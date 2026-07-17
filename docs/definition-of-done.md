@@ -15,6 +15,7 @@ Every PR must satisfy:
 - [ ] All required CI checks green
 
 ## Backend / API additions
+
 - [ ] Auth **and** ownership re-checked inside the action/handler
 - [ ] Input zod-validated; DTO-only returns (never a raw row)
 - [ ] DAL boundary respected (no `db` / `process.env` outside `lib/dal`)
@@ -23,6 +24,7 @@ Every PR must satisfy:
 - [ ] zod schema / types updated; breaking changes flagged + versioned
 
 ## Database additions
+
 - [ ] Generated SQL committed and reviewed (never `drizzle-kit push` to prod)
 - [ ] Forward-only (no edits to applied migrations); one migration per PR
 - [ ] Squawk lint passes; migration applies on empty Docker PG + a Neon branch; drift check clean
@@ -30,6 +32,7 @@ Every PR must satisfy:
 - [ ] Backfill plan + rollback plan documented in the PR
 
 ## Test pyramid
+
 - **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils
 - **Integration:** Server Actions / Route Handlers against a test DB
 - **Component:** React Testing Library for the log forms

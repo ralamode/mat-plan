@@ -1,0 +1,8 @@
+---
+description: mat-plan project rules — always follow the root AGENTS.md
+alwaysApply: true
+---
+
+All project conventions — stack, **file organization & hierarchy**, schema/server/security rules,
+PR/CI gates, and the git/branch workflow — live in the root `AGENTS.md`. Read and follow it before
+writing code. Do not duplicate rules here; keep this file a thin pointer (DRY).
