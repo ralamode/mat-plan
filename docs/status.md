@@ -6,8 +6,8 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 **Last updated:** 2026-07-16
 
 ## Where we are right now
-📍 **Bootstrap** — planning docs on a PR, awaiting review/merge. No app code yet.
-Next up after merge: **V0-1** (pnpm workspace + Next.js scaffold + agent rules + hooks).
+📍 **Bootstrap ✅ merged** — repo + planning docs are on `main`. No app code yet.
+Next up: **V0-1** (pnpm workspace + Next.js scaffold + agent rules + hooks).
 
 ## Progress toward MVP (v1)
 - **Code PRs merged:** 0 / 27  ▱▱▱▱▱▱▱▱▱▱ 0%
@@ -16,7 +16,7 @@ Next up after merge: **V0-1** (pnpm workspace + Next.js scaffold + agent rules +
 ## Phases
 | Phase | Goal | Status |
 |---|---|---|
-| Bootstrap | Repo + planning docs | 🔵 in review |
+| Bootstrap | Repo + planning docs | ✅ done |
 | **v0** | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ⚪ not started |
 | **v1** | Online kids logger (all data types, CSV export) — **MVP** | ⚪ not started |
 | AI-1 | NL logging via structured outputs + eval | ⚪ not started |
@@ -62,4 +62,5 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-14 | full-day E2E + rate-limit/Sentry/Dependabot | ⚪ |
 
 ## Changelog (merged PRs)
-_(none yet — updated as PRs merge)_
+- **2026-07-16** — Bootstrap: repo + planning docs (spec, plan, agent rules incl. file-hierarchy &
+  semantic-HTML, security, status tracker), organized into `docs/` + `.github/`. Merged to `main`.
