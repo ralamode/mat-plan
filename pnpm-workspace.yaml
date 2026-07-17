@@ -1,0 +1,8 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Native deps allowed to run install/build scripts (pnpm 11 blocks these by default).
+onlyBuiltDependencies:
+  - sharp
+  - unrs-resolver
