@@ -7,12 +7,12 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **V0-2 — in review** (PR open). GitHub Actions CI (quality + gitleaks) + branch protection.
-Next up after merge: **V0-3** (Vercel connect + preview deploys).
+📍 **V0-3 — in review** (PR open). Vercel connect + preview deploys + deploy docs.
+Next up after merge: **V0-4** (env validation + access-gate + security headers).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 2 / 27 ▰▰▱▱▱▱▱▱▱▱ ~7%
+- **Code PRs merged:** 3 / 27 ▰▰▰▱▱▱▱▱▱▱ ~11%
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -35,8 +35,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | ----- | ----------------------------------------------------------- | ------------ |
 | V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done      |
 | V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done      |
-| V0-2  | GH Actions CI + branch protection                           | 🔵 in review |
-| V0-3  | Vercel connect + preview deploys                            | ⚪           |
+| V0-2  | GH Actions CI + branch protection                           | ✅ done      |
+| V0-3  | Vercel connect + preview deploys                            | 🔵 in review |
 | V0-4  | env validation + access-gate + security headers             | ⚪           |
 | V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ⚪           |
 | V0-6  | migrate-on-deploy (GH Actions single migrator)              | ⚪           |
@@ -68,6 +68,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-17** — **V0-2**: GitHub Actions CI (quality: format/lint/typecheck/build + gitleaks) +
+  branch protection (require checks, 0 approvals).
 - **2026-07-17** — **V0-1b**: shadcn/ui + Radix, CSS-variable design tokens (light/dark),
   `docs/design.md`, Button/Card + themed sample page.
 - **2026-07-16** — Architecture diagrams (`docs/architecture.md`): system containers, write path,
