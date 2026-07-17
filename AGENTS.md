@@ -8,13 +8,15 @@ See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan
 (PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md).
 
 ## What this is
+
 A portable, entity-based activity logger (kids' wrestling S&C + Ray's PPL), offline-capable, that
 also exports byte-faithful CSVs for an existing Claude workflow. Built at ~4h/wk → **scope
 discipline is a first-class constraint.** The one inviolable product rule: **the LLM never authors
-loads/weights** (bad loads are an injury risk) — the model may draft *definitions* a human confirms,
+loads/weights** (bad loads are an injury risk) — the model may draft _definitions_ a human confirms,
 never live prescriptions.
 
 ## Stack (do not deviate without updating this file)
+
 - **Frontend:** Next.js App Router (RSC) + TypeScript (strict) + Tailwind + **shadcn/ui** (Radix).
   TanStack Query is introduced at **v1.5** (offline), not before.
 - **Design:** adult-first, clean — NOT a kid aesthetic. Kid ergonomics (≥44px tap targets,
@@ -29,12 +31,13 @@ never live prescriptions.
 - **Host / CI:** Vercel + GitHub Actions + Playwright.
 
 ## File organization & hierarchy (treat as first-class)
+
 A clean, predictable hierarchy is a **primary design concern here — not an afterthought.** Before
-adding a file, decide where it *belongs*; never dump it in the repo root or the nearest convenient
+adding a file, decide where it _belongs_; never dump it in the repo root or the nearest convenient
 directory. If a directory starts collecting unrelated files, **propose a reorganization in the PR**
 rather than adding to the mess. Moving files is cheap on a branch, expensive once they sprout imports.
 
-- **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that *must*
+- **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that _must_
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
 - **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `design.md`,
@@ -46,12 +49,13 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
 - **`packages/`** — shared importable code: `shared/` (zod schemas + types + golden vectors),
   `engine/` (pure progression engine — no DB/IO), `db/` (drizzle schema + migrations + seed).
 - **Colocation:** a unit's test (`*.test.ts`) lives next to the code it covers. Feature code stays in
-  its feature folder; only *genuinely shared* code is promoted to `packages/`.
+  its feature folder; only _genuinely shared_ code is promoted to `packages/`.
 - **Naming:** kebab-case files/dirs (`profile-tile.tsx`, `definition-of-done.md`); PascalCase React
   components; conventional UPPERCASE for the root/.github meta files.
 - **When placement isn't obvious, ask or propose it in the PR description** — don't guess and move on.
 
 ## Architecture rules
+
 - **RSC-first.** Minimize `'use client'`. Fetch data in Server Components / Route Handlers.
 - **Data Access Layer (DAL):** all Drizzle/Neon access and all `process.env` reads live in
   `lib/dal/*`, marked `import 'server-only'`. Each DAL function: (1) `getCurrentUser()` (Clerk
@@ -63,6 +67,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   vectors, so a later Python port is a reference port, not an entanglement.
 
 ## The "don't" list
+
 - No Pages Router, no `getServerSideProps`/`getStaticProps`.
 - No client-side fetching where an RSC/Server Action works.
 - No runtime CSS-in-JS libraries (MUI/emotion/styled) — Tailwind + shadcn only.
@@ -73,6 +78,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
 - No native `pgEnum` (use reference tables / text+CHECK).
 
 ## Schema & migration conventions
+
 ```
 Keys:   internal PK = bigint GENERATED ALWAYS AS IDENTITY (never serial/UUIDv4 PK).
         Public/URL/API IDs = UUIDv7 (non-enumerable → anti-IDOR).
@@ -92,6 +98,7 @@ Migrate: drizzle-kit generate+migrate ONLY (never push in prod); forward-only; n
 ```
 
 ## Server conventions
+
 ```
 Trust: every Server Action + Route Handler is a PUBLIC endpoint. Re-auth + re-authorize (ownership)
        + zod-validate inside each. Never trust FormData/JSON/searchParams/params/headers.
@@ -111,6 +118,7 @@ Security baseline lives in [.github/SECURITY.md](./.github/SECURITY.md) (BOLA-fi
 bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
 ## Git & branch workflow
+
 - **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
   bootstrap commit). All work goes via PR.
 - One short-lived branch = one PR = one backlog item / one concern. Branch from latest `main`. Keep
@@ -125,6 +133,7 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 
 ## Local hooks vs CI merge-gates
+
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only** — fast, blocks the
   commit. Never put whole-project checks here.
 - **pre-push:** `tsc --noEmit` (whole project) + affected tests.
@@ -135,6 +144,7 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   API/DB changes.
 
 ## UI PR rules
+
 - Tests pass locally (full suite runs in CI as a required check).
 - Lint must pass to commit (pre-commit blocks a failing lint). Prettier runs on staged files +
   `prettier --check` in CI — no style debates.
@@ -149,6 +159,7 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   number fields. Semantic HTML is the foundation of this — get the elements right first.
 
 ## Backend / API PR rules
+
 ```
 Every mutating endpoint / Server Action (verified by TESTS, not review):
   1 re-verify authN inside it (page/middleware auth does NOT protect an action — it's a public POST).
@@ -166,6 +177,7 @@ Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (
 ```
 
 ## Database / migration PR rules
+
 ```
 Workflow: edit schema → drizzle-kit generate → COMMIT the generated .sql (the reviewed artifact) → PR.
   NEVER drizzle-kit push to prod. Prod only runs `migrate`. Forward-only: never modify a migration
@@ -188,5 +200,6 @@ Deploy order: expand/additive migrations run BEFORE the new app deploys; destruc
 ```
 
 ## Definition of Done
+
 See [docs/definition-of-done.md](./docs/definition-of-done.md). A PR isn't done until every
 applicable box is checked and CI is green.

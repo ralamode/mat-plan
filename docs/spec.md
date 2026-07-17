@@ -9,6 +9,7 @@ Next.js server, API/security); findings are folded in. The phased PR backlog liv
 
 The kids' training data kept going unlogged, and the stopgap was a single-file `localStorage` HTML
 logger. This goes bigger for three reasons at once:
+
 1. **Real tool** — hand it to Liam & Scarlett to log everything they do in a day on a phone/iPad
    (wake, weigh-in, rice bucket, wrestling, calisthenics, brush-teeth, splits, S&C lifts, Brain Rep,
    shots), and log Ray's own PPL+core too.
@@ -16,24 +17,24 @@ logger. This goes bigger for three reasons at once:
    **applied-AI** job targets.
 3. **Portfolio** — dogfoods GitHub Actions CI + applied-AI evals.
 
-Outcome: a portable, **entity-based** app that models *any* logged activity, works offline in a gym,
+Outcome: a portable, **entity-based** app that models _any_ logged activity, works offline in a gym,
 and coexists with — then upgrades — the current Claude + CSV/markdown workflow. Built at ~4h/wk, so
 **scope discipline is a first-class constraint.**
 
 ## 2. Decisions
 
-| Decision | Choice |
-|---|---|
-| Frontend | Next.js (App Router/RSC) + TypeScript + Tailwind + shadcn/ui; TanStack Query at v1.5 (offline), not v0 |
-| Backend / Python | All-TS through v2. Progression engine stays **pure TypeScript** (no DB/IO) with golden vectors. Python/FastAPI only at v3, where evals/structured-output/pgvector want it |
-| DB | Postgres + Drizzle + Neon. Runtime = pooled string + `pg`/node-postgres through PgBouncer, Node runtime, Fluid `attachDatabasePool`; migrations = direct/unpooled string (neon-http disqualified — nested writes need interactive transactions) |
-| Data access | Server-only **DAL** (`lib/dal/*`) is the sole place touching Drizzle/`process.env`: auth → household-ownership authz → DTO |
-| Sync / edits | Append-outbox + per-event UUIDv7 idempotency (DB UNIQUE + ON CONFLICT) + last-writer-wins on mutable rows, comparing the **client-supplied** timestamp |
-| Coexistence | App-canonical + **versioned golden-file CSV export contract** + single-writer ownership per data type; v3 MCP/REST API that Claude fetches |
-| Auth | Access-gated stopgap through v1; **Clerk** household login at v1.5 (kids have no accounts → COPPA deferred). Profile tiles = UX switch, not a security boundary; PIN deferred (`pin_hash` column only) |
-| DB-in-CI | Docker Postgres service for the CI test job; Neon branch-per-PR for the preview deploy |
-| UI / design | shadcn/ui + design tokens (CSS vars) + `DESIGN.md`; adult-first/clean, kid-ergonomic; Recharts for dashboards. No MUI |
-| Host / CI / E2E | Vercel + GitHub Actions + Playwright, from v0 |
+| Decision         | Choice                                                                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend         | Next.js (App Router/RSC) + TypeScript + Tailwind + shadcn/ui; TanStack Query at v1.5 (offline), not v0                                                                                                                                          |
+| Backend / Python | All-TS through v2. Progression engine stays **pure TypeScript** (no DB/IO) with golden vectors. Python/FastAPI only at v3, where evals/structured-output/pgvector want it                                                                       |
+| DB               | Postgres + Drizzle + Neon. Runtime = pooled string + `pg`/node-postgres through PgBouncer, Node runtime, Fluid `attachDatabasePool`; migrations = direct/unpooled string (neon-http disqualified — nested writes need interactive transactions) |
+| Data access      | Server-only **DAL** (`lib/dal/*`) is the sole place touching Drizzle/`process.env`: auth → household-ownership authz → DTO                                                                                                                      |
+| Sync / edits     | Append-outbox + per-event UUIDv7 idempotency (DB UNIQUE + ON CONFLICT) + last-writer-wins on mutable rows, comparing the **client-supplied** timestamp                                                                                          |
+| Coexistence      | App-canonical + **versioned golden-file CSV export contract** + single-writer ownership per data type; v3 MCP/REST API that Claude fetches                                                                                                      |
+| Auth             | Access-gated stopgap through v1; **Clerk** household login at v1.5 (kids have no accounts → COPPA deferred). Profile tiles = UX switch, not a security boundary; PIN deferred (`pin_hash` column only)                                          |
+| DB-in-CI         | Docker Postgres service for the CI test job; Neon branch-per-PR for the preview deploy                                                                                                                                                          |
+| UI / design      | shadcn/ui + design tokens (CSS vars) + `DESIGN.md`; adult-first/clean, kid-ergonomic; Recharts for dashboards. No MUI                                                                                                                           |
+| Host / CI / E2E  | Vercel + GitHub Actions + Playwright, from v0                                                                                                                                                                                                   |
 
 ## 3. Repo structure
 
@@ -52,28 +53,31 @@ mat-plan/
   packages/engine/          # progression engine — PURE TS: (state, inputs) => decision, no DB/IO
   packages/db/              # drizzle schema + migrations + seed (catalogs)
 ```
+
 File-organization rules (root stays clean, docs in `docs/`, etc.) are in [../AGENTS.md](../AGENTS.md).
 
 ## 4. Domain / entity model (tagged union, NOT EAV)
 
-A generalized `entry` with a *fixed small* set of typed value columns + a `unit` discriminator,
+A generalized `entry` with a _fixed small_ set of typed value columns + a `unit` discriminator,
 constrained by seed catalogs. Key/ID/enum conventions in [../AGENTS.md](../AGENTS.md): internal PK =
 `bigint identity`; public IDs = UUIDv7; `client_id` = UUIDv7 NOT NULL UNIQUE(partial); all timestamps
 `timestamptz`; `unit`/`category` = reference tables, `status` = text+CHECK; tagged-union XOR = a real
 CHECK. All rows household-scoped for DAL authz.
 
 **Catalog (seeded, versioned):**
+
 - `household` — root; a Clerk operator owns one household.
 - `profile` — id, household_id (FK), name, kind(kid|adult), birthdate, avatar, pin_hash?
 - `activity_type` — key, label, category(strength|conditioning|skill|habit|measurement|routine|life),
-  input_shape(set_list|single_metric|boolean|timing), default_unit, icon. *(The catalog is what makes
+  input_shape(set_list|single_metric|boolean|timing), default_unit, icon. _(The catalog is what makes
   it portable: wake, weigh_in, rice_bucket, wrestling_practice, calisthenics, brush_teeth, splits,
-  sc_lift, brain_rep, shots are rows.)*
+  sc_lift, brain_rep, shots are rows.)_
 - `movement` — slug, name, pattern, unit_default, is_bodyweight, video_url, cues.
 - `metric_definition` — key, label, unit, value_type, aggregation(sum|last|max|avg). Includes a
   canonical `shot` metric and a first-class `pullup_max` (aggregation=max).
 
 **Program / prescription:**
+
 - `program_block`, `prescription` (day_role, movement, superset_label?, order, sets, target_reps, scheme, notes)
 - `prescription_target(prescription_id, profile_id, load, reps)` — per-profile loads (real table, not jsonb)
 - `ladder` + `rung`; `progression_state` (profile, ladder, current_rung, current_target)
@@ -81,6 +85,7 @@ CHECK. All rows household-scoped for DAL authz.
   target rows so adherence is computable in SQL.
 
 **Log / event (mutable rows, LWW):**
+
 - `session` — profile_id, activity_date (declared), logged_at (device clock, informational),
   session_type, block_id?, timing, status, source, client_id. `feel`/`next_day_soreness` at session grain.
 - `day_readiness` — profile_id, date, gate_color (readiness is per-day).
@@ -89,7 +94,7 @@ CHECK. All rows household-scoped for DAL authz.
   lossless export), scheme, status(done|skipped|sub_failure), value_num?, value_text?, context?, notes,
   client_id. CHECK: exactly-one-of {movement_id, metric_key}.
 - `entry_set` — entry_id, idx, reps?, seconds?, weight_num?, weight_label?("BW"/"50ft"), value_num?,
-  status, done. *(Derived/queryable layer; `raw_*` on entry is the export source of truth.)*
+  status, done. _(Derived/queryable layer; `raw_*` on entry is the export source of truth.)_
 - `superset` — session_id, label, note (nullable).
 
 **Mapping both systems:** kids strength `back-squat 3×3 "65/65/65"` → session → entry(raw_load, movement)
@@ -98,6 +103,7 @@ calisthenics/habits → entry(metric_key or unit=bool). Life activities → one-
 Ray's PPL → session(feel, soreness) → superset → entry → entry_set.
 
 ### 4a. Validation — ERD + worked coverage
+
 All 11 kid activities + Ray's PPL were pushed through the schema against real data: **zero bespoke
 per-activity columns needed.**
 
@@ -124,17 +130,17 @@ erDiagram
   entry ||--o{ entry_set : "expands to"
 ```
 
-| Activity | Rows | Export |
-|---|---|---|
-| wake | entry(type=wake, unit=timing, event_at) | app-only |
-| weigh_in | entry(metric=bodyweight, unit=lb, value_num, context) | bodyweight CSV |
-| rice_bucket / splits / brain_rep | entry(unit=bool, status=done) | app-only |
-| wrestling_practice | entry(type=wrestling_practice, unit=timing, value_num=min) | app-only |
-| calisthenics | 4× entry(metric∈{pushups,pullups,vsit_crunch,vsit_skill_step}, unit=count) | calisthenics CSV (pivot 4→1) |
-| brush_teeth | 7× entry(metric∈{stance,ladder,bridge,mobility,pressure,reaction,shot}) | checkins CSV (pivot 7→1) |
-| sc_lift | session(strength_a, feel) + day_readiness → entry(movement, raw_load/raw_reps) → N entry_set | strength-log CSV (per-movement, raw_load verbatim) |
-| shots | entry(metric=**shot** — canonical, not double-modeled) | checkins.shot projection; 10K = SUM(value_num WHERE metric='shot') |
-| Ray PPL | session(feel,soreness) → superset → entry(unit ∈ reps+weight/sec) → entry_set; + progression_state | movement.csv / core-log.csv (v2) |
+| Activity                         | Rows                                                                                               | Export                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| wake                             | entry(type=wake, unit=timing, event_at)                                                            | app-only                                                           |
+| weigh_in                         | entry(metric=bodyweight, unit=lb, value_num, context)                                              | bodyweight CSV                                                     |
+| rice_bucket / splits / brain_rep | entry(unit=bool, status=done)                                                                      | app-only                                                           |
+| wrestling_practice               | entry(type=wrestling_practice, unit=timing, value_num=min)                                         | app-only                                                           |
+| calisthenics                     | 4× entry(metric∈{pushups,pullups,vsit_crunch,vsit_skill_step}, unit=count)                         | calisthenics CSV (pivot 4→1)                                       |
+| brush_teeth                      | 7× entry(metric∈{stance,ladder,bridge,mobility,pressure,reaction,shot})                            | checkins CSV (pivot 7→1)                                           |
+| sc_lift                          | session(strength_a, feel) + day_readiness → entry(movement, raw_load/raw_reps) → N entry_set       | strength-log CSV (per-movement, raw_load verbatim)                 |
+| shots                            | entry(metric=**shot** — canonical, not double-modeled)                                             | checkins.shot projection; 10K = SUM(value_num WHERE metric='shot') |
+| Ray PPL                          | session(feel,soreness) → superset → entry(unit ∈ reps+weight/sec) → entry_set; + progression_state | movement.csv / core-log.csv (v2)                                   |
 
 Edge cases (sled `"123 (50ft)"`, box `"30in"`, `SKIPPED`, `sub-failure`) are lossless via `raw_*` +
 `status`. Metric scales pinned: `pressure`=1–10, `reaction`=scale_10, `shot`=one canonical metric.
@@ -145,18 +151,21 @@ splits, brain_rep) are markdown-checkbox-only today, so they stay **app-only unt
 seam — "log everything" in the UI is real from v1, "Claude sees everything" lands at v3.
 
 ### 4b. Extensibility — feeding drastically new programs
+
 Definitions (program_block, prescription, movement, activity_type, metric_definition, ladder/rung)
-are split from events. "Feed a new routine" = write *definition rows*, not code.
+are split from events. "Feed a new routine" = write _definition rows_, not code.
+
 - **🟢 Pure data (no deploy):** a new block/mesocycle, new movements/splits/loads, new metrics that
   fit an existing value_type (sleep, RPE, HRV), new habits, a new sport's practice logging. ~90% of change.
 - **🟡 New seed + small mapper:** a new `activity_type` fitting the input_shape taxonomy.
-- **🔴 Code/schema change (new *shape* or *math*):** food/macros, GPS routes, barbell complexes
+- **🔴 Code/schema change (new _shape_ or _math_):** food/macros, GPS routes, barbell complexes
   (multiple movements per set), AMRAP/EMOM circuits, throw-quality+video; or a different progression
   algorithm (contained — the engine is small/pure/golden-tested).
 - **Escape hatches:** extensible enums; satellite tables (e.g. `nutrition_item → entry`) for exotic
   shapes; the AI authoring path (structured-output drafts prescription rows, human confirms — never loads).
 
 ## 5. Coexistence & the Claude/API arc
+
 - **v1:** app canonical; `GET /api/export/csv?kind=…&month=…` emits the **live** repo headers
   (`date,session_type,movement,sets,reps,load,prescribed,notes`), validated by a golden-file diff test.
   **Single-writer ownership:** at cutover the skills stop writing structured CSVs. Narrative markdown
@@ -166,6 +175,7 @@ are split from events. "Feed a new routine" = write *definition rows*, not code.
   scoped Clerk API key. CSV export retained as fallback.
 
 ## 6. Offline / PWA
+
 Local-first: installable PWA. Every log writes to an IndexedDB (Dexie) **append-outbox** with a
 per-event UUID (server unique-constraint = idempotency). Reads render from TanStack Query cache +
 outbox. Background flush sends the whole session graph atomically to `POST /api/sync`; server rows
@@ -175,13 +185,16 @@ stale-cache (skipWaiting + update prompt + payload version check), multi-device 
 (client-side dedupe on profile/date/activity/movement/set-idx).
 
 ## 7. AI features (one slice early; depth at v3)
+
 Gated behind the deterministic core — **the model never authors loads.**
+
 - **AI-1 (early, TS-native):** NL logging via Anthropic structured outputs → human-confirm chip →
   write; shipped with a 15-case golden eval + CI accuracy assertion.
-- **v3 depth:** in-app retro/summary (reads only aggregates); LLM progression *adapter* (explain-why
+- **v3 depth:** in-app retro/summary (reads only aggregates); LLM progression _adapter_ (explain-why
   first); expand evals; optional pgvector; MCP/REST API + optional Python/FastAPI.
 
 ## 8. Foundations (not deferred)
+
 Error boundary + shared loading/empty/error/offline UI primitives · test pyramid (unit / integration /
 component / few E2E) · `client_id` from the first write PR · observability (structured logs + Sentry) ·
 a11y for kids/iPad · env validation.
@@ -189,17 +202,19 @@ a11y for kids/iPad · env validation.
 ## 9. Server & DB engineering standards
 
 ### DAL (the backbone)
+
 One `lib/dal/*` module (`import 'server-only'`) is the only place that imports Drizzle/Neon or reads
 `process.env`. Each function: `getCurrentUser()` (Clerk, cached) → authorize ownership (scope by
 `household_id`) → return a minimal DTO. Actions, Route Handlers, and the future MCP all call it.
 Neutralizes most OWASP-API risk (esp. BOLA/IDOR — the #1 risk).
 
 ### Neon connection
+
 - Two env strings: `DATABASE_URL` = pooled (PgBouncer) for runtime; `DATABASE_URL_UNPOOLED` = direct
   for migrations/seeds/DDL.
 - Driver: interactive transactions rule out `neon-http`. Use `pg` (node-postgres) through the pooler
-  + `drizzle-orm/node-postgres`, module-scoped `Pool` + `attachDatabasePool` (Vercel Fluid), **Node
-  runtime**. Nested writes in `db.transaction()`; batch sync upserts via `onConflictDoUpdate`.
+  - `drizzle-orm/node-postgres`, module-scoped `Pool` + `attachDatabasePool` (Vercel Fluid), **Node
+    runtime**. Nested writes in `db.transaction()`; batch sync upserts via `onConflictDoUpdate`.
 
 The schema conventions, server conventions, and security baseline are enumerated in
 [../AGENTS.md](../AGENTS.md) and [../.github/SECURITY.md](../.github/SECURITY.md).
