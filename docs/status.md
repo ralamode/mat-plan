@@ -1,7 +1,7 @@
 # mat-plan — Status
 
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
-the Claude workflow alive). Updated as each PR merges. Roadmap detail in [PLAN.md](./PLAN.md).
+the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
 **Last updated:** 2026-07-16
 

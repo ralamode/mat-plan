@@ -16,11 +16,16 @@ Planning complete; app scaffolding not started. This is the docs bootstrap.
 
 | File | What |
 |---|---|
-| [SPEC.md](./SPEC.md) | Architecture, entity/data model, coexistence, offline, server & DB standards |
-| [PLAN.md](./PLAN.md) | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3) |
-| [AGENTS.md](./AGENTS.md) | Rules for AI coding agents: stack, conventions, PR/CI gates, git/branch workflow |
-| [SECURITY.md](./SECURITY.md) | Security baseline + threat model |
-| [DoD.md](./DoD.md) | Per-PR Definition of Done |
+| [AGENTS.md](./AGENTS.md) | Rules for AI coding agents: stack, conventions, file hierarchy, PR/CI gates, git/branch workflow |
+| [docs/spec.md](./docs/spec.md) | Architecture, entity/data model, coexistence, offline, server & DB standards |
+| [docs/plan.md](./docs/plan.md) | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3) |
+| [docs/status.md](./docs/status.md) | Living progress tracker toward the MVP |
+| [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done |
+| [.github/SECURITY.md](./.github/SECURITY.md) | Security baseline + threat model |
+
+**Repo layout:** root holds only `README.md`, `AGENTS.md`, `.gitignore`; project docs live in
+`docs/`; GitHub meta (security policy, PR template, workflows) in `.github/`; app code in `apps/web`
+and `packages/*`. See the file-organization rules in [AGENTS.md](./AGENTS.md).
 
 ## Stack
 

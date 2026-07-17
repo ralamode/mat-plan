@@ -4,8 +4,8 @@ Read this before writing code. It encodes the project's decisions so agents don'
 are enforced by CI and pre-commit hooks, **not** by a reviewer's memory. `CLAUDE.md` and
 `.cursor/rules` are thin pointers to this file — keep the rules here (DRY).
 
-See also: [SPEC.md](./SPEC.md) (architecture + data model), [PLAN.md](./PLAN.md) (PR backlog),
-[SECURITY.md](./SECURITY.md), [DoD.md](./DoD.md).
+See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
+(PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md).
 
 ## What this is
 A portable, entity-based activity logger (kids' wrestling S&C + Ray's PPL), offline-capable, that
@@ -27,6 +27,29 @@ never live prescriptions.
 - **Auth:** Clerk (household login) from v1.5; access-gate stopgap before that. Profile tiles are a
   UX switch, **not** a security boundary.
 - **Host / CI:** Vercel + GitHub Actions + Playwright.
+
+## File organization & hierarchy (treat as first-class)
+A clean, predictable hierarchy is a **primary design concern here — not an afterthought.** Before
+adding a file, decide where it *belongs*; never dump it in the repo root or the nearest convenient
+directory. If a directory starts collecting unrelated files, **propose a reorganization in the PR**
+rather than adding to the mess. Moving files is cheap on a branch, expensive once they sprout imports.
+
+- **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that *must*
+  sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
+  `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
+- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `design.md`,
+  `definition-of-done.md`, future `decisions/` ADRs).
+- **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
+- **`apps/web/`** — the Next.js app, grouped by responsibility (not a flat dump by file type):
+  `app/` (routes + `layout`/`loading`/`error`), `components/` (`ui/` primitives vs feature folders),
+  `lib/` (`dal/`, `env.ts`, utils). Route files stay thin — domain logic goes in `packages/`.
+- **`packages/`** — shared importable code: `shared/` (zod schemas + types + golden vectors),
+  `engine/` (pure progression engine — no DB/IO), `db/` (drizzle schema + migrations + seed).
+- **Colocation:** a unit's test (`*.test.ts`) lives next to the code it covers. Feature code stays in
+  its feature folder; only *genuinely shared* code is promoted to `packages/`.
+- **Naming:** kebab-case files/dirs (`profile-tile.tsx`, `definition-of-done.md`); PascalCase React
+  components; conventional UPPERCASE for the root/.github meta files.
+- **When placement isn't obvious, ask or propose it in the PR description** — don't guess and move on.
 
 ## Architecture rules
 - **RSC-first.** Minimize `'use client'`. Fetch data in Server Components / Route Handlers.
@@ -84,8 +107,8 @@ Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation
         enableLogs + structured context (userId, householdId, batchId).
 ```
 
-Security baseline lives in [SECURITY.md](./SECURITY.md) (BOLA-first, bodyweight-privileged, scoped
-MCP token, headers, supply-chain). Follow it.
+Security baseline lives in [.github/SECURITY.md](./.github/SECURITY.md) (BOLA-first,
+bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
 ## Git & branch workflow
 - **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
@@ -159,4 +182,5 @@ Deploy order: expand/additive migrations run BEFORE the new app deploys; destruc
 ```
 
 ## Definition of Done
-See [DoD.md](./DoD.md). A PR isn't done until every applicable box is checked and CI is green.
+See [docs/definition-of-done.md](./docs/definition-of-done.md). A PR isn't done until every
+applicable box is checked and CI is green.

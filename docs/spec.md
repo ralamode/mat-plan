@@ -3,7 +3,7 @@
 Architecture, data model, and engineering standards. Reviewed by a 3-agent adversarial stress-test
 (schema / architecture / phasing) plus four research tracks (Postgres/Drizzle, Neon-serverless,
 Next.js server, API/security); findings are folded in. The phased PR backlog lives in
-[PLAN.md](./PLAN.md); agent rules in [AGENTS.md](./AGENTS.md).
+[plan.md](./plan.md); agent rules in [../AGENTS.md](../AGENTS.md).
 
 ## 1. Context — why
 
@@ -44,17 +44,20 @@ Python service — lands).
 
 ```
 mat-plan/
-  apps/web/                 # Next.js App Router (only app through v2)
+  README.md  AGENTS.md  .gitignore    # root: only these + tool-mandated config
+  docs/                     # spec.md, plan.md, status.md, definition-of-done.md, design.md, decisions/
+  .github/                  # SECURITY.md, PULL_REQUEST_TEMPLATE.md, workflows/, ISSUE_TEMPLATE/
+  apps/web/                 # Next.js App Router (only app through v2) — app/, components/, lib/(dal,env)
   packages/shared/          # zod schemas + TS types + golden test vectors (the contract)
   packages/engine/          # progression engine — PURE TS: (state, inputs) => decision, no DB/IO
   packages/db/              # drizzle schema + migrations + seed (catalogs)
-  .github/workflows/ci.yml  # lint · typecheck · test · playwright (Docker Postgres service)
 ```
+File-organization rules (root stays clean, docs in `docs/`, etc.) are in [../AGENTS.md](../AGENTS.md).
 
 ## 4. Domain / entity model (tagged union, NOT EAV)
 
 A generalized `entry` with a *fixed small* set of typed value columns + a `unit` discriminator,
-constrained by seed catalogs. Key/ID/enum conventions in [AGENTS.md](./AGENTS.md): internal PK =
+constrained by seed catalogs. Key/ID/enum conventions in [../AGENTS.md](../AGENTS.md): internal PK =
 `bigint identity`; public IDs = UUIDv7; `client_id` = UUIDv7 NOT NULL UNIQUE(partial); all timestamps
 `timestamptz`; `unit`/`category` = reference tables, `status` = text+CHECK; tagged-union XOR = a real
 CHECK. All rows household-scoped for DAL authz.
@@ -199,4 +202,4 @@ Neutralizes most OWASP-API risk (esp. BOLA/IDOR — the #1 risk).
   runtime**. Nested writes in `db.transaction()`; batch sync upserts via `onConflictDoUpdate`.
 
 The schema conventions, server conventions, and security baseline are enumerated in
-[AGENTS.md](./AGENTS.md) and [SECURITY.md](./SECURITY.md).
+[../AGENTS.md](../AGENTS.md) and [../.github/SECURITY.md](../.github/SECURITY.md).

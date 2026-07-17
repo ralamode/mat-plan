@@ -2,8 +2,8 @@
 
 Each phase is small, shippable, and dogfoods CI + Playwright. **v0 and v1 are broken into
 individually-reviewable PRs** (reviewed PR-by-PR to learn the codebase). Architecture + standards are
-in [SPEC.md](./SPEC.md); agent/PR/CI rules in [AGENTS.md](./AGENTS.md); per-PR checklist in
-[DoD.md](./DoD.md). Each PR is one branch → one PR → squash-merge; reference the id (e.g. `V0-1`).
+in [spec.md](./spec.md); agent/PR/CI rules in [../AGENTS.md](../AGENTS.md); per-PR checklist in
+[definition-of-done.md](./definition-of-done.md). Each PR is one branch → one PR → squash-merge; reference the id (e.g. `V0-1`).
 
 ## v0 — thin slice (3 tables, one seeded profile, NO catalogs, NO auth, access-gated)
 | ID | Scope | Acceptance | Concept |
