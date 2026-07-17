@@ -18,6 +18,7 @@ Planning complete; app scaffolding not started. This is the docs bootstrap.
 |---|---|
 | [AGENTS.md](./AGENTS.md) | Rules for AI coding agents: stack, conventions, file hierarchy, PR/CI gates, git/branch workflow |
 | [docs/spec.md](./docs/spec.md) | Architecture, entity/data model, coexistence, offline, server & DB standards |
+| [docs/architecture.md](./docs/architecture.md) | System diagrams (containers, write path, offline sync, ERD, CI, roadmap) |
 | [docs/plan.md](./docs/plan.md) | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3) |
 | [docs/status.md](./docs/status.md) | Living progress tracker toward the MVP |
 | [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done |
