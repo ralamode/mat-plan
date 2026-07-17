@@ -140,7 +140,13 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   `prettier --check` in CI — no style debates.
 - PRs include **screenshots for any UI change** (before/after where relevant).
 - PR description follows the template.
-- A11y: keyboard-usable, labeled, ≥44px tap targets, numeric `inputmode` on number fields.
+- **Semantic HTML is required.** Use the correct native element for the job — `button` (never a
+  clickable `div`/`span`), `a` for navigation, `nav`/`main`/`header`/`footer`/`section` landmarks,
+  `ul`/`ol`/`li` for lists, `label` + `htmlFor` for inputs, `<form>` for forms, and a correct heading
+  order (one `<h1>` per page, no skipped levels). No `div`-soup with click handlers. Radix/shadcn
+  primitives are semantic + accessible by default — don't wrap them in ways that regress that.
+- A11y: keyboard-usable, focus-visible, labeled controls, ≥44px tap targets, numeric `inputmode` on
+  number fields. Semantic HTML is the foundation of this — get the elements right first.
 
 ## Backend / API PR rules
 ```

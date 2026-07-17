@@ -5,7 +5,8 @@ Every PR must satisfy:
 - [ ] Typecheck (`tsc --noEmit`) + lint (ESLint) + `prettier --check` pass
 - [ ] Unit / integration test for new logic (see test pyramid below)
 - [ ] Loading / empty / error states present for any new UI
-- [ ] A11y basics: labels, ≥44px tap targets, numeric `inputmode` on number fields
+- [ ] Semantic HTML: correct native elements (button/a/nav/main/ul-li/label), proper heading order — no div-soup
+- [ ] A11y basics: keyboard-usable, focus-visible, labels, ≥44px tap targets, numeric `inputmode` on number fields
 - [ ] Migration + idempotent seed updated if the schema changed (see DB rules in AGENTS.md)
 - [ ] `client_id` stamped on writes
 - [ ] Playwright updated if a critical flow changed
