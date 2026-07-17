@@ -21,6 +21,10 @@ coverage/
 playwright-report/
 test-results/
 
+# local scratch (playwright screenshots, etc.)
+.screenshots/
+.playwright-mcp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
