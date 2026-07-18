@@ -3,16 +3,16 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-18
 
 ## Where we are right now
 
-📍 **V0-3 — in review** (PR open). Vercel connect + preview deploys + deploy docs.
-Next up after merge: **V0-4** (env validation + access-gate + security headers).
+📍 **V0-4 — up next.** V0-3 (Vercel connect + preview deploys + deploy docs) is **merged**.
+Next: **V0-4** (env validation + access-gate + security headers).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 3 / 27 ▰▰▰▱▱▱▱▱▱▱ ~11%
+- **Code PRs merged:** 4 / 27 ▰▰▰▰▱▱▱▱▱▱ ~15%
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -31,21 +31,21 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 
-| PR    | Scope                                                       | Status       |
-| ----- | ----------------------------------------------------------- | ------------ |
-| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done      |
-| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done      |
-| V0-2  | GH Actions CI + branch protection                           | ✅ done      |
-| V0-3  | Vercel connect + preview deploys                            | 🔵 in review |
-| V0-4  | env validation + access-gate + security headers             | ⚪           |
-| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ⚪           |
-| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ⚪           |
-| V0-7  | Today view (RSC via DAL)                                    | ⚪           |
-| V0-8  | log bodyweight (Server Action + zod)                        | ⚪           |
-| V0-9  | log strength entry (transactional nested write)             | ⚪           |
-| V0-10 | loading/empty/error primitives + boundary                   | ⚪           |
-| V0-11 | CI Postgres + Playwright smoke                              | ⚪           |
-| V0-12 | unit + integration test + DoD                               | ⚪           |
+| PR    | Scope                                                       | Status  |
+| ----- | ----------------------------------------------------------- | ------- |
+| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done |
+| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done |
+| V0-2  | GH Actions CI + branch protection                           | ✅ done |
+| V0-3  | Vercel connect + preview deploys                            | ✅ done |
+| V0-4  | env validation + access-gate + security headers             | ⚪      |
+| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ⚪      |
+| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ⚪      |
+| V0-7  | Today view (RSC via DAL)                                    | ⚪      |
+| V0-8  | log bodyweight (Server Action + zod)                        | ⚪      |
+| V0-9  | log strength entry (transactional nested write)             | ⚪      |
+| V0-10 | loading/empty/error primitives + boundary                   | ⚪      |
+| V0-11 | CI Postgres + Playwright smoke                              | ⚪      |
+| V0-12 | unit + integration test + DoD                               | ⚪      |
 
 ## v1 backlog (14 PRs) — completes the MVP
 
