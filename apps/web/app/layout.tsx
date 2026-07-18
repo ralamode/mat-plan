@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   description: 'Activity logger for wrestling S&C — kids and adult training.',
 };
 
+// Nonce-based CSP (see proxy.ts) is applied during SSR, so every route must be
+// dynamically rendered. This is an inherently per-user app — nothing is
+// statically cacheable — so opting the whole tree in here is the right default.
+export const dynamic = 'force-dynamic';
+
 export default function RootLayout({
   children,
 }: Readonly<{
