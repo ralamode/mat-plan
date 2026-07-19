@@ -3,7 +3,9 @@ packages:
   - 'packages/*'
 
 # Native deps allowed to run install/build scripts (pnpm 11 blocks these by default and
-# HARD-ERRORS in CI). sharp = Next image optimization; unrs-resolver = ESLint import resolver.
+# HARD-ERRORS in CI). sharp = Next image optimization; unrs-resolver = ESLint import resolver;
+# esbuild = bundler behind drizzle-kit / tsx / pglite (needs its postinstall to fetch its binary).
 allowBuilds:
+  esbuild: true
   sharp: true
   unrs-resolver: true
