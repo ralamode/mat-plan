@@ -17,11 +17,15 @@ export const env = createEnv({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     // Access-gate stopgap shared code — see lib/access-gate.ts. NOT an auth boundary.
     ACCESS_GATE_PASSWORD: z.string().min(8, 'ACCESS_GATE_PASSWORD must be at least 8 characters.'),
+    // Pooled Neon string (PgBouncer) for app runtime on the Node runtime. Migrations
+    // use the DIRECT/unpooled string via drizzle-kit (tooling), not this app env.
+    DATABASE_URL: z.string().url(),
   },
   client: {},
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     ACCESS_GATE_PASSWORD: process.env.ACCESS_GATE_PASSWORD,
+    DATABASE_URL: process.env.DATABASE_URL,
   },
   emptyStringAsUndefined: true,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

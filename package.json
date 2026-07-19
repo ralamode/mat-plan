@@ -13,6 +13,10 @@
     "lint": "pnpm --filter web lint",
     "typecheck": "pnpm --filter web exec tsc --noEmit",
     "test": "pnpm --filter web test",
+    "db:generate": "pnpm --filter @mat-plan/db db:generate",
+    "db:migrate": "pnpm --filter @mat-plan/db db:migrate",
+    "db:seed": "pnpm --filter @mat-plan/db db:seed",
+    "db:verify": "pnpm --filter @mat-plan/db db:verify",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"

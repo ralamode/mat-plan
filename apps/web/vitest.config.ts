@@ -16,9 +16,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['**/*.test.{ts,tsx}'],
-    // A valid value so modules that import lib/env.ts don't fail boot validation
+    // Valid values so modules that import lib/env.ts don't fail boot validation
     // under test. Individual tests override/mock as needed.
-    env: { ACCESS_GATE_PASSWORD: 'test-access-code-1234' },
+    env: {
+      ACCESS_GATE_PASSWORD: 'test-access-code-1234',
+      DATABASE_URL: 'postgres://user:pass@localhost:5432/mat_plan_test',
+    },
   },
   resolve: {
     alias: {
