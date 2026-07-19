@@ -15,6 +15,19 @@
 
 export const GATE_COOKIE_NAME = 'mp_gate';
 
+/** Route of the access-gate entry page (also the `app/gate/` segment). */
+export const GATE_PATH = '/gate';
+
+/**
+ * Clamp a caller-supplied redirect target to a same-origin absolute path, so a
+ * `?from=` value can never become an open redirect (`//evil.com`, `https://…`)
+ * or an XSS sink. Falls back to the site root. Shared by the proxy, the gate
+ * page, and the gate Server Action so the rule can't drift between them.
+ */
+export function safeInternalPath(path: string | null | undefined): string {
+  return path && path.startsWith('/') && !path.startsWith('//') ? path : '/';
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
