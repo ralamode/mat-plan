@@ -5,3 +5,6 @@ build
 coverage
 pnpm-lock.yaml
 next-env.d.ts
+
+# Drizzle-generated migration artifacts (reviewed as SQL; regenerated verbatim).
+packages/db/migrations

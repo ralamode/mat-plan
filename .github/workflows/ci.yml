@@ -44,11 +44,19 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: DB drift guard + migration/seed verify
+        run: |
+          pnpm --filter @mat-plan/db db:generate
+          git diff --exit-code packages/db/migrations \
+            || (echo '::error::Schema drift — run `pnpm --filter @mat-plan/db db:generate` and commit.' && exit 1)
+          pnpm --filter @mat-plan/db db:verify
+
       - name: Build
         run: pnpm build
         env:
-          # lib/env.ts validates at build; the value is a non-secret CI placeholder.
+          # lib/env.ts validates at build; values are non-secret CI placeholders.
           ACCESS_GATE_PASSWORD: ci-build-placeholder
+          DATABASE_URL: postgres://user:pass@localhost:5432/db
 
   gitleaks:
     name: gitleaks
