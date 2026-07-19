@@ -43,6 +43,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          # lib/env.ts validates at build; the value is a non-secret CI placeholder.
+          ACCESS_GATE_PASSWORD: ci-build-placeholder
 
   gitleaks:
     name: gitleaks
