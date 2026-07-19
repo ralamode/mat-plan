@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { GATE_COOKIE_NAME, gateTokenFor } from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, gateTokenFor, safeInternalPath } from '@/lib/access-gate';
 import { env } from '@/lib/env';
 
 /**
@@ -21,11 +21,6 @@ const gateSchema = z.object({
 export type GateState = { error: string | null };
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
-
-/** Only allow same-origin, non-protocol-relative redirect targets (no open redirect). */
-function safeRedirectTarget(from: string | undefined): string {
-  return from && from.startsWith('/') && !from.startsWith('//') ? from : '/';
-}
 
 export async function submitGate(_prev: GateState, formData: FormData): Promise<GateState> {
   const parsed = gateSchema.safeParse({
@@ -54,5 +49,5 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
     maxAge: COOKIE_MAX_AGE,
   });
 
-  redirect(safeRedirectTarget(parsed.data.from));
+  redirect(safeInternalPath(parsed.data.from));
 }
