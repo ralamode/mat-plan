@@ -23,9 +23,13 @@ const pool = globalForDb.__mpPool ?? createDbPool(env.DATABASE_URL);
 if (!globalForDb.__mpPool) {
   globalForDb.__mpPool = pool;
   try {
+    // Registers a pool 'release' listener so Vercel Fluid drains idle connections
+    // on suspend. Off Vercel it's a safe no-op (guarded on VERCEL_URL internally),
+    // so reaching the catch means a genuinely unexpected failure — warn, don't
+    // swallow. (Folds into Sentry once observability lands.)
     attachDatabasePool(pool);
-  } catch {
-    // No-op off Vercel Fluid (local/CI) — nothing to attach to.
+  } catch (err) {
+    console.warn('[dal/db] attachDatabasePool failed; pool may not drain on suspend', err);
   }
 }
 
