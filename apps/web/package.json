@@ -11,9 +11,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mat-plan/db": "workspace:*",
+    "@mat-plan/shared": "workspace:*",
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@vercel/functions": "^3.7.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.24.0",
     "next": "16.2.10",
     "radix-ui": "^1.6.2",
