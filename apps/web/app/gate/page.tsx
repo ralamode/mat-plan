@@ -1,3 +1,5 @@
+import { safeInternalPath } from '@/lib/access-gate';
+
 import { GateForm } from './gate-form';
 
 /** Access-gate stopgap entry page (V0-4). Replaced by Clerk household login at v1.5. */
@@ -7,7 +9,7 @@ export default async function GatePage({
   searchParams: Promise<{ from?: string }>;
 }) {
   const { from } = await searchParams;
-  const safeFrom = from && from.startsWith('/') && !from.startsWith('//') ? from : '/';
+  const safeFrom = safeInternalPath(from);
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-8 px-4 py-12">
