@@ -33,7 +33,12 @@ Every PR must satisfy:
 
 ## Test pyramid
 
+Runner: **Vitest** (`pnpm test`) for unit / integration / component; **Playwright** for E2E
+(added V0-11). Tests colocate as `*.test.ts(x)` next to the code they cover. Vitest runs in CI
+(required check) and on `pre-push`.
+
 - **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils
-- **Integration:** Server Actions / Route Handlers against a test DB
-- **Component:** React Testing Library for the log forms
+- **Integration:** Server Actions / Route Handlers — call as plain async fns, mock the DAL; against
+  ephemeral Docker Postgres once the DB lands (V0-5+)
+- **Component:** React Testing Library (jsdom) for the log forms
 - **E2E:** a few critical flows only (Playwright)
