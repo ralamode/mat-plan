@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { GATE_COOKIE_NAME, isValidGateCookie } from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, GATE_PATH, isValidGateCookie } from '@/lib/access-gate';
 import { env } from '@/lib/env';
 
 /**
@@ -15,8 +15,6 @@ import { env } from '@/lib/env';
  * with `export const dynamic = 'force-dynamic'` (this is an inherently per-user
  * app, so nothing is statically cacheable anyway).
  */
-
-const GATE_PATH = '/gate';
 
 function buildCsp(nonce: string, isDev: boolean): string {
   return [

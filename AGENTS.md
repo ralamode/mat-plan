@@ -54,6 +54,32 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   components; conventional UPPERCASE for the root/.github meta files.
 - **When placement isn't obvious, ask or propose it in the PR description** — don't guess and move on.
 
+## Constants, enums & shared values (single source of truth)
+
+A named value is defined **once** and imported everywhere it's used. Duplicating a magic
+string/number that must stay in sync is a defect, not a style nit — it's how a cookie name, route,
+limit, or enum member silently drifts between two files. Enforced by review.
+
+- **Name it, don't repeat it.** If a literal carries meaning and appears in ≥2 places, or _must_ stay
+  in sync with something else (a DB value, a header, a route), hoist it to a `const` (or `as const`
+  map) and import it. The second occurrence of a literal is the trigger to extract.
+- **Where it lives — by blast radius:**
+  - **Cross-boundary / domain values** (units, `activity_type` categories, statuses, and every
+    enum) → **`packages/shared`** as an `as const` array + a zod enum + a `z.infer` type. That _one_
+    definition feeds runtime validation (zod), compile-time types, **and** the DB reference-table
+    seed — so app, engine, and DB can't drift. This is the canonical home for enums.
+  - **App-only values** (cookie names, route paths, cache tags, form limits) → the feature's `lib`
+    module, or a small `lib/constants.ts` when they're cross-feature. Never re-typed in a component.
+  - **Engine values** → `packages/engine`. Never redefine the same value in two packages — import
+    across the workspace (`@mat-plan/shared`).
+- **Enums are reference tables, sourced from `shared`.** No native `pgEnum` (see the "don't" list).
+  The canonical enum is the `shared` const-array; the Drizzle **reference table seeds from it** and
+  the app validates against the same zod enum. One list, three consumers, zero drift.
+- **Reuse small logic too**, not just values: a validation/derivation used in two places (e.g. a
+  "safe internal redirect path" check) becomes one exported helper, not a copy-paste.
+- **Don't over-abstract.** Truly universal or single-use literals (`'/'` root, `0`/`1`, an obvious
+  one-off default) don't need a named indirection. Centralize for _meaning and sync_, not ceremony.
+
 ## Architecture rules
 
 - **RSC-first.** Minimize `'use client'`. Fetch data in Server Components / Route Handlers.
