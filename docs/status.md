@@ -7,15 +7,14 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **V0-7 — in review.** V0-6 (migrate-on-deploy) is **merged** and the app is **live**: Neon
-provisioned, schema + seed applied to production, Vercel env + GitHub migrator secret set, and the
-deployed access gate + security headers smoke-tested at `mat-plan-web.vercel.app`. V0-7 adds the
-**Today view** — an RSC that reads the DB via the DAL and shows an empty state. Next: **V0-8** (log
-bodyweight — the first write).
+📍 **V0-8 — in review.** V0-7 (Today view) is **merged**; the app reads the DB in production. V0-8
+adds the **first write**: log a bodyweight via a zod-validated Server Action → Neon → it appears in
+Today (idempotent by client_id). Verified end-to-end against live Neon with Playwright. Next:
+**V0-9** (log a strength entry — transactional `entry` + `entry_set`).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 7 / 27 ▰▰▰▰▰▰▰▱▱▱ ~26% (+2 out-of-band: constants convention, Vitest harness)
+- **Code PRs merged:** 8 / 27 ▰▰▰▰▰▰▰▰▱▱ ~30% (+2 out-of-band: constants convention, Vitest harness)
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -43,8 +42,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V0-4  | env validation + access-gate + security headers             | ✅ done      |
 | V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ✅ done      |
 | V0-6  | migrate-on-deploy (GH Actions single migrator)              | ✅ done      |
-| V0-7  | Today view (RSC via DAL)                                    | 🔵 in review |
-| V0-8  | log bodyweight (Server Action + zod)                        | ⚪           |
+| V0-7  | Today view (RSC via DAL)                                    | ✅ done      |
+| V0-8  | log bodyweight (Server Action + zod)                        | 🔵 in review |
 | V0-9  | log strength entry (transactional nested write)             | ⚪           |
 | V0-10 | loading/empty/error primitives + boundary                   | ⚪           |
 | V0-11 | CI Postgres + Playwright smoke                              | ⚪           |
@@ -71,6 +70,9 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V0-7**: Today view — RSC reads the DB via the DAL and renders the default
+  profile's day with an empty state; `nodejs` runtime; pure date helpers (unit-tested). First
+  DB-backed page, verified in production.
 - **2026-07-20** — **V0-6**: migrate-on-deploy (GitHub Actions single migrator, direct/unpooled Neon
   string) + one-time setup guide (`deploy.md`); observability ADR + Core Web Vitals convention;
   documented `.local-secrets/` folder. App went **live** on Vercel + Neon.
