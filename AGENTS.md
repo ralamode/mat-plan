@@ -162,6 +162,13 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   the branch on merge.
 - **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
   and changelog) **in the same PR** as the change it tracks — no separate status-bump PRs.
+- **Implementation plans for significant PRs.** A **significant** PR gets a committed file-by-file
+  plan at `docs/plans/<id>-<slug>.md`, written and **reviewed before** implementation code is
+  committed (the Plan agent drafts it; a human reviews it). "Significant" = the change touches CI, a
+  DB migration, auth, a new subsystem/runner, or non-trivial multi-file logic. **Exempt:** docs, copy,
+  config one-liners, single-file mechanical changes. The plan is committed on the feature branch in
+  the **same PR** as the code it plans, and the [docs/plan.md](./docs/plan.md) backlog row links to
+  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md).
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 
@@ -184,8 +191,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - PRs include **screenshots for any UI change** (before/after where relevant), **captured with
   Playwright** driving the running app (boot the prod build → log through the access gate → navigate →
   screenshot each changed screen/state). Save to the gitignored `.screenshots/` folder and attach to
-  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill; it graduates to a
-  committed `pnpm screenshot` script when Playwright lands as a dep at V0-11.
+  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill, which runs the
+  committed `pnpm --filter web screenshot <route>` script (since V0-11, on the shared
+  `e2e/gate-login.ts` helper); the Playwright-MCP path is the fallback.
   - **Placement:** the **first** screenshots for a PR go **in the PR description** — the reviewer's
     baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a **PR
     comment** rather than editing the description, so the description stays the original baseline and

@@ -26,6 +26,8 @@ dist/
 coverage/
 playwright-report/
 test-results/
+# Playwright gate-auth storage state (carries the gate cookie — never commit)
+e2e/.auth/
 
 # local scratch (playwright screenshots, etc.)
 .screenshots/

@@ -1,0 +1,20 @@
+# gitleaks config — extends the default ruleset and allowlists intentionally
+# committed, non-secret CI placeholders. These are NOT credentials: the CI
+# Postgres service container is ephemeral, and ACCESS_GATE_PASSWORD in CI gates
+# nothing real (it only has to match between the app and the e2e login). The
+# same placeholders are quoted verbatim in the V0-11 implementation-plan doc.
+#
+# Keep the allowlist tight (specific strings), not a blanket path exclusion, so
+# a real secret accidentally added to these files is still caught.
+title = "mat-plan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret CI placeholder values (env for the ephemeral CI DB / gate)"
+regexTarget = "line"
+regexes = [
+  '''ci-e2e-placeholder-1234''',
+  '''ci-build-placeholder''',
+]

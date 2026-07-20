@@ -16,6 +16,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['**/*.test.{ts,tsx}'],
+    // Playwright owns e2e/ (its specs are *.spec.ts, already outside `include`);
+    // exclude the dir too so a stray *.test.ts there never leaks into Vitest.
+    exclude: ['**/e2e/**', '**/node_modules/**', '**/dist/**', '**/.next/**'],
     // Valid values so modules that import lib/env.ts don't fail boot validation
     // under test. Individual tests override/mock as needed.
     env: {
