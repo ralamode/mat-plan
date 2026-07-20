@@ -9,6 +9,11 @@ description: Capture Playwright screenshot(s) of a mat-plan UI screen for a PR �
 required part of the front-end workflow — see AGENTS.md "UI PR rules" and the DoD. Do it before
 finalizing the PR; attach the image(s) to the PR's Screenshots section.
 
+**Where it goes (placement):** the **first** screenshots for a PR go **in the PR description** — the
+reviewer's baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a
+**PR comment** rather than editing the description, so the description stays the original baseline
+and the comment thread shows the progression.
+
 Screenshots go in the gitignored `.screenshots/` folder — they are **attached to the PR, never
 committed**.
 
@@ -73,10 +78,20 @@ no copy-paste. BUT:
   broken.** Do NOT embed raw/assets-branch URLs here (an "assets branch" trick only works on _public_
   repos). This was learned the hard way on V0-10.
 - The **only** way to get an inline image in a private-repo PR is GitHub's **user-attachments** upload
-  (the web drag-drop), which is session-authenticated and **not** scriptable via `gh`/PAT.
-- **So the flow is:** post the body via `gh` with the screenshot referenced as _"attached below"_ (no
-  inline embed), then **`SendUserFile` the PNG** so the user drags it into the PR. One manual drop; the
-  description is fully automated.
+  (the web drag-drop) — session-authenticated and **not** scriptable via `gh`/PAT. But it **is**
+  drivable through the **Chrome browser MCP**, which holds the user's authenticated GitHub session.
+- **Preferred flow (no manual drag):** post the body via `gh` (`--body-file`), then use the Chrome MCP
+  to attach the inline image where it belongs:
+  1. `mcp__claude-in-chrome__navigate` to the PR page (`.../pull/<n>`).
+  2. `find` the comment/description **textbox** + the **"Add files"** `type=file` input.
+  3. Type any caption into the textbox, then `mcp__claude-in-chrome__file_upload` the PNG onto the file
+     input's ref — GitHub uploads to its user-attachments CDN and inserts the `<img …>` markdown
+     (**heads-up: the upload replaces the textbox contents**, so re-type the caption above the tag
+     after it lands). Submit.
+  - First-screenshot case → do this in the **description editor**; later-change case → do it in a **new
+    comment** (matches the placement rule above). Verified working on PR #19/#21.
+- Fallback (if the browser MCP is unavailable): post the body via `gh` referencing the shot as
+  _"attached below"_ and **`SendUserFile` the PNG** so the user drags it in — one manual drop.
 - Zero-drag alternative (only if asked): commit the PNG into the PR branch so it renders in the **Files
   changed** tab — costs a small binary in `main` on squash-merge.
 - If the repo ever goes **public**, `raw.githubusercontent.com` embeds work and the image can be
