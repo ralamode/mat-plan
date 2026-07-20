@@ -276,12 +276,13 @@ migrated+seeded PG and the three env vars.)
   MCP flow already relies on.) If a future browser tightens this, fall back to the
   `addCookies`+`gateTokenFor` variant noted above.
 - **Flakiness.** Mitigations: assert on stable roles/labels (`getByRole`/`getByLabel` with `exact` to
-  avoid substring ambiguity) and the exact `entryLabel` string, not CSS; a **generous expect timeout**
-  (global 10s + 15s on the post-submit assertion) so the cold-first-request server round-trip
-  (Server Action → DB → revalidate → RSC) doesn't race the default 5s; `retries: 1` as a backstop only
-  (a `flaky` annotation is a bug to fix, not to ignore); `trace: 'on-first-retry'` + report artifact
-  for triage; deterministic seed so the item is unique. **Observed:** the first CI run flaked exactly
-  here (5s default timeout on the cold round-trip) — the timeouts above are the fix.
+  avoid substring ambiguity) and the exact `entryLabel` string, not CSS; **warm the write path once in
+  the setup project** so the cold-start cost (first Server Action after boot: JIT + first DB connection)
+  is absorbed there and the coverage test runs warm under the **default** timeout — no padded timeout;
+  `retries: 1` as a backstop only (a `flaky` annotation is a bug to fix, not to ignore);
+  `trace: 'on-first-retry'` + report artifact for triage; deterministic seed. **Observed:** the first
+  CI run flaked exactly here (cold first round-trip beat the 5s default); the setup warmup is the fix,
+  keeping the test fast without a big timeout.
 - **Playwright browser download cost/instability.** Cache `~/.cache/ms-playwright` keyed on
   `pnpm-lock.yaml`; install only `chromium --with-deps`.
 - **Build-vs-dev server.** Deliberately prod (`build && start`) for representative CSP/render and the

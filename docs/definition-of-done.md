@@ -39,8 +39,28 @@ Runner: **Vitest** (`pnpm test`) for unit / integration / component; **Playwrigh
 (added V0-11). Tests colocate as `*.test.ts(x)` next to the code they cover. Vitest runs in CI
 (required check) and on `pre-push`.
 
+**Speed budget (enforced by review).** Unit / integration / component tests are **fast — sub-second,
+usually milliseconds** (the whole Vitest suite runs in well under a second). **E2E is the _only_ tier
+allowed to take multiple seconds**, so keep it **minimal and very selective — a handful of critical
+wiring smokes, nothing more.** Never reach for an E2E to cover what a fast integration/unit test can:
+push correctness (idempotency, zod, ownership, edge cases) down to the fast tiers and let E2E prove
+only that the pieces are wired together. A test that _needs_ seconds outside E2E is a design smell —
+rewrite the coverage, don't accept the slowness.
+
 - **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils
 - **Integration:** Server Actions / Route Handlers — call as plain async fns, mock the DAL; against
   ephemeral Docker Postgres once the DB lands (V0-5+)
 - **Component:** React Testing Library (jsdom) for the log forms
-- **E2E:** a few critical flows only (Playwright)
+- **E2E:** a few critical flows only (Playwright). Authoring rules (learned the hard way in V0-11):
+  - **Locate by role/label with `exact: true`.** `getByLabel`/`getByText` are substring +
+    case-insensitive by default — "Weight" also matches "Log bodyweight" and "Set 1 weight". Scope by
+    section (`getByRole('region', { name }).getBy…`) when a page repeats a label.
+  - **Fix cold-start races at the source, not with big timeouts.** A first Server Action after a cold
+    server boot is slow (JIT + first DB connection) and can flake. **Warm that path once in the setup
+    project** so the coverage test runs warm under the **default** timeout. Never pad a timeout or rely
+    on `retries` to hide a race — a `flaky` annotation is a bug to fix.
+  - **Robust `webServer` command.** Prefer `pnpm --filter web exec next start -p <port>` or the `PORT`
+    env over `pnpm run … -- -p` (the `--` gets forwarded literally and mis-parsed).
+  - **Run it locally before pushing.** The e2e needs a real Postgres; when Docker/DB isn't available
+    locally, every bug otherwise surfaces one-CI-round-at-a-time. See the local-run recipe in
+    `docs/plans/v0-11-ci-postgres-playwright.md`.
