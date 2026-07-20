@@ -162,6 +162,13 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   the branch on merge.
 - **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
   and changelog) **in the same PR** as the change it tracks — no separate status-bump PRs.
+- **Implementation plans for significant PRs.** A **significant** PR gets a committed file-by-file
+  plan at `docs/plans/<id>-<slug>.md`, written and **reviewed before** implementation code is
+  committed (the Plan agent drafts it; a human reviews it). "Significant" = the change touches CI, a
+  DB migration, auth, a new subsystem/runner, or non-trivial multi-file logic. **Exempt:** docs, copy,
+  config one-liners, single-file mechanical changes. The plan is committed on the feature branch in
+  the **same PR** as the code it plans, and the [docs/plan.md](./docs/plan.md) backlog row links to
+  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md).
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 

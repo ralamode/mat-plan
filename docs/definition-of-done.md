@@ -2,6 +2,7 @@
 
 Every PR must satisfy:
 
+- [ ] Significant PR (CI / migration / auth / new subsystem / non-trivial multi-file logic): file-by-file plan at `docs/plans/<id>-<slug>.md` exists, was reviewed before coding, and was followed
 - [ ] Typecheck (`tsc --noEmit`) + lint (ESLint) + `prettier --check` pass
 - [ ] Unit / integration test for new logic (see test pyramid below)
 - [ ] Loading / empty / error states present for any new UI
