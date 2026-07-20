@@ -25,6 +25,7 @@ See [docs/status.md](./docs/status.md).
 | [docs/plan.md](./docs/plan.md)                             | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3)                                |
 | [docs/status.md](./docs/status.md)                         | Living progress tracker toward the MVP                                                           |
 | [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done                                                                        |
+| [docs/decisions/](./docs/decisions/)                       | Architecture Decision Records (ADRs) — e.g. observability & Core Web Vitals                      |
 | [.github/SECURITY.md](./.github/SECURITY.md)               | Security baseline + threat model                                                                 |
 
 **Repo layout:** root holds only `README.md`, `AGENTS.md`, `.gitignore`; project docs live in
