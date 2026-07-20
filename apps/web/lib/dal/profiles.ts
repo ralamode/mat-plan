@@ -2,7 +2,7 @@ import 'server-only';
 
 import { schema } from '@mat-plan/db';
 import type { ProfileKind } from '@mat-plan/shared';
-import { isNull } from 'drizzle-orm';
+import { asc, isNull } from 'drizzle-orm';
 
 import { db } from './db';
 
@@ -29,4 +29,24 @@ export async function listProfiles(): Promise<ProfileDTO[]> {
     .where(isNull(schema.profiles.deletedAt));
 
   return rows.map((r) => ({ id: r.publicId, name: r.name, kind: r.kind as ProfileKind }));
+}
+
+/**
+ * The default profile to show. v0 has a single seeded profile and no auth, so
+ * this returns the earliest-created one. Replaced by profile tiles + the
+ * Clerk-scoped current household at V1-3/v1.5.
+ */
+export async function getDefaultProfile(): Promise<ProfileDTO | null> {
+  const [row] = await db
+    .select({
+      publicId: schema.profiles.publicId,
+      name: schema.profiles.name,
+      kind: schema.profiles.kind,
+    })
+    .from(schema.profiles)
+    .where(isNull(schema.profiles.deletedAt))
+    .orderBy(asc(schema.profiles.id))
+    .limit(1);
+
+  return row ? { id: row.publicId, name: row.name, kind: row.kind as ProfileKind } : null;
 }
