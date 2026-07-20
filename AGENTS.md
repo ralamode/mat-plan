@@ -185,6 +185,12 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   primitives are semantic + accessible by default — don't wrap them in ways that regress that.
 - A11y: keyboard-usable, focus-visible, labeled controls, ≥44px tap targets, numeric `inputmode` on
   number fields. Semantic HTML is the foundation of this — get the elements right first.
+- **Web performance / Core Web Vitals is a first-class concern**, not a later cleanup. Follow web best
+  practices where they don't fight scope: RSC-first (minimal client JS), `next/image` + `next/font`
+  (no layout shift / font FOUT), no render-blocking third-party scripts, lean/code-split bundles.
+  Budget (p75, mobile): **LCP < 2.5s · INP < 200ms · CLS < 0.1**. Regressing it is a review concern.
+  Tooling + phasing (Sentry, Vercel Speed Insights, Neon health) live in
+  [docs/decisions/0001-observability-and-web-vitals.md](./docs/decisions/0001-observability-and-web-vitals.md).
 
 ## Backend / API PR rules
 
