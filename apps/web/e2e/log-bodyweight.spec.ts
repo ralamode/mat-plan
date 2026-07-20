@@ -14,7 +14,9 @@ test('logs a bodyweight and renders it in Today', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Today', level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toBeVisible();
 
-  await page.getByLabel('Weight').fill('72.5');
+  // `exact` disambiguates from the "Log bodyweight" section label and the
+  // strength form's "Set 1 weight" input (getByLabel is substring by default).
+  await page.getByLabel('Weight', { exact: true }).fill('72.5');
   // Unit defaults to 'lb' (DEFAULT_BODYWEIGHT_UNIT); leave it.
   await page.getByRole('button', { name: 'Log weight' }).click();
 

@@ -233,8 +233,9 @@ is acceptable (optimizing via artifact hand-off is deferred).
    would otherwise bounce to `/gate`).
 2. `page.goto('/')`; assert the `Today` `<h1>` and the "Log bodyweight" section (`bodyweight-form.tsx`)
    are visible.
-3. Fill the **Weight** field (`getByLabel('Weight')`) with a fixed, distinctive value (e.g. `72.5`);
-   leave Unit at its default `lb` (`DEFAULT_BODYWEIGHT_UNIT`).
+3. Fill the **Weight** field (`getByLabel('Weight', { exact: true })` — `exact` disambiguates from
+   the "Log bodyweight" section label and the strength form's "Set 1 weight" input) with a fixed,
+   distinctive value (e.g. `72.5`); leave Unit at its default `lb` (`DEFAULT_BODYWEIGHT_UNIT`).
 4. Click **Log weight** (`getByRole('button', { name: /log weight/i })`).
 5. Assert the entry renders in the Today list:
    `await expect(page.getByText('Bodyweight — 72.5 lb')).toBeVisible()` — the exact label string
