@@ -3,3 +3,5 @@
 // define a value once here, import it in the app, engine, and DB seed.
 export * from './units';
 export * from './enums';
+export * from './id';
+export * from './bodyweight';
