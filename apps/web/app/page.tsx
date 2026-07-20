@@ -1,12 +1,15 @@
+import { ENTRY_KIND, ENTRY_STATUS } from '@mat-plan/shared';
+
 import { formatDayLong, todayIso } from '@/lib/date';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
 
-// Reads the DB via the DAL (pg → Node runtime; not Edge-compatible).
+// Route-segment config must be a static inline literal (Next can't follow an
+// imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
 export const runtime = 'nodejs';
 
 function entryLabel(e: EntryDTO): string {
-  if (e.kind === 'bodyweight') {
+  if (e.kind === ENTRY_KIND.bodyweight) {
     return e.value === null ? 'Bodyweight' : `Bodyweight — ${e.value} ${e.unit}`;
   }
   return e.movementName ?? 'Strength';
@@ -48,7 +51,7 @@ export default async function TodayPage() {
                 className="flex items-center justify-between rounded-lg border px-4 py-3"
               >
                 <span className="font-medium">{entryLabel(e)}</span>
-                {e.status !== 'done' ? (
+                {e.status !== ENTRY_STATUS.done ? (
                   <span className="text-muted-foreground text-sm">{e.status}</span>
                 ) : null}
               </li>
