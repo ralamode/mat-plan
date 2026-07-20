@@ -86,6 +86,19 @@ new user features.
 
 _Exit: zero hardcoded user-facing strings; a second locale could be added by dropping in a catalog._
 
+## Backlog / ideas (post-MVP, to brainstorm)
+
+Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
+
+- **Notifications / reminders.** Push reminders to log entries and finish blocks (e.g. "log your
+  weigh-in", "conditioning is due today"). Primary surface is **iPad / iPhone / tablet** (installed-PWA
+  **web push** works on iOS 16.4+; a thin native shell only if web push proves too limited),
+  occasionally Mac. Per-profile schedules + quiet hours; opt-in per kid. Builds on the v1.5 PWA + Clerk
+  foundation. Scope + delivery mechanism TBD.
+- **Brain-reps content.** Surface daily **motivational quotes / inspiration** for the `brain_rep`
+  activity — a rotating quote for the day, maybe a small home widget. Content source, rotation, and
+  "already seen" tracking TBD.
+
 ## Verification (per phase)
 
 - **v0:** `pnpm test` + `playwright test` green in GH Actions; manually log a bodyweight + a squat
