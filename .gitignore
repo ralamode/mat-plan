@@ -16,6 +16,12 @@ dist/
 # vercel
 .vercel
 
+# local secrets (recovery/backup codes, etc.) — folder is DOCUMENTED via its
+# committed README, but every actual secret file inside is ignored. Never commit
+# a real secret here; connection strings live in apps/web/.env.local.
+/.local-secrets/*
+!/.local-secrets/README.md
+
 # testing
 coverage/
 playwright-report/
