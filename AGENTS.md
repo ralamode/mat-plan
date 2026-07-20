@@ -181,7 +181,11 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - Tests pass locally (full suite runs in CI as a required check).
 - Lint must pass to commit (pre-commit blocks a failing lint). Prettier runs on staged files +
   `prettier --check` in CI — no style debates.
-- PRs include **screenshots for any UI change** (before/after where relevant).
+- PRs include **screenshots for any UI change** (before/after where relevant), **captured with
+  Playwright** driving the running app (boot the prod build → log through the access gate → navigate →
+  screenshot each changed screen/state). Save to the gitignored `.screenshots/` folder and attach to
+  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill; it graduates to a
+  committed `pnpm screenshot` script when Playwright lands as a dep at V0-11.
 - PR description follows the template.
 - **Semantic HTML is required.** Use the correct native element for the job — `button` (never a
   clickable `div`/`span`), `a` for navigation, `nav`/`main`/`header`/`footer`/`section` landmarks,
