@@ -7,14 +7,17 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **V0-10 — in review.** V0-9 (log strength) is **merged**. V0-10 adds shared
-**loading / empty / error primitives** + a route **error boundary** (`error.tsx`): a down DB now
-shows a recoverable "Something went wrong" state instead of a crash (verified by pointing the app at
-an unreachable DB via Playwright). Next: **V0-11** (CI Postgres + Playwright smoke).
+📍 **V0-11 — in review.** V0-10 (loading/empty/error primitives + error boundary) is **merged**.
+V0-11 crosses the CI-DB cliff: **Playwright** lands as a real dep with a **CI Postgres service
+container** (migrated + seeded), one **smoke E2E** (log a bodyweight → renders in Today) run against
+that ephemeral DB, and the `ui-screenshot` flow **graduates** to a committed `pnpm screenshot`
+script on the shared gate-login helper. Also introduces **`docs/plans/`** — file-by-file
+implementation plans for significant PRs, written/reviewed before code. Next: **V0-12** (unit +
+integration test + finalize DoD).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 10 / 27 ▰▰▰▰▰▰▰▰▰▰ ~37% (+2 out-of-band: constants convention, Vitest harness)
+- **Code PRs merged:** 11 / 27 ▰▰▰▰▰▰▰▰▰▰▰ ~41% (+2 out-of-band: constants convention, Vitest harness)
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -45,8 +48,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V0-7  | Today view (RSC via DAL)                                    | ✅ done      |
 | V0-8  | log bodyweight (Server Action + zod)                        | ✅ done      |
 | V0-9  | log strength entry (transactional nested write)             | ✅ done      |
-| V0-10 | loading/empty/error primitives + boundary                   | 🔵 in review |
-| V0-11 | CI Postgres + Playwright smoke                              | ⚪           |
+| V0-10 | loading/empty/error primitives + boundary                   | ✅ done      |
+| V0-11 | CI Postgres + Playwright smoke                              | 🔵 in review |
 | V0-12 | unit + integration test + DoD                               | ⚪           |
 
 ## v1 backlog (14 PRs) — completes the MVP
@@ -70,6 +73,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V0-11**: Playwright as a real dep + CI Postgres service container (migrated + seeded); one smoke E2E (log a bodyweight → renders in Today) vs the ephemeral DB, on a shared gate-login `storageState`; `ui-screenshot` graduated to a committed `pnpm screenshot` script. Introduces `docs/plans/` — file-by-file plans for significant PRs, reviewed before code.
 - **2026-07-20** — **V0-10**: shared loading/empty/error UI primitives + route error boundary (error.tsx/loading.tsx); DB pool connect timeout; a down DB renders a recoverable error state, verified via Playwright.
 - **2026-07-20** — **V0-9**: log a strength entry per-set — one `entry` + N `entry_set` rows in a
   single transaction (idempotent by client_id), rendered with its sets under Today; ON DELETE CASCADE
