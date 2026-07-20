@@ -155,6 +155,8 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   preferred for linear history.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
+- **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
+  and changelog) **in the same PR** as the change it tracks — no separate status-bump PRs.
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 
