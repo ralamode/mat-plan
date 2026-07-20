@@ -306,15 +306,13 @@ migrated+seeded PG and the three env vars.)
   migration-workflow gate.
 - **A root-level `pnpm e2e`/`pnpm screenshot` passthrough** — left to a later convenience PR.
 
-## Open questions
+## Open questions (resolved 2026-07-20)
 
-1. **Postgres image pin:** `postgres:17` (latest GA) vs pinning to whatever major Neon runs for closer
-   prod parity. Recommend `postgres:17`; confirm the Neon major if parity matters.
-2. **`E2E_PORT` / screenshot base port:** config defaults to `3100` for tests; the screenshot script
-   keeps the skill's `3996`. Fine to keep them distinct (tests auto-boot; screenshots reuse a
-   hand-booted server), or unify.
-3. **Required check:** should the maintainer add `e2e` to branch protection's required checks now, or
-   let it soak as non-blocking for a PR or two first?
-4. **Relative imports in `e2e/`:** the helper imports `../lib/access-gate` (relative) rather than the
-   `@/` alias, purely so the tsx-run screenshot script resolves without `tsconfig-paths`. Acceptable
-   deviation from the `@/` convention for test tooling, or add `tsconfig-paths` and keep `@/` everywhere?
+1. **Postgres image pin:** → **`postgres:17`** (latest GA; also matches Neon's major, so it doubles as
+   prod parity).
+2. **`E2E_PORT` / screenshot base port:** → **keep distinct** — tests auto-boot on `3100`; the
+   screenshot script reuses a hand-booted server on `3996`.
+3. **Required check:** → **soak as non-blocking** for a PR or two before the maintainer adds `e2e` to
+   branch protection's required checks.
+4. **Relative imports in `e2e/`:** → **keep relative** (`../lib/access-gate`) — one localized deviation
+   from `@/` for test tooling; no `tsconfig-paths` dependency.

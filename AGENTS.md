@@ -191,8 +191,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - PRs include **screenshots for any UI change** (before/after where relevant), **captured with
   Playwright** driving the running app (boot the prod build → log through the access gate → navigate →
   screenshot each changed screen/state). Save to the gitignored `.screenshots/` folder and attach to
-  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill; it graduates to a
-  committed `pnpm screenshot` script when Playwright lands as a dep at V0-11.
+  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill, which runs the
+  committed `pnpm --filter web screenshot <route>` script (since V0-11, on the shared
+  `e2e/gate-login.ts` helper); the Playwright-MCP path is the fallback.
   - **Placement:** the **first** screenshots for a PR go **in the PR description** — the reviewer's
     baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a **PR
     comment** rather than editing the description, so the description stays the original baseline and

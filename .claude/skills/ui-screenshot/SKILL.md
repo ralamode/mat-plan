@@ -17,48 +17,50 @@ and the comment thread shows the progression.
 Screenshots go in the gitignored `.screenshots/` folder — they are **attached to the PR, never
 committed**.
 
-## Procedure
+## Procedure — the committed script (primary, since V0-11)
+
+Playwright is a real dev dependency and the capture is a committed script built on the **same**
+gate-login helper the E2E smoke uses (`apps/web/e2e/gate-login.ts`). No MCP needed.
 
 1. **Build + start the prod server** (production build = representative CSP/render):
 
    ```bash
    pnpm build
    (cd apps/web && node_modules/.bin/next start -p 3996 > "$CLAUDE_JOB_DIR/tmp/screenshot-server.log" 2>&1 &)
-   # wait until it answers
    for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:3996/gate && break; sleep 0.5; done
    ```
 
    The app needs its env — `apps/web/.env.local` must have `ACCESS_GATE_PASSWORD` + `DATABASE_URL`
    (Next auto-loads it). Data-backed pages read live Neon; seed first if the screen needs rows.
 
-2. **Get the gate code** (do not hardcode it):
+2. **Capture** (the script logs through the gate itself, then screenshots the route to
+   `.screenshots/<slug>.png`):
 
    ```bash
-   grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -E 's/^[^=]+=//; s/^"//; s/"$//'
+   pnpm --filter web screenshot /            # or any route, e.g. /gate
    ```
 
-3. **Drive the gate with the Playwright MCP** (load the tools via ToolSearch: `browser_navigate`,
-   `browser_snapshot`, `browser_type`, `browser_take_screenshot`, `browser_close`):
-   - `browser_navigate` → `http://localhost:3996/gate`
-   - `browser_snapshot` to get the Access-code textbox ref
-   - `browser_type` the code into it with `submit: true` → it redirects to `/` once the cookie is set
-     (Chromium honors the `Secure` cookie on `localhost`).
+   Chromium honors the `Secure` gate cookie on `localhost`. Override the target server with
+   `SCREENSHOT_BASE_URL` if not on `:3996`. Rename the output descriptively + versioned to the PR
+   (e.g. `mv .screenshots/home.png .screenshots/v0-11-today.png`).
 
-4. **Navigate to the target route(s)** and capture each changed screen/state:
-   - `browser_navigate` → `http://localhost:3996/<route>`
-   - `browser_take_screenshot` with `fullPage: true`, `type: 'png'`, `filename: '<screen>.png'`.
+3. **Hand it over:** `SendUserFile` the PNG, then attach it to the PR per "Posting to the PR" below.
 
-5. **Move the file into `.screenshots/`** (the MCP may drop it in the repo root) and hand it over:
+4. **Cleanup:** kill the server (`pkill -f "next start -p 3996"`); confirm `git status` is clean
+   (`.screenshots/` is gitignored).
 
-   ```bash
-   mkdir -p .screenshots && mv <screen>.png .screenshots/ 2>/dev/null || true
-   ```
+## Fallback — the Playwright MCP (when the script can't run)
 
-   Then send it with `SendUserFile` (`.screenshots/<screen>.png`) and tell the user to attach it to
-   the PR's Screenshots section.
+If Playwright/deps aren't installed or the script is unavailable, drive the running prod server with
+the Playwright MCP directly (load via ToolSearch: `browser_navigate`, `browser_snapshot`,
+`browser_type`, `browser_take_screenshot`, `browser_close`):
 
-6. **Cleanup:** `browser_close`; kill the server (`pkill -f "next start -p 3996"`); confirm
-   `git status` is clean (no stray PNG in the repo root — `.screenshots/` is gitignored).
+- Read the gate code (don't hardcode):
+  `grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -E 's/^[^=]+=//; s/^"//; s/"$//'`
+- `browser_navigate` → `http://localhost:3996/gate`; `browser_snapshot` for the Access-code textbox
+  ref; `browser_type` the code with `submit: true` → redirects to `/`.
+- `browser_navigate` → the target route; `browser_take_screenshot` (`fullPage: true`, `type: 'png'`).
+- Move the PNG into `.screenshots/` (the MCP may drop it in the repo root); `browser_close`.
 
 ## Guidance
 
@@ -97,8 +99,8 @@ no copy-paste. BUT:
 - If the repo ever goes **public**, `raw.githubusercontent.com` embeds work and the image can be
   automated too.
 
-## Future
+## History
 
-At **V0-11** Playwright lands as a real dev dependency; this flow graduates to a committed
-`pnpm --filter web screenshot <route>` script (reusable by humans + CI artifacts) built on the same
-gate-login helper. Until then, use the MCP procedure above.
+Graduated at **V0-11**: Playwright became a real dev dependency and this flow moved from the
+MCP-driven procedure to the committed `pnpm --filter web screenshot <route>` script above (reusable by
+humans, built on the shared `e2e/gate-login.ts` helper). The MCP path is kept as the fallback.
