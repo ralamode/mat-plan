@@ -77,6 +77,11 @@ limit, or enum member silently drifts between two files. Enforced by review.
   the app validates against the same zod enum. One list, three consumers, zero drift.
 - **Reuse small logic too**, not just values: a validation/derivation used in two places (e.g. a
   "safe internal redirect path" check) becomes one exported helper, not a copy-paste.
+- **Tests use the same constant as the app.** When app code switched from a literal to a shared
+  const, update the tests too — assert/exercise via the const (`ENTRY_KIND.bodyweight`), not a
+  re-typed `'bodyweight'`. The one exception is a deliberate **contract test that pins the const's
+  value** (`expect(GATE_COOKIE_NAME).toBe('mp_gate')`) — the literal belongs on the assertion side
+  there, exactly once, or the test is tautological.
 - **Don't over-abstract.** Truly universal or single-use literals (`'/'` root, `0`/`1`, an obvious
   one-off default) don't need a named indirection. Centralize for _meaning and sync_, not ceremony.
 

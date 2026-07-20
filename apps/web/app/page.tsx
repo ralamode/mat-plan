@@ -4,6 +4,8 @@ import { formatDayLong, todayIso } from '@/lib/date';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
 
+import { BodyweightForm } from './bodyweight-form';
+
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
 export const runtime = 'nodejs';
@@ -29,6 +31,15 @@ export default async function TodayPage() {
           {profile ? ` · ${profile.name}` : ''}
         </p>
       </header>
+
+      {profile ? (
+        <section aria-labelledby="log-heading" className="flex flex-col gap-3">
+          <h2 id="log-heading" className="text-lg font-medium">
+            Log bodyweight
+          </h2>
+          <BodyweightForm />
+        </section>
+      ) : null}
 
       <section aria-labelledby="entries-heading">
         <h2 id="entries-heading" className="sr-only">
