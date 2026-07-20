@@ -1,5 +1,6 @@
 import { ENTRY_KIND, ENTRY_STATUS } from '@mat-plan/shared';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { formatDayLong, todayIso } from '@/lib/date';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
@@ -56,13 +57,9 @@ export default async function TodayPage() {
         </h2>
 
         {!profile ? (
-          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-            No profile found. Seed the database to get started.
-          </p>
+          <EmptyState>No profile found. Seed the database to get started.</EmptyState>
         ) : entries.length === 0 ? (
-          <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center">
-            No entries logged today.
-          </p>
+          <EmptyState>No entries logged today.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
             {entries.map((e) => (
