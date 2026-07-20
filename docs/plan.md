@@ -70,6 +70,22 @@ In-app retro/summary; LLM progression **adapter** (explain-why first); expand ev
 so Claude fetches from the app** (exposes logs _and_ block/program state); optional Python/FastAPI +
 pgvector where they earn it. Each AI capability is its own PR; pgvector stays gated.
 
+## i18n — externalize strings (post-MVP, near the bottom)
+
+Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
+**English as the default locale**, so the app can later be translated. Groundwork/refactor phase — no
+new user features.
+
+- Extract all display copy — page/section text, form labels + placeholders, button text, empty/error
+  states, and zod **validation messages** — into typed message catalogs (`en` first).
+- Add an **ESLint rule** (e.g. `no-literal-string` / `formatjs`) that fails CI on new raw string
+  literals in JSX/user-facing paths, so drift can't creep back in.
+- Keep it display-only: domain enum **values/identifiers** (`'bodyweight'`, cookie names, routes)
+  stay as-is — this is about what the user _reads_, not what the code keys on.
+- Locale-aware formatting for dates/numbers/units (ties into the existing `formatDayLong` helper).
+
+_Exit: zero hardcoded user-facing strings; a second locale could be added by dropping in a catalog._
+
 ## Verification (per phase)
 
 - **v0:** `pnpm test` + `playwright test` green in GH Actions; manually log a bodyweight + a squat
