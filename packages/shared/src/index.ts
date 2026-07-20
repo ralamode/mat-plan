@@ -5,3 +5,4 @@ export * from './units';
 export * from './enums';
 export * from './id';
 export * from './bodyweight';
+export * from './strength';
