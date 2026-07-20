@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
+  logStrengthEntry: vi.fn(async () => ({ id: 'strength-pub-id' })),
 }));
 vi.mock('@/lib/dal/profiles', () => ({
   getDefaultProfile: vi.fn(async () => ({
@@ -15,11 +16,11 @@ vi.mock('@/lib/dal/profiles', () => ({
   })),
 }));
 
-import { logBodyweight } from '@/lib/dal/entries';
+import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
 import { revalidatePath } from 'next/cache';
 
-import { logBodyweightAction, type ActionState } from './actions';
+import { logBodyweightAction, logStrengthAction, type ActionState } from './actions';
 
 const initial: ActionState = { ok: false, error: null };
 
@@ -100,5 +101,87 @@ describe('logBodyweightAction — happy path + ownership', () => {
     );
     expect(res.ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
+  });
+});
+
+// Builds strength FormData with parallel repeated reps/weight fields.
+function strengthForm(opts: {
+  movementName?: string;
+  unit?: string;
+  clientId?: string;
+  sets?: Array<{ reps: string; weight: string }>;
+}): FormData {
+  const fd = new FormData();
+  if (opts.movementName !== undefined) fd.append('movementName', opts.movementName);
+  fd.append('unit', opts.unit ?? BODYWEIGHT_UNITS[0]);
+  fd.append('clientId', opts.clientId ?? newId());
+  for (const s of opts.sets ?? []) {
+    fd.append('reps', s.reps);
+    fd.append('weight', s.weight);
+  }
+  return fd;
+}
+
+describe('logStrengthAction — boundary (bad body → zod-reject)', () => {
+  it('rejects a missing movement without touching the DAL', async () => {
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({ movementName: '', sets: [{ reps: '5', weight: '135' }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movementName).toBeTruthy();
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+  });
+
+  it('rejects when there are no sets (blank rows dropped)', async () => {
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({ movementName: 'Back squat', sets: [{ reps: '', weight: '' }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.sets).toBeTruthy();
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-integer rep count', async () => {
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({ movementName: 'Back squat', sets: [{ reps: '5.5', weight: '135' }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+  });
+});
+
+describe('logStrengthAction — happy path (transactional nested write)', () => {
+  it('passes movement + parsed sets to the DAL and revalidates', async () => {
+    const clientId = newId();
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({
+        movementName: 'Back squat',
+        clientId,
+        sets: [
+          { reps: '5', weight: '135' },
+          { reps: '5', weight: '135' },
+          { reps: '3', weight: '155' },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(logStrengthEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profilePublicId: 'profile-pub-id',
+        movementName: 'Back squat',
+        unit: BODYWEIGHT_UNITS[0],
+        clientId,
+        sets: [
+          { reps: 5, weight: 135 },
+          { reps: 5, weight: 135 },
+          { reps: 3, weight: 155 },
+        ],
+      }),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith('/');
   });
 });
