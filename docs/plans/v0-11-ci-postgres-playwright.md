@@ -77,7 +77,7 @@ export default defineConfig({
   webServer: {
     // Build+start the PROD server: representative CSP/render, and NODE_ENV=production
     // means the gate cookie is Secure — Chromium honors Secure on localhost.
-    command: `pnpm --filter web build && pnpm --filter web start -- -p ${PORT}`,
+    command: `pnpm --filter web build && pnpm --filter web exec next start -p ${PORT}`,
     url: `${baseURL}/gate`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000, // Next build inside the server boot

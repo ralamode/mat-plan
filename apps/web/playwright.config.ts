@@ -30,7 +30,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `pnpm --filter web build && pnpm --filter web start -- -p ${PORT}`,
+    command: `pnpm --filter web build && pnpm --filter web exec next start -p ${PORT}`,
     url: `${baseURL}/gate`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
