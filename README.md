@@ -21,7 +21,7 @@ See [docs/status.md](./docs/status.md).
 | [docs/spec.md](./docs/spec.md)                             | Architecture, entity/data model, coexistence, offline, server & DB standards                     |
 | [docs/architecture.md](./docs/architecture.md)             | System diagrams (containers, write path, offline sync, ERD, CI, roadmap)                         |
 | [docs/design.md](./docs/design.md)                         | Design language + tokens (shadcn/ui + Tailwind, adult-first)                                     |
-| [docs/deploy.md](./docs/deploy.md)                         | Vercel deployment (monorepo root dir, preview deploys, env, migration rule)                      |
+| [docs/deploy.md](./docs/deploy.md)                         | Deployment + one-time setup (Neon, Vercel env, GitHub secret, first migration, local dev)        |
 | [docs/plan.md](./docs/plan.md)                             | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3)                                |
 | [docs/status.md](./docs/status.md)                         | Living progress tracker toward the MVP                                                           |
 | [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done                                                                        |
