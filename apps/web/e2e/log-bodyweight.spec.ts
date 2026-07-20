@@ -22,5 +22,7 @@ test('logs a bodyweight and renders it in Today', async ({ page }) => {
 
   // `revalidatePath('/')` in the action re-renders the RSC, so the entry shows
   // without a manual reload. The string is exactly entryLabel()'s output.
-  await expect(page.getByText('Bodyweight — 72.5 lb')).toBeVisible();
+  // Extra-generous timeout: this is the one assertion that awaits the whole
+  // server round-trip, which is slowest on the cold first request in CI.
+  await expect(page.getByText('Bodyweight — 72.5 lb')).toBeVisible({ timeout: 15_000 });
 });

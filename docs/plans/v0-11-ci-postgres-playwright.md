@@ -275,9 +275,13 @@ migrated+seeded PG and the three env vars.)
   `localhost` as a secure context and stores `Secure` cookies there. (This is exactly what the existing
   MCP flow already relies on.) If a future browser tightens this, fall back to the
   `addCookies`+`gateTokenFor` variant noted above.
-- **Flakiness.** Mitigations: assert on stable roles/labels (`getByRole`/`getByLabel`) and the exact
-  `entryLabel` string, not CSS; `retries: 1` in CI; `trace: 'on-first-retry'` + report artifact for
-  triage; deterministic seed so the item is unique.
+- **Flakiness.** Mitigations: assert on stable roles/labels (`getByRole`/`getByLabel` with `exact` to
+  avoid substring ambiguity) and the exact `entryLabel` string, not CSS; a **generous expect timeout**
+  (global 10s + 15s on the post-submit assertion) so the cold-first-request server round-trip
+  (Server Action → DB → revalidate → RSC) doesn't race the default 5s; `retries: 1` as a backstop only
+  (a `flaky` annotation is a bug to fix, not to ignore); `trace: 'on-first-retry'` + report artifact
+  for triage; deterministic seed so the item is unique. **Observed:** the first CI run flaked exactly
+  here (5s default timeout on the cold round-trip) — the timeouts above are the fix.
 - **Playwright browser download cost/instability.** Cache `~/.cache/ms-playwright` keyed on
   `pnpm-lock.yaml`; install only `chromium --with-deps`.
 - **Build-vs-dev server.** Deliberately prod (`build && start`) for representative CSP/render and the

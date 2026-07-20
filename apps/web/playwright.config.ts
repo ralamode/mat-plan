@@ -21,7 +21,14 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  // Retries are a backstop for genuine infra hiccups — NOT a cover for known
+  // races. A `flaky` annotation is a signal to fix the test (see the generous
+  // expect timeout below), not to shrug at.
   retries: process.env.CI ? 1 : 0,
+  // Default expect is 5s — too tight for an assertion that awaits a full server
+  // round-trip (Server Action → DB write → revalidate → RSC re-render) on a cold
+  // CI first request. Give every assertion realistic headroom.
+  expect: { timeout: 10_000 },
   reporter: process.env.CI ? [['html'], ['github']] : 'list',
   outputDir: './test-results',
   use: {
