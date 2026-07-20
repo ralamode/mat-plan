@@ -5,6 +5,7 @@ import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
 
 import { BodyweightForm } from './bodyweight-form';
+import { StrengthForm } from './strength-form';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -33,12 +34,20 @@ export default async function TodayPage() {
       </header>
 
       {profile ? (
-        <section aria-labelledby="log-heading" className="flex flex-col gap-3">
-          <h2 id="log-heading" className="text-lg font-medium">
-            Log bodyweight
-          </h2>
-          <BodyweightForm />
-        </section>
+        <div className="flex flex-col gap-6">
+          <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
+            <h2 id="log-bw-heading" className="text-lg font-medium">
+              Log bodyweight
+            </h2>
+            <BodyweightForm />
+          </section>
+          <section aria-labelledby="log-str-heading" className="flex flex-col gap-3">
+            <h2 id="log-str-heading" className="text-lg font-medium">
+              Log strength
+            </h2>
+            <StrengthForm />
+          </section>
+        </div>
       ) : null}
 
       <section aria-labelledby="entries-heading">
@@ -57,13 +66,21 @@ export default async function TodayPage() {
         ) : (
           <ul className="flex flex-col gap-2">
             {entries.map((e) => (
-              <li
-                key={e.id}
-                className="flex items-center justify-between rounded-lg border px-4 py-3"
-              >
-                <span className="font-medium">{entryLabel(e)}</span>
-                {e.status !== ENTRY_STATUS.done ? (
-                  <span className="text-muted-foreground text-sm">{e.status}</span>
+              <li key={e.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{entryLabel(e)}</span>
+                  {e.status !== ENTRY_STATUS.done ? (
+                    <span className="text-muted-foreground text-sm">{e.status}</span>
+                  ) : null}
+                </div>
+                {e.sets.length > 0 ? (
+                  <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+                    {e.sets.map((s) => (
+                      <li key={s.idx}>
+                        {s.reps ?? '?'} × {s.weightLabel ?? `${s.weight ?? '?'} ${e.unit}`}
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
               </li>
             ))}
