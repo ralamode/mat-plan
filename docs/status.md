@@ -3,18 +3,19 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-20
 
 ## Where we are right now
 
-📍 **V0-5 — up next.** V0-4 (env validation + access-gate + security headers) is **merged**,
-plus two out-of-band hardening PRs: a **constants/enums centralization convention** and the
-**Vitest harness** (test runner pulled forward from V0-12 so V0-8 can ship boundary tests in-PR).
-Next: **V0-5** (Neon + Drizzle + first migration + DAL skeleton) — the DB unblock.
+📍 **V0-6 — in progress.** V0-5 (Neon + Drizzle schema + first migration + seed + DAL skeleton) is
+**merged**; the DB layer exists and is verified via PGlite. V0-6 wires **migrate-on-deploy** (GitHub
+Actions as the single migrator) + the one-time Neon/Vercel setup docs. **Manual setup pending:**
+provision Neon, set `DATABASE_URL` (Vercel) + `DATABASE_URL_UNPOOLED` (GitHub secret) — see
+[deploy.md](./deploy.md). Next: **V0-7** (Today view reading the DB via the DAL).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 5 / 27 ▰▰▰▰▰▱▱▱▱▱ ~19% (+2 out-of-band: constants convention, Vitest harness)
+- **Code PRs merged:** 6 / 27 ▰▰▰▰▰▰▱▱▱▱ ~22% (+2 out-of-band: constants convention, Vitest harness)
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -22,7 +23,7 @@ Next: **V0-5** (Neon + Drizzle + first migration + DAL skeleton) — the DB unbl
 | Phase     | Goal                                                                     | Status         |
 | --------- | ------------------------------------------------------------------------ | -------------- |
 | Bootstrap | Repo + planning docs                                                     | ✅ done        |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ⚪ not started |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | 🟡 in progress |
 | **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | ⚪ not started |
 | AI-1      | NL logging via structured outputs + eval                                 | ⚪ not started |
 | v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started |
@@ -33,21 +34,21 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 
-| PR    | Scope                                                       | Status  |
-| ----- | ----------------------------------------------------------- | ------- |
-| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done |
-| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done |
-| V0-2  | GH Actions CI + branch protection                           | ✅ done |
-| V0-3  | Vercel connect + preview deploys                            | ✅ done |
-| V0-4  | env validation + access-gate + security headers             | ✅ done |
-| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ⚪      |
-| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ⚪      |
-| V0-7  | Today view (RSC via DAL)                                    | ⚪      |
-| V0-8  | log bodyweight (Server Action + zod)                        | ⚪      |
-| V0-9  | log strength entry (transactional nested write)             | ⚪      |
-| V0-10 | loading/empty/error primitives + boundary                   | ⚪      |
-| V0-11 | CI Postgres + Playwright smoke                              | ⚪      |
-| V0-12 | unit + integration test + DoD                               | ⚪      |
+| PR    | Scope                                                       | Status       |
+| ----- | ----------------------------------------------------------- | ------------ |
+| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done      |
+| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done      |
+| V0-2  | GH Actions CI + branch protection                           | ✅ done      |
+| V0-3  | Vercel connect + preview deploys                            | ✅ done      |
+| V0-4  | env validation + access-gate + security headers             | ✅ done      |
+| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ✅ done      |
+| V0-6  | migrate-on-deploy (GH Actions single migrator)              | 🔵 in review |
+| V0-7  | Today view (RSC via DAL)                                    | ⚪           |
+| V0-8  | log bodyweight (Server Action + zod)                        | ⚪           |
+| V0-9  | log strength entry (transactional nested write)             | ⚪           |
+| V0-10 | loading/empty/error primitives + boundary                   | ⚪           |
+| V0-11 | CI Postgres + Playwright smoke                              | ⚪           |
+| V0-12 | unit + integration test + DoD                               | ⚪           |
 
 ## v1 backlog (14 PRs) — completes the MVP
 
@@ -70,6 +71,9 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V0-5**: Neon + Drizzle schema (units/profiles/entries/entry_sets) + first
+  migration + idempotent seed + server-only DAL skeleton; unit enum sourced from `@mat-plan/shared`;
+  PGlite verify + schema-drift guard wired into CI.
 - **2026-07-18** — **Vitest harness** (out-of-band): unit/integration runner pulled forward from
   V0-12; `server-only` stub + `@` alias; first suite covers the access-gate token helpers; wired
   into CI (required Test check) + `pre-push`.
