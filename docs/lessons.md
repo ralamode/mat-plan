@@ -41,6 +41,15 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 - **Commit rejected: "subject must not be sentence-case / start-case".** → commitlint wants a
   **lowercase** subject start. → `feat(x): add …`, not `feat(x): Add …` / `feat(x): CI …`.
 
+## tsx / scripts
+
+- **`tsx` script fails: "Top-level await is currently not supported with the cjs output format".** →
+  The package has no `"type": "module"` (e.g. `apps/web`), so tsx transforms `.ts` to CJS. → Wrap the
+  body in an `async function main() { … }` + `main().catch(…)`, or make the package/file ESM
+  (`.mts` / `"type": "module"` — `packages/db` does the latter). (V0-11 screenshot script)
+- **A plain `tsx` script doesn't see `.env.local`.** → Only Next auto-loads `.env.local`; a standalone
+  tsx run doesn't. → Pass env explicitly (`ACCESS_GATE_PASSWORD=$(…) pnpm --filter web screenshot`).
+
 ## pnpm / build
 
 - **Native/esbuild build script blocked on install.** → pnpm 11 blocks unlisted build scripts. → Add

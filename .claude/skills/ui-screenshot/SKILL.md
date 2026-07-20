@@ -34,15 +34,19 @@ gate-login helper the E2E smoke uses (`apps/web/e2e/gate-login.ts`). No MCP need
    (Next auto-loads it). Data-backed pages read live Neon; seed first if the screen needs rows.
 
 2. **Capture** (the script logs through the gate itself, then screenshots the route to
-   `.screenshots/<slug>.png`):
+   `.screenshots/<slug>.png`). The script is a plain tsx run (**not** Next), so it does **not**
+   auto-load `.env.local` — pass the gate code explicitly:
 
    ```bash
-   pnpm --filter web screenshot /            # or any route, e.g. /gate
+   ACCESS_GATE_PASSWORD=$(grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -E 's/^[^=]+=//; s/^"//; s/"$//') \
+     pnpm --filter web screenshot /            # or any route, e.g. /gate
    ```
 
    Chromium honors the `Secure` gate cookie on `localhost`. Override the target server with
-   `SCREENSHOT_BASE_URL` if not on `:3996`. Rename the output descriptively + versioned to the PR
-   (e.g. `mv .screenshots/home.png .screenshots/v0-11-today.png`).
+   `SCREENSHOT_BASE_URL` if not on `:3996`. The PNG lands in `apps/web/.screenshots/` (`pnpm --filter
+web` runs from `apps/web`); move + rename it descriptively + versioned to the PR
+   (e.g. `mv apps/web/.screenshots/home.png .screenshots/v0-11-today.png`). Run `playwright install
+chromium` once if the browser isn't present.
 
 3. **Hand it over:** `SendUserFile` the PNG, then attach it to the PR per "Posting to the PR" below.
 

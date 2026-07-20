@@ -137,28 +137,43 @@ setup('authenticate through the gate', async ({ page }) => {
 ### `apps/web/scripts/screenshot.ts` (entrypoint)
 
 ```ts
-import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+import { chromium } from '@playwright/test';
 import { gateLogin } from '../e2e/gate-login';
 
-// Usage (mirrors the current skill): build → start prod → run this.
+// Usage (mirrors the current skill): build → start prod → run this. The script
+// is a plain tsx run (NOT Next), so it does NOT auto-load .env.local — pass the
+// gate code explicitly:
 //   pnpm build && pnpm --filter web start -- -p 3996
-//   pnpm --filter web screenshot /            # or /gate, other routes
-const route = process.argv[2] ?? '/';
-const base = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
-const name = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
+//   ACCESS_GATE_PASSWORD=<code> pnpm --filter web screenshot /   # or any route
+//
+// Body wrapped in async main() (NOT top-level await): apps/web is a CJS package
+// and tsx transforms this to CJS, where top-level await is unsupported.
+async function main() {
+  const route = process.argv[2] ?? '/';
+  const base = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
+  const name = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
 
-await mkdir('.screenshots', { recursive: true });
-const browser = await chromium.launch();
-const page = await browser.newContext({ baseURL: base }).then((c) => c.newPage());
-await gateLogin(page); // SAME helper as the test setup
-await page.goto(route, { waitUntil: 'networkidle' });
-await page.screenshot({ path: `.screenshots/${name}.png`, fullPage: true });
-await browser.close();
+  await mkdir('.screenshots', { recursive: true });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newContext({ baseURL: base }).then((c) => c.newPage());
+    await gateLogin(page); // SAME helper as the test setup
+    await page.goto(route, { waitUntil: 'networkidle' });
+    await page.screenshot({ path: `.screenshots/${name}.png`, fullPage: true });
+  } finally {
+    await browser.close();
+  }
+}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
 ```
 
 It requires a running prod server (exactly like today's SKILL step 1) and reuses `gateLogin` — the
-"same gate-login fixture" the smoke test uses. Writes to the already-gitignored `.screenshots/`.
+"same gate-login fixture" the smoke test uses. Writes to the already-gitignored `.screenshots/`
+(under the invoking package dir — `pnpm --filter web` runs it from `apps/web`).
 
 ### CI job (`.github/workflows/ci.yml`, new `e2e` job)
 
