@@ -63,6 +63,25 @@ committed**.
 - Optional: capture light **and** dark (the app is theme-aware) when the change is visual/design-heavy.
 - Keep filenames descriptive and versioned to the PR (e.g. `v0-7-today-empty.png`).
 
+## Posting to the PR — private repo, read this
+
+`gh` is authenticated (via `GH_TOKEN`), so **post the PR body with `gh pr create/edit --body-file`** —
+no copy-paste. BUT:
+
+- **This repo is PRIVATE.** GitHub renders inline markdown images through an anonymous proxy (camo)
+  that **cannot fetch a private repo's `raw.githubusercontent.com` / blob URLs → the image shows
+  broken.** Do NOT embed raw/assets-branch URLs here (an "assets branch" trick only works on _public_
+  repos). This was learned the hard way on V0-10.
+- The **only** way to get an inline image in a private-repo PR is GitHub's **user-attachments** upload
+  (the web drag-drop), which is session-authenticated and **not** scriptable via `gh`/PAT.
+- **So the flow is:** post the body via `gh` with the screenshot referenced as _"attached below"_ (no
+  inline embed), then **`SendUserFile` the PNG** so the user drags it into the PR. One manual drop; the
+  description is fully automated.
+- Zero-drag alternative (only if asked): commit the PNG into the PR branch so it renders in the **Files
+  changed** tab — costs a small binary in `main` on squash-merge.
+- If the repo ever goes **public**, `raw.githubusercontent.com` embeds work and the image can be
+  automated too.
+
 ## Future
 
 At **V0-11** Playwright lands as a real dev dependency; this flow graduates to a committed
