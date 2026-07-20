@@ -1,9 +1,9 @@
 'use server';
 
-import { logBodyweightSchema } from '@mat-plan/shared';
+import { logBodyweightSchema, logStrengthSchema } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
-import { logBodyweight } from '@/lib/dal/entries';
+import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
 import { getDefaultProfile } from '@/lib/dal/profiles';
 import { todayIso } from '@/lib/date';
 
@@ -49,6 +49,47 @@ export async function logBodyweightAction(
     clientId: parsed.data.clientId,
     day: todayIso(),
     notes: parsed.data.notes ?? null,
+  });
+
+  revalidatePath('/');
+  return { ok: true, error: null };
+}
+
+export async function logStrengthAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  // Sets come in as parallel repeated fields; pair them up, drop blank rows.
+  const reps = formData.getAll('reps').map(String);
+  const weights = formData.getAll('weight').map(String);
+  const sets = reps
+    .map((r, i) => ({ reps: r, weight: weights[i] ?? '' }))
+    .filter((s) => s.reps.trim() !== '' || s.weight.trim() !== '');
+
+  const parsed = logStrengthSchema.safeParse({
+    movementName: formData.get('movementName'),
+    unit: formData.get('unit'),
+    clientId: formData.get('clientId'),
+    sets,
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const profile = await getDefaultProfile();
+  if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+  await logStrengthEntry({
+    profilePublicId: profile.id,
+    movementName: parsed.data.movementName,
+    unit: parsed.data.unit,
+    sets: parsed.data.sets,
+    clientId: parsed.data.clientId,
+    day: todayIso(),
   });
 
   revalidatePath('/');

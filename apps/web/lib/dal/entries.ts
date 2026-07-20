@@ -10,7 +10,7 @@ import {
   type EntryStatus,
   type Unit,
 } from '@mat-plan/shared';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { db } from './db';
 
@@ -20,19 +20,28 @@ import { db } from './db';
  * day. Returns DTOs — never raw rows. Ownership/household scoping plugs in here
  * once Clerk lands (V1-1/v1.5).
  */
+export type SetDTO = {
+  idx: number;
+  reps: number | null;
+  weight: number | null;
+  weightLabel: string | null;
+};
+
 export type EntryDTO = {
   id: string; // public_id (UUIDv7)
   kind: EntryKind;
   unit: Unit;
   movementName: string | null;
-  value: number | null; // bodyweight value_num; null for strength (values live in entry_sets)
+  value: number | null; // bodyweight value_num; null for strength (values live in sets)
   status: EntryStatus;
   notes: string | null;
+  sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
 export async function listEntriesForDay(profilePublicId: string, day: string): Promise<EntryDTO[]> {
   const rows = await db
     .select({
+      id: schema.entries.id, // internal — used only to join sets, never returned
       publicId: schema.entries.publicId,
       kind: schema.entries.kind,
       unit: schema.entries.unit,
@@ -52,6 +61,36 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     )
     .orderBy(desc(schema.entries.createdAt));
 
+  // Fetch sets for the strength entries in one query, then group by entry.
+  const strengthIds = rows.filter((r) => r.kind === ENTRY_KIND.strength).map((r) => r.id);
+  const setRows = strengthIds.length
+    ? await db
+        .select({
+          entryId: schema.entrySets.entryId,
+          idx: schema.entrySets.idx,
+          reps: schema.entrySets.reps,
+          weightNum: schema.entrySets.weightNum,
+          weightLabel: schema.entrySets.weightLabel,
+        })
+        .from(schema.entrySets)
+        .where(
+          and(inArray(schema.entrySets.entryId, strengthIds), isNull(schema.entrySets.deletedAt)),
+        )
+        .orderBy(asc(schema.entrySets.idx))
+    : [];
+
+  const setsByEntry = new Map<number, SetDTO[]>();
+  for (const s of setRows) {
+    const list = setsByEntry.get(s.entryId) ?? [];
+    list.push({
+      idx: s.idx,
+      reps: s.reps,
+      weight: s.weightNum === null ? null : Number(s.weightNum),
+      weightLabel: s.weightLabel,
+    });
+    setsByEntry.set(s.entryId, list);
+  }
+
   return rows.map((r) => ({
     id: r.publicId,
     kind: r.kind as EntryKind,
@@ -61,6 +100,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     value: r.valueNum === null ? null : Number(r.valueNum),
     status: r.status as EntryStatus,
     notes: r.notes,
+    sets: setsByEntry.get(r.id) ?? [],
   }));
 }
 
@@ -119,4 +159,74 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: stri
     .where(eq(schema.entries.clientId, args.clientId))
     .limit(1);
   return { id: existing.publicId };
+}
+
+export type LogStrengthArgs = {
+  profilePublicId: string;
+  movementName: string;
+  unit: BodyweightUnit; // lb/kg
+  sets: { reps: number; weight: number }[];
+  clientId: string; // client-stamped UUIDv7 (parent entry)
+  day: string;
+};
+
+/**
+ * Writes a strength entry + its sets in ONE transaction (V0-9): either the entry
+ * and all N `entry_set` rows land, or none do. Idempotent by the entry's
+ * `client_id` — a replay finds the existing entry and skips re-inserting sets
+ * (so it never doubles the sets). Set ids are generated server-side.
+ */
+export async function logStrengthEntry(args: LogStrengthArgs): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const [profile] = await tx
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(
+        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
+      )
+      .limit(1);
+    if (!profile) throw new Error('Profile not found');
+
+    const [entry] = await tx
+      .insert(schema.entries)
+      .values({
+        publicId: newId(),
+        clientId: args.clientId,
+        profileId: profile.id,
+        activityDate: args.day,
+        kind: ENTRY_KIND.strength,
+        unit: args.unit,
+        movementName: args.movementName,
+        status: ENTRY_STATUS.done,
+      })
+      .onConflictDoNothing({
+        target: schema.entries.clientId,
+        where: isNull(schema.entries.deletedAt),
+      })
+      .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
+
+    // Idempotent replay: the entry already exists — return it, don't re-add sets.
+    if (!entry) {
+      const [existing] = await tx
+        .select({ publicId: schema.entries.publicId })
+        .from(schema.entries)
+        .where(eq(schema.entries.clientId, args.clientId))
+        .limit(1);
+      return { id: existing.publicId };
+    }
+
+    await tx.insert(schema.entrySets).values(
+      args.sets.map((s, i) => ({
+        publicId: newId(),
+        clientId: newId(),
+        entryId: entry.id,
+        idx: i + 1, // 1-based
+        reps: s.reps,
+        weightNum: String(s.weight),
+        status: ENTRY_STATUS.done,
+      })),
+    );
+
+    return { id: entry.publicId };
+  });
 }
