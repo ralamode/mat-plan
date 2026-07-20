@@ -1,0 +1,53 @@
+name: Migrate (production)
+
+# GitHub Actions is the SINGLE migrator (AGENTS.md DB rules): it applies pending
+# migrations against the DIRECT/unpooled Neon string on merge to main — NEVER in
+# the Vercel build (concurrent preview builds would race / DDL the wrong DB).
+# Additive/expand migrations are backward-compatible, so racing the Vercel deploy
+# is safe; destructive contract steps are gated behind a later, separate deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/db/migrations/**'
+      - '.github/workflows/migrate.yml'
+  workflow_dispatch: # manual trigger — use this for the very first run once the secret is set
+
+# Never cancel an in-flight migration; serialize runs against main.
+concurrency:
+  group: migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: apply migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations + idempotent seed (direct/unpooled Neon string)
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            echo "::warning::DATABASE_URL_UNPOOLED secret not set — skipping (Neon not wired yet)."
+            exit 0
+          fi
+          pnpm --filter @mat-plan/db db:migrate
+          pnpm --filter @mat-plan/db db:seed
