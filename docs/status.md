@@ -7,15 +7,15 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **V0-6 — in progress.** V0-5 (Neon + Drizzle schema + first migration + seed + DAL skeleton) is
-**merged**; the DB layer exists and is verified via PGlite. V0-6 wires **migrate-on-deploy** (GitHub
-Actions as the single migrator) + the one-time Neon/Vercel setup docs. **Manual setup pending:**
-provision Neon, set `DATABASE_URL` (Vercel) + `DATABASE_URL_UNPOOLED` (GitHub secret) — see
-[deploy.md](./deploy.md). Next: **V0-7** (Today view reading the DB via the DAL).
+📍 **V0-7 — in review.** V0-6 (migrate-on-deploy) is **merged** and the app is **live**: Neon
+provisioned, schema + seed applied to production, Vercel env + GitHub migrator secret set, and the
+deployed access gate + security headers smoke-tested at `mat-plan-web.vercel.app`. V0-7 adds the
+**Today view** — an RSC that reads the DB via the DAL and shows an empty state. Next: **V0-8** (log
+bodyweight — the first write).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 6 / 27 ▰▰▰▰▰▰▱▱▱▱ ~22% (+2 out-of-band: constants convention, Vitest harness)
+- **Code PRs merged:** 7 / 27 ▰▰▰▰▰▰▰▱▱▱ ~26% (+2 out-of-band: constants convention, Vitest harness)
 - **Phase:** v0 🟡 in progress
 
 ## Phases
@@ -42,8 +42,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V0-3  | Vercel connect + preview deploys                            | ✅ done      |
 | V0-4  | env validation + access-gate + security headers             | ✅ done      |
 | V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ✅ done      |
-| V0-6  | migrate-on-deploy (GH Actions single migrator)              | 🔵 in review |
-| V0-7  | Today view (RSC via DAL)                                    | ⚪           |
+| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ✅ done      |
+| V0-7  | Today view (RSC via DAL)                                    | 🔵 in review |
 | V0-8  | log bodyweight (Server Action + zod)                        | ⚪           |
 | V0-9  | log strength entry (transactional nested write)             | ⚪           |
 | V0-10 | loading/empty/error primitives + boundary                   | ⚪           |
@@ -71,6 +71,9 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V0-6**: migrate-on-deploy (GitHub Actions single migrator, direct/unpooled Neon
+  string) + one-time setup guide (`deploy.md`); observability ADR + Core Web Vitals convention;
+  documented `.local-secrets/` folder. App went **live** on Vercel + Neon.
 - **2026-07-20** — **V0-5**: Neon + Drizzle schema (units/profiles/entries/entry_sets) + first
   migration + idempotent seed + server-only DAL skeleton; unit enum sourced from `@mat-plan/shared`;
   PGlite verify + schema-drift guard wired into CI.
