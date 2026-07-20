@@ -13,7 +13,9 @@ export { schema };
 export type Schema = typeof schema;
 
 export function createDbPool(connectionString: string): Pool {
-  return new Pool({ connectionString });
+  // Bound the connect wait so an unreachable DB fails fast into the error
+  // boundary (V0-10) instead of hanging the request.
+  return new Pool({ connectionString, connectionTimeoutMillis: 10_000 });
 }
 
 export function createDb(pool: Pool) {
