@@ -1,7 +1,8 @@
 # V1-1 — generalize the v0 schema toward the full activity model
 
 > Backlog: [plan.md](../plan.md) row V1-1. Branches: `db/v1-1a-additive-catalogs` (merged),
-> `db/v1-1b-generalize-entries` (this PR), then `db/v1-1c-*`. Grounds in [spec.md](../spec.md) §4.
+> `db/v1-1b-generalize-entries` (merged), `db/v1-1c-relax-kind` (constraint relaxation), then
+> `db/v1-1d-contract` (the physical column drops). Grounds in [spec.md](../spec.md) §4.
 
 ## Goal
 
@@ -18,8 +19,10 @@ production Neon DB already holds the v0 seed profile and (potentially) real rows
 1. **Entry tagged-union CHECK = AT-MOST-ONE:** `(movement_id IS NULL OR metric_key IS NULL)` — not
    the exactly-one XOR in spec §4 — because boolean/timing activities (rice_bucket, wake, splits)
    reference **neither** a movement nor a metric. Added in **V1-1b** (with the entry columns), not here.
-2. **Split into a / b / c** (see phase table). Each phase is independently deployable and reversible
-   by omission (expand-contract).
+2. **Split into a / b / c / d** (see phase table). Each phase is independently deployable and
+   reversible by omission (expand-contract). Originally scoped as a/b/c; the destructive contract was
+   later split into **V1-1c (constraint relaxation, metadata-only)** and **V1-1d (the physical
+   `DROP COLUMN` + CHECK drops)** so the app can be taken off `kind` (V1-5–V1-8) between them.
 3. **Defer the Squawk + Neon-branch CI wiring.** V1-1a does **not** edit `ci.yml`. The migration is
    proven locally via the PGlite `db:verify` harness + the drizzle drift guard; the real-DB gates
    (Squawk lint, Docker-PG apply, Neon-branch apply) are wired in a later infra PR. Consequence: the
@@ -29,11 +32,12 @@ production Neon DB already holds the v0 seed profile and (potentially) real rows
 
 ## Phase table
 
-| Phase     | Branch                        | Kind                   | Scope                                                                                                                                                                                                          | Status                |
-| --------- | ----------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| **V1-1a** | `db/v1-1a-additive-catalogs`  | additive (expand)      | New tables + `profiles` columns + structural enums + reference-table seeds. **No `entries`/`entry_sets` change, no entry backfill, no DAL change.**                                                            | ✅ merged             |
-| **V1-1b** | `db/v1-1b-generalize-entries` | additive + backfill    | Add `entries.session_id / activity_type_id / movement_id / metric_key / value_text / context / scheme`; the **at-most-one CHECK** (decision 1); seed 3 minimal catalog rows; backfill v0 rows; DAL dual-write. | ✅ **this PR**        |
-| V1-1c     | `db/v1-1c-contract`           | destructive (contract) | Drop the legacy `entries.kind` / `movement_name` / `entries_shape_check` once V1-1b has backfilled and the app no longer reads them. Squawk-gated, separate deploy.                                            | ⏳ deferred (after b) |
+| Phase     | Branch                        | Kind                   | Scope                                                                                                                                                                                                                                                                                                                     | Status                  |
+| --------- | ----------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **V1-1a** | `db/v1-1a-additive-catalogs`  | additive (expand)      | New tables + `profiles` columns + structural enums + reference-table seeds. **No `entries`/`entry_sets` change, no entry backfill, no DAL change.**                                                                                                                                                                       | ✅ merged               |
+| **V1-1b** | `db/v1-1b-generalize-entries` | additive + backfill    | Add `entries.session_id / activity_type_id / movement_id / metric_key / value_text / context / scheme`; the **at-most-one CHECK** (decision 1); seed 3 minimal catalog rows; backfill v0 rows; DAL dual-write.                                                                                                            | ✅ merged               |
+| **V1-1c** | `db/v1-1c-relax-kind`         | constraint relaxation  | Relax `entries.kind` to **NULLABLE** (unblocks metric-only / boolean check-ins) + add the discriminant invariant `activity_type_id IS NOT NULL` (CHECK NOT VALID → VALIDATE). **No column drop, no app change** — the legacy `kind`/`movement_name` columns + the `entries_kind_check`/`entries_shape_check` guards STAY. | ✅ **this PR**          |
+| V1-1d     | `db/v1-1d-contract`           | destructive (contract) | The physical `DROP COLUMN kind` / `movement_name` + drop `entries_kind_check` / `entries_shape_check`, once V1-5–V1-8 take the app off `kind`. Squawk-wired, 2-deploy expand→contract split, Neon RESTORE branch cut first.                                                                                               | ⏳ deferred (after b→c) |
 
 ## Acceptance (V1-1a)
 
@@ -159,3 +163,128 @@ one-time backfill; new movements the DAL creates get a client UUIDv7.
 ## Open questions
 
 _(none — the four decisions above are locked.)_
+
+---
+
+# V1-1c — relax `entries.kind` NOT NULL; add the `activity_type_id` discriminant invariant
+
+> Backlog: [plan.md](../plan.md) row V1-1. Branch: `db/v1-1c-relax-kind`. This is the **constraint
+> relaxation** phase (metadata-only), split out of the original "destructive contract" — the physical
+> `DROP COLUMN` is now **V1-1d**.
+
+## Goal
+
+A metric-only / boolean check-in (e.g. a `rice_bucket` "stance" check-in) has no `kind` — it's not a
+bodyweight or a strength row. The single thing blocking that insert is `entries.kind NOT NULL`. This
+PR makes `kind` **nullable** so those entries insert, and adds the discriminant invariant
+`activity_type_id IS NOT NULL` (every row must identify its activity — [spec.md](../spec.md) §4;
+`schema.ts` already reserved "becomes NOT NULL at V1-1c"). It is **metadata-only**: no column is
+dropped, no data moves, and no app code changes. The legacy `kind`/`movement_name` columns and the
+`entries_kind_check` / `entries_shape_check` guards **stay** (they still guard the live `kind`
+dual-writer — `logBodyweight`/`logStrengthEntry` keep writing `kind`); the physical drop is **V1-1d**,
+after V1-5–V1-8 take the app off `kind`.
+
+## Acceptance
+
+- **plan.md V1-1 criterion:** "Migration runs forward on a Neon branch, v0 data preserved." V1-1c is
+  backward-compatible (nothing dropped) → v0 data is trivially preserved; the Neon-branch apply is the
+  CI `e2e` job's `db:migrate`.
+- Done when, in this PR: `db:generate` leaves a clean tree (the `kind`-nullable change matches the
+  snapshot; the hand-added `activity_type_id` CHECK is absent from `schema.ts`/snapshot, same as
+  `household_id`, so `generate` doesn't re-emit it); `db:verify` proves a `kind`-less metric-only
+  check-in inserts + round-trips (`kind IS NULL`, `activity_type_id` set, `movement_id` NULL) and that
+  a row without `activity_type_id` is rejected **specifically** by `entries_activity_type_id_not_null`;
+  the pre-existing guard assertions still hold; typecheck · lint · test · `format:check` · `next build`
+  green.
+
+## File-by-file changes
+
+| Path                                            | Change   | What & why                                                                                                                                                                                                                                                     |
+| ----------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/schema.ts`                     | EDIT     | `kind: text('kind').notNull()` → `kind: text('kind')` (nullable). Both `check()` calls **unchanged**; `activity_type_id` stays nullable in Drizzle (NOT NULL is a hand-added CHECK). Comments updated: kind relaxed at V1-1c, columns/CHECKs dropped at V1-1d. |
+| `packages/db/migrations/0003_slow_mandarin.sql` | NEW      | Generated `ALTER … DROP NOT NULL` on `kind` + hand-added `SET` timeouts, header, and `activity_type_id` NOT-NULL CHECK (`NOT VALID` → `VALIDATE`).                                                                                                             |
+| `packages/db/migrations/meta/*`                 | NEW/EDIT | drizzle snapshot `0003` + journal (the drift-guard artifact).                                                                                                                                                                                                  |
+| `packages/db/scripts/verify.ts`                 | EDIT     | Add the V1-1c assertions (kind-less check-in inserts; discriminant guard rejects a no-activity row by name); reproduce the V1-1b backfill-sim under deploy-order (relax→backfill→re-add the invariant); fix a stale "dropped at V1-1c" comment → V1-1d.        |
+| `docs/plans/v1-1-generalize-schema.md`          | EDIT     | This section + phase-table (V1-1c = relaxation, V1-1d = drops) + review-response log.                                                                                                                                                                          |
+| `docs/plan.md`, `docs/status.md`                | EDIT     | Backlog row a/b/c → a/b/c/d; status where-we-are + changelog.                                                                                                                                                                                                  |
+
+### Migration `0003` (hand-added shape)
+
+```sql
+SET lock_timeout = '5s';
+SET statement_timeout = '60s';
+ALTER TABLE "entries" ALTER COLUMN "kind" DROP NOT NULL;              -- generated
+ALTER TABLE "entries" ADD CONSTRAINT "entries_activity_type_id_not_null"
+  CHECK ("activity_type_id" IS NOT NULL) NOT VALID;                   -- hand-added (mirrors household_id)
+ALTER TABLE "entries" VALIDATE CONSTRAINT "entries_activity_type_id_not_null";
+```
+
+`VALIDATE` succeeds because V1-1b backfilled `activity_type_id` on every row. Backward-compatible
+(nothing removed) → safe to race the concurrent Vercel deploy (expand-before-deploy ordering).
+
+## Test plan
+
+- `pnpm --filter @mat-plan/db db:verify` — PGlite applies `0000`–`0003`; the new V1-1c assertions pass
+  alongside the retained V1-1a/b/2 ones.
+- `pnpm --filter @mat-plan/db db:generate` — drift guard: clean tree.
+- Root gates: `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm format:check` (+ `next build` in CI).
+- **Real-PG gate:** the CI `e2e` job runs `db:migrate` against a real Postgres — so **do NOT apply the
+  `ci-skip-e2e` label** on this PR (that would skip the one real-DB apply of this migration).
+
+## Risks / rollback
+
+- **`entries_shape_check` is NOT fully NULL-permissive (3-valued-logic subtlety).** A `kind=NULL` row
+  passes the retained `entries_shape_check` **only when `value_num` is populated** — a NULL `value_num`
+  makes the sub-predicate `value_num is not null` **FALSE** (not NULL), forcing both OR-branches FALSE
+  and the whole CHECK FALSE (→ reject). So the relaxation unblocks metric-only entries **because every
+  seeded metric is numeric** (bool/count/duration/scale_10/number → stored in `value_num`; V1-1b's own
+  boolean row used `value_num='1'`) — a real metric entry always carries `value_num`. **Latent gap:** a
+  future `value_type='text'` metric (reading in `value_text`, `value_num` NULL) with `kind` NULL would
+  still be blocked by `entries_shape_check` until **V1-1d** drops it. No such metric is seeded today; a
+  downstream note is filed. (This corrects the draft's over-broad "Postgres CHECKs pass on NULL".)
+- **Drift guard vs the hand-edited `.sql`.** → The `activity_type_id` CHECK is hand-added **after** the
+  generated statement and is absent from `schema.ts`/the snapshot (same pattern as `household_id`), so
+  `generate` stays clean (proven).
+- **Rollback** = fix-forward (relaxing a constraint is reversible by re-tightening only if no kind-less
+  row exists yet; V1-1c ships before any kind-less writer, so re-adding `NOT NULL` is safe until V1-5).
+
+## Out-of-scope / deferred (V1-1c)
+
+- The physical `DROP COLUMN kind` / `movement_name` and dropping `entries_kind_check` /
+  `entries_shape_check` — **V1-1d** (destructive contract; Squawk-wired, 2-deploy split, Neon RESTORE
+  branch), after V1-5–V1-8 take the app off `kind`.
+- Any DAL / form / `EntryDTO` / `entry-label.ts` change — the dual-writer keeps writing `kind`; the
+  kind-less writer arrives with the check-in/habit UI (V1-5).
+- Making `entries_shape_check` tolerate `value_text`-only metric readings — folded into V1-1d's drop.
+
+## Review-response log (adversarial panel)
+
+Per critique: lens → **accepted** (what changed) or **rejected** (why). This section reconciles the
+panel that hardened the reconciled scope; the draft was wrong on two points (keep-the-CHECKs,
+add-activity_type_id) and those are now baked in.
+
+- **Correctness / data-integrity — "don't drop the CHECKs; the only blocker is `kind NOT NULL`."**
+  **Accepted.** Postgres CHECKs are NULL-permissive, so `entries_kind_check` (`kind in (…)`) already
+  passes on a `kind=NULL` row, and the CHECKs still guard the live `kind` dual-writer — dropping them
+  is unnecessary and unsafe here. Only `kind DROP NOT NULL` is required to unblock. **Correction logged
+  under Risks:** `entries_shape_check` is only NULL-permissive when `value_num` is set (3VL: a FALSE
+  sub-predicate ≠ NULL) — true for every seeded (numeric) metric, so the relaxation achieves the goal;
+  the `value_text`-only case is a documented latent gap deferred to V1-1d. The `db:verify` check-in
+  fixture therefore carries `value_num` (as a real bool reading does), not the draft's `value_num:null`.
+- **Correctness / data-integrity — "a row must still identify its activity."** **Accepted.** Added
+  `activity_type_id IS NOT NULL` as `CHECK … NOT VALID → VALIDATE` (mirrors `household_id`), keeping the
+  Drizzle column nullable so the snapshot stays simple. V1-1b backfilled it on all rows → `VALIDATE`
+  clean. `db:verify` asserts a no-`activity_type_id` row is rejected **by name**
+  (`entries_activity_type_id_not_null`), not incidentally by another CHECK.
+- **Simplicity / scope — "no phantom V1-1d; if you defer the drop, schedule it."** **Accepted.** Added
+  a real **V1-1d** phase row + backlog note; V1-1c is scoped to metadata-only (no `DROP COLUMN`).
+- **Correctness — "verify.ts must prove the relaxation, not just assert schema."** **Accepted.** Added
+  the positive round-trip (kind-less check-in) + the constraint-name-precise rejection; kept the
+  existing `entries_value_source_check` both-set rejection and the `entries_shape_check`
+  bodyweight-missing-`value_num` rejection (both still valid — the shape CHECK is retained).
+- **DB-safety — "what's the real-PG gate?"** **Accepted.** The CI `e2e` job's `db:migrate` applies this
+  migration on real Postgres; the PR forbids the `ci-skip-e2e` label so that apply can't be skipped.
+- **Architecture — "boolean activities (rice_bucket/brain_rep/splits/wake) mislabel as Strength
+  downstream."** **Accepted as downstream.** The read-path label seam (`entry-label.ts`, V1-4) still
+  infers from `kind`; kind-less rows need a metric/activity-driven label. Filed as a note for V1-5/V1-7
+  — out of scope for this metadata-only migration.
