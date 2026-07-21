@@ -61,8 +61,8 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | PR    | Scope                                                                  | Status |
 | ----- | ---------------------------------------------------------------------- | ------ |
 | V1-1  | generalize schema + forward-migrate (a/b/c; a merged, **b in review**) | 🔵     |
-| V1-2  | seed catalogs + coverage test                                          | 🔵     |
-| V1-3  | profile tiles                                                          | ⚪     |
+| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))  | ✅     |
+| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                  | 🔵     |
 | V1-4  | bodyweight/measurement on generalized model                            | ⚪     |
 | V1-5  | checkins/habits dynamic form                                           | ⚪     |
 | V1-6  | calisthenics totals + ramp targets                                     | ⚪     |
@@ -77,6 +77,16 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V1-3** (in review): profile tiles + Today scoped to a profile
+  ([plan](./plans/v1-3-profile-tiles.md)). `/` is now the "Who's logging today?" **picker** (a tile per
+  household profile); tapping a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`), a
+  Today view scoped to it. The log forms/actions moved under `app/p/[profileId]/`; they carry
+  `profileId` in a hidden field that the Server Actions **re-validate server-side** via
+  `getProfileByPublicId` (the ownership seam v1.5's Clerk plugs into — tiles are a UX switch, not a
+  security boundary). A malformed/unknown id → `notFound()` (the not-found UI; the app is force-dynamic
+  so Next streams a 200, not a 500). Seed now provisions two kid profiles (**Liam + Scarlett**) under
+  the root household. First RTL/jsdom component test lands (`profile-tile`). No migration (`avatar`
+  already existed from V1-1a).
 - **2026-07-21** — **V1-2** (in review): seed the FULL catalog + coverage test
   ([plan](./plans/v1-2-seed-catalogs.md)). **Reference-data only** — no `schema.ts` change, no
   migration. New single-source `packages/shared` catalog modules: `ACTIVITY_TYPE_SEED_ROWS` (11),

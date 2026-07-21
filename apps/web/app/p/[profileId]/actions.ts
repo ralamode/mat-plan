@@ -4,16 +4,18 @@ import { logBodyweightSchema, logStrengthSchema } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
 import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
-import { getDefaultProfile } from '@/lib/dal/profiles';
+import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { todayIso } from '@/lib/date';
 
 /**
- * Server Action: log a bodyweight (V0-8). A Server Action is a PUBLIC POST, so it
- * validates its own input (zod) and re-checks ownership inside — never trusting
- * the form. Returns a typed envelope for `useActionState` (expected errors don't
- * throw). Ownership is the default profile in v0; Clerk household scoping plugs
- * in here at V1-1/v1.5. Sentry `withServerActionInstrumentation` wrapping lands
- * with observability (V1-14).
+ * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
+ * Action is a PUBLIC POST, so it validates its own input (zod) and re-checks the
+ * profile inside — never trusting the form. The tile-supplied `profileId` (a
+ * hidden field) is re-validated server-side via `getProfileByPublicId` — the
+ * ownership seam v1.5's Clerk household scoping plugs into (profile tiles are a
+ * UX switch, not a security boundary). Returns a typed envelope for
+ * `useActionState` (expected errors don't throw). Sentry
+ * `withServerActionInstrumentation` wrapping lands with observability (V1-14).
  */
 export type ActionState = {
   ok: boolean;
@@ -26,6 +28,7 @@ export async function logBodyweightAction(
   formData: FormData,
 ): Promise<ActionState> {
   const parsed = logBodyweightSchema.safeParse({
+    profileId: formData.get('profileId'),
     value: formData.get('value'),
     unit: formData.get('unit'),
     clientId: formData.get('clientId'),
@@ -39,7 +42,7 @@ export async function logBodyweightAction(
     };
   }
 
-  const profile = await getDefaultProfile();
+  const profile = await getProfileByPublicId(parsed.data.profileId);
   if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
   await logBodyweight({
@@ -51,7 +54,7 @@ export async function logBodyweightAction(
     notes: parsed.data.notes ?? null,
   });
 
-  revalidatePath('/');
+  revalidatePath(`/p/${profile.id}`);
   return { ok: true, error: null };
 }
 
@@ -67,6 +70,7 @@ export async function logStrengthAction(
     .filter((s) => s.reps.trim() !== '' || s.weight.trim() !== '');
 
   const parsed = logStrengthSchema.safeParse({
+    profileId: formData.get('profileId'),
     movementName: formData.get('movementName'),
     unit: formData.get('unit'),
     clientId: formData.get('clientId'),
@@ -80,7 +84,7 @@ export async function logStrengthAction(
     };
   }
 
-  const profile = await getDefaultProfile();
+  const profile = await getProfileByPublicId(parsed.data.profileId);
   if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
   await logStrengthEntry({
@@ -92,6 +96,6 @@ export async function logStrengthAction(
     day: todayIso(),
   });
 
-  revalidatePath('/');
+  revalidatePath(`/p/${profile.id}`);
   return { ok: true, error: null };
 }

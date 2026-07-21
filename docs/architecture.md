@@ -62,6 +62,28 @@ sequenceDiagram
   UI-->>Kid: updated Today view
 ```
 
+## 2b. Profile routing — picker → scoped Today (V1-3)
+
+`/` is the profile picker; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
+selection lives entirely in the URL — no client state. The `profileId` rides the log forms as a hidden
+field, and every Server Action **re-validates it server-side** via `getProfileByPublicId` (the seam
+v1.5's Clerk household scoping tightens). Profile tiles are a **UX switch, not a security boundary**;
+an unknown/malformed id resolves to `notFound()` (404), never a 500.
+
+```mermaid
+flowchart LR
+  PICKER["/ — profile picker<br/>listProfiles() → tiles"]
+  TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
+  ACT["Server Action<br/>log bodyweight / strength"]
+  DAL["DAL (server-only)<br/>getProfileByPublicId(id)"]
+
+  PICKER -->|"tap tile → next/link"| TODAY
+  TODAY -->|"back-link"| PICKER
+  TODAY -->|"hidden field profileId"| ACT
+  ACT -->|"re-validate id (never trust the form)"| DAL
+  DAL -->|"revalidatePath('/p/'+id)"| TODAY
+```
+
 ## 3. Offline outbox → sync
 
 ```mermaid
