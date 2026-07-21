@@ -105,6 +105,20 @@ export const entries = pgTable(
     valueNum: numeric('value_num', { precision: 8, scale: 3 }), // bodyweight value
     rawLoad: text('raw_load'), // verbatim legacy strings → lossless CSV export
     rawReps: text('raw_reps'),
+    // ── V1-1b generalized columns (additive; legacy kind/movement_name stay until V1-1c) ──
+    // All NULLABLE now. The at-most-one tagged-union guard
+    // (`movement_id IS NULL OR metric_key IS NULL`) is a HAND-ADDED CHECK in the migration,
+    // NOT declared here — so the drizzle drift snapshot stays trivially clean (same pattern
+    // as V1-1a's profiles NOT-NULL CHECK). `activity_type_id` becomes NOT NULL at V1-1c.
+    sessionId: bigint('session_id', { mode: 'number' }).references(() => sessions.id),
+    activityTypeId: bigint('activity_type_id', { mode: 'number' }).references(
+      () => activityTypes.id,
+    ),
+    movementId: bigint('movement_id', { mode: 'number' }).references(() => movements.id),
+    metricKey: text('metric_key').references(() => metricDefinitions.key),
+    valueText: text('value_text'), // free-text / non-numeric metric readings
+    context: text('context'), // e.g. warmup/working/amrap qualifier
+    scheme: text('scheme'), // e.g. set/rep scheme label
     status: text('status').notNull().default('done'), // mirrors ENTRY_STATUSES
     notes: text('notes'),
     ...timestamps,
@@ -112,12 +126,18 @@ export const entries = pgTable(
   (t) => [
     index('idx_entries_profile_date').on(t.profileId, t.activityDate), // hot path: Today view
     index('idx_entries_unit').on(t.unit), // covering index for the unit FK
+    index('idx_entries_session').on(t.sessionId), // covering index for the session FK
+    index('idx_entries_activity_type').on(t.activityTypeId), // covering index for the activity_type FK
+    index('idx_entries_movement').on(t.movementId), // covering index for the movement FK
+    index('idx_entries_metric_key').on(t.metricKey), // covering index for the metric_key FK
     uniqueIndex('uq_entries_client_id')
       .on(t.clientId)
       .where(sql`${t.deletedAt} is null`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
-    // Tagged-union shape guard: bodyweight carries value_num (no movement); strength names a movement.
+    // Legacy tagged-union shape guard (V0): bodyweight carries value_num (no movement); strength
+    // names a movement. Kept until V1-1c; the generalized at-most-one CHECK
+    // (entries_value_source_check) is hand-added in the V1-1b migration alongside it.
     check(
       'entries_shape_check',
       sql`(${t.kind} = 'bodyweight' and ${t.valueNum} is not null and ${t.movementName} is null)

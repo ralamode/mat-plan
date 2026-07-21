@@ -1,7 +1,7 @@
 # V1-1 — generalize the v0 schema toward the full activity model
 
-> Backlog: [plan.md](../plan.md) row V1-1. Branches: `db/v1-1a-additive-catalogs` (this PR),
-> then `db/v1-1b-*`, `db/v1-1c-*`. Grounds in [spec.md](../spec.md) §4.
+> Backlog: [plan.md](../plan.md) row V1-1. Branches: `db/v1-1a-additive-catalogs` (merged),
+> `db/v1-1b-generalize-entries` (this PR), then `db/v1-1c-*`. Grounds in [spec.md](../spec.md) §4.
 
 ## Goal
 
@@ -29,11 +29,11 @@ production Neon DB already holds the v0 seed profile and (potentially) real rows
 
 ## Phase table
 
-| Phase     | Branch                       | Kind                   | Scope                                                                                                                                                                                            | Status                |
-| --------- | ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
-| **V1-1a** | `db/v1-1a-additive-catalogs` | additive (expand)      | New tables + `profiles` columns + structural enums + reference-table seeds. **No `entries`/`entry_sets` change, no entry backfill, no DAL change.**                                              | ✅ **this PR**        |
-| V1-1b     | `db/v1-1b-entry-generalize`  | additive + backfill    | Add `entries.activity_type_id / movement_id / metric_key / value_text / context / session_id / superset_id`; the **at-most-one CHECK** (decision 1); backfill v0 rows; the DAL read/write moves. | ⏳ deferred (after a) |
-| V1-1c     | `db/v1-1c-contract`          | destructive (contract) | Drop the legacy `entries.kind` / `movement_name` / `entries_shape_check` once V1-1b has backfilled and the app no longer reads them. Squawk-gated, separate deploy.                              | ⏳ deferred (after b) |
+| Phase     | Branch                        | Kind                   | Scope                                                                                                                                                                                                          | Status                |
+| --------- | ----------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| **V1-1a** | `db/v1-1a-additive-catalogs`  | additive (expand)      | New tables + `profiles` columns + structural enums + reference-table seeds. **No `entries`/`entry_sets` change, no entry backfill, no DAL change.**                                                            | ✅ merged             |
+| **V1-1b** | `db/v1-1b-generalize-entries` | additive + backfill    | Add `entries.session_id / activity_type_id / movement_id / metric_key / value_text / context / scheme`; the **at-most-one CHECK** (decision 1); seed 3 minimal catalog rows; backfill v0 rows; DAL dual-write. | ✅ **this PR**        |
+| V1-1c     | `db/v1-1c-contract`           | destructive (contract) | Drop the legacy `entries.kind` / `movement_name` / `entries_shape_check` once V1-1b has backfilled and the app no longer reads them. Squawk-gated, separate deploy.                                            | ⏳ deferred (after b) |
 
 ## Acceptance (V1-1a)
 
@@ -85,6 +85,49 @@ production Neon DB already holds the v0 seed profile and (potentially) real rows
   `profiles_household_id_not_null CHECK (household_id IS NOT NULL) NOT VALID`; `VALIDATE CONSTRAINT`.
   The FK is the drizzle-emitted inline one (NULLs are RI-exempt, so it validates pre-backfill) —
   exactly one FK, reconciled.
+
+## V1-1b (shipped — this PR)
+
+The entry-generalization phase. **Additive + backfill only** — the legacy `entries.kind` /
+`movement_name` / `entries_shape_check` **stay** (dropping them is V1-1c, a later deploy). No data dropped.
+
+**What this PR did:**
+
+- **`packages/db/src/schema.ts`** — added seven NULLABLE columns to `entries`: `session_id` →
+  `sessions.id`, `activity_type_id` → `activity_types.id`, `movement_id` → `movements.id`,
+  `metric_key` → `metric_definitions.key`, plus `value_text` / `context` / `scheme`. Every new FK gets
+  a covering index (`idx_entries_session` / `_activity_type` / `_movement` / `_metric_key`). The
+  at-most-one CHECK is **NOT** declared here — it's hand-added in the migration so the drift snapshot
+  stays clean (same pattern as V1-1a's `profiles` NOT-NULL CHECK).
+- **`packages/shared/src/catalog-seed.ts`** (NEW) — the three minimal catalog rows the backfill + DAL
+  reference, as `as const` objects with fixed UUIDv7 public_ids (seed namespace): activity types
+  `weigh_in` (measurement / single_metric / lb) + `sc_lift` (strength / set_list), metric `bodyweight`
+  (lb / number / last). **The single source V1-2's full catalog reuses** (same keys + public_ids; its
+  seed is `ON CONFLICT DO NOTHING` on the natural key → no dup). Barrel-exported.
+- **`packages/shared/src/movements.ts`** — added `movementSlug(name)` (lower + collapse whitespace to
+  `_`), the one derivation shared by the DAL find-or-create and the migration backfill SQL.
+- **`packages/db/migrations/0002_freezing_cargill.sql`** — generated ADD COLUMN/FK/index DDL, then
+  hand-added (after the generated block): `SET` timeouts + header; seed `lb` unit + the 3 catalog rows
+  (`ON CONFLICT DO NOTHING`); `INSERT … SELECT DISTINCT` a movement per legacy `movement_name`;
+  idempotent backfill (bodyweight → `metric_key='bodyweight'` + weigh_in; strength → matched
+  `movement_id` + sc_lift); the `entries_value_source_check` CHECK (`movement_id IS NULL OR
+metric_key IS NULL`) as `NOT VALID` → `VALIDATE`.
+- **`packages/db/src/seed.ts`** — also seeds the 3 catalog rows from the shared const (idempotent).
+- **`apps/web/lib/dal/catalog.ts`** (NEW) + **`entries.ts`** — DAL dual-write: `logBodyweight` now
+  sets `activity_type_id`=weigh_in + `metric_key`='bodyweight'; `logStrengthEntry` sets
+  `activity_type_id`=sc_lift + `movement_id`=find-or-create(slug(name)). Cached catalog lookups; the
+  free-text→movement find-or-create is the v0→v1 bridge (picker is V1-8). Legacy `value_num`/`raw_*`,
+  `client_id` idempotency, and revalidate are unchanged.
+- **`packages/db/scripts/verify.ts`** — asserts the new columns + at-most-one CHECK (rejects BOTH
+  source cols set; allows NEITHER — at-most-one, not XOR), the backfill resolution (bodyweight→metric,
+  strength→movement), and schema-CHECK ↔ shared-const parity (`activity_types_input_shape_check`
+  contains every `ACTIVITY_INPUT_SHAPES` member).
+
+**Deviation:** the migration seeds the `lb` unit inline (`ON CONFLICT DO NOTHING`) because the catalog
+rows FK `units.code` and units are seeded by `db:seed`, not a migration — so the migration seeds its
+own backfill dependency to stay self-sufficient at migrate time (mirrors V1-1a's root-household seed).
+Backfilled movement `public_id`s use `gen_random_uuid()` (no in-DB UUIDv7 fn on PG16/Neon) for the
+one-time backfill; new movements the DAL creates get a client UUIDv7.
 
 ## Test plan
 

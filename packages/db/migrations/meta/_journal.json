@@ -15,6 +15,13 @@
       "when": 1784597356607,
       "tag": "0001_loose_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784604086235,
+      "tag": "0002_freezing_cargill",
+      "breakpoints": true
     }
   ]
 }
