@@ -137,28 +137,43 @@ setup('authenticate through the gate', async ({ page }) => {
 ### `apps/web/scripts/screenshot.ts` (entrypoint)
 
 ```ts
-import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+import { chromium } from '@playwright/test';
 import { gateLogin } from '../e2e/gate-login';
 
-// Usage (mirrors the current skill): build → start prod → run this.
+// Usage (mirrors the current skill): build → start prod → run this. The script
+// is a plain tsx run (NOT Next), so it does NOT auto-load .env.local — pass the
+// gate code explicitly:
 //   pnpm build && pnpm --filter web start -- -p 3996
-//   pnpm --filter web screenshot /            # or /gate, other routes
-const route = process.argv[2] ?? '/';
-const base = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
-const name = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
+//   ACCESS_GATE_PASSWORD=<code> pnpm --filter web screenshot /   # or any route
+//
+// Body wrapped in async main() (NOT top-level await): apps/web is a CJS package
+// and tsx transforms this to CJS, where top-level await is unsupported.
+async function main() {
+  const route = process.argv[2] ?? '/';
+  const base = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
+  const name = route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home';
 
-await mkdir('.screenshots', { recursive: true });
-const browser = await chromium.launch();
-const page = await browser.newContext({ baseURL: base }).then((c) => c.newPage());
-await gateLogin(page); // SAME helper as the test setup
-await page.goto(route, { waitUntil: 'networkidle' });
-await page.screenshot({ path: `.screenshots/${name}.png`, fullPage: true });
-await browser.close();
+  await mkdir('.screenshots', { recursive: true });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newContext({ baseURL: base }).then((c) => c.newPage());
+    await gateLogin(page); // SAME helper as the test setup
+    await page.goto(route, { waitUntil: 'networkidle' });
+    await page.screenshot({ path: `.screenshots/${name}.png`, fullPage: true });
+  } finally {
+    await browser.close();
+  }
+}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
 ```
 
 It requires a running prod server (exactly like today's SKILL step 1) and reuses `gateLogin` — the
-"same gate-login fixture" the smoke test uses. Writes to the already-gitignored `.screenshots/`.
+"same gate-login fixture" the smoke test uses. Writes to the already-gitignored `.screenshots/`
+(under the invoking package dir — `pnpm --filter web` runs it from `apps/web`).
 
 ### CI job (`.github/workflows/ci.yml`, new `e2e` job)
 
@@ -276,12 +291,13 @@ migrated+seeded PG and the three env vars.)
   MCP flow already relies on.) If a future browser tightens this, fall back to the
   `addCookies`+`gateTokenFor` variant noted above.
 - **Flakiness.** Mitigations: assert on stable roles/labels (`getByRole`/`getByLabel` with `exact` to
-  avoid substring ambiguity) and the exact `entryLabel` string, not CSS; a **generous expect timeout**
-  (global 10s + 15s on the post-submit assertion) so the cold-first-request server round-trip
-  (Server Action → DB → revalidate → RSC) doesn't race the default 5s; `retries: 1` as a backstop only
-  (a `flaky` annotation is a bug to fix, not to ignore); `trace: 'on-first-retry'` + report artifact
-  for triage; deterministic seed so the item is unique. **Observed:** the first CI run flaked exactly
-  here (5s default timeout on the cold round-trip) — the timeouts above are the fix.
+  avoid substring ambiguity) and the exact `entryLabel` string, not CSS; **warm the write path once in
+  the setup project** so the cold-start cost (first Server Action after boot: JIT + first DB connection)
+  is absorbed there and the coverage test runs warm under the **default** timeout — no padded timeout;
+  `retries: 1` as a backstop only (a `flaky` annotation is a bug to fix, not to ignore);
+  `trace: 'on-first-retry'` + report artifact for triage; deterministic seed. **Observed:** the first
+  CI run flaked exactly here (cold first round-trip beat the 5s default); the setup warmup is the fix,
+  keeping the test fast without a big timeout.
 - **Playwright browser download cost/instability.** Cache `~/.cache/ms-playwright` keyed on
   `pnpm-lock.yaml`; install only `chromium --with-deps`.
 - **Build-vs-dev server.** Deliberately prod (`build && start`) for representative CSP/render and the

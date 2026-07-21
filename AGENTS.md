@@ -5,7 +5,12 @@ are enforced by CI and pre-commit hooks, **not** by a reviewer's memory. `CLAUDE
 `.cursor/rules` are thin pointers to this file — keep the rules here (DRY).
 
 See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
-(PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md).
+(PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md),
+[docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes).
+
+**Debugging a CI / test / build failure? Check [docs/lessons.md](./docs/lessons.md) first** — a terse,
+grep-able log of past failures (symptom → cause → fix) so a known trap costs one attempt, not three.
+When a failure takes more than one attempt to diagnose, add an entry there in the same PR as the fix.
 
 ## What this is
 
