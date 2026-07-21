@@ -18,9 +18,22 @@ import type { Unit } from './units';
  * rows stable-by-identity across re-seeds.
  */
 
-export const SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID = '019826b4-0000-7000-8000-000000000020';
-export const SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID = '019826b4-0000-7000-8000-000000000021';
-export const SEED_METRIC_BODYWEIGHT_PUBLIC_ID = '019826b4-0000-7000-8000-000000000030';
+/**
+ * Shared seed-namespace prefix + helper (single source — AGENTS.md constants
+ * convention). Every fixed-identity seed row's public_id is `seedPublicId('<hex>')`
+ * so the `019826b4-0000-7000-8000-…` UUIDv7 namespace is defined ONCE and the full
+ * catalog (V1-2) can't drift its suffix scheme from these reused rows. `<hex>` is the
+ * trailing 3 hex digits (12-digit final segment): `020`/`021` activity types, `030`
+ * metrics, `050`+ movements, alongside SEED_HOUSEHOLD `010` / SEED_PROFILE `001`.
+ */
+export const SEED_PUBLIC_ID_PREFIX = '019826b4-0000-7000-8000-000000000';
+export function seedPublicId(suffix: string): string {
+  return `${SEED_PUBLIC_ID_PREFIX}${suffix}`;
+}
+
+export const SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID = seedPublicId('020');
+export const SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID = seedPublicId('021');
+export const SEED_METRIC_BODYWEIGHT_PUBLIC_ID = seedPublicId('030');
 
 /** Natural keys (activity_type.key / metric_definition.key) the backfill + DAL branch on. */
 export const SEED_ACTIVITY_TYPE_KEYS = {
