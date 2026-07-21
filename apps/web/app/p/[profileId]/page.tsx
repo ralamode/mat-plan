@@ -1,11 +1,12 @@
-import { ENTRY_KIND, ENTRY_STATUS } from '@mat-plan/shared';
+import { ENTRY_STATUS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { formatDayLong, todayIso } from '@/lib/date';
-import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
+import { listEntriesForDay } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { entryLabel } from '@/lib/entries/entry-label';
 
 import { BodyweightForm } from './bodyweight-form';
 import { StrengthForm } from './strength-form';
@@ -13,13 +14,6 @@ import { StrengthForm } from './strength-form';
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
 export const runtime = 'nodejs';
-
-function entryLabel(e: EntryDTO): string {
-  if (e.kind === ENTRY_KIND.bodyweight) {
-    return e.value === null ? 'Bodyweight' : `Bodyweight — ${e.value} ${e.unit}`;
-  }
-  return e.movementName ?? 'Strength';
-}
 
 export default async function TodayPage({ params }: { params: Promise<{ profileId: string }> }) {
   const { profileId } = await params;

@@ -38,6 +38,12 @@ export type EntryDTO = {
   value: number | null; // bodyweight value_num; null for strength (values live in sets)
   status: EntryStatus;
   notes: string | null;
+  // V1-4 generalized-metric read fields (additive, nullable). Populated via a LEFT
+  // JOIN on the entry's metric_definition; NULL on legacy strength / pre-generalized
+  // rows. `entryLabel` (lib/entries/entry-label.ts) dispatches on `metricKey`/`valueType`.
+  metricKey: string | null;
+  metricLabel: string | null;
+  valueType: string | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -52,9 +58,15 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       valueNum: schema.entries.valueNum,
       status: schema.entries.status,
       notes: schema.entries.notes,
+      // V1-4: the joined metric's identity/display. LEFT JOIN so legacy rows with
+      // metric_key IS NULL survive; metric_definitions.key is UNIQUE → no fan-out.
+      metricKey: schema.entries.metricKey,
+      metricLabel: schema.metricDefinitions.label,
+      valueType: schema.metricDefinitions.valueType,
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+    .leftJoin(schema.metricDefinitions, eq(schema.entries.metricKey, schema.metricDefinitions.key))
     .where(
       and(
         eq(schema.profiles.publicId, profilePublicId),
@@ -103,6 +115,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     value: r.valueNum === null ? null : Number(r.valueNum),
     status: r.status as EntryStatus,
     notes: r.notes,
+    metricKey: r.metricKey,
+    metricLabel: r.metricLabel,
+    valueType: r.valueType,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }
