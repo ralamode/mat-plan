@@ -61,6 +61,10 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
+    # `pull-requests: read` lets the guard list a PR's changed files (auto-skip).
+    permissions:
+      contents: read
+      pull-requests: read
     services:
       postgres:
         image: postgres:17
@@ -83,20 +87,61 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # OVERRIDE: adding the `ci-skip-e2e` label to a PR skips the smoke while the
-      # job still SUCCEEDS — so once `e2e` becomes a required check (planned at
-      # V0/PR-28), a merge is never hard-blocked by a known-flaky or e2e-irrelevant
-      # change. The job runs (never job-level `if`, which would leave a required
-      # check pending); only the heavy steps below are gated. Escalation path if
-      # even the label won't do: an admin merge (branch-protection bypass).
+      # The smoke is SKIPPED (heavy steps gated) but the job still SUCCEEDS in two
+      # cases — so once `e2e` is a required check (planned at V0/PR-28), neither
+      # path ever hard-blocks a merge by leaving the check "pending". We never use
+      # a job-level `if:`/`paths-ignore` (that would leave the required check
+      # unreported); the job always runs, only the heavy steps are conditional.
+      #   1. MANUAL: the `ci-skip-e2e` label — for a known-flaky or e2e-irrelevant
+      #      change that DOES touch code. Escalation beyond that: admin merge.
+      #   2. AUTOMATIC: every changed file in the PR is provably inert (docs /
+      #      tooling only — see INERT below), so the smoke has nothing to prove.
+      #      Conservative + default-to-run: any file outside the allowlist (app,
+      #      packages, workflows, config, lockfile) forces the smoke to run.
       - name: Resolve e2e override
         id: guard
         uses: actions/github-script@v7
         with:
           script: |
-            const labels = (context.payload.pull_request?.labels ?? []).map((l) => l.name);
-            const skip = labels.includes('ci-skip-e2e');
-            if (skip) core.notice('e2e smoke skipped via the ci-skip-e2e label (override).');
+            const pr = context.payload.pull_request;
+            let skip = false;
+            let reason = '';
+
+            const labels = (pr?.labels ?? []).map((l) => l.name);
+            if (labels.includes('ci-skip-e2e')) {
+              skip = true;
+              reason = 'ci-skip-e2e label';
+            }
+
+            // Auto-skip only on PRs (a push to main always runs the smoke).
+            if (!skip && pr) {
+              const INERT = [
+                /^docs\//, // all docs (incl. plans, lessons, ADRs)
+                /^[^/]+\.md$/, // root-level markdown (README, AGENTS, …)
+                /^\.claude\//, // agent tooling: skills, settings
+                /^\.github\/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE)/,
+                /^\.github\/SECURITY\.md$/,
+                /^LICENSE$/,
+                /\.(png|jpe?g|gif|svg|webp|ico)$/i,
+              ];
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              const names = files.map((f) => f.filename);
+              // Default to RUN: skip only if there is at least one file and EVERY
+              // one is inert. An empty list (shouldn't happen) runs the smoke.
+              if (names.length > 0 && names.every((f) => INERT.some((re) => re.test(f)))) {
+                skip = true;
+                reason = `docs/tooling-only change — ${names.length} file(s), all inert`;
+              }
+            }
+
+            if (skip) {
+              core.notice(`e2e smoke skipped (${reason}); job still reports success.`);
+            }
             core.setOutput('skip', skip ? 'true' : 'false');
 
       - name: Setup pnpm

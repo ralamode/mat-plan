@@ -186,11 +186,15 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   `next build` · gitleaks · `pnpm audit` (fail high/critical) · CodeQL · (DB) drift check + Squawk +
   Neon-branch apply. CI re-runs everything regardless of hooks.
 - **`e2e` (Playwright smoke):** runs on every PR but is **not yet a required check** — it **soaks as
-  non-blocking until PR 28**, then becomes required (a repo-admin branch-protection change). **Override
-  a required `e2e`** two ways: add the **`ci-skip-e2e` label** to the PR (the job skips the smoke but
-  still reports success, so the required check stays green — for a known-flaky or e2e-irrelevant
-  change), or an **admin merge** (branch-protection bypass) as the last-resort escalation. Prefer the
-  label so the intent is visible on the PR; use it sparingly — a red `e2e` usually means a real bug.
+  non-blocking until PR 28**, then becomes required (a repo-admin branch-protection change). The job
+  always runs but **auto-skips the smoke (still reporting success) when every changed file is provably
+  inert** — docs, root markdown, `.claude/`, GitHub templates, images (conservative allowlist,
+  default-to-run: any app/package/workflow/config/lockfile file forces the smoke). **Manually override
+  a required `e2e`** two ways: add the **`ci-skip-e2e` label** to the PR (skips the smoke but still
+  reports success — for a known-flaky or e2e-irrelevant change that _does_ touch code), or an **admin
+  merge** (branch-protection bypass) as the last-resort escalation. Prefer the label so the intent is
+  visible on the PR; use it sparingly — a red `e2e` usually means a real bug. The skip is always
+  step-level (never a job-level `if:`/`paths-ignore`), so a required check never stalls "pending".
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking
   API/DB changes.
 
