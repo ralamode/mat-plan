@@ -179,7 +179,12 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   DB migration, auth, a new subsystem/runner, or non-trivial multi-file logic. **Exempt:** docs, copy,
   config one-liners, single-file mechanical changes. The plan is committed on the feature branch in
   the **same PR** as the code it plans, and the [docs/plan.md](./docs/plan.md) backlog row links to
-  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md).
+  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md). A significant plan is authored
+  at **Staff-SWE level** and **hardened by an adversarial review panel** (≥3 independent skeptical
+  lenses — correctness/data-integrity, simplicity/scope, architecture/consistency) **before**
+  implementation: the author agent reconciles each critique (incorporate or push back with
+  justification), records a **review-response log** in the plan, and re-reviews until blocking concerns
+  are resolved. See [docs/plans/README.md](./docs/plans/README.md) → "Adversarial plan review".
 - **Diagrams in the PR description.** A PR that introduces or changes a **pivotal flow, data model, or
   schema** embeds a **Mermaid diagram in the PR description** (GitHub renders it) so the reviewer sees
   the _shape_ of the change without reading every file — an ERD for a schema/migration, a
