@@ -1,8 +1,13 @@
 import { BODYWEIGHT_UNITS, newId } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the boundaries so the action runs as a plain async fn (AGENTS.md gotcha:
-// Server Actions aren't HTTP routes — test the function, mock the DAL + cache).
+// INTEGRATION TIER (see docs/definition-of-done.md → Test pyramid). These exercise
+// the Server Actions end-to-end THROUGH their zod validation and typed-envelope
+// contract down to the DAL boundary — the mandatory bad-body → zod-reject and
+// happy-path + ownership cases — without a live Postgres. Mock the boundaries so
+// the action runs as a plain async fn (AGENTS.md gotcha: Server Actions aren't
+// HTTP routes — test the function, mock the DAL + cache). Real-DB coverage of the
+// same write path lives in the Playwright smoke E2E (the `e2e` CI job, V0-11).
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
