@@ -61,7 +61,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | PR    | Scope                                                                  | Status |
 | ----- | ---------------------------------------------------------------------- | ------ |
 | V1-1  | generalize schema + forward-migrate (a/b/c; a merged, **b in review**) | 🔵     |
-| V1-2  | seed catalogs + coverage test                                          | ⚪     |
+| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))  | ✅     |
 | V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                  | 🔵     |
 | V1-4  | bodyweight/measurement on generalized model                            | ⚪     |
 | V1-5  | checkins/habits dynamic form                                           | ⚪     |
@@ -83,9 +83,23 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
   Today view scoped to it. The log forms/actions moved under `app/p/[profileId]/`; they carry
   `profileId` in a hidden field that the Server Actions **re-validate server-side** via
   `getProfileByPublicId` (the ownership seam v1.5's Clerk plugs into — tiles are a UX switch, not a
-  security boundary). A malformed/unknown id → `notFound()` (404, not a 500). Seed now provisions two
-  kid profiles (**Liam + Scarlett**) under the root household. First RTL/jsdom component test lands
-  (`profile-tile`). No migration (`avatar` already existed from V1-1a).
+  security boundary). A malformed/unknown id → `notFound()` (the not-found UI; the app is force-dynamic
+  so Next streams a 200, not a 500). Seed now provisions two kid profiles (**Liam + Scarlett**) under
+  the root household. First RTL/jsdom component test lands (`profile-tile`). No migration (`avatar`
+  already existed from V1-1a).
+- **2026-07-21** — **V1-2** (in review): seed the FULL catalog + coverage test
+  ([plan](./plans/v1-2-seed-catalogs.md)). **Reference-data only** — no `schema.ts` change, no
+  migration. New single-source `packages/shared` catalog modules: `ACTIVITY_TYPE_SEED_ROWS` (11),
+  `METRIC_DEFINITION_SEED_ROWS` (16), `MOVEMENT_SEED_ROWS` (21 = 7 kids' Strength-A + Ray's **real**
+  Push/Pull/Legs from `movement-templates.md`), and `ACTIVITY_METRIC_MAP` (typed against both key
+  sets). Each row `as const satisfies` the shared enums (bad value = typecheck fail); public_ids from
+  one `seedPublicId()` namespace helper; V1-1b's 3 rows (weigh_in/sc_lift/bodyweight) are spread, not
+  redefined. `db:seed` seeds all three arrays `ON CONFLICT (natural key) DO NOTHING` (idempotent). The
+  PGlite coverage block proves every `ACTIVITY_METRIC_MAP` key resolves, exactly one canonical `shot`,
+  `pullup_max`=max, every movement `slug === movementSlug(name)`, every MOVEMENT_PATTERN covered, one
+  round-tripped entry per `input_shape` (no bespoke column — no json/jsonb, no per-activity column),
+  and the CHECK↔shared-const parity for input_shape + movement pattern + metric value_type/aggregation.
+  Catalog validated against two real training days (2026-07-20 Strength A + 2026-07-21 Conditioning).
 - **2026-07-20** — **V1-1b** (in review): entry-generalization phase of V1-1 (additive + backfill,
   [plan](./plans/v1-1-generalize-schema.md)). Generalized `entries` with `session_id` /
   `activity_type_id` / `movement_id` / `metric_key` (+ `value_text`/`context`/`scheme`), each FK with a

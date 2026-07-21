@@ -30,13 +30,13 @@ _Exit: one feature works UI → Server Action → Drizzle → Neon in prod, CI-g
 | ID    | Scope                                                                                                                                                                                             | Acceptance                                                           | Concept                           |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------- |
 | V1-1  | Generalize schema (household, activity_type, movement, metric_definition, session); forward-migrate v0 rows ([plan](./plans/v1-1-generalize-schema.md); split a/b/c — **V1-1a additive** shipped) | Migration runs forward on a Neon branch, v0 data preserved           | Non-trivial migration + backfill  |
-| V1-2  | Seed catalogs (11 kid activities + Ray PPL) + coverage test                                                                                                                                       | Idempotent seed; test asserts every activity maps, no bespoke column | Reference-data discipline         |
+| V1-2  | Seed catalogs (kid activities + Ray's real PPL) + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                                                                           | Idempotent seed; test asserts every activity maps, no bespoke column | Reference-data discipline         |
 | V1-3  | Profile tiles (no auth); scope Today to profile ([plan](./plans/v1-3-profile-tiles.md))                                                                                                           | Tap tile → Today scoped                                              | Per-profile routing/state         |
 | V1-4  | Bodyweight + measurement entries on generalized model                                                                                                                                             | Log a weigh-in via generalized entry                                 | Mapping UI to a tagged union      |
 | V1-5  | Checkins/habits form driven by metric_definition                                                                                                                                                  | Log a brush-teeth day + habit checkboxes                             | Dynamic forms from reference data |
 | V1-6  | Calisthenics totals (aggregation metrics + ramp targets)                                                                                                                                          | Log push/pull/v-sit totals; adherence computed                       | Aggregation semantics             |
 | V1-7  | Life activities (timing/boolean): wake, practice — one-tap                                                                                                                                        | One-tap "wrestling practice" logged                                  | The generality proof              |
-| V1-8  | Kids' strength via session (+ light superset), per-set                                                                                                                                            | Log a full S&C strength day                                          | Session model                     |
+| V1-8  | Kids' strength via session (+ light superset), per-set. **Superset model must support arbitrary adult PPL pairings (not kids-only) — v2 reuses it; see [spec.md](./spec.md) §4 `superset`**       | Log a full S&C strength day                                          | Session model                     |
 | V1-9  | Fix-a-set / edit UX (LWW update)                                                                                                                                                                  | Mistype a set → correct it → Today reflects fix                      | Mutable-row edit model            |
 | V1-10 | Block-template prefill: seed templates, weekday auto-select, greyed suggested loads                                                                                                               | Open Today Tuesday → conditioning prefilled                          | Prescription data + prefill       |
 | V1-11 | Copy-set-to-other-kid                                                                                                                                                                             | Copy a set to sibling's session                                      | Cross-entity convenience write    |
@@ -61,8 +61,10 @@ seeded, no PIN UI) → offline E2E (log a day offline, sync, assert no dupes acr
 
 ## v2 — Ray's PPL + progression engine (still all-TS)
 
-Superset model; session-grain feel/next-day-soreness; **pure-TS engine** in `packages/engine` with
-golden vectors; ladders/rungs + in-UI suggestions; engine unit-tested. (No FastAPI here.)
+Superset model (Ray's real PPL pairings — DB Bench + OHP, Dips + Lateral Raises — **reusing** the
+arbitrary-pairing model from V1-8, not a new one); session-grain feel/next-day-soreness; **pure-TS
+engine** in `packages/engine` with golden vectors; ladders/rungs + in-UI suggestions; engine
+unit-tested. (No FastAPI here.)
 
 ## v3 — AI depth + API/MCP (+ optional Python)
 

@@ -157,8 +157,14 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
 - **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
   bootstrap commit). All work goes via PR.
-- One short-lived branch = one PR = one backlog item / one concern. Branch from latest `main`. Keep
-  small (target <400 lines).
+- One short-lived branch = one PR = one backlog item / one concern. Keep small (target <400 lines).
+- **Start every task from a freshly-synced `main`.** Before cutting a branch: `git checkout main &&
+git fetch origin && git pull --ff-only origin main` — so the new work sits on top of every merged PR
+  (missing this is how a branch silently omits a just-merged migration/schema and drifts). Then branch
+  off that updated `main` (`git checkout -b <type>/<id>-<slug> origin/main`). For **parallel** work,
+  cut each concern its own **git worktree** off the updated `main` (isolated checkout → no index/branch
+  collisions between concurrent agents), one branch/PR per worktree; remove the worktree when its PR is
+  up. Re-sync `main` again before starting the _next_ task — every merge moves the baseline.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
@@ -173,7 +179,12 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   DB migration, auth, a new subsystem/runner, or non-trivial multi-file logic. **Exempt:** docs, copy,
   config one-liners, single-file mechanical changes. The plan is committed on the feature branch in
   the **same PR** as the code it plans, and the [docs/plan.md](./docs/plan.md) backlog row links to
-  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md).
+  it. Template + rules: [docs/plans/README.md](./docs/plans/README.md). A significant plan is authored
+  at **Staff-SWE level** and **hardened by an adversarial review panel** (≥3 independent skeptical
+  lenses — correctness/data-integrity, simplicity/scope, architecture/consistency) **before**
+  implementation: the author agent reconciles each critique (incorporate or push back with
+  justification), records a **review-response log** in the plan, and re-reviews until blocking concerns
+  are resolved. See [docs/plans/README.md](./docs/plans/README.md) → "Adversarial plan review".
 - **Diagrams in the PR description.** A PR that introduces or changes a **pivotal flow, data model, or
   schema** embeds a **Mermaid diagram in the PR description** (GitHub renders it) so the reviewer sees
   the _shape_ of the change without reading every file — an ERD for a schema/migration, a

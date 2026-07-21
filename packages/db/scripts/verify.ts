@@ -5,9 +5,22 @@ import { PGlite } from '@electric-sql/pglite';
 import {
   ACTIVITY_CATEGORIES,
   ACTIVITY_INPUT_SHAPES,
-  CATALOG_ACTIVITY_TYPE_SEED_ROWS,
-  CATALOG_METRIC_DEFINITION_SEED_ROWS,
+  ACTIVITY_METRIC_MAP,
+  ACTIVITY_TYPE_SEED_ROWS,
+  activityTypeSeedRowSchema,
+  METRIC_AGGREGATIONS,
+  METRIC_DEFINITION_SEED_ROWS,
+  METRIC_VALUE_TYPES,
+  metricDefinitionSeedRowSchema,
+  MOVEMENT_PATTERNS,
+  MOVEMENT_SEED_ROWS,
+  movementSeedRowSchema,
+  movementSlug,
+  movementSlugMatchesName,
   SEED_ACTIVITY_TYPE_KEYS,
+  SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
+  SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
+  SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
   UNIT_CODES,
 } from '@mat-plan/shared';
@@ -130,18 +143,245 @@ console.log('✓ gate_color + input_shape CHECKs enforced');
 
 // ── V1-1b: generalized entry columns + at-most-one CHECK + backfill logic ───────────
 
-// The 3 minimal catalog rows are seeded (by both the migration AND seed.ts; idempotent).
+// The FULL V1-2 catalog is seeded (activity_types + metric_definitions + movements),
+// idempotent across the two seed runs above.
 const activityTypes = await db.select().from(schema.activityTypes);
 const metricDefinitions = await db.select().from(schema.metricDefinitions);
+const movements = await db.select().from(schema.movements);
 assert.equal(
   activityTypes.length,
-  CATALOG_ACTIVITY_TYPE_SEED_ROWS.length,
-  'weigh_in + sc_lift activity types seeded from the shared const, exactly once',
+  ACTIVITY_TYPE_SEED_ROWS.length,
+  'activity_types: full catalog seeded from the shared const, exactly once',
 );
 assert.equal(
   metricDefinitions.length,
-  CATALOG_METRIC_DEFINITION_SEED_ROWS.length,
-  'bodyweight metric_definition seeded from the shared const, exactly once',
+  METRIC_DEFINITION_SEED_ROWS.length,
+  'metric_definitions: full catalog seeded from the shared const, exactly once',
+);
+assert.equal(
+  movements.length,
+  MOVEMENT_SEED_ROWS.length,
+  'movements: full catalog seeded from the shared const, exactly once',
+);
+console.log(
+  `✓ full catalog seeded: ${activityTypes.length} activity_types, ${metricDefinitions.length} metric_definitions, ${movements.length} movements`,
+);
+
+// ── V1-2: catalog coverage block (runs after the count asserts, before the backfill sim) ──
+
+// (1) zod pre-flight — every shared seed row parses against its row schema (a bad value in
+// a catalog row fails HERE, not on a DB insert further along).
+for (const row of ACTIVITY_TYPE_SEED_ROWS) activityTypeSeedRowSchema.parse(row);
+for (const row of METRIC_DEFINITION_SEED_ROWS) metricDefinitionSeedRowSchema.parse(row);
+for (const row of MOVEMENT_SEED_ROWS) movementSeedRowSchema.parse(row);
+console.log('✓ catalog rows pass zod pre-flight');
+
+// (2) V1-1b's 3 reused rows keep their FIXED public_ids (single-source, spread-not-redefined).
+async function publicIdByActivityKey(key: string): Promise<string> {
+  const [row] = await db
+    .select({ publicId: schema.activityTypes.publicId })
+    .from(schema.activityTypes)
+    .where(eq(schema.activityTypes.key, key));
+  assert.ok(row, `activity_type '${key}' is seeded`);
+  return row.publicId;
+}
+assert.equal(
+  await publicIdByActivityKey(SEED_ACTIVITY_TYPE_KEYS.weighIn),
+  SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
+  'reused weigh_in row keeps its fixed public_id (…020)',
+);
+assert.equal(
+  await publicIdByActivityKey(SEED_ACTIVITY_TYPE_KEYS.scLift),
+  SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
+  'reused sc_lift row keeps its fixed public_id (…021)',
+);
+const [bodyweightMetric] = await db
+  .select({
+    publicId: schema.metricDefinitions.publicId,
+    aggregation: schema.metricDefinitions.aggregation,
+  })
+  .from(schema.metricDefinitions)
+  .where(eq(schema.metricDefinitions.key, SEED_METRIC_KEYS.bodyweight));
+assert.equal(
+  bodyweightMetric.publicId,
+  SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
+  'reused bodyweight metric keeps its fixed public_id (…030)',
+);
+console.log('✓ V1-1b reused rows keep fixed public_ids');
+
+// (3) Walk ACTIVITY_METRIC_MAP — every activity key AND every metric key it lists resolves
+// to a seeded row (the map can't reference a catalog row that does not exist).
+const seededActivityKeys = new Set(activityTypes.map((r) => r.key));
+const seededMetricKeys = new Set(metricDefinitions.map((r) => r.key));
+for (const [activityKey, metricKeys] of Object.entries(ACTIVITY_METRIC_MAP)) {
+  assert.ok(seededActivityKeys.has(activityKey), `map activity '${activityKey}' is a seeded row`);
+  for (const metricKey of metricKeys) {
+    assert.ok(
+      seededMetricKeys.has(metricKey),
+      `map metric '${metricKey}' (for '${activityKey}') is a seeded row`,
+    );
+  }
+}
+assert.equal(
+  Object.keys(ACTIVITY_METRIC_MAP).length,
+  activityTypes.length,
+  'ACTIVITY_METRIC_MAP covers every seeded activity_type',
+);
+console.log('✓ ACTIVITY_METRIC_MAP resolves against the seeded catalog');
+
+// (4) exactly ONE canonical `shot` metric (not double-modeled).
+assert.equal(
+  metricDefinitions.filter((r) => r.key === 'shot').length,
+  1,
+  'exactly one canonical shot metric',
+);
+// (5) `pullup_max` is a first-class metric with aggregation=max.
+const [pullupMax] = await db
+  .select({ aggregation: schema.metricDefinitions.aggregation })
+  .from(schema.metricDefinitions)
+  .where(eq(schema.metricDefinitions.key, 'pullup_max'));
+assert.ok(pullupMax, 'pullup_max metric is seeded');
+assert.equal(pullupMax.aggregation, 'max', 'pullup_max aggregation is max');
+console.log('✓ canonical shot (exactly one) + pullup_max aggregation=max');
+
+// (6) every movement slug is exactly `movementSlug(name)` (natural key ↔ DAL/backfill parity).
+for (const row of MOVEMENT_SEED_ROWS) {
+  assert.ok(
+    movementSlugMatchesName(row),
+    `movement slug '${row.slug}' === movementSlug('${row.name}')`,
+  );
+}
+// (7) every MOVEMENT_PATTERN has ≥1 seeded movement (patterns fully covered).
+const seededPatterns = new Set(movements.map((r) => r.pattern));
+for (const pattern of MOVEMENT_PATTERNS) {
+  assert.ok(seededPatterns.has(pattern), `movement pattern '${pattern}' has ≥1 seeded movement`);
+}
+console.log('✓ movement slug↔name parity + every pattern covered');
+
+// (8) Round-trip ONE entry per input_shape — proving the tagged union carries every activity
+// shape with NO bespoke per-activity column, each satisfying the at-most-one source CHECK.
+// NB: the legacy V0 `entries_shape_check` (dropped at V1-1c) still forces kind∈{bodyweight,
+// strength} + value_num/movement_name; that guard is incidental here — the assertion is on the
+// GENERALIZED columns (activity_type_id + the at-most-one movement_id/metric_key + unit/event_at).
+async function activityTypeIdByKey(key: string): Promise<number> {
+  const [row] = await db
+    .select({ id: schema.activityTypes.id })
+    .from(schema.activityTypes)
+    .where(eq(schema.activityTypes.key, key));
+  assert.ok(row, `activity_type '${key}' resolves`);
+  return row.id;
+}
+const [frontSquat] = await db
+  .select({ id: schema.movements.id })
+  .from(schema.movements)
+  .where(eq(schema.movements.slug, 'front_squat'));
+assert.ok(frontSquat, 'front_squat movement is seeded');
+
+// set_list → movement_id (metric_key NULL)
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000d0',
+  clientId: '019826b4-0000-7000-8000-0000000000d1',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-21',
+  kind: 'strength', // legacy guard: strength needs movement_name
+  unit: 'lb',
+  movementName: 'Front Squat',
+  activityTypeId: await activityTypeIdByKey('sc_lift'),
+  movementId: frontSquat.id,
+});
+// single_metric → metric_key + value_num (movement_id NULL)
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000d2',
+  clientId: '019826b4-0000-7000-8000-0000000000d3',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-21',
+  kind: 'bodyweight',
+  unit: 'lb',
+  valueNum: '182',
+  activityTypeId: await activityTypeIdByKey('weigh_in'),
+  metricKey: SEED_METRIC_KEYS.bodyweight,
+});
+// boolean → NEITHER source column, unit=bool
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000d4',
+  clientId: '019826b4-0000-7000-8000-0000000000d5',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-21',
+  kind: 'bodyweight', // legacy guard needs value_num; the shape point is unit=bool + neither source
+  unit: 'bool',
+  valueNum: '1',
+  activityTypeId: await activityTypeIdByKey('rice_bucket'),
+});
+// timing → NEITHER source column, event_at set
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000d6',
+  clientId: '019826b4-0000-7000-8000-0000000000d7',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-21',
+  kind: 'bodyweight',
+  unit: 'timing',
+  valueNum: '0',
+  eventAt: new Date('2026-07-21T06:30:00Z'),
+  activityTypeId: await activityTypeIdByKey('wake'),
+});
+
+async function roundTrip(publicId: string) {
+  const [row] = await db
+    .select({
+      movementId: schema.entries.movementId,
+      metricKey: schema.entries.metricKey,
+      unit: schema.entries.unit,
+      valueNum: schema.entries.valueNum,
+      eventAt: schema.entries.eventAt,
+    })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, publicId));
+  return row;
+}
+const setListRt = await roundTrip('019826b4-0000-7000-8000-0000000000d0');
+assert.ok(setListRt.movementId != null, 'set_list entry carries movement_id');
+assert.equal(setListRt.metricKey, null, 'set_list entry has no metric_key (at-most-one)');
+const singleMetricRt = await roundTrip('019826b4-0000-7000-8000-0000000000d2');
+assert.equal(
+  singleMetricRt.metricKey,
+  SEED_METRIC_KEYS.bodyweight,
+  'single_metric entry: metric_key',
+);
+assert.ok(singleMetricRt.valueNum != null, 'single_metric entry carries value_num');
+assert.equal(
+  singleMetricRt.movementId,
+  null,
+  'single_metric entry has no movement_id (at-most-one)',
+);
+const booleanRt = await roundTrip('019826b4-0000-7000-8000-0000000000d4');
+assert.equal(booleanRt.movementId, null, 'boolean entry: neither source (movement_id)');
+assert.equal(booleanRt.metricKey, null, 'boolean entry: neither source (metric_key)');
+assert.equal(booleanRt.unit, 'bool', 'boolean entry: unit=bool');
+const timingRt = await roundTrip('019826b4-0000-7000-8000-0000000000d6');
+assert.equal(timingRt.movementId, null, 'timing entry: neither source (movement_id)');
+assert.equal(timingRt.metricKey, null, 'timing entry: neither source (metric_key)');
+assert.ok(timingRt.eventAt != null, 'timing entry carries event_at');
+console.log('✓ round-trip one entry per input_shape (all satisfy the at-most-one CHECK)');
+
+// (9) NO bespoke column: `entries` has no json/jsonb column and no column named after any
+// activity key (proves the tagged union, not an EAV/per-activity-column sprawl).
+const entryColsRes = await db.execute(sql`
+  SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'entries'`);
+const entryCols = (
+  entryColsRes as unknown as { rows: { column_name: string; data_type: string }[] }
+).rows;
+for (const c of entryCols) {
+  assert.ok(
+    c.data_type !== 'json' && c.data_type !== 'jsonb',
+    `entries.${c.column_name} is not json/jsonb (no EAV)`,
+  );
+}
+const entryColNames = new Set(entryCols.map((c) => c.column_name));
+for (const key of Object.keys(ACTIVITY_METRIC_MAP)) {
+  assert.ok(!entryColNames.has(key), `no bespoke per-activity column named '${key}'`);
+}
+console.log(
+  '✓ no bespoke column: entries is a tagged union (no json/jsonb, no per-activity column)',
 );
 
 // Resolve the two activity_type ids the backfill maps onto.
@@ -256,19 +496,28 @@ await db.insert(schema.entries).values({
 });
 console.log('✓ at-most-one CHECK: rejects both source cols, allows neither');
 
-// CHECK ↔ shared-const parity: the DB's activity_types_input_shape_check definition must
-// list every ACTIVITY_INPUT_SHAPES member (pins schema CHECK to the shared source of truth).
-const shapeCheckRes = await db.execute(sql`
-  SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
-  WHERE conname = 'activity_types_input_shape_check'`);
-const shapeCheckRows = (shapeCheckRes as unknown as { rows: { def: string }[] }).rows;
-assert.equal(shapeCheckRows.length, 1, 'activity_types_input_shape_check exists');
-for (const shape of ACTIVITY_INPUT_SHAPES) {
-  assert.ok(
-    shapeCheckRows[0].def.includes(`'${shape}'`),
-    `input_shape CHECK includes shared const member '${shape}'`,
-  );
+// CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
+// its shared const (pins the schema CHECKs to the single source of truth — one can't drift
+// from the other without this failing). V1-2 extends this from input_shape to the movement
+// pattern + metric value_type/aggregation CHECKs (their columns are now catalog-populated).
+async function assertCheckCoversConst(conname: string, values: readonly string[]): Promise<void> {
+  const res = await db.execute(sql`
+    SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`);
+  const rows = (res as unknown as { rows: { def: string }[] }).rows;
+  assert.equal(rows.length, 1, `${conname} exists`);
+  for (const value of values) {
+    assert.ok(
+      rows[0].def.includes(`'${value}'`),
+      `${conname} includes shared const member '${value}'`,
+    );
+  }
 }
-console.log('✓ schema-CHECK ↔ shared-const parity (activity_types_input_shape_check)');
+await assertCheckCoversConst('activity_types_input_shape_check', ACTIVITY_INPUT_SHAPES);
+await assertCheckCoversConst('movements_pattern_check', MOVEMENT_PATTERNS);
+await assertCheckCoversConst('metric_definitions_value_type_check', METRIC_VALUE_TYPES);
+await assertCheckCoversConst('metric_definitions_aggregation_check', METRIC_AGGREGATIONS);
+console.log(
+  '✓ schema-CHECK ↔ shared-const parity (input_shape, movement pattern, metric value_type + aggregation)',
+);
 
 console.log('✓ verify passed');
