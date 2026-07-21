@@ -7,17 +7,20 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **v0 complete → starting v1.** V0-12 — the capstone — lands the last of v0's **13 PRs**: a
-finalized test pyramid (a `safeInternalPath` open-redirect unit test + the V0-8/V0-9 Server Action
-integration tests designated as the integration tier) and a `docs/definition-of-done.md` that now
-describes the **real** CI shape — the fast `quality` Vitest job (DAL mocked, PGlite `db:verify`) vs
-the `e2e` Playwright + CI-Postgres job. The thin vertical slice (UI → Server Action → Drizzle → Neon,
-CI-gated) is proven end to end. Next: **V1-1** — generalize the schema toward the full activity model.
+📍 **v1 underway — V1-1a in review.** V1-1 (generalize the v0 schema toward the full activity model,
+[spec.md](./spec.md) §4) is split into three deploys ([plan](./plans/v1-1-generalize-schema.md)):
+**V1-1a = additive (expand-only)**, V1-1b = entry generalization + backfill, V1-1c = destructive
+contract. This PR ships **V1-1a**: the `households` authz root, the `activity_type` /`movement` /
+`metric_definition` catalogs, `session` + `day_readiness`, additive `profiles` columns
+(`household_id` + `birthdate`/`avatar`/`pin_hash`), and the structural enums in `packages/shared`
+that V1-1b/V1-2 will consume — all proven on PGlite (`db:verify`) + the drizzle drift guard. It does
+**not** touch `entries`/`entry_sets` (V1-1b) and defers the Squawk + Neon-branch CI wiring. Prior:
+v0's 13-PR thin vertical slice (UI → Server Action → Drizzle → Neon, CI-gated) is complete.
 
 ## Progress toward MVP (v1)
 
 - **Code PRs merged:** 13 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰ ~48% (+2 out-of-band: constants convention, Vitest harness)
-- **Phase:** v0 ✅ complete → v1 ⚪ next
+- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a in review)
 
 ## Phases
 
@@ -25,7 +28,7 @@ CI-gated) is proven end to end. Next: **V1-1** — generalize the schema toward 
 | --------- | ------------------------------------------------------------------------ | -------------- |
 | Bootstrap | Repo + planning docs                                                     | ✅ done        |
 | **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done        |
-| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | ⚪ not started |
+| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🔵 in review   |
 | AI-1      | NL logging via structured outputs + eval                                 | ⚪ not started |
 | v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started |
 | v2        | Ray's PPL + progression engine                                           | ⚪ not started |
@@ -53,25 +56,33 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR    | Scope                                       | Status |
-| ----- | ------------------------------------------- | ------ |
-| V1-1  | generalize schema + forward-migrate         | ⚪     |
-| V1-2  | seed catalogs + coverage test               | ⚪     |
-| V1-3  | profile tiles                               | ⚪     |
-| V1-4  | bodyweight/measurement on generalized model | ⚪     |
-| V1-5  | checkins/habits dynamic form                | ⚪     |
-| V1-6  | calisthenics totals + ramp targets          | ⚪     |
-| V1-7  | life activities (wake/practice)             | ⚪     |
-| V1-8  | kids' strength via session                  | ⚪     |
-| V1-9  | fix-a-set / edit (LWW)                      | ⚪     |
-| V1-10 | block-template prefill                      | ⚪     |
-| V1-11 | copy-set-to-other-kid                       | ⚪     |
-| V1-12 | a11y pass                                   | ⚪     |
-| V1-13 | CSV export endpoint (golden-file)           | ⚪     |
-| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot | ⚪     |
+| PR    | Scope                                                            | Status |
+| ----- | ---------------------------------------------------------------- | ------ |
+| V1-1  | generalize schema + forward-migrate (a/b/c; **V1-1a in review**) | 🔵     |
+| V1-2  | seed catalogs + coverage test                                    | ⚪     |
+| V1-3  | profile tiles                                                    | ⚪     |
+| V1-4  | bodyweight/measurement on generalized model                      | ⚪     |
+| V1-5  | checkins/habits dynamic form                                     | ⚪     |
+| V1-6  | calisthenics totals + ramp targets                               | ⚪     |
+| V1-7  | life activities (wake/practice)                                  | ⚪     |
+| V1-8  | kids' strength via session                                       | ⚪     |
+| V1-9  | fix-a-set / edit (LWW)                                           | ⚪     |
+| V1-10 | block-template prefill                                           | ⚪     |
+| V1-11 | copy-set-to-other-kid                                            | ⚪     |
+| V1-12 | a11y pass                                                        | ⚪     |
+| V1-13 | CSV export endpoint (golden-file)                                | ⚪     |
+| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                      | ⚪     |
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V1-1a** (in review): additive (expand-only) start of the V1-1 schema
+  generalization ([plan](./plans/v1-1-generalize-schema.md), split a/b/c). New tables — `households`
+  (authz root), the `activity_type`/`movement`/`metric_definition` catalogs, `session`,
+  `day_readiness` — plus additive `profiles` columns (`household_id` NOT-NULL-via-CHECK backfilled to
+  a root household; `birthdate`/`avatar`/`pin_hash` reserved). Structural enums for V1-1b/V1-2 land in
+  `packages/shared` (activity categories/shapes, metric value-types/aggregations, movement patterns,
+  session types/statuses, gate colors). Migration `0001` is expand-only (no `entries` change);
+  Squawk + Neon-branch CI wiring deferred; proven on PGlite `db:verify` + the drizzle drift guard.
 - **2026-07-20** — **V0-12** (v0 capstone): finalized the test pyramid — added a `safeInternalPath` open-redirect/XSS-guard unit test, designated the V0-8/V0-9 Server Action tests as the integration tier, and rewrote `definition-of-done.md`'s Test pyramid to match the real CI shape (fast `quality` Vitest job with the DAL mocked + PGlite `db:verify`; Playwright + CI-Postgres in the `e2e` job). Removes stale "once the DB lands" future-tense. **v0 done (13 PRs).**
 - **2026-07-20** — **V0-11**: Playwright as a real dep + CI Postgres service container (migrated + seeded); one smoke E2E (log a bodyweight → renders in Today) vs the ephemeral DB, on a shared gate-login `storageState`; `ui-screenshot` graduated to a committed `pnpm screenshot` script. Introduces `docs/plans/` — file-by-file plans for significant PRs, reviewed before code.
 - **2026-07-20** — **V0-10**: shared loading/empty/error UI primitives + route error boundary (error.tsx/loading.tsx); DB pool connect timeout; a down DB renders a recoverable error state, verified via Playwright.
