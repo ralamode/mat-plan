@@ -7,25 +7,24 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **V0-11 — in review.** V0-10 (loading/empty/error primitives + error boundary) is **merged**.
-V0-11 crosses the CI-DB cliff: **Playwright** lands as a real dep with a **CI Postgres service
-container** (migrated + seeded), one **smoke E2E** (log a bodyweight → renders in Today) run against
-that ephemeral DB, and the `ui-screenshot` flow **graduates** to a committed `pnpm screenshot`
-script on the shared gate-login helper. Also introduces **`docs/plans/`** — file-by-file
-implementation plans for significant PRs, written/reviewed before code. Next: **V0-12** (unit +
-integration test + finalize DoD).
+📍 **v0 complete → starting v1.** V0-12 — the capstone — lands the last of v0's **13 PRs**: a
+finalized test pyramid (a `safeInternalPath` open-redirect unit test + the V0-8/V0-9 Server Action
+integration tests designated as the integration tier) and a `docs/definition-of-done.md` that now
+describes the **real** CI shape — the fast `quality` Vitest job (DAL mocked, PGlite `db:verify`) vs
+the `e2e` Playwright + CI-Postgres job. The thin vertical slice (UI → Server Action → Drizzle → Neon,
+CI-gated) is proven end to end. Next: **V1-1** — generalize the schema toward the full activity model.
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 11 / 27 ▰▰▰▰▰▰▰▰▰▰▰ ~41% (+2 out-of-band: constants convention, Vitest harness)
-- **Phase:** v0 🟡 in progress
+- **Code PRs merged:** 13 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰ ~48% (+2 out-of-band: constants convention, Vitest harness)
+- **Phase:** v0 ✅ complete → v1 ⚪ next
 
 ## Phases
 
 | Phase     | Goal                                                                     | Status         |
 | --------- | ------------------------------------------------------------------------ | -------------- |
 | Bootstrap | Repo + planning docs                                                     | ✅ done        |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | 🟡 in progress |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done        |
 | **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | ⚪ not started |
 | AI-1      | NL logging via structured outputs + eval                                 | ⚪ not started |
 | v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started |
@@ -36,21 +35,21 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 
-| PR    | Scope                                                       | Status       |
-| ----- | ----------------------------------------------------------- | ------------ |
-| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done      |
-| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done      |
-| V0-2  | GH Actions CI + branch protection                           | ✅ done      |
-| V0-3  | Vercel connect + preview deploys                            | ✅ done      |
-| V0-4  | env validation + access-gate + security headers             | ✅ done      |
-| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ✅ done      |
-| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ✅ done      |
-| V0-7  | Today view (RSC via DAL)                                    | ✅ done      |
-| V0-8  | log bodyweight (Server Action + zod)                        | ✅ done      |
-| V0-9  | log strength entry (transactional nested write)             | ✅ done      |
-| V0-10 | loading/empty/error primitives + boundary                   | ✅ done      |
-| V0-11 | CI Postgres + Playwright smoke                              | 🔵 in review |
-| V0-12 | unit + integration test + DoD                               | ⚪           |
+| PR    | Scope                                                       | Status  |
+| ----- | ----------------------------------------------------------- | ------- |
+| V0-1  | pnpm workspace + Next.js scaffold + AGENTS pointers + hooks | ✅ done |
+| V0-1b | shadcn/ui + design tokens + DESIGN.md                       | ✅ done |
+| V0-2  | GH Actions CI + branch protection                           | ✅ done |
+| V0-3  | Vercel connect + preview deploys                            | ✅ done |
+| V0-4  | env validation + access-gate + security headers             | ✅ done |
+| V0-5  | Neon + Drizzle + first migration + DAL skeleton             | ✅ done |
+| V0-6  | migrate-on-deploy (GH Actions single migrator)              | ✅ done |
+| V0-7  | Today view (RSC via DAL)                                    | ✅ done |
+| V0-8  | log bodyweight (Server Action + zod)                        | ✅ done |
+| V0-9  | log strength entry (transactional nested write)             | ✅ done |
+| V0-10 | loading/empty/error primitives + boundary                   | ✅ done |
+| V0-11 | CI Postgres + Playwright smoke                              | ✅ done |
+| V0-12 | unit + integration test + DoD                               | ✅ done |
 
 ## v1 backlog (14 PRs) — completes the MVP
 
@@ -73,6 +72,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V0-12** (v0 capstone): finalized the test pyramid — added a `safeInternalPath` open-redirect/XSS-guard unit test, designated the V0-8/V0-9 Server Action tests as the integration tier, and rewrote `definition-of-done.md`'s Test pyramid to match the real CI shape (fast `quality` Vitest job with the DAL mocked + PGlite `db:verify`; Playwright + CI-Postgres in the `e2e` job). Removes stale "once the DB lands" future-tense. **v0 done (13 PRs).**
 - **2026-07-20** — **V0-11**: Playwright as a real dep + CI Postgres service container (migrated + seeded); one smoke E2E (log a bodyweight → renders in Today) vs the ephemeral DB, on a shared gate-login `storageState`; `ui-screenshot` graduated to a committed `pnpm screenshot` script. Introduces `docs/plans/` — file-by-file plans for significant PRs, reviewed before code.
 - **2026-07-20** — **V0-10**: shared loading/empty/error UI primitives + route error boundary (error.tsx/loading.tsx); DB pool connect timeout; a down DB renders a recoverable error state, verified via Playwright.
 - **2026-07-20** — **V0-9**: log a strength entry per-set — one `entry` + N `entry_set` rows in a

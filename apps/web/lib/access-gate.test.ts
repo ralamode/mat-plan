@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { GATE_COOKIE_NAME, gateTokenFor, isValidGateCookie } from './access-gate';
+import { GATE_COOKIE_NAME, gateTokenFor, isValidGateCookie, safeInternalPath } from './access-gate';
 
 // First tests on the harness (pulled forward ahead of V0-8). The access-gate
 // helpers are pure and security-relevant, so they make a good first target:
@@ -47,5 +47,29 @@ describe('isValidGateCookie', () => {
 describe('GATE_COOKIE_NAME', () => {
   it('is a stable contract shared by the proxy and the Server Action', () => {
     expect(GATE_COOKIE_NAME).toBe('mp_gate');
+  });
+});
+
+describe('safeInternalPath (open-redirect / XSS guard)', () => {
+  it('passes through a same-origin absolute path unchanged', () => {
+    expect(safeInternalPath('/today')).toBe('/today');
+  });
+
+  it('preserves a query string on an internal path', () => {
+    expect(safeInternalPath('/log?tab=strength')).toBe('/log?tab=strength');
+  });
+
+  // Anything that could escape the origin (or isn't an absolute internal path)
+  // must fall back to the site root — never become an open redirect / XSS sink.
+  it.each([
+    ['a protocol-relative host', '//evil.com'],
+    ['an absolute https URL', 'https://evil.com'],
+    ['an absolute http URL', 'http://evil.com/steal'],
+    ['a relative path (no leading slash)', 'evil.com'],
+    ['an empty string', ''],
+    ['null', null],
+    ['undefined', undefined],
+  ])('clamps %s to the root', (_label, value) => {
+    expect(safeInternalPath(value)).toBe('/');
   });
 });
