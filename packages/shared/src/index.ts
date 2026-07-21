@@ -7,6 +7,7 @@ export * from './activity-categories';
 export * from './activity-shapes';
 export * from './metrics';
 export * from './movements';
+export * from './catalog-seed';
 export * from './sessions';
 export * from './readiness';
 export * from './id';
