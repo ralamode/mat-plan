@@ -22,9 +22,14 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await logBodyweight(page, '72.5');
 });
 
-// V1-3: an unknown profile id is a 404 (the scoped Today re-validates the URL id
-// server-side — tiles are a UX switch, not a security boundary).
+// V1-3: an unknown profile id renders the not-found UI (the scoped Today
+// re-validates the URL id server-side — tiles are a UX switch, not a security
+// boundary). The app is force-dynamic (nonce CSP), so Next streams a 200 header
+// before notFound() throws — so assert the rendered not-found content, not the
+// HTTP status.
 test('an unknown profile id renders not-found', async ({ page }) => {
-  const res = await page.goto('/p/does-not-exist');
-  expect(res?.status()).toBe(404);
+  await page.goto('/p/does-not-exist');
+  await expect(page.getByText(/this page could not be found/i)).toBeVisible();
+  // never leaks a scoped Today for a bogus id
+  await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toHaveCount(0);
 });

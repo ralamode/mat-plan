@@ -7,6 +7,11 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## E2E / Playwright
 
+- **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
+  app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws
+  `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
+  not-found **content** (`getByText(/this page could not be found/i)`), not the HTTP status. (V1-3)
+
 - **Test "flaky" (fails attempt 1, passes on retry) after a form submit.** → The _first_ Server Action
   after a cold `next start` pays JIT + first-DB-connection cost, exceeding the assertion timeout; the
   warm retry passes, masking the race. → **Warm the cold path once in `global.setup`** (submit one
