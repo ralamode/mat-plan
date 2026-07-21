@@ -96,6 +96,13 @@ CHECK. All rows household-scoped for DAL authz.
 - `entry_set` — entry_id, idx, reps?, seconds?, weight_num?, weight_label?("BW"/"50ft"), value_num?,
   status, done. _(Derived/queryable layer; `raw_*` on entry is the export source of truth.)_
 - `superset` — session_id, label, note (nullable).
+  - **Requirement — adult PPL, not just kids:** a `superset` groups **2+ movements performed
+    alternating** within a session; each movement still logs its own per-set `entry` → `entry_set`,
+    tagged by `superset_id` + order. Ray's real PPL supersets pairs (e.g. **DB Bench + Overhead
+    Press**, **Dips + Lateral Raises** — `job-search-context/docs/movement-templates.md`). The superset
+    model built at **V1-8** (framed "light superset" for the kids) **must support arbitrary
+    N-movement adult pairings from the start**, so **v2 (Ray's PPL) reuses it rather than re-modeling**
+    — do not build a kids-only shortcut that later blocks PPL supersets.
 
 **Mapping both systems:** kids strength `back-squat 3×3 "65/65/65"` → session → entry(raw_load, movement)
 → 3 entry_set (derived); export re-emits `raw_load` verbatim → lossless. Checkins/bodyweight/
