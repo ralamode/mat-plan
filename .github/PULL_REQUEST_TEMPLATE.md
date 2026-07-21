@@ -20,6 +20,17 @@
 
 <!-- REQUIRED for any UI change: before / after. -->
 
+## Diagram (flow / model / schema changes)
+
+<!-- Embed a Mermaid diagram for any pivotal flow, data-model, or schema change — it renders on GitHub
+     and shows the reviewer the shape of the change. Reuse/update docs/architecture.md. Skip for trivial
+     changes. e.g.:
+```mermaid
+erDiagram
+  parent ||--o{ child : has
+```
+-->
+
 ---
 
 <!-- Fill only the section(s) that apply. -->
