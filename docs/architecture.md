@@ -1,7 +1,9 @@
 # mat-plan — Architecture Diagrams
 
-Visual overview of the **designed** system (app not built yet). Detail in [spec.md](./spec.md);
-roadmap in [plan.md](./plan.md). Diagrams render on GitHub (Mermaid).
+Visual overview of the system — **v0 is built and live on Vercel + Neon; v1 (the generalized activity
+model) is in progress** (V1-1). Detail in [spec.md](./spec.md); roadmap in [plan.md](./plan.md); the
+v1 schema plan is [plans/v1-1-generalize-schema.md](./plans/v1-1-generalize-schema.md). Diagrams
+render on GitHub (Mermaid).
 
 ## 1. System architecture (containers)
 
@@ -75,21 +77,66 @@ flowchart LR
   G -->|"semantic dupe"| I["client-side dedupe<br/>(profile/date/activity/movement/set-idx)"]
 ```
 
-## 4. Data model (core — full ERD in spec.md §4a)
+## 4. Data model — v1 generalized model (target of V1-1)
+
+The concrete tables the v0 thin slice (`units · profiles · entries · entry_sets`) generalizes into.
+`households` is the authz root; the catalogs (`activity_types · movements · metric_definitions`, all
+keyed by natural keys and seeded from `@mat-plan/shared` in V1-2) classify each `entry`; `sessions`
+group a training day's entries. Full column detail in [spec.md](./spec.md) §4a.
 
 ```mermaid
 erDiagram
-  household ||--o{ profile : has
-  profile ||--o{ session : logs
-  profile ||--o{ entry : logs
-  session ||--o{ superset : groups
-  session ||--o{ entry : contains
-  entry ||--o{ entry_set : "expands to"
-  activity_type ||--o{ entry : classifies
-  movement ||--o{ entry : "of"
-  metric_definition ||--o{ entry : "typed by"
-  program_block ||--o{ prescription : contains
-  prescription ||--o{ prescription_target : "per-profile load"
+  households ||--o{ profiles : "scopes"
+  profiles ||--o{ sessions : "logs"
+  profiles ||--o{ entries : "logs"
+  profiles ||--o{ day_readiness : "gate 🟢🟡🔴"
+  sessions ||--o{ entries : "groups"
+  entries ||--o{ entry_sets : "expands to"
+  activity_type_categories ||--o{ activity_types : "categorizes"
+  activity_types ||--o{ entries : "classifies"
+  movements ||--o{ entries : "set_list (0..1)"
+  metric_definitions ||--o{ entries : "single_metric (0..1)"
+  units ||--o{ activity_types : "default_unit"
+  units ||--o{ movements : "unit_default"
+  units ||--o{ metric_definitions : "unit"
+  units ||--o{ entries : "unit"
+
+  entries {
+    bigint id PK
+    uuid public_id UK "anti-IDOR"
+    uuid client_id "UNIQUE partial (offline idempotency)"
+    bigint activity_type_id FK
+    bigint movement_id FK "nullable — set_list only"
+    text metric_key FK "nullable — single_metric only"
+    numeric value_num "single_metric value"
+    text raw_load "verbatim → lossless CSV export"
+    date activity_date
+  }
+  activity_types {
+    text key UK "natural key"
+    text category FK
+    text input_shape "set_list, single_metric, boolean, timing"
+  }
+```
+
+> **Tagged union (V1-1b):** an `entry` carries **at most one** of `{movement_id, metric_key}` —
+> `CHECK (movement_id IS NULL OR metric_key IS NULL)`. `boolean`/`timing` activities (e.g. `wake`,
+> `brain_rep`) reference **neither** and are typed by `activity_type_id` alone.
+
+### 4a. How one activity maps to an entry (the tagged union)
+
+```mermaid
+flowchart TB
+  AT["activity_type.input_shape"] --> D{"which shape?"}
+  D -->|set_list| SET["movement_id set · metric_key NULL"] --> ES["N × entry_set (reps × load)"]
+  D -->|single_metric| SM["metric_key set · movement_id NULL"] --> VN["value_num + unit"]
+  D -->|boolean| BOOL["movement_id NULL · metric_key NULL"] --> ST["status = done"]
+  D -->|timing| TIM["movement_id NULL · metric_key NULL"] --> EA["event_at (moment)"]
+  ES --> CHK
+  VN --> CHK
+  ST --> CHK
+  EA --> CHK
+  CHK["✓ CHECK: at-most-one of movement_id / metric_key"]
 ```
 
 ## 5. Deploy & CI topology
@@ -97,26 +144,60 @@ erDiagram
 ```mermaid
 flowchart TB
   DEV["feature branch → PR"] --> CI
-  subgraph CI["GitHub Actions — required checks"]
-    L["lint · prettier · tsc"]
-    T["tests vs Docker Postgres"]
-    S["Squawk (migrations) · gitleaks · CodeQL"]
+  subgraph CI["GitHub Actions — on every PR"]
+    Q["<b>quality</b> (required)<br/>prettier · eslint · tsc · vitest · next build<br/>+ drift guard + PGlite db:verify"]
+    E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>auto-skips docs-only PRs · ci-skip-e2e label override"]
+    G["<b>gitleaks</b> (required)"]
   end
-  CI --> PREV["Vercel preview<br/>+ Neon branch (prod-shaped)"]
-  PREV --> REV["review + squash-merge"]
-  REV --> MIG["GH Actions migrator<br/>(direct/unpooled) on merge to main"]
-  MIG --> PROD["Vercel prod"]
-  PROD --> NEON[("Neon Postgres<br/>pooled runtime")]
+  CI --> PREV["Vercel preview + Neon branch (prod-shaped)"]
+  PREV --> REV["review + squash-merge to main"]
+  REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>(direct/unpooled Neon)"]
+  REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
+  MIG --> NEON[("Neon Postgres")]
+  PROD --> NEON
 ```
+
+> `e2e` soaks as non-blocking until **PR 28**, then becomes a required check. Squawk (migration lint)
+> and a Neon-branch apply are documented gates not yet wired into `ci.yml` (a follow-up).
 
 ## 6. Roadmap to MVP and beyond
 
 ```mermaid
 flowchart LR
-  B["Bootstrap ✅"] --> V0["v0<br/>thin slice"]
-  V0 --> V1["v1<br/>online logger 🎯 MVP"]
+  B["Bootstrap ✅"] --> V0["v0 ✅<br/>thin slice"]
+  V0 --> V1["v1 🚧<br/>online logger 🎯 MVP"]
   V1 --> AI1["AI-1<br/>NL logging + eval"]
   AI1 --> V15["v1.5<br/>offline PWA + Clerk"]
   V15 --> V2["v2<br/>PPL + engine"]
   V2 --> V3["v3<br/>AI depth + MCP/REST"]
 ```
+
+## 7. v1 build order & parallelization
+
+The serial spine (schema → catalogs) must land first; then the feature slices are additive on the
+settled model and **fan out in parallel**, before the serial tail (edit → prefill → export → capstone).
+
+```mermaid
+flowchart LR
+  V11["V1-1<br/>generalize schema<br/>(a → b → c)"] --> V12["V1-2<br/>seed catalogs<br/>+ coverage test"]
+  V12 --> BAND
+  subgraph BAND["parallelizable — additive on the generalized model"]
+    direction TB
+    V13["V1-3 profile tiles"]
+    V14["V1-4 weigh-ins"]
+    V15["V1-5 checkins / habits"]
+    V16["V1-6 calisthenics totals"]
+    V17["V1-7 life activities"]
+    V18["V1-8 strength session"]
+  end
+  BAND --> V19["V1-9 fix-a-set (LWW)"]
+  V19 --> V110["V1-10 block-template prefill"]
+  V110 --> V111["V1-11 copy-set-to-kid"]
+  V111 --> V112["V1-12 a11y pass"]
+  V112 --> V113["V1-13 CSV export"]
+  V113 --> V114["V1-14 full-day E2E<br/>🎯 MVP complete"]
+```
+
+> Migrations serialize by rule (one per PR, drift-checked, forward-only), so schema-touching PRs stay
+> on the spine; the parallel band is app-layer (no new migrations). The **training-log day**
+> (`2026-07-20`) becomes fully loggable once V1-4 + V1-8 + V1-5 + V1-6 land, and V1-13 exports it.
