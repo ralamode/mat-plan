@@ -5,6 +5,8 @@ import {
   ENTRY_KIND,
   ENTRY_STATUS,
   newId,
+  SEED_ACTIVITY_TYPE_KEYS,
+  SEED_METRIC_KEYS,
   type BodyweightUnit,
   type EntryKind,
   type EntryStatus,
@@ -12,6 +14,7 @@ import {
 } from '@mat-plan/shared';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
+import { assertMetricKeyExists, findOrCreateMovementId, getActivityTypeIdByKey } from './catalog';
 import { db } from './db';
 
 /**
@@ -129,6 +132,12 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: stri
     .limit(1);
   if (!profile) throw new Error('Profile not found');
 
+  // V1-1b dual-write: also populate the generalized columns. A weigh-in is a
+  // single_metric activity carrying the `bodyweight` metric (no movement) — so
+  // metric_key is set and movement_id stays NULL (satisfies the at-most-one CHECK).
+  const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  const metricKey = await assertMetricKeyExists(SEED_METRIC_KEYS.bodyweight);
+
   const [inserted] = await db
     .insert(schema.entries)
     .values({
@@ -139,6 +148,8 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: stri
       kind: ENTRY_KIND.bodyweight,
       unit: args.unit,
       valueNum: String(args.value), // numeric column takes a string (precision-safe)
+      activityTypeId,
+      metricKey,
       status: ENTRY_STATUS.done,
       notes: args.notes ?? null,
     })
@@ -177,6 +188,13 @@ export type LogStrengthArgs = {
  * (so it never doubles the sets). Set ids are generated server-side.
  */
 export async function logStrengthEntry(args: LogStrengthArgs): Promise<{ id: string }> {
+  // V1-1b dual-write: resolve the generalized columns BEFORE the transaction. An S&C
+  // lift is a set_list activity referencing a movement (no metric) — so movement_id is
+  // set and metric_key stays NULL (satisfies the at-most-one CHECK). find-or-create is
+  // idempotent by slug, so resolving it outside the tx is safe (a replay reuses the row).
+  const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
+  const movementId = await findOrCreateMovementId(args.movementName);
+
   return db.transaction(async (tx) => {
     const [profile] = await tx
       .select({ id: schema.profiles.id })
@@ -197,6 +215,8 @@ export async function logStrengthEntry(args: LogStrengthArgs): Promise<{ id: str
         kind: ENTRY_KIND.strength,
         unit: args.unit,
         movementName: args.movementName,
+        activityTypeId,
+        movementId,
         status: ENTRY_STATUS.done,
       })
       .onConflictDoNothing({
