@@ -180,6 +180,12 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · `pnpm audit` (fail high/critical) · CodeQL · (DB) drift check + Squawk +
   Neon-branch apply. CI re-runs everything regardless of hooks.
+- **`e2e` (Playwright smoke):** runs on every PR but is **not yet a required check** — it **soaks as
+  non-blocking until PR 28**, then becomes required (a repo-admin branch-protection change). **Override
+  a required `e2e`** two ways: add the **`ci-skip-e2e` label** to the PR (the job skips the smoke but
+  still reports success, so the required check stays green — for a known-flaky or e2e-irrelevant
+  change), or an **admin merge** (branch-protection bypass) as the last-resort escalation. Prefer the
+  label so the intent is visible on the PR; use it sparingly — a red `e2e` usually means a real bug.
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking
   API/DB changes.
 
