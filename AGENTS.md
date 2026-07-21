@@ -174,6 +174,13 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   config one-liners, single-file mechanical changes. The plan is committed on the feature branch in
   the **same PR** as the code it plans, and the [docs/plan.md](./docs/plan.md) backlog row links to
   it. Template + rules: [docs/plans/README.md](./docs/plans/README.md).
+- **Diagrams in the PR description.** A PR that introduces or changes a **pivotal flow, data model, or
+  schema** embeds a **Mermaid diagram in the PR description** (GitHub renders it) so the reviewer sees
+  the _shape_ of the change without reading every file — an ERD for a schema/migration, a
+  flowchart/sequence for a new flow or subsystem. Keep it to the pivotal one or two, not every trivial
+  change. Reuse and update [docs/architecture.md](./docs/architecture.md) (the diagram home) and embed
+  the relevant view; the description diagram and the committed one should agree. Same placement rule as
+  screenshots: the first goes in the description, later revisions as PR comments.
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 
