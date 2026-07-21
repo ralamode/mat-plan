@@ -1,7 +1,8 @@
 import {
   ACTIVITY_CATEGORY_ROWS,
-  CATALOG_ACTIVITY_TYPE_SEED_ROWS,
-  CATALOG_METRIC_DEFINITION_SEED_ROWS,
+  ACTIVITY_TYPE_SEED_ROWS,
+  METRIC_DEFINITION_SEED_ROWS,
+  MOVEMENT_SEED_ROWS,
   UNITS,
 } from '@mat-plan/shared';
 import { eq } from 'drizzle-orm';
@@ -12,11 +13,12 @@ import * as schema from './schema';
 /**
  * Idempotent seed (AGENTS.md: seed reference data ON CONFLICT DO NOTHING; runs
  * twice → identical result). Seeds the `units` + `activity_type_categories`
- * reference tables, the root household, one profile scoped to it, and (V1-1b) the
- * three minimal catalog rows the entry write paths reference (weigh_in / sc_lift /
- * bodyweight). Fixed UUIDv7s let re-runs conflict on the natural key / public_id
- * instead of inserting duplicates. The FULL catalog is seeded at V1-2, which
- * reuses these exact keys (ON CONFLICT DO NOTHING → no dup).
+ * reference tables, the root household, one profile scoped to it, and (V1-2) the
+ * FULL catalog — `activity_types`, `metric_definitions`, and `movements` — sourced
+ * from @mat-plan/shared as the single source of truth. Fixed UUIDv7s let re-runs
+ * conflict on the natural key / public_id instead of inserting duplicates. V1-1b's
+ * three minimal rows (weigh_in / sc_lift / bodyweight) are SPREAD into these arrays,
+ * so they keep one definition and re-seed as a no-op (ON CONFLICT DO NOTHING).
  */
 
 // Fixed UUIDv7s for the single-tenant v0/v1 seed rows (stable identity for idempotency).
@@ -53,15 +55,22 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     })
     .onConflictDoNothing({ target: schema.profiles.publicId });
 
-  // V1-1b: the three minimal catalog rows the entry backfill + DAL dual-write need.
-  // Sourced from @mat-plan/shared (single source; V1-2's full catalog reuses these keys).
+  // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from
+  // @mat-plan/shared (single source of truth). ON CONFLICT on each natural key → idempotent,
+  // and a safe no-op for V1-1b's 3 reused rows (weigh_in / sc_lift / bodyweight). Runs after
+  // the FK parents (units + activity_type_categories) so category/unit references resolve.
   await db
     .insert(schema.activityTypes)
-    .values([...CATALOG_ACTIVITY_TYPE_SEED_ROWS])
+    .values([...ACTIVITY_TYPE_SEED_ROWS])
     .onConflictDoNothing({ target: schema.activityTypes.key });
 
   await db
     .insert(schema.metricDefinitions)
-    .values([...CATALOG_METRIC_DEFINITION_SEED_ROWS])
+    .values([...METRIC_DEFINITION_SEED_ROWS])
     .onConflictDoNothing({ target: schema.metricDefinitions.key });
+
+  await db
+    .insert(schema.movements)
+    .values([...MOVEMENT_SEED_ROWS])
+    .onConflictDoNothing({ target: schema.movements.slug });
 }
