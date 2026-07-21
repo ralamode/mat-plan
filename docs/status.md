@@ -3,26 +3,29 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-20
+**Last updated:** 2026-07-21
 
 ## Where we are right now
 
-📍 **v1 underway — V1-1b in review (V1-1a merged).** V1-1 (generalize the v0 schema toward the full
-activity model, [spec.md](./spec.md) §4) is split into three deploys
-([plan](./plans/v1-1-generalize-schema.md)): **V1-1a = additive (expand-only)** ✅ merged, **V1-1b =
-entry generalization + backfill** (this PR), V1-1c = destructive contract. This PR ships **V1-1b**:
-the generalized `entries` columns (`session_id` / `activity_type_id` / `movement_id` / `metric_key` +
-`value_text`/`context`/`scheme`), the **at-most-one** tagged-union CHECK (`movement_id IS NULL OR
-metric_key IS NULL`), three minimal catalog rows (weigh_in / sc_lift / bodyweight, the single source
-V1-2's full catalog reuses), an idempotent backfill of the v0 rows, and the DAL **dual-write** so new
-bodyweight/strength logs populate the generalized columns — all proven on PGlite (`db:verify`) + the
-drift guard. Legacy `kind`/`movement_name` **stay** (dropped in V1-1c); Squawk + Neon-branch CI wiring
-still deferred. Prior: V1-1a (catalogs + household + structural enums) and v0's 13-PR thin slice.
+📍 **v1 underway — V1-1c in review (V1-1a/b merged).** V1-1 (generalize the v0 schema toward the full
+activity model, [spec.md](./spec.md) §4) is split into **four** deploys
+([plan](./plans/v1-1-generalize-schema.md)): **V1-1a = additive (expand-only)** ✅, **V1-1b = entry
+generalization + backfill** ✅, **V1-1c = constraint relaxation** (this PR), **V1-1d = the physical
+column drops** (deferred). This PR ships **V1-1c** — **metadata-only**: relax `entries.kind` to
+**NULLABLE** so a metric-only / boolean check-in (no `kind`) inserts, and add the discriminant
+invariant `activity_type_id IS NOT NULL` (CHECK `NOT VALID`→`VALIDATE`, mirroring `household_id`;
+V1-1b backfilled every row). **No column drop, no app change** — the legacy `kind`/`movement_name`
+columns and the `entries_kind_check`/`entries_shape_check` guards **stay** (they still guard the live
+`kind` dual-writer, and pass on a `kind=NULL` row). The physical `DROP COLUMN` + CHECK drops are
+**V1-1d**, after V1-5–V1-8 take the app off `kind`. Proven on PGlite (`db:verify`: a kind-less check-in
+round-trips; a no-`activity_type_id` row is rejected by name) + the drift guard. **Independent of V1-4
+(#39)** — a pure migration, mergeable in either order. Squawk + Neon-branch CI still deferred (the
+`e2e` job's `db:migrate` is the real-PG apply gate). Prior: V1-1a/b, V1-2/V1-3/V1-4, and v0's slice.
 
 ## Progress toward MVP (v1)
 
 - **Code PRs merged:** 14 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~52% (+2 out-of-band: constants convention, Vitest harness)
-- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a merged; V1-1b in review)
+- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b merged; V1-1c in review)
 
 ## Phases
 
@@ -58,25 +61,36 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR    | Scope                                                                  | Status |
-| ----- | ---------------------------------------------------------------------- | ------ |
-| V1-1  | generalize schema + forward-migrate (a/b/c; a merged, **b in review**) | 🔵     |
-| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))  | ✅     |
-| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                  | 🔵     |
-| V1-4  | bodyweight/measurement on generalized model (read path)                | 🔵     |
-| V1-5  | checkins/habits dynamic form                                           | ⚪     |
-| V1-6  | calisthenics totals + ramp targets                                     | ⚪     |
-| V1-7  | life activities (wake/practice)                                        | ⚪     |
-| V1-8  | kids' strength via session                                             | ⚪     |
-| V1-9  | fix-a-set / edit (LWW)                                                 | ⚪     |
-| V1-10 | block-template prefill                                                 | ⚪     |
-| V1-11 | copy-set-to-other-kid                                                  | ⚪     |
-| V1-12 | a11y pass                                                              | ⚪     |
-| V1-13 | CSV export endpoint (golden-file)                                      | ⚪     |
-| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                            | ⚪     |
+| PR    | Scope                                                                                  | Status |
+| ----- | -------------------------------------------------------------------------------------- | ------ |
+| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b merged, **c in review**, d deferred) | 🔵     |
+| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                  | ✅     |
+| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                  | 🔵     |
+| V1-4  | bodyweight/measurement on generalized model (read path)                                | 🔵     |
+| V1-5  | checkins/habits dynamic form                                                           | ⚪     |
+| V1-6  | calisthenics totals + ramp targets                                                     | ⚪     |
+| V1-7  | life activities (wake/practice)                                                        | ⚪     |
+| V1-8  | kids' strength via session                                                             | ⚪     |
+| V1-9  | fix-a-set / edit (LWW)                                                                 | ⚪     |
+| V1-10 | block-template prefill                                                                 | ⚪     |
+| V1-11 | copy-set-to-other-kid                                                                  | ⚪     |
+| V1-12 | a11y pass                                                                              | ⚪     |
+| V1-13 | CSV export endpoint (golden-file)                                                      | ⚪     |
+| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                            | ⚪     |
 
 ## Changelog (merged PRs)
 
+- **2026-07-21** — **V1-1c** (in review): constraint relaxation to unblock metric-only / boolean
+  check-ins ([plan](./plans/v1-1-generalize-schema.md)). **Metadata-only migration** (`0003`): relax
+  `entries.kind` to **NULLABLE** (the sole blocker of a kind-less check-in insert) + add the
+  discriminant invariant `activity_type_id IS NOT NULL` (CHECK `NOT VALID`→`VALIDATE`, mirroring
+  `household_id`; V1-1b backfilled all rows so `VALIDATE` is clean). **No column drop, no app change** —
+  the legacy `kind`/`movement_name` columns + the `entries_kind_check`/`entries_shape_check` guards
+  **stay** (they still guard the live `kind` dual-writer; Postgres CHECKs pass on a `kind=NULL` row —
+  though `entries_shape_check` needs `value_num` populated, which every seeded numeric metric carries).
+  The physical `DROP COLUMN` + CHECK drops become **V1-1d**, after V1-5–V1-8 take the app off `kind`.
+  Proven on PGlite `db:verify` (kind-less check-in round-trips; no-`activity_type_id` row rejected by
+  name) + the drift guard. **Independent of V1-4 (#39)** (pure migration). Backlog `a/b/c` → `a/b/c/d`.
 - **2026-07-20** — **V1-4** (in review): bodyweight/measurement entries on the generalized model —
   **read path only** ([plan](./plans/v1-4-weigh-ins.md)). `listEntriesForDay` LEFT JOINs
   `metric_definitions` (legacy `metric_key IS NULL` rows survive; UNIQUE key → no fan-out; row
