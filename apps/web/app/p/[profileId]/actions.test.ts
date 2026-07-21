@@ -14,18 +14,23 @@ vi.mock('@/lib/dal/entries', () => ({
   logStrengthEntry: vi.fn(async () => ({ id: 'strength-pub-id' })),
 }));
 vi.mock('@/lib/dal/profiles', () => ({
-  getDefaultProfile: vi.fn(async () => ({
-    id: 'profile-pub-id',
-    name: 'Athlete One',
+  getProfileByPublicId: vi.fn(async () => ({
+    id: PROFILE_ID,
+    name: 'Liam',
     kind: 'kid',
+    avatar: null,
   })),
 }));
 
 import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
-import { getDefaultProfile } from '@/lib/dal/profiles';
+import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { revalidatePath } from 'next/cache';
 
 import { logBodyweightAction, logStrengthAction, type ActionState } from './actions';
+
+// A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
+// the action must thread it through to both the ownership check and revalidate path.
+const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
 
 const initial: ActionState = { ok: false, error: null };
 
@@ -41,7 +46,7 @@ describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
   it('rejects a non-numeric weight without touching the DAL', async () => {
     const res = await logBodyweightAction(
       initial,
-      form({ value: 'abc', unit: 'lb', clientId: newId() }),
+      form({ profileId: PROFILE_ID, value: 'abc', unit: 'lb', clientId: newId() }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.value).toBeTruthy();
@@ -52,7 +57,7 @@ describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
   it('rejects a non-positive weight', async () => {
     const res = await logBodyweightAction(
       initial,
-      form({ value: '0', unit: 'lb', clientId: newId() }),
+      form({ profileId: PROFILE_ID, value: '0', unit: 'lb', clientId: newId() }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.value).toBeTruthy();
@@ -62,7 +67,7 @@ describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
   it('rejects a unit outside the allowed set', async () => {
     const res = await logBodyweightAction(
       initial,
-      form({ value: '180', unit: 'stone', clientId: newId() }),
+      form({ profileId: PROFILE_ID, value: '180', unit: 'stone', clientId: newId() }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.unit).toBeTruthy();
@@ -72,51 +77,77 @@ describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
   it('rejects a non-UUID clientId', async () => {
     const res = await logBodyweightAction(
       initial,
-      form({ value: '180', unit: 'lb', clientId: 'not-a-uuid' }),
+      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: 'not-a-uuid' }),
     );
     expect(res.ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
   });
-});
 
-describe('logBodyweightAction — happy path + ownership', () => {
-  it('writes a valid entry via the DAL and revalidates Today', async () => {
-    const clientId = newId();
-    const res = await logBodyweightAction(
-      initial,
-      form({ value: '182.5', unit: BODYWEIGHT_UNITS[0], clientId }),
-    );
-    expect(res.ok).toBe(true);
-    expect(logBodyweight).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profilePublicId: 'profile-pub-id',
-        value: 182.5,
-        unit: BODYWEIGHT_UNITS[0],
-        clientId,
-      }),
-    );
-    expect(revalidatePath).toHaveBeenCalledWith('/');
-  });
-
-  it('fails gracefully when there is no profile to log against', async () => {
-    vi.mocked(getDefaultProfile).mockResolvedValueOnce(null);
+  it('rejects a missing profileId without touching the DAL', async () => {
     const res = await logBodyweightAction(
       initial,
       form({ value: '180', unit: 'lb', clientId: newId() }),
     );
     expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.profileId).toBeTruthy();
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(logBodyweight).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed (non-UUID) profileId', async () => {
+    const res = await logBodyweightAction(
+      initial,
+      form({ profileId: 'not-a-uuid', value: '180', unit: 'lb', clientId: newId() }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.profileId).toBeTruthy();
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(logBodyweight).not.toHaveBeenCalled();
+  });
+});
+
+describe('logBodyweightAction — happy path + ownership', () => {
+  it('writes a valid entry via the DAL and revalidates the scoped Today', async () => {
+    const clientId = newId();
+    const res = await logBodyweightAction(
+      initial,
+      form({ profileId: PROFILE_ID, value: '182.5', unit: BODYWEIGHT_UNITS[0], clientId }),
+    );
+    expect(res.ok).toBe(true);
+    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
+    expect(logBodyweight).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profilePublicId: PROFILE_ID,
+        value: 182.5,
+        unit: BODYWEIGHT_UNITS[0],
+        clientId,
+      }),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('fails gracefully (no write) when the profile is unknown', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await logBodyweightAction(
+      initial,
+      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logBodyweight).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
 
 // Builds strength FormData with parallel repeated reps/weight fields.
 function strengthForm(opts: {
+  profileId?: string;
   movementName?: string;
   unit?: string;
   clientId?: string;
   sets?: Array<{ reps: string; weight: string }>;
 }): FormData {
   const fd = new FormData();
+  if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
   if (opts.movementName !== undefined) fd.append('movementName', opts.movementName);
   fd.append('unit', opts.unit ?? BODYWEIGHT_UNITS[0]);
   fd.append('clientId', opts.clientId ?? newId());
@@ -131,7 +162,11 @@ describe('logStrengthAction — boundary (bad body → zod-reject)', () => {
   it('rejects a missing movement without touching the DAL', async () => {
     const res = await logStrengthAction(
       initial,
-      strengthForm({ movementName: '', sets: [{ reps: '5', weight: '135' }] }),
+      strengthForm({
+        profileId: PROFILE_ID,
+        movementName: '',
+        sets: [{ reps: '5', weight: '135' }],
+      }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.movementName).toBeTruthy();
@@ -141,7 +176,11 @@ describe('logStrengthAction — boundary (bad body → zod-reject)', () => {
   it('rejects when there are no sets (blank rows dropped)', async () => {
     const res = await logStrengthAction(
       initial,
-      strengthForm({ movementName: 'Back squat', sets: [{ reps: '', weight: '' }] }),
+      strengthForm({
+        profileId: PROFILE_ID,
+        movementName: 'Back squat',
+        sets: [{ reps: '', weight: '' }],
+      }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.sets).toBeTruthy();
@@ -151,19 +190,35 @@ describe('logStrengthAction — boundary (bad body → zod-reject)', () => {
   it('rejects a non-integer rep count', async () => {
     const res = await logStrengthAction(
       initial,
-      strengthForm({ movementName: 'Back squat', sets: [{ reps: '5.5', weight: '135' }] }),
+      strengthForm({
+        profileId: PROFILE_ID,
+        movementName: 'Back squat',
+        sets: [{ reps: '5.5', weight: '135' }],
+      }),
     );
     expect(res.ok).toBe(false);
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing profileId without touching the DAL', async () => {
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.profileId).toBeTruthy();
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(logStrengthEntry).not.toHaveBeenCalled();
   });
 });
 
 describe('logStrengthAction — happy path (transactional nested write)', () => {
-  it('passes movement + parsed sets to the DAL and revalidates', async () => {
+  it('passes movement + parsed sets to the DAL and revalidates the scoped Today', async () => {
     const clientId = newId();
     const res = await logStrengthAction(
       initial,
       strengthForm({
+        profileId: PROFILE_ID,
         movementName: 'Back squat',
         clientId,
         sets: [
@@ -174,9 +229,10 @@ describe('logStrengthAction — happy path (transactional nested write)', () => 
       }),
     );
     expect(res.ok).toBe(true);
+    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
     expect(logStrengthEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        profilePublicId: 'profile-pub-id',
+        profilePublicId: PROFILE_ID,
         movementName: 'Back squat',
         unit: BODYWEIGHT_UNITS[0],
         clientId,
@@ -187,6 +243,21 @@ describe('logStrengthAction — happy path (transactional nested write)', () => 
         ],
       }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith('/');
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('fails gracefully (no write) when the profile is unknown', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await logStrengthAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movementName: 'Back squat',
+        sets: [{ reps: '5', weight: '135' }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
