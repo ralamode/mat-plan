@@ -46,7 +46,8 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
 - **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `design.md`,
-  `definition-of-done.md`, future `decisions/` ADRs).
+  `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `plans/`, future
+  `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
 - **`apps/web/`** — the Next.js app, grouped by responsibility (not a flat dump by file type):
   `app/` (routes + `layout`/`loading`/`error`), `components/` (`ui/` primitives vs feature folders),
