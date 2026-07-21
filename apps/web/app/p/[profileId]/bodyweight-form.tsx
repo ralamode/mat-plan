@@ -12,7 +12,7 @@ const initialState: ActionState = { ok: false, error: null };
 const inputClass =
   'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
 
-export function BodyweightForm() {
+export function BodyweightForm({ profileId }: { profileId: string }) {
   const [state, formAction, pending] = useActionState(logBodyweightAction, initialState);
   // Client-stamped idempotency key: generated once, rotated after a successful
   // write (via the DOM, not state — avoids a cascading re-render).
@@ -31,6 +31,7 @@ export function BodyweightForm() {
 
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+      <input type="hidden" name="profileId" value={profileId} readOnly />
       <input ref={clientIdRef} type="hidden" name="clientId" defaultValue={initialClientId} />
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-1 flex-col gap-1.5">

@@ -7,6 +7,11 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## E2E / Playwright
 
+- **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
+  app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws
+  `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
+  not-found **content** (`getByText(/this page could not be found/i)`), not the HTTP status. (V1-3)
+
 - **Test "flaky" (fails attempt 1, passes on retry) after a form submit.** → The _first_ Server Action
   after a cold `next start` pays JIT + first-DB-connection cost, exceeding the assertion timeout; the
   warm retry passes, masking the race. → **Warm the cold path once in `global.setup`** (submit one
@@ -22,6 +27,15 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   Postgres (PGlite is in-process only, used just for `db:verify`). → CI is the first real e2e run;
   front-load robustness. Future fix: embedded-postgres / throwaway Neon branch. See
   [docs/plans/v0-11-ci-postgres-playwright.md] and the `no-docker-local-e2e` memory.
+
+## Vitest / RTL (component tests)
+
+- **Test "passes" but the run exits non-zero: `ReferenceError: window is not defined` (unhandled,
+  after the tests).** → An RTL component test didn't **unmount** — clearing `document.body.innerHTML`
+  isn't enough; React/`next/link` scheduler work stays pending and flushes _after_ jsdom is torn down.
+  → `import { cleanup } from '@testing-library/react'; afterEach(cleanup)`. RTL's auto-cleanup only
+  registers when vitest `globals` is on (ours is off — we import test APIs), so wire it explicitly.
+  Also declare the DOM per-file: `// @vitest-environment jsdom` (the suite default is `node`). (V1-3)
 
 ## CI / secrets
 

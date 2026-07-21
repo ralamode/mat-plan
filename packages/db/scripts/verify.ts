@@ -30,7 +30,12 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
-import { SEED_HOUSEHOLD_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID, seed } from '../src/seed';
+import {
+  SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_PUBLIC_ID,
+  seed,
+} from '../src/seed';
 
 /**
  * Verifies the migration + seed against an in-process Postgres (PGlite) — no
@@ -53,8 +58,19 @@ const profiles = await db.select().from(schema.profiles);
 const households = await db.select().from(schema.households);
 const categories = await db.select().from(schema.activityTypeCategories);
 assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
-assert.equal(profiles.length, 1, 'exactly one profile after two seed runs');
-assert.equal(profiles[0].publicId, SEED_PROFILE_PUBLIC_ID, 'seed profile stable by public_id');
+// V1-3: two kid profiles (Liam + Scarlett), stable by public_id across re-seeds.
+assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
+const seededProfileIds = profiles.map((p) => p.publicId).sort();
+assert.deepEqual(
+  seededProfileIds,
+  [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID].sort(),
+  'both seed profiles stable by public_id',
+);
+assert.deepEqual(
+  profiles.map((p) => p.name).sort(),
+  ['Liam', 'Scarlett'],
+  'seed profiles are Liam + Scarlett',
+);
 assert.equal(households.length, 1, 'exactly one household after two seed runs');
 assert.equal(
   households[0].publicId,
@@ -67,14 +83,16 @@ assert.equal(
   'activity_type_categories seeded from the shared const, exactly once',
 );
 console.log(
-  `✓ idempotent seed: ${units.length} units, ${categories.length} categories, ${households.length} household, ${profiles.length} profile`,
+  `✓ idempotent seed: ${units.length} units, ${categories.length} categories, ${households.length} household, ${profiles.length} profiles`,
 );
 
-// V1-1a: the seed profile must be scoped to the root household (household_id NOT NULL
+// V1-1a: every seed profile must be scoped to the root household (household_id NOT NULL
 // enforced by the migration's CHECK; the migration backfill + seed both set it).
-assert.equal(profiles[0].householdId, households[0].id, 'seed profile scoped to root household');
-assert.ok(profiles[0].householdId != null, 'profile.household_id is non-null (CHECK-enforced)');
-console.log('✓ profile scoped to root household (household_id NOT NULL)');
+for (const p of profiles) {
+  assert.equal(p.householdId, households[0].id, 'seed profile scoped to root household');
+  assert.ok(p.householdId != null, 'profile.household_id is non-null (CHECK-enforced)');
+}
+console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 
 // Tagged-union CHECK: a bodyweight entry with no value_num must be rejected.
 let rejected = false;

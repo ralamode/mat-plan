@@ -2,7 +2,7 @@ import { test as setup } from '@playwright/test';
 
 import { STORAGE_STATE } from '../playwright.config';
 import { gateLogin } from './gate-login';
-import { logBodyweight } from './steps';
+import { logBodyweight, selectProfile } from './steps';
 
 // Runs once before the chromium project (its `dependencies: ['setup']`). Two jobs:
 //   1. Authenticate through the gate and persist storageState, so specs start
@@ -17,5 +17,6 @@ setup('authenticate + warm the write path', async ({ page }) => {
   await page.context().storageState({ path: STORAGE_STATE });
 
   await page.goto('/');
+  await selectProfile(page, 'Liam'); // '/' is the picker (V1-3) → tap into a scoped Today
   await logBodyweight(page, '0.5', { timeout: 30_000 }); // cold: boot cost lands here, not in the test
 });

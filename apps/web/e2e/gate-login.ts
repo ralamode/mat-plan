@@ -22,7 +22,8 @@ export async function gateLogin(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Enter' }).click();
 
   // The Server Action redirects to the safe internal target ('/' by default)
-  // once the cookie is set.
+  // once the cookie is set. '/' is the profile picker (V1-3); the apostrophe in the
+  // heading is a curly ’ (U+2019), so match loosely.
   await page.waitForURL('/');
-  await expect(page.getByRole('heading', { name: 'Today', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Who.s logging today/, level: 1 })).toBeVisible();
 }

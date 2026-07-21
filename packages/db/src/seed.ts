@@ -13,17 +13,23 @@ import * as schema from './schema';
 /**
  * Idempotent seed (AGENTS.md: seed reference data ON CONFLICT DO NOTHING; runs
  * twice → identical result). Seeds the `units` + `activity_type_categories`
- * reference tables, the root household, one profile scoped to it, and (V1-2) the
- * FULL catalog — `activity_types`, `metric_definitions`, and `movements` — sourced
- * from @mat-plan/shared as the single source of truth. Fixed UUIDv7s let re-runs
- * conflict on the natural key / public_id instead of inserting duplicates. V1-1b's
- * three minimal rows (weigh_in / sc_lift / bodyweight) are SPREAD into these arrays,
- * so they keep one definition and re-seed as a no-op (ON CONFLICT DO NOTHING).
+ * reference tables, the root household, two kid profiles scoped to it (V1-3: Liam +
+ * Scarlett), and (V1-2) the FULL catalog — `activity_types`, `metric_definitions`, and
+ * `movements` — sourced from @mat-plan/shared as the single source of truth. Fixed
+ * UUIDv7s let re-runs conflict on the natural key / public_id instead of inserting
+ * duplicates. V1-1b's three minimal rows (weigh_in / sc_lift / bodyweight) are SPREAD
+ * into these arrays, so they keep one definition and re-seed as a no-op (ON CONFLICT
+ * DO NOTHING).
  */
 
 // Fixed UUIDv7s for the single-tenant v0/v1 seed rows (stable identity for idempotency).
 export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
+// V1-3: two kid profiles (Liam + Scarlett) under the root household — the picker tiles.
+// SEED_PROFILE_PUBLIC_ID keeps the v0 id (was "Athlete One", now Liam) so prod's existing
+// row is matched by public_id on re-seed (ON CONFLICT DO NOTHING → prod keeps its name;
+// a prod rename is out of scope). SEED_PROFILE_2_PUBLIC_ID (Scarlett) is a new fixed id.
 export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
+export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
   await db.insert(schema.units).values(UNITS).onConflictDoNothing({ target: schema.units.code });
@@ -45,14 +51,25 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .from(schema.households)
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
 
+  // V1-3: the two kid profiles the picker tiles render. Both scoped to the root
+  // household; idempotent by public_id (a re-seed of prod's existing "Athlete One"
+  // row conflicts on SEED_PROFILE_PUBLIC_ID and keeps its name — rename is fresh-DB only).
   await db
     .insert(schema.profiles)
-    .values({
-      publicId: SEED_PROFILE_PUBLIC_ID,
-      name: 'Athlete One',
-      kind: 'kid',
-      householdId: household.id,
-    })
+    .values([
+      {
+        publicId: SEED_PROFILE_PUBLIC_ID,
+        name: 'Liam',
+        kind: 'kid',
+        householdId: household.id,
+      },
+      {
+        publicId: SEED_PROFILE_2_PUBLIC_ID,
+        name: 'Scarlett',
+        kind: 'kid',
+        householdId: household.id,
+      },
+    ])
     .onConflictDoNothing({ target: schema.profiles.publicId });
 
   // V1-2: the FULL catalog (activity_types + metric_definitions + movements), sourced from
