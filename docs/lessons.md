@@ -38,6 +38,11 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Git / commits
 
+- **Squash merge landed an _intermediate_ commit — the last pushes are missing from `main`.** → A PR
+  merged while newer commits were still landing (or merged at the SHA the page was showing) squashes a
+  stale head, silently dropping later commits. → After any squash merge, `git checkout main && git
+pull`, then spot-check `main` has your final work (`git show HEAD:<file> | grep <distinctive line>`).
+  If missing, cherry-pick the dropped commits forward on a follow-up branch. (V0-11 → #24)
 - **Commit rejected: "subject must not be sentence-case / start-case".** → commitlint wants a
   **lowercase** subject start. → `feat(x): add …`, not `feat(x): Add …` / `feat(x): CI …`.
 
