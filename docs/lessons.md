@@ -28,6 +28,15 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   front-load robustness. Future fix: embedded-postgres / throwaway Neon branch. See
   [docs/plans/v0-11-ci-postgres-playwright.md] and the `no-docker-local-e2e` memory.
 
+## Vitest / RTL (component tests)
+
+- **Test "passes" but the run exits non-zero: `ReferenceError: window is not defined` (unhandled,
+  after the tests).** → An RTL component test didn't **unmount** — clearing `document.body.innerHTML`
+  isn't enough; React/`next/link` scheduler work stays pending and flushes _after_ jsdom is torn down.
+  → `import { cleanup } from '@testing-library/react'; afterEach(cleanup)`. RTL's auto-cleanup only
+  registers when vitest `globals` is on (ours is off — we import test APIs), so wire it explicitly.
+  Also declare the DOM per-file: `// @vitest-environment jsdom` (the suite default is `node`). (V1-3)
+
 ## CI / secrets
 
 - **gitleaks red on a CI placeholder** (e.g. `ci-e2e-placeholder-1234`). → A high-entropy dummy value
