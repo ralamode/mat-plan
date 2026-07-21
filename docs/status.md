@@ -63,7 +63,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-1  | generalize schema + forward-migrate (a/b/c; a merged, **b in review**) | 🔵     |
 | V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))  | ✅     |
 | V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                  | 🔵     |
-| V1-4  | bodyweight/measurement on generalized model                            | ⚪     |
+| V1-4  | bodyweight/measurement on generalized model (read path)                | 🔵     |
 | V1-5  | checkins/habits dynamic form                                           | ⚪     |
 | V1-6  | calisthenics totals + ramp targets                                     | ⚪     |
 | V1-7  | life activities (wake/practice)                                        | ⚪     |
@@ -77,6 +77,18 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-20** — **V1-4** (in review): bodyweight/measurement entries on the generalized model —
+  **read path only** ([plan](./plans/v1-4-weigh-ins.md)). `listEntriesForDay` LEFT JOINs
+  `metric_definitions` (legacy `metric_key IS NULL` rows survive; UNIQUE key → no fan-out; row
+  count + `desc(created_at)` order unchanged) and `EntryDTO` gains nullable `metricKey`/`metricLabel`/
+  `valueType`. The Today-view label moves to a pure, route-agnostic `lib/entries/entry-label.ts`
+  (reusable by the later history/CSV surfaces) that **dispatches on the model discriminant** — a
+  `value_type` `switch` (only `number`/`count` implemented; an explicit seam for V1-5 `bool`/`scale_10`
+  and V1-6 `aggregation`), not a per-`kind` string ladder. Rendered output is **byte-identical**
+  (`Bodyweight — 72.5 lb`), so the e2e smoke is untouched. A **required** contract test pins the seeded
+  `bodyweight` label to the canonical shared const. The **write path/forms/actions are deferred to
+  V1-5** (this PR touches no write code). Plan was authored Staff-SWE then slimmed ~3× by the
+  adversarial panel.
 - **2026-07-20** — **V1-3** (in review): profile tiles + Today scoped to a profile
   ([plan](./plans/v1-3-profile-tiles.md)). `/` is now the "Who's logging today?" **picker** (a tile per
   household profile); tapping a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`), a
