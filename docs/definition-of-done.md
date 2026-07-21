@@ -36,8 +36,11 @@ Every PR must satisfy:
 ## Test pyramid
 
 Runner: **Vitest** (`pnpm test`) for unit / integration / component; **Playwright** for E2E
-(added V0-11). Tests colocate as `*.test.ts(x)` next to the code they cover. Vitest runs in CI
-(required check) and on `pre-push`.
+(added V0-11). Tests colocate as `*.test.ts(x)` next to the code they cover. Two CI jobs run them:
+the **`quality`** job runs the full **Vitest** suite (required check; no database — the DAL is
+mocked, and `db:verify` checks the schema against in-memory **PGlite**), and the **`e2e`** job runs
+the **Playwright** smoke against a real **CI Postgres service** (migrated + seeded). Vitest also runs
+on `pre-push`.
 
 **Speed budget (enforced by review).** Unit / integration / component tests are **fast — sub-second,
 usually milliseconds** (the whole Vitest suite runs in well under a second). **E2E is the _only_ tier
@@ -47,9 +50,13 @@ push correctness (idempotency, zod, ownership, edge cases) down to the fast tier
 only that the pieces are wired together. A test that _needs_ seconds outside E2E is a design smell —
 rewrite the coverage, don't accept the slowness.
 
-- **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils
-- **Integration:** Server Actions / Route Handlers — call as plain async fns, mock the DAL; against
-  ephemeral Docker Postgres once the DB lands (V0-5+)
+- **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils. Live: `lib/date.test.ts`
+  and `lib/access-gate.test.ts` (token derivation + the `safeInternalPath` open-redirect guard).
+- **Integration:** Server Actions / Route Handlers — call as plain async fns, mock the DAL + cache so
+  no live Postgres is needed (runs in the fast `quality` job). Covers the mandatory boundary cases
+  (bad body → zod-reject, no-profile → fail) plus the happy path + ownership. Live:
+  `app/actions.test.ts` (the V0-8 bodyweight + V0-9 strength actions). The real end-to-end DB write
+  path is proven once — by the Playwright smoke in the `e2e` job — not re-tested here.
 - **Component:** React Testing Library (jsdom) for the log forms
 - **E2E:** a few critical flows only (Playwright). Authoring rules (learned the hard way in V0-11):
   - **Locate by role/label with `exact: true`.** `getByLabel`/`getByText` are substring +
