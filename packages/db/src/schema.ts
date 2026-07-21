@@ -97,7 +97,11 @@ export const entries = pgTable(
       .references(() => profiles.id),
     activityDate: date('activity_date').notNull(), // declared date (not device clock)
     eventAt: timestamp('event_at', { withTimezone: true }), // timing activities (future)
-    kind: text('kind').notNull(), // mirrors ENTRY_KINDS
+    // V1-1c: kind relaxed to NULLABLE so metric-only / boolean check-in entries insert (a
+    // check-in has no kind). The legacy dual-writer (logBodyweight/logStrengthEntry) still WRITES
+    // kind, and entries_kind_check/entries_shape_check stay as guards on it — they don't block a
+    // kind-less check-in (see the entries_shape_check note below re: value_num). Dropped in V1-1d.
+    kind: text('kind'), // mirrors ENTRY_KINDS (nullable since V1-1c)
     unit: text('unit')
       .notNull()
       .references(() => units.code),
@@ -105,11 +109,13 @@ export const entries = pgTable(
     valueNum: numeric('value_num', { precision: 8, scale: 3 }), // bodyweight value
     rawLoad: text('raw_load'), // verbatim legacy strings → lossless CSV export
     rawReps: text('raw_reps'),
-    // ── V1-1b generalized columns (additive; legacy kind/movement_name stay until V1-1c) ──
-    // All NULLABLE now. The at-most-one tagged-union guard
+    // ── V1-1b generalized columns (additive; legacy kind/movement_name dropped in V1-1d) ──
+    // All NULLABLE at the column level. The at-most-one tagged-union guard
     // (`movement_id IS NULL OR metric_key IS NULL`) is a HAND-ADDED CHECK in the migration,
     // NOT declared here — so the drizzle drift snapshot stays trivially clean (same pattern
-    // as V1-1a's profiles NOT-NULL CHECK). `activity_type_id` becomes NOT NULL at V1-1c.
+    // as V1-1a's profiles NOT-NULL CHECK). `activity_type_id` is the discriminant invariant:
+    // it becomes NOT NULL at V1-1c via a hand-added CHECK (NOT VALID → VALIDATE), mirroring
+    // household_id — the drizzle column stays nullable so the snapshot stays simple.
     sessionId: bigint('session_id', { mode: 'number' }).references(() => sessions.id),
     activityTypeId: bigint('activity_type_id', { mode: 'number' }).references(
       () => activityTypes.id,
@@ -136,7 +142,12 @@ export const entries = pgTable(
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
     // Legacy tagged-union shape guard (V0): bodyweight carries value_num (no movement); strength
-    // names a movement. Kept until V1-1c; the generalized at-most-one CHECK
+    // names a movement. RETAINED past V1-1c — it (and entries_kind_check) still guard the live
+    // `kind` dual-writer. On a kind=NULL check-in it passes AS LONG AS value_num is populated:
+    // 3-valued logic makes the whole CHECK NULL (→ pass) when kind is NULL, but a NULL value_num
+    // turns `value_num is not null` FALSE (→ reject). Every seeded metric is numeric (→ value_num),
+    // so metric-only check-ins pass; a future text-only metric would need V1-1d's drop. Dropped in
+    // V1-1d with the kind/movement_name columns. The generalized at-most-one CHECK
     // (entries_value_source_check) is hand-added in the V1-1b migration alongside it.
     check(
       'entries_shape_check',

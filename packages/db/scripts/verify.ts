@@ -260,8 +260,8 @@ console.log('✓ movement slug↔name parity + every pattern covered');
 
 // (8) Round-trip ONE entry per input_shape — proving the tagged union carries every activity
 // shape with NO bespoke per-activity column, each satisfying the at-most-one source CHECK.
-// NB: the legacy V0 `entries_shape_check` (dropped at V1-1c) still forces kind∈{bodyweight,
-// strength} + value_num/movement_name; that guard is incidental here — the assertion is on the
+// NB: the legacy V0 `entries_shape_check` (RETAINED past V1-1c; dropped at V1-1d) still forces
+// kind∈{bodyweight,strength} + value_num/movement_name; that guard is incidental here — the assertion is on the
 // GENERALIZED columns (activity_type_id + the at-most-one movement_id/metric_key + unit/event_at).
 async function activityTypeIdByKey(key: string): Promise<number> {
   const [row] = await db
@@ -397,6 +397,11 @@ const [scLift] = await db
 // Insert legacy-shaped v0 rows (generalized cols NULL), then RE-RUN migration 0002's
 // backfill: the migration's one-time backfill saw an empty table on this fresh PGlite,
 // so we replicate its guarded (idempotent) statements to prove the backfill LOGIC resolves.
+// V1-1c note: these pre-backfill rows carry activity_type_id NULL, which the V1-1c invariant
+// (entries_activity_type_id_not_null) now forbids. That is faithful to the DEPLOY ORDER — 0002's
+// backfill runs BEFORE 0003 adds the CHECK — so we reproduce it here: drop the CHECK, run the
+// backfill sim, then re-add it (NOT VALID → VALIDATE) against the now-backfilled rows.
+await db.execute(sql`ALTER TABLE "entries" DROP CONSTRAINT "entries_activity_type_id_not_null"`);
 await db.insert(schema.entries).values({
   publicId: '019826b4-0000-7000-8000-0000000000c1',
   clientId: '019826b4-0000-7000-8000-0000000000c2',
@@ -434,6 +439,14 @@ await db.execute(sql`
   FROM "movements" m
   WHERE m."slug" = lower(regexp_replace(btrim(e."movement_name"), '\s+', '_', 'g'))
     AND e."kind" = 'strength' AND e."activity_type_id" IS NULL`);
+// Re-establish the V1-1c invariant now that every row is backfilled (reproduces 0003's
+// NOT VALID → VALIDATE against the just-backfilled rows — all now carry activity_type_id).
+await db.execute(
+  sql`ALTER TABLE "entries" ADD CONSTRAINT "entries_activity_type_id_not_null" CHECK ("activity_type_id" IS NOT NULL) NOT VALID`,
+);
+await db.execute(
+  sql`ALTER TABLE "entries" VALIDATE CONSTRAINT "entries_activity_type_id_not_null"`,
+);
 
 const [bwEntry] = await db
   .select({
@@ -495,6 +508,67 @@ await db.insert(schema.entries).values({
   activityTypeId: weighIn.id,
 });
 console.log('✓ at-most-one CHECK: rejects both source cols, allows neither');
+
+// ── V1-1c: kind relaxed to NULLABLE (unblocks metric-only check-ins) + activity_type_id NOT NULL ──
+
+// (a) A `kind`-less metric-only check-in inserts + round-trips. This is the row V1-1c unblocks: a
+// rice_bucket check-in carries NO kind, unit='bool', a bool-typed metric (stance), and its reading
+// in value_num. Why value_num is set: entries_shape_check is RETAINED, and Postgres 3-valued logic
+// only lets a kind=NULL row PASS it when no sub-predicate is FALSE — a NULL kind alone makes the
+// expression NULL (→ pass), but a NULL value_num makes `value_num is not null` FALSE, forcing the
+// whole CHECK FALSE (→ reject). Every seeded metric is numeric (bool/count/duration/scale_10/number
+// → value_num), so a real metric entry always carries value_num (V1-1b's boolean row did the same).
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000e0',
+  clientId: '019826b4-0000-7000-8000-0000000000e1',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-22',
+  unit: 'bool',
+  activityTypeId: await activityTypeIdByKey('rice_bucket'),
+  metricKey: 'stance', // seeded value_type='bool' metric
+  valueNum: '1', // the bool reading (numeric); NOT kind — the point of V1-1c is the absent kind
+  // no `kind` — the row V1-1c unblocks
+});
+const [checkin] = await db
+  .select({
+    kind: schema.entries.kind,
+    activityTypeId: schema.entries.activityTypeId,
+    movementId: schema.entries.movementId,
+    metricKey: schema.entries.metricKey,
+  })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, '019826b4-0000-7000-8000-0000000000e0'));
+assert.equal(checkin.kind, null, 'V1-1c: kind-less check-in row has kind IS NULL');
+assert.ok(checkin.activityTypeId != null, 'V1-1c: check-in row carries activity_type_id');
+assert.equal(checkin.metricKey, 'stance', 'V1-1c: check-in row carries its bool metric_key');
+assert.equal(checkin.movementId, null, 'V1-1c: check-in row has no movement_id (at-most-one)');
+console.log('✓ V1-1c: kind-less metric-only check-in inserts + round-trips (kind IS NULL)');
+
+// (b) The discriminant invariant: a row WITHOUT activity_type_id is rejected by
+// entries_activity_type_id_not_null (the hand-added CHECK, mirroring household_id). The row is
+// otherwise VALID (kind NULL + value_num set → shape CHECK passes; movement_id NULL → at-most-one
+// passes) so the rejection isolates the discriminant guard — asserted by the constraint NAME.
+let rejectedConstraint: string | undefined;
+try {
+  await db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-0000000000e2',
+    clientId: '019826b4-0000-7000-8000-0000000000e3',
+    profileId: profiles[0].id,
+    activityDate: '2026-07-22',
+    unit: 'bool',
+    activityTypeId: null, // violates the discriminant NOT-NULL guard
+    metricKey: 'stance',
+    valueNum: '1',
+  });
+} catch (e) {
+  rejectedConstraint = (e as { cause?: { constraint?: string } })?.cause?.constraint;
+}
+assert.equal(
+  rejectedConstraint,
+  'entries_activity_type_id_not_null',
+  'V1-1c: a row without activity_type_id is rejected specifically by the discriminant NOT-NULL CHECK',
+);
+console.log('✓ V1-1c: activity_type_id NOT-NULL guard enforced');
 
 // CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
 // its shared const (pins the schema CHECKs to the single source of truth — one can't drift
