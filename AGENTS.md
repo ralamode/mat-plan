@@ -191,6 +191,8 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   still reports success, so the required check stays green — for a known-flaky or e2e-irrelevant
   change), or an **admin merge** (branch-protection bypass) as the last-resort escalation. Prefer the
   label so the intent is visible on the PR; use it sparingly — a red `e2e` usually means a real bug.
+- **Before debugging a CI/test failure**, check [docs/lessons.md](./docs/lessons.md) (concrete past
+  failures → root cause → fix); append an entry there whenever you diagnose a non-obvious one.
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking
   API/DB changes.
 
