@@ -78,17 +78,17 @@ sequenceDiagram
   participant DAL as DAL (server-only)
   participant DB as Neon (Drizzle)
   Kid->>UI: tick habits / rate drills
-  UI->>Act: submit: v:<field>, c:<field> (UUIDv7 each), profileId, day
+  UI->>Act: submit v: and c: field names (UUIDv7 each) plus profileId and day
   Act->>Reg: walk CHECKIN_FIELDS (never enumerate the body)
-  Reg-->>Act: expected field names + value_type
-  Act->>Act: per-field zod; accumulate ALL field errors; bound day to ±1
-  Act->>DAL: logCheckinEntries({profile, day, items[]})
-  DAL->>DB: resolve activity_type + metric_definition (cached)
+  Reg-->>Act: expected field names plus value_type
+  Act->>Act: per-field zod, accumulate ALL field errors, bound day to +/-1
+  Act->>DAL: logCheckinEntries(profile, day, items)
+  DAL->>DB: resolve activity_type plus metric_definition (cached)
   DB-->>DAL: catalog rows (unit comes from HERE, never the body)
-  DAL->>DB: one multi-row INSERT<br/>kind NULL, value_num always set<br/>ON CONFLICT(client_id) DO NOTHING
+  DAL->>DB: one multi-row INSERT, kind NULL, value_num always set, ON CONFLICT DO NOTHING
   DB-->>DAL: inserted rows
-  DAL-->>Act: per-item {clientId, id, created}
-  Act-->>UI: {ok} + revalidate (or "already logged" if none created)
+  DAL-->>Act: per-item clientId, id, created
+  Act-->>UI: ok plus revalidate (or already-logged if none created)
   UI-->>Kid: check-ins rendered in Today
 ```
 
