@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-07-23
 
 ## Where we are right now
 
@@ -79,6 +79,15 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-07-23** — **tooling** (`chore/screenshot-ephemeral-db`): the screenshot flow now targets a
+  **throwaway embedded Postgres by default** instead of the running app's live Neon DB. New
+  `pnpm --filter web screenshot:ephemeral <route>` boots an `embedded-postgres` instance (real PG
+  binary on an ephemeral TCP port — no Docker/creds), migrates + seeds it via the `packages/db`
+  scripts, runs `next start` against it, captures, and tears everything down. `--state already-logged`
+  seeds fixture rows so **data-dependent** UI (an "already logged today" check-in) can be captured
+  without ever writing to prod. Pointing at a non-local DB now requires an explicit `--use-live-db` /
+  `SCREENSHOT_ALLOW_LIVE_DB=1` opt-in (the old live-Neon behavior). Realizes the embedded-postgres
+  "future fix" note in [lessons.md](./lessons.md); `ui-screenshot` skill updated. No app/schema change.
 - **2026-07-22** — **V1-5** (in review): the check-ins / habits form
   ([plan](./plans/v1-5-checkins-form.md)). **No migration.** The **consumer of V1-1c**: first writer
   of `kind = NULL` and of the **neither-source** row (bare habit — no `movement_id`, no `metric_key`).
