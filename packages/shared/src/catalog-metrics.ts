@@ -71,6 +71,19 @@ export const METRIC_DEFINITION_SEED_ROWS = [
     aggregation: 'last',
   },
   {
+    // Ladder drills — the daily brush-teeth skill rep (spec.md §4a). DISTINCT from
+    // `footwork` below: ladder and footwork are separate things, but the daily
+    // "brush your teeth" rep is specifically ladder work (domain ruling, V1-5).
+    publicId: seedPublicId('040'),
+    key: 'ladder',
+    label: 'Ladder',
+    unit: 'bool',
+    valueType: 'bool',
+    aggregation: 'last',
+  },
+  {
+    // Kept as its own metric (not renamed to `ladder`): the two are distinct skills.
+    // Currently referenced by no activity — available to a later one.
     publicId: seedPublicId('036'),
     key: 'footwork',
     label: 'Footwork',

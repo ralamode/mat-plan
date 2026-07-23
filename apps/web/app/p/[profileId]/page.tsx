@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { EmptyState } from '@/components/ui/empty-state';
+import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { formatDayLong, todayIso } from '@/lib/date';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { entryLabel } from '@/lib/entries/entry-label';
 
 import { BodyweightForm } from './bodyweight-form';
+import { CheckinForm } from './checkin-form';
 import { StrengthForm } from './strength-form';
 
 // Route-segment config must be a static inline literal (Next can't follow an
@@ -24,6 +26,13 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
 
   const day = todayIso();
   const entries = await listEntriesForDay(profile.id, day);
+
+  // Which check-in fields are already logged today — derived from the entries we just
+  // fetched, so the form's inert state costs no extra query. A field's identity is
+  // `activityKey` (bare habit) or `activityKey:metricKey` (metric), matching the registry.
+  const loggedFieldKeys = entries
+    .filter((e) => e.activityKey !== null)
+    .map((e) => (e.metricKey === null ? e.activityKey! : `${e.activityKey}:${e.metricKey}`));
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
@@ -51,6 +60,19 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           </h2>
           <StrengthForm profileId={profile.id} />
         </section>
+        {CHECKIN_FIELDS.length > 0 ? (
+          <section aria-labelledby="checkins-heading" className="flex flex-col gap-3">
+            <h2 id="checkins-heading" className="text-lg font-medium">
+              Check-ins
+            </h2>
+            <CheckinForm
+              profileId={profile.id}
+              day={day}
+              fields={CHECKIN_FIELDS}
+              loggedFieldKeys={loggedFieldKeys}
+            />
+          </section>
+        ) : null}
       </div>
 
       <section aria-labelledby="entries-heading">

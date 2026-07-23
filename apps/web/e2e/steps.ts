@@ -30,3 +30,26 @@ export async function logBodyweight(
   await page.getByRole('button', { name: 'Log weight' }).click();
   await expect(page.getByText(`Bodyweight — ${value} lb`)).toBeVisible(opts);
 }
+
+/**
+ * Log a check-in through the Today form and wait for it to render (V1-5). Covers the
+ * kind-NULL write path end-to-end: a bare habit checkbox (neither source column) and a
+ * rated brush-teeth metric, in one submit.
+ *
+ * `exact` matters here — `Shot` vs `Shots` and `Stance` vs the section copy are live
+ * substring collisions (docs/lessons.md: substring matching bit us in V0-11).
+ */
+export async function logCheckins(
+  page: Page,
+  opts: { habit: string; rating: { label: string; value: string } },
+): Promise<void> {
+  const section = page.getByRole('region', { name: 'Check-ins' });
+  await section.getByRole('checkbox', { name: opts.habit, exact: true }).check();
+  await section
+    .getByRole('spinbutton', { name: new RegExp(`^${opts.rating.label}`) })
+    .fill(opts.rating.value);
+  await page.getByRole('button', { name: 'Log check-ins' }).click();
+
+  await expect(page.getByText(opts.habit, { exact: true })).toBeVisible();
+  await expect(page.getByText(`${opts.rating.label} — ${opts.rating.value}/10`)).toBeVisible();
+}
