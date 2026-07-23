@@ -43,13 +43,29 @@ export async function logCheckins(
   page: Page,
   opts: { habit: string; rating: { label: string; value: string } },
 ): Promise<void> {
-  const section = page.getByRole('region', { name: 'Check-ins' });
-  await section.getByRole('checkbox', { name: opts.habit, exact: true }).check();
-  await section
-    .getByRole('spinbutton', { name: new RegExp(`^${opts.rating.label}`) })
-    .fill(opts.rating.value);
-  await page.getByRole('button', { name: 'Log check-ins' }).click();
+  const form = page.getByRole('region', { name: 'Check-ins' });
+  const submit = page.getByRole('button', { name: 'Log check-ins' });
+  const rating = form.getByRole('spinbutton', { name: new RegExp(`^${opts.rating.label}`) });
 
-  await expect(page.getByText(opts.habit, { exact: true })).toBeVisible();
-  await expect(page.getByText(`${opts.rating.label} — ${opts.rating.value}/10`)).toBeVisible();
+  // RETRY-SAFE. Playwright retries reuse the same ephemeral DB, and an already-logged
+  // field renders readonly/aria-disabled by design — so a second attempt must assert the
+  // end state rather than re-submit into an inert control (which just times out).
+  if (await rating.isEditable()) {
+    await form.getByRole('checkbox', { name: opts.habit, exact: true }).check();
+    await rating.fill(opts.rating.value);
+    await submit.click();
+
+    // Synchronize on the submit completing. The button returning from "Logging…" is the
+    // real signal: this action does several catalog reads plus a multi-row insert and a
+    // full RSC revalidation, so it is slower than the single-row bodyweight write and
+    // outruns the default 5s expect timeout on a cold CI worker.
+    await expect(submit).toBeEnabled({ timeout: 15_000 });
+  }
+
+  // Scope assertions to the ENTRIES list, not the page. The habit's own <label> renders
+  // its name inside the form, so an unscoped getByText('Rice bucket') passes even when
+  // nothing was written — a false positive that masks a genuinely failed write.
+  const logged = page.getByRole('region', { name: 'Logged entries' });
+  await expect(logged.getByText(opts.habit, { exact: true })).toBeVisible();
+  await expect(logged.getByText(`${opts.rating.label} — ${opts.rating.value}/10`)).toBeVisible();
 }

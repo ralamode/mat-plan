@@ -50,6 +50,27 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing
   version-sensitive code (per `apps/web/AGENTS.md`). (V0-4)
 
+## Playwright / e2e
+
+- **An assertion on a form's own label is a FALSE POSITIVE — it passes while nothing was written.**
+  → `getByText('Rice bucket', { exact: true })` matches the check-in `<label>` inside the form, not
+  only the logged-entry list, so the test went green on a write that never happened and then failed
+  one line later on a different assertion — sending the diagnosis to the wrong place. → **Scope
+  post-write assertions to the entries region** (`getByRole('region', { name: 'Logged entries' })`),
+  never the whole page, whenever the form and the list share vocabulary. (V1-5)
+- **`toBeVisible()` raced an in-flight Server Action; the snapshot showed `button "Logging…"
+[disabled]`.** → The default 5s expect timeout is fine for the single-row bodyweight write but not
+  for an action doing several catalog reads + a multi-row insert + a full RSC revalidation on a cold
+  CI worker. → **Synchronize on the submit button returning from its pending label**
+  (`await expect(submit).toBeEnabled({ timeout: 15_000 })`) before asserting on the revalidated list.
+  Read `error-context.md` in the Playwright artifact first — the page snapshot names the real state
+  immediately (`gh run download <run-id>`). (V1-5)
+- **A Playwright RETRY reuses the same ephemeral DB, so "already logged" UI breaks the rerun.** →
+  Attempt 1 logged the row; the retry then found the control `readonly`/`aria-disabled` by design and
+  timed out in `fill()` — looking like a new bug rather than leftover state. → Make steps that write
+  **retry-safe**: check `isEditable()` and, when the state is already there, skip the write and assert
+  the end state. (V1-5)
+
 ## Git / commits
 
 - **Squash merge landed an _intermediate_ commit — the last pushes are missing from `main`.** → A PR
