@@ -570,6 +570,62 @@ assert.equal(
 );
 console.log('✓ V1-1c: activity_type_id NOT-NULL guard enforced');
 
+// ── V1-5: the check-in write shape (a bare habit) + the shape-CHECK boundary ──────
+
+// (a) A bare HABIT row: kind NULL and NEITHER source column set (no metric_key, no
+// movement_id) — the shape V1-5 introduces. The V1-1c block above covers a kind-less
+// row WITH a metric; this covers the neither-source case the habit checkboxes write.
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000000e4',
+  clientId: '019826b4-0000-7000-8000-0000000000e5',
+  profileId: profiles[0].id,
+  activityDate: '2026-07-22',
+  unit: 'bool',
+  activityTypeId: await activityTypeIdByKey('rice_bucket'),
+  valueNum: '1', // the checked box; REQUIRED — see (b)
+  // no kind, no metric_key, no movement_id, no movement_name
+});
+const [habit] = await db
+  .select({
+    kind: schema.entries.kind,
+    metricKey: schema.entries.metricKey,
+    movementId: schema.entries.movementId,
+    valueNum: schema.entries.valueNum,
+  })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, '019826b4-0000-7000-8000-0000000000e4'));
+assert.equal(habit.kind, null, 'V1-5: bare habit row has kind IS NULL');
+assert.equal(habit.metricKey, null, 'V1-5: bare habit row has no metric_key');
+assert.equal(habit.movementId, null, 'V1-5: bare habit row has no movement_id');
+assert.equal(Number(habit.valueNum), 1, 'V1-5: a checked habit is encoded as value_num = 1');
+console.log('✓ V1-5: bare habit (kind NULL, NEITHER source col) inserts + round-trips');
+
+// (b) THE TRAP, pinned by constraint NAME. entries_shape_check is retained until V1-1d.
+// With kind NULL it passes only while no sub-predicate is FALSE — so a kind-less row with
+// value_num NULL *and* movement_name NULL is REJECTED. This is why every check-in must
+// carry value_num (a bool is 1) and must never set movement_name. If this assertion ever
+// fails, the DAL's encoding assumption has changed and logCheckinEntries must be revisited.
+let checkinRejected: string | undefined;
+try {
+  await db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-0000000000e6',
+    clientId: '019826b4-0000-7000-8000-0000000000e7',
+    profileId: profiles[0].id,
+    activityDate: '2026-07-22',
+    unit: 'bool',
+    activityTypeId: await activityTypeIdByKey('rice_bucket'),
+    // no valueNum and no movementName → the CHECK evaluates FALSE
+  });
+} catch (e) {
+  checkinRejected = (e as { cause?: { constraint?: string } })?.cause?.constraint;
+}
+assert.equal(
+  checkinRejected,
+  'entries_shape_check',
+  'V1-5: a kind-less row with neither value_num nor movement_name is rejected by entries_shape_check',
+);
+console.log('✓ V1-5: shape CHECK rejects a kind-less check-in missing value_num');
+
 // CHECK ↔ shared-const parity: each DB text-enum CHECK definition must list EVERY member of
 // its shared const (pins the schema CHECKs to the single source of truth — one can't drift
 // from the other without this failing). V1-2 extends this from input_shape to the movement

@@ -23,7 +23,7 @@ export const ACTIVITY_METRIC_MAP: Record<ActivityTypeKey, readonly MetricKey[]> 
   ],
   [ACTIVITY_TYPE_KEYS.brush_teeth]: [
     METRIC_KEYS.stance,
-    METRIC_KEYS.footwork,
+    METRIC_KEYS.ladder,
     METRIC_KEYS.bridge,
     METRIC_KEYS.mobility,
     METRIC_KEYS.pressure,

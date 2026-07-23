@@ -14,7 +14,13 @@ import {
 } from '@mat-plan/shared';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
-import { assertMetricKeyExists, findOrCreateMovementId, getActivityTypeIdByKey } from './catalog';
+import {
+  assertMetricKeyExists,
+  findOrCreateMovementId,
+  getActivityTypeByKey,
+  getActivityTypeIdByKey,
+  getMetricDefinition,
+} from './catalog';
 import { db } from './db';
 
 /**
@@ -32,7 +38,9 @@ export type SetDTO = {
 
 export type EntryDTO = {
   id: string; // public_id (UUIDv7)
-  kind: EntryKind;
+  // NULLABLE since V1-1c: a check-in carries no legacy `kind` (V1-5 is the first
+  // writer to insert NULL). The pre-V1-5 `as EntryKind` cast here was a lie.
+  kind: EntryKind | null;
   unit: Unit;
   movementName: string | null;
   value: number | null; // bodyweight value_num; null for strength (values live in sets)
@@ -44,6 +52,10 @@ export type EntryDTO = {
   metricKey: string | null;
   metricLabel: string | null;
   valueType: string | null;
+  // V1-5: the entry's activity, for labelling a "neither-source" check-in (a bare
+  // habit has no metric AND no movement, so only the activity names it).
+  activityKey: string | null;
+  activityLabel: string | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -63,10 +75,15 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       metricKey: schema.entries.metricKey,
       metricLabel: schema.metricDefinitions.label,
       valueType: schema.metricDefinitions.valueType,
+      // V1-5: joined on the PK → at most one match, so no fan-out; LEFT so any row
+      // without an activity_type survives (none today — 0003 CHECKs it NOT NULL).
+      activityKey: schema.activityTypes.key,
+      activityLabel: schema.activityTypes.label,
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
     .leftJoin(schema.metricDefinitions, eq(schema.entries.metricKey, schema.metricDefinitions.key))
+    .leftJoin(schema.activityTypes, eq(schema.entries.activityTypeId, schema.activityTypes.id))
     .where(
       and(
         eq(schema.profiles.publicId, profilePublicId),
@@ -108,7 +125,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
 
   return rows.map((r) => ({
     id: r.publicId,
-    kind: r.kind as EntryKind,
+    kind: r.kind as EntryKind | null,
     unit: r.unit as Unit,
     movementName: r.movementName,
     // numeric comes back as a string from pg; coerce to number for the DTO.
@@ -118,6 +135,8 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     metricKey: r.metricKey,
     metricLabel: r.metricLabel,
     valueType: r.valueType,
+    activityKey: r.activityKey,
+    activityLabel: r.activityLabel,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }
@@ -185,6 +204,103 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: stri
     .where(eq(schema.entries.clientId, args.clientId))
     .limit(1);
   return { id: existing.publicId };
+}
+
+export type CheckinItemInput = {
+  activityKey: string;
+  metricKey: string | null; // null → a bare habit (NEITHER source column set)
+  value: number; // always numeric; a checked box is 1 (see the shape-CHECK note)
+  clientId: string; // client-stamped UUIDv7, per item
+};
+
+export type CheckinResult = {
+  clientId: string;
+  id: string | null; // public_id of the row this item wrote; null if it conflicted
+  created: boolean;
+};
+
+/**
+ * Writes N check-in entries in one multi-row INSERT (V1-5). Returns PER-ITEM results
+ * (AGENTS.md: "client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results") —
+ * a bare count can't tell a full replay from a partial conflict, and v1.5's /api/sync
+ * is specified around per-item results.
+ *
+ * ⚠️ THE SHAPE-CHECK TRAP. `entries_shape_check` (0000, retained until V1-1d) reads:
+ *     (kind='bodyweight' AND value_num IS NOT NULL AND movement_name IS NULL)
+ *  OR (kind='strength'   AND movement_name IS NOT NULL)
+ * With `kind` NULL both branches go NULL, and Postgres passes a CHECK that evaluates to
+ * NULL — but only while no sub-predicate is FALSE. So a kind-less row passes iff
+ * `value_num IS NOT NULL OR movement_name IS NOT NULL`. We therefore ALWAYS write
+ * `value_num` (a checked box is `1`) and NEVER write `movement_name`. Encoding a bool as
+ * a NULL-valued "presence" row would be rejected in prod. `db:verify` pins both directions.
+ * (The 1/0 encoding is also what V1-6's sum/last aggregation and V1-13's CSV pivot want.)
+ *
+ * No transaction: a single multi-row INSERT is already atomic. `logStrengthEntry` uses one
+ * because it spans two tables.
+ */
+export async function logCheckinEntries(args: {
+  profilePublicId: string;
+  day: string;
+  items: readonly CheckinItemInput[];
+}): Promise<CheckinResult[]> {
+  const [profile] = await db
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(
+      and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
+    )
+    .limit(1);
+  if (!profile) throw new Error('Profile not found');
+
+  // Resolve the catalog rows OUTSIDE the insert — cached reads of immutable reference
+  // data. This is also the DB-truth guard: a key that exists in the shared const but not
+  // in the seeded catalog throws here instead of writing a bad row. The written `unit`
+  // comes from the resolved row, never from the request or a compiled const.
+  const activityKeys = [...new Set(args.items.map((i) => i.activityKey))];
+  const metricKeys = [...new Set(args.items.map((i) => i.metricKey).filter((k) => k !== null))];
+  const activities = new Map(
+    await Promise.all(activityKeys.map(async (k) => [k, await getActivityTypeByKey(k)] as const)),
+  );
+  const metrics = new Map(
+    await Promise.all(metricKeys.map(async (k) => [k, await getMetricDefinition(k)] as const)),
+  );
+
+  const values = args.items.map((i) => {
+    const activity = activities.get(i.activityKey)!;
+    const metric = i.metricKey === null ? null : metrics.get(i.metricKey)!;
+    const unit = metric?.unit ?? activity.defaultUnit;
+    if (!unit) throw new Error(`no unit resolvable for check-in activity: ${i.activityKey}`);
+    return {
+      publicId: newId(),
+      clientId: i.clientId,
+      profileId: profile.id,
+      activityDate: args.day,
+      // no `kind` — V1-5 is the first kind-less writer (V1-1c relaxed it for exactly this)
+      unit: unit as Unit,
+      valueNum: String(i.value), // ALWAYS set — see the shape-CHECK trap above
+      // movementName intentionally omitted — must stay NULL for the same CHECK
+      activityTypeId: activity.id,
+      metricKey: i.metricKey, // NULL for a bare habit → the "neither source" shape
+      status: ENTRY_STATUS.done,
+    };
+  });
+
+  const inserted = await db
+    .insert(schema.entries)
+    .values(values)
+    // client_id UNIQUE is PARTIAL (WHERE deleted_at IS NULL), so the arbiter repeats it.
+    .onConflictDoNothing({
+      target: schema.entries.clientId,
+      where: isNull(schema.entries.deletedAt),
+    })
+    .returning({ publicId: schema.entries.publicId, clientId: schema.entries.clientId });
+
+  const byClientId = new Map(inserted.map((r) => [r.clientId, r.publicId]));
+  return args.items.map((i) => ({
+    clientId: i.clientId,
+    id: byClientId.get(i.clientId) ?? null,
+    created: byClientId.has(i.clientId),
+  }));
 }
 
 export type LogStrengthArgs = {

@@ -12,6 +12,10 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
   logStrengthEntry: vi.fn(async () => ({ id: 'strength-pub-id' })),
+  // Default: every item was written. Individual tests override for the conflict case.
+  logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
+    items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
+  ),
 }));
 vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
@@ -22,11 +26,18 @@ vi.mock('@/lib/dal/profiles', () => ({
   })),
 }));
 
-import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
+import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
+import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { todayIso } from '@/lib/date';
 import { revalidatePath } from 'next/cache';
 
-import { logBodyweightAction, logStrengthAction, type ActionState } from './actions';
+import {
+  logBodyweightAction,
+  logCheckinsAction,
+  logStrengthAction,
+  type ActionState,
+} from './actions';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
 // the action must thread it through to both the ownership check and revalidate path.
@@ -259,5 +270,196 @@ describe('logStrengthAction — happy path (transactional nested write)', () => 
     expect(res.ok).toBe(false);
     expect(logStrengthEntry).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// ── V1-5: check-ins / habits ────────────────────────────────────────────────────
+//
+// These drive REAL FormData objects on purpose. A checkbox submits the STRING "1",
+// never the number 1 — a `z.literal(1)` validator would reject every checkbox and
+// make the happy path unreachable, and a hand-built object fixture would hide it.
+
+const HABIT = CHECKIN_FIELDS.find((f) => f.metricKey === null)!;
+const BOOL_METRIC = CHECKIN_FIELDS.find((f) => f.valueType === 'bool')!;
+const SCALE_METRIC = CHECKIN_FIELDS.find((f) => f.valueType === 'scale_10')!;
+
+/** Build check-in FormData: one `v:`/`c:` pair per submitted field. */
+function checkinForm(opts: {
+  profileId?: string;
+  day?: string;
+  values?: Record<string, string>;
+  clientIds?: Record<string, string>;
+  extra?: Record<string, string>;
+}): FormData {
+  const fd = new FormData();
+  if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
+  fd.append('day', opts.day ?? todayIso());
+  for (const [key, value] of Object.entries(opts.values ?? {})) {
+    fd.append(valueInputName(key), value);
+    fd.append(clientIdInputName(key), opts.clientIds?.[key] ?? newId());
+  }
+  for (const [k, v] of Object.entries(opts.extra ?? {})) fd.append(k, v);
+  return fd;
+}
+
+describe('logCheckinsAction — boundary (bad body → zod-reject)', () => {
+  it('rejects a missing profileId without touching the DAL', async () => {
+    const res = await logCheckinsAction(initial, checkinForm({ values: { [HABIT.key]: '1' } }));
+    expect(res.ok).toBe(false);
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed (non-UUID) profileId', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: 'not-a-uuid', values: { [HABIT.key]: '1' } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty submission (nothing checked)', async () => {
+    const res = await logCheckinsAction(initial, checkinForm({ profileId: PROFILE_ID }));
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('IGNORES an unknown field key — the action walks the registry, not the body', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        extra: { 'v:evil_key': '1', 'c:evil_key': newId(), unit: 'lb', activityKey: 'sc_lift' },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.activityKey).toBe(HABIT.activityKey);
+  });
+
+  it('rejects a checkbox value other than "1"', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '2' } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[HABIT.key]).toBeTruthy();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '11', 'abc'])('rejects an out-of-range scale_10 value (%s)', async (bad) => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, values: { [SCALE_METRIC.key]: bad } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[SCALE_METRIC.key]).toBeTruthy();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('reports EVERY invalid field, not just the first', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '2', [SCALE_METRIC.key]: '99' },
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[HABIT.key]).toBeTruthy();
+    expect(res.fieldErrors?.[SCALE_METRIC.key]).toBeTruthy();
+  });
+
+  it('rejects a non-UUID clientId', async () => {
+    const fd = checkinForm({ profileId: PROFILE_ID });
+    fd.append(valueInputName(HABIT.key), '1');
+    fd.append(clientIdInputName(HABIT.key), 'not-a-uuid');
+    const res = await logCheckinsAction(initial, fd);
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  // todayIso() is UTC and check-ins are evening activities, so the form submits the day
+  // it rendered; a day far from the server's today means a stale tab, not a valid log.
+  it('rejects a stale day (more than ±1 from today)', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, day: '2020-01-01', values: { [HABIT.key]: '1' } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+});
+
+describe('logCheckinsAction — happy path + ownership', () => {
+  it('parses the checkbox STRING "1" to numeric 1 and writes via the DAL', async () => {
+    const clientId = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1' },
+        clientIds: { [HABIT.key]: clientId },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
+    expect(logCheckinEntries).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profilePublicId: PROFILE_ID,
+        day: todayIso(),
+        items: [{ activityKey: HABIT.activityKey, metricKey: null, value: 1, clientId }],
+      }),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [HABIT.key]: '1', [BOOL_METRIC.key]: '1', [SCALE_METRIC.key]: '7' },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
+    expect(items).toHaveLength(3);
+    // A bare habit carries NEITHER source column — the shape V1-5 introduces.
+    expect(items.find((i) => i.activityKey === HABIT.activityKey)!.metricKey).toBeNull();
+    expect(items.find((i) => i.metricKey === BOOL_METRIC.metricKey)!.value).toBe(1);
+    expect(items.find((i) => i.metricKey === SCALE_METRIC.metricKey)!.value).toBe(7);
+    // `unit` is never on the wire — the DAL resolves it from the seeded catalog.
+    for (const i of items) expect(i).not.toHaveProperty('unit');
+  });
+
+  it('fails gracefully (no write) when the profile is unknown', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  // client_id UNIQUE is GLOBAL, not profile-scoped: a colliding id writes nothing.
+  // Reporting success there would mask a lost write.
+  it('reports failure when every item conflicted (nothing written)', async () => {
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
+      { clientId: 'x', id: null, created: false },
+    ]);
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/already logged/i);
   });
 });

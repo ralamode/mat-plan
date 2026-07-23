@@ -30,6 +30,8 @@ function entry(overrides: Partial<EntryDTO>): EntryDTO {
     metricKey: null,
     metricLabel: null,
     valueType: null,
+    activityKey: null,
+    activityLabel: null,
     sets: [],
     ...overrides,
   };
@@ -98,6 +100,79 @@ describe('entryLabel', () => {
         }),
       ),
     ).toBe('Strength');
+  });
+
+  // ── V1-5 ────────────────────────────────────────────────────────────────────
+  //
+  // REGRESSION GUARD for the shape real rows actually have. Migration 0002 step 4a
+  // backfilled `metric_key='bodyweight'` onto every legacy bodyweight row AND gave it
+  // an activity_type, so a live weigh-in carries BOTH a metricKey and an activityLabel
+  // ('Weigh-in'). The metric branch must keep winning — if the new activity branch ever
+  // shadowed it, the Today view and the e2e would silently render 'Weigh-in'.
+  it('keeps rendering the metric label when an entry also carries an activity label', () => {
+    expect(
+      entryLabel(
+        entry({
+          metricKey: SEED_METRIC_KEYS.bodyweight,
+          metricLabel: BODYWEIGHT_SEED.label,
+          valueType: 'number',
+          value: 72.5,
+          unit: 'lb',
+          activityKey: 'weigh_in',
+          activityLabel: 'Weigh-in',
+        }),
+      ),
+    ).toBe('Bodyweight — 72.5 lb');
+  });
+
+  it('renders a bool check-in metric as the bare metric label', () => {
+    expect(
+      entryLabel(
+        entry({
+          kind: null,
+          metricKey: 'stance',
+          metricLabel: 'Stance',
+          valueType: 'bool',
+          value: 1,
+          unit: 'bool',
+          activityKey: 'brush_teeth',
+          activityLabel: 'Brush teeth',
+        }),
+      ),
+    ).toBe('Stance');
+  });
+
+  it('renders a scale_10 check-in as a rating, not as its storage unit', () => {
+    expect(
+      entryLabel(
+        entry({
+          kind: null,
+          metricKey: 'pressure',
+          metricLabel: 'Pressure',
+          valueType: 'scale_10',
+          value: 7,
+          unit: 'count', // seeded unit is `count`; the label must NOT say "7 count"
+          activityKey: 'brush_teeth',
+          activityLabel: 'Brush teeth',
+        }),
+      ),
+    ).toBe('Pressure — 7/10');
+  });
+
+  it('renders a bare habit (neither metric nor movement) as its activity label', () => {
+    expect(
+      entryLabel(
+        entry({
+          kind: null,
+          metricKey: null,
+          movementName: null,
+          value: 1,
+          unit: 'bool',
+          activityKey: 'rice_bucket',
+          activityLabel: 'Rice bucket',
+        }),
+      ),
+    ).toBe('Rice bucket');
   });
 });
 

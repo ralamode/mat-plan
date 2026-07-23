@@ -62,6 +62,36 @@ sequenceDiagram
   UI-->>Kid: updated Today view
 ```
 
+## 2c. Batch write path — logging a day's check-ins (V1-5)
+
+The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by
+V1-1c). Differs from §2 in three ways worth seeing at a glance: the action derives its fields from a
+**server-side registry** rather than the request body, results are **per-item**, and the conflict
+policy is `DO NOTHING` (not §2's LWW `DO UPDATE` — editing a check-in is V1-9).
+
+```mermaid
+sequenceDiagram
+  actor Kid as Kid (phone)
+  participant UI as CheckinForm
+  participant Act as Server Action
+  participant Reg as Field registry (seeded catalogs)
+  participant DAL as DAL (server-only)
+  participant DB as Neon (Drizzle)
+  Kid->>UI: tick habits / rate drills
+  UI->>Act: submit v: and c: field names (UUIDv7 each) plus profileId and day
+  Act->>Reg: walk CHECKIN_FIELDS (never enumerate the body)
+  Reg-->>Act: expected field names plus value_type
+  Act->>Act: per-field zod, accumulate ALL field errors, bound day to +/-1
+  Act->>DAL: logCheckinEntries(profile, day, items)
+  DAL->>DB: resolve activity_type plus metric_definition (cached)
+  DB-->>DAL: catalog rows (unit comes from HERE, never the body)
+  DAL->>DB: one multi-row INSERT, kind NULL, value_num always set, ON CONFLICT DO NOTHING
+  DB-->>DAL: inserted rows
+  DAL-->>Act: per-item clientId, id, created
+  Act-->>UI: ok plus revalidate (or already-logged if none created)
+  UI-->>Kid: check-ins rendered in Today
+```
+
 ## 2b. Profile routing — picker → scoped Today (V1-3)
 
 `/` is the profile picker; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The

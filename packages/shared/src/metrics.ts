@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { keyBySelf } from './enums';
+
 /**
  * `metric_definition` structural enums (spec.md §4): the value shape a metric
  * carries and how repeated readings roll up. Text + CHECK (structural enums, not
@@ -20,6 +22,9 @@ export const METRIC_VALUE_TYPES = [
 export type MetricValueType = (typeof METRIC_VALUE_TYPES)[number];
 
 export const metricValueTypeSchema = z.enum(METRIC_VALUE_TYPES);
+
+/** Named members, so code branches on `METRIC_VALUE_TYPE.bool`, not a bare string. */
+export const METRIC_VALUE_TYPE = keyBySelf(METRIC_VALUE_TYPES);
 
 /** How repeated readings of a metric aggregate (e.g. `pullup_max` = max; shots = sum). */
 export const METRIC_AGGREGATIONS = ['sum', 'last', 'max', 'avg'] as const;

@@ -1,11 +1,25 @@
 'use server';
 
-import { logBodyweightSchema, logStrengthSchema } from '@mat-plan/shared';
+import {
+  logBodyweightSchema,
+  logStrengthSchema,
+  METRIC_VALUE_TYPE,
+  uuidSchema,
+} from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 
-import { logBodyweight, logStrengthEntry } from '@/lib/dal/entries';
+import {
+  CHECKIN_FIELDS,
+  clientIdInputName,
+  isCheckbox,
+  valueInputName,
+  VALUE_NUM_MAX,
+  type CheckinField,
+} from '@/lib/checkins/checkin-fields';
+import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { todayIso } from '@/lib/date';
+import { isoDayDiff, isoDaySchema, todayIso } from '@/lib/date';
 
 /**
  * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
@@ -55,6 +69,116 @@ export async function logBodyweightAction(
   });
 
   revalidatePath(`/p/${profile.id}`);
+  return { ok: true, error: null };
+}
+
+/**
+ * Per-field value validator, chosen from the field's `value_type`.
+ *
+ * ⚠️ A checkbox submits the STRING "1" — `FormData.get()` never returns a number. A
+ * `z.literal(1)` here would reject every checkbox and make the happy path unreachable,
+ * and the declared return type would hide it from typecheck. Hence the string literal
+ * plus an explicit transform. A required test drives this through a real FormData.
+ */
+function valueSchemaFor(f: CheckinField): z.ZodType<number> {
+  if (isCheckbox(f)) return z.literal('1').transform(() => 1);
+  if (f.valueType === METRIC_VALUE_TYPE.scale_10) {
+    return z.coerce
+      .number()
+      .int()
+      .min(f.min ?? 1)
+      .max(f.max ?? 10);
+  }
+  // count (and any future numeric type) — clamped to the numeric(8,3) domain so an
+  // out-of-range value is a typed envelope, not a Postgres 22003 escaping to error.tsx.
+  return z.coerce
+    .number()
+    .int()
+    .min(f.min ?? 0)
+    .max(f.max ?? VALUE_NUM_MAX);
+}
+
+/**
+ * Server Action: log a day's check-ins / habits (V1-5). Writes N entries in one call.
+ *
+ * SECURITY: this NEVER enumerates the submitted FormData. It walks the trusted server-side
+ * field registry and reads the names it expects, so an unknown/extra key in the POST is
+ * inert, and neither `unit` nor `activity_type_id` is ever taken from the body (the DAL
+ * resolves both from the seeded catalog).
+ *
+ * KNOWN GAPS, inherited and recorded rather than papered over: there is no authN here (the
+ * access gate is middleware-only, which .github/SECURITY.md explicitly disclaims as the auth
+ * boundary), and `getProfileByPublicId` is an EXISTENCE check — it does not scope by
+ * household, so any known profile id writes to that profile. Both are pre-existing since
+ * V1-3 and close at v1.5 with Clerk. Rate limiting and Sentry wrapping land at V1-14.
+ */
+export async function logCheckinsAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
+  //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
+  const items = [];
+  const fieldErrors: Record<string, string[]> = {};
+  for (const f of CHECKIN_FIELDS) {
+    const raw = formData.get(valueInputName(f.key));
+    if (raw === null || String(raw).trim() === '') continue; // unchecked / blank → not submitted
+    const value = valueSchemaFor(f).safeParse(raw);
+    if (!value.success) {
+      fieldErrors[f.key] = value.error.issues.map((i) => i.message);
+      continue;
+    }
+    const clientId = uuidSchema.safeParse(formData.get(clientIdInputName(f.key)));
+    if (!clientId.success) {
+      fieldErrors[f.key] = ['Could not submit this item. Reload and try again.'];
+      continue;
+    }
+    // Carry the descriptor's identity straight through — no re-encoding a key and
+    // re-parsing it back out of a lookup map.
+    items.push({
+      activityKey: f.activityKey,
+      metricKey: f.metricKey,
+      value: value.data,
+      clientId: clientId.data,
+    });
+  }
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, error: 'Please fix the errors below.', fieldErrors };
+  }
+  if (items.length === 0) return { ok: false, error: 'Check at least one thing to log.' };
+
+  // 2. The genuinely untrusted scalars.
+  const profileId = uuidSchema.safeParse(formData.get('profileId'));
+  const day = isoDaySchema.safeParse(formData.get('day'));
+  if (!profileId.success) {
+    return {
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: { profileId: ['Invalid profile.'] },
+    };
+  }
+  if (!day.success || Math.abs(isoDayDiff(day.data, todayIso())) > 1) {
+    return { ok: false, error: 'That day is no longer open for logging. Reload the page.' };
+  }
+
+  // 3. Re-resolve the profile server-side (never trust the hidden field).
+  const profile = await getProfileByPublicId(profileId.data);
+  if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+  const results = await logCheckinEntries({
+    profilePublicId: profile.id,
+    day: day.data,
+    items,
+  });
+
+  revalidatePath(`/p/${profile.id}`);
+
+  // A conflict on every item means nothing was written. `client_id` UNIQUE is GLOBAL
+  // (not profile-scoped), so silently reporting success here would mask a lost write.
+  if (!results.some((r) => r.created)) {
+    return { ok: false, error: 'Those check-ins were already logged.' };
+  }
   return { ok: true, error: null };
 }
 
