@@ -7,6 +7,27 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## E2E / Playwright
 
+- **An assertion on a form's own label is a FALSE POSITIVE — it goes green while nothing was
+  written.** → `getByText('Rice bucket', { exact: true })` matched the check-in `<label>` inside the
+  form, not only the logged-entry list. The write assertion "passed", the run then failed one line
+  later on a different string, and the diagnosis went to the wrong place entirely. → **Scope
+  post-write assertions to the entries region** (`getByRole('region', { name: 'Logged entries' })`),
+  never the whole page, whenever the form and the list share vocabulary. (V1-5)
+- **A post-submit `toBeVisible()` raced an in-flight Server Action** — the failure snapshot showed
+  `button "Logging…" [disabled]` with the entries list not yet revalidated. → **Synchronize on the
+  submit button returning from its pending label** (`await expect(submit).toBeEnabled({ timeout:
+15_000 })`) before asserting on the list. Note this is a real **sync point**, not padding a timeout
+  to hide a race — the V0-11 lesson below still stands. The cold path is already warmed in
+  `global.setup`; this action is genuinely heavier (several catalog reads + a multi-row insert + a
+  full RSC revalidation) than the single-row bodyweight write the default 5s was tuned for. (V1-5)
+- **Read `error-context.md` in the Playwright artifact FIRST** (`gh run download <run-id>`) — the
+  page snapshot names the true state in one look (a disabled "Logging…" button, which element was
+  `readonly`), instead of inferring it from the assertion text. (V1-5)
+- **A Playwright RETRY reuses the same ephemeral DB, so "already logged" UI breaks the rerun.** →
+  Attempt 1 logged the row; the retry found the control `readonly`/`aria-disabled` **by design** and
+  timed out in `fill()`, looking like a fresh bug rather than leftover state. → Make writing steps
+  **retry-safe**: check `isEditable()` and, when the state is already there, skip the write and
+  assert the end state. (V1-5)
 - **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
   app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws
   `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered

@@ -3,29 +3,28 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-21
+**Last updated:** 2026-07-22
 
 ## Where we are right now
 
-📍 **v1 underway — V1-1c in review (V1-1a/b merged).** V1-1 (generalize the v0 schema toward the full
-activity model, [spec.md](./spec.md) §4) is split into **four** deploys
-([plan](./plans/v1-1-generalize-schema.md)): **V1-1a = additive (expand-only)** ✅, **V1-1b = entry
-generalization + backfill** ✅, **V1-1c = constraint relaxation** (this PR), **V1-1d = the physical
-column drops** (deferred). This PR ships **V1-1c** — **metadata-only**: relax `entries.kind` to
-**NULLABLE** so a metric-only / boolean check-in (no `kind`) inserts, and add the discriminant
-invariant `activity_type_id IS NOT NULL` (CHECK `NOT VALID`→`VALIDATE`, mirroring `household_id`;
-V1-1b backfilled every row). **No column drop, no app change** — the legacy `kind`/`movement_name`
-columns and the `entries_kind_check`/`entries_shape_check` guards **stay** (they still guard the live
-`kind` dual-writer, and pass on a `kind=NULL` row). The physical `DROP COLUMN` + CHECK drops are
-**V1-1d**, after V1-5–V1-8 take the app off `kind`. Proven on PGlite (`db:verify`: a kind-less check-in
-round-trips; a no-`activity_type_id` row is rejected by name) + the drift guard. **Independent of V1-4
-(#39)** — a pure migration, mergeable in either order. Squawk + Neon-branch CI still deferred (the
-`e2e` job's `db:migrate` is the real-PG apply gate). Prior: V1-1a/b, V1-2/V1-3/V1-4, and v0's slice.
+📍 **v1 underway — V1-5 in review (V1-1a/b/c, V1-2, V1-3, V1-4 all merged).** This PR ships
+**V1-5 — the check-ins / habits form** ([plan](./plans/v1-5-checkins-form.md)), the **consumer of
+V1-1c**: the first writer to insert `kind = NULL`, and the first to write a **neither-source** row
+(no `movement_id`, no `metric_key` — a bare habit names only its `activity_type`). **No migration** —
+every column already exists. The form is **derived from the seeded catalogs** (a registry over
+`activity_types.input_shape` + `ACTIVITY_METRIC_MAP` + `metric_definitions`), so a new habit needs no
+component/action/DAL edit; the RSC page passes the field list as a prop, keeping the catalog out of
+the client bundle. The action **walks that registry rather than enumerating the body**, so unknown
+POST keys are inert and `unit`/`activity_type_id` are resolved server-side from the DB row. Also
+lands: `EntryDTO.kind` → nullable (the old `as EntryKind` cast lied), `entryLabel` `bool`/`scale_10`/
+bare-habit branches, and the **`ladder`** metric (domain fix — the daily brush-teeth rep is ladder
+drills; `footwork` stays a separate metric). Plan hardened by a four-lens adversarial panel that
+falsified two of its headline claims and halved its scope. Prior: v0's slice, V1-1a/b/c, V1-2/3/4.
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 14 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~52% (+2 out-of-band: constants convention, Vitest harness)
-- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b merged; V1-1c in review)
+- **Code PRs merged:** 18 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~67% (+2 out-of-band: constants convention, Vitest harness)
+- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 merged; V1-5 in review)
 
 ## Phases
 
@@ -61,24 +60,47 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR    | Scope                                                                                  | Status |
-| ----- | -------------------------------------------------------------------------------------- | ------ |
-| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b merged, **c in review**, d deferred) | 🔵     |
-| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                  | ✅     |
-| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                  | 🔵     |
-| V1-4  | bodyweight/measurement on generalized model (read path)                                | 🔵     |
-| V1-5  | checkins/habits dynamic form                                                           | ⚪     |
-| V1-6  | calisthenics totals + ramp targets                                                     | ⚪     |
-| V1-7  | life activities (wake/practice)                                                        | ⚪     |
-| V1-8  | kids' strength via session                                                             | ⚪     |
-| V1-9  | fix-a-set / edit (LWW)                                                                 | ⚪     |
-| V1-10 | block-template prefill                                                                 | ⚪     |
-| V1-11 | copy-set-to-other-kid                                                                  | ⚪     |
-| V1-12 | a11y pass                                                                              | ⚪     |
-| V1-13 | CSV export endpoint (golden-file)                                                      | ⚪     |
-| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                            | ⚪     |
+| PR    | Scope                                                                           | Status |
+| ----- | ------------------------------------------------------------------------------- | ------ |
+| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)         | ✅     |
+| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))           | ✅     |
+| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                           | ✅     |
+| V1-4  | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md)) | ✅     |
+| V1-5  | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))            | 🔵     |
+| V1-6  | calisthenics totals + ramp targets                                              | ⚪     |
+| V1-7  | life activities (wake/practice)                                                 | ⚪     |
+| V1-8  | kids' strength via session                                                      | ⚪     |
+| V1-9  | fix-a-set / edit (LWW)                                                          | ⚪     |
+| V1-10 | block-template prefill                                                          | ⚪     |
+| V1-11 | copy-set-to-other-kid                                                           | ⚪     |
+| V1-12 | a11y pass                                                                       | ⚪     |
+| V1-13 | CSV export endpoint (golden-file)                                               | ⚪     |
+| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                     | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-07-22** — **V1-5** (in review): the check-ins / habits form
+  ([plan](./plans/v1-5-checkins-form.md)). **No migration.** The **consumer of V1-1c**: first writer
+  of `kind = NULL` and of the **neither-source** row (bare habit — no `movement_id`, no `metric_key`).
+  A pure registry (`lib/checkins/checkin-fields.ts`) derives the fields from the seeded catalogs —
+  habits from `input_shape='boolean'`, brush-teeth from `ACTIVITY_METRIC_MAP` — with the control
+  chosen by the metric's `value_type`; **no activity or metric key appears in JSX**. The RSC page
+  passes the field list as a **prop**, so the catalog crosses as JSON and stays out of the client
+  bundle. `logCheckinsAction` **walks the registry rather than the request body** (unknown POST keys
+  inert; `unit`/`activity_type_id` resolved from the DB row via the widened
+  `getMetricDefinition`/`getActivityTypeByKey`), accumulates **all** field errors, and bounds the
+  submitted day to ±1 of `todayIso()` — the form carries the day it rendered, so an evening habit
+  can't land on the wrong UTC date. `logCheckinEntries` does one multi-row INSERT (no tx — a single
+  statement is atomic) and returns **per-item** `{clientId, id, created}`, so an all-conflict batch
+  reports "already logged" instead of a false success (`client_id` UNIQUE is global, not
+  profile-scoped). `EntryDTO.kind` → **nullable** (the `as EntryKind` cast lied);
+  `entryLabel` gains `bool` / `scale_10` / bare-habit branches over **disjoint** discriminants.
+  Domain fix: the daily brush-teeth rep is **`ladder`** drills — new metric row; `footwork` stays a
+  distinct (now unmapped) metric. `spec.md` §4 corrected: the tagged union is **at-most-one**, not
+  exactly-one. `db:verify` pins the shape-CHECK trap in **both** directions. Plan authored Staff-SWE,
+  then hardened by a **four-lens adversarial panel** that falsified two headline claims (a
+  `z.literal(1)` that could never parse a FormData string; a branch-ordering rationale resting on
+  legacy `entryLabel` branches that are dead in the DB) and cut scope ~2×.
 
 - **2026-07-21** — **V1-1c** (in review): constraint relaxation to unblock metric-only / boolean
   check-ins ([plan](./plans/v1-1-generalize-schema.md)). **Metadata-only migration** (`0003`): relax

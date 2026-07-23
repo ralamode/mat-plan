@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { keyBySelf } from './enums';
+
 /**
  * `activity_type.input_shape` — the small taxonomy of value shapes an activity can
  * take (spec.md §4): a list of sets, a single metric reading, a boolean done/not,
@@ -12,3 +14,6 @@ export const ACTIVITY_INPUT_SHAPES = ['set_list', 'single_metric', 'boolean', 't
 export type ActivityInputShape = (typeof ACTIVITY_INPUT_SHAPES)[number];
 
 export const activityInputShapeSchema = z.enum(ACTIVITY_INPUT_SHAPES);
+
+/** Named members, so code branches on `ACTIVITY_INPUT_SHAPE.boolean`, not a bare string. */
+export const ACTIVITY_INPUT_SHAPE = keyBySelf(ACTIVITY_INPUT_SHAPES);

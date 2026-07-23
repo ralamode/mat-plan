@@ -12,7 +12,9 @@ import { z } from 'zod';
  * literals live in exactly one place. Lets app code compare/branch on a NAMED
  * member (`ENTRY_KIND.bodyweight`) instead of a bare string (constants convention).
  */
-function keyBySelf<const T extends readonly string[]>(values: T): { readonly [K in T[number]]: K } {
+export function keyBySelf<const T extends readonly string[]>(
+  values: T,
+): { readonly [K in T[number]]: K } {
   return Object.fromEntries(values.map((v) => [v, v])) as { readonly [K in T[number]]: K };
 }
 

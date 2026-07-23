@@ -92,7 +92,9 @@ CHECK. All rows household-scoped for DAL authz.
 - `entry` — session_id?, superset_id?, profile_id, activity_date, event_at? (timing activities),
   activity_type_id, movement_id?, metric_key?, unit, raw_load, raw_reps (verbatim legacy strings for
   lossless export), scheme, status(done|skipped|sub_failure), value_num?, value_text?, context?, notes,
-  client_id. CHECK: exactly-one-of {movement_id, metric_key}.
+  client_id. CHECK: **at-most-one-of** {movement_id, metric_key} — a movement entry, a metric entry,
+  or **neither** (a boolean habit check-in names only its activity_type; V1-5 is the first writer of
+  that shape). Implemented in `0002` as `movement_id IS NULL OR metric_key IS NULL`.
 - `entry_set` — entry_id, idx, reps?, seconds?, weight_num?, weight_label?("BW"/"50ft"), value_num?,
   status, done. _(Derived/queryable layer; `raw_*` on entry is the export source of truth.)_
 - `superset` — session_id, label, note (nullable).
