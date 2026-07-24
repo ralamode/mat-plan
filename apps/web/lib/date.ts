@@ -61,6 +61,22 @@ export function isoDayDiff(a: string, b: string): number {
 }
 
 /**
+ * The Monday that starts the ISO-week containing the calendar date `day` (`YYYY-MM-DD`).
+ *
+ * THE week-boundary seam (V1-6b-2): feed it a LOCAL day (`localDayIso(activeTz)`); V1-15 day-nav
+ * and any dashboard ISO-week bucketing should reuse this, not re-encode weekday math. Monday-based
+ * (ISO-8601), matching `ramp_targets.week_start`. Pure UTC-epoch integer-day arithmetic on the safe
+ * `…T00:00:00Z` parse (NEVER `new Date("YYYY-MM-DD")`): `day` is already a bare local calendar date,
+ * so no zone is reinterpreted and DST never enters — the Monday is always correct.
+ */
+export function localWeekStartIso(day: string): string {
+  const t = Date.parse(`${day}T00:00:00Z`);
+  const dow = new Date(t).getUTCDay(); // 0=Sun … 6=Sat
+  const backToMonday = (dow + 6) % 7; // Mon→0 … Sun→6 (back to THIS week's Monday)
+  return new Date(t - backToMonday * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
  * Human-readable long date from a `YYYY-MM-DD` calendar date.
  *
  * Anchored at UTC midnight and formatted in UTC BY DESIGN — and it deliberately takes NO

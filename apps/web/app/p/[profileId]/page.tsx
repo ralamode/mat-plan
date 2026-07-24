@@ -5,7 +5,8 @@ import { notFound } from 'next/navigation';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { formatDayLong, localDayIso } from '@/lib/date';
+import { formatDayLong, localDayIso, localWeekStartIso } from '@/lib/date';
+import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
@@ -15,6 +16,7 @@ import { BodyweightForm } from './bodyweight-form';
 import { CheckinForm } from './checkin-form';
 import { StrengthForm } from './strength-form';
 import { TimeZoneSync } from './tz-sync';
+import { WeeklyAdherence } from './weekly-adherence';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -33,7 +35,13 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
   // same `day`, so date & weekday can't disagree.
   const timeZone = await getActiveTimeZone();
   const day = localDayIso(timeZone);
-  const entries = await listEntriesForDay(profile.id, day);
+  const weekStart = localWeekStartIso(day);
+  // Two independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the
+  // ramp schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
+  const [entries, adherence] = await Promise.all([
+    listEntriesForDay(profile.id, day),
+    getWeeklyAdherence(profile.id, weekStart),
+  ]);
 
   // Which check-in fields are already logged today — derived from the entries we just
   // fetched, so the form's inert state costs no extra query. A field's identity is
@@ -118,6 +126,8 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           </ul>
         </section>
       ) : null}
+
+      {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 
       <section aria-labelledby="entries-heading">
         <h2 id="entries-heading" className="sr-only">

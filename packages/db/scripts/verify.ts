@@ -8,10 +8,12 @@ import {
   ACTIVITY_METRIC_MAP,
   ACTIVITY_TYPE_SEED_ROWS,
   activityTypeSeedRowSchema,
+  assertRollupAggregation,
   CALISTHENICS_METRIC_KEYS,
   ENTRY_STATUS,
   foldAggregation,
   METRIC_AGGREGATION,
+  type MetricAggregation,
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
   METRIC_KEYS,
@@ -29,6 +31,7 @@ import {
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
   UNIT_CODES,
+  WEEK_LENGTH_DAYS,
 } from '@mat-plan/shared';
 import { and, eq, gte, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -36,6 +39,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
+import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
@@ -679,8 +683,10 @@ console.log('✓ V1-6b-1: empty ramp schedule seeds zero rows (seed idempotent)'
 const aggByMetricKey = new Map(metricDefinitions.map((m) => [m.key, m.aggregation]));
 for (const key of CALISTHENICS_METRIC_KEYS) {
   const agg = aggByMetricKey.get(key);
-  assert.ok(
-    agg === METRIC_AGGREGATION.sum || agg === METRIC_AGGREGATION.max,
+  // Reuse the SAME {sum,max} membership guard the read DAL's mapper uses (it throws on avg/last),
+  // so the domain lives in one place — a future avg/last calisthenics metric fails here, not in prod.
+  assert.doesNotThrow(
+    () => assertRollupAggregation(agg as MetricAggregation),
     `V1-6b-1: calisthenics metric '${key}' aggregation ∈ {sum,max} (weekly adherence assumes it), got '${agg}'`,
   );
 }
@@ -792,7 +798,7 @@ await insertCalisthenicsBout({
 
 // THE ADHERENCE AGGREGATE (SQL, not in-memory): SUM + MAX per metric over the in-week, done,
 // non-deleted calisthenics entries for this profile. `week_start <= activity_date < week_start+7`.
-const weekEndExclusive = sql`${schema.rampTargets.weekStart} + 7`; // date + int = date
+const weekEndExclusive = sql`${schema.rampTargets.weekStart} + ${WEEK_LENGTH_DAYS}::int`; // date + int = date
 const adherence = await db
   .select({
     metricKey: schema.entries.metricKey,
@@ -807,7 +813,10 @@ const adherence = await db
       eq(schema.entries.status, ENTRY_STATUS.done),
       isNull(schema.entries.deletedAt),
       gte(schema.entries.activityDate, RAMP_TEST_WEEK_START),
-      lt(schema.entries.activityDate, sql`${RAMP_TEST_WEEK_START}::date + 7`),
+      lt(
+        schema.entries.activityDate,
+        sql`${RAMP_TEST_WEEK_START}::date + ${WEEK_LENGTH_DAYS}::int`,
+      ),
     ),
   )
   .groupBy(schema.entries.metricKey);
@@ -879,6 +888,98 @@ assert.equal(
   'V1-6b-1: ramp_target join returns the seeded pushups target (45)',
 );
 console.log('✓ V1-6b-1: ramp_target ⋈ entries join returns actual (50) alongside target (45)');
+
+// ── V1-6b-2: the read DAL's EXACT query (weeklyAdherenceRows), proven here ────────────────────
+// The app DAL and this proof call the SAME function (single-sourced in src/queries), so the
+// LEFT-JOIN + profile/label joins + zero-bout NULL-actual paths the DAL ships are covered on real
+// SQL — not the different (INNER, sum-only) shape the b-1 block above pins.
+const RAMP_TEST_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000f0'; // rampTestProfile above
+const dalRows = await weeklyAdherenceRows(asPg, {
+  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+  weekStart: RAMP_TEST_WEEK_START,
+  activityTypeId: calisthenicsId,
+  metricKeys: CALISTHENICS_METRIC_KEYS,
+});
+const dalByMetric = new Map(dalRows.map((r) => [r.metricKey, r]));
+// Targets DRIVE the rows: all four calisthenics metrics have a target this week → four rows.
+assert.equal(dalRows.length, 4, 'V1-6b-2: one row per calisthenics target for the week');
+
+const dalPush = dalByMetric.get(METRIC_KEYS.pushups);
+assert.ok(dalPush, 'V1-6b-2: pushups row present');
+assert.equal(assertRollupAggregation(dalPush.aggregation as MetricAggregation), 'sum');
+assert.equal(
+  Number(dalPush.actualSum),
+  50,
+  'V1-6b-2: pushups actualSum = 50 (LEFT JOIN, decoys excluded)',
+);
+assert.equal(Number(dalPush.target), 45, 'V1-6b-2: pushups target = 45');
+assert.equal(dalPush.label, 'Push-ups', 'V1-6b-2: label comes from the metric_definitions join');
+
+const dalVsit = dalByMetric.get(METRIC_KEYS.vsit_skill_step);
+assert.ok(dalVsit, 'V1-6b-2: vsit_skill_step row present');
+assert.equal(assertRollupAggregation(dalVsit.aggregation as MetricAggregation), 'max');
+assert.equal(Number(dalVsit.actualMax), 5, 'V1-6b-2: vsit_skill_step actualMax = 5');
+
+// THE zero-bout path: pullups has a target (12) but NO in-week bouts → LEFT JOIN yields NULL
+// actuals, which the DAL's `Number(actual ?? 0)` coerces to 0. This is the graceful-empty-metric
+// case the INNER-join b-1 pin could never exercise.
+const dalPull = dalByMetric.get(METRIC_KEYS.pullups);
+assert.ok(dalPull, 'V1-6b-2: a target with zero logged bouts STILL returns a row (LEFT JOIN)');
+assert.equal(
+  dalPull.actualSum,
+  null,
+  'V1-6b-2: zero-bout target has NULL actualSum (DAL coerces → 0)',
+);
+assert.equal(Number(dalPull.actualSum ?? 0), 0, 'V1-6b-2: NULL actual coerces to 0');
+console.log(
+  '✓ V1-6b-2: weeklyAdherenceRows (the DAL query) — LEFT-JOIN target+actual, zero-bout → 0',
+);
+
+// Profile scoping: a SECOND profile's target + bout the same week must NEVER leak into profile 1's rows.
+const [otherRampProfile] = await db
+  .insert(schema.profiles)
+  .values({
+    publicId: '019826b4-0000-7000-8000-0000000000e0',
+    name: 'Other Ramp Kid',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  })
+  .returning({ id: schema.profiles.id });
+await db.insert(schema.rampTargets).values({
+  publicId: '019826b4-0000-7000-8000-0000000000e1',
+  profileId: otherRampProfile.id,
+  metricKey: METRIC_KEYS.pushups,
+  weekStart: RAMP_TEST_WEEK_START,
+  targetValue: '999',
+});
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000001e0',
+  clientId: '019826b4-0000-7000-8000-0000000002e0',
+  profileId: otherRampProfile.id,
+  activityDate: '2026-01-05',
+  unit: 'count',
+  activityTypeId: calisthenicsId,
+  metricKey: METRIC_KEYS.pushups,
+  valueNum: '500',
+  status: ENTRY_STATUS.done,
+});
+const scoped = await weeklyAdherenceRows(asPg, {
+  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+  weekStart: RAMP_TEST_WEEK_START,
+  activityTypeId: calisthenicsId,
+  metricKeys: CALISTHENICS_METRIC_KEYS,
+});
+assert.equal(
+  scoped.length,
+  4,
+  'V1-6b-2: profile scoping — profile 2 target does not appear in profile 1',
+);
+assert.equal(
+  Number(scoped.find((r) => r.metricKey === METRIC_KEYS.pushups)!.actualSum),
+  50,
+  'V1-6b-2: profile scoping — profile 1 pushups stays 50, not 500 from profile 2',
+);
+console.log('✓ V1-6b-2: weeklyAdherenceRows is profile-scoped (no cross-profile leak)');
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
 // target_value CHECK.
