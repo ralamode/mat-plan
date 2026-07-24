@@ -1,14 +1,17 @@
 'use server';
 
 import {
+  ACTIVITY_TYPE_KEYS,
   logBodyweightSchema,
   logStrengthSchema,
+  METRIC_KEYS,
   METRIC_VALUE_TYPE,
   uuidSchema,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { getActiveTimeZone } from '@/lib/active-timezone';
 import {
   CHECKIN_FIELDS,
   clientIdInputName,
@@ -17,9 +20,16 @@ import {
   VALUE_NUM_MAX,
   type CheckinField,
 } from '@/lib/checkins/checkin-fields';
-import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
+import {
+  logBodyweight,
+  logCheckinEntries,
+  logStrengthEntry,
+  type CheckinItemInput,
+} from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { localMinutesSinceMidnight } from '@/lib/date';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
+import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 /**
  * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
@@ -227,5 +237,74 @@ export async function logStrengthAction(
   });
 
   revalidatePath(`/p/${profile.id}`);
+  return { ok: true, error: null };
+}
+
+/**
+ * Server Action: log a one-tap "life" activity (V1-7). Two shapes, both riding the shared
+ * `logCheckinEntries` write path (profile/catalog/unit resolution, always-set `value_num`, per-item
+ * `ON CONFLICT` idempotency):
+ *   - `wake` — a `timing` event: `event_at = now`, `value_num = local minutes-since-midnight` (so the
+ *     clock renders tz-free), NEITHER source column (metric_key null → unit resolves to 'timing').
+ *   - `wrestling_practice` — the `practice_minutes` metric at `DEFAULT_PRACTICE_MINUTES`.
+ * The submitted `activityKey` is validated against the TRUSTED `LIFE_ACTIVITY_KEYS` set — never
+ * trusted from the body; unit/metric are resolved server-side. Same authZ gap as the other writers
+ * (existence-only until Clerk v1.5).
+ */
+export async function logLifeActivitiesAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const profileId = uuidSchema.safeParse(formData.get('profileId'));
+  const clientId = uuidSchema.safeParse(formData.get('clientId'));
+  const activityKey = formData.get('activityKey');
+  const day = await resolveDeclaredDay(formData.get('day'));
+
+  if (!profileId.success || !clientId.success) {
+    return { ok: false, error: 'Please fix the errors below.' };
+  }
+  // Trust boundary: only the two life activities are loggable here.
+  if (
+    typeof activityKey !== 'string' ||
+    !(LIFE_ACTIVITY_KEYS as readonly string[]).includes(activityKey)
+  ) {
+    return { ok: false, error: "That isn't a life activity we can log." };
+  }
+  if (!day.ok) return { ok: false, error: day.error };
+
+  // Build the entry item per activity — the ONLY life-specific logic; the DAL does the rest.
+  let item: CheckinItemInput;
+  if (activityKey === ACTIVITY_TYPE_KEYS.wake) {
+    const eventAt = new Date();
+    item = {
+      activityKey,
+      metricKey: null, // neither-source: unit resolves to the wake activity's 'timing'
+      value: localMinutesSinceMidnight(await getActiveTimeZone(), eventAt),
+      clientId: clientId.data,
+      eventAt,
+    };
+  } else {
+    item = {
+      activityKey, // wrestling_practice
+      metricKey: METRIC_KEYS.practice_minutes,
+      value: DEFAULT_PRACTICE_MINUTES,
+      clientId: clientId.data,
+    };
+  }
+
+  const profile = await getProfileByPublicId(profileId.data);
+  if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+  const results = await logCheckinEntries({
+    profilePublicId: profile.id,
+    day: day.day,
+    items: [item],
+  });
+  revalidatePath(`/p/${profile.id}`);
+
+  // A conflict on the only item means the same client_id was already logged (idempotent replay).
+  if (!results.some((r) => r.created)) {
+    return { ok: false, error: 'That was already logged today.' };
+  }
   return { ok: true, error: null };
 }

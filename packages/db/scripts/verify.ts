@@ -981,6 +981,98 @@ assert.equal(
 );
 console.log('✓ V1-6b-2: weeklyAdherenceRows is profile-scoped (no cross-profile leak)');
 
+// ── V1-7: life activities (wake timing event + wrestling practice) — the generality proof ──────
+// The APP write shape: kind NULL for both; wake is a NEITHER-source timing event (metric/movement
+// NULL → unit resolves to 'timing') carrying value_num = local minutes-since-midnight (forced
+// non-null by the retained entries_shape_check) + event_at (the instant); wrestling_practice is the
+// practice_minutes metric. Both must PASS the shape-CHECK; a value_num-less wake must be REJECTED.
+const wakeActivityId = await activityTypeIdByKey('wake');
+const wrestlingActivityId = await activityTypeIdByKey('wrestling_practice');
+
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000007a0',
+  clientId: '019826b4-0000-7000-8000-0000000007a1',
+  profileId: rampTestProfile.id,
+  activityDate: '2026-01-05',
+  unit: 'timing',
+  valueNum: '412', // 06:52 local
+  eventAt: new Date('2026-01-05T14:52:00Z'),
+  activityTypeId: wakeActivityId,
+  metricKey: null,
+  status: ENTRY_STATUS.done,
+});
+const [wakeRow] = await db
+  .select({
+    kind: schema.entries.kind,
+    metricKey: schema.entries.metricKey,
+    movementId: schema.entries.movementId,
+    unit: schema.entries.unit,
+    valueNum: schema.entries.valueNum,
+    eventAt: schema.entries.eventAt,
+  })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, '019826b4-0000-7000-8000-0000000007a0'));
+assert.equal(wakeRow.kind, null, 'V1-7: wake row is kind-NULL (the app write shape)');
+assert.equal(wakeRow.metricKey, null, 'V1-7: wake has no metric_key (neither-source)');
+assert.equal(wakeRow.movementId, null, 'V1-7: wake has no movement_id');
+assert.equal(wakeRow.unit, 'timing', 'V1-7: wake unit is timing');
+assert.equal(Number(wakeRow.valueNum), 412, 'V1-7: wake value_num = local minutes-since-midnight');
+assert.ok(wakeRow.eventAt instanceof Date, 'V1-7: wake carries event_at (the timing instant)');
+
+// A value_num-less wake is REJECTED by the retained entries_shape_check (the trap that forces the
+// always-set-value_num idiom — the same direction the V1-5 proof pins).
+let wakeNullRejected = false;
+try {
+  await db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-0000000007a2',
+    clientId: '019826b4-0000-7000-8000-0000000007a3',
+    profileId: rampTestProfile.id,
+    activityDate: '2026-01-05',
+    unit: 'timing',
+    eventAt: new Date('2026-01-05T14:52:00Z'),
+    activityTypeId: wakeActivityId,
+    metricKey: null,
+    status: ENTRY_STATUS.done,
+  });
+} catch {
+  wakeNullRejected = true;
+}
+assert.ok(
+  wakeNullRejected,
+  'V1-7: a wake row with NULL value_num is rejected by entries_shape_check',
+);
+
+await db.insert(schema.entries).values({
+  publicId: '019826b4-0000-7000-8000-0000000007b0',
+  clientId: '019826b4-0000-7000-8000-0000000007b1',
+  profileId: rampTestProfile.id,
+  activityDate: '2026-01-05',
+  unit: 'min',
+  valueNum: '90',
+  activityTypeId: wrestlingActivityId,
+  metricKey: METRIC_KEYS.practice_minutes,
+  status: ENTRY_STATUS.done,
+});
+const [wrestlingRow] = await db
+  .select({
+    kind: schema.entries.kind,
+    metricKey: schema.entries.metricKey,
+    unit: schema.entries.unit,
+    valueNum: schema.entries.valueNum,
+  })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, '019826b4-0000-7000-8000-0000000007b0'));
+assert.equal(wrestlingRow.kind, null, 'V1-7: wrestling_practice is kind-NULL');
+assert.equal(
+  wrestlingRow.metricKey,
+  METRIC_KEYS.practice_minutes,
+  'V1-7: wrestling carries practice_minutes',
+);
+assert.equal(Number(wrestlingRow.valueNum), 90, 'V1-7: wrestling value_num = default minutes');
+console.log(
+  '✓ V1-7: wake (timing event) + wrestling_practice round-trip; NULL-value_num wake rejected',
+);
+
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
 // target_value CHECK.
 await expectRejectedBy('uq_ramp_targets_profile_metric_week', () =>

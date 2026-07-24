@@ -1,6 +1,7 @@
-import { ENTRY_KIND, METRIC_VALUE_TYPE } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, ENTRY_KIND, METRIC_VALUE_TYPE } from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
+import { minutesToClock } from '@/lib/date';
 
 /**
  * Human label for a logged entry (V1-4, extended V1-5). Route-AGNOSTIC and pure — no
@@ -48,6 +49,15 @@ export function entryLabel(e: EntryDTO): string {
   // 2. Strength lift (names a movement, no metric).
   if (e.movementName !== null) {
     return e.movementName;
+  }
+
+  // 3a. Wake (V1-7): a timing "neither-source" event — `value` is local minutes-since-midnight,
+  // rendered tz-free as a clock. Dispatch on `activityKey` (the robust discriminant; `unit` is
+  // display-only), and place it BEFORE the generic bare-habit branch — which would otherwise catch
+  // wake (also metricKey/movement-null) and render "Wake" with no time. Falls through when value is
+  // NULL (impossible for a real wake row, but then branch 3 yields the plain "Wake").
+  if (e.activityKey === ACTIVITY_TYPE_KEYS.wake && e.value !== null) {
+    return `${e.activityLabel} — ${minutesToClock(e.value)}`;
   }
 
   // 3. Check-in with NEITHER source — a bare habit ("Rice bucket"). V1-5.

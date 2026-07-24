@@ -16,21 +16,24 @@ via profile tiles (V1-3), bodyweight/measurements (V1-4), habits + brush-teeth c
 calisthenics inputs + daily accumulate totals (V1-6a, #42), the **`ramp_targets` table + weekly
 SQL-adherence proof** (V1-6b-1, #48 — DB layer only; ADR 0002 = `ramp_target`, a coach-authored fixed
 weekly calendar, not the future progression engine; ships the schedule empty, real coach numbers are a
-later data-only PR), and **timezone / local-calendar-date correctness** (V1-6c, #50 — "today" follows the
+later data-only PR), **timezone / local-calendar-date correctness** (V1-6c, #50 — "today" follows the
 active IANA local calendar date via a `tz` cookie + `localDayIso`, not UTC; all three writers thread the
-rendered day; instants stay UTC).
+rendered day; instants stay UTC), and the **calisthenics ramp "This week" adherence UI** (V1-6b-2, #51 —
+read DAL + `<progress>`; the adherence query single-sourced in `packages/db` and run by both the DAL and
+`db:verify`; **"adherence computed" closed**).
 
-**In flight** — **V1-6b-2**: the ramp **"This week" `<progress>` adherence UI + read DAL** that surfaces
-what V1-6b-1 made computable. The adherence SQL is single-sourced in `packages/db` (`weeklyAdherenceRows`)
-and run by both the DAL and the `db:verify` proof (so the proof covers the DAL's exact LEFT-JOIN query —
-zero-bout→0, profile-scoped); the ISO-week boundary comes from V1-6c's `localWeekStartIso`. Renders
-nothing until the schedule is seeded (screenshots use a seeded target). No migration. Hardened by the
-4-lens panel (R1–R12). **Closes the "adherence computed" clause.**
+**In flight** — **V1-7**: the two **one-tap "Life" activities** — **wake** (a `timing` event: `event_at`
 
-**Remaining to the MVP:** V1-6b-2 (in flight) → V1-7 (wake/practice) → V1-8 (kids' strength via
-sessions; **+V1-8a** weighted calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a**
-per-exercise notes) → V1-10/11/12 (template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's
-whole point) → **V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
+- local minutes-since-midnight in `value_num`, rendered tz-free as a clock) and **wrestling practice** (a
+  one-tap `practice_minutes` at the default 90). **"The generality proof":** no migration and no new
+  structure — `event_at`/`value_text` and the catalog rows already exist; it reuses the V1-5 write path
+  (one optional `eventAt`) and V1-6c's tz seam. Hardened by the 4-lens panel (R1–R14: cut a full registry,
+  fixed a 12-hour-clock defect, dispatch by `activityKey`). `db:verify` proves the shape-CHECK both ways.
+
+**Remaining to the MVP:** V1-7 (in flight) → V1-8 (kids' strength via sessions; **+V1-8a** weighted
+calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a** per-exercise notes) → V1-10/11/12
+(template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day
+E2E + rate-limit/Sentry) = MVP done.
 
 **Newly brainstormed (post-MVP, backlogged):** **V1-15 day navigation** (page back through previous
 days, read-only history; then a week-dot strip, then a month calendar) and **V1-16 progress dashboard**
@@ -45,10 +48,10 @@ migrations).
 
 ## Progress toward MVP (v1)
 
-- **Feature PRs merged:** ~9 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
-  V1-6b-1 · V1-6c). Data foundation complete; the back third is the remaining activity types (V1-7/8),
-  editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-6b-2** (ramp adherence UI), then V1-7 /
+- **Feature PRs merged:** ~10 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
+  V1-6b-1 · V1-6c · V1-6b-2). Data foundation complete; the back third is the remaining activity types
+  (V1-7/8), editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-7** (life activities), then V1-8 /
   the notes field.
 
 ## Phases

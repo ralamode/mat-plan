@@ -219,6 +219,10 @@ export type CheckinItemInput = {
   metricKey: string | null; // null → a bare habit (NEITHER source column set)
   value: number; // always numeric; a checked box is 1 (see the shape-CHECK note)
   clientId: string; // client-stamped UUIDv7, per item
+  // V1-7: a point-in-time for timing activities (wake). Optional — the check-in/habit callers
+  // omit it (→ NULL). This makes logCheckinEntries the de-facto shared entry writer; RENAME to
+  // `logEntries` / `EntryItemInput` when the 2nd non-checkin caller lands (or at V1-1d).
+  eventAt?: Date;
 };
 
 export type CheckinResult = {
@@ -289,6 +293,7 @@ export async function logCheckinEntries(args: {
       // movementName intentionally omitted — must stay NULL for the same CHECK
       activityTypeId: activity.id,
       metricKey: i.metricKey, // NULL for a bare habit → the "neither source" shape
+      eventAt: i.eventAt, // V1-7 timing (wake); undefined → column omitted → NULL for check-ins
       status: ENTRY_STATUS.done,
     };
   });
