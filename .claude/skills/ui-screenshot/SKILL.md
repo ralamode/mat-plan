@@ -17,41 +17,49 @@ and the comment thread shows the progression.
 Screenshots go in the gitignored `.screenshots/` folder — they are **attached to the PR, never
 committed**.
 
-## Procedure — the committed script (primary, since V0-11)
+## Procedure — the ephemeral-DB script (primary, since chore/screenshot-ephemeral-db)
 
 Playwright is a real dev dependency and the capture is a committed script built on the **same**
 gate-login helper the E2E smoke uses (`apps/web/e2e/gate-login.ts`). No MCP needed.
 
-1. **Build + start the prod server** (production build = representative CSP/render):
+**Default flow — self-contained, never touches live Neon.** `screenshot:ephemeral` boots a throwaway
+**`embedded-postgres`** (a real Postgres binary on an ephemeral TCP port — no Docker, no creds),
+migrates + seeds it via the `packages/db` scripts, runs `next start` against it, captures the route,
+and tears everything down. It manages the server + DB itself — no manual build/start, no `.env.local`.
 
-   ```bash
-   pnpm build
-   (cd apps/web && node_modules/.bin/next start -p 3996 > "$CLAUDE_JOB_DIR/tmp/screenshot-server.log" 2>&1 &)
-   for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:3996/gate && break; sleep 0.5; done
-   ```
+```bash
+pnpm --filter web screenshot:ephemeral /                          # empty home / picker
+pnpm --filter web screenshot:ephemeral /p --state empty           # seeded profile's Today (empty)
+pnpm --filter web screenshot:ephemeral /p --state already-logged  # Today with a habit + a
+                                                                  #   brush-teeth metric pre-logged
+```
 
-   The app needs its env — `apps/web/.env.local` must have `ACCESS_GATE_PASSWORD` + `DATABASE_URL`
-   (Next auto-loads it). Data-backed pages read live Neon; seed first if the screen needs rows.
+- `/p` (no id) is shorthand for the **seeded profile's Today page** (`/p/<seed-profile-uuid>`), where
+  the check-ins/bodyweight/strength forms live. Any explicit route also works.
+- `--state already-logged` seeds fixture rows so the **data-dependent** "already logged today" state
+  renders — impossible to capture safely before, because it required writing to the real DB.
+- The PNG lands in `apps/web/.screenshots/<slug>.png` (e.g. `today.png`, `today-already-logged.png`);
+  the first run builds (`next build`) and is slower; later runs reuse `.next` (pass `--build` to force).
+- Run `pnpm --filter web exec playwright install chromium` once if the browser isn't present.
 
-2. **Capture** (the script logs through the gate itself, then screenshots the route to
-   `.screenshots/<slug>.png`). The script is a plain tsx run (**not** Next), so it does **not**
-   auto-load `.env.local` — pass the gate code explicitly:
+**Opt-in — capture against a live/running server (the OLD behavior).** Only when you deliberately want
+the running app's own DB (e.g. live Neon). This writes REAL rows for data-dependent states, so it is
+gated behind an explicit flag:
 
-   ```bash
-   ACCESS_GATE_PASSWORD=$(grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -E 's/^[^=]+=//; s/^"//; s/"$//') \
-     pnpm --filter web screenshot /            # or any route, e.g. /gate
-   ```
+```bash
+pnpm build                                            # env: ACCESS_GATE_PASSWORD + DATABASE_URL
+(cd apps/web && node_modules/.bin/next start -p 3996 &)
+for i in $(seq 1 30); do curl -s -o /dev/null http://localhost:3996/gate && break; sleep 0.5; done
+ACCESS_GATE_PASSWORD=$(grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -E 's/^[^=]+=//; s/^"//; s/"$//') \
+  pnpm --filter web screenshot:ephemeral / --use-live-db     # or SCREENSHOT_ALLOW_LIVE_DB=1
+```
 
-   Chromium honors the `Secure` gate cookie on `localhost`. Override the target server with
-   `SCREENSHOT_BASE_URL` if not on `:3996`. The PNG lands in `apps/web/.screenshots/` (`pnpm --filter
-web` runs from `apps/web`); move + rename it descriptively + versioned to the PR
-   (e.g. `mv apps/web/.screenshots/home.png .screenshots/v0-11-today.png`). Run `playwright install
-chromium` once if the browser isn't present.
+Override the target with `SCREENSHOT_BASE_URL` if not on `:3996`. (The bare `pnpm --filter web
+screenshot <route>` script still exists for this same already-running-server case.)
 
-3. **Hand it over:** `SendUserFile` the PNG, then attach it to the PR per "Posting to the PR" below.
-
-4. **Cleanup:** kill the server (`pkill -f "next start -p 3996"`); confirm `git status` is clean
-   (`.screenshots/` is gitignored).
+**Hand it over:** `SendUserFile` the PNG, then attach it to the PR per "Posting to the PR" below.
+Confirm `git status` is clean (`.screenshots/` is gitignored). If you started a `--use-live-db`
+server, kill it (`pkill -f "next start -p 3996"`) — the default ephemeral flow cleans up after itself.
 
 ## Fallback — the Playwright MCP (when the script can't run)
 
