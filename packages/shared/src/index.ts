@@ -6,6 +6,7 @@ export * from './enums';
 export * from './activity-categories';
 export * from './activity-shapes';
 export * from './metrics';
+export * from './aggregation';
 export * from './movements';
 export * from './catalog-seed';
 export * from './catalog-activity-types';

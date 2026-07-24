@@ -52,6 +52,9 @@ export type EntryDTO = {
   metricKey: string | null;
   metricLabel: string | null;
   valueType: string | null;
+  // V1-6a: the metric's rollup rule, carried on the DTO (like `valueType`) so the totals
+  // fold dispatches on the model discriminant instead of reaching back into the seed catalog.
+  aggregation: string | null;
   // V1-5: the entry's activity, for labelling a "neither-source" check-in (a bare
   // habit has no metric AND no movement, so only the activity names it).
   activityKey: string | null;
@@ -75,6 +78,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       metricKey: schema.entries.metricKey,
       metricLabel: schema.metricDefinitions.label,
       valueType: schema.metricDefinitions.valueType,
+      aggregation: schema.metricDefinitions.aggregation,
       // V1-5: joined on the PK → at most one match, so no fan-out; LEFT so any row
       // without an activity_type survives (none today — 0003 CHECKs it NOT NULL).
       activityKey: schema.activityTypes.key,
@@ -91,7 +95,10 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
         isNull(schema.entries.deletedAt),
       ),
     )
-    .orderBy(desc(schema.entries.createdAt));
+    // `id` (bigint identity) breaks created_at ties deterministically: rows written in one
+    // batch (e.g. several calisthenics bouts) share `now()`, so without this their order is
+    // unspecified and the grouped bout display ("20, 30") would flip run to run.
+    .orderBy(desc(schema.entries.createdAt), desc(schema.entries.id));
 
   // Fetch sets for the strength entries in one query, then group by entry.
   const strengthIds = rows.filter((r) => r.kind === ENTRY_KIND.strength).map((r) => r.id);
@@ -135,6 +142,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     metricKey: r.metricKey,
     metricLabel: r.metricLabel,
     valueType: r.valueType,
+    aggregation: r.aggregation,
     activityKey: r.activityKey,
     activityLabel: r.activityLabel,
     sets: setsByEntry.get(r.id) ?? [],

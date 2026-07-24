@@ -7,24 +7,26 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **v1 underway — V1-5 in review (V1-1a/b/c, V1-2, V1-3, V1-4 all merged).** This PR ships
-**V1-5 — the check-ins / habits form** ([plan](./plans/v1-5-checkins-form.md)), the **consumer of
-V1-1c**: the first writer to insert `kind = NULL`, and the first to write a **neither-source** row
-(no `movement_id`, no `metric_key` — a bare habit names only its `activity_type`). **No migration** —
-every column already exists. The form is **derived from the seeded catalogs** (a registry over
-`activity_types.input_shape` + `ACTIVITY_METRIC_MAP` + `metric_definitions`), so a new habit needs no
-component/action/DAL edit; the RSC page passes the field list as a prop, keeping the catalog out of
-the client bundle. The action **walks that registry rather than enumerating the body**, so unknown
-POST keys are inert and `unit`/`activity_type_id` are resolved server-side from the DB row. Also
-lands: `EntryDTO.kind` → nullable (the old `as EntryKind` cast lied), `entryLabel` `bool`/`scale_10`/
-bare-habit branches, and the **`ladder`** metric (domain fix — the daily brush-teeth rep is ladder
-drills; `footwork` stays a separate metric). Plan hardened by a four-lens adversarial panel that
-falsified two of its headline claims and halved its scope. Prior: v0's slice, V1-1a/b/c, V1-2/3/4.
+📍 **v1 underway — V1-6a in review (V1-5 merged as #41; V1-1a/b/c, V1-2, V1-3, V1-4 all merged).**
+This PR ships **V1-6a — calisthenics inputs + daily totals** ([plan](./plans/v1-6a-calisthenics-totals.md)),
+the first feature to make `metric_definition.aggregation` do observable work. **No migration** — it
+reuses V1-5's kind-NULL `count` write path wholesale (calisthenics metrics are `count`/`count`, the
+same shape as `shot`); the changes are a render-scope extension of the V1-5 registry plus a read-side
+rollup. The calisthenics fields **accumulate** (each submit is a bout; a "Calisthenics today" card
+sums them — the digital replacement for the kids' paper tally), so they stay editable after logging
+rather than going inert; the sum/max fold lives in a shared `foldAggregation` kernel with golden
+vectors (so V1-6b's weekly SQL adherence + V1-13's CSV pivot pin against one contract), and
+`aggregation` now rides on `EntryDTO`. Scoped to calisthenics — V1-5's `shot` is untouched. **V1-6
+was split**: V1-6a (this) is the UI/read half; **V1-6b** (the `ramp_target` table + migration + SQL
+adherence) is its own significant migration PR. Plan hardened by a three-lens panel whose central
+"cut the accumulate model" push was **rejected on product ground truth** (the paper tally) while its
+two real defect-findings (an input-loss race, a double-counting e2e retry) were fixed. Prior: v0's
+slice, V1-1a/b/c, V1-2/3/4, V1-5 (#41).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 18 / 27 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~67% (+2 out-of-band: constants convention, Vitest harness)
-- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 merged; V1-5 in review)
+- **Code PRs merged:** 19 / 28 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~68% (+2 out-of-band; V1-6 split into a/b → 28)
+- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 + V1-5 merged; V1-6a in review)
 
 ## Phases
 
@@ -60,24 +62,40 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR    | Scope                                                                           | Status |
-| ----- | ------------------------------------------------------------------------------- | ------ |
-| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)         | ✅     |
-| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))           | ✅     |
-| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                           | ✅     |
-| V1-4  | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md)) | ✅     |
-| V1-5  | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))            | 🔵     |
-| V1-6  | calisthenics totals + ramp targets                                              | ⚪     |
-| V1-7  | life activities (wake/practice)                                                 | ⚪     |
-| V1-8  | kids' strength via session                                                      | ⚪     |
-| V1-9  | fix-a-set / edit (LWW)                                                          | ⚪     |
-| V1-10 | block-template prefill                                                          | ⚪     |
-| V1-11 | copy-set-to-other-kid                                                           | ⚪     |
-| V1-12 | a11y pass                                                                       | ⚪     |
-| V1-13 | CSV export endpoint (golden-file)                                               | ⚪     |
-| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                     | ⚪     |
+| PR    | Scope                                                                             | Status |
+| ----- | --------------------------------------------------------------------------------- | ------ |
+| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)           | ✅     |
+| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))             | ✅     |
+| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                             | ✅     |
+| V1-4  | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))   | ✅     |
+| V1-5  | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))              | ✅     |
+| V1-6a | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md)) | 🔵     |
+| V1-6b | calisthenics ramp targets + adherence (migration)                                 | ⚪     |
+| V1-7  | life activities (wake/practice)                                                   | ⚪     |
+| V1-8  | kids' strength via session                                                        | ⚪     |
+| V1-9  | fix-a-set / edit (LWW)                                                            | ⚪     |
+| V1-10 | block-template prefill                                                            | ⚪     |
+| V1-11 | copy-set-to-other-kid                                                             | ⚪     |
+| V1-12 | a11y pass                                                                         | ⚪     |
+| V1-13 | CSV export endpoint (golden-file)                                                 | ⚪     |
+| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                       | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-07-23** — **V1-6a** (in review): calisthenics inputs + daily totals
+  ([plan](./plans/v1-6a-calisthenics-totals.md)). **No migration** — reuses V1-5's kind-NULL `count`
+  write path. Appends `calisthenics` to the check-in registry (4 count inputs); the fields
+  **accumulate** (each submit is a bout, a "Calisthenics today" card sums them via the sum/max fold —
+  the digital paper-tally), so they stay editable rather than going inert. New shared
+  `foldAggregation(aggregation, values)` kernel + golden vectors (the contract V1-6b's SQL adherence
+  and V1-13's CSV pivot pin against); `aggregation` added to the `metric_definitions` join +
+  `EntryDTO`; a pure `calisthenicsTotals(entries)` read helper. Scoped to calisthenics — V1-5's `shot`
+  (also `sum`) is left log-once until the shots/10K-goal work gives it a total. `METRIC_AGGREGATION`
+  named map exported. **V1-6 split** into V1-6a (this) + V1-6b (the `ramp_target` migration).
+  Three-lens panel: its "cut accumulate" push was **rejected** on product ground truth (the kids'
+  paper tally), while the two real defects it found — a clear-on-success input-loss race and a
+  double-counting e2e retry — were **fixed** (input disabled while pending; the e2e asserts end-state
+  without re-filling). Boundary tests + golden vectors + a warm-smoke e2e step; 92 vitest pass.
 
 - **2026-07-23** — **tooling** (`chore/screenshot-ephemeral-db`): the screenshot flow now targets a
   **throwaway embedded Postgres by default** instead of the running app's live Neon DB. New

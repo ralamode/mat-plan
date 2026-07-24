@@ -15,6 +15,7 @@ import {
   SCALE_10_MAX,
   SCALE_10_MIN,
   valueInputName,
+  VALUE_NUM_MAX,
 } from './checkin-fields';
 
 // The registry's whole claim is "derived from seed data, not hand-coded". Every
@@ -98,5 +99,39 @@ describe('field-name encoding', () => {
     // not the label, is what disambiguates them.
     const shot = CHECKIN_FIELDS.find((f) => f.metricKey === 'shot')!;
     expect(shot.key).toBe(`${ACTIVITY_TYPE_KEYS.brush_teeth}:shot`);
+  });
+});
+
+describe('CHECKIN_FIELDS — calisthenics (V1-6a)', () => {
+  const calisFields = CHECKIN_FIELDS.filter(
+    (f) => f.activityKey === ACTIVITY_TYPE_KEYS.calisthenics,
+  );
+
+  it('renders one field per mapped calisthenics metric, in map order', () => {
+    expect(calisFields.map((f) => f.metricKey)).toEqual([
+      ...ACTIVITY_METRIC_MAP[ACTIVITY_TYPE_KEYS.calisthenics],
+    ]);
+  });
+
+  it('are count fields bounded 0..VALUE_NUM_MAX under the Calisthenics legend', () => {
+    for (const f of calisFields) {
+      expect(f.valueType).toBe(METRIC_VALUE_TYPE.count);
+      expect(isCheckbox(f)).toBe(false);
+      expect(f.groupLabel).toBe('Calisthenics');
+      expect(f.min).toBe(0);
+      expect(f.max).toBe(VALUE_NUM_MAX);
+    }
+  });
+
+  it('ACCUMULATE (stay editable) — unlike V1-5 habits/brush-teeth, which are log-once', () => {
+    expect(calisFields.every((f) => f.accumulates)).toBe(true);
+    // V1-5's shot is also a `sum` metric but must stay log-once until the shots/goal work.
+    const shot = CHECKIN_FIELDS.find((f) => f.metricKey === 'shot')!;
+    expect(shot.accumulates).toBe(false);
+    // Habits + scale_10 brush-teeth are log-once too.
+    expect(CHECKIN_FIELDS.filter((f) => f.metricKey === null).every((f) => !f.accumulates)).toBe(
+      true,
+    );
+    expect(CHECKIN_FIELDS.find((f) => f.metricKey === 'pressure')!.accumulates).toBe(false);
   });
 });
