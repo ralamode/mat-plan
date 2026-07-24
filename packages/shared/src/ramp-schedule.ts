@@ -20,6 +20,12 @@ export type CalisthenicsRampMetricKey = CalisthenicsMetricKey;
 export { CALISTHENICS_METRIC_KEYS };
 
 /**
+ * Days in a ramp week — the half-open adherence window is `[week_start, week_start + WEEK_LENGTH_DAYS)`.
+ * Named so the weekly-adherence SQL (`week_start + N`) and the `db:verify` proof share one literal.
+ */
+export const WEEK_LENGTH_DAYS = 7;
+
+/**
  * One week of the ramp: the ISO-week Monday (UTC, `YYYY-MM-DD`) and the target value for
  * each calisthenics metric that week. `targets` is a total map over the metric keys, so a
  * missing metric is a compile error (the schedule stays complete as the metric set evolves).

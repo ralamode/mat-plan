@@ -29,3 +29,28 @@ export function foldAggregation(aggregation: MetricAggregation, values: readonly
       return values[0];
   }
 }
+
+/**
+ * Assert a metric's aggregation is one the WEEKLY SQL ROLLUP can compute (V1-6b-2 adherence),
+ * and return which — `'sum'` or `'max'`. The SINGLE source for the `{sum,max}` membership the
+ * weekly rollup rests on: reused by the read DAL's row→DTO mapper (to pick the actualSum vs
+ * actualMax column with a typed switch) and pinned by `db:verify`'s membership guard, so the
+ * set can't drift between them.
+ *
+ * Throws on `avg`/`last`: the weekly rollup computes only SUM + MAX (an avg/last calisthenics
+ * metric would need a different query), so a non-`{sum,max}` target must fail loudly here rather
+ * than silently read the wrong column. The DAL query filters targets to CALISTHENICS_METRIC_KEYS,
+ * so for correctly-authored data this throw is unreachable defense-in-depth.
+ */
+export function assertRollupAggregation(aggregation: MetricAggregation): 'sum' | 'max' {
+  switch (aggregation) {
+    case METRIC_AGGREGATION.sum:
+      return 'sum';
+    case METRIC_AGGREGATION.max:
+      return 'max';
+    default:
+      throw new Error(
+        `aggregation '${aggregation}' has no weekly SQL rollup (expected 'sum' or 'max')`,
+      );
+  }
+}
