@@ -83,11 +83,19 @@ Create `apps/web/.env.local` (gitignored) from `apps/web/.env.example`:
 
 ```bash
 ACCESS_GATE_PASSWORD="any-local-code-8+chars"
-DATABASE_URL="<neon-pooled-url>"            # or a Neon branch for dev
-DATABASE_URL_UNPOOLED="<neon-direct-url>"   # only needed to run db:migrate/db:seed locally
+DATABASE_URL="<neon-pooled-url>"            # only used by `pnpm dev:prod` (the opt-in)
+DATABASE_URL_UNPOOLED="<neon-direct-url>"   # only used by `pnpm dev:prod`
 ```
 
-Then `pnpm dev`. Point local dev at a **Neon branch** (not production) if you'll be writing test data.
+**`pnpm dev` (the safe default)** does NOT read those `DATABASE_URL`s — it boots a **persistent
+local embedded Postgres** (fixed port `54329`, gitignored `apps/web/.local-db/`), migrates + seeds it,
+and runs `next dev` against it, so playing with the app never writes to prod Neon. Your play-data
+survives restarts; `ACCESS_GATE_PASSWORD` still comes from `.env.local` so the gate login works. Wipe
+the sandbox with `pnpm db:local:reset`.
+
+`pnpm dev:prod` is the **deliberate opt-in** that runs the old `next dev` against `.env.local`'s Neon
+DB (it prints a warning that writes hit real data). Point it at a **Neon branch** (not production) if
+you'll be writing test data. See the local-dev section in the [README](../README.md).
 
 ## Rules
 

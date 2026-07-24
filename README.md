@@ -13,6 +13,24 @@ Postgres + Clerk, deployed on Vercel with GitHub Actions CI and Playwright E2E.
 **v0 in progress.** Scaffold (V0-1) + design system (V0-1b) landed; building the vertical slice.
 See [docs/status.md](./docs/status.md).
 
+## Local development
+
+| Command               | What it does                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`            | **Safe default.** Boots a **persistent local embedded Postgres** + `next dev` against it — prod Neon is never touched.     |
+| `pnpm dev:prod`       | **Opt-in.** The old behavior — `next dev` against `.env.local`'s **live Neon** DB. Prints a warning; writes hit real data. |
+| `pnpm db:local:reset` | Wipes the local sandbox DB so the next `pnpm dev` starts fresh + re-seeded.                                                |
+
+`pnpm dev` is a **local sandbox**: it starts a real (Dockerless) Postgres on port `54329` with a
+fixed, gitignored data dir at `apps/web/.local-db/`, runs `db:migrate` + `db:seed` (both idempotent),
+then launches `next dev` with `DATABASE_URL` pointed at that local DB. Play with the product freely —
+**your data survives restarts** and never reaches prod. `ACCESS_GATE_PASSWORD` still comes from your
+`.env.local`, so the gate login works as before. Reach for `pnpm dev:prod` only when you deliberately
+want to hit live data (prefer a Neon **branch**, not production). This mirrors the screenshot flow
+(`screenshot:ephemeral`): local isolation is the default, prod is the deliberate exception. First run
+downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.example` first (see
+[docs/deploy.md](./docs/deploy.md) §5).
+
 ## Docs
 
 | File                                                       | What                                                                                             |

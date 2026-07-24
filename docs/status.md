@@ -97,6 +97,19 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
   double-counting e2e retry — were **fixed** (input disabled while pending; the e2e asserts end-state
   without re-filling). Boundary tests + golden vectors + a warm-smoke e2e step; 92 vitest pass.
 
+- **2026-07-23** — **tooling** (`chore/local-dev-db`): `pnpm dev` now defaults to a **persistent local
+  embedded Postgres** instead of live Neon, so playing with the app locally never writes to prod (where
+  the duplicate test rows came from). The launcher (`apps/web/scripts/dev-local.ts`) starts an
+  `embedded-postgres` on a fixed port (`54329`) with a fixed, gitignored data dir (`apps/web/.local-db/`),
+  migrates + seeds it (idempotent), then runs `next dev` with `DATABASE_URL` injected to override
+  `.env.local` (Next env-precedence) — `ACCESS_GATE_PASSWORD` is left to `.env.local` so the gate login
+  still works. The data dir **persists across restarts** (play-data survives; the seed's ON CONFLICT
+  means no dupes). `pnpm dev:prod` is the deliberate opt-in for the old live-Neon behavior (prints a
+  warning); `pnpm db:local:reset` wipes the sandbox. Reuses PR #43's plumbing via a new shared
+  `apps/web/scripts/embedded-pg.ts` helper (embedded-PG lifecycle + first-run detection, migrate+seed,
+  local-DB guard, free-port, process-group teardown) that **both** `screenshot-ephemeral.ts` and
+  `dev-local.ts` now consume — no copy-paste. Mirrors the screenshot flow's "prod is the deliberate
+  exception" philosophy. No app/schema change; docs + lessons updated.
 - **2026-07-23** — **tooling** (`chore/screenshot-ephemeral-db`): the screenshot flow now targets a
   **throwaway embedded Postgres by default** instead of the running app's live Neon DB. New
   `pnpm --filter web screenshot:ephemeral <route>` boots an `embedded-postgres` instance (real PG

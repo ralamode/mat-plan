@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "tsx scripts/dev-local.ts",
+    "dev:prod": "echo '⚠️  dev:prod → LIVE Neon via .env.local. Writes hit REAL prod data. Use `pnpm dev` for the local sandbox.' && next dev",
+    "db:local:reset": "tsx scripts/db-local-reset.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
