@@ -22,13 +22,13 @@ rendered day; instants stay UTC), and the **calisthenics ramp "This week" adhere
 read DAL + `<progress>`; the adherence query single-sourced in `packages/db` and run by both the DAL and
 `db:verify`; **"adherence computed" closed**).
 
-**In flight** — **V1-7**: the two **one-tap "Life" activities** — **wake** (a `timing` event: `event_at`
-
-- local minutes-since-midnight in `value_num`, rendered tz-free as a clock) and **wrestling practice** (a
-  one-tap `practice_minutes` at the default 90). **"The generality proof":** no migration and no new
-  structure — `event_at`/`value_text` and the catalog rows already exist; it reuses the V1-5 write path
-  (one optional `eventAt`) and V1-6c's tz seam. Hardened by the 4-lens panel (R1–R14: cut a full registry,
-  fixed a 12-hour-clock defect, dispatch by `activityKey`). `db:verify` proves the shape-CHECK both ways.
+**In flight** — **V1-7**: the two **one-tap "Life" activities**. **Wake** is a `timing` event —
+`event_at` plus local minutes-since-midnight in `value_num`, rendered tz-free as a clock ("Wake — 6:52
+AM"). **Wrestling practice** is a one-tap `practice_minutes` at the default 90 ("Practice minutes — 90
+min"). **"The generality proof":** no migration and no new structure — `event_at`/`value_text` and the
+catalog rows already exist; it reuses the V1-5 write path (one optional `eventAt`) and V1-6c's tz seam.
+Hardened by the 4-lens panel (R1–R14: cut a full registry, fixed a 12-hour-clock defect, dispatch by
+`activityKey`). `db:verify` proves the shape-CHECK both ways.
 
 **Remaining to the MVP:** V1-7 (in flight) → V1-8 (kids' strength via sessions; **+V1-8a** weighted
 calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a** per-exercise notes) → V1-10/11/12
@@ -97,8 +97,9 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                   | ✅     |
 | V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                      | ✅     |
 | V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md)) | ✅     |
-| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-calisthenics-ramp.md))                      | ⚪     |
-| V1-7    | life activities (wake/practice)                                                                        | ⚪     |
+| V1-6c   | timezone / local-calendar-date correctness ([plan](./plans/v1-6c-timezone-local-date.md))              | ✅     |
+| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                         | ✅     |
+| V1-7    | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                              | 🟡     |
 | V1-8    | kids' strength via session                                                                             | ⚪     |
 | V1-9    | fix-a-set / edit (LWW)                                                                                 | ⚪     |
 | V1-10   | block-template prefill                                                                                 | ⚪     |
