@@ -64,6 +64,12 @@ export function CheckinForm({
   // `loggedFieldKeys` then carries the checked state).
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
+  // V1-6a: accumulating number inputs (calisthenics) are CONTROLLED so they can be cleared
+  // after a bout is logged, ready for the next one. Cleared on success — safe because the
+  // input is `disabled` while `pending` (see below), so nothing can be typed into the
+  // slow submit window and then clobbered. (V1-5's log-once number inputs stay uncontrolled.)
+  const [numberValues, setNumberValues] = useState<Record<string, string>>({});
+
   // Reset on a new action result by ADJUSTING STATE DURING RENDER, not in an effect —
   // an effect here would cause a cascading re-render (and trips react-hooks lint).
   // https://react.dev/learn/you-might-not-need-an-effect
@@ -72,6 +78,7 @@ export function CheckinForm({
     setSeenState(state);
     if (state.ok) {
       setChecked({});
+      setNumberValues({});
       setIdSeed((n) => n + 1); // rotate idempotency keys; a stale one = a silent no-op
     }
   }
@@ -114,6 +121,26 @@ export function CheckinForm({
                     if (isLogged) return; // inert, but still focusable + announced
                     setChecked((c) => ({ ...c, [f.key]: e.target.checked }));
                   }}
+                />
+              ) : f.accumulates ? (
+                // Accumulating (calisthenics): controlled + disabled while pending so a
+                // value typed during the slow submit can't be clobbered by clear-on-success.
+                // Never `isLogged` (page.tsx excludes accumulating fields), so no readOnly.
+                <input
+                  id={id}
+                  name={valueInputName(f.key)}
+                  type="number"
+                  inputMode="numeric"
+                  step="1"
+                  min={f.min}
+                  max={f.max}
+                  autoComplete="off"
+                  disabled={pending}
+                  value={numberValues[f.key] ?? ''}
+                  onChange={(e) => setNumberValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  aria-invalid={err ? true : undefined}
+                  aria-describedby={describedBy}
+                  className={numberInputClass}
                 />
               ) : (
                 <input

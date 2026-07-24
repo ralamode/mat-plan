@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { logBodyweight, logCheckins, selectProfile } from './steps';
+import { logBodyweight, logCalisthenics, logCheckins, selectProfile } from './steps';
 
 // The one V0-11 smoke: the full happy path UI → Server Action → Drizzle →
 // Postgres → RSC re-render, against an ephemeral migrated+seeded DB. Uses the
@@ -24,6 +24,9 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   // V1-5: the kind-NULL write path (a bare habit + a rated metric), on the same warm
   // session — no second cold flow, so the slow tier stays cheap.
   await logCheckins(page, { habit: 'Rice bucket', rating: { label: 'Pressure', value: '7' } });
+
+  // V1-6a: the accumulating calisthenics path — log a count, assert the totals card.
+  await logCalisthenics(page, { label: 'Push-ups', value: '20' });
 });
 
 // V1-3: an unknown profile id renders the not-found UI (the scoped Today
