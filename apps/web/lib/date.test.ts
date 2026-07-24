@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDayLong, isIanaTimeZone, localDayIso } from './date';
+import { formatDayLong, isIanaTimeZone, localDayIso, localWeekStartIso } from './date';
 
 // V1-6c. Offsets: PDT=UTC-7, PST=UTC-8, EDT=UTC-4, MST(Arizona)=UTC-7 year-round,
 // HST(Hawaii)=UTC-10 year-round. Pacific local midnight 2026-07-24 00:00 PDT = 2026-07-24T07:00Z.
@@ -63,6 +63,35 @@ describe('isIanaTimeZone', () => {
   it.each(['Not/AZone', 'foo', '', null, undefined])('rejects a bad value (%s)', (tz) =>
     expect(isIanaTimeZone(tz)).toBe(false),
   );
+});
+
+describe('localWeekStartIso (ISO-week Monday)', () => {
+  it('returns the same day for a Monday', () => {
+    expect(localWeekStartIso('2026-01-05')).toBe('2026-01-05'); // Mon (the b-1 fixture week)
+  });
+
+  it('maps a Sunday to the PRIOR Monday, not the next', () => {
+    expect(localWeekStartIso('2026-01-11')).toBe('2026-01-05'); // Sun → prior Mon
+  });
+
+  it.each([
+    ['2026-01-06', '2026-01-05'], // Tue
+    ['2026-01-08', '2026-01-05'], // Thu
+    ['2026-01-10', '2026-01-05'], // Sat
+  ])('maps a mid-week day (%s) to its Monday', (day, monday) => {
+    expect(localWeekStartIso(day)).toBe(monday);
+  });
+
+  it('crosses a month boundary correctly', () => {
+    expect(localWeekStartIso('2026-01-01')).toBe('2025-12-29'); // Thu Jan 1 → Mon Dec 29 (prev month/year)
+  });
+
+  it('is unaffected by DST weekends (UTC-epoch math applies no offset)', () => {
+    // 2026-03-08 (US spring-forward Sunday) → prior Mon 2026-03-02.
+    expect(localWeekStartIso('2026-03-08')).toBe('2026-03-02');
+    // 2026-11-01 (US fall-back Sunday) → prior Mon 2026-10-26.
+    expect(localWeekStartIso('2026-11-01')).toBe('2026-10-26');
+  });
 });
 
 describe('formatDayLong', () => {

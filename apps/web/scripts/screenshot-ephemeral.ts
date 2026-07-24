@@ -9,7 +9,7 @@ import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS, METRIC_KEYS, newId } from '@mat-plan/
 import { eq, isNull } from 'drizzle-orm';
 
 import { DEFAULT_TIME_ZONE } from '../lib/constants';
-import { localDayIso } from '../lib/date';
+import { localDayIso, localWeekStartIso } from '../lib/date';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -247,8 +247,39 @@ async function seedCalisthenics(dbUrl: string): Promise<void> {
         target: schema.entries.clientId,
         where: isNull(schema.entries.deletedAt),
       });
+
+    // V1-6b-2: a ramp target per logged metric for THIS ISO week, so the "This week" <progress>
+    // bars render (the shipped schedule is empty). Targets above the seeded actuals (push-ups 50,
+    // pull-ups 12) → partially-filled bars.
+    const weekStart = localWeekStartIso(day);
+    await db
+      .insert(schema.rampTargets)
+      .values([
+        {
+          publicId: newId(),
+          profileId: profile.id,
+          metricKey: pushups.key,
+          weekStart,
+          targetValue: '60',
+        },
+        {
+          publicId: newId(),
+          profileId: profile.id,
+          metricKey: pullups.key,
+          weekStart,
+          targetValue: '15',
+        },
+      ])
+      .onConflictDoNothing({
+        target: [
+          schema.rampTargets.profileId,
+          schema.rampTargets.metricKey,
+          schema.rampTargets.weekStart,
+        ],
+        where: isNull(schema.rampTargets.deletedAt),
+      });
     console.log(
-      '✓ seeded calisthenics fixture (rice_bucket + splits habits; push-ups 20+30, pull-ups 12)',
+      '✓ seeded calisthenics fixture (habits; push-ups 20+30, pull-ups 12; ramp targets 60/15)',
     );
   } finally {
     await pool.end();

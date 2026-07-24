@@ -13,22 +13,21 @@ Claude workflow alive.**
 
 **Merged & live** — the generalized data model (V1-1a/b/c), full seed catalog (V1-2), per-kid Today
 via profile tiles (V1-3), bodyweight/measurements (V1-4), habits + brush-teeth check-ins (V1-5),
-calisthenics inputs + daily accumulate totals (V1-6a, #42), and the **`ramp_targets` table + weekly
+calisthenics inputs + daily accumulate totals (V1-6a, #42), the **`ramp_targets` table + weekly
 SQL-adherence proof** (V1-6b-1, #48 — DB layer only; ADR 0002 = `ramp_target`, a coach-authored fixed
 weekly calendar, not the future progression engine; ships the schedule empty, real coach numbers are a
-later data-only PR).
+later data-only PR), and **timezone / local-calendar-date correctness** (V1-6c, #50 — "today" follows the
+active IANA local calendar date via a `tz` cookie + `localDayIso`, not UTC; all three writers thread the
+rendered day; instants stay UTC).
 
-**In flight** — **V1-6c**: timezone / local-calendar-date correctness (afternoon in PT was showing
-_tomorrow's_ workout because "today" was UTC). "Today" now follows the active IANA local calendar date
-via a client-reported `tz` cookie + `localDayIso`; date & weekday always agree; all three writers thread
-the rendered day (one shared ±1 bound); historical dates stay stable across travel; instants stay UTC.
-No migration, no new dep. Hardened by the 4-lens panel (review-response log R1–R10). **Prerequisite of
-V1-6b-2** (the ramp UI computes ISO-week boundaries from "local today").
+**In flight** — **V1-6b-2**: the ramp **"This week" `<progress>` adherence UI + read DAL** that surfaces
+what V1-6b-1 made computable. The adherence SQL is single-sourced in `packages/db` (`weeklyAdherenceRows`)
+and run by both the DAL and the `db:verify` proof (so the proof covers the DAL's exact LEFT-JOIN query —
+zero-bout→0, profile-scoped); the ISO-week boundary comes from V1-6c's `localWeekStartIso`. Renders
+nothing until the schedule is seeded (screenshots use a seeded target). No migration. Hardened by the
+4-lens panel (R1–R12). **Closes the "adherence computed" clause.**
 
-**Next up** — **V1-6b-2**: the ramp "this week" `<progress>` UI + read DAL that surfaces what V1-6b-1
-made computable (captured at mobile/tablet/desktop per the adaptive-screenshots principle).
-
-**Remaining to the MVP:** V1-6c (in flight) → V1-6b-2 → V1-7 (wake/practice) → V1-8 (kids' strength via
+**Remaining to the MVP:** V1-6b-2 (in flight) → V1-7 (wake/practice) → V1-8 (kids' strength via
 sessions; **+V1-8a** weighted calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a**
 per-exercise notes) → V1-10/11/12 (template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's
 whole point) → **V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
@@ -46,10 +45,11 @@ migrations).
 
 ## Progress toward MVP (v1)
 
-- **Feature PRs merged:** ~8 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
-  V1-6b-1). Data foundation complete; the back third is the remaining activity types (V1-7/8), editing
-  (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. Next: **V1-6b-2** (ramp UI), then V1-7 / the notes field.
+- **Feature PRs merged:** ~9 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
+  V1-6b-1 · V1-6c). Data foundation complete; the back third is the remaining activity types (V1-7/8),
+  editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-6b-2** (ramp adherence UI), then V1-7 /
+  the notes field.
 
 ## Phases
 
