@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { EmptyState } from '@/components/ui/empty-state';
+import { getActiveTimeZone } from '@/lib/active-timezone';
 import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { formatDayLong, todayIso } from '@/lib/date';
+import { formatDayLong, localDayIso } from '@/lib/date';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
@@ -13,6 +14,7 @@ import { entryLabel } from '@/lib/entries/entry-label';
 import { BodyweightForm } from './bodyweight-form';
 import { CheckinForm } from './checkin-form';
 import { StrengthForm } from './strength-form';
+import { TimeZoneSync } from './tz-sync';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -25,7 +27,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
   const profile = await getProfileByPublicId(profileId);
   if (!profile) notFound();
 
-  const day = todayIso();
+  // "Today" is the LOCAL calendar date in the request's active tz (V1-6c) — the client
+  // reports its zone via the `tz` cookie (see TimeZoneSync); the RSC validates + uses it,
+  // falling back to DEFAULT_TIME_ZONE on first paint. The header weekday derives from this
+  // same `day`, so date & weekday can't disagree.
+  const timeZone = await getActiveTimeZone();
+  const day = localDayIso(timeZone);
   const entries = await listEntriesForDay(profile.id, day);
 
   // Which check-in fields are already logged today — derived from the entries we just
@@ -47,6 +54,8 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+      {/* Reports the device tz → `tz` cookie so the RSC computes the local day (V1-6c). Renders nothing. */}
+      <TimeZoneSync serverTimeZone={timeZone} />
       <header className="flex flex-col gap-2">
         <Link
           href="/"
@@ -63,13 +72,13 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           <h2 id="log-bw-heading" className="text-lg font-medium">
             Log bodyweight
           </h2>
-          <BodyweightForm profileId={profile.id} />
+          <BodyweightForm profileId={profile.id} day={day} />
         </section>
         <section aria-labelledby="log-str-heading" className="flex flex-col gap-3">
           <h2 id="log-str-heading" className="text-lg font-medium">
             Log strength
           </h2>
-          <StrengthForm profileId={profile.id} />
+          <StrengthForm profileId={profile.id} day={day} />
         </section>
         {CHECKIN_FIELDS.length > 0 ? (
           <section aria-labelledby="checkins-heading" className="flex flex-col gap-3">

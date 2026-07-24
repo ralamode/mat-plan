@@ -12,6 +12,7 @@ import {
 } from '@/lib/checkins/checkin-fields';
 
 import { logCheckinsAction, type ActionState } from './actions';
+import { DayField } from './day-field';
 
 const initialState: ActionState = { ok: false, error: null };
 
@@ -91,7 +92,7 @@ export function CheckinForm({
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="profileId" value={profileId} readOnly />
-      <input type="hidden" name="day" value={day} readOnly />
+      <DayField day={day} />
 
       {[...groups].map(([groupLabel, groupFields]) => (
         <fieldset key={groupLabel} className="flex flex-col gap-1">

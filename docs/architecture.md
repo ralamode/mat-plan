@@ -164,7 +164,7 @@ erDiagram
     text metric_key FK "nullable — single_metric only"
     numeric value_num "single_metric value"
     text raw_load "verbatim → lossless CSV export"
-    date activity_date
+    date activity_date "calendar date in the ACTIVE IANA tz (V1-6c), not UTC"
   }
   activity_types {
     text key UK "natural key"
