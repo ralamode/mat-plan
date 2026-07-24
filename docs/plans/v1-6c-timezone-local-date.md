@@ -88,8 +88,9 @@ screenshots at mobile/tablet/desktop show the correct **local** weekday.
 No `schema.ts` change, no migration file. The active tz comes from the client (the `tz` cookie); it is
 never persisted. `activity_date` (plain `DATE`), `created_at`/`deleted_at` (`timestamptz`, UTC) are all
 unchanged. The **household-timezone override** (`households.timezone`, nullable, IANA-validated) is an
-**additive follow-up**; this PR builds the `getActiveTimeZone()` seam so the override plugs in later
-with zero refactor, but ships **no DDL**.
+**additive follow-up**; this PR ships the `getActiveTimeZone()` resolver as the correct place to add it,
+but landing the override is its own signature-changing refactor (see D1 / out-of-scope, R4), **not** a
+zero-refactor plug-in. This PR ships **no DDL**.
 
 ## Design decisions (positions taken)
 
