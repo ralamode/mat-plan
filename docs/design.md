@@ -15,6 +15,10 @@ CSS-variable tokens so components adapt to light/dark automatically.
   reserved for meaning (primary actions, destructive, charts).
 - **Kid ergonomics as defaults:** interactive targets ≥ 44px, `inputmode="numeric"` on number
   fields, high contrast, generous text size — applied everywhere, no separate "kid mode."
+- **Adaptive / mobile-first:** the kids use this **primarily on phones and tablets**, so design at the
+  narrow width first and let it scale up. Fluid, responsive layouts (Tailwind breakpoints); no
+  desktop-only fixed widths; content wraps/stacks gracefully from ~360px through desktop. UI PRs are
+  screenshotted at mobile + tablet + desktop (AGENTS.md) — a layout that only works wide is a defect.
 
 ## Tokens
 
