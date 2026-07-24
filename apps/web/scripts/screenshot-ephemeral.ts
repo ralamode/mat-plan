@@ -65,6 +65,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 const STATES = {
   empty: null,
   'already-logged': seedAlreadyLogged,
+  // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
+  calisthenics: seedCalisthenics,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -190,6 +192,65 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
         where: isNull(schema.entries.deletedAt),
       });
     console.log('✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance)');
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Seed the V1-6a calisthenics state: several bouts today so the "Calisthenics today" totals
+ * card renders (push-ups logged in TWO bouts → the sum + "2 sets"; pull-ups in one). Same
+ * row shape as `logCheckinEntries`: kind NULL, value_num set, metric_key set, unit from the
+ * DB catalog row, activity = calisthenics.
+ */
+async function seedCalisthenics(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [profile] = await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
+      .limit(1);
+    if (!profile) throw new Error('seeded profile not found — did db:seed run?');
+
+    const [calisthenics] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.calisthenics))
+      .limit(1);
+    const metric = async (key: string) => {
+      const [row] = await db
+        .select({ key: schema.metricDefinitions.key, unit: schema.metricDefinitions.unit })
+        .from(schema.metricDefinitions)
+        .where(eq(schema.metricDefinitions.key, key))
+        .limit(1);
+      return row;
+    };
+    const pushups = await metric(METRIC_KEYS.pushups);
+    const pullups = await metric(METRIC_KEYS.pullups);
+
+    const day = todayIso();
+    const bout = (m: { key: string; unit: string }, value: string) => ({
+      publicId: newId(),
+      clientId: newId(),
+      profileId: profile.id,
+      activityDate: day,
+      unit: m.unit,
+      valueNum: value,
+      activityTypeId: calisthenics.id,
+      metricKey: m.key,
+      status: ENTRY_STATUS.done,
+    });
+    // Two push-up bouts (sum → 50, "2 sets") + one pull-up set.
+    await db
+      .insert(schema.entries)
+      .values([bout(pushups, '20'), bout(pushups, '30'), bout(pullups, '12')])
+      .onConflictDoNothing({
+        target: schema.entries.clientId,
+        where: isNull(schema.entries.deletedAt),
+      });
+    console.log('✓ seeded calisthenics fixture (push-ups 20+30, pull-ups 12)');
   } finally {
     await pool.end();
   }
