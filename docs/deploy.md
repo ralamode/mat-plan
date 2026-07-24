@@ -97,6 +97,42 @@ the sandbox with `pnpm db:local:reset`.
 DB (it prints a warning that writes hit real data). Point it at a **Neon branch** (not production) if
 you'll be writing test data. See the local-dev section in the [README](../README.md).
 
+## Environments & how a schema change reaches each (the canonical reference)
+
+**One source of truth, applied identically everywhere.** The schema is defined once in
+`packages/db/src/schema.ts`; `drizzle-kit generate` turns a change into a **committed, reviewed**
+`packages/db/migrations/*.sql` (forward-only, never edited once merged). Reference/catalog data lives
+in `packages/db/src/seed.ts` (idempotent, `ON CONFLICT`). **The same migrations + seed apply to every
+environment** — that is the dev/prod parity guarantee, and it is _enforced_, not hoped:
+
+| Environment              | Database                                                   | How migrations + seed apply                                    | When               |
+| ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------- | ------------------ |
+| **Dev** (your laptop)    | a real **local embedded Postgres** (`apps/web/.local-db/`) | `pnpm dev` runs `db:migrate` + `db:seed` on start (idempotent) | every `pnpm dev`   |
+| **Prod**                 | **Neon** (pooled = runtime, direct/unpooled = migrator)    | GitHub Actions `migrate.yml` — the **single migrator**         | on merge to `main` |
+| **CI (pre-merge proof)** | **PGlite** (`db:verify`) + **Docker Postgres** (`e2e`)     | `db:migrate` + `db:seed` inside the jobs                       | every PR           |
+
+**The workflow for a data-model change:** edit `schema.ts` → `pnpm --filter @mat-plan/db db:generate`
+→ commit the generated `.sql` + snapshot → open the PR. CI's **drift guard** (`db:generate` must
+leave a clean tree) proves `migrations/` still matches `schema.ts`, and `db:verify` + the `e2e`
+Docker-PG apply prove it applies on real Postgres. On merge, prod auto-migrates; your local sandbox
+auto-migrates the **next** `pnpm dev`. You do nothing special for dev.
+
+**Why it's low-risk on both:**
+
+- **Dev is trivially recoverable** — `pnpm db:local:reset` wipes the sandbox and the next `pnpm dev`
+  re-migrates + re-seeds from scratch. (You would never do that to prod; you don't have to.)
+- **Prod stays backward-compatible** — the expand→contract discipline (below) means a migration is
+  safe to apply _before_ the app deploys; destructive drops are their own later, deferred migration.
+- **Fidelity is high** — the dev sandbox is a **real** Postgres (embedded), so it behaves like Neon
+  for schema/migrations. (PGlite is only used by `db:verify`.) The one difference — Neon's PgBouncer
+  pooling — is irrelevant to DDL. The one _testing_ gap is the **Neon-branch CI gate (deferred)**:
+  pre-merge we prove migrations on PGlite + Docker PG, not an actual Neon branch.
+
+**The one discipline:** `db:seed` runs on **prod** (on merge), so seed **only reference/catalog data,
+or nothing** — never fictional or per-user "play" data (which is why, e.g., V1-6b-1 ships its ramp
+schedule empty). Play data belongs to your dev sandbox only. Manual prod data fixes go through
+[runbooks.md](./runbooks.md), not the seed.
+
 ## Rules
 
 - **Migrations do NOT run in the Vercel build.** GitHub Actions is the single migrator (direct/unpooled
