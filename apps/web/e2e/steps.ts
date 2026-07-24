@@ -69,3 +69,50 @@ export async function logCheckins(
   await expect(logged.getByText(opts.habit, { exact: true })).toBeVisible();
   await expect(logged.getByText(`${opts.rating.label} — ${opts.rating.value}/10`)).toBeVisible();
 }
+
+/**
+ * Submit the check-ins form with a set of habit checkboxes and/or numeric fields (V1-6a).
+ * Retry-safe: a habit already logged (checked + inert) is skipped rather than re-checked, so
+ * a Playwright retry on the reused DB doesn't get stuck. Waits for the submit to complete.
+ */
+export async function submitCheckins(
+  page: Page,
+  opts: { checks?: string[]; numbers?: { label: string; value: string }[] },
+): Promise<void> {
+  const form = page.getByRole('region', { name: 'Check-ins' });
+  const submit = page.getByRole('button', { name: 'Log check-ins' });
+  for (const name of opts.checks ?? []) {
+    const box = form.getByRole('checkbox', { name, exact: true });
+    if (!(await box.isChecked())) await box.check(); // already logged → checked + inert; skip
+  }
+  for (const n of opts.numbers ?? []) {
+    await form.getByRole('spinbutton', { name: new RegExp(`^${n.label}`) }).fill(n.value);
+  }
+  await submit.click();
+  await expect(submit).toBeEnabled({ timeout: 15_000 }); // slow action — see logCheckins
+}
+
+/**
+ * Log a calisthenics count and assert the "Calisthenics today" total (V1-6a). Covers the
+ * ACCUMULATING path: the field stays editable after logging, so — unlike `logCheckins`'s
+ * inert fields — retry-safety CANNOT lean on `isEditable()`. Instead we assert the END
+ * STATE and only submit when the total isn't already present, so a Playwright retry (which
+ * reuses the ephemeral DB) neither re-submits (double-count) nor trips the exact locator.
+ */
+export async function logCalisthenics(
+  page: Page,
+  opts: { label: string; value: string },
+): Promise<void> {
+  const totals = page.getByRole('region', { name: 'Calisthenics today' });
+  const totalRow = totals.getByRole('listitem').filter({ hasText: opts.label });
+
+  if ((await totalRow.count()) === 0) {
+    const form = page.getByRole('region', { name: 'Check-ins' });
+    const submit = page.getByRole('button', { name: 'Log check-ins' });
+    await form.getByRole('spinbutton', { name: new RegExp(`^${opts.label}`) }).fill(opts.value);
+    await submit.click();
+    await expect(submit).toBeEnabled({ timeout: 15_000 }); // slow action — see logCheckins
+  }
+
+  await expect(totalRow).toContainText(opts.value);
+}

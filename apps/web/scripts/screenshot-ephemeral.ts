@@ -65,6 +65,8 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 const STATES = {
   empty: null,
   'already-logged': seedAlreadyLogged,
+  // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
+  calisthenics: seedCalisthenics,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -190,6 +192,89 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
         where: isNull(schema.entries.deletedAt),
       });
     console.log('✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance)');
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Seed a realistic V1-6a day — the "fixed" state (contrast the duplicated-data bug). A couple
+ * of log-once habits (each ONE row, no re-submit dupes) + several calisthenics bouts (push-ups
+ * in TWO bouts → grouped into ONE row: "20, 30 · 2 sets"; pull-ups once). Same row shape as
+ * `logCheckinEntries`: kind NULL, value_num set, unit from the DB catalog row.
+ */
+async function seedCalisthenics(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [profile] = await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
+      .limit(1);
+    if (!profile) throw new Error('seeded profile not found — did db:seed run?');
+
+    const activityId = async (key: string) => {
+      const [row] = await db
+        .select({ id: schema.activityTypes.id, defaultUnit: schema.activityTypes.defaultUnit })
+        .from(schema.activityTypes)
+        .where(eq(schema.activityTypes.key, key))
+        .limit(1);
+      return row;
+    };
+    const metric = async (key: string) => {
+      const [row] = await db
+        .select({ key: schema.metricDefinitions.key, unit: schema.metricDefinitions.unit })
+        .from(schema.metricDefinitions)
+        .where(eq(schema.metricDefinitions.key, key))
+        .limit(1);
+      return row;
+    };
+    const calisthenics = await activityId(ACTIVITY_TYPE_KEYS.calisthenics);
+    const riceBucket = await activityId(ACTIVITY_TYPE_KEYS.rice_bucket);
+    const splits = await activityId(ACTIVITY_TYPE_KEYS.splits);
+    const pushups = await metric(METRIC_KEYS.pushups);
+    const pullups = await metric(METRIC_KEYS.pullups);
+
+    const day = todayIso();
+    const base = () => ({
+      publicId: newId(),
+      clientId: newId(),
+      profileId: profile.id,
+      activityDate: day,
+      valueNum: '1',
+      status: ENTRY_STATUS.done,
+    });
+    const bout = (m: { key: string; unit: string }, value: string) => ({
+      ...base(),
+      unit: m.unit,
+      valueNum: value,
+      activityTypeId: calisthenics.id,
+      metricKey: m.key,
+    });
+    const habit = (a: { id: number; defaultUnit: string | null }) => ({
+      ...base(),
+      unit: a.defaultUnit ?? 'bool',
+      activityTypeId: a.id,
+      metricKey: null,
+    });
+    // Two habits (ONE row each) + two push-up bouts (grouped) + one pull-up set.
+    await db
+      .insert(schema.entries)
+      .values([
+        habit(riceBucket),
+        habit(splits),
+        bout(pushups, '20'),
+        bout(pushups, '30'),
+        bout(pullups, '12'),
+      ])
+      .onConflictDoNothing({
+        target: schema.entries.clientId,
+        where: isNull(schema.entries.deletedAt),
+      });
+    console.log(
+      '✓ seeded calisthenics fixture (rice_bucket + splits habits; push-ups 20+30, pull-ups 12)',
+    );
   } finally {
     await pool.end();
   }

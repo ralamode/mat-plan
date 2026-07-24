@@ -53,6 +53,14 @@ export type CheckinField = {
   unit: Unit;
   /** `null` for a bare habit checkbox (no metric backs it). */
   valueType: MetricValueType | null;
+  /**
+   * V1-6a: the field logs MULTIPLE readings a day that the totals card sums (the digital
+   * tally sheet), so it stays editable after logging instead of going inert. `false` fields
+   * are log-once (V1-5 habits/brush-teeth). NOT a blanket `sum`/`max` predicate — it's scoped
+   * to the activities we actually surface a total for, so V1-5's `shot` (also `sum`) is
+   * untouched until the shots/10K-goal work gives it a total too.
+   */
+  accumulates: boolean;
   min?: number;
   max?: number;
 };
@@ -60,6 +68,9 @@ export type CheckinField = {
 const METRIC_BY_KEY = new Map(METRIC_DEFINITION_SEED_ROWS.map((m) => [m.key, m]));
 
 const HABITS_GROUP_LABEL = 'Habits';
+
+/** Activities whose fields accumulate same-day readings (see `CheckinField.accumulates`). */
+const ACCUMULATING_ACTIVITIES = new Set<ActivityTypeKey>([ACTIVITY_TYPE_KEYS.calisthenics]);
 
 function habitField(a: (typeof ACTIVITY_TYPE_SEED_ROWS)[number]): CheckinField {
   return {
@@ -72,6 +83,7 @@ function habitField(a: (typeof ACTIVITY_TYPE_SEED_ROWS)[number]): CheckinField {
     // catalog-wide, so narrow explicitly rather than asserting.
     unit: a.defaultUnit ?? 'bool',
     valueType: null,
+    accumulates: false, // habits are log-once
   };
 }
 
@@ -93,18 +105,18 @@ function metricField(activityKey: ActivityTypeKey, metricKey: MetricKey): Checki
     groupLabel: activity.label,
     unit: metric.unit,
     valueType: metric.valueType,
+    accumulates: ACCUMULATING_ACTIVITIES.has(activityKey),
     ...bounds,
   };
 }
 
 /**
- * Rendered order is catalog-seed order, so the DOM is stable for the e2e + screenshots.
+ * Rendered order is catalog-seed / map order, so the DOM is stable for e2e + screenshots.
  *
- * Only `brush_teeth` is rendered here. That is a deliberate V1-5 render scope, NOT a
- * general extension seam: V1-6 (calisthenics) also needs aggregation rollups, and V1-7
- * (wake / wrestling_practice) needs a third field source entirely — `wake` has an empty
- * ACTIVITY_METRIC_MAP entry and `wrestling_practice` needs event_at semantics plus a
- * non-numeric value shape. Neither is one line here.
+ * `brush_teeth` (V1-5) + `calisthenics` (V1-6a) are rendered. This is a deliberate render
+ * scope, NOT a general seam: V1-7 (wake / wrestling_practice) needs a third field source
+ * entirely — `wake` has an empty ACTIVITY_METRIC_MAP entry and `wrestling_practice` needs
+ * event_at semantics plus a non-numeric value shape. Neither is one line here.
  */
 export const CHECKIN_FIELDS: readonly CheckinField[] = [
   ...ACTIVITY_TYPE_SEED_ROWS.filter((a) => a.inputShape === ACTIVITY_INPUT_SHAPE.boolean).map(
@@ -112,6 +124,11 @@ export const CHECKIN_FIELDS: readonly CheckinField[] = [
   ),
   ...ACTIVITY_METRIC_MAP[ACTIVITY_TYPE_KEYS.brush_teeth].map((m) =>
     metricField(ACTIVITY_TYPE_KEYS.brush_teeth, m),
+  ),
+  // V1-6a: calisthenics — 4 `count` metrics, same render path as brush_teeth's `shot`,
+  // but `accumulates` (each submit is a bout; the totals card sums them).
+  ...ACTIVITY_METRIC_MAP[ACTIVITY_TYPE_KEYS.calisthenics].map((m) =>
+    metricField(ACTIVITY_TYPE_KEYS.calisthenics, m),
   ),
 ];
 

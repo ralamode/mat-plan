@@ -32,3 +32,6 @@ export const METRIC_AGGREGATIONS = ['sum', 'last', 'max', 'avg'] as const;
 export type MetricAggregation = (typeof METRIC_AGGREGATIONS)[number];
 
 export const metricAggregationSchema = z.enum(METRIC_AGGREGATIONS);
+
+/** Named members, so code branches on `METRIC_AGGREGATION.sum`, not a bare string. */
+export const METRIC_AGGREGATION = keyBySelf(METRIC_AGGREGATIONS);

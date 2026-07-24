@@ -64,6 +64,16 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `next start` at a different DB, inject `DATABASE_URL` into the server's environment — no
   `.env.screenshot`/temp-cwd trick needed. (chore/screenshot-ephemeral-db)
 
+## React / forms
+
+- **`aria-disabled` and `readOnly` do NOT stop a control from being submitted** — only real
+  `disabled` (or omitting the `name`) does. A V1-5 check-in field rendered "already logged" as a
+  still-`checked` checkbox with `aria-disabled` (chosen for keyboard/SR reachability); it kept
+  submitting `"1"` on every later form submit, inserting a **duplicate row each time** (surfaced once
+  V1-6a's accumulate flow made repeated submits normal). → For a display-only "already done" field,
+  **drop its `name`** (`name={isLogged ? undefined : …}`) so it renders but doesn't submit — keeps it
+  focusable + announced, unlike real `disabled`. A one-submit e2e won't catch this; test a **re-submit**. (V1-6a)
+
 ## Vitest / RTL (component tests)
 
 - **Test "passes" but the run exits non-zero: `ReferenceError: window is not defined` (unhandled,

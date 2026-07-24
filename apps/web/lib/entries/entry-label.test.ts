@@ -30,6 +30,7 @@ function entry(overrides: Partial<EntryDTO>): EntryDTO {
     metricKey: null,
     metricLabel: null,
     valueType: null,
+    aggregation: null,
     activityKey: null,
     activityLabel: null,
     sets: [],

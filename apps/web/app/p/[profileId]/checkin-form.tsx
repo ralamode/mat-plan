@@ -64,6 +64,12 @@ export function CheckinForm({
   // `loggedFieldKeys` then carries the checked state).
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
+  // V1-6a: accumulating number inputs (calisthenics) are CONTROLLED so they can be cleared
+  // after a bout is logged, ready for the next one. Cleared on success — safe because the
+  // input is `disabled` while `pending` (see below), so nothing can be typed into the
+  // slow submit window and then clobbered. (V1-5's log-once number inputs stay uncontrolled.)
+  const [numberValues, setNumberValues] = useState<Record<string, string>>({});
+
   // Reset on a new action result by ADJUSTING STATE DURING RENDER, not in an effect —
   // an effect here would cause a cascading re-render (and trips react-hooks lint).
   // https://react.dev/learn/you-might-not-need-an-effect
@@ -72,6 +78,7 @@ export function CheckinForm({
     setSeenState(state);
     if (state.ok) {
       setChecked({});
+      setNumberValues({});
       setIdSeed((n) => n + 1); // rotate idempotency keys; a stale one = a silent no-op
     }
   }
@@ -96,11 +103,19 @@ export function CheckinForm({
               const err = state.fieldErrors?.[f.key]?.[0];
               const describedBy = err ? `${id}-error` : isLogged ? `${id}-logged` : undefined;
 
+              // A logged log-once field submits NO NAME → it's display-only, not re-submitted.
+              // `aria-disabled`/`readOnly` do NOT stop a control from being submitted, so a
+              // still-checked "already logged" checkbox would re-insert a DUPLICATE row on every
+              // later submit (the accumulate flow submits repeatedly). Dropping the name is the fix
+              // that keeps it focusable + announced (unlike real `disabled`). Accumulating fields
+              // are never `isLogged`, so they keep their name.
+              const submitName = isLogged ? undefined : valueInputName(f.key);
+
               const checkbox = isCheckbox(f);
               const control = checkbox ? (
                 <input
                   id={id}
-                  name={valueInputName(f.key)}
+                  name={submitName}
                   type="checkbox"
                   value="1"
                   className="size-5 shrink-0"
@@ -115,10 +130,30 @@ export function CheckinForm({
                     setChecked((c) => ({ ...c, [f.key]: e.target.checked }));
                   }}
                 />
-              ) : (
+              ) : f.accumulates ? (
+                // Accumulating (calisthenics): controlled + disabled while pending so a
+                // value typed during the slow submit can't be clobbered by clear-on-success.
+                // Never `isLogged` (page.tsx excludes accumulating fields), so no readOnly.
                 <input
                   id={id}
                   name={valueInputName(f.key)}
+                  type="number"
+                  inputMode="numeric"
+                  step="1"
+                  min={f.min}
+                  max={f.max}
+                  autoComplete="off"
+                  disabled={pending}
+                  value={numberValues[f.key] ?? ''}
+                  onChange={(e) => setNumberValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  aria-invalid={err ? true : undefined}
+                  aria-describedby={describedBy}
+                  className={numberInputClass}
+                />
+              ) : (
+                <input
+                  id={id}
+                  name={submitName}
                   type="number"
                   inputMode="numeric"
                   step="1"
@@ -157,12 +192,15 @@ export function CheckinForm({
                         Already logged today
                       </span>
                     ) : null}
-                    <input
-                      type="hidden"
-                      name={clientIdInputName(f.key)}
-                      value={clientIds[f.key]}
-                      readOnly
-                    />
+                    {/* No client id for a logged log-once field — it doesn't submit (see submitName). */}
+                    {isLogged ? null : (
+                      <input
+                        type="hidden"
+                        name={clientIdInputName(f.key)}
+                        value={clientIds[f.key]}
+                        readOnly
+                      />
+                    )}
                   </div>
                   {err ? (
                     <p id={`${id}-error`} role="alert" className="text-destructive px-2 text-sm">

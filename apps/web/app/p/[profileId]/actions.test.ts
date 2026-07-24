@@ -463,3 +463,47 @@ describe('logCheckinsAction — happy path + ownership', () => {
     expect(res.error).toMatch(/already logged/i);
   });
 });
+
+// ── V1-6a: calisthenics (accumulating count metrics) ─────────────────────────────
+const CALIS = CHECKIN_FIELDS.find((f) => f.activityKey === 'calisthenics')!;
+
+describe('logCheckinsAction — calisthenics counts', () => {
+  it('logs a filled counter via the DAL (rides the V1-5 count path)', async () => {
+    const clientId = newId();
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({
+        profileId: PROFILE_ID,
+        values: { [CALIS.key]: '20' },
+        clientIds: { [CALIS.key]: clientId },
+      }),
+    );
+    expect(res.ok).toBe(true);
+    const items = vi.mocked(logCheckinEntries).mock.calls[0]![0].items;
+    expect(items).toEqual([
+      { activityKey: 'calisthenics', metricKey: CALIS.metricKey, value: 20, clientId },
+    ]);
+  });
+
+  it.each(['-1', '100000.5', 'abc'])(
+    'rejects an out-of-range / non-int count (%s)',
+    async (bad) => {
+      const res = await logCheckinsAction(
+        initial,
+        checkinForm({ profileId: PROFILE_ID, values: { [CALIS.key]: bad } }),
+      );
+      expect(res.ok).toBe(false);
+      expect(res.fieldErrors?.[CALIS.key]).toBeTruthy();
+      expect(logCheckinEntries).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ignores a blank counter (not submitted)', async () => {
+    const res = await logCheckinsAction(
+      initial,
+      checkinForm({ profileId: PROFILE_ID, values: { [CALIS.key]: '   ' } }),
+    );
+    expect(res.ok).toBe(false); // nothing submitted at all
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+});
