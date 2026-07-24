@@ -1,17 +1,23 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
-import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createDb, createDbPool, schema, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS, METRIC_KEYS, newId } from '@mat-plan/shared';
-import EmbeddedPostgres from 'embedded-postgres';
 import { eq, isNull } from 'drizzle-orm';
 
 import { todayIso } from '../lib/date';
 import { captureScreenshot, routeSlug } from './capture';
+import {
+  freePort,
+  isLocalDbUrl,
+  migrateAndSeed,
+  runScript,
+  startEmbeddedPostgres,
+  stopChildProcess,
+} from './embedded-pg';
 
 /**
  * The DURABLE FIX for the screenshot flow (chore/screenshot-ephemeral-db).
@@ -50,16 +56,13 @@ import { captureScreenshot, routeSlug } from './capture';
  * wrapped in `async function main()` rather than top-level await.
  */
 
-// Throwaway-DB identity — all local, all disposable (constants, not re-typed literals).
-const EPHEMERAL_DB_NAME = 'mat_plan';
-const EPHEMERAL_DB_USER = 'postgres';
+// Throwaway-DB password (name + user come from the shared embedded-pg helper).
 const EPHEMERAL_DB_PASSWORD = 'screenshot';
 // The access-gate code for the throwaway server. We own BOTH sides (server env +
 // gateLogin), so a fixed value ≥8 chars satisfies env.ts and needs no real secret.
 const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
 // Bare `/p` (no id) → the seeded profile's Today page (where the check-ins form lives).
 const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
@@ -70,17 +73,11 @@ const STATES = {
 } as const;
 type StateName = keyof typeof STATES;
 
-function isLocalDbUrl(url: string): boolean {
-  try {
-    return LOCAL_HOSTS.has(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
-
 /**
  * The teeth of the durable fix: refuse a non-local DB target unless explicitly
  * opted in. Local (embedded) targets always pass; live Neon needs `--use-live-db`.
+ * (Screenshot-specific: the shared helper's `assertLocalDbUrl` has no opt-in; this
+ * flow keeps its `--use-live-db` escape hatch.)
  */
 function assertDbTargetAllowed(url: string, allowLive: boolean): void {
   if (isLocalDbUrl(url)) return;
@@ -103,29 +100,6 @@ function assertDbTargetAllowed(url: string, allowLive: boolean): void {
       `uses a throwaway embedded Postgres by default; to target a live DB deliberately, ` +
       `pass --use-live-db or set SCREENSHOT_ALLOW_LIVE_DB=1.`,
   );
-}
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const addr = srv.address();
-      const port = typeof addr === 'object' && addr ? addr.port : 0;
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-/** Run a workspace script to completion, failing on a non-zero exit. */
-function run(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'inherit', env });
-    child.on('error', reject);
-    child.on('exit', (code) =>
-      code === 0 ? resolve() : reject(new Error(`${command} ${args.join(' ')} exited ${code}`)),
-    );
-  });
 }
 
 /** Seed the "already-logged" check-in state: one habit + one brush-teeth metric today. */
@@ -295,58 +269,25 @@ async function waitForServer(baseUrl: string, timeoutMs = 90_000): Promise<void>
   throw new Error(`server did not become ready at ${baseUrl} within ${timeoutMs}ms`);
 }
 
-async function stopServer(server: ChildProcess): Promise<void> {
-  if (server.exitCode !== null || server.pid === undefined) return;
-  await new Promise<void>((resolve) => {
-    server.on('exit', () => resolve());
-    try {
-      // Kill the whole process group (detached) so no `next` worker is orphaned.
-      process.kill(-server.pid!, 'SIGTERM');
-    } catch {
-      server.kill('SIGTERM');
-    }
-    setTimeout(() => {
-      try {
-        process.kill(-server.pid!, 'SIGKILL');
-      } catch {
-        /* already gone */
-      }
-      resolve();
-    }, 5_000);
-  });
-}
-
 async function runEphemeral(route: string, state: StateName, name: string): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-screenshot-pg-'));
   const pgPort = await freePort();
-  const pg = new EmbeddedPostgres({
+  let server: ChildProcess | undefined;
+  // Throwaway cluster: temp dir + persistent:false → the helper initialises a fresh
+  // cluster now and stop() DELETES the data in `finally`.
+  const { pg, url: dbUrl } = await startEmbeddedPostgres({
     databaseDir: dataDir,
-    user: EPHEMERAL_DB_USER,
-    password: EPHEMERAL_DB_PASSWORD,
     port: pgPort,
+    password: EPHEMERAL_DB_PASSWORD,
     persistent: false,
   });
-  let server: ChildProcess | undefined;
   try {
-    console.log(`▸ starting embedded Postgres on 127.0.0.1:${pgPort} (data: ${dataDir})`);
-    await pg.initialise();
-    await pg.start();
-    await pg.createDatabase(EPHEMERAL_DB_NAME);
-
-    const dbUrl = `postgresql://${EPHEMERAL_DB_USER}:${EPHEMERAL_DB_PASSWORD}@127.0.0.1:${pgPort}/${EPHEMERAL_DB_NAME}`;
+    console.log(`▸ started embedded Postgres on 127.0.0.1:${pgPort} (data: ${dataDir})`);
     assertDbTargetAllowed(dbUrl, false); // invariant: the embedded target is always local
 
-    // Migrate + seed via the EXISTING packages/db scripts (do NOT hand-roll). Against
-    // embedded PG (no PgBouncer) pooled == unpooled == the same local string.
-    const dbEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      DATABASE_URL: dbUrl,
-      DATABASE_URL_UNPOOLED: dbUrl,
-    };
-    console.log('▸ migrating…');
-    await run('pnpm', ['--filter', '@mat-plan/db', 'db:migrate'], dbEnv);
-    console.log('▸ seeding catalogs…');
-    await run('pnpm', ['--filter', '@mat-plan/db', 'db:seed'], dbEnv);
+    // Migrate + seed via the EXISTING packages/db scripts (shared helper; do NOT
+    // hand-roll). Against embedded PG (no PgBouncer) pooled == unpooled == same string.
+    await migrateAndSeed(dbUrl);
 
     const seedFixture = STATES[state];
     if (seedFixture) await seedFixture(dbUrl);
@@ -361,7 +302,7 @@ async function runEphemeral(route: string, state: StateName, name: string): Prom
     const forceBuild = process.argv.includes('--build');
     if (forceBuild || !existsSync(join(process.cwd(), '.next', 'BUILD_ID'))) {
       console.log('▸ building (next build)…');
-      await run('pnpm', ['--filter', 'web', 'build'], serverEnv);
+      await runScript('pnpm', ['--filter', 'web', 'build'], serverEnv);
     }
 
     // Boot the prod server on a free port with the embedded DB in its env (wins over
@@ -380,7 +321,7 @@ async function runEphemeral(route: string, state: StateName, name: string): Prom
     process.env.ACCESS_GATE_PASSWORD = SCREENSHOT_GATE_PASSWORD;
     await captureScreenshot({ route, baseUrl, name });
   } finally {
-    if (server) await stopServer(server);
+    if (server) await stopChildProcess(server);
     await pg.stop().catch(() => {});
     await rm(dataDir, { recursive: true, force: true });
     console.log('▸ torn down embedded Postgres + temp dir');

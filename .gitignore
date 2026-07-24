@@ -33,6 +33,10 @@ e2e/.auth/
 .screenshots/
 .playwright-mcp/
 
+# persistent local-dev embedded-Postgres data dir (`pnpm dev` sandbox — survives
+# restarts, wiped by `pnpm db:local:reset`). Ray's play-data; never commit it.
+.local-db/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
