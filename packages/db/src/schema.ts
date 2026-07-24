@@ -340,3 +340,39 @@ export const dayReadiness = pgTable(
     check('day_readiness_gate_color_check', sql`${t.gateColor} in ('green', 'yellow', 'red')`),
   ],
 );
+
+/**
+ * ramp_target — per-profile, per-week TARGET value for a calisthenics metric (V1-6b; spec.md
+ * §4: adherence is "modeled as target rows so it is computable in SQL"). A coach-authored
+ * weekly calendar (week N = a set target, ramping to a cap) — NOT algorithmic performance-gated
+ * advancement (that is the V2 progression engine's ladder/rung model). Config data, so there is
+ * NO `client_id`: idempotency is the natural key `(profile_id, metric_key, week_start)`, mirroring
+ * `day_readiness`. `metric_key` FKs the metric catalog; `target_value` reuses the `entries`
+ * numeric(8,3) domain. See ADR 0002 for `ramp_target` vs `goal`/`prescription_target`.
+ */
+export const rampTargets = pgTable(
+  'ramp_targets',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    profileId: bigint('profile_id', { mode: 'number' })
+      .notNull()
+      .references(() => profiles.id),
+    metricKey: text('metric_key')
+      .notNull()
+      .references(() => metricDefinitions.key),
+    weekStart: date('week_start').notNull(), // ISO-week Monday (UTC)
+    targetValue: numeric('target_value', { precision: 8, scale: 3 }).notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_ramp_targets_profile').on(t.profileId), // covering index for the profile FK
+    index('idx_ramp_targets_metric_key').on(t.metricKey), // covering index for the metric_key FK
+    // Natural-key UNIQUE, partial (WHERE deleted_at is null) — the idempotency arbiter, so a
+    // soft-deleted target doesn't block re-inserting the same profile/metric/week (like day_readiness).
+    uniqueIndex('uq_ramp_targets_profile_metric_week')
+      .on(t.profileId, t.metricKey, t.weekStart)
+      .where(sql`${t.deletedAt} is null`),
+    check('ramp_targets_target_value_check', sql`${t.targetValue} >= 0`),
+  ],
+);

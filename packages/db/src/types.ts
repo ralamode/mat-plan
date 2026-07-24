@@ -8,6 +8,7 @@ import type {
   metricDefinitions,
   movements,
   profiles,
+  rampTargets,
   sessions,
   units,
 } from './schema';
@@ -36,3 +37,6 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type DayReadinessRow = typeof dayReadiness.$inferSelect;
 export type NewDayReadiness = typeof dayReadiness.$inferInsert;
+// V1-6b: per-profile weekly calisthenics ramp targets (spec.md §4 adherence).
+export type RampTargetRow = typeof rampTargets.$inferSelect;
+export type NewRampTarget = typeof rampTargets.$inferInsert;
