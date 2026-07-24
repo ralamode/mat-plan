@@ -71,6 +71,28 @@ export async function logCheckins(
 }
 
 /**
+ * Submit the check-ins form with a set of habit checkboxes and/or numeric fields (V1-6a).
+ * Retry-safe: a habit already logged (checked + inert) is skipped rather than re-checked, so
+ * a Playwright retry on the reused DB doesn't get stuck. Waits for the submit to complete.
+ */
+export async function submitCheckins(
+  page: Page,
+  opts: { checks?: string[]; numbers?: { label: string; value: string }[] },
+): Promise<void> {
+  const form = page.getByRole('region', { name: 'Check-ins' });
+  const submit = page.getByRole('button', { name: 'Log check-ins' });
+  for (const name of opts.checks ?? []) {
+    const box = form.getByRole('checkbox', { name, exact: true });
+    if (!(await box.isChecked())) await box.check(); // already logged → checked + inert; skip
+  }
+  for (const n of opts.numbers ?? []) {
+    await form.getByRole('spinbutton', { name: new RegExp(`^${n.label}`) }).fill(n.value);
+  }
+  await submit.click();
+  await expect(submit).toBeEnabled({ timeout: 15_000 }); // slow action — see logCheckins
+}
+
+/**
  * Log a calisthenics count and assert the "Calisthenics today" total (V1-6a). Covers the
  * ACCUMULATING path: the field stays editable after logging, so — unlike `logCheckins`'s
  * inert fields — retry-safety CANNOT lean on `isEditable()`. Instead we assert the END

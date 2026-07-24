@@ -7,7 +7,7 @@ import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { formatDayLong, todayIso } from '@/lib/date';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { calisthenicsTotals } from '@/lib/entries/activity-totals';
+import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
 import { entryLabel } from '@/lib/entries/entry-label';
 
 import { BodyweightForm } from './bodyweight-form';
@@ -41,6 +41,9 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
 
   // V1-6a: the calisthenics tally — today's per-metric totals, folded from the day's entries.
   const calisTotals = calisthenicsTotals(entries);
+  // Display rows for the "Logged entries" list: calisthenics bouts grouped into one row per
+  // exercise (so repeated bouts don't read as duplicate rows), everything else individual.
+  const rows = todayRows(entries);
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
@@ -112,29 +115,48 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           Logged entries
         </h2>
 
-        {entries.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState>No entries logged today.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
-            {entries.map((e) => (
-              <li key={e.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{entryLabel(e)}</span>
-                  {e.status !== ENTRY_STATUS.done ? (
-                    <span className="text-muted-foreground text-sm">{e.status}</span>
+            {rows.map((row) =>
+              row.kind === 'calisthenics' ? (
+                // Grouped calisthenics: ONE row per exercise, so N bouts don't read as N
+                // duplicate rows. Shows the bouts + "(N sets · total)" when there's more than one.
+                <li
+                  key={`c:${row.total.metricKey}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
+                >
+                  <span className="font-medium">
+                    {row.total.label} — {row.total.values.join(', ')}
+                  </span>
+                  {row.total.readings > 1 ? (
+                    <span className="text-muted-foreground text-sm tabular-nums">
+                      {row.total.readings} sets · {row.total.total}
+                    </span>
                   ) : null}
-                </div>
-                {e.sets.length > 0 ? (
-                  <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-                    {e.sets.map((s) => (
-                      <li key={s.idx}>
-                        {s.reps ?? '?'} × {s.weightLabel ?? `${s.weight ?? '?'} ${e.unit}`}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </li>
-            ))}
+                </li>
+              ) : (
+                <li key={row.entry.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{entryLabel(row.entry)}</span>
+                    {row.entry.status !== ENTRY_STATUS.done ? (
+                      <span className="text-muted-foreground text-sm">{row.entry.status}</span>
+                    ) : null}
+                  </div>
+                  {row.entry.sets.length > 0 ? (
+                    <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+                      {row.entry.sets.map((s) => (
+                        <li key={s.idx}>
+                          {s.reps ?? '?'} ×{' '}
+                          {s.weightLabel ?? `${s.weight ?? '?'} ${row.entry.unit}`}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>

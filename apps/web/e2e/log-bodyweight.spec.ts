@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-import { logBodyweight, logCalisthenics, logCheckins, selectProfile } from './steps';
+import {
+  logBodyweight,
+  logCalisthenics,
+  logCheckins,
+  selectProfile,
+  submitCheckins,
+} from './steps';
 
 // The one V0-11 smoke: the full happy path UI → Server Action → Drizzle →
 // Postgres → RSC re-render, against an ephemeral migrated+seeded DB. Uses the
@@ -27,6 +33,35 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-6a: the accumulating calisthenics path — log a count, assert the totals card.
   await logCalisthenics(page, { label: 'Push-ups', value: '20' });
+});
+
+// V1-6a: multi-submit correctness — the bugs the "duplicated data" screenshot surfaced.
+// Uses SCARLETT (the smoke uses Liam) so this test has its own clean surface. Assertions are
+// row COUNTS, not exact bout values, so a CI retry (which reuses the ephemeral DB and adds
+// more bouts) stays green.
+test('re-submitting check-ins never duplicates a logged habit; calisthenics bouts group into one row', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await selectProfile(page, 'Scarlett');
+  await expect(page.getByRole('heading', { name: 'Check-ins' })).toBeVisible();
+
+  // Submit 1: a log-once habit + a first push-up bout.
+  await submitCheckins(page, {
+    checks: ['Rice bucket'],
+    numbers: [{ label: 'Push-ups', value: '20' }],
+  });
+  // Submit 2: a second push-up bout. Rice bucket is now logged/inert and must NOT re-submit
+  // (the V1-5 bug: an aria-disabled checkbox still submitted → a duplicate row every time).
+  await submitCheckins(page, { numbers: [{ label: 'Push-ups', value: '30' }] });
+
+  const logged = page.getByRole('region', { name: 'Logged entries' });
+  // FIX #1: the habit logged once stays exactly ONE row across re-submits.
+  await expect(logged.getByRole('listitem').filter({ hasText: 'Rice bucket' })).toHaveCount(1);
+  // FIX #2: the two push-up bouts render as ONE grouped row, not two look-alike rows.
+  const pushRow = logged.getByRole('listitem').filter({ hasText: 'Push-ups' });
+  await expect(pushRow).toHaveCount(1);
+  await expect(pushRow).toContainText(/sets/); // "2 sets · 50" (more on a retry — regex-tolerant)
 });
 
 // V1-3: an unknown profile id renders the not-found UI (the scoped Today

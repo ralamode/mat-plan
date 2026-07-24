@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { EntryDTO } from '@/lib/dal/entries';
 
-import { calisthenicsTotals } from './activity-totals';
+import { calisthenicsTotals, todayRows } from './activity-totals';
 
 // A calisthenics reading DTO. Rows arrive from the DAL desc(createdAt); tests pass them
 // newest-first when order matters.
@@ -28,34 +28,31 @@ function reading(overrides: Partial<EntryDTO>): EntryDTO {
 }
 
 describe('calisthenicsTotals', () => {
-  it('sums a metric across the day and counts the bouts (the paper tally)', () => {
+  it('sums a metric across the day, counts the bouts, lists them oldest-first', () => {
+    // Passed newest-first (desc); `values` comes back oldest-first for display ("20, 30").
     const totals = calisthenicsTotals([reading({ value: 30 }), reading({ value: 20 })]);
-    expect(totals).toEqual([{ metricKey: 'pushups', label: 'Push-ups', total: 50, readings: 2 }]);
+    expect(totals).toEqual([
+      { metricKey: 'pushups', label: 'Push-ups', total: 50, readings: 2, values: [20, 30] },
+    ]);
   });
 
   it('folds the skill step by max, not sum', () => {
-    const totals = calisthenicsTotals([
+    const skill = (value: number) =>
       reading({
         metricKey: 'vsit_skill_step',
         metricLabel: 'V-sit skill step',
         aggregation: 'max',
-        value: 3,
-      }),
-      reading({
-        metricKey: 'vsit_skill_step',
-        metricLabel: 'V-sit skill step',
-        aggregation: 'max',
-        value: 5,
-      }),
-      reading({
-        metricKey: 'vsit_skill_step',
-        metricLabel: 'V-sit skill step',
-        aggregation: 'max',
-        value: 4,
-      }),
-    ]);
+        value,
+      });
+    const totals = calisthenicsTotals([skill(3), skill(5), skill(4)]);
     expect(totals).toEqual([
-      { metricKey: 'vsit_skill_step', label: 'V-sit skill step', total: 5, readings: 3 },
+      {
+        metricKey: 'vsit_skill_step',
+        label: 'V-sit skill step',
+        total: 5,
+        readings: 3,
+        values: [4, 5, 3],
+      },
     ]);
   });
 
@@ -78,7 +75,9 @@ describe('calisthenicsTotals', () => {
         value: 99,
       }),
     ]);
-    expect(totals).toEqual([{ metricKey: 'pushups', label: 'Push-ups', total: 20, readings: 1 }]);
+    expect(totals).toEqual([
+      { metricKey: 'pushups', label: 'Push-ups', total: 20, readings: 1, values: [20] },
+    ]);
   });
 
   it('skips null values and non-done readings', () => {
@@ -87,10 +86,56 @@ describe('calisthenicsTotals', () => {
       reading({ value: null }),
       reading({ value: 15, status: ENTRY_STATUS.skipped }),
     ]);
-    expect(totals).toEqual([{ metricKey: 'pushups', label: 'Push-ups', total: 20, readings: 1 }]);
+    expect(totals).toEqual([
+      { metricKey: 'pushups', label: 'Push-ups', total: 20, readings: 1, values: [20] },
+    ]);
   });
 
   it('returns [] when there are no calisthenics readings', () => {
     expect(calisthenicsTotals([])).toEqual([]);
+  });
+});
+
+describe('todayRows — the "Logged entries" list composition (V1-6a)', () => {
+  const habit = (): EntryDTO =>
+    reading({
+      id: 'habit',
+      activityKey: ACTIVITY_TYPE_KEYS.rice_bucket,
+      activityLabel: 'Rice bucket',
+      metricKey: null,
+      value: 1,
+      aggregation: null,
+      unit: 'bool',
+    });
+
+  it('groups N calisthenics bouts of one exercise into ONE row, not N', () => {
+    // Two push-up bouts (desc) + a one-off habit → 2 rows total, not 3.
+    const rows = todayRows([
+      reading({ id: 'b2', value: 30 }),
+      reading({ id: 'b1', value: 20 }),
+      habit(),
+    ]);
+    expect(rows).toHaveLength(2);
+    const calis = rows.find((r) => r.kind === 'calisthenics');
+    expect(calis).toEqual({
+      kind: 'calisthenics',
+      total: { metricKey: 'pushups', label: 'Push-ups', total: 50, readings: 2, values: [20, 30] },
+    });
+    expect(rows.filter((r) => r.kind === 'entry')).toHaveLength(1); // the habit, individually
+  });
+
+  it('emits the grouped calisthenics row at the position of the newest bout', () => {
+    // desc order: newest push-up bout, then the habit, then the older bout.
+    const rows = todayRows([
+      reading({ id: 'b2', value: 30 }),
+      habit(),
+      reading({ id: 'b1', value: 20 }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(['calisthenics', 'entry']); // grouped once, at the top
+  });
+
+  it('renders non-calisthenics entries individually and in order', () => {
+    const rows = todayRows([habit()]);
+    expect(rows).toEqual([{ kind: 'entry', entry: habit() }]);
   });
 });

@@ -95,7 +95,10 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
         isNull(schema.entries.deletedAt),
       ),
     )
-    .orderBy(desc(schema.entries.createdAt));
+    // `id` (bigint identity) breaks created_at ties deterministically: rows written in one
+    // batch (e.g. several calisthenics bouts) share `now()`, so without this their order is
+    // unspecified and the grouped bout display ("20, 30") would flip run to run.
+    .orderBy(desc(schema.entries.createdAt), desc(schema.entries.id));
 
   // Fetch sets for the strength entries in one query, then group by entry.
   const strengthIds = rows.filter((r) => r.kind === ENTRY_KIND.strength).map((r) => r.id);
