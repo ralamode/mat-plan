@@ -3,35 +3,40 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-07-24
 
 ## Where we are right now
 
-📍 **v1 underway — V1-6b-1 in review (V1-6a merged as #42; V1-5 as #41; V1-1a/b/c, V1-2, V1-3, V1-4 all merged).**
-This PR ships **V1-6b-1 — the `ramp_targets` table + migration + seed mechanism + a `db:verify`
-adherence proof** ([plan](./plans/v1-6b-calisthenics-ramp.md)), the DB half of "adherence computed."
-**A significant migration PR (DB-only — no DAL, no UI).** New `ramp_targets` table (migration `0004`):
-per-profile, per-week TARGET value for a calisthenics metric, so weekly adherence (actual `entries` vs
-target) is computable in **SQL** (the deliberate contrast with V1-6a's daily _in-memory_ totals). It
-mirrors `day_readiness` — FK covering indexes, a partial natural-key UNIQUE
-`(profile_id, metric_key, week_start) WHERE deleted_at IS NULL`, a `target_value >= 0` CHECK, and **no
-`client_id`** (config data; idempotency is the natural key). The ramp schedule
-(`CALISTHENICS_RAMP_SCHEDULE`) ships **empty (`[]`)** — the real coach calendar is a later data-only
-follow-up, so no fiction lands in prod; its metric domain is **derived** from a hoisted
-`CALISTHENICS_METRIC_KEYS` (killing a constants-rule duplication). The seed expands
-`schedule × kid profiles × metric keys` (0 rows today, mechanism correct). `db:verify` proves the
-headline: weekly SQL `SUM(pushups)=50` / `MAX(vsit_skill_step)=5` **match the shared `foldAggregation`
-golden vectors**, decoys (next-week / skipped / soft-deleted) excluded, the ramp_target ⋈ entries join
-returns the target, and all four constraint rejections fire — with `expectRejectedBy` extracted and the
-two existing inline copies refactored onto it. `ramp_target` (not `goal`/`prescription_target`/`ladder`)
-is settled in [ADR 0002](./decisions/0002-calisthenics-ramp-targets.md). **Squawk stays deferred** (the
-locked V1-1a decision). "Adherence computed" **closes at V1-6b-2** (the read DAL + `<progress>` UI) —
-this row is NOT done. Prior: v0's slice, V1-1a/b/c, V1-2/3/4, V1-5 (#41), V1-6a (#42).
+📍 **v1 (the MVP) — mid-build. The data foundation + core logging surfaces are in; the weekly-ramp
+data layer just landed.** The MVP finish line is: **kids log a full day online + CSV export keeps the
+Claude workflow alive.**
+
+**Merged & live** — the generalized data model (V1-1a/b/c), full seed catalog (V1-2), per-kid Today
+via profile tiles (V1-3), bodyweight/measurements (V1-4), habits + brush-teeth check-ins (V1-5),
+calisthenics inputs + daily accumulate totals (V1-6a, #42), and the **`ramp_targets` table + weekly
+SQL-adherence proof** (V1-6b-1, #48 — DB layer only; ADR 0002 = `ramp_target`, a coach-authored fixed
+weekly calendar, not the future progression engine; ships the schedule empty, real coach numbers are a
+later data-only PR).
+
+**Next up** — **V1-6b-2**: the ramp "this week" `<progress>` UI + read DAL that surfaces what V1-6b-1
+made computable (captured at mobile/tablet/desktop per the adaptive-screenshots principle).
+
+**Remaining to the MVP:** V1-6b-2 → V1-7 (wake/practice) → V1-8 (kids' strength via sessions; **+V1-8a**
+weighted calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a** per-exercise notes) →
+V1-10/11/12 (template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) →
+**V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
+
+**DX / infra landed alongside** (not v1 features): the ephemeral + **local sandbox DBs** (`pnpm dev`,
+#43/#46), **adaptive tri-viewport screenshots** (#45), and the **adversarial review process** (4
+standing lenses — correctness · simplicity · architecture · code-reuse — plus a DB-safety reviewer for
+migrations).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 20 / 28 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~71% (+2 out-of-band; V1-6 split into a/b, 6b into b-1/b-2)
-- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 + V1-5 + V1-6a merged; V1-6b-1 in review)
+- **Feature PRs merged:** ~8 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
+  V1-6b-1). Data foundation complete; the back third is the remaining activity types (V1-7/8), editing
+  (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. Next: **V1-6b-2** (ramp UI), then V1-7 / the notes field.
 
 ## Phases
 
@@ -75,7 +80,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-4    | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                        | ✅     |
 | V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                   | ✅     |
 | V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                      | ✅     |
-| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md)) | 🔵     |
+| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md)) | ✅     |
 | V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-calisthenics-ramp.md))                      | ⚪     |
 | V1-7    | life activities (wake/practice)                                                                        | ⚪     |
 | V1-8    | kids' strength via session                                                                             | ⚪     |
