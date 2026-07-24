@@ -17,10 +17,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ### `embedded-postgres` downloads a Postgres binary on every install, incl. CI that never uses it
 
-- **What & why (PR #43):** the ephemeral-DB screenshot flow (`apps/web/scripts/screenshot-ephemeral.ts`)
-  uses `embedded-postgres` (a **dev** dependency) so a screenshot never touches live Neon. Its
-  platform package (`@embedded-postgres/<os>-<arch>`) fetches a real Postgres binary in a `postinstall`
-  (allow-listed in `pnpm-workspace.yaml`). Pinned to a **beta** (`18.4.0-beta.17`).
+- **What & why (PR #43; extended by chore/local-dev-db):** the ephemeral-DB screenshot flow
+  (`apps/web/scripts/screenshot-ephemeral.ts`) and now the default local-dev launcher
+  (`apps/web/scripts/dev-local.ts` — `pnpm dev`) both use `embedded-postgres` (a **dev** dependency) so
+  neither a screenshot nor local play touches live Neon. Its platform package
+  (`@embedded-postgres/<os>-<arch>`) fetches a real Postgres binary in a `postinstall` (allow-listed in
+  `pnpm-workspace.yaml`). Pinned to a **beta** (`18.4.0-beta.17`). (Two consumers now — the tool is no
+  longer manual-only, which slightly raises the value of keeping the binary available, but the CI
+  install-cost concern below is unchanged: CI still never runs either flow.)
 - **Impact:** every `pnpm install` — including the CI `quality` and `e2e` jobs, which provision
   Postgres via a **service container** and never invoke this tool — pays the binary download. Wasted
   install time/bandwidth for a manual-only, developer-facing utility. Low correctness risk.

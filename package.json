@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter web dev",
+    "dev:prod": "pnpm --filter web dev:prod",
+    "db:local:reset": "pnpm --filter web db:local:reset",
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
     "lint": "pnpm --filter web lint",

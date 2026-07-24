@@ -64,6 +64,23 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `next start` at a different DB, inject `DATABASE_URL` into the server's environment — no
   `.env.screenshot`/temp-cwd trick needed. (chore/screenshot-ephemeral-db)
 
+## embedded-postgres
+
+- **A PERSISTENT `embedded-postgres` re-run fails if you re-`initialise()` / re-`createDatabase()`.**
+  → For a throwaway DB the dir is always empty so both calls are fine; for a persistent dir (the
+  `pnpm dev` local sandbox) the cluster already exists — `initialise()` repopulates and
+  `createDatabase()` errors "already exists". → Detect a live cluster by the **`PG_VERSION` marker** in
+  the data dir and, when present, skip both — just `start()`. Also: the superuser **password is baked
+  into the cluster at initdb time**, so it MUST stay constant across runs (a changed password can't
+  reconnect to an existing `.local-db` — `pnpm db:local:reset` to start over). Shared
+  `startEmbeddedPostgres` helper (`apps/web/scripts/embedded-pg.ts`) does the detection for both the
+  screenshot and dev flows. (chore/local-dev-db)
+- **The Next env-precedence trick works for `next dev`, not just `next start`.** → Same `@next/env`
+  `processEnv` path (a value already in `process.env` WINS over `.env.local`), so injecting
+  `DATABASE_URL` into the `next dev` child env overrides `.env.local` — the basis for `pnpm dev`
+  pointing the dev server at the local embedded DB while leaving `.env.local` (and its
+  `ACCESS_GATE_PASSWORD`) otherwise intact. (chore/local-dev-db)
+
 ## React / forms
 
 - **`aria-disabled` and `readOnly` do NOT stop a control from being submitted** — only real
