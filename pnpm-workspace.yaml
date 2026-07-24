@@ -5,7 +5,14 @@ packages:
 # Native deps allowed to run install/build scripts (pnpm 11 blocks these by default and
 # HARD-ERRORS in CI). sharp = Next image optimization; unrs-resolver = ESLint import resolver;
 # esbuild = bundler behind drizzle-kit / tsx / pglite (needs its postinstall to fetch its binary).
+# @embedded-postgres/* = the throwaway Postgres binary for the ephemeral screenshot DB (its
+# postinstall rehydrates shared-lib symlinks so `postgres` can start); the platform package that
+# installs varies by OS — allow every dev/CI platform so a frozen install never hard-errors.
 allowBuilds:
+  '@embedded-postgres/darwin-arm64': true
+  '@embedded-postgres/darwin-x64': true
+  '@embedded-postgres/linux-arm64': true
+  '@embedded-postgres/linux-x64': true
   esbuild: true
   sharp: true
   unrs-resolver: true

@@ -46,8 +46,23 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `pnpm --filter web exec next start -p <port>` (or the `PORT` env). (V0-11)
 - **Can't run the e2e locally at all.** → No Docker on the dev machine; the app needs a **TCP**
   Postgres (PGlite is in-process only, used just for `db:verify`). → CI is the first real e2e run;
-  front-load robustness. Future fix: embedded-postgres / throwaway Neon branch. See
-  [docs/plans/v0-11-ci-postgres-playwright.md] and the `no-docker-local-e2e` memory.
+  front-load robustness. **Fix realized for the screenshot flow (`chore/screenshot-ephemeral-db`):**
+  `pnpm --filter web screenshot:ephemeral` boots a throwaway **`embedded-postgres`** (real Postgres
+  binary on an ephemeral TCP port, no Docker/creds), migrates+seeds it via the `packages/db` scripts,
+  and runs `next start` against it — so a data-dependent capture never touches live Neon. The same
+  approach is the future path for local e2e. See [docs/plans/v0-11-ci-postgres-playwright.md] and the
+  `no-docker-local-e2e` memory.
+- **Screenshot capture wrote real rows into the live kids' log.** → The old `screenshot` script boots
+  a prod server that reads `apps/web/.env.local` → live Neon, so capturing an "already-logged"
+  check-in **mutated prod**. → Default the flow to a throwaway embedded Postgres
+  (`screenshot:ephemeral`); targeting a non-local DB now requires an explicit `--use-live-db` /
+  `SCREENSHOT_ALLOW_LIVE_DB=1` opt-in, so "point at prod" is a deliberate exception, not the default.
+  (chore/screenshot-ephemeral-db)
+- **Next 16 env precedence — does `.env.local` override an injected `process.env`?** → NO. `@next/env`
+  `processEnv` only applies a parsed `.env*` key when it is **undefined in the initial `process.env`
+  snapshot** (`typeof l[t]==="undefined"`), so a value **already in `process.env` WINS**. → To point a
+  `next start` at a different DB, inject `DATABASE_URL` into the server's environment — no
+  `.env.screenshot`/temp-cwd trick needed. (chore/screenshot-ephemeral-db)
 
 ## Vitest / RTL (component tests)
 
