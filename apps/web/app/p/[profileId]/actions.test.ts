@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // HTTP routes — test the function, mock the DAL + cache). Real-DB coverage of the
 // same write path lives in the Playwright smoke E2E (the `e2e` CI job, V0-11).
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// All three writers now resolve the active-tz today (getActiveLocalDay → cookies()) to bound
+// the declared `day` ±1 (V1-6c). No `tz` cookie → DEFAULT_TIME_ZONE, so the harness's default
+// `day` (localDayIso(DEFAULT_TIME_ZONE)) lands within bound. File-wide, not per-suite.
+vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined })) }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
   logStrengthEntry: vi.fn(async () => ({ id: 'strength-pub-id' })),
@@ -29,8 +33,19 @@ vi.mock('@/lib/dal/profiles', () => ({
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
 import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { todayIso } from '@/lib/date';
+import { DEFAULT_TIME_ZONE } from '@/lib/constants';
+import { isoDayDiff, localDayIso } from '@/lib/date';
 import { revalidatePath } from 'next/cache';
+
+/** The day the harness declares by default — the active-tz today under the pinned default tz,
+ *  so the ±1 bound accepts it. `offsetDays` builds a stale/near day for the bound tests. */
+function localDay(offsetDays = 0): string {
+  const base = localDayIso(DEFAULT_TIME_ZONE);
+  if (offsetDays === 0) return base;
+  const shifted = new Date(`${base}T00:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + offsetDays);
+  return shifted.toISOString().slice(0, 10);
+}
 
 import {
   logBodyweightAction,
@@ -47,7 +62,11 @@ const initial: ActionState = { ok: false, error: null };
 
 function form(fields: Record<string, string>): FormData {
   const fd = new FormData();
-  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  // Default the declared `day` to the active-tz today (bodyweight/strength thread it now, V1-6c);
+  // an explicit `day` in `fields` overrides. Boundary tests that omit other fields still reject at
+  // zod BEFORE the day check, so a valid default day is harmless to them.
+  const withDay: Record<string, string> = { day: localDay(), ...fields };
+  for (const [k, v] of Object.entries(withDay)) fd.append(k, v);
   return fd;
 }
 
@@ -132,6 +151,7 @@ describe('logBodyweightAction — happy path + ownership', () => {
         value: 182.5,
         unit: BODYWEIGHT_UNITS[0],
         clientId,
+        day: localDay(), // the write lands on the day the page rendered (V1-6c)
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
@@ -155,6 +175,7 @@ function strengthForm(opts: {
   movementName?: string;
   unit?: string;
   clientId?: string;
+  day?: string;
   sets?: Array<{ reps: string; weight: string }>;
 }): FormData {
   const fd = new FormData();
@@ -162,6 +183,7 @@ function strengthForm(opts: {
   if (opts.movementName !== undefined) fd.append('movementName', opts.movementName);
   fd.append('unit', opts.unit ?? BODYWEIGHT_UNITS[0]);
   fd.append('clientId', opts.clientId ?? newId());
+  fd.append('day', opts.day ?? localDay());
   for (const s of opts.sets ?? []) {
     fd.append('reps', s.reps);
     fd.append('weight', s.weight);
@@ -247,6 +269,7 @@ describe('logStrengthAction — happy path (transactional nested write)', () => 
         movementName: 'Back squat',
         unit: BODYWEIGHT_UNITS[0],
         clientId,
+        day: localDay(), // threaded from the rendered day (V1-6c)
         sets: [
           { reps: 5, weight: 135 },
           { reps: 5, weight: 135 },
@@ -293,7 +316,7 @@ function checkinForm(opts: {
 }): FormData {
   const fd = new FormData();
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
-  fd.append('day', opts.day ?? todayIso());
+  fd.append('day', opts.day ?? localDay());
   for (const [key, value] of Object.entries(opts.values ?? {})) {
     fd.append(valueInputName(key), value);
     fd.append(clientIdInputName(key), opts.clientIds?.[key] ?? newId());
@@ -412,7 +435,7 @@ describe('logCheckinsAction — happy path + ownership', () => {
     expect(logCheckinEntries).toHaveBeenCalledWith(
       expect.objectContaining({
         profilePublicId: PROFILE_ID,
-        day: todayIso(),
+        day: localDay(),
         items: [{ activityKey: HABIT.activityKey, metricKey: null, value: 1, clientId }],
       }),
     );
@@ -505,5 +528,49 @@ describe('logCheckinsAction — calisthenics counts', () => {
     );
     expect(res.ok).toBe(false); // nothing submitted at all
     expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+});
+
+// ── V1-6c: the shared declared-day ±1 bound applies to ALL THREE writers ──────────
+// resolveDeclaredDay bounds the rendered `day` to the active-tz today ±1, so a write lands
+// on the day the user saw (even across local midnight) but a stale tab is rejected.
+describe('declared-day ±1 bound (shared across writers)', () => {
+  const bwForm = (day: string) =>
+    form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId(), day });
+  const strForm = (day: string) =>
+    strengthForm({
+      profileId: PROFILE_ID,
+      movementName: 'Back squat',
+      sets: [{ reps: '5', weight: '135' }],
+      day,
+    });
+  const ciForm = (day: string) =>
+    checkinForm({ profileId: PROFILE_ID, day, values: { [HABIT.key]: '1' } });
+
+  it.each([-1, 0, 1])('accepts a day within ±1 (offset %s)', async (offset) => {
+    const day = localDay(offset);
+    expect((await logBodyweightAction(initial, bwForm(day))).ok).toBe(true);
+    expect((await logStrengthAction(initial, strForm(day))).ok).toBe(true);
+    expect((await logCheckinsAction(initial, ciForm(day))).ok).toBe(true);
+    // Sanity: the offset day is exactly ±1 (or 0) from the active-tz today.
+    expect(Math.abs(isoDayDiff(day, localDay()))).toBeLessThanOrEqual(1);
+  });
+
+  it('rejects a day more than +1 ahead (stale/forward tab) on every writer', async () => {
+    const day = localDay(2);
+    const bw = await logBodyweightAction(initial, bwForm(day));
+    const str = await logStrengthAction(initial, strForm(day));
+    const ci = await logCheckinsAction(initial, ciForm(day));
+    for (const res of [bw, str, ci]) expect(res.ok).toBe(false);
+    expect(logBodyweight).not.toHaveBeenCalled();
+    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed day on bodyweight/strength (after zod, before the DAL)', async () => {
+    expect((await logBodyweightAction(initial, bwForm('not-a-date'))).ok).toBe(false);
+    expect((await logStrengthAction(initial, strForm('2026-13-99'))).ok).toBe(false);
+    expect(logBodyweight).not.toHaveBeenCalled();
+    expect(logStrengthEntry).not.toHaveBeenCalled();
   });
 });

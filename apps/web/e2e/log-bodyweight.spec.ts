@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { DEFAULT_TIME_ZONE } from '../lib/constants';
+import { formatDayLong, localDayIso } from '../lib/date';
 import {
   logBodyweight,
   logCalisthenics,
@@ -62,6 +64,24 @@ test('re-submitting check-ins never duplicates a logged habit; calisthenics bout
   const pushRow = logged.getByRole('listitem').filter({ hasText: 'Push-ups' });
   await expect(pushRow).toHaveCount(1);
   await expect(pushRow).toContainText(/sets/); // "2 sets · 50" (more on a retry — regex-tolerant)
+});
+
+// V1-6c: the Today header shows the ACTIVE LOCAL calendar date (not UTC), and it's stable
+// across a reload. The browser tz is pinned to DEFAULT_TIME_ZONE (playwright.config), and the
+// server's first-paint default matches it, so the header weekday is the local day — derived
+// here from the same helpers (never a hardcoded weekday, which would rot at the next DST edge).
+test('the Today header shows the active local calendar date, stable across reload', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await selectProfile(page, 'Liam');
+
+  const localDate = formatDayLong(localDayIso(DEFAULT_TIME_ZONE));
+  await expect(page.getByText(localDate)).toBeVisible();
+
+  // Reload: the tz cookie is stable → the same local day, no flip.
+  await page.reload();
+  await expect(page.getByText(localDate)).toBeVisible();
 });
 
 // V1-3: an unknown profile id renders the not-found UI (the scoped Today

@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { GATE_COOKIE_NAME, gateTokenFor, safeInternalPath } from '@/lib/access-gate';
+import { COOKIE_MAX_AGE } from '@/lib/constants';
 import { env } from '@/lib/env';
 
 /**
@@ -19,8 +20,6 @@ const gateSchema = z.object({
 });
 
 export type GateState = { error: string | null };
-
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 export async function submitGate(_prev: GateState, formData: FormData): Promise<GateState> {
   const parsed = gateSchema.safeParse({

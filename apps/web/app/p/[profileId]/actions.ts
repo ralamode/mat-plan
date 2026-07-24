@@ -19,7 +19,7 @@ import {
 } from '@/lib/checkins/checkin-fields';
 import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { isoDayDiff, isoDaySchema, todayIso } from '@/lib/date';
+import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 
 /**
  * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
@@ -56,6 +56,11 @@ export async function logBodyweightAction(
     };
   }
 
+  // The write lands on the day the page rendered (bounded ±1 against the active-tz today),
+  // so a weigh-in never stamps a date the header didn't show — the same seam check-ins use.
+  const day = await resolveDeclaredDay(formData.get('day'));
+  if (!day.ok) return { ok: false, error: day.error };
+
   const profile = await getProfileByPublicId(parsed.data.profileId);
   if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
@@ -64,7 +69,7 @@ export async function logBodyweightAction(
     value: parsed.data.value,
     unit: parsed.data.unit,
     clientId: parsed.data.clientId,
-    day: todayIso(),
+    day: day.day,
     notes: parsed.data.notes ?? null,
   });
 
@@ -150,7 +155,7 @@ export async function logCheckinsAction(
 
   // 2. The genuinely untrusted scalars.
   const profileId = uuidSchema.safeParse(formData.get('profileId'));
-  const day = isoDaySchema.safeParse(formData.get('day'));
+  const day = await resolveDeclaredDay(formData.get('day'));
   if (!profileId.success) {
     return {
       ok: false,
@@ -158,9 +163,7 @@ export async function logCheckinsAction(
       fieldErrors: { profileId: ['Invalid profile.'] },
     };
   }
-  if (!day.success || Math.abs(isoDayDiff(day.data, todayIso())) > 1) {
-    return { ok: false, error: 'That day is no longer open for logging. Reload the page.' };
-  }
+  if (!day.ok) return { ok: false, error: day.error };
 
   // 3. Re-resolve the profile server-side (never trust the hidden field).
   const profile = await getProfileByPublicId(profileId.data);
@@ -168,7 +171,7 @@ export async function logCheckinsAction(
 
   const results = await logCheckinEntries({
     profilePublicId: profile.id,
-    day: day.data,
+    day: day.day,
     items,
   });
 
@@ -208,6 +211,9 @@ export async function logStrengthAction(
     };
   }
 
+  const day = await resolveDeclaredDay(formData.get('day'));
+  if (!day.ok) return { ok: false, error: day.error };
+
   const profile = await getProfileByPublicId(parsed.data.profileId);
   if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
@@ -217,7 +223,7 @@ export async function logStrengthAction(
     unit: parsed.data.unit,
     sets: parsed.data.sets,
     clientId: parsed.data.clientId,
-    day: todayIso(),
+    day: day.day,
   });
 
   revalidatePath(`/p/${profile.id}`);
