@@ -7,26 +7,31 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-📍 **v1 underway — V1-6a in review (V1-5 merged as #41; V1-1a/b/c, V1-2, V1-3, V1-4 all merged).**
-This PR ships **V1-6a — calisthenics inputs + daily totals** ([plan](./plans/v1-6a-calisthenics-totals.md)),
-the first feature to make `metric_definition.aggregation` do observable work. **No migration** — it
-reuses V1-5's kind-NULL `count` write path wholesale (calisthenics metrics are `count`/`count`, the
-same shape as `shot`); the changes are a render-scope extension of the V1-5 registry plus a read-side
-rollup. The calisthenics fields **accumulate** (each submit is a bout; a "Calisthenics today" card
-sums them — the digital replacement for the kids' paper tally), so they stay editable after logging
-rather than going inert; the sum/max fold lives in a shared `foldAggregation` kernel with golden
-vectors (so V1-6b's weekly SQL adherence + V1-13's CSV pivot pin against one contract), and
-`aggregation` now rides on `EntryDTO`. Scoped to calisthenics — V1-5's `shot` is untouched. **V1-6
-was split**: V1-6a (this) is the UI/read half; **V1-6b** (the `ramp_target` table + migration + SQL
-adherence) is its own significant migration PR. Plan hardened by a three-lens panel whose central
-"cut the accumulate model" push was **rejected on product ground truth** (the paper tally) while its
-two real defect-findings (an input-loss race, a double-counting e2e retry) were fixed. Prior: v0's
-slice, V1-1a/b/c, V1-2/3/4, V1-5 (#41).
+📍 **v1 underway — V1-6b-1 in review (V1-6a merged as #42; V1-5 as #41; V1-1a/b/c, V1-2, V1-3, V1-4 all merged).**
+This PR ships **V1-6b-1 — the `ramp_targets` table + migration + seed mechanism + a `db:verify`
+adherence proof** ([plan](./plans/v1-6b-calisthenics-ramp.md)), the DB half of "adherence computed."
+**A significant migration PR (DB-only — no DAL, no UI).** New `ramp_targets` table (migration `0004`):
+per-profile, per-week TARGET value for a calisthenics metric, so weekly adherence (actual `entries` vs
+target) is computable in **SQL** (the deliberate contrast with V1-6a's daily _in-memory_ totals). It
+mirrors `day_readiness` — FK covering indexes, a partial natural-key UNIQUE
+`(profile_id, metric_key, week_start) WHERE deleted_at IS NULL`, a `target_value >= 0` CHECK, and **no
+`client_id`** (config data; idempotency is the natural key). The ramp schedule
+(`CALISTHENICS_RAMP_SCHEDULE`) ships **empty (`[]`)** — the real coach calendar is a later data-only
+follow-up, so no fiction lands in prod; its metric domain is **derived** from a hoisted
+`CALISTHENICS_METRIC_KEYS` (killing a constants-rule duplication). The seed expands
+`schedule × kid profiles × metric keys` (0 rows today, mechanism correct). `db:verify` proves the
+headline: weekly SQL `SUM(pushups)=50` / `MAX(vsit_skill_step)=5` **match the shared `foldAggregation`
+golden vectors**, decoys (next-week / skipped / soft-deleted) excluded, the ramp_target ⋈ entries join
+returns the target, and all four constraint rejections fire — with `expectRejectedBy` extracted and the
+two existing inline copies refactored onto it. `ramp_target` (not `goal`/`prescription_target`/`ladder`)
+is settled in [ADR 0002](./decisions/0002-calisthenics-ramp-targets.md). **Squawk stays deferred** (the
+locked V1-1a decision). "Adherence computed" **closes at V1-6b-2** (the read DAL + `<progress>` UI) —
+this row is NOT done. Prior: v0's slice, V1-1a/b/c, V1-2/3/4, V1-5 (#41), V1-6a (#42).
 
 ## Progress toward MVP (v1)
 
-- **Code PRs merged:** 19 / 28 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~68% (+2 out-of-band; V1-6 split into a/b → 28)
-- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 + V1-5 merged; V1-6a in review)
+- **Code PRs merged:** 20 / 28 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰ ~71% (+2 out-of-band; V1-6 split into a/b, 6b into b-1/b-2)
+- **Phase:** v0 ✅ complete → v1 🔵 in progress (V1-1a/b/c + V1-2/3/4 + V1-5 + V1-6a merged; V1-6b-1 in review)
 
 ## Phases
 
@@ -62,25 +67,51 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR    | Scope                                                                             | Status |
-| ----- | --------------------------------------------------------------------------------- | ------ |
-| V1-1  | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)           | ✅     |
-| V1-2  | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))             | ✅     |
-| V1-3  | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                             | ✅     |
-| V1-4  | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))   | ✅     |
-| V1-5  | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))              | ✅     |
-| V1-6a | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md)) | 🔵     |
-| V1-6b | calisthenics ramp targets + adherence (migration)                                 | ⚪     |
-| V1-7  | life activities (wake/practice)                                                   | ⚪     |
-| V1-8  | kids' strength via session                                                        | ⚪     |
-| V1-9  | fix-a-set / edit (LWW)                                                            | ⚪     |
-| V1-10 | block-template prefill                                                            | ⚪     |
-| V1-11 | copy-set-to-other-kid                                                             | ⚪     |
-| V1-12 | a11y pass                                                                         | ⚪     |
-| V1-13 | CSV export endpoint (golden-file)                                                 | ⚪     |
-| V1-14 | full-day E2E + rate-limit/Sentry/Dependabot                                       | ⚪     |
+| PR      | Scope                                                                                                  | Status |
+| ------- | ------------------------------------------------------------------------------------------------------ | ------ |
+| V1-1    | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)                                | ✅     |
+| V1-2    | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                  | ✅     |
+| V1-3    | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                                  | ✅     |
+| V1-4    | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                        | ✅     |
+| V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                   | ✅     |
+| V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                      | ✅     |
+| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md)) | 🔵     |
+| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-calisthenics-ramp.md))                      | ⚪     |
+| V1-7    | life activities (wake/practice)                                                                        | ⚪     |
+| V1-8    | kids' strength via session                                                                             | ⚪     |
+| V1-9    | fix-a-set / edit (LWW)                                                                                 | ⚪     |
+| V1-10   | block-template prefill                                                                                 | ⚪     |
+| V1-11   | copy-set-to-other-kid                                                                                  | ⚪     |
+| V1-12   | a11y pass                                                                                              | ⚪     |
+| V1-13   | CSV export endpoint (golden-file)                                                                      | ⚪     |
+| V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                            | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-07-23** — **V1-6b-1** (in review): the `ramp_targets` table + migration + seed mechanism +
+  a `db:verify` adherence proof ([plan](./plans/v1-6b-calisthenics-ramp.md)). **Significant migration
+  PR — DB-only (no DAL, no UI).** Migration `0004` adds `ramp_targets` (per-profile, per-week
+  calisthenics TARGET, so weekly adherence is computable in **SQL** — the contrast with V1-6a's daily
+  in-memory rollup), mirroring `day_readiness`: FK covering indexes, a partial natural-key UNIQUE
+  `(profile_id, metric_key, week_start) WHERE deleted_at IS NULL`, a `target_value >= 0` CHECK, **no
+  `client_id`** (config; idempotency = the natural key). Net-new empty table → clean by construction
+  (inline FKs/indexes/CHECK, no NOT-VALID/backfill); the lock/statement-timeout preamble is
+  hand-prepended (drift guard clean). `CALISTHENICS_RAMP_SCHEDULE` ships **`[]`** (real coach numbers
+  are a later data-only PR; `onConflictDoNothing` would make placeholders sticky); its metric domain is
+  **derived** from a newly hoisted `CALISTHENICS_METRIC_KEYS` (kills a constants-rule duplication;
+  `ACTIVITY_METRIC_MAP.calisthenics` now consumes it, V1-2 coverage test still green). The seed expands
+  `schedule × kid profiles × metric keys` (0 rows today, mechanism correct; filtered to `kind='kid'`).
+  `db:verify` headline: weekly SQL `SUM(pushups)=50` / `MAX(vsit_skill_step)=5` **match the shared
+  `foldAggregation` golden vectors**, decoys (next-week / skipped / soft-deleted) excluded, the
+  ramp_target ⋈ entries join returns the target, all four constraint rejections fire, every calisthenics
+  metric is guarded `∈ {sum,max}` — with `expectRejectedBy` extracted and the two existing inline copies
+  refactored onto it. `ramp_target` vs `goal`/`prescription_target`/`ladder` settled in
+  [ADR 0002](./decisions/0002-calisthenics-ramp-targets.md). **Squawk stays deferred** (V1-1a decision;
+  "clean by construction" only holds under `--assume-in-transaction`). **V1-6b split** into b-1 (this)
+  - b-2 (read DAL + `<progress>` UI); "adherence computed" **closes at b-2** — this PR does not mark the
+    row done. Five-lens panel: ship `[]`, drop Squawk, fix the self-colliding verify week, derive the
+    metric keys, extract `expectRejectedBy`, guard sum/max — all accepted; DTO/profile-scope/`pickAggregate`
+    deferred to b-2.
 
 - **2026-07-23** — **V1-6a** (in review): calisthenics inputs + daily totals
   ([plan](./plans/v1-6a-calisthenics-totals.md)). **No migration** — reuses V1-5's kind-NULL `count`

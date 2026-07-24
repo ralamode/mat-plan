@@ -142,12 +142,14 @@ erDiagram
   profiles ||--o{ sessions : "logs"
   profiles ||--o{ entries : "logs"
   profiles ||--o{ day_readiness : "gate 🟢🟡🔴"
+  profiles ||--o{ ramp_targets : "weekly target (V1-6b)"
   sessions ||--o{ entries : "groups"
   entries ||--o{ entry_sets : "expands to"
   activity_type_categories ||--o{ activity_types : "categorizes"
   activity_types ||--o{ entries : "classifies"
   movements ||--o{ entries : "set_list (0..1)"
   metric_definitions ||--o{ entries : "single_metric (0..1)"
+  metric_definitions ||--o{ ramp_targets : "targets (V1-6b)"
   units ||--o{ activity_types : "default_unit"
   units ||--o{ movements : "unit_default"
   units ||--o{ metric_definitions : "unit"
@@ -169,7 +171,21 @@ erDiagram
     text category FK
     text input_shape "set_list, single_metric, boolean, timing"
   }
+  ramp_targets {
+    bigint id PK
+    uuid public_id UK "anti-IDOR"
+    bigint profile_id FK
+    text metric_key FK "→ metric_definitions"
+    date week_start "ISO-week Monday, UTC"
+    numeric target_value "the weekly ramp target"
+  }
 ```
+
+> **Ramp targets (V1-6b):** `ramp_targets` holds a per-profile, per-week TARGET value for a calisthenics
+> metric, so weekly adherence (actual `entries` vs target) is computable in **SQL** (spec.md §4). A
+> coach-authored weekly calendar, not engine-computed progression — see
+> [ADR 0002](./decisions/0002-calisthenics-ramp-targets.md). Config data → no `client_id`; idempotency
+> is the partial natural-key UNIQUE `(profile_id, metric_key, week_start) WHERE deleted_at IS NULL`.
 
 > **Tagged union (V1-1b):** an `entry` carries **at most one** of `{movement_id, metric_key}` —
 > `CHECK (movement_id IS NULL OR metric_key IS NULL)`. `boolean`/`timing` activities (e.g. `wake`,
