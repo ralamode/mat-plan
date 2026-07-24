@@ -224,9 +224,12 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   `prettier --check` in CI — no style debates.
 - PRs include **screenshots for any UI change** (before/after where relevant), **captured with
   Playwright** driving the running app (boot the prod build → log through the access gate → navigate →
-  screenshot each changed screen/state). Save to the gitignored `.screenshots/` folder and attach to
-  the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill, which runs the
-  committed `pnpm --filter web screenshot <route>` script (since V0-11, on the shared
+  screenshot each changed screen/state). **Each capture is taken at THREE widths — mobile (~390px),
+  tablet (~820px), and desktop (~1280px)** — so the reviewer sees the primary phone/tablet experience,
+  not just desktop; the `screenshot` scripts emit `<name>-mobile.png` / `-tablet.png` / `-desktop.png`
+  automatically (attach at least mobile + desktop). Save to the gitignored `.screenshots/` folder and
+  attach to the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill, which
+  runs the committed `pnpm --filter web screenshot <route>` script (since V0-11, on the shared
   `e2e/gate-login.ts` helper); the Playwright-MCP path is the fallback.
   - **Placement:** the **first** screenshots for a PR go **in the PR description** — the reviewer's
     baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a **PR
@@ -240,6 +243,12 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   primitives are semantic + accessible by default — don't wrap them in ways that regress that.
 - A11y: keyboard-usable, focus-visible, labeled controls, ≥44px tap targets, numeric `inputmode` on
   number fields. Semantic HTML is the foundation of this — get the elements right first.
+- **Adaptive / responsive by default (first-class).** The app is used **primarily on phones and
+  tablets** (the kids log on the gym floor); desktop is the secondary case. **Every screen must work
+  from ~360px up through desktop** — fluid, responsive layouts (Tailwind breakpoints), no desktop-only
+  fixed widths, content that wraps/stacks gracefully rather than overflowing or clipping. Design and
+  review at the small width first, then confirm it scales up. A layout that only looks right on a wide
+  viewport is a defect, not a polish item.
 - **Web performance / Core Web Vitals is a first-class concern**, not a later cleanup. Follow web best
   practices where they don't fight scope: RSC-first (minimal client JS), `next/image` + `next/font`
   (no layout shift / font FOUT), no render-blocking third-party scripts, lean/code-split bundles.
