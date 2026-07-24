@@ -28,7 +28,11 @@ panel** before any code is written. The loop:
      constraint and the one-concern/<400-line target?
    - **Architecture & consistency** — does it fight AGENTS.md / spec.md, paint us into a corner, or
      set up later PRs poorly? Naming/DRY/seams.
-     (Add lenses for the PR's nature — a migration plan gets a dedicated DB-safety reviewer, etc.)
+   - **Code reuse / DRY** — what does this duplicate (a constant, type, helper, query, validation)
+     that already exists and should be imported or extracted? Checked against the constants
+     single-source rule and existing `packages/shared` + `lib/` helpers.
+     (These four lenses are standing panel members. Add further lenses for the PR's nature — a
+     migration plan additionally gets a dedicated DB-safety reviewer, etc.)
 3. **Reconcile (author responds).** The author agent reviews each critique and either **incorporates**
    it (revises the plan) or **pushes back with justification**. It records a short **review-response
    log** in the plan doc: each material critique → accepted (what changed) or rejected (why).
