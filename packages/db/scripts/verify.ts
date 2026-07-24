@@ -8,8 +8,13 @@ import {
   ACTIVITY_METRIC_MAP,
   ACTIVITY_TYPE_SEED_ROWS,
   activityTypeSeedRowSchema,
+  CALISTHENICS_METRIC_KEYS,
+  ENTRY_STATUS,
+  foldAggregation,
+  METRIC_AGGREGATION,
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
+  METRIC_KEYS,
   METRIC_VALUE_TYPES,
   metricDefinitionSeedRowSchema,
   MOVEMENT_PATTERNS,
@@ -17,6 +22,7 @@ import {
   movementSeedRowSchema,
   movementSlug,
   movementSlugMatchesName,
+  PROFILE_KIND,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
@@ -24,7 +30,7 @@ import {
   SEED_METRIC_KEYS,
   UNIT_CODES,
 } from '@mat-plan/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
@@ -45,6 +51,26 @@ import {
  */
 const db = drizzle(new PGlite(), { schema, casing: 'snake_case' });
 const asPg = db as unknown as NodePgDatabase<typeof schema>;
+
+/**
+ * Assert `fn` rejects with a Postgres error whose violated constraint is `constraintName`,
+ * read off `cause.constraint` (the node-postgres / PGlite error shape). Extracted from the two
+ * inline copies this file grew (V1-1c's activity_type_id guard + V1-5's shape-CHECK trap) and
+ * reused for the V1-6b-1 ramp_targets rejections — one idiom, so a rename fails in one place.
+ */
+async function expectRejectedBy(constraintName: string, fn: () => Promise<unknown>): Promise<void> {
+  let violated: string | undefined;
+  try {
+    await fn();
+  } catch (e) {
+    violated = (e as { cause?: { constraint?: string } })?.cause?.constraint;
+  }
+  assert.equal(
+    violated,
+    constraintName,
+    `expected rejection by constraint '${constraintName}', got '${violated ?? '(none)'}'`,
+  );
+}
 
 await migrate(db, { migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)) });
 console.log('✓ migration applied to PGlite');
@@ -548,9 +574,8 @@ console.log('✓ V1-1c: kind-less metric-only check-in inserts + round-trips (ki
 // entries_activity_type_id_not_null (the hand-added CHECK, mirroring household_id). The row is
 // otherwise VALID (kind NULL + value_num set → shape CHECK passes; movement_id NULL → at-most-one
 // passes) so the rejection isolates the discriminant guard — asserted by the constraint NAME.
-let rejectedConstraint: string | undefined;
-try {
-  await db.insert(schema.entries).values({
+await expectRejectedBy('entries_activity_type_id_not_null', () =>
+  db.insert(schema.entries).values({
     publicId: '019826b4-0000-7000-8000-0000000000e2',
     clientId: '019826b4-0000-7000-8000-0000000000e3',
     profileId: profiles[0].id,
@@ -559,14 +584,7 @@ try {
     activityTypeId: null, // violates the discriminant NOT-NULL guard
     metricKey: 'stance',
     valueNum: '1',
-  });
-} catch (e) {
-  rejectedConstraint = (e as { cause?: { constraint?: string } })?.cause?.constraint;
-}
-assert.equal(
-  rejectedConstraint,
-  'entries_activity_type_id_not_null',
-  'V1-1c: a row without activity_type_id is rejected specifically by the discriminant NOT-NULL CHECK',
+  }),
 );
 console.log('✓ V1-1c: activity_type_id NOT-NULL guard enforced');
 
@@ -605,24 +623,17 @@ console.log('✓ V1-5: bare habit (kind NULL, NEITHER source col) inserts + roun
 // value_num NULL *and* movement_name NULL is REJECTED. This is why every check-in must
 // carry value_num (a bool is 1) and must never set movement_name. If this assertion ever
 // fails, the DAL's encoding assumption has changed and logCheckinEntries must be revisited.
-let checkinRejected: string | undefined;
-try {
-  await db.insert(schema.entries).values({
+const riceBucketId = await activityTypeIdByKey('rice_bucket');
+await expectRejectedBy('entries_shape_check', () =>
+  db.insert(schema.entries).values({
     publicId: '019826b4-0000-7000-8000-0000000000e6',
     clientId: '019826b4-0000-7000-8000-0000000000e7',
     profileId: profiles[0].id,
     activityDate: '2026-07-22',
     unit: 'bool',
-    activityTypeId: await activityTypeIdByKey('rice_bucket'),
+    activityTypeId: riceBucketId,
     // no valueNum and no movementName → the CHECK evaluates FALSE
-  });
-} catch (e) {
-  checkinRejected = (e as { cause?: { constraint?: string } })?.cause?.constraint;
-}
-assert.equal(
-  checkinRejected,
-  'entries_shape_check',
-  'V1-5: a kind-less row with neither value_num nor movement_name is rejected by entries_shape_check',
+  }),
 );
 console.log('✓ V1-5: shape CHECK rejects a kind-less check-in missing value_num');
 
@@ -648,6 +659,267 @@ await assertCheckCoversConst('metric_definitions_value_type_check', METRIC_VALUE
 await assertCheckCoversConst('metric_definitions_aggregation_check', METRIC_AGGREGATIONS);
 console.log(
   '✓ schema-CHECK ↔ shared-const parity (input_shape, movement pattern, metric value_type + aggregation)',
+);
+
+// ── V1-6b-1: ramp_targets table + SQL weekly-adherence parity against foldAggregation ──────
+
+// The empty ramp schedule seeds ZERO ramp_targets (the seed ran twice above); assert that so a
+// future non-empty schedule that regresses idempotency shows up here, not in prod.
+const seededRampTargets = await db.select().from(schema.rampTargets);
+assert.equal(
+  seededRampTargets.length,
+  0,
+  'V1-6b-1: empty CALISTHENICS_RAMP_SCHEDULE seeds zero ramp_targets (idempotent, no duplicates)',
+);
+console.log('✓ V1-6b-1: empty ramp schedule seeds zero rows (seed idempotent)');
+
+// Guard the sum/max assumption the weekly SQL adherence rests on: EVERY calisthenics metric must
+// aggregate by `sum` or `max` (a future `avg`/`last` calisthenics metric would silently break the
+// weekly rollup, which only computes SUM + MAX). Pins the assumption to the seed catalog.
+const aggByMetricKey = new Map(metricDefinitions.map((m) => [m.key, m.aggregation]));
+for (const key of CALISTHENICS_METRIC_KEYS) {
+  const agg = aggByMetricKey.get(key);
+  assert.ok(
+    agg === METRIC_AGGREGATION.sum || agg === METRIC_AGGREGATION.max,
+    `V1-6b-1: calisthenics metric '${key}' aggregation ∈ {sum,max} (weekly adherence assumes it), got '${agg}'`,
+  );
+}
+console.log('✓ V1-6b-1: every calisthenics metric aggregates by sum or max');
+
+// A dedicated TEST profile + a clearly TEST-ONLY week (2026-01-05 = a Monday) that is NOT in the
+// (empty) schedule, so the fixture is fully self-contained and can never collide with seed data.
+const RAMP_TEST_WEEK_START = '2026-01-05'; // ISO-week Monday, UTC
+const [rampTestProfile] = await db
+  .insert(schema.profiles)
+  .values({
+    publicId: '019826b4-0000-7000-8000-0000000000f0',
+    name: 'Ramp Test Kid',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  })
+  .returning({ id: schema.profiles.id });
+const calisthenicsId = await activityTypeIdByKey('calisthenics');
+
+// Seed a ramp_target per calisthenics metric for the test profile/week (the mechanism the seed
+// uses; here with concrete numbers so the join has a target to return).
+const RAMP_TEST_TARGETS: Record<string, number> = {
+  [METRIC_KEYS.pushups]: 45,
+  [METRIC_KEYS.pullups]: 12,
+  [METRIC_KEYS.vsit_crunch]: 40,
+  [METRIC_KEYS.vsit_skill_step]: 6,
+};
+await db.insert(schema.rampTargets).values(
+  CALISTHENICS_METRIC_KEYS.map((metricKey) => ({
+    publicId: `019826b4-0000-7000-8000-0000000000${metricKey === METRIC_KEYS.pushups ? 'f1' : metricKey === METRIC_KEYS.pullups ? 'f2' : metricKey === METRIC_KEYS.vsit_crunch ? 'f3' : 'f4'}`,
+    profileId: rampTestProfile.id,
+    metricKey,
+    weekStart: RAMP_TEST_WEEK_START,
+    targetValue: String(RAMP_TEST_TARGETS[metricKey]),
+  })),
+);
+
+// Real in-week calisthenics bouts (kind-NULL count entries — the V1-6a write shape):
+//   pushups: 20, 30  → SUM = 50  (= foldAggregation('sum', [20,30]))
+//   vsit_skill_step: 3, 5, 4  → MAX = 5  (= foldAggregation('max', [3,5,4]))
+// plus three DECOYS that the adherence filters MUST exclude.
+let entryProbe = 0;
+async function insertCalisthenicsBout(args: {
+  metricKey: string;
+  value: number;
+  activityDate: string;
+  status?: (typeof ENTRY_STATUS)[keyof typeof ENTRY_STATUS];
+  softDeleted?: boolean;
+}): Promise<void> {
+  const tag = (0x10 + entryProbe++).toString(16); // f-block probe ids
+  await db.insert(schema.entries).values({
+    publicId: `019826b4-0000-7000-8000-0000000001${tag}`,
+    clientId: `019826b4-0000-7000-8000-0000000002${tag}`,
+    profileId: rampTestProfile.id,
+    activityDate: args.activityDate,
+    unit: 'count',
+    activityTypeId: calisthenicsId,
+    metricKey: args.metricKey,
+    valueNum: String(args.value),
+    status: args.status ?? ENTRY_STATUS.done,
+    deletedAt: args.softDeleted ? new Date('2026-01-06T00:00:00Z') : null,
+  });
+}
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 20,
+  activityDate: '2026-01-05',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 30,
+  activityDate: '2026-01-07',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.vsit_skill_step,
+  value: 3,
+  activityDate: '2026-01-05',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.vsit_skill_step,
+  value: 5,
+  activityDate: '2026-01-06',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.vsit_skill_step,
+  value: 4,
+  activityDate: '2026-01-08',
+});
+// DECOY 1 — next week (>= weekStart+7): excluded by the date range.
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 999,
+  activityDate: '2026-01-12',
+});
+// DECOY 2 — skipped bout: excluded by status='done'.
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 888,
+  activityDate: '2026-01-06',
+  status: ENTRY_STATUS.skipped,
+});
+// DECOY 3 — soft-deleted bout: excluded by deleted_at IS NULL.
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 777,
+  activityDate: '2026-01-06',
+  softDeleted: true,
+});
+
+// THE ADHERENCE AGGREGATE (SQL, not in-memory): SUM + MAX per metric over the in-week, done,
+// non-deleted calisthenics entries for this profile. `week_start <= activity_date < week_start+7`.
+const weekEndExclusive = sql`${schema.rampTargets.weekStart} + 7`; // date + int = date
+const adherence = await db
+  .select({
+    metricKey: schema.entries.metricKey,
+    actualSum: sum(schema.entries.valueNum),
+    actualMax: max(schema.entries.valueNum),
+  })
+  .from(schema.entries)
+  .where(
+    and(
+      eq(schema.entries.profileId, rampTestProfile.id),
+      eq(schema.entries.activityTypeId, calisthenicsId),
+      eq(schema.entries.status, ENTRY_STATUS.done),
+      isNull(schema.entries.deletedAt),
+      gte(schema.entries.activityDate, RAMP_TEST_WEEK_START),
+      lt(schema.entries.activityDate, sql`${RAMP_TEST_WEEK_START}::date + 7`),
+    ),
+  )
+  .groupBy(schema.entries.metricKey);
+
+const byMetric = new Map(adherence.map((r) => [r.metricKey, r]));
+// Exactly two metrics have in-week done readings — the three pushups decoys added NO extra group.
+assert.equal(
+  adherence.length,
+  2,
+  'V1-6b-1: only pushups + vsit_skill_step have in-week done readings',
+);
+
+const pushupsAgg = byMetric.get(METRIC_KEYS.pushups);
+assert.ok(pushupsAgg, 'V1-6b-1: pushups adherence row present');
+// SUM(pushups) === 50 === foldAggregation('sum',[20,30]); the 999/888/777 decoys are all excluded.
+assert.equal(Number(pushupsAgg.actualSum), 50, 'V1-6b-1: SUM(pushups) = 50 (decoys excluded)');
+assert.equal(
+  Number(pushupsAgg.actualSum),
+  foldAggregation(METRIC_AGGREGATION.sum, [20, 30]),
+  'V1-6b-1: SQL SUM(pushups) === foldAggregation(sum,[20,30]) — golden-vector parity',
+);
+
+const vsitAgg = byMetric.get(METRIC_KEYS.vsit_skill_step);
+assert.ok(vsitAgg, 'V1-6b-1: vsit_skill_step adherence row present');
+assert.equal(Number(vsitAgg.actualMax), 5, 'V1-6b-1: MAX(vsit_skill_step) = 5');
+assert.equal(
+  Number(vsitAgg.actualMax),
+  foldAggregation(METRIC_AGGREGATION.max, [3, 5, 4]),
+  'V1-6b-1: SQL MAX(vsit_skill_step) === foldAggregation(max,[3,5,4]) — golden-vector parity',
+);
+console.log(
+  '✓ V1-6b-1: weekly SQL adherence === foldAggregation golden vectors (SUM pushups=50, MAX vsit_skill_step=5; decoys excluded)',
+);
+
+// The ramp_target JOIN returns the seeded target alongside the actual — the shape V1-6b-2's DAL
+// reads (actual weekly performance vs target, joined on profile/metric/week, all in SQL).
+const [joined] = await db
+  .select({
+    metricKey: schema.rampTargets.metricKey,
+    target: schema.rampTargets.targetValue,
+    actual: sum(schema.entries.valueNum),
+  })
+  .from(schema.rampTargets)
+  .innerJoin(
+    schema.entries,
+    and(
+      eq(schema.entries.profileId, schema.rampTargets.profileId),
+      eq(schema.entries.metricKey, schema.rampTargets.metricKey),
+      eq(schema.entries.activityTypeId, calisthenicsId),
+      eq(schema.entries.status, ENTRY_STATUS.done),
+      isNull(schema.entries.deletedAt),
+      gte(schema.entries.activityDate, schema.rampTargets.weekStart),
+      lt(schema.entries.activityDate, weekEndExclusive),
+    ),
+  )
+  .where(
+    and(
+      eq(schema.rampTargets.profileId, rampTestProfile.id),
+      eq(schema.rampTargets.metricKey, METRIC_KEYS.pushups),
+      isNull(schema.rampTargets.deletedAt),
+    ),
+  )
+  .groupBy(schema.rampTargets.metricKey, schema.rampTargets.targetValue);
+assert.ok(joined, 'V1-6b-1: ramp_target ⋈ entries join returns a row for pushups');
+assert.equal(Number(joined.actual), 50, 'V1-6b-1: joined actual pushups = 50');
+assert.equal(
+  Number(joined.target),
+  45,
+  'V1-6b-1: ramp_target join returns the seeded pushups target (45)',
+);
+console.log('✓ V1-6b-1: ramp_target ⋈ entries join returns actual (50) alongside target (45)');
+
+// Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
+// target_value CHECK.
+await expectRejectedBy('uq_ramp_targets_profile_metric_week', () =>
+  db.insert(schema.rampTargets).values({
+    publicId: '019826b4-0000-7000-8000-0000000000fa',
+    profileId: rampTestProfile.id,
+    metricKey: METRIC_KEYS.pushups, // dup (profile, metric, week) → partial UNIQUE violated
+    weekStart: RAMP_TEST_WEEK_START,
+    targetValue: '50',
+  }),
+);
+await expectRejectedBy('ramp_targets_metric_key_metric_definitions_key_fk', () =>
+  db.insert(schema.rampTargets).values({
+    publicId: '019826b4-0000-7000-8000-0000000000fb',
+    profileId: rampTestProfile.id,
+    metricKey: 'not_a_real_metric', // FK → metric_definitions.key violated
+    weekStart: RAMP_TEST_WEEK_START,
+    targetValue: '10',
+  }),
+);
+await expectRejectedBy('ramp_targets_profile_id_profiles_id_fk', () =>
+  db.insert(schema.rampTargets).values({
+    publicId: '019826b4-0000-7000-8000-0000000000fc',
+    profileId: 9_999_999, // FK → profiles.id violated (no such profile)
+    metricKey: METRIC_KEYS.pushups,
+    weekStart: RAMP_TEST_WEEK_START,
+    targetValue: '10',
+  }),
+);
+await expectRejectedBy('ramp_targets_target_value_check', () =>
+  db.insert(schema.rampTargets).values({
+    publicId: '019826b4-0000-7000-8000-0000000000fd',
+    profileId: rampTestProfile.id,
+    metricKey: METRIC_KEYS.pullups,
+    weekStart: RAMP_TEST_WEEK_START,
+    targetValue: '-1', // CHECK target_value >= 0 violated
+  }),
+);
+console.log(
+  '✓ V1-6b-1: ramp_targets rejections (natural-key UNIQUE, metric FK, profile FK, target CHECK)',
 );
 
 console.log('✓ verify passed');

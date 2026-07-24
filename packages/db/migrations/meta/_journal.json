@@ -29,6 +29,13 @@
       "when": 1784616361392,
       "tag": "0003_slow_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784872900585,
+      "tag": "0004_parched_tomas",
+      "breakpoints": true
     }
   ]
 }
