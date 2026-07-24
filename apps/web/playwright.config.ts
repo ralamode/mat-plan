@@ -32,6 +32,10 @@ export default defineConfig({
     baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Pin the browser tz to the app's default (V1-6c): dates are deterministic, and because
+    // the server's first-paint default equals this, TimeZoneSync writes the cookie WITHOUT a
+    // refresh — no refresh-induced flake in the smoke.
+    timezoneId: 'America/Los_Angeles',
   },
   webServer: {
     command: `pnpm --filter web build && pnpm --filter web exec next start -p ${PORT}`,

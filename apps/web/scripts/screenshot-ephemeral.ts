@@ -8,7 +8,8 @@ import { createDb, createDbPool, schema, SEED_PROFILE_PUBLIC_ID } from '@mat-pla
 import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS, METRIC_KEYS, newId } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
-import { todayIso } from '../lib/date';
+import { DEFAULT_TIME_ZONE } from '../lib/constants';
+import { localDayIso } from '../lib/date';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -132,7 +133,7 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
       .where(eq(schema.metricDefinitions.key, METRIC_KEYS.stance))
       .limit(1);
 
-    const day = todayIso();
+    const day = localDayIso(DEFAULT_TIME_ZONE);
     // Mirrors logCheckinEntries' shape exactly: ALWAYS value_num='1', NEVER movement_name,
     // metric_key NULL for a bare habit (the entries_shape_check trap — see the DAL note).
     await db
@@ -210,7 +211,7 @@ async function seedCalisthenics(dbUrl: string): Promise<void> {
     const pushups = await metric(METRIC_KEYS.pushups);
     const pullups = await metric(METRIC_KEYS.pullups);
 
-    const day = todayIso();
+    const day = localDayIso(DEFAULT_TIME_ZONE);
     const base = () => ({
       publicId: newId(),
       clientId: newId(),

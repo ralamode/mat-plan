@@ -18,13 +18,26 @@ SQL-adherence proof** (V1-6b-1, #48 — DB layer only; ADR 0002 = `ramp_target`,
 weekly calendar, not the future progression engine; ships the schedule empty, real coach numbers are a
 later data-only PR).
 
+**In flight** — **V1-6c**: timezone / local-calendar-date correctness (afternoon in PT was showing
+_tomorrow's_ workout because "today" was UTC). "Today" now follows the active IANA local calendar date
+via a client-reported `tz` cookie + `localDayIso`; date & weekday always agree; all three writers thread
+the rendered day (one shared ±1 bound); historical dates stay stable across travel; instants stay UTC.
+No migration, no new dep. Hardened by the 4-lens panel (review-response log R1–R10). **Prerequisite of
+V1-6b-2** (the ramp UI computes ISO-week boundaries from "local today").
+
 **Next up** — **V1-6b-2**: the ramp "this week" `<progress>` UI + read DAL that surfaces what V1-6b-1
 made computable (captured at mobile/tablet/desktop per the adaptive-screenshots principle).
 
-**Remaining to the MVP:** V1-6b-2 → V1-7 (wake/practice) → V1-8 (kids' strength via sessions; **+V1-8a**
-weighted calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a** per-exercise notes) →
-V1-10/11/12 (template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) →
-**V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
+**Remaining to the MVP:** V1-6c (in flight) → V1-6b-2 → V1-7 (wake/practice) → V1-8 (kids' strength via
+sessions; **+V1-8a** weighted calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a**
+per-exercise notes) → V1-10/11/12 (template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's
+whole point) → **V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
+
+**Newly brainstormed (post-MVP, backlogged):** **V1-15 day navigation** (page back through previous
+days, read-only history; then a week-dot strip, then a month calendar) and **V1-16 progress dashboard**
+(range views + restrained Recharts, a series = `foldAggregation` per time-bucket) — 3-lens synthesis in
+[day-navigation-and-dashboard-brainstorm.md](./plans/day-navigation-and-dashboard-brainstorm.md).
+V1-15 depends on V1-6c's tz-aware "today."
 
 **DX / infra landed alongside** (not v1 features): the ephemeral + **local sandbox DBs** (`pnpm dev`,
 #43/#46), **adaptive tri-viewport screenshots** (#45), and the **adversarial review process** (4
