@@ -97,6 +97,9 @@ CHECK. All rows household-scoped for DAL authz.
   that shape). Implemented in `0002` as `movement_id IS NULL OR metric_key IS NULL`.
 - `entry_set` — entry_id, idx, reps?, seconds?, weight_num?, weight_label?("BW"/"50ft"), value_num?,
   status, done. _(Derived/queryable layer; `raw_*` on entry is the export source of truth.)_
+  - **Added-load axis (calisthenics):** a calisthenics bout may carry an optional added load
+    (weighted vest/belt) — **reusing this `entry_set` reps+weight shape rather than a new structure**;
+    max-strength metrics (`pullup_max`, weighted maxes) sit on top of that same data (plan.md `V1-8a`).
 - `superset` — session_id, label, note (nullable).
   - **Requirement — adult PPL, not just kids:** a `superset` groups **2+ movements performed
     alternating** within a session; each movement still logs its own per-set `entry` → `entry_set`,
