@@ -1,4 +1,5 @@
 import {
+  ACTIVITY_TYPE_KEYS,
   CATALOG_METRIC_DEFINITION_SEED_ROWS,
   ENTRY_KIND,
   ENTRY_STATUS,
@@ -174,6 +175,39 @@ describe('entryLabel', () => {
         }),
       ),
     ).toBe('Rice bucket');
+  });
+
+  // ── V1-7 ────────────────────────────────────────────────────────────────────
+  // Wake is a timing "neither-source" event: value_num is local minutes-since-midnight,
+  // rendered as a clock. It must be caught by the activityKey branch BEFORE the bare-habit
+  // branch (both are metricKey/movement-null) — else it renders "Wake" with no time.
+  it('renders a wake event as its activity label + the local clock (from value_num minutes)', () => {
+    expect(
+      entryLabel(
+        entry({
+          kind: null,
+          metricKey: null,
+          movementName: null,
+          value: 412, // 06:52 local
+          unit: 'timing',
+          activityKey: ACTIVITY_TYPE_KEYS.wake,
+          activityLabel: 'Wake',
+        }),
+      ),
+    ).toBe('Wake — 6:52 AM');
+  });
+
+  it('renders a wake event with no value as the bare activity label', () => {
+    expect(
+      entryLabel(
+        entry({
+          kind: null,
+          value: null,
+          activityKey: ACTIVITY_TYPE_KEYS.wake,
+          activityLabel: 'Wake',
+        }),
+      ),
+    ).toBe('Wake');
   });
 });
 

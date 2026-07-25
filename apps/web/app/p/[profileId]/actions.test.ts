@@ -1,4 +1,4 @@
-import { BODYWEIGHT_UNITS, newId } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, BODYWEIGHT_UNITS, METRIC_KEYS, newId } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // INTEGRATION TIER (see docs/definition-of-done.md → Test pyramid). These exercise
@@ -35,6 +35,7 @@ import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/en
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
+import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
 
 /** The day the harness declares by default — the active-tz today under the pinned default tz,
@@ -50,6 +51,7 @@ function localDay(offsetDays = 0): string {
 import {
   logBodyweightAction,
   logCheckinsAction,
+  logLifeActivitiesAction,
   logStrengthAction,
   type ActionState,
 } from './actions';
@@ -572,5 +574,129 @@ describe('declared-day ±1 bound (shared across writers)', () => {
     expect((await logStrengthAction(initial, strForm('2026-13-99'))).ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
     expect(logStrengthEntry).not.toHaveBeenCalled();
+  });
+});
+
+// ── V1-7: life activities (wake = timing event, wrestling_practice = one-tap duration) ──────
+const lifeForm = (fields: Record<string, string>) =>
+  form({ profileId: PROFILE_ID, clientId: newId(), ...fields });
+
+describe('logLifeActivitiesAction — boundary', () => {
+  it('rejects an activityKey not in the trusted life set (never trust the body)', async () => {
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: 'sc_lift' }), // a real activity, but not a life one
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing/absent activityKey', async () => {
+    const res = await logLifeActivitiesAction(
+      initial,
+      form({ profileId: PROFILE_ID, clientId: newId() }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing/malformed profileId or clientId without touching the DAL', async () => {
+    expect(
+      (
+        await logLifeActivitiesAction(
+          initial,
+          form({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId: newId() }),
+        )
+      ).ok,
+    ).toBe(false);
+    expect(
+      (
+        await logLifeActivitiesAction(
+          initial,
+          lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId: 'nope' }),
+        )
+      ).ok,
+    ).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale day on wrestling practice (day-grain, bounded ±1)', async () => {
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: '2020-01-01' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('IGNORES the declared day for wake (a "now" event stamps its own day, no ±1 rejection)', async () => {
+    // Wake derives day/minutes/event_at from now, so even a wildly stale rendered `day` still logs
+    // (on today) — the cross-midnight-wrong-day bug the review caught can't happen.
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, day: '2020-01-01' }),
+    );
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].day).toBe(localDay());
+  });
+
+  it('fails gracefully (no write) when the profile is unknown', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+});
+
+describe('logLifeActivitiesAction — happy path', () => {
+  it('logs wake as a timing event: metricKey null, eventAt a Date, value = local minutes (0–1439)', async () => {
+    const clientId = newId();
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId }),
+    );
+    expect(res.ok).toBe(true);
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    const { items, day } = vi.mocked(logCheckinEntries).mock.calls[0]![0];
+    expect(day).toBe(localDay());
+    expect(items).toHaveLength(1);
+    const item = items[0]!;
+    expect(item.activityKey).toBe(ACTIVITY_TYPE_KEYS.wake);
+    expect(item.metricKey).toBeNull();
+    expect(item.clientId).toBe(clientId);
+    expect(item.eventAt).toBeInstanceOf(Date);
+    expect(item.value).toBeGreaterThanOrEqual(0);
+    expect(item.value).toBeLessThanOrEqual(1439);
+    expect(Number.isInteger(item.value)).toBe(true);
+  });
+
+  it('logs wrestling practice one-tap: practice_minutes at the default, no eventAt', async () => {
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice }),
+    );
+    expect(res.ok).toBe(true);
+    const item = vi.mocked(logCheckinEntries).mock.calls[0]![0].items[0]!;
+    expect(item.activityKey).toBe(ACTIVITY_TYPE_KEYS.wrestling_practice);
+    expect(item.metricKey).toBe(METRIC_KEYS.practice_minutes);
+    expect(item.value).toBe(DEFAULT_PRACTICE_MINUTES);
+    expect(item.eventAt).toBeUndefined();
+  });
+
+  it('treats an idempotent replay (client_id conflict) as SUCCESS, not a destructive error', async () => {
+    // A one-tap double-tap reuses the same fixed client_id → ON CONFLICT dedupe → created:false. The
+    // end state is identical (the activity is logged), so it must return ok:true — never a red
+    // "already logged" alert for an operation that in fact succeeded (review finding).
+    vi.mocked(logCheckinEntries).mockResolvedValueOnce([
+      { clientId: 'x', id: null, created: false },
+    ]);
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
+    );
+    expect(res.ok).toBe(true);
   });
 });

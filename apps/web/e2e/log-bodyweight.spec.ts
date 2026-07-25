@@ -6,6 +6,7 @@ import {
   logBodyweight,
   logCalisthenics,
   logCheckins,
+  logLifeActivity,
   selectProfile,
   submitCheckins,
 } from './steps';
@@ -35,6 +36,14 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-6a: the accumulating calisthenics path — log a count, assert the totals card.
   await logCalisthenics(page, { label: 'Push-ups', value: '20' });
+
+  // V1-7: the one-tap life activities — a timing event (wake, shown as a local clock) and a
+  // one-tap duration (wrestling practice, the default 90 min via the metric-label default path).
+  await logLifeActivity(page, { button: 'Wake', expectInList: /Wake — \d{1,2}:\d{2} [AP]M/ });
+  await logLifeActivity(page, {
+    button: 'Wrestling practice',
+    expectInList: /Practice minutes — 90 min/,
+  });
 });
 
 // V1-6a: multi-submit correctness — the bugs the "duplicated data" screenshot surfaced.

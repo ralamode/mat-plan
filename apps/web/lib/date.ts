@@ -16,22 +16,71 @@ import { z } from 'zod';
 export const isoDaySchema = z.iso.date();
 
 /**
- * The LOCAL calendar date (`YYYY-MM-DD`) of the instant `now`, in `timeZone`.
- *
- * Assembled from `formatToParts` — engine-proof (no reliance on a locale's format string
- * or part order), and it uses the platform's tz database, so DST and no-DST zones
- * (Arizona, Hawaii) are handled without any manual offset/DST math. NEVER
- * `toISOString().slice` (UTC) and NEVER `new Date("YYYY-MM-DD")` (parsed as UTC midnight).
+ * The LOCAL date+time parts of the instant `now`, in `timeZone` — the shared `formatToParts`
+ * primitive `localDayIso` and `localMinutesSinceMidnight` both build on (engine-proof: assembled
+ * by part `type`, no reliance on a locale's format string). `hourCycle: 'h23'` so midnight is hour
+ * `00` (not `12` on a 12-hour locale, nor `24` on `h24`). Uses the platform tz database → DST and
+ * no-DST zones (Arizona, Hawaii) are handled without any manual offset math.
  */
-export function localDayIso(timeZone: string, now: Date = new Date()): string {
+function localDateParts(timeZone: string, now: Date) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(now);
   const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+  };
+}
+
+/**
+ * The LOCAL calendar date (`YYYY-MM-DD`) of the instant `now`, in `timeZone`. NEVER
+ * `toISOString().slice` (UTC) and NEVER `new Date("YYYY-MM-DD")` (parsed as UTC midnight).
+ */
+export function localDayIso(timeZone: string, now: Date = new Date()): string {
+  const { year, month, day } = localDateParts(timeZone, now);
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Whole minutes since LOCAL midnight of `now` in `timeZone` (0–1439). The wall-clock projection
+ * `wake` stores in `value_num` (V1-7) so the clock renders tz-free at read time. `hourCycle:'h23'`
+ * (via `localDateParts`) makes 00:00 → 0 and 23:59 → 1439 — a 12-hour hour part would map midnight
+ * to 720. DST-safe: the tz database resolves the wall time; this is the wake CLOCK time, which is
+ * what "average wake time" wants (not elapsed minutes).
+ */
+export function localMinutesSinceMidnight(timeZone: string, now: Date = new Date()): number {
+  const { hour, minute } = localDateParts(timeZone, now);
+  return Number(hour) * 60 + Number(minute);
+}
+
+/**
+ * Format minutes-since-midnight (0–1439) as a local 12-hour clock string ("6:52 AM"). tz-FREE by
+ * design: the minutes are anchored at UTC epoch and formatted in UTC, so no zone re-enters (the same
+ * discipline as `formatDayLong`) — the caller already projected the local wall time into the number.
+ */
+export function minutesToClock(minutes: number): string {
+  return (
+    new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC',
+    })
+      .format(new Date(minutes * 60_000))
+      // Modern ICU (>=72) separates the time from AM/PM with a NARROW NO-BREAK SPACE (U+202F);
+      // JS \s matches it, so normalize to a plain space -> display/test/e2e read "6:52 AM".
+      .replace(/\s/g, ' ')
+  );
 }
 
 /** True iff `tz` is a resolvable IANA zone. Dependency-free: the Intl constructor throws
