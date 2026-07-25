@@ -12,8 +12,11 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
 import { entryLabel } from '@/lib/entries/entry-label';
 
+import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+
 import { BodyweightForm } from './bodyweight-form';
 import { CheckinForm } from './checkin-form';
+import { LifeForm } from './life-form';
 import { StrengthForm } from './strength-form';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
@@ -53,6 +56,14 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
     .filter((e) => e.activityKey !== null)
     .map((e) => (e.metricKey === null ? e.activityKey! : `${e.activityKey}:${e.metricKey}`))
     .filter((k) => !accumulatingKeys.has(k));
+
+  // V1-7: which life activities (wake / wrestling practice) are already logged today, so their
+  // one-tap buttons render inert. Derived from the same fetched entries (no extra query).
+  const loggedLifeKeys = entries
+    .map((e) => e.activityKey)
+    .filter(
+      (k): k is string => k !== null && (LIFE_ACTIVITY_KEYS as readonly string[]).includes(k),
+    );
 
   // V1-6a: the calisthenics tally — today's per-metric totals, folded from the day's entries.
   const calisTotals = calisthenicsTotals(entries);
@@ -101,6 +112,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
             />
           </section>
         ) : null}
+        <section aria-labelledby="life-heading" className="flex flex-col gap-3">
+          <h2 id="life-heading" className="text-lg font-medium">
+            Life
+          </h2>
+          <LifeForm profileId={profile.id} day={day} loggedLifeKeys={loggedLifeKeys} />
+        </section>
       </div>
 
       {calisTotals.length > 0 ? (

@@ -99,6 +99,28 @@ export async function submitCheckins(
  * STATE and only submit when the total isn't already present, so a Playwright retry (which
  * reuses the ephemeral DB) neither re-submits (double-count) nor trips the exact locator.
  */
+/**
+ * Tap a one-tap "Life" activity (V1-7: Wake / Wrestling practice) and assert it logged. Covers the
+ * timing/duration write path end-to-end. Retry-safe: an already-logged button renders inert (a
+ * "· logged today" line, not a button), so a Playwright retry on the reused DB skips the click and
+ * asserts the end state. `expectInList` is scoped to the Logged-entries region (the button's own
+ * label collides with the entries text — the docs/lessons.md substring trap).
+ */
+export async function logLifeActivity(
+  page: Page,
+  opts: { button: string; expectInList: RegExp },
+): Promise<void> {
+  const life = page.getByRole('region', { name: 'Life' });
+  const button = life.getByRole('button', { name: opts.button, exact: true });
+  if ((await button.count()) > 0) {
+    await button.click();
+    // The write + full RSC revalidation flips the button to an inert "· logged today" line.
+    await expect(life.getByText(`${opts.button} · logged today`)).toBeVisible({ timeout: 15_000 });
+  }
+  const logged = page.getByRole('region', { name: 'Logged entries' });
+  await expect(logged.getByText(opts.expectInList)).toBeVisible();
+}
+
 export async function logCalisthenics(
   page: Page,
   opts: { label: string; value: string },
