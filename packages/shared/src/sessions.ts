@@ -25,6 +25,13 @@ export type SessionType = (typeof SESSION_TYPES)[number];
 
 export const sessionTypeSchema = z.enum(SESSION_TYPES);
 
+/**
+ * The default session type — a kids' S&C day is 'strength' (Ray's PPL push/pull/legs come at v2).
+ * Named off the const (mirroring `DEFAULT_BODYWEIGHT_UNIT`) so a form/schema default is sourced,
+ * never a re-typed literal (AGENTS.md constants convention).
+ */
+export const DEFAULT_SESSION_TYPE: SessionType = SESSION_TYPES[0];
+
 /** Session log status — reuses the entry status vocabulary (single source). */
 export const SESSION_STATUSES = ENTRY_STATUSES;
 

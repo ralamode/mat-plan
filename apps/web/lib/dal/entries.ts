@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { schema } from '@mat-plan/db';
+import { schema, writeStrengthSession } from '@mat-plan/db';
 import {
   ENTRY_KIND,
   ENTRY_STATUS,
@@ -10,6 +10,7 @@ import {
   type BodyweightUnit,
   type EntryKind,
   type EntryStatus,
+  type SessionMovementInput,
   type Unit,
 } from '@mat-plan/shared';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
@@ -70,6 +71,10 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       kind: schema.entries.kind,
       unit: schema.entries.unit,
       movementName: schema.entries.movementName,
+      // internal — the set-fetch discriminant (never returned): a set-bearing sc_lift entry is the
+      // only row with movement_id. Replaces the `kind === 'strength'` dispatch so V1-8 session
+      // members (kind NULL) also fetch their sets, decoupling reads from the V1-1d `kind` drop.
+      movementId: schema.entries.movementId,
       valueNum: schema.entries.valueNum,
       status: schema.entries.status,
       notes: schema.entries.notes,
@@ -100,8 +105,11 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     // unspecified and the grouped bout display ("20, 30") would flip run to run.
     .orderBy(desc(schema.entries.createdAt), desc(schema.entries.id));
 
-  // Fetch sets for the strength entries in one query, then group by entry.
-  const strengthIds = rows.filter((r) => r.kind === ENTRY_KIND.strength).map((r) => r.id);
+  // Fetch sets for the set-bearing (strength) entries in one query, then group by entry. Dispatch on
+  // `movement_id !== null` (not `kind === 'strength'`): V1-8 session members are written kind=NULL, so
+  // the old dispatch would fetch zero sets for them. Only sc_lift entries carry a movement_id (metric
+  // rows have it NULL by the at-most-one CHECK), so this catches new session members AND legacy strength.
+  const strengthIds = rows.filter((r) => r.movementId !== null).map((r) => r.id);
   const setRows = strengthIds.length
     ? await db
         .select({
@@ -247,8 +255,8 @@ export type CheckinResult = {
  * a NULL-valued "presence" row would be rejected in prod. `db:verify` pins both directions.
  * (The 1/0 encoding is also what V1-6's sum/last aggregation and V1-13's CSV pivot want.)
  *
- * No transaction: a single multi-row INSERT is already atomic. `logStrengthEntry` uses one
- * because it spans two tables.
+ * No transaction: a single multi-row INSERT is already atomic. `logStrengthSession` uses one
+ * because it spans the sessions / entries / entry_sets tables.
  */
 export async function logCheckinEntries(args: {
   profilePublicId: string;
@@ -316,81 +324,39 @@ export async function logCheckinEntries(args: {
   }));
 }
 
-export type LogStrengthArgs = {
+export type LogStrengthSessionArgs = {
   profilePublicId: string;
-  movementName: string;
-  unit: BodyweightUnit; // lb/kg
-  sets: { reps: number; weight: number }[];
-  clientId: string; // client-stamped UUIDv7 (parent entry)
+  sessionType: string;
+  clientId: string; // client-stamped UUIDv7 (parent SESSION)
   day: string;
+  movements: readonly SessionMovementInput[]; // { movementName, unit, clientId, sets }
 };
 
 /**
- * Writes a strength entry + its sets in ONE transaction (V0-9): either the entry
- * and all N `entry_set` rows land, or none do. Idempotent by the entry's
- * `client_id` — a replay finds the existing entry and skips re-inserting sets
- * (so it never doubles the sets). Set ids are generated server-side.
+ * Writes a flat multi-movement strength SESSION (V1-8-2): one `sessions` row grouping N movement
+ * `entry`s (each → its `entry_set`s) in ONE transaction, per-row idempotency at every level. This
+ * is a THIN wrapper — it resolves the catalog ids the pure write core can't (the `sc_lift`
+ * activity type + each movement's `movement_id`, both cached/idempotent-by-slug, so resolving them
+ * OUTSIDE the tx is safe), then hands off to `writeStrengthSession` in `packages/db`, which the
+ * `db:verify` proof runs too (single-sourced — no drift). Profile ownership is re-resolved inside
+ * the core by `public_id` (the F7 seam). Returns the session's public id.
  */
-export async function logStrengthEntry(args: LogStrengthArgs): Promise<{ id: string }> {
-  // V1-1b dual-write: resolve the generalized columns BEFORE the transaction. An S&C
-  // lift is a set_list activity referencing a movement (no metric) — so movement_id is
-  // set and metric_key stays NULL (satisfies the at-most-one CHECK). find-or-create is
-  // idempotent by slug, so resolving it outside the tx is safe (a replay reuses the row).
+export async function logStrengthSession(
+  args: LogStrengthSessionArgs,
+): Promise<{ sessionId: string }> {
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
-  const movementId = await findOrCreateMovementId(args.movementName);
+  // Resolve each movement's id up front (find-or-create is idempotent by slug → safe outside the tx).
+  const movements = [];
+  for (const m of args.movements) {
+    movements.push({ ...m, movementId: await findOrCreateMovementId(m.movementName) });
+  }
 
-  return db.transaction(async (tx) => {
-    const [profile] = await tx
-      .select({ id: schema.profiles.id })
-      .from(schema.profiles)
-      .where(
-        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
-      )
-      .limit(1);
-    if (!profile) throw new Error('Profile not found');
-
-    const [entry] = await tx
-      .insert(schema.entries)
-      .values({
-        publicId: newId(),
-        clientId: args.clientId,
-        profileId: profile.id,
-        activityDate: args.day,
-        kind: ENTRY_KIND.strength,
-        unit: args.unit,
-        movementName: args.movementName,
-        activityTypeId,
-        movementId,
-        status: ENTRY_STATUS.done,
-      })
-      .onConflictDoNothing({
-        target: schema.entries.clientId,
-        where: isNull(schema.entries.deletedAt),
-      })
-      .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
-
-    // Idempotent replay: the entry already exists — return it, don't re-add sets.
-    if (!entry) {
-      const [existing] = await tx
-        .select({ publicId: schema.entries.publicId })
-        .from(schema.entries)
-        .where(eq(schema.entries.clientId, args.clientId))
-        .limit(1);
-      return { id: existing.publicId };
-    }
-
-    await tx.insert(schema.entrySets).values(
-      args.sets.map((s, i) => ({
-        publicId: newId(),
-        clientId: newId(),
-        entryId: entry.id,
-        idx: i + 1, // 1-based
-        reps: s.reps,
-        weightNum: String(s.weight),
-        status: ENTRY_STATUS.done,
-      })),
-    );
-
-    return { id: entry.publicId };
+  return writeStrengthSession(db, {
+    profilePublicId: args.profilePublicId,
+    day: args.day,
+    sessionType: args.sessionType,
+    sessionClientId: args.clientId,
+    activityTypeId,
+    movements,
   });
 }

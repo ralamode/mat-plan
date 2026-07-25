@@ -4,8 +4,21 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createDb, createDbPool, schema, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
-import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS, METRIC_KEYS, newId } from '@mat-plan/shared';
+import {
+  createDb,
+  createDbPool,
+  schema,
+  SEED_PROFILE_PUBLIC_ID,
+  writeStrengthSession,
+} from '@mat-plan/db';
+import {
+  ACTIVITY_TYPE_KEYS,
+  DEFAULT_SESSION_TYPE,
+  ENTRY_STATUS,
+  METRIC_KEYS,
+  newId,
+  SEED_ACTIVITY_TYPE_KEYS,
+} from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
 import { DEFAULT_TIME_ZONE } from '../lib/constants';
@@ -71,6 +84,8 @@ const STATES = {
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
   calisthenics: seedCalisthenics,
+  // V1-8-2: a logged flat multi-movement strength session (via the shipped write core).
+  'strength-session': seedStrengthSession,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -280,6 +295,62 @@ async function seedCalisthenics(dbUrl: string): Promise<void> {
       });
     console.log(
       '✓ seeded calisthenics fixture (habits; push-ups 20+30, pull-ups 12; ramp targets 60/15)',
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * V1-8-2: a logged multi-movement strength SESSION today, seeded THROUGH the shipped write core
+ * (`writeStrengthSession`) — so the screenshot shows the real flat-session rows, and the fixture
+ * dogfoods the same path the app + `db:verify` use. Two movements (2 sets + 1 set) render flat in
+ * the "Logged entries" list (session grouping is V1-8-3).
+ */
+async function seedStrengthSession(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [scLift] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift))
+      .limit(1);
+    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
+    const movementRows = await db
+      .select({ id: schema.movements.id, name: schema.movements.name })
+      .from(schema.movements)
+      .limit(2);
+    if (movementRows.length < 2) throw new Error('seeded movements not found — did db:seed run?');
+
+    await writeStrengthSession(db, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      day: localDayIso(DEFAULT_TIME_ZONE),
+      sessionType: DEFAULT_SESSION_TYPE,
+      sessionClientId: newId(),
+      activityTypeId: scLift.id,
+      movements: [
+        {
+          movementName: movementRows[0].name,
+          unit: 'lb',
+          movementId: movementRows[0].id,
+          clientId: newId(),
+          sets: [
+            { reps: 5, weight: 135 },
+            { reps: 5, weight: 155 },
+          ],
+        },
+        {
+          movementName: movementRows[1].name,
+          unit: 'lb',
+          movementId: movementRows[1].id,
+          clientId: newId(),
+          sets: [{ reps: 8, weight: 95 }],
+        },
+      ],
+    });
+    console.log(
+      `✓ seeded strength-session fixture (${movementRows[0].name} + ${movementRows[1].name}, flat)`,
     );
   } finally {
     await pool.end();
