@@ -257,6 +257,35 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
+  it('rejects a blank weight (must not coerce to 0)', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects two movements sharing a clientId (would silently drop one)', async () => {
+    const dupId = '019826b4-0000-7000-8000-0000000000aa';
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementName: 'Back squat', clientId: dupId, sets: [{ reps: '5', weight: '135' }] },
+          { movementName: 'Bench press', clientId: dupId, sets: [{ reps: '8', weight: '95' }] },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
   it('rejects a malformed movements JSON body without touching the DAL', async () => {
     const res = await logStrengthSessionAction(
       initial,

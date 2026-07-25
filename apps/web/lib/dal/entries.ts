@@ -100,10 +100,14 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
         isNull(schema.entries.deletedAt),
       ),
     )
-    // `id` (bigint identity) breaks created_at ties deterministically: rows written in one
-    // batch (e.g. several calisthenics bouts) share `now()`, so without this their order is
-    // unspecified and the grouped bout display ("20, 30") would flip run to run.
-    .orderBy(desc(schema.entries.createdAt), desc(schema.entries.id));
+    // `id` (bigint identity) breaks created_at ties deterministically: rows written in one batch
+    // share one `now()` (Postgres now() is the transaction timestamp), so without this their order
+    // is unspecified. The tiebreak is ASC so a batched insert reads in INSERTION order — a V1-8
+    // strength session's N movements (one tx, one created_at) show Squat, Bench, Row, not reversed.
+    // Across different created_at, desc(createdAt) still lists the day newest-first; calisthenics
+    // bouts are separate submits (distinct created_at), so `calisthenicsTotals`' oldest-first
+    // reverse is unaffected.
+    .orderBy(desc(schema.entries.createdAt), asc(schema.entries.id));
 
   // Fetch sets for the set-bearing (strength) entries in one query, then group by entry. Dispatch on
   // `movement_id !== null` (not `kind === 'strength'`): V1-8 session members are written kind=NULL, so
@@ -345,11 +349,14 @@ export async function logStrengthSession(
   args: LogStrengthSessionArgs,
 ): Promise<{ sessionId: string }> {
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
-  // Resolve each movement's id up front (find-or-create is idempotent by slug → safe outside the tx).
-  const movements = [];
-  for (const m of args.movements) {
-    movements.push({ ...m, movementId: await findOrCreateMovementId(m.movementName) });
-  }
+  // Resolve each movement's id up front (find-or-create is idempotent by slug → safe outside the tx,
+  // and independent → resolved in PARALLEL so a 12-movement session isn't 12 serial round trips).
+  const movements = await Promise.all(
+    args.movements.map(async (m) => ({
+      ...m,
+      movementId: await findOrCreateMovementId(m.movementName),
+    })),
+  );
 
   return writeStrengthSession(db, {
     profilePublicId: args.profilePublicId,

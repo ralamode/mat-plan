@@ -226,11 +226,17 @@ export async function logStrengthSessionAction(
     // sessionType omitted on purpose → schema default (see the note above).
   });
   if (!parsed.success) {
-    return {
-      ok: false,
-      error: 'Please fix the errors below.',
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
+    // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
+    // (a multi-card form otherwise shows an unlocatable "reps must be positive").
+    const movementMsgs = parsed.error.issues
+      .filter((i) => i.path[0] === 'movements')
+      .map((i) =>
+        typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
+      );
+    if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
+    return { ok: false, error: 'Please fix the errors below.', fieldErrors };
   }
 
   const day = await resolveDeclaredDay(formData.get('day'));

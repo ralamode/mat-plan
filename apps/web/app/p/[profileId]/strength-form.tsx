@@ -94,7 +94,9 @@ function StrengthFormBody({
     })),
   );
 
-  const movementsErr = state.fieldErrors?.movements?.[0];
+  // All movement-level messages (the action names each by movement number), not just the first —
+  // a multi-card form can have several invalid movements at once.
+  const movementErrs = state.fieldErrors?.movements ?? [];
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -141,10 +143,12 @@ function StrengthFormBody({
         </Button>
       </div>
 
-      {movementsErr ? (
-        <p role="alert" className="text-destructive text-sm">
-          {movementsErr}
-        </p>
+      {movementErrs.length > 0 ? (
+        <div role="alert" className="text-destructive flex flex-col gap-1 text-sm">
+          {movementErrs.map((m) => (
+            <p key={m}>{m}</p>
+          ))}
+        </div>
       ) : state.error ? (
         <p role="alert" className="text-destructive text-sm">
           {state.error}

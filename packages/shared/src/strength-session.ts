@@ -29,13 +29,27 @@ export type SessionMovementInput = z.infer<typeof sessionMovementSchema>;
  * reject it, making the happy path unreachable (panel B3). No superset fields — flat only; V1-8-3
  * adds superset grouping.
  */
-export const logStrengthSessionSchema = z.object({
-  profileId: uuidSchema,
-  clientId: uuidSchema,
-  sessionType: sessionTypeSchema.default(DEFAULT_SESSION_TYPE),
-  movements: z
-    .array(sessionMovementSchema)
-    .min(1, 'Add at least one movement.')
-    .max(12, 'That’s a lot of movements — split into two sessions.'),
-});
+export const logStrengthSessionSchema = z
+  .object({
+    profileId: uuidSchema,
+    clientId: uuidSchema,
+    sessionType: sessionTypeSchema.default(DEFAULT_SESSION_TYPE),
+    movements: z
+      .array(sessionMovementSchema)
+      .min(1, 'Add at least one movement.')
+      .max(12, 'That’s a lot of movements — split into two sessions.'),
+  })
+  // Each movement's `clientId` is its entry's idempotency key; the writer dedupes on it, so two
+  // movements sharing one would silently drop the second (ON CONFLICT → skip its sets). Reject that
+  // at the boundary — the form mints a fresh id per movement, so this only guards a crafted body.
+  .superRefine((val, ctx) => {
+    const ids = val.movements.map((m) => m.clientId);
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['movements'],
+        message: 'Each movement needs its own id.',
+      });
+    }
+  });
 export type LogStrengthSessionInput = z.infer<typeof logStrengthSessionSchema>;

@@ -22,10 +22,15 @@ type Executor =
   | NodePgDatabase<typeof schema>
   | PgTransaction<NodePgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
-export type SessionMovementInput = {
+/**
+ * A session movement with its catalog `movementId` already resolved (the caller owns
+ * `findOrCreateMovementId`). Named distinctly from `@mat-plan/shared`'s `SessionMovementInput`
+ * (the pre-resolution wire shape, no `movementId`) so importing both never collides.
+ */
+export type ResolvedSessionMovement = {
   movementName: string;
   unit: string;
-  movementId: number; // resolved by the caller (findOrCreateMovementId)
+  movementId: number;
   clientId: string; // per-movement entry idempotency key
   sets: readonly { reps: number; weight: number }[];
 };
@@ -34,9 +39,10 @@ export type SessionMovementInput = {
  * Insert the parent `sessions` row, idempotent by `client_id` (partial UNIQUE). On conflict the
  * row already exists (a replay) → re-select its id/public_id so members attach to it. `status` is
  * omitted → the column default ('done'); `sessionType` is the caller's (a sourced const, never a
- * re-typed literal).
+ * re-typed literal). NOT exported — call the transactional `writeStrengthSession` wrapper so the
+ * whole graph stays all-or-nothing (V1-8-3 exports it if it needs the superset branch).
  */
-export async function insertStrengthSessionRow(
+async function insertStrengthSessionRow(
   exec: Executor,
   args: { profileId: number; day: string; sessionType: string; clientId: string },
 ): Promise<{ id: number; publicId: string }> {
@@ -56,10 +62,13 @@ export async function insertStrengthSessionRow(
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
   if (row) return row;
 
+  // A conflict only fires against a LIVE row (the UNIQUE is partial WHERE deleted_at IS NULL), but a
+  // soft-deleted row can share the client_id — so guard the re-select to never attach members to a
+  // deleted session (matches the profile select's isNull guard).
   const [existing] = await exec
     .select({ id: schema.sessions.id, publicId: schema.sessions.publicId })
     .from(schema.sessions)
-    .where(eq(schema.sessions.clientId, args.clientId))
+    .where(and(eq(schema.sessions.clientId, args.clientId), isNull(schema.sessions.deletedAt)))
     .limit(1);
   return existing;
 }
@@ -72,9 +81,10 @@ export async function insertStrengthSessionRow(
  * is NULL, whole CHECK NULL → passes) and the at-most-one `entries_value_source_check`, and stops
  * feeding the V1-1d `kind` drop (panel R5/F2). `activity_type_id` is set (NOT-NULL CHECK).
  * `superset_id`/`superset_order` default NULL here; V1-8-3 passes them for the superset branch —
- * the same writer, not a fork.
+ * the same writer, not a fork. NOT exported — reached only via `writeStrengthSession`'s tx (V1-8-3
+ * exports it when the superset branch needs it directly).
  */
-export async function writeSessionStrengthEntry(
+async function writeSessionStrengthEntry(
   exec: Executor,
   args: {
     profileId: number;
@@ -112,12 +122,13 @@ export async function writeSessionStrengthEntry(
     })
     .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
 
-  // Idempotent replay: the entry already exists — return it, don't re-add sets.
+  // Idempotent replay: the entry already exists — return it, don't re-add sets. Guard deleted_at so a
+  // soft-deleted row sharing this client_id (post-V1-9) is never re-selected.
   if (!entry) {
     const [existing] = await exec
       .select({ id: schema.entries.id, publicId: schema.entries.publicId })
       .from(schema.entries)
-      .where(eq(schema.entries.clientId, args.clientId))
+      .where(and(eq(schema.entries.clientId, args.clientId), isNull(schema.entries.deletedAt)))
       .limit(1);
     return { ...existing, created: false };
   }
@@ -155,7 +166,7 @@ export async function writeStrengthSession(
     sessionType: string;
     sessionClientId: string;
     activityTypeId: number;
-    movements: readonly SessionMovementInput[];
+    movements: readonly ResolvedSessionMovement[];
   },
 ): Promise<{ sessionId: string }> {
   return db.transaction(async (tx) => {
