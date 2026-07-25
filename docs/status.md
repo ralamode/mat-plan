@@ -20,20 +20,23 @@ later data-only PR), **timezone / local-calendar-date correctness** (V1-6c, #50 
 active IANA local calendar date via a `tz` cookie + `localDayIso`, not UTC; all three writers thread the
 rendered day; instants stay UTC), and the **calisthenics ramp "This week" adherence UI** (V1-6b-2, #51 —
 read DAL + `<progress>`; the adherence query single-sourced in `packages/db` and run by both the DAL and
-`db:verify`; **"adherence computed" closed**).
+`db:verify`; **"adherence computed" closed**), and the two **one-tap "Life" activities** (V1-7, #52 — wake
+= a `timing` event with local minutes in `value_num` rendered tz-free; wrestling practice = one-tap
+`practice_minutes`; the generality proof — no migration, reuses the V1-5 write path).
 
-**In flight** — **V1-7**: the two **one-tap "Life" activities**. **Wake** is a `timing` event —
-`event_at` plus local minutes-since-midnight in `value_num`, rendered tz-free as a clock ("Wake — 6:52
-AM"). **Wrestling practice** is a one-tap `practice_minutes` at the default 90 ("Practice minutes — 90
-min"). **"The generality proof":** no migration and no new structure — `event_at`/`value_text` and the
-catalog rows already exist; it reuses the V1-5 write path (one optional `eventAt`) and V1-6c's tz seam.
-Hardened by the 4-lens panel (R1–R14: cut a full registry, fixed a 12-hour-clock defect, dispatch by
-`activityKey`). `db:verify` proves the shape-CHECK both ways.
+**In flight** — **V1-8-1**: the **`supersets` table + `entries.superset_id`/`superset_order`** (migration
+`0005`) + a `db:verify` proof — the data model for **strength sessions with supersets**, built to carry
+**arbitrary N-movement adult PPL pairings** (spec §4; v2 reuses it — no kids-only shortcut). **DB-only**
+(the write DAL + form are V1-8-2, the superset UI V1-8-3 — the V1-6b-1 split precedent). Hardened by the
+**5-lens panel incl. DB-safety** (R1–R12: added `uq_entries_superset_order` + a member-is-movement CHECK,
+cut `supersets.position`, same-session = writer invariant, corrected the Squawk/Neon gate claims,
+decoupled from V1-1d). ADR 0003 captures the model.
 
-**Remaining to the MVP:** V1-7 (in flight) → V1-8 (kids' strength via sessions; **+V1-8a** weighted
-calisthenics / max-strength) → V1-9 (edit/fix-a-set; **+V1-9a** per-exercise notes) → V1-10/11/12
-(template prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day
-E2E + rate-limit/Sentry) = MVP done.
+**Remaining to the MVP:** V1-8-1 (in flight) → V1-8-2/8-3 (session write path + superset UI) → V1-9
+(edit/fix-a-set; **+V1-9a** per-exercise notes, **+V1-9b** delete/clear-day) → V1-10/11/12 (template
+prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E +
+rate-limit/Sentry) = MVP done. _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
+calisthenics / max-strength.)_
 
 **Newly brainstormed (post-MVP, backlogged):** **V1-15 day navigation** (page back through previous
 days, read-only history; then a week-dot strip, then a month calendar) and **V1-16 progress dashboard**
