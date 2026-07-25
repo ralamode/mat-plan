@@ -8,14 +8,19 @@ import { minutesToClock } from '@/lib/date';
  * `server-only`, so the history view and the CSV export (later PRs) reuse it. Type-only
  * import of `EntryDTO` (erased at compile time) keeps this off the DAL's server runtime.
  *
- * Dispatch is over MUTUALLY EXCLUSIVE data-model discriminants, not an ordered ladder:
- * `entries_value_source_check` is at-most-one, so a row names a metric, OR a movement,
- * OR neither (a bare habit — the shape V1-5 introduces). Order is therefore not
- * load-bearing among branches 1-3.
+ * The TOP-LEVEL dispatch is over MUTUALLY EXCLUSIVE data-model discriminants, not an ordered
+ * ladder: `entries_value_source_check` is at-most-one, so a row names a metric, OR a movement,
+ * OR neither. Order is not load-bearing among branches 1/2/3.
  *
  *   1. `metricKey`     → a generalized metric entry; branch on `valueType`.
  *   2. `movementName`  → a strength lift.
- *   3. `activityLabel` → a check-in with neither source (a habit).
+ *   3. neither-source (a check-in habit or a life event) → refine by `activityKey`, then fall
+ *      back to the bare `activityLabel`.
+ *
+ * WITHIN branch 3, order IS load-bearing: a specific-activity refinement (e.g. `wake` → its clock)
+ * must precede the generic `activityLabel` fallback, since a wake row also carries an activityLabel.
+ * That's a documented ordered refinement, not a peer-branch ordering. (A future second timing/
+ * neither-source activity would add another such refinement, or motivate an input_shape dispatch.)
  *
  * ⚠️ The legacy `kind` fallbacks below are DEAD IN THE DATABASE and kept only as a
  * belt-and-braces default. Migration 0002 step 4a backfilled `metric_key='bodyweight'`

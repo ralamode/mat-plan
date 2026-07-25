@@ -620,13 +620,24 @@ describe('logLifeActivitiesAction — boundary', () => {
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
-  it('rejects a stale day (more than ±1 from today)', async () => {
+  it('rejects a stale day on wrestling practice (day-grain, bounded ±1)', async () => {
+    const res = await logLifeActivitiesAction(
+      initial,
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: '2020-01-01' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logCheckinEntries).not.toHaveBeenCalled();
+  });
+
+  it('IGNORES the declared day for wake (a "now" event stamps its own day, no ±1 rejection)', async () => {
+    // Wake derives day/minutes/event_at from now, so even a wildly stale rendered `day` still logs
+    // (on today) — the cross-midnight-wrong-day bug the review caught can't happen.
     const res = await logLifeActivitiesAction(
       initial,
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, day: '2020-01-01' }),
     );
-    expect(res.ok).toBe(false);
-    expect(logCheckinEntries).not.toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(logCheckinEntries).mock.calls[0]![0].day).toBe(localDay());
   });
 
   it('fails gracefully (no write) when the profile is unknown', async () => {
@@ -675,7 +686,10 @@ describe('logLifeActivitiesAction — happy path', () => {
     expect(item.eventAt).toBeUndefined();
   });
 
-  it('reports "already logged" when the client_id conflicted (idempotent replay)', async () => {
+  it('treats an idempotent replay (client_id conflict) as SUCCESS, not a destructive error', async () => {
+    // A one-tap double-tap reuses the same fixed client_id → ON CONFLICT dedupe → created:false. The
+    // end state is identical (the activity is logged), so it must return ok:true — never a red
+    // "already logged" alert for an operation that in fact succeeded (review finding).
     vi.mocked(logCheckinEntries).mockResolvedValueOnce([
       { clientId: 'x', id: null, created: false },
     ]);
@@ -683,7 +697,6 @@ describe('logLifeActivitiesAction — happy path', () => {
       initial,
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
     );
-    expect(res.ok).toBe(false);
-    expect(res.error).toMatch(/already logged/i);
+    expect(res.ok).toBe(true);
   });
 });

@@ -1,9 +1,10 @@
 'use client';
 
-import { ACTIVITY_TYPE_KEYS, newId } from '@mat-plan/shared';
+import { newId } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
 import { logLifeActivitiesAction, type ActionState } from './actions';
 
@@ -75,20 +76,16 @@ export function LifeForm({
   const logged = new Set(loggedLifeKeys);
   return (
     <div className="flex flex-wrap gap-3">
-      <LifeButton
-        profileId={profileId}
-        day={day}
-        activityKey={ACTIVITY_TYPE_KEYS.wake}
-        label="Wake"
-        logged={logged.has(ACTIVITY_TYPE_KEYS.wake)}
-      />
-      <LifeButton
-        profileId={profileId}
-        day={day}
-        activityKey={ACTIVITY_TYPE_KEYS.wrestling_practice}
-        label="Wrestling practice"
-        logged={logged.has(ACTIVITY_TYPE_KEYS.wrestling_practice)}
-      />
+      {LIFE_ACTIVITIES.map((a) => (
+        <LifeButton
+          key={a.key}
+          profileId={profileId}
+          day={day}
+          activityKey={a.key}
+          label={a.label}
+          logged={logged.has(a.key)}
+        />
+      ))}
     </div>
   );
 }
