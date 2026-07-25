@@ -25,6 +25,7 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  SESSION_TYPES,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
@@ -1099,6 +1100,26 @@ const [sessionProfileB] = await db
   })
   .returning({ id: schema.profiles.id });
 
+/** Insert `values` into a session-graph table idempotently (onConflictDoNothing on client_id) and
+ *  return the row id — re-selecting by client_id on a replay conflict. ONE helper so the three
+ *  session/superset/entry inserts can't drift on the replay-fetch strategy (code-reuse). */
+type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
+async function upsertReturningId(
+  table: GraphTable,
+  values: Record<string, unknown>,
+  clientId: string,
+): Promise<number> {
+  const [row] = await db
+    .insert(table)
+    .values(values as never)
+    .onConflictDoNothing({ target: table.clientId, where: isNull(table.deletedAt) })
+    .returning({ id: table.id });
+  return (
+    row?.id ??
+    (await db.select({ id: table.id }).from(table).where(eq(table.clientId, clientId)))[0].id
+  );
+}
+
 /** Insert a strength member/standalone entry (kind=NULL, movement_id+movement_name set) + its set,
  *  idempotent by client_id (a replay with the same `tag` is a no-op). Returns the entry id. */
 async function insertSessionEntry(
@@ -1112,9 +1133,9 @@ async function insertSessionEntry(
   },
 ): Promise<number> {
   const cid = `019826b4-0000-7000-8000-000000000a${tag}`;
-  const [entry] = await db
-    .insert(schema.entries)
-    .values({
+  const entryId = await upsertReturningId(
+    schema.entries,
+    {
       publicId: `019826b4-0000-7000-8000-0000000009${tag}`,
       clientId: cid,
       profileId: args.profileId,
@@ -1127,20 +1148,9 @@ async function insertSessionEntry(
       supersetId: args.supersetId ?? null,
       supersetOrder: args.supersetOrder ?? null,
       status: ENTRY_STATUS.done,
-    })
-    .onConflictDoNothing({
-      target: schema.entries.clientId,
-      where: isNull(schema.entries.deletedAt),
-    })
-    .returning({ id: schema.entries.id });
-  const entryId =
-    entry?.id ??
-    (
-      await db
-        .select({ id: schema.entries.id })
-        .from(schema.entries)
-        .where(eq(schema.entries.clientId, cid))
-    )[0].id;
+    },
+    cid,
+  );
   await db
     .insert(schema.entrySets)
     .values({
@@ -1159,58 +1169,30 @@ async function insertSessionEntry(
   return entryId;
 }
 
-/** Insert a session (idempotent by client_id). */
+/** Insert a session (idempotent by client_id). `SESSION_TYPES[0]` = 'strength' — the shared const,
+ *  not a re-typed literal. */
 async function insertSession(tag: string, profileId: number): Promise<number> {
   const cid = `019826b4-0000-7000-8000-000000000d${tag}`;
-  const [row] = await db
-    .insert(schema.sessions)
-    .values({
+  return upsertReturningId(
+    schema.sessions,
+    {
       publicId: `019826b4-0000-7000-8000-000000000e${tag}`,
       clientId: cid,
       profileId,
       activityDate: '2026-02-02',
-      sessionType: 'strength',
-    })
-    .onConflictDoNothing({
-      target: schema.sessions.clientId,
-      where: isNull(schema.sessions.deletedAt),
-    })
-    .returning({ id: schema.sessions.id });
-  return (
-    row?.id ??
-    (
-      await db
-        .select({ id: schema.sessions.id })
-        .from(schema.sessions)
-        .where(eq(schema.sessions.clientId, cid))
-    )[0].id
+      sessionType: SESSION_TYPES[0],
+    },
+    cid,
   );
 }
 
 /** Insert a superset (idempotent by client_id). */
 async function insertSuperset(tag: string, sessionId: number, label: string): Promise<number> {
   const cid = `019826b4-0000-7000-8000-000000000f${tag}`;
-  const [row] = await db
-    .insert(schema.supersets)
-    .values({
-      publicId: `019826b4-0000-7000-8000-0000000010${tag}`,
-      clientId: cid,
-      sessionId,
-      label,
-    })
-    .onConflictDoNothing({
-      target: schema.supersets.clientId,
-      where: isNull(schema.supersets.deletedAt),
-    })
-    .returning({ id: schema.supersets.id });
-  return (
-    row?.id ??
-    (
-      await db
-        .select({ id: schema.supersets.id })
-        .from(schema.supersets)
-        .where(eq(schema.supersets.clientId, cid))
-    )[0].id
+  return upsertReturningId(
+    schema.supersets,
+    { publicId: `019826b4-0000-7000-8000-0000000010${tag}`, clientId: cid, sessionId, label },
+    cid,
   );
 }
 
