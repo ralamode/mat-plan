@@ -25,6 +25,7 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  SESSION_TYPES,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
@@ -33,7 +34,7 @@ import {
   UNIT_CODES,
   WEEK_LENGTH_DAYS,
 } from '@mat-plan/shared';
-import { and, eq, gte, isNull, lt, max, sql, sum } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
@@ -1071,6 +1072,366 @@ assert.equal(
 assert.equal(Number(wrestlingRow.valueNum), 90, 'V1-7: wrestling value_num = default minutes');
 console.log(
   '✓ V1-7: wake (timing event) + wrestling_practice round-trip; NULL-value_num wake rejected',
+);
+
+// ── V1-8-1: strength SESSION + SUPERSET model — the generality proof ──────────────────────────
+// Prove the schema carries ARBITRARY N-movement adult PPL pairings (spec §4): a session groups N
+// movement entries; 2+ are tagged into a superset (superset_id + superset_order); each member is a
+// strength entry (kind=NULL, movement_id + movement_name set, metric_key NULL) → entry_set. Order
+// within a superset is deterministic (uq_entries_superset_order); session-level order is insertion (id).
+const scLiftActivityId = await activityTypeIdByKey('sc_lift');
+const [movX, movY, movZ] = movements; // three distinct seeded movements
+const [sessionProfileA] = await db
+  .insert(schema.profiles)
+  .values({
+    publicId: '019826b4-0000-7000-8000-0000000009a0',
+    name: 'Session Kid A',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  })
+  .returning({ id: schema.profiles.id });
+const [sessionProfileB] = await db
+  .insert(schema.profiles)
+  .values({
+    publicId: '019826b4-0000-7000-8000-0000000009b0',
+    name: 'Session Kid B',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  })
+  .returning({ id: schema.profiles.id });
+
+/** Insert `values` into a session-graph table idempotently (onConflictDoNothing on client_id) and
+ *  return the row id — re-selecting by client_id on a replay conflict. ONE helper so the three
+ *  session/superset/entry inserts can't drift on the replay-fetch strategy (code-reuse). */
+type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
+async function upsertReturningId(
+  table: GraphTable,
+  values: Record<string, unknown>,
+  clientId: string,
+): Promise<number> {
+  const [row] = await db
+    .insert(table)
+    .values(values as never)
+    .onConflictDoNothing({ target: table.clientId, where: isNull(table.deletedAt) })
+    .returning({ id: table.id });
+  return (
+    row?.id ??
+    (await db.select({ id: table.id }).from(table).where(eq(table.clientId, clientId)))[0].id
+  );
+}
+
+/** Insert a strength member/standalone entry (kind=NULL, movement_id+movement_name set) + its set,
+ *  idempotent by client_id (a replay with the same `tag` is a no-op). Returns the entry id. */
+async function insertSessionEntry(
+  tag: string,
+  args: {
+    profileId: number;
+    sessionId: number;
+    movementId: number;
+    supersetId?: number;
+    supersetOrder?: number;
+  },
+): Promise<number> {
+  const cid = `019826b4-0000-7000-8000-000000000a${tag}`;
+  const entryId = await upsertReturningId(
+    schema.entries,
+    {
+      publicId: `019826b4-0000-7000-8000-0000000009${tag}`,
+      clientId: cid,
+      profileId: args.profileId,
+      sessionId: args.sessionId,
+      activityDate: '2026-02-02',
+      unit: 'lb',
+      movementName: 'Lift', // kind=NULL + movement_name set → passes entries_shape_check (3-valued NULL)
+      activityTypeId: scLiftActivityId,
+      movementId: args.movementId,
+      supersetId: args.supersetId ?? null,
+      supersetOrder: args.supersetOrder ?? null,
+      status: ENTRY_STATUS.done,
+    },
+    cid,
+  );
+  await db
+    .insert(schema.entrySets)
+    .values({
+      publicId: `019826b4-0000-7000-8000-000000000b${tag}`,
+      clientId: `019826b4-0000-7000-8000-000000000c${tag}`,
+      entryId,
+      idx: 1,
+      reps: 5,
+      weightNum: '135',
+      status: ENTRY_STATUS.done,
+    })
+    .onConflictDoNothing({
+      target: schema.entrySets.clientId,
+      where: isNull(schema.entrySets.deletedAt),
+    });
+  return entryId;
+}
+
+/** Insert a session (idempotent by client_id). `SESSION_TYPES[0]` = 'strength' — the shared const,
+ *  not a re-typed literal. */
+async function insertSession(tag: string, profileId: number): Promise<number> {
+  const cid = `019826b4-0000-7000-8000-000000000d${tag}`;
+  return upsertReturningId(
+    schema.sessions,
+    {
+      publicId: `019826b4-0000-7000-8000-000000000e${tag}`,
+      clientId: cid,
+      profileId,
+      activityDate: '2026-02-02',
+      sessionType: SESSION_TYPES[0],
+    },
+    cid,
+  );
+}
+
+/** Insert a superset (idempotent by client_id). */
+async function insertSuperset(tag: string, sessionId: number, label: string): Promise<number> {
+  const cid = `019826b4-0000-7000-8000-000000000f${tag}`;
+  return upsertReturningId(
+    schema.supersets,
+    { publicId: `019826b4-0000-7000-8000-0000000010${tag}`, clientId: cid, sessionId, label },
+    cid,
+  );
+}
+
+// Session 1 (profile A): a 2-movement superset + a standalone movement (a MIXED session).
+const session1 = await insertSession('10', sessionProfileA.id);
+const superset1 = await insertSuperset('10', session1, 'DB Bench + Overhead Press');
+const memberA = await insertSessionEntry('11', {
+  profileId: sessionProfileA.id,
+  sessionId: session1,
+  movementId: movX.id,
+  supersetId: superset1,
+  supersetOrder: 1,
+});
+const memberB = await insertSessionEntry('12', {
+  profileId: sessionProfileA.id,
+  sessionId: session1,
+  movementId: movY.id,
+  supersetId: superset1,
+  supersetOrder: 2,
+});
+const standaloneC = await insertSessionEntry('13', {
+  profileId: sessionProfileA.id,
+  sessionId: session1,
+  movementId: movZ.id,
+});
+
+const s1entries = await db
+  .select({
+    id: schema.entries.id,
+    kind: schema.entries.kind,
+    movementId: schema.entries.movementId,
+    supersetId: schema.entries.supersetId,
+    supersetOrder: schema.entries.supersetOrder,
+  })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.sessionId, session1), isNull(schema.entries.deletedAt)))
+  .orderBy(schema.entries.id);
+assert.equal(s1entries.length, 3, 'V1-8-1: the session groups its 3 movement entries');
+assert.deepEqual(
+  s1entries.map((e) => e.id),
+  [memberA, memberB, standaloneC],
+  'V1-8-1: session-level block order is deterministic by insertion (id)',
+);
+for (const e of s1entries) {
+  assert.equal(e.kind, null, 'V1-8-1: session entry is kind=NULL (decoupled from the V1-1d drop)');
+  assert.ok(e.movementId != null, 'V1-8-1: session entry carries movement_id');
+}
+assert.equal(
+  s1entries.find((e) => e.id === memberA)!.supersetId,
+  superset1,
+  'V1-8-1: member A is tagged to the superset',
+);
+assert.equal(s1entries.find((e) => e.id === memberA)!.supersetOrder, 1, 'V1-8-1: member A order 1');
+assert.equal(s1entries.find((e) => e.id === memberB)!.supersetOrder, 2, 'V1-8-1: member B order 2');
+assert.equal(
+  s1entries.find((e) => e.id === standaloneC)!.supersetId,
+  null,
+  'V1-8-1: the standalone movement has no superset',
+);
+
+const s1members = await db
+  .select({ order: schema.entries.supersetOrder })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.supersetId, superset1), isNull(schema.entries.deletedAt)))
+  .orderBy(schema.entries.supersetOrder);
+assert.deepEqual(
+  s1members.map((m) => m.order),
+  [1, 2],
+  'V1-8-1: superset members return in their alternating order',
+);
+
+const s1sets = await db
+  .select({ id: schema.entrySets.id })
+  .from(schema.entrySets)
+  .where(inArray(schema.entrySets.entryId, [memberA, memberB, standaloneC]));
+assert.equal(s1sets.length, 3, 'V1-8-1: each session entry expands to an entry_set');
+
+// Session 2 (profile A): a 3-movement superset — NO arity cap (the PPL-generality property).
+const session2 = await insertSession('20', sessionProfileA.id);
+const superset2 = await insertSuperset('20', session2, 'Three-way giant set');
+await insertSessionEntry('21', {
+  profileId: sessionProfileA.id,
+  sessionId: session2,
+  movementId: movX.id,
+  supersetId: superset2,
+  supersetOrder: 1,
+});
+await insertSessionEntry('22', {
+  profileId: sessionProfileA.id,
+  sessionId: session2,
+  movementId: movY.id,
+  supersetId: superset2,
+  supersetOrder: 2,
+});
+await insertSessionEntry('23', {
+  profileId: sessionProfileA.id,
+  sessionId: session2,
+  movementId: movZ.id,
+  supersetId: superset2,
+  supersetOrder: 3,
+});
+const s2members = await db
+  .select({ order: schema.entries.supersetOrder })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.supersetId, superset2), isNull(schema.entries.deletedAt)))
+  .orderBy(schema.entries.supersetOrder);
+assert.deepEqual(
+  s2members.map((m) => m.order),
+  [1, 2, 3],
+  'V1-8-1: a 3-movement superset round-trips (no arity cap) — v2 PPL reuses it verbatim',
+);
+
+// Idempotent whole-graph replay (R8): re-run session1's graph (same client_ids) → still one graph.
+await insertSession('10', sessionProfileA.id);
+await insertSuperset('10', session1, 'DB Bench + Overhead Press');
+await insertSessionEntry('11', {
+  profileId: sessionProfileA.id,
+  sessionId: session1,
+  movementId: movX.id,
+  supersetId: superset1,
+  supersetOrder: 1,
+});
+const s1entriesAfter = await db
+  .select({ id: schema.entries.id })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.sessionId, session1), isNull(schema.entries.deletedAt)));
+const s1supersetsAfter = await db
+  .select({ id: schema.supersets.id })
+  .from(schema.supersets)
+  .where(and(eq(schema.supersets.sessionId, session1), isNull(schema.supersets.deletedAt)));
+assert.equal(
+  s1entriesAfter.length,
+  3,
+  'V1-8-1: replaying the graph inserts no duplicate entries (per-row client_id dedupe)',
+);
+assert.equal(s1supersetsAfter.length, 1, 'V1-8-1: replaying inserts no duplicate superset');
+
+// Profile scoping (R2 — writer invariant): profile B's session never appears in profile A's graph.
+const sessionB = await insertSession('30', sessionProfileB.id);
+await insertSuperset('30', sessionB, 'B superset');
+const aSupersets = await db
+  .select({ id: schema.supersets.id })
+  .from(schema.supersets)
+  .innerJoin(schema.sessions, eq(schema.supersets.sessionId, schema.sessions.id))
+  .where(
+    and(eq(schema.sessions.profileId, sessionProfileA.id), isNull(schema.supersets.deletedAt)),
+  );
+assert.equal(
+  aSupersets.length,
+  2,
+  'V1-8-1: profile A sees only its own supersets (scoped via session.profile_id)',
+);
+console.log(
+  '✓ V1-8-1: session + superset (2- and 3-movement) round-trip; mixed order deterministic; idempotent replay; profile-scoped',
+);
+
+// Constraint rejections (6) via the shared helper.
+await expectRejectedBy('entries_superset_order_check', () =>
+  db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-000000009f01',
+    clientId: '019826b4-0000-7000-8000-000000009f02',
+    profileId: sessionProfileA.id,
+    sessionId: session1,
+    activityDate: '2026-02-02',
+    unit: 'lb',
+    movementName: 'Lift',
+    activityTypeId: scLiftActivityId,
+    movementId: movX.id,
+    supersetId: superset1,
+    supersetOrder: null, // superset without an order → the pairing CHECK
+    status: ENTRY_STATUS.done,
+  }),
+);
+await expectRejectedBy('uq_entries_superset_order', () =>
+  db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-000000009f03',
+    clientId: '019826b4-0000-7000-8000-000000009f04',
+    profileId: sessionProfileA.id,
+    sessionId: session1,
+    activityDate: '2026-02-02',
+    unit: 'lb',
+    movementName: 'Lift',
+    activityTypeId: scLiftActivityId,
+    movementId: movZ.id,
+    supersetId: superset1,
+    supersetOrder: 1, // slot 1 already taken in superset1 → the ordinal UNIQUE
+    status: ENTRY_STATUS.done,
+  }),
+);
+await expectRejectedBy('entries_superset_movement_check', () =>
+  db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-000000009f05',
+    clientId: '019826b4-0000-7000-8000-000000009f06',
+    profileId: sessionProfileA.id,
+    sessionId: session1,
+    activityDate: '2026-02-02',
+    unit: 'bool',
+    valueNum: '1',
+    activityTypeId: scLiftActivityId,
+    movementId: null, // a superset member that isn't a movement → the member-is-movement CHECK
+    supersetId: superset1,
+    supersetOrder: 9,
+    status: ENTRY_STATUS.done,
+  }),
+);
+await expectRejectedBy('entries_superset_id_supersets_id_fk', () =>
+  db.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-000000009f07',
+    clientId: '019826b4-0000-7000-8000-000000009f08',
+    profileId: sessionProfileA.id,
+    sessionId: session1,
+    activityDate: '2026-02-02',
+    unit: 'lb',
+    movementName: 'Lift',
+    activityTypeId: scLiftActivityId,
+    movementId: movX.id,
+    supersetId: 9_999_999, // no such superset → FK
+    supersetOrder: 5,
+    status: ENTRY_STATUS.done,
+  }),
+);
+await expectRejectedBy('supersets_session_id_sessions_id_fk', () =>
+  db.insert(schema.supersets).values({
+    publicId: '019826b4-0000-7000-8000-000000009f09',
+    clientId: '019826b4-0000-7000-8000-000000009f0a',
+    sessionId: 9_999_999, // no such session → FK
+    label: 'orphan',
+  }),
+);
+await expectRejectedBy('uq_supersets_client_id', () =>
+  db.insert(schema.supersets).values({
+    publicId: '019826b4-0000-7000-8000-000000009f0b',
+    clientId: '019826b4-0000-7000-8000-000000000f10', // superset1's client_id (tag '10') → partial UNIQUE
+    sessionId: session1,
+    label: 'dup client',
+  }),
+);
+console.log(
+  '✓ V1-8-1: superset rejections (order pairing, dup slot, member-is-movement, 2 FKs, client_id UNIQUE)',
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
