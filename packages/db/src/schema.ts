@@ -122,6 +122,12 @@ export const entries = pgTable(
     ),
     movementId: bigint('movement_id', { mode: 'number' }).references(() => movements.id),
     metricKey: text('metric_key').references(() => metricDefinitions.key),
+    // V1-8: superset grouping. A member movement is tagged with its superset + its order WITHIN that
+    // superset (both NULL for a non-superset entry). The paired-nullability + member-is-a-movement
+    // CHECKs are HAND-ADDED in the migration (not here), keeping the drizzle snapshot clean — same
+    // pattern as entries_value_source_check / entries_activity_type_id_not_null.
+    supersetId: bigint('superset_id', { mode: 'number' }).references(() => supersets.id),
+    supersetOrder: integer('superset_order'),
     valueText: text('value_text'), // free-text / non-numeric metric readings
     context: text('context'), // e.g. warmup/working/amrap qualifier
     scheme: text('scheme'), // e.g. set/rep scheme label
@@ -136,6 +142,12 @@ export const entries = pgTable(
     index('idx_entries_activity_type').on(t.activityTypeId), // covering index for the activity_type FK
     index('idx_entries_movement').on(t.movementId), // covering index for the movement FK
     index('idx_entries_metric_key').on(t.metricKey), // covering index for the metric_key FK
+    index('idx_entries_superset').on(t.supersetId), // covering index for the superset FK (V1-8)
+    // Deterministic order WITHIN a superset — two members can't claim the same slot (V1-8). Mirrors
+    // uq_entry_sets_entry_idx (the ordinal-within-parent idiom).
+    uniqueIndex('uq_entries_superset_order')
+      .on(t.supersetId, t.supersetOrder)
+      .where(sql`${t.deletedAt} is null`),
     uniqueIndex('uq_entries_client_id')
       .on(t.clientId)
       .where(sql`${t.deletedAt} is null`),
@@ -312,6 +324,39 @@ export const sessions = pgTable(
       sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core')`,
     ),
     check('sessions_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
+  ],
+);
+
+/**
+ * superset — groups 2+ movements performed ALTERNATING within a session (spec.md §4). Each member
+ * movement still logs its own entry → entry_set, tagged by `entries.superset_id` + `superset_order`.
+ * Built to carry ARBITRARY N-movement adult PPL pairings from day one (v2 reuses it — no kids-only
+ * shortcut, no arity cap). Member order lives on `entries.superset_order`; a superset's session-level
+ * position is insertion order (`entries.created_at`/`id`), so there is deliberately NO `position`
+ * column. The "≥2 members" and same-session-membership invariants are enforced by the writer (a member
+ * entry sets `session_id = superset.session_id`), not the schema — matching how `entry.profile_id`
+ * vs `session.profile_id` is already handled. See docs/decisions/0003-superset-log-grouping.md.
+ */
+export const supersets = pgTable(
+  'supersets',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    // No natural key (label is free text) → client_id + partial UNIQUE is the idempotency arbiter for
+    // the offline replay graph — the sessions/entries idiom (NOT ramp_targets, which has none).
+    clientId: uuid('client_id').notNull(),
+    sessionId: bigint('session_id', { mode: 'number' })
+      .notNull()
+      .references(() => sessions.id),
+    label: text('label'), // "DB Bench + Overhead Press" / "light superset"
+    note: text('note'),
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_supersets_session').on(t.sessionId), // covering index for the session FK
+    uniqueIndex('uq_supersets_client_id')
+      .on(t.clientId)
+      .where(sql`${t.deletedAt} is null`),
   ],
 );
 
