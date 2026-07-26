@@ -1,4 +1,4 @@
-import { ENTRY_STATUS } from '@mat-plan/shared';
+import { ENTRY_STATUS, SESSION_TYPE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -7,7 +7,7 @@ import { getActiveTimeZone } from '@/lib/active-timezone';
 import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { formatDayLong, localDayIso, localWeekStartIso } from '@/lib/date';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
-import { listEntriesForDay } from '@/lib/dal/entries';
+import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
 import { entryLabel } from '@/lib/entries/entry-label';
@@ -155,47 +155,91 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           <EmptyState>No entries logged today.</EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
-            {rows.map((row) =>
-              row.kind === 'calisthenics' ? (
+            {rows.map((row) => {
+              if (row.kind === 'calisthenics') {
                 // Grouped calisthenics: ONE row per exercise, so N bouts don't read as N
                 // duplicate rows. Shows the bouts + "(N sets · total)" when there's more than one.
-                <li
-                  key={`c:${row.total.metricKey}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-                >
-                  <span className="font-medium">
-                    {row.total.label} — {row.total.values.join(', ')}
-                  </span>
-                  {row.total.readings > 1 ? (
-                    <span className="text-muted-foreground text-sm tabular-nums">
-                      {row.total.readings} sets · {row.total.total}
+                return (
+                  <li
+                    key={`c:${row.total.metricKey}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
+                  >
+                    <span className="font-medium">
+                      {row.total.label} — {row.total.values.join(', ')}
                     </span>
-                  ) : null}
-                </li>
-              ) : (
-                <li key={row.entry.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{entryLabel(row.entry)}</span>
-                    {row.entry.status !== ENTRY_STATUS.done ? (
-                      <span className="text-muted-foreground text-sm">{row.entry.status}</span>
+                    {row.total.readings > 1 ? (
+                      <span className="text-muted-foreground text-sm tabular-nums">
+                        {row.total.readings} sets · {row.total.total}
+                      </span>
                     ) : null}
-                  </div>
-                  {row.entry.sets.length > 0 ? (
-                    <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-                      {row.entry.sets.map((s) => (
-                        <li key={s.idx}>
-                          {s.reps ?? '?'} ×{' '}
-                          {s.weightLabel ?? `${s.weight ?? '?'} ${row.entry.unit}`}
+                  </li>
+                );
+              }
+              if (row.kind === 'session') {
+                // V1-8-3a: a logged strength session as ONE block — a type header + movement count,
+                // with its movements nested (each via the shared <MovementLine>). Supersets sub-bracket
+                // within this block in V1-8-3b.
+                const typeLabel =
+                  SESSION_TYPE_LABELS[row.session.type as keyof typeof SESSION_TYPE_LABELS] ??
+                  SESSION_TYPE_LABELS.strength;
+                const count = row.movements.length;
+                return (
+                  <li
+                    key={`s:${row.session.id}`}
+                    className="flex flex-col gap-2 rounded-lg border px-4 py-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <h3 className="font-medium">{typeLabel} session</h3>
+                      <span className="text-muted-foreground text-sm">
+                        {count} {count === 1 ? 'movement' : 'movements'}
+                      </span>
+                    </div>
+                    <ul className="flex flex-col gap-2">
+                      {row.movements.map((m) => (
+                        <li key={m.id} className="flex flex-col gap-1">
+                          <MovementLine entry={m} />
                         </li>
                       ))}
                     </ul>
-                  ) : null}
+                  </li>
+                );
+              }
+              return (
+                <li key={row.entry.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
+                  <MovementLine entry={row.entry} />
                 </li>
-              ),
-            )}
+              );
+            })}
           </ul>
         )}
       </section>
     </main>
+  );
+}
+
+/**
+ * One movement's display: its label + (non-done) status, then its sets. Shared (V1-8-3a) by the flat
+ * `{kind:'entry'}` row and each movement inside a session block, so the reps × weight/label fallback
+ * lives once. The caller supplies the `<li>` wrapper (flat = a bordered row; session = a nested item).
+ */
+function MovementLine({ entry }: { entry: EntryDTO }) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="font-medium">{entryLabel(entry)}</span>
+        {entry.status !== ENTRY_STATUS.done ? (
+          <span className="text-muted-foreground text-sm">{entry.status}</span>
+        ) : null}
+      </div>
+      {entry.sets.length > 0 ? (
+        <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+          {entry.sets.map((s) => (
+            <li key={s.idx}>
+              {s.reps ?? '?'} × {s.weightLabel ?? `${s.weight ?? '?'} ${entry.unit}`}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
   );
 }

@@ -32,6 +32,22 @@ export const sessionTypeSchema = z.enum(SESSION_TYPES);
  */
 export const DEFAULT_SESSION_TYPE: SessionType = SESSION_TYPES[0];
 
+/**
+ * Display labels for the session types (V1-8-3a) — the single source for the Today session-block
+ * header, mirroring `ACTIVITY_CATEGORY_LABELS`/`UNIT_LABELS`. The enum values are lowercase; the
+ * header renders via this map so no component re-types or re-cases a label. (Distinct from
+ * `ACTIVITY_CATEGORY_LABELS`, which lacks the PPL push/pull/legs/core types.)
+ */
+export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
+  strength: 'Strength',
+  conditioning: 'Conditioning',
+  skill: 'Skill',
+  push: 'Push',
+  pull: 'Pull',
+  legs: 'Legs',
+  core: 'Core',
+};
+
 /** Session log status — reuses the entry status vocabulary (single source). */
 export const SESSION_STATUSES = ENTRY_STATUSES;
 

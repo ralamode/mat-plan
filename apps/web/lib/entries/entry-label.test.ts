@@ -34,6 +34,8 @@ function entry(overrides: Partial<EntryDTO>): EntryDTO {
     aggregation: null,
     activityKey: null,
     activityLabel: null,
+    sessionId: null,
+    sessionType: null,
     sets: [],
     ...overrides,
   };
