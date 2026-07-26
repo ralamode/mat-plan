@@ -1,31 +1,22 @@
 import { z } from 'zod';
 
-import { BODYWEIGHT_UNITS } from './bodyweight';
-import { uuidSchema } from './id';
-
-/** One set of a strength movement. Weights use the same lb/kg set as bodyweight. */
+/**
+ * One set of a strength movement. Weights use the same lb/kg set as bodyweight. Consumed by
+ * `logStrengthSessionSchema` (V1-8-2) — the single-movement `logStrengthSchema` it once fed was
+ * retired when the form flipped to multi-movement sessions.
+ */
 export const strengthSetSchema = z.object({
   reps: z.coerce
     .number()
     .int('Reps must be a whole number.')
     .positive('Reps must be above 0.')
     .max(1000),
-  weight: z.coerce.number().min(0, 'Weight can’t be negative.').max(2000),
+  // 0 is a legitimate weight (bodyweight movement), so a blank string must NOT slip past `.min(0)`
+  // as 0 (Number('') === 0) — treat a blank as invalid (NaN fails the range check) on the JSON
+  // trust boundary. The browser form marks the input `required`, so this only guards a crafted body.
+  weight: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? NaN : v),
+    z.coerce.number().min(0, 'Weight can’t be negative.').max(2000),
+  ),
 });
 export type StrengthSetInput = z.infer<typeof strengthSetSchema>;
-
-/**
- * Input contract for logging a strength entry with its sets (V0-9). Written as
- * one `entry` + N `entry_set` rows in a single transaction. `clientId` stamps the
- * parent entry for idempotency (set ids are generated server-side).
- */
-export const logStrengthSchema = z.object({
-  // The profile to log against — the tile-supplied public id (UUIDv7). Re-validated
-  // server-side by the DAL (V1-3 ownership seam); never trusted from the form alone.
-  profileId: uuidSchema,
-  movementName: z.string().trim().min(1, 'Enter a movement.').max(100),
-  unit: z.enum(BODYWEIGHT_UNITS),
-  clientId: uuidSchema,
-  sets: z.array(strengthSetSchema).min(1, 'Add at least one set.').max(20),
-});
-export type LogStrengthInput = z.infer<typeof logStrengthSchema>;

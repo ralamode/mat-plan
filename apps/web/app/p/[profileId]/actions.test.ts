@@ -15,7 +15,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefined })) }));
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
-  logStrengthEntry: vi.fn(async () => ({ id: 'strength-pub-id' })),
+  logStrengthSession: vi.fn(async () => ({ sessionId: 'session-pub-id' })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
@@ -31,7 +31,7 @@ vi.mock('@/lib/dal/profiles', () => ({
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
-import { logBodyweight, logCheckinEntries, logStrengthEntry } from '@/lib/dal/entries';
+import { logBodyweight, logCheckinEntries, logStrengthSession } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
@@ -52,7 +52,7 @@ import {
   logBodyweightAction,
   logCheckinsAction,
   logLifeActivitiesAction,
-  logStrengthAction,
+  logStrengthSessionAction,
   type ActionState,
 } from './actions';
 
@@ -171,111 +171,186 @@ describe('logBodyweightAction — happy path + ownership', () => {
   });
 });
 
-// Builds strength FormData with parallel repeated reps/weight fields.
+// Builds strength-session FormData: the movement cards serialized into ONE hidden `movements` JSON
+// field (V1-8-2), plus the session-level profileId/clientId/day. `sessionType` is deliberately never
+// submitted (the schema default fires). `movementsRaw` injects a raw string for the malformed-JSON test.
 function strengthForm(opts: {
   profileId?: string;
-  movementName?: string;
-  unit?: string;
   clientId?: string;
   day?: string;
-  sets?: Array<{ reps: string; weight: string }>;
+  movements?: Array<{
+    movementName?: string;
+    unit?: string;
+    clientId?: string;
+    sets: Array<{ reps: string; weight: string }>;
+  }>;
+  movementsRaw?: string;
 }): FormData {
   const fd = new FormData();
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
-  if (opts.movementName !== undefined) fd.append('movementName', opts.movementName);
-  fd.append('unit', opts.unit ?? BODYWEIGHT_UNITS[0]);
   fd.append('clientId', opts.clientId ?? newId());
   fd.append('day', opts.day ?? localDay());
-  for (const s of opts.sets ?? []) {
-    fd.append('reps', s.reps);
-    fd.append('weight', s.weight);
+  if (opts.movementsRaw !== undefined) {
+    fd.append('movements', opts.movementsRaw);
+  } else if (opts.movements !== undefined) {
+    fd.append(
+      'movements',
+      JSON.stringify(
+        opts.movements.map((m) => ({
+          movementName: m.movementName ?? 'Back squat',
+          unit: m.unit ?? BODYWEIGHT_UNITS[0],
+          clientId: m.clientId ?? newId(),
+          sets: m.sets,
+        })),
+      ),
+    );
   }
   return fd;
 }
 
-describe('logStrengthAction — boundary (bad body → zod-reject)', () => {
-  it('rejects a missing movement without touching the DAL', async () => {
-    const res = await logStrengthAction(
+describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () => {
+  it('rejects a movement with a blank name without touching the DAL', async () => {
+    const res = await logStrengthSessionAction(
       initial,
       strengthForm({
         profileId: PROFILE_ID,
-        movementName: '',
-        sets: [{ reps: '5', weight: '135' }],
+        movements: [{ movementName: '', sets: [{ reps: '5', weight: '135' }] }],
       }),
     );
     expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movementName).toBeTruthy();
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
-  it('rejects when there are no sets (blank rows dropped)', async () => {
-    const res = await logStrengthAction(
+  it('rejects a movement with no sets', async () => {
+    const res = await logStrengthSessionAction(
       initial,
       strengthForm({
         profileId: PROFILE_ID,
-        movementName: 'Back squat',
-        sets: [{ reps: '', weight: '' }],
+        movements: [{ movementName: 'Back squat', sets: [] }],
       }),
     );
     expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.sets).toBeTruthy();
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty movements array (a session needs ≥1 movement)', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movements: [] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
   it('rejects a non-integer rep count', async () => {
-    const res = await logStrengthAction(
+    const res = await logStrengthSessionAction(
       initial,
       strengthForm({
         profileId: PROFILE_ID,
-        movementName: 'Back squat',
-        sets: [{ reps: '5.5', weight: '135' }],
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5.5', weight: '135' }] }],
       }),
     );
     expect(res.ok).toBe(false);
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank weight (must not coerce to 0)', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects two movements sharing a clientId (would silently drop one)', async () => {
+    const dupId = '019826b4-0000-7000-8000-0000000000aa';
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementName: 'Back squat', clientId: dupId, sets: [{ reps: '5', weight: '135' }] },
+          { movementName: 'Bench press', clientId: dupId, sets: [{ reps: '8', weight: '95' }] },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed movements JSON body without touching the DAL', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movementsRaw: '{not valid json' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
   it('rejects a missing profileId without touching the DAL', async () => {
-    const res = await logStrengthAction(
+    const res = await logStrengthSessionAction(
       initial,
-      strengthForm({ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }),
+      strengthForm({
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.profileId).toBeTruthy();
     expect(getProfileByPublicId).not.toHaveBeenCalled();
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 });
 
-describe('logStrengthAction — happy path (transactional nested write)', () => {
-  it('passes movement + parsed sets to the DAL and revalidates the scoped Today', async () => {
+describe('logStrengthSessionAction — happy path (multi-movement session)', () => {
+  it('passes the parsed movements + defaulted sessionType to the DAL and revalidates', async () => {
     const clientId = newId();
-    const res = await logStrengthAction(
+    const res = await logStrengthSessionAction(
       initial,
       strengthForm({
         profileId: PROFILE_ID,
-        movementName: 'Back squat',
         clientId,
-        sets: [
-          { reps: '5', weight: '135' },
-          { reps: '5', weight: '135' },
-          { reps: '3', weight: '155' },
+        movements: [
+          {
+            movementName: 'Back squat',
+            sets: [
+              { reps: '5', weight: '135' },
+              { reps: '3', weight: '155' },
+            ],
+          },
+          { movementName: 'Bench press', sets: [{ reps: '8', weight: '95' }] },
         ],
       }),
     );
     expect(res.ok).toBe(true);
     expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
-    expect(logStrengthEntry).toHaveBeenCalledWith(
+    expect(logStrengthSession).toHaveBeenCalledWith(
       expect.objectContaining({
         profilePublicId: PROFILE_ID,
-        movementName: 'Back squat',
-        unit: BODYWEIGHT_UNITS[0],
+        sessionType: 'strength', // the schema default (never submitted) — panel B3
         clientId,
         day: localDay(), // threaded from the rendered day (V1-6c)
-        sets: [
-          { reps: 5, weight: 135 },
-          { reps: 5, weight: 135 },
-          { reps: 3, weight: 155 },
+        movements: [
+          expect.objectContaining({
+            movementName: 'Back squat',
+            unit: BODYWEIGHT_UNITS[0],
+            sets: [
+              { reps: 5, weight: 135 }, // coerced to numbers by the schema
+              { reps: 3, weight: 155 },
+            ],
+          }),
+          expect.objectContaining({
+            movementName: 'Bench press',
+            sets: [{ reps: 8, weight: 95 }],
+          }),
         ],
       }),
     );
@@ -284,16 +359,15 @@ describe('logStrengthAction — happy path (transactional nested write)', () => 
 
   it('fails gracefully (no write) when the profile is unknown', async () => {
     vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
-    const res = await logStrengthAction(
+    const res = await logStrengthSessionAction(
       initial,
       strengthForm({
         profileId: PROFILE_ID,
-        movementName: 'Back squat',
-        sets: [{ reps: '5', weight: '135' }],
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
       }),
     );
     expect(res.ok).toBe(false);
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });
@@ -542,8 +616,7 @@ describe('declared-day ±1 bound (shared across writers)', () => {
   const strForm = (day: string) =>
     strengthForm({
       profileId: PROFILE_ID,
-      movementName: 'Back squat',
-      sets: [{ reps: '5', weight: '135' }],
+      movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
       day,
     });
   const ciForm = (day: string) =>
@@ -552,7 +625,7 @@ describe('declared-day ±1 bound (shared across writers)', () => {
   it.each([-1, 0, 1])('accepts a day within ±1 (offset %s)', async (offset) => {
     const day = localDay(offset);
     expect((await logBodyweightAction(initial, bwForm(day))).ok).toBe(true);
-    expect((await logStrengthAction(initial, strForm(day))).ok).toBe(true);
+    expect((await logStrengthSessionAction(initial, strForm(day))).ok).toBe(true);
     expect((await logCheckinsAction(initial, ciForm(day))).ok).toBe(true);
     // Sanity: the offset day is exactly ±1 (or 0) from the active-tz today.
     expect(Math.abs(isoDayDiff(day, localDay()))).toBeLessThanOrEqual(1);
@@ -561,19 +634,19 @@ describe('declared-day ±1 bound (shared across writers)', () => {
   it('rejects a day more than +1 ahead (stale/forward tab) on every writer', async () => {
     const day = localDay(2);
     const bw = await logBodyweightAction(initial, bwForm(day));
-    const str = await logStrengthAction(initial, strForm(day));
+    const str = await logStrengthSessionAction(initial, strForm(day));
     const ci = await logCheckinsAction(initial, ciForm(day));
     for (const res of [bw, str, ci]) expect(res.ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
     expect(logCheckinEntries).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed day on bodyweight/strength (after zod, before the DAL)', async () => {
     expect((await logBodyweightAction(initial, bwForm('not-a-date'))).ok).toBe(false);
-    expect((await logStrengthAction(initial, strForm('2026-13-99'))).ok).toBe(false);
+    expect((await logStrengthSessionAction(initial, strForm('2026-13-99'))).ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
-    expect(logStrengthEntry).not.toHaveBeenCalled();
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 });
 

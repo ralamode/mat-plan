@@ -247,6 +247,13 @@ append-outbox can replay a whole session→superset→entry graph idempotently.
 V1-8-2 concern — no new _enum_ is introduced, so slice 1 needs no shared const), `apps/web/lib/dal/entries.ts`,
 `apps/web/app/p/[profileId]/{actions,strength-form,page}.tsx`, `apps/web/lib/entries/*`.
 
+> **Rebalanced by the V1-8-2 panel** (see [v1-8-2-session-write-path.md](./v1-8-2-session-write-path.md) §10):
+> the **read-path session grouping** (the `session` TodayRow variant + header + nested render, the session/
+> superset `EntryDTO` fields, and the optional `feel`) **moved to V1-8-3**, which builds the grouping anyway
+> for superset bracketing — so 8-2 is the flat write path (movements render flat) and the strength write core
+> is **single-sourced in `packages/db`** (a caller-less `server-only` writer couldn't be shared with
+> `verify.ts`). The sketches below are the pre-rebalance intent; the 8-2 contract is the dedicated plan.
+
 ### V1-8-2 file sketch (next slice)
 
 - `packages/shared/src/strength-session.ts` NEW — `logStrengthSessionSchema` (profileId, day, sessionType
