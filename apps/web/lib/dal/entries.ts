@@ -11,6 +11,7 @@ import {
   type EntryKind,
   type EntryStatus,
   type SessionMovementInput,
+  type SessionType,
   type Unit,
 } from '@mat-plan/shared';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
@@ -65,7 +66,9 @@ export type EntryDTO = {
   // is the raw enum (rendered via SESSION_TYPE_LABELS at the view). `supersetId`/`supersetOrder` are
   // added in V1-8-3b with their bracketing reader — no dead DTO fields here.
   sessionId: string | null;
-  sessionType: string | null;
+  // The session's type from a CHECK-constrained column, so it's the SessionType union (not bare
+  // string) — the view indexes SESSION_TYPE_LABELS with no cast, and a stray value fails the build.
+  sessionType: SessionType | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -174,7 +177,8 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     activityKey: r.activityKey,
     activityLabel: r.activityLabel,
     sessionId: r.sessionId,
-    sessionType: r.sessionType,
+    // The sessions_session_type_check column only holds SessionType values (or NULL).
+    sessionType: r.sessionType as SessionType | null,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }

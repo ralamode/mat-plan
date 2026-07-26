@@ -1,4 +1,4 @@
-import { ENTRY_STATUS, SESSION_TYPE_LABELS } from '@mat-plan/shared';
+import { DEFAULT_SESSION_TYPE, ENTRY_STATUS, SESSION_TYPE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -179,9 +179,7 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 // V1-8-3a: a logged strength session as ONE block — a type header + movement count,
                 // with its movements nested (each via the shared <MovementLine>). Supersets sub-bracket
                 // within this block in V1-8-3b.
-                const typeLabel =
-                  SESSION_TYPE_LABELS[row.session.type as keyof typeof SESSION_TYPE_LABELS] ??
-                  SESSION_TYPE_LABELS.strength;
+                const typeLabel = SESSION_TYPE_LABELS[row.session.type ?? DEFAULT_SESSION_TYPE];
                 const count = row.movements.length;
                 return (
                   <li

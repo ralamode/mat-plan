@@ -1,4 +1,4 @@
-import { ACTIVITY_TYPE_KEYS, ENTRY_STATUS } from '@mat-plan/shared';
+import { ACTIVITY_TYPE_KEYS, DEFAULT_SESSION_TYPE, ENTRY_STATUS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { EntryDTO } from '@/lib/dal/entries';
@@ -157,7 +157,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       value: null,
       movementName: 'Back squat',
       sessionId: 's1',
-      sessionType: 'strength',
+      sessionType: DEFAULT_SESSION_TYPE,
       sets: [{ idx: 1, reps: 5, weight: 135, weightLabel: null }],
       ...o,
     });
@@ -170,7 +170,10 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       move({ id: 'c', movementName: 'Barbell row' }),
     ]);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: 'session', session: { id: 's1', type: 'strength' } });
+    expect(rows[0]).toMatchObject({
+      kind: 'session',
+      session: { id: 's1', type: DEFAULT_SESSION_TYPE },
+    });
     const session = rows[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
     expect(session.movements.map((m) => m.movementName)).toEqual([
       'Back squat',
@@ -193,8 +196,9 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     const session = sessions[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
     // Sorted by id asc == insertion order: a, b, then the appended d.
     expect(session.movements.map((m) => m.id)).toEqual(['a', 'b', 'd']);
-    // The block is emitted at the session's first-encountered member (position 0, the newest 'd').
-    expect(rows.map((r) => r.kind)).toEqual(['session', 'entry']);
+    // The block anchors at the session's OLDEST member ('a'), so it stays BELOW the later-logged habit
+    // (which is newer than 'a') rather than jumping to the top at the appended 'd' — no relocation.
+    expect(rows.map((r) => r.kind)).toEqual(['entry', 'session']);
   });
 
   it('keeps a mixed day intact: session block + calisthenics grouping + flat habit', () => {
