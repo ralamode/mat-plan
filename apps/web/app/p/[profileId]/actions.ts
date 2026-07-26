@@ -3,7 +3,7 @@
 import {
   ACTIVITY_TYPE_KEYS,
   logBodyweightSchema,
-  logStrengthSchema,
+  logStrengthSessionSchema,
   METRIC_KEYS,
   METRIC_VALUE_TYPE,
   uuidSchema,
@@ -23,7 +23,7 @@ import {
 import {
   logBodyweight,
   logCheckinEntries,
-  logStrengthEntry,
+  logStrengthSession,
   type CheckinItemInput,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
@@ -195,30 +195,48 @@ export async function logCheckinsAction(
   return { ok: true, error: null };
 }
 
-export async function logStrengthAction(
+/**
+ * Server Action: log a flat multi-movement strength SESSION (V1-8-2). The form serializes its
+ * movement cards (each: movementName, unit, per-movement clientId, sets) into ONE hidden
+ * `movements` JSON field — the only way to encode N movements × variable set counts (parallel
+ * repeated fields can't disambiguate boundaries). The `JSON.parse` is wrapped so a malformed body
+ * is a typed envelope, never `error.tsx`; the zod schema is the trust boundary (strength is
+ * inherently free data — no server registry to walk, unlike check-ins).
+ *
+ * `sessionType` is deliberately NOT read from the body — it's omitted so the schema default fires
+ * (FormData.get returns null, which .default() doesn't catch and z.enum rejects; V1-8-2 has no
+ * type control anyway). Same authZ gap as the other writers (existence-only until Clerk v1.5).
+ */
+export async function logStrengthSessionAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sets come in as parallel repeated fields; pair them up, drop blank rows.
-  const reps = formData.getAll('reps').map(String);
-  const weights = formData.getAll('weight').map(String);
-  const sets = reps
-    .map((r, i) => ({ reps: r, weight: weights[i] ?? '' }))
-    .filter((s) => s.reps.trim() !== '' || s.weight.trim() !== '');
+  const raw = formData.get('movements');
+  let movements: unknown;
+  try {
+    movements = typeof raw === 'string' ? JSON.parse(raw) : undefined;
+  } catch {
+    return { ok: false, error: 'Could not read the session. Reload and try again.' };
+  }
 
-  const parsed = logStrengthSchema.safeParse({
+  const parsed = logStrengthSessionSchema.safeParse({
     profileId: formData.get('profileId'),
-    movementName: formData.get('movementName'),
-    unit: formData.get('unit'),
     clientId: formData.get('clientId'),
-    sets,
+    movements,
+    // sessionType omitted on purpose → schema default (see the note above).
   });
   if (!parsed.success) {
-    return {
-      ok: false,
-      error: 'Please fix the errors below.',
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
+    // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
+    // (a multi-card form otherwise shows an unlocatable "reps must be positive").
+    const movementMsgs = parsed.error.issues
+      .filter((i) => i.path[0] === 'movements')
+      .map((i) =>
+        typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
+      );
+    if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
+    return { ok: false, error: 'Please fix the errors below.', fieldErrors };
   }
 
   const day = await resolveDeclaredDay(formData.get('day'));
@@ -227,16 +245,18 @@ export async function logStrengthAction(
   const profile = await getProfileByPublicId(parsed.data.profileId);
   if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
-  await logStrengthEntry({
+  await logStrengthSession({
     profilePublicId: profile.id,
-    movementName: parsed.data.movementName,
-    unit: parsed.data.unit,
-    sets: parsed.data.sets,
+    sessionType: parsed.data.sessionType,
     clientId: parsed.data.clientId,
     day: day.day,
+    movements: parsed.data.movements,
   });
 
   revalidatePath(`/p/${profile.id}`);
+  // Idempotent by the session's `client_id`: a replay (network retry) dedupes via ON CONFLICT and
+  // the end state is identical — that IS success (the form rotates the clientId on ok, so a
+  // resubmit is a genuine retry, not a new session), not a destructive "already logged" error.
   return { ok: true, error: null };
 }
 

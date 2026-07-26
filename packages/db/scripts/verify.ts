@@ -41,6 +41,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
+import { writeStrengthSession } from '../src/writers/strength-session';
 import {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
@@ -1432,6 +1433,131 @@ await expectRejectedBy('uq_supersets_client_id', () =>
 );
 console.log(
   '✓ V1-8-1: superset rejections (order pairing, dup slot, member-is-movement, 2 FKs, client_id UNIQUE)',
+);
+
+// ── V1-8-2: the FLAT session write path — through the SHARED writer core (single-sourced) ──────────
+// The app DAL's `logStrengthSession` and THIS proof both call `writeStrengthSession`, so this exercises
+// the ACTUAL insert path the app ships (not a bespoke re-implementation) — the `weeklyAdherenceRows`
+// "one unit, two consumers" pattern applied to a writer (panel B2/N5, the sole behavior pin for the core
+// now that `logStrengthEntry` is retired). A 3-movement flat session round-trips; a replay dedupes.
+const flatSessionCid = '019826b4-0000-7000-8000-000000001200';
+const flatArgs = {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  day: '2026-02-03',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: flatSessionCid,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: 'Back Squat',
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: '019826b4-0000-7000-8000-000000001201',
+      sets: [
+        { reps: 5, weight: 135 },
+        { reps: 5, weight: 155 },
+      ],
+    },
+    {
+      movementName: 'Bench Press',
+      unit: 'lb',
+      movementId: movY.id,
+      clientId: '019826b4-0000-7000-8000-000000001202',
+      sets: [{ reps: 8, weight: 95 }],
+    },
+    {
+      movementName: 'Barbell Row',
+      unit: 'lb',
+      movementId: movZ.id,
+      clientId: '019826b4-0000-7000-8000-000000001203',
+      sets: [{ reps: 10, weight: 75 }],
+    },
+  ],
+} as const;
+
+const flat = await writeStrengthSession(asPg, flatArgs);
+const [flatSession] = await db
+  .select({ id: schema.sessions.id, profileId: schema.sessions.profileId })
+  .from(schema.sessions)
+  .where(eq(schema.sessions.publicId, flat.sessionId));
+assert.ok(flatSession, 'V1-8-2: writeStrengthSession returns the session public_id');
+assert.equal(
+  flatSession.profileId,
+  sessionProfileA.id,
+  'V1-8-2: the session is written under the resolved profile (F7 seam, profile-scoped)',
+);
+
+const flatEntries = await db
+  .select({
+    id: schema.entries.id,
+    kind: schema.entries.kind,
+    movementId: schema.entries.movementId,
+    movementName: schema.entries.movementName,
+    sessionId: schema.entries.sessionId,
+    supersetId: schema.entries.supersetId,
+  })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.sessionId, flatSession.id), isNull(schema.entries.deletedAt)))
+  .orderBy(schema.entries.id);
+assert.equal(flatEntries.length, 3, 'V1-8-2: the flat session groups its 3 movement entries');
+for (const e of flatEntries) {
+  assert.equal(e.kind, null, 'V1-8-2: session member is kind=NULL (decoupled forward shape)');
+  assert.ok(
+    e.movementId != null,
+    'V1-8-2: member carries movement_id (read set-fetch discriminant)',
+  );
+  assert.ok(
+    e.movementName != null,
+    'V1-8-2: member carries movement_name (passes entries_shape_check)',
+  );
+  assert.equal(
+    e.sessionId,
+    flatSession.id,
+    'V1-8-2: member session_id == the session (writer invariant)',
+  );
+  assert.equal(e.supersetId, null, 'V1-8-2: a flat-session member has no superset');
+}
+const flatSets = await db
+  .select({ entryId: schema.entrySets.entryId, idx: schema.entrySets.idx })
+  .from(schema.entrySets)
+  .where(
+    inArray(
+      schema.entrySets.entryId,
+      flatEntries.map((e) => e.id),
+    ),
+  )
+  .orderBy(schema.entrySets.entryId, schema.entrySets.idx);
+assert.equal(flatSets.length, 4, 'V1-8-2: 2+1+1 sets round-trip across the 3 movements');
+assert.deepEqual(
+  flatSets.filter((s) => s.entryId === flatEntries[0].id).map((s) => s.idx),
+  [1, 2],
+  'V1-8-2: the first movement’s sets are 1-based and ordered',
+);
+
+// Idempotent whole-graph replay: re-run the SAME graph (same client_ids) → still one graph, same id.
+const flatReplay = await writeStrengthSession(asPg, flatArgs);
+assert.equal(flatReplay.sessionId, flat.sessionId, 'V1-8-2: replay returns the same session id');
+const flatEntriesAfter = await db
+  .select({ id: schema.entries.id })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.sessionId, flatSession.id), isNull(schema.entries.deletedAt)));
+const flatSetsAfter = await db
+  .select({ id: schema.entrySets.id })
+  .from(schema.entrySets)
+  .where(
+    inArray(
+      schema.entrySets.entryId,
+      flatEntriesAfter.map((e) => e.id),
+    ),
+  );
+assert.equal(
+  flatEntriesAfter.length,
+  3,
+  'V1-8-2: replay inserts no duplicate entries (per-row dedupe)',
+);
+assert.equal(flatSetsAfter.length, 4, 'V1-8-2: replay does not double the sets');
+console.log(
+  '✓ V1-8-2: flat multi-movement session round-trips via the shared writer core; idempotent replay; profile-scoped',
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,

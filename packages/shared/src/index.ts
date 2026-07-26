@@ -19,3 +19,4 @@ export * from './readiness';
 export * from './id';
 export * from './bodyweight';
 export * from './strength';
+export * from './strength-session';
