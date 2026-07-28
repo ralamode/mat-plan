@@ -4,6 +4,7 @@ import {
   ENTRY_STATUS,
   foldAggregation,
   type MetricAggregation,
+  type SessionType,
 } from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
@@ -73,12 +74,42 @@ export function calisthenicsTotals(entries: readonly EntryDTO[]): MetricTotal[] 
  * exercise (so N bouts don't read as N duplicate rows). The grouped row appears at the
  * position of the exercise's newest bout, preserving the desc(createdAt) order of the rest.
  */
+/** A logged strength session, grouped: a header (type) + its movements in insertion order (V1-8-3a).
+ *  `movements` is a flat list here; V1-8-3b refactors it into a two-level list to sub-bracket supersets. */
+export type SessionRow = {
+  kind: 'session';
+  session: { id: string; type: SessionType | null };
+  movements: EntryDTO[];
+};
+
 export type TodayRow =
-  { kind: 'entry'; entry: EntryDTO } | { kind: 'calisthenics'; total: MetricTotal };
+  { kind: 'entry'; entry: EntryDTO } | { kind: 'calisthenics'; total: MetricTotal } | SessionRow;
 
 export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   const totalByMetric = new Map(calisthenicsTotals(entries).map((t) => [t.metricKey, t]));
-  const emitted = new Set<string>();
+
+  // V1-8-3a: gather each session's members in a FULL PASS keyed by sessionId (the `byMetric` idiom) —
+  // NOT a contiguous run: a replay-appended member has a later created_at, so in the DAL's
+  // desc(createdAt),asc(id) order it is non-adjacent to the originals, and a run collector would split
+  // one session into two blocks. Members are then sorted by public id (== insertion order: uuidv7 is
+  // monotonic and the writer mints ids in insertion order) so an appended member re-orders into place.
+  const sessionMembers = new Map<string, EntryDTO[]>();
+  for (const e of entries) {
+    if (e.sessionId === null) continue;
+    const list = sessionMembers.get(e.sessionId) ?? [];
+    list.push(e);
+    sessionMembers.set(e.sessionId, list);
+  }
+  for (const list of sessionMembers.values()) list.sort((a, b) => a.id.localeCompare(b.id));
+
+  // Emit each session block at its OLDEST member (list[0] after the id-asc sort) so the block stays
+  // where the session STARTED, and a later replay-appended (newer created_at) movement doesn't yank
+  // the whole block to the top of the day. For a normal single-tx session (all members one created_at)
+  // the oldest member is also the first-encountered, so placement is unchanged.
+  const sessionAnchor = new Map<string, string>();
+  for (const [sid, list] of sessionMembers) sessionAnchor.set(sid, list[0].id);
+
+  const emitted = new Set<string>(); // calisthenics metric keys
   const rows: TodayRow[] = [];
   for (const e of entries) {
     if (e.activityKey === ACTIVITY_TYPE_KEYS.calisthenics && e.metricKey !== null) {
@@ -88,6 +119,16 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
       emitted.add(e.metricKey);
       const total = totalByMetric.get(e.metricKey);
       if (total) rows.push({ kind: 'calisthenics', total });
+      continue;
+    }
+    if (e.sessionId !== null) {
+      // Emit the block once, at its anchor (oldest member); skip every other member.
+      if (e.id !== sessionAnchor.get(e.sessionId)) continue;
+      rows.push({
+        kind: 'session',
+        session: { id: e.sessionId, type: e.sessionType }, // per-session data, same on every member
+        movements: sessionMembers.get(e.sessionId)!, // e is in it (anchor came from this map)
+      });
       continue;
     }
     rows.push({ kind: 'entry', entry: e });

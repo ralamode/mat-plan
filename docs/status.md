@@ -31,16 +31,24 @@ Hardened by the **5-lens panel incl. DB-safety** (R1–R12: added `uq_entries_su
 member-is-movement CHECK, cut `supersets.position`, same-session = writer invariant, decoupled from V1-1d)
 and a code-review round. ADR 0003 captures the model.
 
-**In flight** — **V1-8-2**: the **flat multi-movement strength SESSION write path** — one submission logs a
-`sessions` row grouping N movement entries (each its own `entry` → `entry_set`), rendered **flat** (session
-grouping UI is V1-8-3). The strength write core is **single-sourced in `packages/db`** (`writeStrengthSession`,
-the `weeklyAdherenceRows` pattern) so the app DAL and `db:verify` run the identical insert path; reads switch
-the set-fetch dispatch to `movement_id` (decoupling from the V1-1d `kind` drop); the single-movement path is
-retired. Hardened by a **4-lens panel** (cut read grouping → 8-3, relocated the single-source obligation,
-fixed the `null`-default happy-path trap) — see
-[v1-8-2-session-write-path.md](./plans/v1-8-2-session-write-path.md).
+**Merged (#54)** — **V1-8-2**: the **flat multi-movement strength SESSION write path** — one submission logs a
+`sessions` row grouping N movement entries (each its own `entry` → `entry_set`), rendered **flat**. The strength
+write core is **single-sourced in `packages/db`** (`writeStrengthSession`, the `weeklyAdherenceRows` pattern) so
+the app DAL and `db:verify` run the identical insert path; reads switched the set-fetch dispatch to `movement_id`
+(decoupling from the V1-1d `kind` drop); the single-movement path was retired. Hardened by a **4-lens panel** +
+a code-review round (10 findings — fixed a reversed-order + a silent-drop path, relocated the single-source
+obligation). See [v1-8-2-session-write-path.md](./plans/v1-8-2-session-write-path.md).
 
-**Remaining to the MVP:** V1-8-2 (in flight) → V1-8-3 (superset write branch + grouping UI) → V1-9
+**In flight** — **V1-8-3a**: **session read grouping** — a logged strength session reads as one grouped **block**
+(a `SESSION_TYPE_LABELS` header + movement count, its movements nested in insertion order) instead of N loose
+rows. Pure read change: a `sessions` LEFT JOIN + `sessionId`(public_id)/`sessionType` on `EntryDTO`, a
+`{kind:'session'}` `TodayRow` variant (full-pass `sessionId` map so a replay-appended member doesn't split the
+block), a shared `<MovementLine>`. **No feel, no supersets, no write change.** Hardened by a **4-lens panel** (cut
+`feel` → 3b; pinned the map-based grouping + the soft-delete-guarded JOIN). V1-8-3 was split into **3a
+(grouping)** and **3b (supersets + feel)**; see
+[v1-8-3-session-grouping-and-supersets.md](./plans/v1-8-3-session-grouping-and-supersets.md).
+
+**Remaining to the MVP:** V1-8-3a (in flight) → V1-8-3b (superset write branch + UI + feel) → V1-9
 (edit/fix-a-set; **+V1-9a** per-exercise notes, **+V1-9b** delete/clear-day) → V1-10/11/12 (template
 prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E +
 rate-limit/Sentry) = MVP done. _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
@@ -59,10 +67,10 @@ migrations).
 
 ## Progress toward MVP (v1)
 
-- **Feature PRs merged:** ~12 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
-  V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1). Data foundation complete; the back third is the strength
-  session write/UI (V1-8-2/8-3), editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-8-2** (flat strength session write path).
+- **Feature PRs merged:** ~13 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
+  V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2). Data foundation complete; the back third is the strength
+  session grouping/superset UI (V1-8-3a/3b), editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-8-3a** (session read grouping).
 
 ## Phases
 
@@ -111,8 +119,9 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                         | ✅     |
 | V1-7    | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                              | ✅     |
 | V1-8-1  | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                        | ✅     |
-| V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                        | 🟡     |
-| V1-8-3  | superset write branch + grouping UI                                                                    | ⚪     |
+| V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                        | ✅     |
+| V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                       | 🟡     |
+| V1-8-3b | superset write branch + grouping UI + feel                                                             | ⚪     |
 | V1-9    | fix-a-set / edit (LWW)                                                                                 | ⚪     |
 | V1-10   | block-template prefill                                                                                 | ⚪     |
 | V1-11   | copy-set-to-other-kid                                                                                  | ⚪     |
