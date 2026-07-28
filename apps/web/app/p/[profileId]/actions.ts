@@ -196,12 +196,31 @@ export async function logCheckinsAction(
 }
 
 /**
- * Server Action: log a flat multi-movement strength SESSION (V1-8-2). The form serializes its
- * movement cards (each: movementName, unit, per-movement clientId, sets) into ONE hidden
- * `movements` JSON field — the only way to encode N movements × variable set counts (parallel
- * repeated fields can't disambiguate boundaries). The `JSON.parse` is wrapped so a malformed body
- * is a typed envelope, never `error.tsx`; the zod schema is the trust boundary (strength is
- * inherently free data — no server registry to walk, unlike check-ins).
+ * The supersets to create = the distinct `supersetClientId`s the movements are tagged with (V1-8-3d).
+ * Derived from the raw movements JSON (v1 supersets carry no user label, so there's nothing else to
+ * carry) — one source of truth (the movement tags), no separate wire field to drift. Reads defensively
+ * off `unknown`; the schema then validates the real shapes.
+ */
+function deriveSupersets(movements: unknown): { clientId: string }[] {
+  if (!Array.isArray(movements)) return [];
+  const ids = new Set<string>();
+  for (const m of movements) {
+    const id =
+      m && typeof m === 'object'
+        ? (m as { supersetClientId?: unknown }).supersetClientId
+        : undefined;
+    if (typeof id === 'string') ids.add(id);
+  }
+  return [...ids].map((clientId) => ({ clientId }));
+}
+
+/**
+ * Server Action: log a multi-movement strength SESSION (V1-8-2; supersets V1-8-3d). The form serializes
+ * its movement cards (each: movementName, unit, per-movement clientId, sets, and superset tags) into ONE
+ * hidden `movements` JSON field — the only way to encode N movements × variable set counts (parallel
+ * repeated fields can't disambiguate boundaries). The `JSON.parse` is wrapped so a malformed body is a
+ * typed envelope, never `error.tsx`; the zod schema is the trust boundary (strength is inherently free
+ * data — no server registry to walk, unlike check-ins).
  *
  * `sessionType` is deliberately NOT read from the body — it's omitted so the schema default fires
  * (FormData.get returns null, which .default() doesn't catch and z.enum rejects; V1-8-2 has no
@@ -227,6 +246,10 @@ export async function logStrengthSessionAction(
     // the schema's transform.
     feel: formData.get('feel') ?? undefined,
     movements,
+    // V1-8-3d: supersets are DERIVED from the movements' distinct superset tags (v1 has no superset
+    // label), so there's no second wire field to keep in sync with the movement tags. Built before
+    // validation so the schema's membership check (movement.supersetClientId ∈ supersets[]) passes.
+    supersets: deriveSupersets(movements),
     // sessionType omitted on purpose → schema default (see the note above).
   });
   if (!parsed.success) {
@@ -240,6 +263,12 @@ export async function logStrengthSessionAction(
         typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
       );
     if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
+    // Superset-level issues (≥2 members, distinct order) key on `['supersets', i]` — surface them too,
+    // or a form bug in the grouping logic shows only the generic banner with no recoverable message.
+    const supersetMsgs = parsed.error.issues
+      .filter((i) => i.path[0] === 'supersets')
+      .map((i) => i.message);
+    if (supersetMsgs.length > 0) fieldErrors.supersets = supersetMsgs;
     return { ok: false, error: 'Please fix the errors below.', fieldErrors };
   }
 
@@ -255,6 +284,7 @@ export async function logStrengthSessionAction(
     clientId: parsed.data.clientId,
     day: day.day,
     feel: parsed.data.feel,
+    supersets: parsed.data.supersets,
     movements: parsed.data.movements,
   });
 

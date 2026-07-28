@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { EntryDTO } from '@/lib/dal/entries';
 
-import { calisthenicsTotals, todayRows } from './activity-totals';
+import { calisthenicsTotals, todayRows, type SessionRow } from './activity-totals';
+
+// Flatten a session's two-level items (V1-8-3d) back to member entries in display order.
+const members = (s: SessionRow): EntryDTO[] =>
+  s.items.flatMap((it) => (it.kind === 'movement' ? [it.entry] : it.members));
 
 // A calisthenics reading DTO. Rows arrive from the DAL desc(createdAt); tests pass them
 // newest-first when order matters.
@@ -25,6 +29,8 @@ function reading(overrides: Partial<EntryDTO>): EntryDTO {
     sessionId: null,
     sessionType: null,
     sessionFeel: null,
+    supersetId: null,
+    supersetOrder: null,
     sets: [],
     ...overrides,
   };
@@ -176,7 +182,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       session: { id: 's1', type: DEFAULT_SESSION_TYPE },
     });
     const session = rows[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
-    expect(session.movements.map((m) => m.movementName)).toEqual([
+    expect(members(session).map((m) => m.movementName)).toEqual([
       'Back squat',
       'Bench press',
       'Barbell row',
@@ -196,7 +202,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     expect(sessions).toHaveLength(1); // ONE block, not two
     const session = sessions[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
     // Sorted by id asc == insertion order: a, b, then the appended d.
-    expect(session.movements.map((m) => m.id)).toEqual(['a', 'b', 'd']);
+    expect(members(session).map((m) => m.id)).toEqual(['a', 'b', 'd']);
     // The block anchors at the session's OLDEST member ('a'), so it stays BELOW the later-logged habit
     // (which is newer than 'a') rather than jumping to the top at the appended 'd' — no relocation.
     expect(rows.map((r) => r.kind)).toEqual(['entry', 'session']);
@@ -232,7 +238,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].kind).toBe('session');
     const session = rows[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
-    expect(session.movements).toHaveLength(1);
+    expect(members(session)).toHaveLength(1);
   });
 
   it('carries the session feel (V1-8-3b) onto the session row', () => {
@@ -241,5 +247,39 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     // no feel logged → NULL on the row (not '')
     const noFeel = todayRows([move({ id: 'b' })]);
     expect(noFeel[0]).toMatchObject({ kind: 'session', session: { feel: null } });
+  });
+
+  // ── V1-8-3d: superset sub-bracketing ──────────────────────────────────────────
+  it('brackets superset members into ONE item at the superset’s earliest position', () => {
+    const rows = todayRows([
+      move({ id: 'a', movementName: 'Squat' }), // standalone
+      move({ id: 'b', movementName: 'Bench', supersetId: 'ss1', supersetOrder: 1 }),
+      move({ id: 'c', movementName: 'OHP', supersetId: 'ss1', supersetOrder: 2 }),
+    ]);
+    const s = rows[0] as SessionRow;
+    expect(s.items.map((it) => it.kind)).toEqual(['movement', 'superset']);
+    const ss = s.items.find((it) => it.kind === 'superset')!;
+    expect(ss.members.map((m) => m.movementName)).toEqual(['Bench', 'OHP']);
+    expect(s.movementCount).toBe(3); // count is movements, not items
+  });
+
+  it('orders superset members by supersetOrder, not by id', () => {
+    const rows = todayRows([
+      move({ id: 'a', movementName: 'First', supersetId: 'ss1', supersetOrder: 2 }),
+      move({ id: 'b', movementName: 'Second', supersetId: 'ss1', supersetOrder: 1 }),
+    ]);
+    const ss = (rows[0] as SessionRow).items.find((it) => it.kind === 'superset')!;
+    expect(ss.members.map((m) => m.movementName)).toEqual(['Second', 'First']);
+  });
+
+  it('renders a soft-deleted superset’s members as standalone (supersetId NULL, order live)', () => {
+    // The supersets LEFT JOIN misses → supersetId NULL, but superset_order survives on the entry.
+    const rows = todayRows([
+      move({ id: 'a', movementName: 'Bench', supersetId: null, supersetOrder: 1 }),
+      move({ id: 'b', movementName: 'OHP', supersetId: null, supersetOrder: 2 }),
+    ]);
+    const s = rows[0] as SessionRow;
+    expect(s.items.every((it) => it.kind === 'movement')).toBe(true); // no orphan bracket
+    expect(s.items).toHaveLength(2);
   });
 });

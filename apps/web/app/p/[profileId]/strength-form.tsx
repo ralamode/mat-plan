@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 
 import { logStrengthSessionAction, type ActionState } from './actions';
 import { DayField } from './day-field';
+import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
 
 const initialState: ActionState = { ok: false, error: null };
 
@@ -24,7 +25,15 @@ const inputClass =
 // (the independence the panel flagged) — no shared set-key list. React keys are UUIDs: a set's own
 // `key`, a movement's `clientId` (which doubles as its entry idempotency key).
 type SetVals = { key: string; reps: string; weight: string };
-type MovementVals = { clientId: string; movementName: string; unit: string; sets: SetVals[] };
+type MovementVals = {
+  clientId: string;
+  movementName: string;
+  unit: string;
+  sets: SetVals[];
+  // V1-8-3d superset tags — set when the movement is grouped; serialized into the movements JSON.
+  supersetClientId?: string;
+  supersetOrder?: number;
+};
 
 const emptySet = (): SetVals => ({ key: newId(), reps: '', weight: '' });
 const emptyMovement = (): MovementVals => ({
@@ -77,6 +86,8 @@ function StrengthFormBody({
 }) {
   const [sessionClientId] = useState(newId);
   const [movements, setMovements] = useState<MovementVals[]>(() => [emptyMovement()]);
+  // TRANSIENT selection for grouping — never serialized (it's not part of the wire shape).
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 
   const patchMovement = (
     clientId: string,
@@ -86,22 +97,48 @@ function StrengthFormBody({
     setMovements((ms) => ms.map((m) => (m.clientId === clientId ? { ...m, sets: fn(m.sets) } : m)));
 
   const addMovement = () => setMovements((ms) => [...ms, emptyMovement()]);
+  // On remove, dissolve any superset that dropped below 2 members (the pure helper) so no lone member
+  // reaches the ≥2 superRefine.
   const removeMovement = (clientId: string) =>
-    setMovements((ms) => (ms.length > 1 ? ms.filter((m) => m.clientId !== clientId) : ms));
+    setMovements((ms) =>
+      ms.length > 1 ? dissolveSmallSupersets(ms.filter((m) => m.clientId !== clientId)) : ms,
+    );
 
-  // The wire shape the action JSON.parses + zod-validates (strings; the schema coerces numbers).
+  const toggleSelect = (clientId: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  const groupSelectedMovements = () => {
+    setMovements((ms) => groupSelected(ms, selected, newId()));
+    setSelected(new Set());
+  };
+  const ungroup = (supersetClientId: string) =>
+    setMovements((ms) => ungroupSuperset(ms, supersetClientId));
+
+  const selectedCount = movements.filter((m) => selected.has(m.clientId)).length;
+
+  // The wire shape the action JSON.parses + zod-validates (strings; the schema coerces numbers). Superset
+  // tags ride here per-movement; the action DERIVES the supersets[] from these distinct ids.
   const movementsJson = JSON.stringify(
     movements.map((m) => ({
       movementName: m.movementName,
       unit: m.unit,
       clientId: m.clientId,
       sets: m.sets.map((s) => ({ reps: s.reps, weight: s.weight })),
+      ...(m.supersetClientId != null
+        ? { supersetClientId: m.supersetClientId, supersetOrder: m.supersetOrder }
+        : {}),
     })),
   );
 
   // All movement-level messages (the action names each by movement number), not just the first —
-  // a multi-card form can have several invalid movements at once.
+  // a multi-card form can have several invalid movements at once. Superset-level messages (≥2 members,
+  // distinct order) come separately so a grouping mistake is recoverable, not a locked banner.
   const movementErrs = state.fieldErrors?.movements ?? [];
+  const supersetErrs = state.fieldErrors?.supersets ?? [];
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -117,6 +154,9 @@ function StrengthFormBody({
               index={i}
               movement={m}
               canRemove={movements.length > 1}
+              selected={selected.has(m.clientId)}
+              onToggleSelect={() => toggleSelect(m.clientId)}
+              onUngroup={m.supersetClientId ? () => ungroup(m.supersetClientId!) : undefined}
               onName={(v) => patchMovement(m.clientId, { movementName: v })}
               onUnit={(v) => patchMovement(m.clientId, { unit: v })}
               onRemove={() => removeMovement(m.clientId)}
@@ -136,10 +176,15 @@ function StrengthFormBody({
         ))}
       </ul>
 
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={addMovement}>
           Add movement
         </Button>
+        {selectedCount >= 2 ? (
+          <Button type="button" variant="outline" size="sm" onClick={groupSelectedMovements}>
+            Group {selectedCount} as superset
+          </Button>
+        ) : null}
       </div>
 
       {/* Session-level feel — a discrete named field (NOT in the movements JSON); uncontrolled, so the
@@ -165,9 +210,9 @@ function StrengthFormBody({
         </Button>
       </div>
 
-      {movementErrs.length > 0 ? (
+      {movementErrs.length > 0 || supersetErrs.length > 0 ? (
         <div role="alert" className="text-destructive flex flex-col gap-1 text-sm">
-          {movementErrs.map((m) => (
+          {[...movementErrs, ...supersetErrs].map((m) => (
             <p key={m}>{m}</p>
           ))}
         </div>
@@ -189,6 +234,9 @@ function MovementCard({
   index,
   movement,
   canRemove,
+  selected,
+  onToggleSelect,
+  onUngroup,
   onName,
   onUnit,
   onRemove,
@@ -199,6 +247,9 @@ function MovementCard({
   index: number;
   movement: MovementVals;
   canRemove: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onUngroup?: () => void; // present only when the movement is in a superset
   onName: (v: string) => void;
   onUnit: (v: string) => void;
   onRemove: () => void;
@@ -208,9 +259,43 @@ function MovementCard({
 }) {
   const nameId = `movement-${movement.clientId}-name`;
   const unitId = `movement-${movement.clientId}-unit`;
+  const inSuperset = movement.supersetClientId != null;
   return (
     <fieldset className="flex flex-col gap-3 rounded-lg border px-4 py-3">
-      <legend className="px-1 text-sm font-medium">Movement {index + 1}</legend>
+      <legend className="flex items-center gap-2 px-1 text-sm font-medium">
+        Movement {index + 1}
+        {inSuperset ? (
+          <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 text-xs font-normal">
+            superset
+          </span>
+        ) : null}
+      </legend>
+
+      {/* Group-as-superset controls (V1-8-3d): select for grouping, or ungroup if already grouped. */}
+      <div className="flex items-center gap-3">
+        {inSuperset ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onUngroup}
+            aria-label={`Ungroup movement ${index + 1}`}
+          >
+            Ungroup
+          </Button>
+        ) : (
+          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="h-4 w-4"
+              aria-label={`Select movement ${index + 1} for a superset`}
+            />
+            Superset
+          </label>
+        )}
+      </div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
           <label htmlFor={nameId} className="text-sm font-medium">
