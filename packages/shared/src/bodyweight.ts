@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { uuidSchema } from './id';
+import { FREE_TEXT_NOTE_MAX } from './text';
 import type { Unit } from './units';
 
 /** Bodyweight is logged in lb or kg — a drift-checked subset of Unit. */
@@ -24,7 +25,7 @@ export const logBodyweightSchema = z.object({
     .max(2000, 'That weight looks too high.'),
   unit: z.enum(BODYWEIGHT_UNITS),
   clientId: uuidSchema,
-  notes: z.string().max(500).optional(),
+  notes: z.string().max(FREE_TEXT_NOTE_MAX).optional(),
 });
 
 export type LogBodyweightInput = z.infer<typeof logBodyweightSchema>;

@@ -178,6 +178,7 @@ function strengthForm(opts: {
   profileId?: string;
   clientId?: string;
   day?: string;
+  feel?: string;
   movements?: Array<{
     movementName?: string;
     unit?: string;
@@ -190,6 +191,7 @@ function strengthForm(opts: {
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
   fd.append('clientId', opts.clientId ?? newId());
   fd.append('day', opts.day ?? localDay());
+  if (opts.feel !== undefined) fd.append('feel', opts.feel);
   if (opts.movementsRaw !== undefined) {
     fd.append('movements', opts.movementsRaw);
   } else if (opts.movements !== undefined) {
@@ -355,6 +357,30 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('threads a session feel to the DAL', async () => {
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: 'strong',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: 'strong' }));
+  });
+
+  it('normalizes a blank/whitespace feel to undefined (stored NULL, not empty string)', async () => {
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: '   ',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: undefined }));
   });
 
   it('fails gracefully (no write) when the profile is unknown', async () => {

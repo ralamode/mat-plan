@@ -222,6 +222,10 @@ export async function logStrengthSessionAction(
   const parsed = logStrengthSessionSchema.safeParse({
     profileId: formData.get('profileId'),
     clientId: formData.get('clientId'),
+    // `feel` is a session-level scalar (a discrete field, NOT part of the movements JSON). `?? undefined`
+    // maps an absent field to undefined so `.optional()` fires; a blank value is normalized to NULL by
+    // the schema's transform.
+    feel: formData.get('feel') ?? undefined,
     movements,
     // sessionType omitted on purpose → schema default (see the note above).
   });
@@ -250,6 +254,7 @@ export async function logStrengthSessionAction(
     sessionType: parsed.data.sessionType,
     clientId: parsed.data.clientId,
     day: day.day,
+    feel: parsed.data.feel,
     movements: parsed.data.movements,
   });
 

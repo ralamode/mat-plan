@@ -1,6 +1,11 @@
 'use client';
 
-import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT, newId } from '@mat-plan/shared';
+import {
+  BODYWEIGHT_UNITS,
+  DEFAULT_BODYWEIGHT_UNIT,
+  FREE_TEXT_NOTE_MAX,
+  newId,
+} from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -135,6 +140,23 @@ function StrengthFormBody({
         <Button type="button" variant="outline" size="sm" onClick={addMovement}>
           Add movement
         </Button>
+      </div>
+
+      {/* Session-level feel — a discrete named field (NOT in the movements JSON); uncontrolled, so the
+          key-remount reset clears it on a successful log. */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="session-feel" className="text-sm font-medium">
+          How did it feel? <span className="text-muted-foreground font-normal">(optional)</span>
+        </label>
+        <input
+          id="session-feel"
+          name="feel"
+          type="text"
+          maxLength={FREE_TEXT_NOTE_MAX}
+          placeholder="e.g. strong, tired, easy"
+          autoComplete="off"
+          className={inputClass}
+        />
       </div>
 
       <div>

@@ -192,6 +192,13 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                         {count} {count === 1 ? 'movement' : 'movements'}
                       </span>
                     </div>
+                    {row.session.feel ? (
+                      // V1-8-3b: the optional session feel. Truthiness-guarded so a normalized-empty
+                      // feel never renders a blank line.
+                      <p className="text-muted-foreground text-sm italic">
+                        Felt: {row.session.feel}
+                      </p>
+                    ) : null}
                     <ul className="flex flex-col gap-2">
                       {row.movements.map((m) => (
                         <li key={m.id} className="flex flex-col gap-1">

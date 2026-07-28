@@ -24,6 +24,7 @@ function reading(overrides: Partial<EntryDTO>): EntryDTO {
     activityLabel: 'Calisthenics',
     sessionId: null,
     sessionType: null,
+    sessionFeel: null,
     sets: [],
     ...overrides,
   };
@@ -232,5 +233,13 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     expect(rows[0].kind).toBe('session');
     const session = rows[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
     expect(session.movements).toHaveLength(1);
+  });
+
+  it('carries the session feel (V1-8-3b) onto the session row', () => {
+    const withFeel = todayRows([move({ id: 'a', sessionFeel: 'strong' })]);
+    expect(withFeel[0]).toMatchObject({ kind: 'session', session: { feel: 'strong' } });
+    // no feel logged → NULL on the row (not '')
+    const noFeel = todayRows([move({ id: 'b' })]);
+    expect(noFeel[0]).toMatchObject({ kind: 'session', session: { feel: null } });
   });
 });
