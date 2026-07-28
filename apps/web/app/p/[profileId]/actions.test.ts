@@ -304,6 +304,26 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
+  it('rejects a crafted superset order without a superset id (bad body → zod-reject)', async () => {
+    // `supersetOrder` rides in the forwarded movements JSON, so this reaches the schema — the pairing
+    // superRefine must reject it as a typed envelope, not let it hit the DB CHECK as a raw 500 (V1-8-3c).
+    const badMovements = JSON.stringify([
+      {
+        movementName: 'Back squat',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '5', weight: '135' }],
+        supersetOrder: 5,
+      },
+    ]);
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movementsRaw: badMovements }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing profileId without touching the DAL', async () => {
     const res = await logStrengthSessionAction(
       initial,

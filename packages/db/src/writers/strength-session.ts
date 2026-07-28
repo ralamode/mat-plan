@@ -22,10 +22,35 @@ type Executor =
   | NodePgDatabase<typeof schema>
   | PgTransaction<NodePgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
+/** The three graph tables that share the `client_id` + `deleted_at` idempotency shape. */
+type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
+
+/**
+ * Re-select a live row by its `client_id` after an ON-CONFLICT no-op (a replay). The **`deleted_at
+ * IS NULL` guard is load-bearing** — the partial UNIQUE lets a soft-deleted row share the client_id,
+ * so an unguarded re-select could return the dead row and attach children to it. Extracted so the
+ * three graph-row inserts can't drift on this (verify.ts's `upsertReturningId` dropped the guard —
+ * that shortcut must NOT reach production). A SELECT over the table union needs no `as never`.
+ */
+async function reselectLiveByClientId(
+  exec: Executor,
+  table: GraphTable,
+  clientId: string,
+): Promise<{ id: number; publicId: string }> {
+  const [row] = await exec
+    .select({ id: table.id, publicId: table.publicId })
+    .from(table)
+    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
+    .limit(1);
+  return row;
+}
+
 /**
  * A session movement with its catalog `movementId` already resolved (the caller owns
  * `findOrCreateMovementId`). Named distinctly from `@mat-plan/shared`'s `SessionMovementInput`
  * (the pre-resolution wire shape, no `movementId`) so importing both never collides.
+ * `supersetClientId` is deliberately the UN-resolved wire key (unlike `movementId`): the `supersets`
+ * row doesn't exist until the tx, so `writeStrengthSession` resolves it to a `superset_id` in-tx.
  */
 export type ResolvedSessionMovement = {
   movementName: string;
@@ -33,14 +58,16 @@ export type ResolvedSessionMovement = {
   movementId: number;
   clientId: string; // per-movement entry idempotency key
   sets: readonly { reps: number; weight: number }[];
+  supersetClientId?: string;
+  supersetOrder?: number;
 };
 
 /**
  * Insert the parent `sessions` row, idempotent by `client_id` (partial UNIQUE). On conflict the
  * row already exists (a replay) → re-select its id/public_id so members attach to it. `status` is
  * omitted → the column default ('done'); `sessionType` is the caller's (a sourced const, never a
- * re-typed literal). NOT exported — call the transactional `writeStrengthSession` wrapper so the
- * whole graph stays all-or-nothing (V1-8-3 exports it if it needs the superset branch).
+ * re-typed literal). NOT exported — reached only via the transactional `writeStrengthSession` wrapper,
+ * so the whole graph stays all-or-nothing.
  */
 async function insertStrengthSessionRow(
   exec: Executor,
@@ -61,17 +88,32 @@ async function insertStrengthSessionRow(
       where: isNull(schema.sessions.deletedAt),
     })
     .returning({ id: schema.sessions.id, publicId: schema.sessions.publicId });
-  if (row) return row;
+  // On conflict (a replay) re-select the LIVE row (the deleted_at-guarded helper).
+  return row ?? reselectLiveByClientId(exec, schema.sessions, args.clientId);
+}
 
-  // A conflict only fires against a LIVE row (the UNIQUE is partial WHERE deleted_at IS NULL), but a
-  // soft-deleted row can share the client_id — so guard the re-select to never attach members to a
-  // deleted session (matches the profile select's isNull guard).
-  const [existing] = await exec
-    .select({ id: schema.sessions.id, publicId: schema.sessions.publicId })
-    .from(schema.sessions)
-    .where(and(eq(schema.sessions.clientId, args.clientId), isNull(schema.sessions.deletedAt)))
-    .limit(1);
-  return existing;
+/**
+ * Insert a `supersets` grouping row, idempotent by `client_id` (the `insertStrengthSessionRow` twin).
+ * NOT exported — reached only via `writeStrengthSession`'s tx. On a replay, re-selects the live row.
+ */
+async function insertSupersetRow(
+  exec: Executor,
+  args: { sessionId: number; clientId: string; label?: string },
+): Promise<{ id: number }> {
+  const [row] = await exec
+    .insert(schema.supersets)
+    .values({
+      publicId: newId(),
+      clientId: args.clientId,
+      sessionId: args.sessionId,
+      label: args.label ?? null,
+    })
+    .onConflictDoNothing({
+      target: schema.supersets.clientId,
+      where: isNull(schema.supersets.deletedAt),
+    })
+    .returning({ id: schema.supersets.id });
+  return row ?? reselectLiveByClientId(exec, schema.supersets, args.clientId);
 }
 
 /**
@@ -81,9 +123,8 @@ async function insertStrengthSessionRow(
  * `movement_name` + `movement_id`, `metric_key` unset) — it passes `entries_shape_check` (branch 2
  * is NULL, whole CHECK NULL → passes) and the at-most-one `entries_value_source_check`, and stops
  * feeding the V1-1d `kind` drop (panel R5/F2). `activity_type_id` is set (NOT-NULL CHECK).
- * `superset_id`/`superset_order` default NULL here; V1-8-3 passes them for the superset branch —
- * the same writer, not a fork. NOT exported — reached only via `writeStrengthSession`'s tx (V1-8-3
- * exports it when the superset branch needs it directly).
+ * `superset_id`/`superset_order` are passed by `writeStrengthSession`'s superset branch (V1-8-3c) —
+ * the same writer, not a fork. NOT exported — reached only via `writeStrengthSession`'s tx.
  */
 async function writeSessionStrengthEntry(
   exec: Executor,
@@ -123,15 +164,13 @@ async function writeSessionStrengthEntry(
     })
     .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
 
-  // Idempotent replay: the entry already exists — return it, don't re-add sets. Guard deleted_at so a
-  // soft-deleted row sharing this client_id (post-V1-9) is never re-selected.
+  // Idempotent replay: the entry already exists — return it, don't re-add sets (the deleted_at-guarded
+  // re-select, so a soft-deleted row sharing this client_id is never returned).
   if (!entry) {
-    const [existing] = await exec
-      .select({ id: schema.entries.id, publicId: schema.entries.publicId })
-      .from(schema.entries)
-      .where(and(eq(schema.entries.clientId, args.clientId), isNull(schema.entries.deletedAt)))
-      .limit(1);
-    return { ...existing, created: false };
+    return {
+      ...(await reselectLiveByClientId(exec, schema.entries, args.clientId)),
+      created: false,
+    };
   }
 
   if (args.sets.length > 0) {
@@ -168,6 +207,7 @@ export async function writeStrengthSession(
     sessionClientId: string;
     activityTypeId: number;
     feel?: string;
+    supersets?: readonly { clientId: string; label?: string }[];
     movements: readonly ResolvedSessionMovement[];
   },
 ): Promise<{ sessionId: string }> {
@@ -189,7 +229,30 @@ export async function writeStrengthSession(
       feel: args.feel,
     });
 
+    // Create the supersets FIRST (before the members) so the client_id → superset_id map holds real ids
+    // to stamp onto members. Scoped to THIS session's supersets → no cross-session leak (ADR-0003 R2).
+    const supersetIdByClientId = new Map<string, number>();
+    for (const s of args.supersets ?? []) {
+      const superset = await insertSupersetRow(tx, {
+        sessionId: session.id,
+        clientId: s.clientId,
+        label: s.label,
+      });
+      supersetIdByClientId.set(s.clientId, superset.id);
+    }
+
     for (const m of args.movements) {
+      let supersetId: number | null = null;
+      if (m.supersetClientId != null) {
+        const resolved = supersetIdByClientId.get(m.supersetClientId);
+        // A dangling superset ref reaches here only via a schema-less caller (verify.ts / future) — the
+        // app boundary's `membership` superRefine catches it. Throw so it's a clear error, not a
+        // silent superset_id=null + superset_order set → a raw entries_superset_order_check violation.
+        if (resolved === undefined) {
+          throw new Error(`superset not found for clientId ${m.supersetClientId}`);
+        }
+        supersetId = resolved;
+      }
       await writeSessionStrengthEntry(tx, {
         profileId: profile.id,
         sessionId: session.id,
@@ -200,6 +263,8 @@ export async function writeStrengthSession(
         day: args.day,
         clientId: m.clientId,
         sets: m.sets,
+        supersetId,
+        supersetOrder: m.supersetOrder ?? null,
       });
     }
 

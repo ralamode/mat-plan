@@ -118,10 +118,14 @@ in the header **when truthy** (`feel ? … : null`, so `''` never renders — be
 
 # PART C — V1-8-3d (superset UI + read bracketing) — sketch
 
+- **Cleanup (from the 3c panel, A2):** correct the stale `apps/web/lib/dal/entries.ts` comment that
+  mis-attributes `EntryDTO.supersetId`/`supersetOrder` to "V1-8-3b" — those fields + their bracketing reader
+  land HERE (3d). 3c is packages-only so it couldn't touch it.
 - **DAL/action**: parse a **second sibling hidden JSON field** `supersets` (its own `JSON.parse` + try/catch,
   symmetric to `movements` — NOT folded into the movements array); thread `supersetClientId`/`supersetOrder`
-  - `supersets[]` to `writeStrengthSession`. Add `supersetId`(public_id, via a `supersets` LEFT JOIN,
-    `deleted_at` in the ON) + `supersetOrder` (an `entries` column) to `EntryDTO`.
+  - `supersets[]` to `writeStrengthSession` (add `LogStrengthSessionArgs.supersets` + one pass-through line).
+    Add `supersetId`(public_id, via a `supersets` LEFT JOIN, `deleted_at` in the ON) + `supersetOrder` (an
+    `entries` column) to `EntryDTO`.
 - **Read** (`activity-totals.ts`): **refactor** `SessionRow.movements: EntryDTO[]` → a two-level
   `items: SessionItem[]` where `SessionItem = { kind:'movement'; entry } | { kind:'superset'; superset:{ id;
 label: string|null }; members: EntryDTO[] }`. Group members by **`supersetId !== null`** (NOT
