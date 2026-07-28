@@ -11,6 +11,7 @@ import {
   type EntryKind,
   type EntryStatus,
   type SessionMovementInput,
+  type SessionType,
   type Unit,
 } from '@mat-plan/shared';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
@@ -60,6 +61,14 @@ export type EntryDTO = {
   // habit has no metric AND no movement, so only the activity names it).
   activityKey: string | null;
   activityLabel: string | null;
+  // V1-8-3a: the grouping session (a strength session groups N movement entries). `sessionId` is the
+  // session's PUBLIC id (never the internal id — anti-IDOR), NULL for non-session entries; `sessionType`
+  // is the raw enum (rendered via SESSION_TYPE_LABELS at the view). `supersetId`/`supersetOrder` are
+  // added in V1-8-3b with their bracketing reader — no dead DTO fields here.
+  sessionId: string | null;
+  // The session's type from a CHECK-constrained column, so it's the SessionType union (not bare
+  // string) — the view indexes SESSION_TYPE_LABELS with no cast, and a stray value fails the build.
+  sessionType: SessionType | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -88,11 +97,21 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       // without an activity_type survives (none today — 0003 CHECKs it NOT NULL).
       activityKey: schema.activityTypes.key,
       activityLabel: schema.activityTypes.label,
+      // V1-8-3a: the grouping session's PUBLIC id + type (raw enum). PK join → ≤1 match, no fan-out.
+      sessionId: schema.sessions.publicId,
+      sessionType: schema.sessions.sessionType,
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
     .leftJoin(schema.metricDefinitions, eq(schema.entries.metricKey, schema.metricDefinitions.key))
     .leftJoin(schema.activityTypes, eq(schema.entries.activityTypeId, schema.activityTypes.id))
+    // V1-8-3a: the `deleted_at IS NULL` guard is in the ON (NOT the WHERE) — in the WHERE it would drop
+    // the live member entries of a soft-deleted session (matched row → whole entry vanishes = data loss);
+    // in the ON a deleted session just fails to match, so its members still render (as flat rows).
+    .leftJoin(
+      schema.sessions,
+      and(eq(schema.entries.sessionId, schema.sessions.id), isNull(schema.sessions.deletedAt)),
+    )
     .where(
       and(
         eq(schema.profiles.publicId, profilePublicId),
@@ -157,6 +176,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     aggregation: r.aggregation,
     activityKey: r.activityKey,
     activityLabel: r.activityLabel,
+    sessionId: r.sessionId,
+    // The sessions_session_type_check column only holds SessionType values (or NULL).
+    sessionType: r.sessionType as SessionType | null,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }
