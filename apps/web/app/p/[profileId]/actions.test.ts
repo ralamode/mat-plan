@@ -1,4 +1,10 @@
-import { ACTIVITY_TYPE_KEYS, BODYWEIGHT_UNITS, METRIC_KEYS, newId } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  BODYWEIGHT_UNITS,
+  FREE_TEXT_NOTE_MAX,
+  METRIC_KEYS,
+  newId,
+} from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // INTEGRATION TIER (see docs/definition-of-done.md → Test pyramid). These exercise
@@ -381,6 +387,20 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: undefined }));
+  });
+
+  it('rejects an over-length feel from a direct POST (bad body → zod-reject)', async () => {
+    // The client maxLength is bypassable; the schema `.max` is the real guard.
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: 'x'.repeat(FREE_TEXT_NOTE_MAX + 1),
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
   it('fails gracefully (no write) when the profile is unknown', async () => {

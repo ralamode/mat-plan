@@ -4,7 +4,7 @@ import { BODYWEIGHT_UNITS } from './bodyweight';
 import { uuidSchema } from './id';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
-import { FREE_TEXT_NOTE_MAX } from './text';
+import { freeTextNoteSchema } from './text';
 
 /**
  * One movement within a logged session: a named movement, its unit, its own idempotency
@@ -35,15 +35,9 @@ export const logStrengthSessionSchema = z
     profileId: uuidSchema,
     clientId: uuidSchema,
     sessionType: sessionTypeSchema.default(DEFAULT_SESSION_TYPE),
-    // Optional "how did it feel?" note for the whole session. `transform(v => v || undefined)` maps a
-    // left-blank ('') or whitespace-only input to undefined → the DAL writes NULL (not ''), so "no feel"
-    // has one representation. The DB column is unbounded text; FREE_TEXT_NOTE_MAX is the app-input cap.
-    feel: z
-      .string()
-      .trim()
-      .max(FREE_TEXT_NOTE_MAX)
-      .transform((v) => v || undefined)
-      .optional(),
+    // Optional "how did it feel?" note for the whole session — the shared free-text shape (blank → NULL,
+    // capped at FREE_TEXT_NOTE_MAX), single-sourced with bodyweight `notes`.
+    feel: freeTextNoteSchema,
     movements: z
       .array(sessionMovementSchema)
       .min(1, 'Add at least one movement.')
