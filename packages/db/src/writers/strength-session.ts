@@ -42,6 +42,10 @@ async function reselectLiveByClientId(
     .from(table)
     .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
     .limit(1);
+  // The re-select follows an ON-CONFLICT no-op, so a live row should exist. If it doesn't (e.g. the row
+  // was soft-deleted between the conflict and this SELECT), fail with a clear error rather than let a
+  // caller crash on `.id` of undefined — keeps the non-null return contract honest.
+  if (!row) throw new Error(`no live row for client_id ${clientId}`);
   return row;
 }
 
@@ -252,6 +256,12 @@ export async function writeStrengthSession(
           throw new Error(`superset not found for clientId ${m.supersetClientId}`);
         }
         supersetId = resolved;
+      }
+      // Pairing guard: `superset_id` and `superset_order` must be both-set or both-null, or the entry
+      // violates `entries_superset_order_check`. The app boundary's pairing superRefine enforces this,
+      // but a schema-less caller (verify.ts / future) bypasses zod — throw a clear error, not a raw 500.
+      if ((supersetId != null) !== (m.supersetOrder != null)) {
+        throw new Error('a superset member needs both a superset id and an order');
       }
       await writeSessionStrengthEntry(tx, {
         profileId: profile.id,

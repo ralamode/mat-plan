@@ -98,6 +98,20 @@ describe('logStrengthSessionSchema — superset validation (V1-8-3c)', () => {
     expect(res.success).toBe(false);
   });
 
+  it('rejects duplicate orders within a superset (would hit the DB UNIQUE as a raw 500)', () => {
+    const ss = newId();
+    const res = logStrengthSessionSchema.safeParse(
+      base({
+        supersets: [{ clientId: ss }],
+        movements: [
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 1 }),
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 1 }), // dup slot
+        ],
+      }),
+    );
+    expect(res.success).toBe(false);
+  });
+
   it('rejects a supersetOrder without a supersetClientId (the pairing invariant)', () => {
     const res = logStrengthSessionSchema.safeParse(
       base({
