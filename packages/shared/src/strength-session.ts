@@ -82,9 +82,11 @@ export const logStrengthSessionSchema = z
     }
 
     // (2) Superset client_ids distinct — `insertSupersetRow`'s ON CONFLICT would silently MERGE two
-    // groups (both members map to the first id), collapsing them with no DB error.
+    // groups (both members map to the first id), collapsing them with no DB error. The Set is reused
+    // by the membership check below.
     const supersetIds = supersets.map((s) => s.clientId);
-    if (new Set(supersetIds).size !== supersetIds.length) {
+    const supersetIdSet = new Set(supersetIds);
+    if (supersetIdSet.size !== supersetIds.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['supersets'],
@@ -110,7 +112,6 @@ export const logStrengthSessionSchema = z
 
     // (4) Membership — every tagged movement references a real `supersets[]` entry (else it dangles to
     // `undefined` in the writer map). Only check movements that ARE tagged.
-    const supersetIdSet = new Set(supersetIds);
     for (const [i, m] of val.movements.entries()) {
       if (m.supersetClientId != null && !supersetIdSet.has(m.supersetClientId)) {
         ctx.addIssue({
@@ -121,15 +122,27 @@ export const logStrengthSessionSchema = z
       }
     }
 
-    // (5) ≥2 members per superset — iterate `supersets` (not movements) so a 0-member orphan is caught
-    // too. Not cheaply DB-expressible (ADR-0003 D4) → a boundary/writer invariant.
+    // (5) Per superset: ≥2 members AND distinct orders. Iterate `supersets` (not movements) so a
+    // 0-member orphan is caught. Both are app-reachable → typed envelopes, NOT raw 500s: ≥2 isn't
+    // DDL-expressible (ADR-0003 D4); distinct-order IS a DB UNIQUE, but the entry ON CONFLICT arbiter is
+    // `client_id` (not the order UNIQUE), so a dup order isn't swallowed — it would surface as a 500.
     for (const [i, s] of supersets.entries()) {
-      const members = val.movements.filter((m) => m.supersetClientId === s.clientId).length;
-      if (members < 2) {
+      const orders = val.movements
+        .filter((m) => m.supersetClientId === s.clientId)
+        .map((m) => m.supersetOrder);
+      if (orders.length < 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['supersets', i],
           message: 'A superset needs at least 2 movements.',
+        });
+      }
+      const definedOrders = orders.filter((o) => o != null);
+      if (new Set(definedOrders).size !== definedOrders.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['supersets', i],
+          message: 'Superset members need distinct orders.',
         });
       }
     }
