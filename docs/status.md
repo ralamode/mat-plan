@@ -125,7 +125,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                        | ✅     |
 | V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                       | ✅     |
 | V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                  | 🟡     |
-| V1-8-3c | superset write core (schema + writer + `db:verify`)                                                    | ⚪     |
+| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                        | 🟡     |
 | V1-8-3d | superset UI + read bracketing                                                                          | ⚪     |
 | V1-9    | fix-a-set / edit (LWW)                                                                                 | ⚪     |
 | V1-10   | block-template prefill                                                                                 | ⚪     |

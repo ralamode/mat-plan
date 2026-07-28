@@ -1566,6 +1566,115 @@ console.log(
   '✓ V1-8-2: flat multi-movement session round-trips via the shared writer core; idempotent replay; profile-scoped',
 );
 
+// ── V1-8-3c: the SUPERSET write branch via the REAL writer ─────────────────────────────────────────
+// Prove `writeStrengthSession` creates supersets rows + stamps members (superset_id + superset_order),
+// for a 2- AND a 3-movement superset (no arity cap — the PPL property), idempotent on replay. The
+// V1-8-1 raw-SQL block above still proves the rejections the writer structurally can't emit; this only
+// asserts the DELTA the writer adds.
+const ssArgs = {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  day: '2026-02-04',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: '019826b4-0000-7000-8000-000000001300',
+  activityTypeId: scLiftActivityId,
+  supersets: [
+    { clientId: '019826b4-0000-7000-8000-000000001310', label: 'DB Bench + Overhead Press' },
+    { clientId: '019826b4-0000-7000-8000-000000001320' }, // 3-movement giant set, no label
+  ],
+  movements: [
+    {
+      movementName: 'DB Bench',
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: '019826b4-0000-7000-8000-000000001301',
+      sets: [{ reps: 8, weight: 40 }],
+      supersetClientId: '019826b4-0000-7000-8000-000000001310',
+      supersetOrder: 1,
+    },
+    {
+      movementName: 'Overhead Press',
+      unit: 'lb',
+      movementId: movY.id,
+      clientId: '019826b4-0000-7000-8000-000000001302',
+      sets: [{ reps: 8, weight: 30 }],
+      supersetClientId: '019826b4-0000-7000-8000-000000001310',
+      supersetOrder: 2,
+    },
+    {
+      movementName: 'Dip',
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: '019826b4-0000-7000-8000-000000001303',
+      sets: [{ reps: 10, weight: 0 }],
+      supersetClientId: '019826b4-0000-7000-8000-000000001320',
+      supersetOrder: 1,
+    },
+    {
+      movementName: 'Lateral Raise',
+      unit: 'lb',
+      movementId: movY.id,
+      clientId: '019826b4-0000-7000-8000-000000001304',
+      sets: [{ reps: 12, weight: 10 }],
+      supersetClientId: '019826b4-0000-7000-8000-000000001320',
+      supersetOrder: 2,
+    },
+    {
+      movementName: 'Push-up',
+      unit: 'lb',
+      movementId: movZ.id,
+      clientId: '019826b4-0000-7000-8000-000000001305',
+      sets: [{ reps: 15, weight: 0 }],
+      supersetClientId: '019826b4-0000-7000-8000-000000001320',
+      supersetOrder: 3,
+    },
+  ],
+} as const;
+
+const ss = await writeStrengthSession(asPg, ssArgs);
+const [ssSession] = await db
+  .select({ id: schema.sessions.id })
+  .from(schema.sessions)
+  .where(eq(schema.sessions.publicId, ss.sessionId));
+const ssSupersetRows = await db
+  .select({ id: schema.supersets.id })
+  .from(schema.supersets)
+  .where(and(eq(schema.supersets.sessionId, ssSession.id), isNull(schema.supersets.deletedAt)))
+  .orderBy(schema.supersets.id);
+assert.equal(ssSupersetRows.length, 2, 'V1-8-3c: the writer created 2 supersets');
+for (const [i, expectedOrders] of [
+  [1, 2],
+  [1, 2, 3],
+].entries()) {
+  const members = await db
+    .select({ order: schema.entries.supersetOrder })
+    .from(schema.entries)
+    .where(
+      and(eq(schema.entries.supersetId, ssSupersetRows[i].id), isNull(schema.entries.deletedAt)),
+    )
+    .orderBy(schema.entries.supersetOrder);
+  assert.deepEqual(
+    members.map((m) => m.order),
+    expectedOrders,
+    `V1-8-3c: superset ${i + 1} members carry superset_order ${expectedOrders.join(',')}`,
+  );
+}
+
+// Idempotent replay → still 2 supersets + 5 members (per-row ON CONFLICT at every level).
+await writeStrengthSession(asPg, ssArgs);
+const ssSupersetsAfter = await db
+  .select({ id: schema.supersets.id })
+  .from(schema.supersets)
+  .where(and(eq(schema.supersets.sessionId, ssSession.id), isNull(schema.supersets.deletedAt)));
+assert.equal(ssSupersetsAfter.length, 2, 'V1-8-3c: replay creates no duplicate supersets');
+const ssMembersAfter = await db
+  .select({ id: schema.entries.id })
+  .from(schema.entries)
+  .where(and(eq(schema.entries.sessionId, ssSession.id), isNull(schema.entries.deletedAt)));
+assert.equal(ssMembersAfter.length, 5, 'V1-8-3c: replay creates no duplicate members');
+console.log(
+  '✓ V1-8-3c: superset write branch (2- and 3-movement) via the real writer; ordered; idempotent replay',
+);
+
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
 // target_value CHECK.
 await expectRejectedBy('uq_ramp_targets_profile_metric_week', () =>

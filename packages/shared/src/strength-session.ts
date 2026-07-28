@@ -6,18 +6,36 @@ import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
 import { freeTextNoteSchema } from './text';
 
+/** Max movements per session, and max supersets (each needs ≥2 of the movements → floor(N/2)). Named
+ *  so the derivation is expressed in code, not two magic numbers that can drift. */
+export const MAX_SESSION_MOVEMENTS = 12;
+export const MAX_SESSION_SUPERSETS = Math.floor(MAX_SESSION_MOVEMENTS / 2);
+
 /**
  * One movement within a logged session: a named movement, its unit, its own idempotency
  * `clientId`, and 1..20 sets. Reuses `strengthSetSchema` + `BODYWEIGHT_UNITS` + `uuidSchema` (the
- * same set bound `logStrengthSchema` used) — no re-declared shapes.
+ * same set bound `logStrengthSchema` used) — no re-declared shapes. `supersetClientId`/`supersetOrder`
+ * (V1-8-3c) tag this movement into a superset: `supersetClientId` references a `supersets[]` entry,
+ * `supersetOrder` is its 1-based position within (like `entry_sets.idx`). Both optional (a flat
+ * movement has neither); paired + validated in the schema's superRefine.
  */
 export const sessionMovementSchema = z.object({
   movementName: z.string().trim().min(1, 'Enter a movement.').max(100),
   unit: z.enum(BODYWEIGHT_UNITS),
   clientId: uuidSchema,
   sets: z.array(strengthSetSchema).min(1, 'Add at least one set.').max(20),
+  supersetClientId: uuidSchema.optional(),
+  supersetOrder: z.coerce.number().int().positive().optional(),
 });
 export type SessionMovementInput = z.infer<typeof sessionMovementSchema>;
+
+/** A superset within a session (V1-8-3c): a grouping row with its own idempotency `clientId` and an
+ *  optional free-text `label` (blank → NULL, shared shape). Members reference it by `supersetClientId`. */
+export const supersetInputSchema = z.object({
+  clientId: uuidSchema,
+  label: freeTextNoteSchema, // borrows freeTextNoteSchema's blank→undefined+cap normalization only
+});
+export type SupersetInput = z.infer<typeof supersetInputSchema>;
 
 /**
  * Input contract for logging a FLAT multi-movement strength session (V1-8-2). Written as one
@@ -41,19 +59,79 @@ export const logStrengthSessionSchema = z
     movements: z
       .array(sessionMovementSchema)
       .min(1, 'Add at least one movement.')
-      .max(12, 'That’s a lot of movements — split into two sessions.'),
+      .max(MAX_SESSION_MOVEMENTS, 'That’s a lot of movements — split into two sessions.'),
+    // Session-level supersets (V1-8-3c) — a sibling of `movements`, keyed by client_id. Optional; a
+    // session with no supersets omits it. Members reference these via `movement.supersetClientId`.
+    supersets: z.array(supersetInputSchema).max(MAX_SESSION_SUPERSETS).optional(),
   })
-  // Each movement's `clientId` is its entry's idempotency key; the writer dedupes on it, so two
-  // movements sharing one would silently drop the second (ON CONFLICT → skip its sets). Reject that
-  // at the boundary — the form mints a fresh id per movement, so this only guards a crafted body.
+  // Writer/DB invariants the boundary must enforce (the form emits well-formed groups; these guard a
+  // crafted body). The pairing + membership + distinct-clientId + ≥2-members are NOT cheaply DB-expressible
+  // (or, for the DB ones, would surface as a raw 500); the cross-row distinct-`superset_order` IS enforced
+  // by `uq_entries_superset_order`, so it's deliberately left DB-only.
   .superRefine((val, ctx) => {
-    const ids = val.movements.map((m) => m.clientId);
-    if (new Set(ids).size !== ids.length) {
+    const supersets = val.supersets ?? [];
+
+    // (1) Movement client_ids distinct — a dup would silently drop the second member (ON CONFLICT).
+    const movementIds = val.movements.map((m) => m.clientId);
+    if (new Set(movementIds).size !== movementIds.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['movements'],
         message: 'Each movement needs its own id.',
       });
+    }
+
+    // (2) Superset client_ids distinct — `insertSupersetRow`'s ON CONFLICT would silently MERGE two
+    // groups (both members map to the first id), collapsing them with no DB error.
+    const supersetIds = supersets.map((s) => s.clientId);
+    if (new Set(supersetIds).size !== supersetIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['supersets'],
+        message: 'Each superset needs its own id.',
+      });
+    }
+
+    // (3) Pairing — a movement carries `supersetOrder` iff it carries `supersetClientId`. Kept (not
+    // DB-delegated): `supersetOrder` rides in the movements JSON the action forwards, so an
+    // order-without-clientId body would otherwise reach `entries_superset_order_check` as a raw 500.
+    // Use `!= null` (not truthiness) — `supersetOrder` is 1-based so 0 never occurs, but be explicit.
+    for (const [i, m] of val.movements.entries()) {
+      const hasClient = m.supersetClientId != null;
+      const hasOrder = m.supersetOrder != null;
+      if (hasClient !== hasOrder) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['movements', i],
+          message: 'A superset member needs both a superset id and an order.',
+        });
+      }
+    }
+
+    // (4) Membership — every tagged movement references a real `supersets[]` entry (else it dangles to
+    // `undefined` in the writer map). Only check movements that ARE tagged.
+    const supersetIdSet = new Set(supersetIds);
+    for (const [i, m] of val.movements.entries()) {
+      if (m.supersetClientId != null && !supersetIdSet.has(m.supersetClientId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['movements', i],
+          message: 'This movement references a superset that wasn’t defined.',
+        });
+      }
+    }
+
+    // (5) ≥2 members per superset — iterate `supersets` (not movements) so a 0-member orphan is caught
+    // too. Not cheaply DB-expressible (ADR-0003 D4) → a boundary/writer invariant.
+    for (const [i, s] of supersets.entries()) {
+      const members = val.movements.filter((m) => m.supersetClientId === s.clientId).length;
+      if (members < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['supersets', i],
+          message: 'A superset needs at least 2 movements.',
+        });
+      }
     }
   });
 export type LogStrengthSessionInput = z.infer<typeof logStrengthSessionSchema>;
