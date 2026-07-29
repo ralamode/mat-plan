@@ -6,6 +6,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -13,6 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import type { RoutineConfig } from '@mat-plan/shared';
 
 /**
  * Schema — v0 thin slice (units + profiles + entries + entry_sets) plus the V1-1a
@@ -78,6 +80,11 @@ export const profiles = pgTable(
     birthdate: date('birthdate'), // spec.md §2 — column only, no UI (PIN/profile fields deferred)
     avatar: text('avatar'),
     pinHash: text('pin_hash'), // PIN deferred; column reserved (spec.md §2)
+    // V1-18: the per-kid routine (ordered activity keys). NULLABLE → the app resolves NULL to the default
+    // routine (ships dark). JSONB is a knowing exception to the typed-columns rule (nothing queries INTO
+    // it — see docs/tech-debt.md + the promotion trigger). `.$type` is a compile cast only; every read
+    // zod-parses via `resolveRoutine` (the value is untrusted).
+    routineConfig: jsonb('routine_config').$type<RoutineConfig>(),
     ...timestamps,
   },
   (t) => [

@@ -21,3 +21,4 @@ export * from './text';
 export * from './bodyweight';
 export * from './strength';
 export * from './strength-session';
+export * from './routine';
