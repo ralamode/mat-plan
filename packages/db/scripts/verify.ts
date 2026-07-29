@@ -25,6 +25,7 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  routineConfigSchema,
   SESSION_TYPES,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
@@ -125,6 +126,29 @@ for (const p of profiles) {
   assert.ok(p.householdId != null, 'profile.household_id is non-null (CHECK-enforced)');
 }
 console.log('✓ profiles scoped to root household (household_id NOT NULL)');
+
+// V1-18 (PR 1a): the per-kid routine_config column + the two-kid A≠B seed.
+const routineColRes = await db.execute(
+  sql`select data_type from information_schema.columns where table_name = 'profiles' and column_name = 'routine_config'`,
+);
+const routineColRows = (routineColRes as unknown as { rows: { data_type: string }[] }).rows;
+assert.equal(routineColRows[0]?.data_type, 'jsonb', 'V1-18: profiles.routine_config is jsonb');
+const liam = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
+const scarlett = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
+// A≠B on a fresh DB: Liam is NULL (→ the app's default routine, ships-dark), Scarlett is explicit.
+assert.equal(liam.routineConfig, null, 'V1-18: Liam has no routine_config (resolves to default)');
+assert.ok(scarlett.routineConfig != null, 'V1-18: Scarlett has an explicit routine_config');
+assert.notDeepEqual(
+  liam.routineConfig,
+  scarlett.routineConfig,
+  'V1-18: the two seeded routines differ (A≠B, fresh DB)',
+);
+// Prove the stored config is GRAMMAR-VALID (a bad seed key fails loudly here, not silently on read).
+assert.ok(
+  routineConfigSchema.safeParse(scarlett.routineConfig).success,
+  'V1-18: Scarlett’s seeded routine_config parses against routineConfigSchema',
+);
+console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored config is valid');
 
 // Tagged-union CHECK: a bodyweight entry with no value_num must be rejected.
 let rejected = false;
