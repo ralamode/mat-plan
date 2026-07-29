@@ -2,6 +2,7 @@
 
 import {
   ACTIVITY_TYPE_KEYS,
+  editStrengthSetSchema,
   logBodyweightSchema,
   logStrengthSessionSchema,
   METRIC_KEYS,
@@ -21,6 +22,7 @@ import {
   type CheckinField,
 } from '@/lib/checkins/checkin-fields';
 import {
+  editStrengthSet,
   logBodyweight,
   logCheckinEntries,
   logStrengthSession,
@@ -367,5 +369,45 @@ export async function logLifeActivitiesAction(
   // A one-tap life activity is idempotent by its fixed `client_id`: a replay (double-tap) dedupes via
   // ON CONFLICT and the end state is identical — that IS success, not the destructive "already logged"
   // error the batch check-in path returns (where a partial conflict can mean a genuinely lost write).
+  return { ok: true, error: null };
+}
+
+/**
+ * Server Action: edit ONE logged strength set's reps/weight (V1-9 fix-a-set). Same public-POST
+ * discipline as the log actions — zod-validate, re-resolve the profile by `public_id` (the ownership
+ * seam). The DAL's guarded UPDATE proves the set belongs to that live profile; a `null` return means
+ * the set wasn't found under this owner (a stale/deleted id, or a crafted cross-profile `setId`) — an
+ * EXPECTED typed error, not a throw. No `day` handling: an edit never moves the entry's date.
+ */
+export async function editStrengthSetAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = editStrengthSetSchema.safeParse({
+    profileId: formData.get('profileId'),
+    setId: formData.get('setId'),
+    reps: formData.get('reps'),
+    weight: formData.get('weight'),
+  });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: 'Please fix the errors below.',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
+
+  const profile = await getProfileByPublicId(parsed.data.profileId);
+  if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+  const updated = await editStrengthSet({
+    profilePublicId: profile.id,
+    setId: parsed.data.setId,
+    reps: parsed.data.reps,
+    weight: parsed.data.weight,
+  });
+  if (!updated) return { ok: false, error: 'That set could not be found.' };
+
+  revalidatePath(`/p/${profile.id}`);
   return { ok: true, error: null };
 }

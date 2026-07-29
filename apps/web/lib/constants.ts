@@ -21,3 +21,12 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
 
 /** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+/**
+ * The shared text/number `<input>` styling — the single source for the app's form fields (the
+ * bodyweight, strength, check-in, and V1-9 edit-set inputs), so the ≥44px height (`h-11`), focus ring,
+ * and invalid-border tokens can't drift between forms. Callers append width utilities as needed
+ * (e.g. `${INPUT_CLASS} w-24`). Extracted from the three form-local copies it used to be duplicated in.
+ */
+export const INPUT_CLASS =
+  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';

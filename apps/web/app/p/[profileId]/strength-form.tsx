@@ -10,14 +10,18 @@ import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
+import { INPUT_CLASS } from '@/lib/constants';
+
 import { logStrengthSessionAction, type ActionState } from './actions';
 import { DayField } from './day-field';
+import { SetRepsWeightFields } from './set-fields';
 import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
 
 const initialState: ActionState = { ok: false, error: null };
 
-const inputClass =
-  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+// The shared field styling (single-sourced in lib/constants). Aliased so the existing `inputClass`
+// usages below stay unchanged; the reps × weight inputs now come from the shared SetRepsWeightFields.
+const inputClass = INPUT_CLASS;
 
 // Form-held movement/set state. Values are strings (the schema's `strengthSetSchema` z.coerce's
 // reps/weight), serialized into the hidden `movements` JSON field on each render. Each movement
@@ -364,30 +368,12 @@ function MovementCard({
         {movement.sets.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2">
             <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              step="1"
-              required
-              placeholder="reps"
-              aria-label={`Movement ${index + 1} set ${i + 1} reps`}
-              value={s.reps}
-              onChange={(e) => onSet(s.key, { reps: e.target.value })}
-              className={`${inputClass} w-24`}
-            />
-            <span className="text-muted-foreground text-sm">×</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.5"
-              required
-              placeholder="weight"
-              aria-label={`Movement ${index + 1} set ${i + 1} weight`}
-              value={s.weight}
-              onChange={(e) => onSet(s.key, { weight: e.target.value })}
-              className={`${inputClass} w-28`}
+            <SetRepsWeightFields
+              reps={s.reps}
+              weight={s.weight}
+              onReps={(v) => onSet(s.key, { reps: v })}
+              onWeight={(v) => onSet(s.key, { weight: v })}
+              ariaLabel={`Movement ${index + 1} set ${i + 1}`}
             />
             {movement.sets.length > 1 ? (
               <Button

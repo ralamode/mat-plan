@@ -4,14 +4,14 @@ import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT, newId } from '@mat-plan/shar
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { INPUT_CLASS } from '@/lib/constants';
 
 import { logBodyweightAction, type ActionState } from './actions';
 import { DayField } from './day-field';
 
 const initialState: ActionState = { ok: false, error: null };
 
-const inputClass =
-  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+const inputClass = INPUT_CLASS; // single-sourced field styling (lib/constants)
 
 export function BodyweightForm({ profileId, day }: { profileId: string; day: string }) {
   const [state, formAction, pending] = useActionState(logBodyweightAction, initialState);

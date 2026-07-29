@@ -1,6 +1,6 @@
 import { newId } from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
@@ -280,4 +280,57 @@ export async function writeStrengthSession(
 
     return { sessionId: session.publicId };
   });
+}
+
+/**
+ * Edit ONE already-logged strength set's `reps` + `weight` (V1-9 fix-a-set), single-sourced HERE so the
+ * app DAL and `db:verify` prove the IDENTICAL ownership guard. The set is addressed by its `public_id`,
+ * but the WHERE also proves the set's parent `entry` belongs to the LIVE profile named by `public_id` —
+ * the BOLA/IDOR guard lives inside this writer (never trusting a raw internal id from the caller), the
+ * same seam as `writeStrengthSession`'s in-tx profile resolve. `deleted_at IS NULL` at set + entry +
+ * profile so a soft-deleted set/entry/profile (post-V1-9b) is never edited. Only `reps` + `weight_num`
+ * change; `idx` (the `uq_entry_sets_entry_idx` slot) is untouched, so no unique/CHECK is disturbed.
+ *
+ * A single atomic UPDATE — NO `db.transaction` (that wraps only the multi-row session graph). Returns the
+ * edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, or a
+ * stale/deleted set id) — an EXPECTED outcome the caller maps to a typed error, not a throw.
+ *
+ * LWW: `updated_at` advances to the DB `now()` (the transaction clock). The offline path's
+ * client-supplied-timestamp compare (`setWhere incoming >= stored`) lands at v1.5 — see docs/tech-debt.md.
+ */
+export async function updateStrengthSetById(
+  exec: Executor,
+  args: { profilePublicId: string; setId: string; reps: number; weight: number },
+): Promise<{ publicId: string } | null> {
+  // Subquery: the internal ids of entries owned by this live profile. Drizzle `update()` can't JOIN, so
+  // the parent-ownership proof rides in the WHERE via `inArray(entry_id, <this select>)` (no sql.raw).
+  const ownedEntryIds = exec
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+    .where(
+      and(
+        eq(schema.profiles.publicId, args.profilePublicId),
+        isNull(schema.profiles.deletedAt),
+        isNull(schema.entries.deletedAt),
+      ),
+    );
+
+  const rows = await exec
+    .update(schema.entrySets)
+    .set({
+      reps: args.reps,
+      weightNum: String(args.weight), // numeric column takes a precision-safe string (never a JS number)
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(schema.entrySets.publicId, args.setId),
+        isNull(schema.entrySets.deletedAt),
+        inArray(schema.entrySets.entryId, ownedEntryIds),
+      ),
+    )
+    .returning({ publicId: schema.entrySets.publicId });
+
+  return rows[0] ?? null; // zero rows = the ownership/live guard tripped → caller returns a typed error
 }

@@ -10,14 +10,15 @@ import {
   valueInputName,
   type CheckinField,
 } from '@/lib/checkins/checkin-fields';
+import { INPUT_CLASS } from '@/lib/constants';
 
 import { logCheckinsAction, type ActionState } from './actions';
 import { DayField } from './day-field';
 
 const initialState: ActionState = { ok: false, error: null };
 
-const numberInputClass =
-  'border-input bg-background focus-visible:ring-ring h-11 w-24 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+// The shared field styling + this form's fixed number-input width (single-sourced in lib/constants).
+const numberInputClass = `${INPUT_CLASS} w-24`;
 
 // A padded label row gives the >=44px tap target; the focus ring must live on the ROW,
 // not the ~16px native checkbox, or we meet the tap-target rule and fail focus-visible.
