@@ -30,7 +30,7 @@ describe('buildRoutineBlocks — contiguous-run collapse', () => {
     ]);
   });
 
-  it('a SCATTERED routine (Scarlett) splits into TWO check-in blocks, in routine order', () => {
+  it('a scattered routine (a check-in on each side of strength) splits into TWO check-in blocks', () => {
     const blocks = buildRoutineBlocks([
       item('checkin:rice_bucket'),
       item('strength'),
