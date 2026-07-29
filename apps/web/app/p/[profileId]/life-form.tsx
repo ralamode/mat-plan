@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
+import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
 import { INITIAL_ACTION_STATE } from './action-state';
 import { logLifeActivitiesAction } from './actions';
@@ -70,15 +71,21 @@ export function LifeForm({
   profileId,
   day,
   loggedLifeKeys,
+  activityKeys,
 }: {
   profileId: string;
   day: string;
   loggedLifeKeys: readonly string[];
+  // V1-18: render only these life activities, in this order (a per-kid routine subset). Omitted → all of
+  // them (the default routine + every pre-V1-18 caller are unchanged).
+  activityKeys?: readonly string[];
 }) {
   const logged = new Set(loggedLifeKeys);
+  // Resolve a per-kid subset via the SHARED helper (single-sourced with the check-in path); omitted → all.
+  const activities = activityKeys ? lifeActivitiesForKeys(activityKeys) : LIFE_ACTIVITIES;
   return (
     <div className="flex flex-wrap gap-3">
-      {LIFE_ACTIVITIES.map((a) => (
+      {activities.map((a) => (
         <LifeButton
           key={a.key}
           profileId={profileId}

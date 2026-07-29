@@ -15,6 +15,11 @@ import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
+import {
+  buildRoutineBlocks,
+  checkinFieldsForKeys,
+  lifeActivitiesForKeys,
+} from '@/lib/routine/catalog';
 import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
@@ -93,6 +98,15 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
         <p className="text-muted-foreground">Today · {formatDayLong(day)}</p>
       </header>
 
+      {/* V1-18: the logging surfaces render in this kid's OWN routine order (`profile.routine`, resolved by
+          the DAL). Weigh-in is pinned FIRST by construction (bodyweight is never a routine `order` key), then
+          each block — a contiguous run of check-ins/life collapses into one existing form (batch submit +
+          single island preserved). A NULL config resolves to the default routine = today's exact order.
+          Scope of "own order" (slice 1): the routine orders BLOCKS. WITHIN a check-in block, fields still
+          render in `CheckinForm`'s group order (by `groupLabel`), not the authored per-key order — true
+          per-key interleave inside check-ins is a later concern. Strength is routine-DRIVEN (the default +
+          seeds include it); a config that omits `strength` shows no strength block (the routine is the
+          selection — PR 2/V1-10 own an "always offer strength" affordance if wanted). */}
       <div className="flex flex-col gap-6">
         <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
           <h2 id="log-bw-heading" className="text-lg font-medium">
@@ -100,31 +114,53 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           </h2>
           <BodyweightForm profileId={profile.id} day={day} />
         </section>
-        <section aria-labelledby="log-str-heading" className="flex flex-col gap-3">
-          <h2 id="log-str-heading" className="text-lg font-medium">
-            Log strength
-          </h2>
-          <StrengthForm profileId={profile.id} day={day} />
-        </section>
-        {CHECKIN_FIELDS.length > 0 ? (
-          <section aria-labelledby="checkins-heading" className="flex flex-col gap-3">
-            <h2 id="checkins-heading" className="text-lg font-medium">
-              Check-ins
-            </h2>
-            <CheckinForm
-              profileId={profile.id}
-              day={day}
-              fields={CHECKIN_FIELDS}
-              loggedFieldKeys={loggedFieldKeys}
-            />
-          </section>
-        ) : null}
-        <section aria-labelledby="life-heading" className="flex flex-col gap-3">
-          <h2 id="life-heading" className="text-lg font-medium">
-            Life
-          </h2>
-          <LifeForm profileId={profile.id} day={day} loggedLifeKeys={loggedLifeKeys} />
-        </section>
+        {buildRoutineBlocks(profile.routine.order).map((block, i) => {
+          if (block.kind === 'strength') {
+            return (
+              <section key={`b${i}`} aria-labelledby={`str-${i}`} className="flex flex-col gap-3">
+                <h2 id={`str-${i}`} className="text-lg font-medium">
+                  Log strength
+                </h2>
+                <StrengthForm profileId={profile.id} day={day} />
+              </section>
+            );
+          }
+          if (block.kind === 'checkins') {
+            const fields = checkinFieldsForKeys(block.keys);
+            if (fields.length === 0) return null; // an empty run renders nothing (mirrors the old guard)
+            return (
+              <section
+                key={`b${i}`}
+                aria-labelledby={`checkins-${i}`}
+                className="flex flex-col gap-3"
+              >
+                <h2 id={`checkins-${i}`} className="text-lg font-medium">
+                  Check-ins
+                </h2>
+                <CheckinForm
+                  profileId={profile.id}
+                  day={day}
+                  fields={fields}
+                  loggedFieldKeys={loggedFieldKeys}
+                />
+              </section>
+            );
+          }
+          if (lifeActivitiesForKeys(block.keys).length === 0) return null; // empty run → render nothing
+          return (
+            <section key={`b${i}`} aria-labelledby={`life-${i}`} className="flex flex-col gap-3">
+              <h2 id={`life-${i}`} className="text-lg font-medium">
+                Life
+              </h2>
+              <LifeForm
+                profileId={profile.id}
+                day={day}
+                loggedLifeKeys={loggedLifeKeys}
+                activityKeys={block.keys}
+              />
+            </section>
+          );
+        })}
       </div>
 
       {calisTotals.length > 0 ? (
