@@ -27,6 +27,7 @@ import {
   PROFILE_KIND,
   type RoutineConfig,
   routineConfigSchema,
+  ROUTINE_VERSION,
   SESSION_TYPES,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
@@ -156,7 +157,7 @@ console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored 
 // validation (`validateRoutineForWrite`) is unit-tested app-side; here we prove the column stores + returns
 // the config unchanged. Writes to Liam (was NULL) so it also exercises the NULL → set transition.
 const writeRoutine = {
-  version: 1,
+  version: ROUTINE_VERSION,
   order: [{ key: 'strength' }, { key: 'checkin:rice_bucket' }],
 } satisfies RoutineConfig;
 await db

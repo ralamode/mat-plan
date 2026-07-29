@@ -34,10 +34,25 @@ export function RoutineEditor({
   const [order, setOrder] = useState<RoutineItem[]>(() => [...initialOrder]);
 
   const labelByKey = new Map(catalog.map((c) => [c.key, c.label]));
+  // The kid's ORIGINAL items, keyed — so re-adding a removed activity restores its opaque `conditional`
+  // marker (a day-conditional strength stays day-conditional across a remove/re-add), not a bare { key }.
+  const initialByKey = new Map(initialOrder.map((item) => [item.key, item]));
   const present = new Set(order.map((item) => item.key));
   const available = catalog.filter((c) => !present.has(c.key));
   // The exact config the action re-validates + persists (version single-sourced, marker preserved).
   const routineJson = JSON.stringify({ version: ROUTINE_VERSION, order });
+
+  // Show "Routine saved." only while the CURRENT order still matches what was last persisted — snapshot the
+  // saved payload during render when the action flips to ok (the strength-form during-render idiom, not an
+  // effect). Any later edit changes `routineJson`, so the stale "saved" message clears and can't mislead the
+  // coach into thinking un-submitted edits are persisted.
+  const [seenState, setSeenState] = useState(state);
+  const [savedJson, setSavedJson] = useState<string | null>(null);
+  if (state !== seenState) {
+    setSeenState(state);
+    if (state.ok) setSavedJson(routineJson);
+  }
+  const showSaved = savedJson !== null && savedJson === routineJson;
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -60,12 +75,15 @@ export function RoutineEditor({
               return (
                 <li key={item.key} className="flex items-center gap-2 rounded-lg border px-3 py-2">
                   <span className="flex-1 text-base">{label}</span>
+                  {/* Always enabled (moveUp/moveDown no-op at the bounds): a `disabled` button that the
+                      user has focused would drop keyboard/AT focus to the body when it disables at the
+                      boundary — a11y regression. `aria-disabled` marks the inert bound without losing focus. */}
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     className="min-h-11 min-w-11"
-                    disabled={i === 0}
+                    aria-disabled={i === 0}
                     onClick={() => setOrder((o) => moveUp(o, i))}
                     aria-label={`Move ${label} up`}
                   >
@@ -76,7 +94,7 @@ export function RoutineEditor({
                     variant="ghost"
                     size="sm"
                     className="min-h-11 min-w-11"
-                    disabled={i === order.length - 1}
+                    aria-disabled={i === order.length - 1}
                     onClick={() => setOrder((o) => moveDown(o, i))}
                     aria-label={`Move ${label} down`}
                   >
@@ -87,7 +105,7 @@ export function RoutineEditor({
                     variant="ghost"
                     size="sm"
                     className="min-h-11"
-                    onClick={() => setOrder((o) => toggle(o, item.key))}
+                    onClick={() => setOrder((o) => toggle(o, item))}
                     aria-label={`Remove ${label} from the routine`}
                   >
                     Remove
@@ -112,7 +130,11 @@ export function RoutineEditor({
                   variant="outline"
                   size="sm"
                   className="min-h-11"
-                  onClick={() => setOrder((o) => toggle(o, c.key))}
+                  // Re-add the ORIGINAL item if this key was in the kid's routine (keeps `conditional`);
+                  // otherwise a fresh bare item.
+                  onClick={() =>
+                    setOrder((o) => toggle(o, initialByKey.get(c.key) ?? { key: c.key }))
+                  }
                 >
                   + {c.label}
                 </Button>
@@ -133,7 +155,7 @@ export function RoutineEditor({
         </Button>
       </div>
 
-      {state.ok ? (
+      {showSaved ? (
         <p role="status" className="text-muted-foreground text-sm">
           Routine saved.
         </p>

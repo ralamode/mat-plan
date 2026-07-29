@@ -4,6 +4,7 @@ import {
   FREE_TEXT_NOTE_MAX,
   METRIC_KEYS,
   newId,
+  ROUTINE_VERSION,
 } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1006,7 +1007,7 @@ function routineForm(opts: { profileId?: string; routineRaw?: string; order?: un
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
   if (opts.routineRaw !== undefined) fd.append('routine', opts.routineRaw);
   else if (opts.order !== undefined)
-    fd.append('routine', JSON.stringify({ version: 1, order: opts.order }));
+    fd.append('routine', JSON.stringify({ version: ROUTINE_VERSION, order: opts.order }));
   return fd;
 }
 
@@ -1062,7 +1063,7 @@ describe('editRoutineAction — happy path + ownership', () => {
     expect(res.ok).toBe(true);
     expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
     expect(updateProfileRoutine).toHaveBeenCalledWith(PROFILE_ID, {
-      version: 1,
+      version: ROUTINE_VERSION,
       order: [{ key: ROUTINE_K2 }, { key: ROUTINE_K1 }],
     });
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);

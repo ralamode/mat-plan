@@ -3,31 +3,41 @@ import { describe, expect, it } from 'vitest';
 
 import { moveDown, moveUp, toggle } from './editor';
 
-describe('toggle — add/remove a key, never a duplicate', () => {
-  it('appends an absent key at the END (the coach then reorders)', () => {
-    expect(toggle([{ key: 'strength' }], 'life:wake')).toEqual([
+describe('toggle — add/remove an item (matched by key), never a duplicate', () => {
+  it('appends an absent item at the END (the coach then reorders)', () => {
+    expect(toggle([{ key: 'strength' }], { key: 'life:wake' })).toEqual([
       { key: 'strength' },
       { key: 'life:wake' },
     ]);
   });
 
-  it('removes a present key', () => {
-    expect(toggle([{ key: 'strength' }, { key: 'life:wake' }], 'strength')).toEqual([
+  it('removes a present key (matched by key, ignoring the passed item’s other fields)', () => {
+    expect(toggle([{ key: 'strength' }, { key: 'life:wake' }], { key: 'strength' })).toEqual([
       { key: 'life:wake' },
     ]);
   });
 
+  it('re-adds with the ORIGINAL conditional marker when the caller passes it (no silent strip)', () => {
+    // The editor resolves the add-item from the kid's initial order, so a removed day-conditional
+    // strength comes back day-conditional.
+    const removed = toggle([{ key: 'strength', conditional: true }], { key: 'strength' }); // -> []
+    expect(removed).toEqual([]);
+    expect(toggle(removed, { key: 'strength', conditional: true })).toEqual([
+      { key: 'strength', conditional: true },
+    ]);
+  });
+
   it('never introduces a duplicate (toggling a present key removes, does not re-add)', () => {
-    const once = toggle([{ key: 'strength' }], 'strength'); // -> []
+    const once = toggle([{ key: 'strength' }], { key: 'strength' }); // -> []
     expect(once).toEqual([]);
-    const twice = toggle(once, 'strength'); // -> [{strength}]
+    const twice = toggle(once, { key: 'strength' }); // -> [{strength}]
     expect(twice).toEqual([{ key: 'strength' }]);
-    expect(toggle(twice, 'strength')).toEqual([]); // back to empty, never [{s},{s}]
+    expect(toggle(twice, { key: 'strength' })).toEqual([]); // back to empty, never [{s},{s}]
   });
 
   it('does not mutate its argument', () => {
     const order: RoutineItem[] = [{ key: 'strength' }];
-    toggle(order, 'life:wake');
+    toggle(order, { key: 'life:wake' });
     expect(order).toEqual([{ key: 'strength' }]);
   });
 });

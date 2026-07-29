@@ -11,12 +11,15 @@ import type { RoutineItem } from '@mat-plan/shared';
  * Reorders are adjacent swaps, so the whole item (marker included) rides along untouched.
  */
 
-/** Toggle a catalog key in/out of the routine. Absent → APPEND `{ key }` at the end (the coach then
- *  reorders with ▲▼); present → remove it. Never introduces a duplicate (append only when absent). */
-export function toggle(order: readonly RoutineItem[], key: string): RoutineItem[] {
-  return order.some((item) => item.key === key)
-    ? order.filter((item) => item.key !== key)
-    : [...order, { key }];
+/** Toggle an item in/out of the routine, matched by `key`. Absent → APPEND `item` at the end (the coach
+ *  then reorders with ▲▼); present → remove it. Never introduces a duplicate (append only when absent).
+ *  Takes the whole `item` (not a bare key) so a re-add can carry the ORIGINAL `conditional` marker: the
+ *  caller resolves the item to add from the kid's initial order, so removing then re-adding a seeded
+ *  day-conditional activity doesn't silently strip the marker (the V1-10 down-payment). */
+export function toggle(order: readonly RoutineItem[], item: RoutineItem): RoutineItem[] {
+  return order.some((i) => i.key === item.key)
+    ? order.filter((i) => i.key !== item.key)
+    : [...order, item];
 }
 
 /** Move the item at `index` one step earlier. No-op (returns a copy) at the top or out of range. */

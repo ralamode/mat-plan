@@ -32,21 +32,39 @@ export type RoutineBlock =
   | { kind: 'checkins'; keys: string[] } // bare CheckinField.key values, in routine order
   | { kind: 'life'; keys: string[] }; // bare LIFE_ACTIVITY_KEYS values, in routine order
 
+/**
+ * Classify ONE routine key into what renders it — the single dispatch both `buildRoutineBlocks` (Today)
+ * and `routineCatalogItems` (the coach editor) share, so a new namespace can't render on one surface but
+ * silently drop on the other. `strength` → the singleton; `checkin:*`/`life:*` → their kind + bare
+ * catalog key; a missing tail or an unknown namespace (`finisher:*` etc.) → null (skipped everywhere).
+ */
+type RoutineKeyClass =
+  | { kind: 'strength' }
+  | { kind: 'checkins'; catalogKey: string }
+  | { kind: 'life'; catalogKey: string };
+
+function classifyRoutineKey(key: string): RoutineKeyClass | null {
+  const { namespace, catalogKey } = parseRoutineKey(key);
+  if (namespace === STRENGTH_KEY) return { kind: 'strength' };
+  if (!catalogKey) return null; // no namespace tail (null / empty '')
+  if (namespace === 'checkin') return { kind: 'checkins', catalogKey };
+  if (namespace === 'life') return { kind: 'life', catalogKey };
+  return null; // unknown namespace (finisher:* etc.)
+}
+
 export function buildRoutineBlocks(order: readonly { key: string }[]): RoutineBlock[] {
   const blocks: RoutineBlock[] = [];
   for (const { key } of order) {
-    const { namespace, catalogKey } = parseRoutineKey(key);
-    if (namespace === STRENGTH_KEY) {
+    const cls = classifyRoutineKey(key);
+    if (cls === null) continue; // no tail / unknown namespace — skip
+    if (cls.kind === 'strength') {
       blocks.push({ kind: 'strength' });
       continue;
     }
-    if (!catalogKey) continue; // no namespace tail (null / empty '') — skip
-    const kind = namespace === 'checkin' ? 'checkins' : namespace === 'life' ? 'life' : null;
-    if (kind === null) continue; // unknown namespace (finisher:* etc.) — skip
     const last = blocks[blocks.length - 1];
-    if (last && 'keys' in last && last.kind === kind)
-      last.keys.push(catalogKey); // extend the run
-    else blocks.push({ kind, keys: [catalogKey] }); // start a new block
+    if (last && 'keys' in last && last.kind === cls.kind)
+      last.keys.push(cls.catalogKey); // extend the run
+    else blocks.push({ kind: cls.kind, keys: [cls.catalogKey] }); // start a new block
   }
   return blocks;
 }
@@ -85,18 +103,14 @@ export type RoutineCatalogItem = { key: string; label: string };
 export function routineCatalogItems(): RoutineCatalogItem[] {
   const items: RoutineCatalogItem[] = [];
   for (const key of ROUTINE_CATALOG) {
-    const { namespace, catalogKey } = parseRoutineKey(key);
-    if (namespace === STRENGTH_KEY) {
-      items.push({ key, label: STRENGTH_LABEL });
-      continue;
-    }
-    if (!catalogKey) continue; // no namespace tail — skip (mirrors buildRoutineBlocks)
+    const cls = classifyRoutineKey(key); // the SAME dispatch buildRoutineBlocks uses (no drift)
+    if (cls === null) continue;
     const label =
-      namespace === 'checkin'
-        ? CHECKIN_FIELD_BY_KEY.get(catalogKey)?.label
-        : namespace === 'life'
-          ? LIFE_ACTIVITY_BY_KEY.get(catalogKey)?.label
-          : undefined;
+      cls.kind === 'strength'
+        ? STRENGTH_LABEL
+        : cls.kind === 'checkins'
+          ? CHECKIN_FIELD_BY_KEY.get(cls.catalogKey)?.label
+          : LIFE_ACTIVITY_BY_KEY.get(cls.catalogKey)?.label;
     if (label !== undefined) items.push({ key, label });
   }
   return items;

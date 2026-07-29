@@ -139,8 +139,10 @@ export function validateRoutineForWrite(
   if (parsed.data.order.length === 0) return null; // empty is not authorable (would revert to the default)
 
   const resolved = resolveRoutine(parsed.data, orderedCatalogKeys);
-  // Clean iff resolving changed nothing: same length AND same key + conditional at each index. Any drop
-  // means a non-catalog key or a duplicate the read path would have silently removed — reject instead.
+  // Clean iff resolving changed nothing. TODAY `resolveRoutine` is an order-preserving, non-transforming
+  // filter, so equal length already implies item-identity — but we ALSO compare key + conditional per index
+  // on purpose: it is the guard that keeps this "reject" contract correct if `resolveRoutine` ever reorders
+  // or normalizes items (then length could match while contents differ). Cheap defence, not dead code.
   const clean =
     resolved.order.length === parsed.data.order.length &&
     resolved.order.every(
