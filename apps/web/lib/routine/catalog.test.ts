@@ -1,10 +1,20 @@
-import { buildDefaultRoutine, makeRoutineKey, STRENGTH_KEY } from '@mat-plan/shared';
+import {
+  buildDefaultRoutine,
+  makeRoutineKey,
+  STRENGTH_KEY,
+  STRENGTH_LABEL,
+} from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-import { buildRoutineBlocks, checkinFieldsForKeys, ROUTINE_CATALOG } from './catalog';
+import {
+  buildRoutineBlocks,
+  checkinFieldsForKeys,
+  ROUTINE_CATALOG,
+  routineCatalogItems,
+} from './catalog';
 
 const CHECKIN_KEYS = CHECKIN_FIELDS.map((f) => f.key);
 const item = (key: string) => ({ key });
@@ -68,5 +78,29 @@ describe('checkinFieldsForKeys — maps bare keys back to CheckinField objects i
     const first = CHECKIN_KEYS[0];
     const fields = checkinFieldsForKeys([first, 'nope']);
     expect(fields.map((f) => f.key)).toEqual([first]);
+  });
+});
+
+describe('routineCatalogItems — the labelled catalog for the coach editor', () => {
+  const items = routineCatalogItems();
+
+  it('covers every ROUTINE_CATALOG key, in catalog order', () => {
+    expect(items.map((i) => i.key)).toEqual([...ROUTINE_CATALOG]);
+  });
+
+  it('single-sources labels from the registries (no re-typed strings)', () => {
+    const byKey = new Map(items.map((i) => [i.key, i.label]));
+    // strength → the shared STRENGTH_LABEL
+    expect(byKey.get(STRENGTH_KEY)).toBe(STRENGTH_LABEL);
+    // a check-in key → its CheckinField.label
+    const cf = CHECKIN_FIELDS[0]!;
+    expect(byKey.get(makeRoutineKey('checkin', cf.key))).toBe(cf.label);
+    // a life key → its LIFE_ACTIVITIES label
+    const la = LIFE_ACTIVITIES[0]!;
+    expect(byKey.get(makeRoutineKey('life', la.key))).toBe(la.label);
+  });
+
+  it('gives every item a non-empty label', () => {
+    for (const i of items) expect(i.label.length).toBeGreaterThan(0);
   });
 });

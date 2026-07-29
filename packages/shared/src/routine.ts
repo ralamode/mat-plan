@@ -16,6 +16,15 @@ import { z } from 'zod';
 /** The bare, singleton routine key for the strength block (not namespaced — there's only one). */
 export const STRENGTH_KEY = 'strength';
 
+/** The display label for the strength block. Homed here (next to `STRENGTH_KEY`) because the strength
+ *  singleton has no per-item registry — unlike check-ins/life, whose labels live on their registry objects.
+ *  The coach editor's catalog (`routineCatalogItems`) sources it here rather than re-typing "Strength". */
+export const STRENGTH_LABEL = 'Strength';
+
+/** The current routine-config shape version. Named so the literal `1` can't drift across the schema, the
+ *  builders, and the client editor's serialization at the next shape bump (a later change branches on it). */
+export const ROUTINE_VERSION = 1;
+
 /**
  * The namespace prefixes for the per-activity keys. A key is `<namespace>:<catalogKey>` — and the tail is
  * COLON-PERMITTING because the existing check-in keys already contain a colon (`activityKey:metricKey`,
@@ -41,7 +50,7 @@ export type RoutineItem = z.infer<typeof routineItemSchema>;
 /** A per-kid routine: a `version` (so a later shape change branches, not guesses) + the ordered items.
  *  An OBJECT (not a bare array) so PR 3's check-in allowlist is additive with no shape bump. */
 export const routineConfigSchema = z
-  .object({ version: z.literal(1), order: z.array(routineItemSchema) })
+  .object({ version: z.literal(ROUTINE_VERSION), order: z.array(routineItemSchema) })
   .strict();
 export type RoutineConfig = z.infer<typeof routineConfigSchema>;
 
@@ -68,7 +77,7 @@ export function makeRoutineKey(namespace: RoutineNamespace, catalogKey: string):
 /** Build the default routine from the app's ordered catalog keys (strength → check-ins → life). Pure: the
  *  CALLER (app-side, PR 1b) owns the ordered key list so the default can't drift from the live catalog. */
 export function buildDefaultRoutine(orderedCatalogKeys: readonly string[]): RoutineConfig {
-  return { version: 1, order: orderedCatalogKeys.map((key) => ({ key })) };
+  return { version: ROUTINE_VERSION, order: orderedCatalogKeys.map((key) => ({ key })) };
 }
 
 /**
@@ -103,5 +112,43 @@ export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string
     }
   }
   // All items stale/invalid → fall back to the default (never a blank routine from a gone-stale config).
-  return order.length > 0 ? { version: 1, order } : buildDefaultRoutine(orderedCatalogKeys);
+  return order.length > 0
+    ? { version: ROUTINE_VERSION, order }
+    : buildDefaultRoutine(orderedCatalogKeys);
+}
+
+/**
+ * STRICT write-side validation (V1-18 PR 2, coach editor) — the authoring counterpart to the forgiving
+ * `resolveRoutine`. A Server Action is an untrusted public POST, so a save must REJECT a bad body rather
+ * than silently drop items (which would let the coach save X and then see Y on Today). It single-sources
+ * the membership + dedupe rule by DELEGATING to `resolveRoutine` and demanding it change NOTHING — the
+ * submitted config is clean iff resolving it (grammar + catalog membership + first-wins dedupe) returns
+ * the identical ordered items. Rejects (→ null):
+ *   - not a valid `routineConfigSchema` object (wrong `version`, unknown field, malformed item);
+ *   - an EMPTY `order` — an empty routine is NOT authorable, because `resolveRoutine` maps it back to the
+ *     full default on read, so "save nothing" would silently render everything (a hidden write/read split);
+ *   - any non-catalog key, or a duplicate key (both things `resolveRoutine` would have dropped/deduped).
+ * Returns the config to persist as-is (so the opaque `conditional` marker survives), or `null`.
+ */
+export function validateRoutineForWrite(
+  raw: unknown,
+  orderedCatalogKeys: readonly string[],
+): RoutineConfig | null {
+  const parsed = routineConfigSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  if (parsed.data.order.length === 0) return null; // empty is not authorable (would revert to the default)
+
+  const resolved = resolveRoutine(parsed.data, orderedCatalogKeys);
+  // Clean iff resolving changed nothing. TODAY `resolveRoutine` is an order-preserving, non-transforming
+  // filter, so equal length already implies item-identity — but we ALSO compare key + conditional per index
+  // on purpose: it is the guard that keeps this "reject" contract correct if `resolveRoutine` ever reorders
+  // or normalizes items (then length could match while contents differ). Cheap defence, not dead code.
+  const clean =
+    resolved.order.length === parsed.data.order.length &&
+    resolved.order.every(
+      (item, i) =>
+        item.key === parsed.data.order[i]!.key &&
+        item.conditional === parsed.data.order[i]!.conditional,
+    );
+  return clean ? parsed.data : null;
 }

@@ -1,0 +1,51 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+
+import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { routineCatalogItems } from '@/lib/routine/catalog';
+
+import { RoutineEditor } from './routine-editor';
+
+// Route-segment config must be a static inline literal (Next can't follow an imported const), so
+// 'nodejs' stays here. pg → Node runtime, not Edge. Mirrors the sibling Today route.
+export const runtime = 'nodejs';
+
+/**
+ * V1-18 PR 2: the coach routine editor. A parent authors which activities are in a kid's routine and their
+ * order (the checklist + ▲▼ the panel settled on). Reachable by URL only — NOT linked from the kid's Today
+ * (no kid-facing edit affordance; the access gate is UX-not-security, so discoverability isn't a security
+ * concern, and the Clerk-era parent nav will place it properly). The profile is re-resolved server-side
+ * (the ownership seam); its routine is already resolved by the DAL, so the editor seeds from a real order.
+ */
+export default async function RoutineEditorPage({
+  params,
+}: {
+  params: Promise<{ profileId: string }>;
+}) {
+  const { profileId } = await params;
+  const profile = await getProfileByPublicId(profileId);
+  if (!profile) notFound();
+
+  return (
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+      <header className="flex flex-col gap-2">
+        <Link
+          href={`/p/${profile.id}`}
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-fit rounded-sm text-sm outline-none focus-visible:ring-3"
+        >
+          ← Back to {profile.name}
+        </Link>
+        <h1 className="text-3xl font-semibold tracking-tight">Edit routine</h1>
+        <p className="text-muted-foreground">
+          Choose {profile.name}&rsquo;s activities and the order they log them in.
+        </p>
+      </header>
+
+      <RoutineEditor
+        profileId={profile.id}
+        initialOrder={profile.routine.order}
+        catalog={routineCatalogItems()}
+      />
+    </main>
+  );
+}
