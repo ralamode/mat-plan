@@ -60,3 +60,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   in `editStrengthSetSchema`, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
   (the same LWW guard the sync path applies to every mutable row). The writer edge already flags the spot.
 - **Severity:** low (deferred with the rest of the offline/LWW work).
+
+## `profiles.routine_config` is JSONB — a knowing exception to the typed-columns rule (V1-18)
+
+- **What & why (V1-18 PR 1a):** the per-kid routine (ordered activity keys) is stored as a nullable JSONB
+  blob (`routineConfigSchema` in `@mat-plan/shared`) instead of a `routine_items` table. Deliberate: the
+  first slice only _renders_ the ordered list (`order.map` over the existing forms, PR 1b) — nothing
+  queries/joins/filters INTO it, key validity is enforced on read (`resolveRoutine`, drop-unknowns), and
+  `null → the default routine` ships dark with no backfill. AGENTS.md "JSONB only for opaque sync/device
+  metadata; values stay in fixed typed columns" — routine config is borderline structured, accepted for the
+  first slice per the V1-18 design→eng investigation (docs/plans/v1-18-*).
+- **Impact:** low now (single-household, hand-seeded, read-only render). Grows if V1-10 needs to schedule /
+  join / query routine rows.
+- **Promotion trigger (explicit):** promote to a `routine_items` table (bigint identity PK, UUIDv7
+  public_id, `profile_id` FK + covering index, `position` ordinal + partial-unique per profile,
+  `activity_key` text, `conditional` → a real typed column, the per-kid check-in allowlist as rows) the
+  **first time V1-10 needs to query INTO the routine** — generate rows from a program schedule, JOIN routine
+  to sessions/day, or filter by conditional/day. Expand→backfill(from JSONB)→contract; keep the default as
+  the seed. Until then JSONB + zod-on-read stays.
+- **Severity:** low.

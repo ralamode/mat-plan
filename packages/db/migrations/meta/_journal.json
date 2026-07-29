@@ -43,6 +43,13 @@
       "when": 1784952237913,
       "tag": "0005_silly_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785343448668,
+      "tag": "0006_spooky_lyja",
+      "breakpoints": true
     }
   ]
 }
