@@ -25,7 +25,9 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  type RoutineConfig,
   routineConfigSchema,
+  ROUTINE_VERSION,
   SESSION_TYPES,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
@@ -149,6 +151,33 @@ assert.ok(
   'V1-18: Scarlett’s seeded routine_config parses against routineConfigSchema',
 );
 console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored config is valid');
+
+// V1-18 (PR 2): the coach-editor WRITE path — prove a routine config round-trips through the jsonb column
+// (drizzle UPDATE → reread → byte-identical), the DB half of `updateProfileRoutine`. The pure strict
+// validation (`validateRoutineForWrite`) is unit-tested app-side; here we prove the column stores + returns
+// the config unchanged. Writes to Liam (was NULL) so it also exercises the NULL → set transition.
+const writeRoutine = {
+  version: ROUTINE_VERSION,
+  order: [{ key: 'strength' }, { key: 'checkin:rice_bucket' }],
+} satisfies RoutineConfig;
+await db
+  .update(schema.profiles)
+  .set({ routineConfig: writeRoutine })
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+const [rewritten] = await db
+  .select({ routineConfig: schema.profiles.routineConfig })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+assert.deepEqual(
+  rewritten?.routineConfig,
+  writeRoutine,
+  'V1-18 (PR 2): routine_config write round-trips through jsonb unchanged',
+);
+assert.ok(
+  routineConfigSchema.safeParse(rewritten?.routineConfig).success,
+  'V1-18 (PR 2): the written routine_config re-parses against routineConfigSchema',
+);
+console.log('✓ V1-18 (PR 2): routine_config write round-trips through jsonb');
 
 // Tagged-union CHECK: a bodyweight entry with no value_num must be rejected.
 let rejected = false;

@@ -15,6 +15,28 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Coach routine editor: no real authz, and two accepted write semantics (V1-18 PR 2)
+
+- **What & why (V1-18 PR 2):** the routine editor (`/p/[profileId]/routine` + `editRoutineAction`) ships
+  behind the access-gate stopgap with **existence-only** ownership (re-resolve by `public_id`), like every
+  other writer — profile tiles are "a UX switch, not a security boundary" (AGENTS.md). So ANY gate-holder can
+  edit ANY kid's routine. It's reachable by URL only (no kid-facing edit affordance on Today), which limits
+  discoverability but is **not** a security control. Two write semantics are also accepted, not bugs:
+  - **Default-freeze (panel C4):** a kid whose `routine_config` is `NULL` renders the live default; saving
+    from the editor **materializes** that default into the column, so the kid stops auto-tracking future
+    catalog additions (a new check-in won't appear in their now-frozen order). Authoring a routine is an
+    explicit opt-out of default-tracking.
+  - **Last-write-wins clobber (panel C6):** the write is an unconditional `SET routine_config = …` with no
+    client-`updated_at` LWW guard, so a stale second tab clobbers the first. No race with the kid logging on
+    Today — that writes the `entries` table, a different column.
+- **Impact:** low today (single trusted household, pre-Clerk, occasional edits). The BOLA gap is the real
+  item; the two semantics are edge cases a single coach won't hit.
+- **Proposed fix:** **Clerk v1.5** closes the authz gap — scope the DAL read + write by `household_id` (the
+  ownership seam every writer already re-resolves through). The LWW clobber is paid down with the offline/sync
+  LWW work (same `incoming >= stored` guard as the set-edit debt above). Default-freeze resolves naturally if
+  the editor gains a "reset to default" affordance or the write skips a no-op-vs-default save.
+- **Severity:** low (accepted for the pre-Clerk single-household deployment).
+
 ### `embedded-postgres` downloads a Postgres binary on every install, incl. CI that never uses it
 
 - **What & why (PR #43; extended by chore/local-dev-db):** the ephemeral-DB screenshot flow

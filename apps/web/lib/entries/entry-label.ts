@@ -1,4 +1,9 @@
-import { ACTIVITY_TYPE_KEYS, ENTRY_KIND, METRIC_VALUE_TYPE } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  ENTRY_KIND,
+  METRIC_VALUE_TYPE,
+  STRENGTH_LABEL,
+} from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
 import { minutesToClock } from '@/lib/date';
@@ -74,5 +79,5 @@ export function entryLabel(e: EntryDTO): string {
   if (e.kind === ENTRY_KIND.bodyweight) {
     return e.value === null ? 'Bodyweight' : `Bodyweight — ${e.value} ${e.unit}`;
   }
-  return 'Strength';
+  return STRENGTH_LABEL;
 }
