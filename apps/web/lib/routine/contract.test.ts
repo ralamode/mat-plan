@@ -131,6 +131,17 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
     const withFuture = { version: 1, order: [{ key: 'strength' }], checkinAllowlist: ['x'] };
     expect(resolveRoutine(withFuture, CATALOG).order).toEqual([{ key: 'strength' }]);
   });
+
+  it('de-dupes a repeated key (first-wins) so a corrupt config never renders duplicate controls', () => {
+    const dup = {
+      version: 1,
+      order: [{ key: 'checkin:rice_bucket' }, { key: 'strength' }, { key: 'checkin:rice_bucket' }],
+    };
+    expect(resolveRoutine(dup, CATALOG).order).toEqual([
+      { key: 'checkin:rice_bucket' },
+      { key: 'strength' },
+    ]);
+  });
 });
 
 describe('parseRoutineKey — no-colon guard', () => {

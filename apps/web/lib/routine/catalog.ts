@@ -1,7 +1,9 @@
 import { makeRoutineKey, parseRoutineKey, STRENGTH_KEY } from '@mat-plan/shared';
 
 import { type CheckinField, CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
+
+type LifeActivity = (typeof LIFE_ACTIVITIES)[number];
 
 /**
  * The ordered routine catalog (V1-18) — the SINGLE source of both the default routine order AND
@@ -38,7 +40,7 @@ export function buildRoutineBlocks(order: readonly { key: string }[]): RoutineBl
       blocks.push({ kind: 'strength' });
       continue;
     }
-    if (catalogKey === null) continue; // malformed / no tail — skip
+    if (!catalogKey) continue; // no namespace tail (null / empty '') — skip
     const kind = namespace === 'checkin' ? 'checkins' : namespace === 'life' ? 'life' : null;
     if (kind === null) continue; // unknown namespace (finisher:* etc.) — skip
     const last = blocks[blocks.length - 1];
@@ -49,9 +51,22 @@ export function buildRoutineBlocks(order: readonly { key: string }[]): RoutineBl
   return blocks;
 }
 
+// Static key → object lookups, built ONCE at module load (the registries are static consts) — not per call.
+const CHECKIN_FIELD_BY_KEY = new Map<string, CheckinField>(CHECKIN_FIELDS.map((f) => [f.key, f]));
+const LIFE_ACTIVITY_BY_KEY = new Map<string, LifeActivity>(LIFE_ACTIVITIES.map((a) => [a.key, a]));
+
 /** Map a check-in block's bare keys back to the live `CheckinField` objects (the ONE registry), in routine
- *  order. DEFAULT (catalog-order keys) yields exactly today's `fields={CHECKIN_FIELDS}`. */
+ *  order (unknown keys dropped). DEFAULT (catalog-order keys) yields exactly today's `fields={CHECKIN_FIELDS}`. */
 export function checkinFieldsForKeys(keys: readonly string[]): CheckinField[] {
-  const byKey = new Map(CHECKIN_FIELDS.map((f) => [f.key, f]));
-  return keys.map((k) => byKey.get(k)).filter((f): f is CheckinField => f !== undefined);
+  return keys
+    .map((k) => CHECKIN_FIELD_BY_KEY.get(k))
+    .filter((f): f is CheckinField => f !== undefined);
+}
+
+/** The life twin of `checkinFieldsForKeys` — bare keys → live `LIFE_ACTIVITIES` objects, in routine order
+ *  (unknown keys dropped). Single-sources the resolution the `LifeForm` subset uses (no inline re-implement). */
+export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
+  return keys
+    .map((k) => LIFE_ACTIVITY_BY_KEY.get(k))
+    .filter((a): a is LifeActivity => a !== undefined);
 }

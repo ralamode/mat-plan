@@ -15,7 +15,11 @@ import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
-import { buildRoutineBlocks, checkinFieldsForKeys } from '@/lib/routine/catalog';
+import {
+  buildRoutineBlocks,
+  checkinFieldsForKeys,
+  lifeActivitiesForKeys,
+} from '@/lib/routine/catalog';
 import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
@@ -97,7 +101,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
       {/* V1-18: the logging surfaces render in this kid's OWN routine order (`profile.routine`, resolved by
           the DAL). Weigh-in is pinned FIRST by construction (bodyweight is never a routine `order` key), then
           each block — a contiguous run of check-ins/life collapses into one existing form (batch submit +
-          single island preserved). A NULL config resolves to the default routine = today's exact order. */}
+          single island preserved). A NULL config resolves to the default routine = today's exact order.
+          Scope of "own order" (slice 1): the routine orders BLOCKS. WITHIN a check-in block, fields still
+          render in `CheckinForm`'s group order (by `groupLabel`), not the authored per-key order — true
+          per-key interleave inside check-ins is a later concern. Strength is routine-DRIVEN (the default +
+          seeds include it); a config that omits `strength` shows no strength block (the routine is the
+          selection — PR 2/V1-10 own an "always offer strength" affordance if wanted). */}
       <div className="flex flex-col gap-6">
         <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
           <h2 id="log-bw-heading" className="text-lg font-medium">
@@ -137,6 +146,7 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
               </section>
             );
           }
+          if (lifeActivitiesForKeys(block.keys).length === 0) return null; // empty run → render nothing
           return (
             <section key={`b${i}`} aria-labelledby={`life-${i}`} className="flex flex-col gap-3">
               <h2 id={`life-${i}`} className="text-lg font-medium">

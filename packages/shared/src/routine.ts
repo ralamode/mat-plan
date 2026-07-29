@@ -76,8 +76,9 @@ export function buildDefaultRoutine(orderedCatalogKeys: readonly string[]): Rout
  * app's ordered catalog keys (which are also the membership set + the default order — so `default ⊆
  * catalog` by construction). Forgiving, item-by-item:
  *   - null / non-object / wrong `version` → the default routine (the ships-dark path);
- *   - a valid config → keep only the items whose key is (a) grammar-valid AND (b) a live catalog key,
- *     dropping any stale/invalid item WITHOUT discarding the rest (a single bad key never nukes the routine);
+ *   - a valid config → keep only the items whose key is (a) grammar-valid, (b) a live catalog key, AND (c)
+ *     not a DUPLICATE (first occurrence wins) — dropping any stale/invalid/repeat item WITHOUT discarding the
+ *     rest (a single bad key never nukes the routine; a repeated key never renders duplicate controls);
  *   - a config whose items ALL drop out (fully stale) → the default too, so a kid never renders a blank Today.
  */
 export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string[]): RoutineConfig {
@@ -90,10 +91,16 @@ export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string
   if (!outer.success) return buildDefaultRoutine(orderedCatalogKeys);
 
   const allow = new Set(orderedCatalogKeys);
+  const seen = new Set<string>();
   const order: RoutineItem[] = [];
   for (const rawItem of outer.data.order) {
     const item = routineItemSchema.safeParse(rawItem);
-    if (item.success && allow.has(item.data.key)) order.push(item.data);
+    // DEDUPE (first-wins): a repeated key from corrupt/crafted JSONB must not render two of the same block
+    // (duplicate React keys, DOM ids, and hidden inputs — a phantom control).
+    if (item.success && allow.has(item.data.key) && !seen.has(item.data.key)) {
+      seen.add(item.data.key);
+      order.push(item.data);
+    }
   }
   // All items stale/invalid → fall back to the default (never a blank routine from a gone-stale config).
   return order.length > 0 ? { version: 1, order } : buildDefaultRoutine(orderedCatalogKeys);

@@ -5,6 +5,7 @@ import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
+import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
 import { INITIAL_ACTION_STATE } from './action-state';
 import { logLifeActivitiesAction } from './actions';
@@ -80,9 +81,8 @@ export function LifeForm({
   activityKeys?: readonly string[];
 }) {
   const logged = new Set(loggedLifeKeys);
-  const activities = activityKeys
-    ? activityKeys.flatMap((k) => LIFE_ACTIVITIES.filter((a) => a.key === k))
-    : LIFE_ACTIVITIES;
+  // Resolve a per-kid subset via the SHARED helper (single-sourced with the check-in path); omitted → all.
+  const activities = activityKeys ? lifeActivitiesForKeys(activityKeys) : LIFE_ACTIVITIES;
   return (
     <div className="flex flex-wrap gap-3">
       {activities.map((a) => (
