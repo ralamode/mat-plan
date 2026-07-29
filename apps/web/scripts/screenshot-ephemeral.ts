@@ -329,6 +329,8 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
       sessionType: DEFAULT_SESSION_TYPE,
       sessionClientId: newId(),
       activityTypeId: scLift.id,
+      feel: 'strong, easy warmup', // V1-8-3b: session feel shows in the block header
+
       movements: [
         {
           movementName: movementRows[0].name,

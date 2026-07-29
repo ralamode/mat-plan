@@ -44,7 +44,7 @@ export type ResolvedSessionMovement = {
  */
 async function insertStrengthSessionRow(
   exec: Executor,
-  args: { profileId: number; day: string; sessionType: string; clientId: string },
+  args: { profileId: number; day: string; sessionType: string; clientId: string; feel?: string },
 ): Promise<{ id: number; publicId: string }> {
   const [row] = await exec
     .insert(schema.sessions)
@@ -54,6 +54,7 @@ async function insertStrengthSessionRow(
       profileId: args.profileId,
       activityDate: args.day,
       sessionType: args.sessionType,
+      feel: args.feel ?? null, // write-once at creation (onConflictDoNothing → replay never updates it)
     })
     .onConflictDoNothing({
       target: schema.sessions.clientId,
@@ -166,6 +167,7 @@ export async function writeStrengthSession(
     sessionType: string;
     sessionClientId: string;
     activityTypeId: number;
+    feel?: string;
     movements: readonly ResolvedSessionMovement[];
   },
 ): Promise<{ sessionId: string }> {
@@ -184,6 +186,7 @@ export async function writeStrengthSession(
       day: args.day,
       sessionType: args.sessionType,
       clientId: args.sessionClientId,
+      feel: args.feel,
     });
 
     for (const m of args.movements) {
