@@ -14,7 +14,7 @@ import {
   type SessionType,
   type Unit,
 } from '@mat-plan/shared';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import {
   assertMetricKeyExists,
@@ -138,14 +138,15 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
         isNull(schema.entries.deletedAt),
       ),
     )
-    // `id` (bigint identity) breaks created_at ties deterministically: rows written in one batch
-    // share one `now()` (Postgres now() is the transaction timestamp), so without this their order
-    // is unspecified. The tiebreak is ASC so a batched insert reads in INSERTION order — a V1-8
-    // strength session's N movements (one tx, one created_at) show Squat, Bench, Row, not reversed.
-    // Across different created_at, desc(createdAt) still lists the day newest-first; calisthenics
-    // bouts are separate submits (distinct created_at), so `calisthenicsTotals`' oldest-first
-    // reverse is unaffected.
-    .orderBy(desc(schema.entries.createdAt), asc(schema.entries.id));
+    // V1-17: OLDEST-FIRST (asc created_at), so the day's "Logged entries" list reads top-down in the
+    // order things were performed — wake → bodyweight → rice bucket — the way the kids log down their
+    // routine. (`created_at` is the performed-order proxy; `event_at` is set only on wake, logged
+    // near-real-time at session start, so plain created_at already reads correctly. A per-entry
+    // performed-time input + a user-flippable sort are a fast-follow.) `id` (bigint identity, insertion
+    // order) breaks created_at ties deterministically — rows in one batch share one `now()` (the tx
+    // timestamp), so a V1-8 session's N movements (one tx) still read Squat, Bench, Row in insertion
+    // order, and the asc(id) tiebreak is unchanged from before.
+    .orderBy(asc(schema.entries.createdAt), asc(schema.entries.id));
 
   // Fetch sets for the set-bearing (strength) entries in one query, then group by entry. Dispatch on
   // `movement_id !== null` (not `kind === 'strength'`): V1-8 session members are written kind=NULL, so
