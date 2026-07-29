@@ -1,6 +1,6 @@
 import { newId } from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
@@ -291,9 +291,15 @@ export async function writeStrengthSession(
  * profile so a soft-deleted set/entry/profile (post-V1-9b) is never edited. Only `reps` + `weight_num`
  * change; `idx` (the `uq_entry_sets_entry_idx` slot) is untouched, so no unique/CHECK is disturbed.
  *
+ * The WHERE also enforces, server-side, the SAME "numeric set only" invariant the client's `isEditableSet`
+ * uses (`weight_label IS NULL AND reps/weight_num NOT NULL`) — never trusting the client. Without it a
+ * crafted POST could set `weight_num` on a labeled ('BW'/'50ft') or timing (seconds-only) set, leaving
+ * `weight_num` coexisting with `weight_label`/`seconds` — a masked or bogus read line. Such a set matches
+ * no row → `null` → typed error, exactly like a wrong-owner id.
+ *
  * A single atomic UPDATE — NO `db.transaction` (that wraps only the multi-row session graph). Returns the
- * edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, or a
- * stale/deleted set id) — an EXPECTED outcome the caller maps to a typed error, not a throw.
+ * edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, a
+ * stale/deleted set id, or a non-numeric set) — an EXPECTED outcome the caller maps to a typed error.
  *
  * LWW: `updated_at` advances to the DB `now()` (the transaction clock). The offline path's
  * client-supplied-timestamp compare (`setWhere incoming >= stored`) lands at v1.5 — see docs/tech-debt.md.
@@ -327,6 +333,11 @@ export async function updateStrengthSetById(
       and(
         eq(schema.entrySets.publicId, args.setId),
         isNull(schema.entrySets.deletedAt),
+        // Server-side "numeric set only" guard — mirrors the client's isEditableSet, so a labeled or
+        // timing set can't be edited into an inconsistent shape by a crafted POST.
+        isNull(schema.entrySets.weightLabel),
+        isNotNull(schema.entrySets.reps),
+        isNotNull(schema.entrySets.weightNum),
         inArray(schema.entrySets.entryId, ownedEntryIds),
       ),
     )

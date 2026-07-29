@@ -12,16 +12,11 @@ import { Button } from '@/components/ui/button';
 
 import { INPUT_CLASS } from '@/lib/constants';
 
-import { logStrengthSessionAction, type ActionState } from './actions';
+import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
+import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
 import { SetRepsWeightFields } from './set-fields';
 import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
-
-const initialState: ActionState = { ok: false, error: null };
-
-// The shared field styling (single-sourced in lib/constants). Aliased so the existing `inputClass`
-// usages below stay unchanged; the reps × weight inputs now come from the shared SetRepsWeightFields.
-const inputClass = INPUT_CLASS;
 
 // Form-held movement/set state. Values are strings (the schema's `strengthSetSchema` z.coerce's
 // reps/weight), serialized into the hidden `movements` JSON field on each render. Each movement
@@ -55,7 +50,10 @@ const emptyMovement = (): MovementVals => ({
  * the inputs — a stale id would otherwise make the next submit a silent ON CONFLICT no-op.
  */
 export function StrengthForm({ profileId, day }: { profileId: string; day: string }) {
-  const [state, formAction, pending] = useActionState(logStrengthSessionAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    logStrengthSessionAction,
+    INITIAL_ACTION_STATE,
+  );
   const [gen, setGen] = useState(0);
   const [seenState, setSeenState] = useState(state);
   if (state !== seenState) {
@@ -216,7 +214,7 @@ function StrengthFormBody({
           maxLength={FREE_TEXT_NOTE_MAX}
           placeholder="e.g. strong, tired, easy"
           autoComplete="off"
-          className={inputClass}
+          className={INPUT_CLASS}
         />
       </div>
 
@@ -244,7 +242,7 @@ function StrengthFormBody({
 /**
  * One movement card — a `<fieldset>` with a name + unit and its own set rows. Presentational: all
  * state lives in the parent `movements` array (so serialization has one source and each card's sets
- * are independent). Reuses the shared `inputClass`; no third copy.
+ * are independent). Reuses the shared `INPUT_CLASS`; no third copy.
  */
 function MovementCard({
   index,
@@ -330,7 +328,7 @@ function MovementCard({
             autoComplete="off"
             value={movement.movementName}
             onChange={(e) => onName(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -341,7 +339,7 @@ function MovementCard({
             id={unitId}
             value={movement.unit}
             onChange={(e) => onUnit(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             {BODYWEIGHT_UNITS.map((u) => (
               <option key={u} value={u}>

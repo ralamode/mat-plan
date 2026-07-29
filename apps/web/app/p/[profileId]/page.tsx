@@ -22,6 +22,7 @@ import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 import { BodyweightForm } from './bodyweight-form';
 import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
+import { formatSetLine, isEditableSet } from './set-display';
 import { LifeForm } from './life-form';
 import { StrengthForm } from './strength-form';
 import { TimeZoneSync } from './tz-sync';
@@ -276,19 +277,24 @@ function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string
         ) : null}
       </div>
       {entry.sets.length > 0 ? (
-        // A vertical list (was a horizontal wrap) so each set is a tappable row — V1-9 gives numeric sets
-        // an inline Edit affordance via <EditableSet>; labeled/null sets stay read-only. The read line
-        // format is unchanged (it lives in EditableSet now, single-sourced with the edit view).
+        // A vertical list (was a horizontal wrap) so each set is a tappable row. V1-9: a numeric set gets
+        // an inline Edit affordance via the <EditableSet> CLIENT island; a read-only set (labeled/null)
+        // stays SERVER-rendered here — so only editable sets hydrate (RSC-first). The read line format is
+        // single-sourced in formatSetLine, shared by both branches.
         <ul className="text-muted-foreground flex flex-col gap-0.5 text-sm tabular-nums">
-          {entry.sets.map((s) => (
-            <EditableSet
-              key={s.publicId}
-              set={s}
-              profileId={profileId}
-              unit={entry.unit}
-              ariaLabel={`${label} set ${s.idx}`}
-            />
-          ))}
+          {entry.sets.map((s) =>
+            isEditableSet(s) ? (
+              <EditableSet
+                key={s.publicId}
+                set={s}
+                profileId={profileId}
+                unit={entry.unit}
+                ariaLabel={`${label} set ${s.idx}`}
+              />
+            ) : (
+              <li key={s.publicId}>{formatSetLine(s, entry.unit)}</li>
+            ),
+          )}
         </ul>
       ) : null}
     </>

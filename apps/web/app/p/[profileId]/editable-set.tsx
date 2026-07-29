@@ -5,22 +5,20 @@ import { useActionState, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { SetDTO } from '@/lib/dal/entries';
 
-import { editStrengthSetAction, type ActionState } from './actions';
-import { formatSetLine, isEditableSet } from './set-display';
+import { INITIAL_ACTION_STATE } from './action-state';
+import { editStrengthSetAction } from './actions';
+import { formatSetLine } from './set-display';
 import { SetRepsWeightFields } from './set-fields';
 
-const initialState: ActionState = { ok: false, error: null };
-
 /**
- * One logged strength set as a `<li>` (V1-9 fix-a-set). Read-only by default — the SAME line
- * `MovementLine` used to render (`reps × weightLabel-or-weight+unit`), so grouping/superset displays are
- * unchanged. A **numeric** reps+weight set (no `weightLabel`) also gets an "Edit" affordance that reveals
- * inline reps × weight inputs wired to `editStrengthSetAction`; on save the RSC revalidates with the new
- * value and the row collapses back to read.
+ * One EDITABLE strength set as a `<li>` (V1-9 fix-a-set). `MovementLine` renders this ONLY for numeric
+ * reps+weight sets (`isEditableSet`) — read-only sets stay server-rendered — so this `'use client'`
+ * island ships only where an Edit control actually exists (RSC-first: no hydration for static set lines).
+ * Read mode shows the set line + an Edit button; edit mode reveals inline reps × weight inputs wired to
+ * `editStrengthSetAction`. On a successful save the RSC revalidates with the new value and this collapses.
  *
- * Only numeric sets are editable: a labeled set ('BW', '50ft') would have its edited `weight_num` MASKED
- * by `weight_label` at this very read seam (`weightLabel ?? …`), and a null reps/weight can't round-trip
- * the required schema — so those render read-only (panel: correctness B1).
+ * Collapse-on-success uses the sibling forms' during-render idiom (checkin/strength-form) — but sets
+ * THIS component's OWN `editing` state, never reaching into a parent mid-render.
  */
 export function EditableSet({
   set,
@@ -33,101 +31,75 @@ export function EditableSet({
   unit: string;
   ariaLabel: string;
 }) {
-  const readLine = formatSetLine(set, unit);
-  const editable = isEditableSet(set);
+  const [state, formAction, pending] = useActionState(editStrengthSetAction, INITIAL_ACTION_STATE);
   const [editing, setEditing] = useState(false);
+  const [reps, setReps] = useState(String(set.reps ?? ''));
+  const [weight, setWeight] = useState(String(set.weight ?? ''));
 
-  if (!editable || !editing) {
+  const [seen, setSeen] = useState(state);
+  if (state !== seen) {
+    setSeen(state);
+    if (state.ok) setEditing(false); // own state — a legal during-render update
+  }
+
+  if (!editing) {
     return (
       <li className="flex items-center justify-between gap-2">
-        <span>{readLine}</span>
-        {editable ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="min-h-11"
-            onClick={() => setEditing(true)}
-            aria-label={`Edit ${ariaLabel}`}
-          >
-            Edit
-          </Button>
-        ) : null}
+        <span>{formatSetLine(set, unit)}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11"
+          onClick={() => {
+            // Re-seed from the current (possibly just-revalidated) value each time edit opens.
+            setReps(String(set.reps ?? ''));
+            setWeight(String(set.weight ?? ''));
+            setEditing(true);
+          }}
+          aria-label={`Edit ${ariaLabel}`}
+        >
+          Edit
+        </Button>
       </li>
     );
   }
 
   return (
     <li>
-      <EditSetForm
-        set={set}
-        profileId={profileId}
-        ariaLabel={ariaLabel}
-        onDone={() => setEditing(false)}
-      />
+      <form action={formAction} className="flex flex-col gap-1.5">
+        <input type="hidden" name="profileId" value={profileId} readOnly />
+        <input type="hidden" name="setId" value={set.publicId} readOnly />
+        <div className="flex flex-wrap items-center gap-2">
+          <SetRepsWeightFields
+            reps={reps}
+            weight={weight}
+            onReps={setReps}
+            onWeight={setWeight}
+            ariaLabel={ariaLabel}
+            nameReps="reps"
+            nameWeight="weight"
+          />
+          <Button type="submit" size="sm" className="min-h-11" disabled={pending}>
+            {pending ? 'Saving…' : 'Save'}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11"
+            onClick={() => setEditing(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+        </div>
+        {state.error ? (
+          <p role="alert" className="text-destructive text-sm">
+            {state.error}
+          </p>
+        ) : null}
+      </form>
     </li>
-  );
-}
-
-/** The inline edit form for one set — a native `<form>` posting to `editStrengthSetAction`, seeded from
- *  the set's current values. Collapses back to read on a successful save (the revalidated RSC supplies
- *  the new value). Reuses `SetRepsWeightFields` so the inputs match the log form exactly. */
-function EditSetForm({
-  set,
-  profileId,
-  ariaLabel,
-  onDone,
-}: {
-  set: SetDTO;
-  profileId: string;
-  ariaLabel: string;
-  onDone: () => void;
-}) {
-  const [state, formAction, pending] = useActionState(editStrengthSetAction, initialState);
-  const [reps, setReps] = useState(String(set.reps ?? ''));
-  const [weight, setWeight] = useState(String(set.weight ?? ''));
-
-  // Collapse on success (the during-render idiom the forms use — not an effect). revalidatePath has
-  // already refreshed the read line with the saved value.
-  const [seen, setSeen] = useState(state);
-  if (state !== seen) {
-    setSeen(state);
-    if (state.ok) onDone();
-  }
-
-  return (
-    <form action={formAction} className="flex flex-col gap-1.5">
-      <input type="hidden" name="profileId" value={profileId} readOnly />
-      <input type="hidden" name="setId" value={set.publicId} readOnly />
-      <div className="flex flex-wrap items-center gap-2">
-        <SetRepsWeightFields
-          reps={reps}
-          weight={weight}
-          onReps={setReps}
-          onWeight={setWeight}
-          ariaLabel={ariaLabel}
-          nameReps="reps"
-          nameWeight="weight"
-        />
-        <Button type="submit" size="sm" className="min-h-11" disabled={pending}>
-          {pending ? 'Saving…' : 'Save'}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="min-h-11"
-          onClick={onDone}
-          disabled={pending}
-        >
-          Cancel
-        </Button>
-      </div>
-      {state.error ? (
-        <p role="alert" className="text-destructive text-sm">
-          {state.error}
-        </p>
-      ) : null}
-    </form>
   );
 }

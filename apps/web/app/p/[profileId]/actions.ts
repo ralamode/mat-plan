@@ -30,6 +30,8 @@ import {
 } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
+
+import type { ActionState } from './action-state';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
@@ -43,11 +45,10 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
  * `useActionState` (expected errors don't throw). Sentry
  * `withServerActionInstrumentation` wrapping lands with observability (V1-14).
  */
-export type ActionState = {
-  ok: boolean;
-  error: string | null;
-  fieldErrors?: Record<string, string[] | undefined>;
-};
+// The result envelope + its initial value live in ./action-state (a 'use server' module can only
+// export async functions, so the type/const can't live here); re-exported so existing importers of
+// `ActionState` from './actions' keep working.
+export type { ActionState };
 
 export async function logBodyweightAction(
   _prev: ActionState,

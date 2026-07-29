@@ -12,10 +12,9 @@ import {
 } from '@/lib/checkins/checkin-fields';
 import { INPUT_CLASS } from '@/lib/constants';
 
-import { logCheckinsAction, type ActionState } from './actions';
+import { INITIAL_ACTION_STATE } from './action-state';
+import { logCheckinsAction } from './actions';
 import { DayField } from './day-field';
-
-const initialState: ActionState = { ok: false, error: null };
 
 // The shared field styling + this form's fixed number-input width (single-sourced in lib/constants).
 const numberInputClass = `${INPUT_CLASS} w-24`;
@@ -46,7 +45,7 @@ export function CheckinForm({
   /** Field keys already logged today → rendered checked + inert. */
   loggedFieldKeys: readonly string[];
 }) {
-  const [state, formAction, pending] = useActionState(logCheckinsAction, initialState);
+  const [state, formAction, pending] = useActionState(logCheckinsAction, INITIAL_ACTION_STATE);
 
   // Idempotency keys, one per field. Held in STATE (not `defaultValue`) and regenerated
   // after a successful write: a stale id would make the next submit a silent ON CONFLICT
