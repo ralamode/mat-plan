@@ -57,6 +57,14 @@ export function parseRoutineKey(key: string): { namespace: string; catalogKey: s
   return { namespace: key.slice(0, i), catalogKey: key.slice(i + 1) };
 }
 
+/** Build a namespaced routine key from a namespace + a bare catalog key — the SYMMETRIC inverse of
+ *  `parseRoutineKey` (same separator, defined once here so the build and read sides can't drift). The tail
+ *  may itself contain a colon (`makeRoutineKey('checkin', 'brush_teeth:stance')` → `checkin:brush_teeth:stance`),
+ *  which `parseRoutineKey` splits back on the FIRST colon. Callers build every `checkin:`/`life:` key with this. */
+export function makeRoutineKey(namespace: RoutineNamespace, catalogKey: string): string {
+  return `${namespace}:${catalogKey}`;
+}
+
 /** Build the default routine from the app's ordered catalog keys (strength → check-ins → life). Pure: the
  *  CALLER (app-side, PR 1b) owns the ordered key list so the default can't drift from the live catalog. */
 export function buildDefaultRoutine(orderedCatalogKeys: readonly string[]): RoutineConfig {

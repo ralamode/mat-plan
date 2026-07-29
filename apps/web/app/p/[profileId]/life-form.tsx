@@ -70,15 +70,22 @@ export function LifeForm({
   profileId,
   day,
   loggedLifeKeys,
+  activityKeys,
 }: {
   profileId: string;
   day: string;
   loggedLifeKeys: readonly string[];
+  // V1-18: render only these life activities, in this order (a per-kid routine subset). Omitted → all of
+  // them (the default routine + every pre-V1-18 caller are unchanged).
+  activityKeys?: readonly string[];
 }) {
   const logged = new Set(loggedLifeKeys);
+  const activities = activityKeys
+    ? activityKeys.flatMap((k) => LIFE_ACTIVITIES.filter((a) => a.key === k))
+    : LIFE_ACTIVITIES;
   return (
     <div className="flex flex-wrap gap-3">
-      {LIFE_ACTIVITIES.map((a) => (
+      {activities.map((a) => (
         <LifeButton
           key={a.key}
           profileId={profileId}
