@@ -33,3 +33,17 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   a `pnpm install --filter` boundary the screenshot script triggers itself, or lazy-install on first
   `screenshot:ephemeral` run. Also **drop the beta pin** once a stable `embedded-postgres` releases.
 - **Severity:** low (works today; purely an install-cost optimization).
+
+## EntryDTO is a wide denormalized row-DTO (per-kind split deferred)
+
+- **What:** `EntryDTO` (`apps/web/lib/dal/entries.ts`) has grown ~13 nullable fields across V1-4/5/6a/8-3
+  (metric ×4, activity ×2, session ×3, superset ×2). Most are NULL for any given row kind (a bodyweight row
+  carries no session/superset fields, etc.). Each V1-8-3 slice added its pair additively — the established,
+  scope-disciplined pattern, but the denormalization now visibly compounds.
+- **Impact:** low — correctness is fine (nullable + read at the right seam); it's a legibility/shape smell.
+  The grouped `SessionItem`/`SessionRow` already re-hoist session/superset identity to the item level while
+  members still carry the columns (mirrors 3a).
+- **Proposed fix:** a per-kind discriminated DTO (`BodyweightDTO | StrengthDTO | CheckinDTO | …`) once the
+  read surfaces stabilize (post-V1-8), so each row carries only its own fields. Deferred — not worth churning
+  the last V1-8 slice.
+- **Severity:** low.
