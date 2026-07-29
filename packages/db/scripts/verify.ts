@@ -1447,6 +1447,7 @@ const flatArgs = {
   sessionType: SESSION_TYPES[0],
   sessionClientId: flatSessionCid,
   activityTypeId: scLiftActivityId,
+  feel: 'strong', // V1-8-3b: the session feel persists on the first (non-conflict) insert path
   movements: [
     {
       movementName: 'Back Squat',
@@ -1477,7 +1478,11 @@ const flatArgs = {
 
 const flat = await writeStrengthSession(asPg, flatArgs);
 const [flatSession] = await db
-  .select({ id: schema.sessions.id, profileId: schema.sessions.profileId })
+  .select({
+    id: schema.sessions.id,
+    profileId: schema.sessions.profileId,
+    feel: schema.sessions.feel,
+  })
   .from(schema.sessions)
   .where(eq(schema.sessions.publicId, flat.sessionId));
 assert.ok(flatSession, 'V1-8-2: writeStrengthSession returns the session public_id');
@@ -1486,6 +1491,7 @@ assert.equal(
   sessionProfileA.id,
   'V1-8-2: the session is written under the resolved profile (F7 seam, profile-scoped)',
 );
+assert.equal(flatSession.feel, 'strong', 'V1-8-3b: the session feel persists');
 
 const flatEntries = await db
   .select({

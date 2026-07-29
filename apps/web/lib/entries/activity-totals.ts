@@ -78,7 +78,7 @@ export function calisthenicsTotals(entries: readonly EntryDTO[]): MetricTotal[] 
  *  `movements` is a flat list here; V1-8-3b refactors it into a two-level list to sub-bracket supersets. */
 export type SessionRow = {
   kind: 'session';
-  session: { id: string; type: SessionType | null };
+  session: { id: string; type: SessionType | null; feel: string | null };
   movements: EntryDTO[];
 };
 
@@ -126,7 +126,8 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
       if (e.id !== sessionAnchor.get(e.sessionId)) continue;
       rows.push({
         kind: 'session',
-        session: { id: e.sessionId, type: e.sessionType }, // per-session data, same on every member
+        // per-session data, same on every member — read from the anchor (first-encountered) member.
+        session: { id: e.sessionId, type: e.sessionType, feel: e.sessionFeel },
         movements: sessionMembers.get(e.sessionId)!, // e is in it (anchor came from this map)
       });
       continue;

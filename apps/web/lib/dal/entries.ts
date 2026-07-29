@@ -69,6 +69,9 @@ export type EntryDTO = {
   // The session's type from a CHECK-constrained column, so it's the SessionType union (not bare
   // string) — the view indexes SESSION_TYPE_LABELS with no cast, and a stray value fails the build.
   sessionType: SessionType | null;
+  // V1-8-3b: the optional session "how did it feel?" note, shown in the session-block header. NULL when
+  // no feel was logged (the schema normalizes a blank input to NULL) or for non-session entries.
+  sessionFeel: string | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -100,6 +103,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       // V1-8-3a: the grouping session's PUBLIC id + type (raw enum). PK join → ≤1 match, no fan-out.
       sessionId: schema.sessions.publicId,
       sessionType: schema.sessions.sessionType,
+      sessionFeel: schema.sessions.feel,
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
@@ -179,6 +183,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     sessionId: r.sessionId,
     // The sessions_session_type_check column only holds SessionType values (or NULL).
     sessionType: r.sessionType as SessionType | null,
+    sessionFeel: r.sessionFeel,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }
@@ -355,6 +360,7 @@ export type LogStrengthSessionArgs = {
   sessionType: string;
   clientId: string; // client-stamped UUIDv7 (parent SESSION)
   day: string;
+  feel?: string; // optional session feel note (V1-8-3b)
   movements: readonly SessionMovementInput[]; // { movementName, unit, clientId, sets }
 };
 
@@ -386,6 +392,7 @@ export async function logStrengthSession(
     sessionType: args.sessionType,
     sessionClientId: args.clientId,
     activityTypeId,
+    feel: args.feel,
     movements,
   });
 }

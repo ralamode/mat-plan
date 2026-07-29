@@ -1,4 +1,10 @@
-import { ACTIVITY_TYPE_KEYS, BODYWEIGHT_UNITS, METRIC_KEYS, newId } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  BODYWEIGHT_UNITS,
+  FREE_TEXT_NOTE_MAX,
+  METRIC_KEYS,
+  newId,
+} from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // INTEGRATION TIER (see docs/definition-of-done.md → Test pyramid). These exercise
@@ -178,6 +184,7 @@ function strengthForm(opts: {
   profileId?: string;
   clientId?: string;
   day?: string;
+  feel?: string;
   movements?: Array<{
     movementName?: string;
     unit?: string;
@@ -190,6 +197,7 @@ function strengthForm(opts: {
   if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
   fd.append('clientId', opts.clientId ?? newId());
   fd.append('day', opts.day ?? localDay());
+  if (opts.feel !== undefined) fd.append('feel', opts.feel);
   if (opts.movementsRaw !== undefined) {
     fd.append('movements', opts.movementsRaw);
   } else if (opts.movements !== undefined) {
@@ -355,6 +363,44 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('threads a session feel to the DAL', async () => {
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: 'strong',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: 'strong' }));
+  });
+
+  it('normalizes a blank/whitespace feel to undefined (stored NULL, not empty string)', async () => {
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: '   ',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(logStrengthSession).toHaveBeenCalledWith(expect.objectContaining({ feel: undefined }));
+  });
+
+  it('rejects an over-length feel from a direct POST (bad body → zod-reject)', async () => {
+    // The client maxLength is bypassable; the schema `.max` is the real guard.
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        feel: 'x'.repeat(FREE_TEXT_NOTE_MAX + 1),
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
   it('fails gracefully (no write) when the profile is unknown', async () => {
