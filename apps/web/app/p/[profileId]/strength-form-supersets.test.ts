@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   dissolveSmallSupersets,
+  dropUntouchedMovements,
   groupSelected,
+  isUntouchedMovement,
   type SupersetTaggable,
   ungroupSuperset,
 } from './strength-form-supersets';
@@ -64,5 +66,37 @@ describe('strength-form superset transforms (V1-8-3d)', () => {
     const out = dissolveSmallSupersets(remaining);
     expect(out.find((m) => m.clientId === 'a')?.supersetClientId).toBeUndefined();
     expect(out.find((m) => m.clientId === 'b')?.supersetClientId).toBe('ss2');
+  });
+});
+
+describe('dropUntouchedMovements / isUntouchedMovement (V1-9 log ergonomics)', () => {
+  const draft = (movementName: string, sets: { reps: string; weight: string }[]) => ({
+    clientId: 'c',
+    movementName,
+    unit: 'lb',
+    sets,
+  });
+  const blank = () => draft('', [{ reps: '', weight: '' }]);
+  const filled = () => draft('Back squat', [{ reps: '10', weight: '75' }]);
+
+  it('treats a blank name + all-blank sets as untouched', () => {
+    expect(isUntouchedMovement(blank())).toBe(true);
+    expect(isUntouchedMovement(draft('  ', [{ reps: ' ', weight: '' }]))).toBe(true); // whitespace only
+  });
+
+  it('does NOT treat a partially-typed card as untouched (never silently discard input)', () => {
+    expect(isUntouchedMovement(draft('Back squat', [{ reps: '', weight: '' }]))).toBe(false); // name only
+    expect(isUntouchedMovement(draft('', [{ reps: '10', weight: '' }]))).toBe(false); // a rep only
+    expect(isUntouchedMovement(draft('', [{ reps: '', weight: '75' }]))).toBe(false); // a weight only
+  });
+
+  it('drops only the untouched cards, keeps filled + partial', () => {
+    const partial = draft('Bench', [{ reps: '', weight: '' }]);
+    const out = dropUntouchedMovements([filled(), blank(), partial]);
+    expect(out.map((m) => m.movementName)).toEqual(['Back squat', 'Bench']); // blank dropped, partial kept
+  });
+
+  it('returns [] when every card is untouched (so the min(1) schema error still fires)', () => {
+    expect(dropUntouchedMovements([blank(), blank()])).toEqual([]);
   });
 });

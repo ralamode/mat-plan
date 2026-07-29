@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { uuidSchema } from './id';
+
 /**
  * One set of a strength movement. Weights use the same lb/kg set as bodyweight. Consumed by
  * `logStrengthSessionSchema` (V1-8-2) — the single-movement `logStrengthSchema` it once fed was
@@ -20,3 +22,16 @@ export const strengthSetSchema = z.object({
   ),
 });
 export type StrengthSetInput = z.infer<typeof strengthSetSchema>;
+
+/**
+ * Input contract for editing ONE already-logged strength set (V1-9 fix-a-set). Reuses
+ * `strengthSetSchema`'s EXACT reps/weight coercion + bounds (incl. the blank→NaN weight guard) via
+ * `.extend()` — one source for "a valid rep/weight," shared by the log form and the edit form — and
+ * adds the addressing pair: `profileId` (the ownership seam, re-checked server-side) and `setId` (the
+ * `entry_sets.public_id` UUIDv7 — non-enumerable, anti-IDOR; never the shifting `idx` or internal id).
+ */
+export const editStrengthSetSchema = strengthSetSchema.extend({
+  profileId: uuidSchema,
+  setId: uuidSchema,
+});
+export type EditStrengthSetInput = z.infer<typeof editStrengthSetSchema>;

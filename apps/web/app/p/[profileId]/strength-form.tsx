@@ -10,14 +10,18 @@ import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { logStrengthSessionAction, type ActionState } from './actions';
+import { INPUT_CLASS } from '@/lib/constants';
+
+import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
+import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
-import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
-
-const initialState: ActionState = { ok: false, error: null };
-
-const inputClass =
-  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+import { SetRepsWeightFields } from './set-fields';
+import {
+  dissolveSmallSupersets,
+  dropUntouchedMovements,
+  groupSelected,
+  ungroupSuperset,
+} from './strength-form-supersets';
 
 // Form-held movement/set state. Values are strings (the schema's `strengthSetSchema` z.coerce's
 // reps/weight), serialized into the hidden `movements` JSON field on each render. Each movement
@@ -51,7 +55,10 @@ const emptyMovement = (): MovementVals => ({
  * the inputs — a stale id would otherwise make the next submit a silent ON CONFLICT no-op.
  */
 export function StrengthForm({ profileId, day }: { profileId: string; day: string }) {
-  const [state, formAction, pending] = useActionState(logStrengthSessionAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    logStrengthSessionAction,
+    INITIAL_ACTION_STATE,
+  );
   const [gen, setGen] = useState(0);
   const [seenState, setSeenState] = useState(state);
   if (state !== seenState) {
@@ -120,10 +127,16 @@ function StrengthFormBody({
 
   const selectedCount = movements.filter((m) => selected.has(m.clientId)).length;
 
+  // Before serializing: drop fully-untouched movement cards (blank name + all-blank sets) so an
+  // added-but-unused card doesn't block the log with empty-field errors — then dissolve any superset a
+  // drop left with a lone member. A partially-typed card is NOT dropped (it validates). If every card is
+  // untouched the payload is [] and the schema's "add at least one movement" still fires.
+  const submittable = dissolveSmallSupersets(dropUntouchedMovements(movements));
+
   // The wire shape the action JSON.parses + zod-validates (strings; the schema coerces numbers). Superset
   // tags ride here per-movement; the action DERIVES the supersets[] from these distinct ids.
   const movementsJson = JSON.stringify(
-    movements.map((m) => ({
+    submittable.map((m) => ({
       movementName: m.movementName,
       unit: m.unit,
       clientId: m.clientId,
@@ -212,7 +225,7 @@ function StrengthFormBody({
           maxLength={FREE_TEXT_NOTE_MAX}
           placeholder="e.g. strong, tired, easy"
           autoComplete="off"
-          className={inputClass}
+          className={INPUT_CLASS}
         />
       </div>
 
@@ -240,7 +253,7 @@ function StrengthFormBody({
 /**
  * One movement card — a `<fieldset>` with a name + unit and its own set rows. Presentational: all
  * state lives in the parent `movements` array (so serialization has one source and each card's sets
- * are independent). Reuses the shared `inputClass`; no third copy.
+ * are independent). Reuses the shared `INPUT_CLASS`; no third copy.
  */
 function MovementCard({
   index,
@@ -326,7 +339,7 @@ function MovementCard({
             autoComplete="off"
             value={movement.movementName}
             onChange={(e) => onName(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -337,7 +350,7 @@ function MovementCard({
             id={unitId}
             value={movement.unit}
             onChange={(e) => onUnit(e.target.value)}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             {BODYWEIGHT_UNITS.map((u) => (
               <option key={u} value={u}>
@@ -364,30 +377,12 @@ function MovementCard({
         {movement.sets.map((s, i) => (
           <div key={s.key} className="flex items-center gap-2">
             <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              step="1"
-              required
-              placeholder="reps"
-              aria-label={`Movement ${index + 1} set ${i + 1} reps`}
-              value={s.reps}
-              onChange={(e) => onSet(s.key, { reps: e.target.value })}
-              className={`${inputClass} w-24`}
-            />
-            <span className="text-muted-foreground text-sm">×</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.5"
-              required
-              placeholder="weight"
-              aria-label={`Movement ${index + 1} set ${i + 1} weight`}
-              value={s.weight}
-              onChange={(e) => onSet(s.key, { weight: e.target.value })}
-              className={`${inputClass} w-28`}
+            <SetRepsWeightFields
+              reps={s.reps}
+              weight={s.weight}
+              onReps={(v) => onSet(s.key, { reps: v })}
+              onWeight={(v) => onSet(s.key, { weight: v })}
+              ariaLabel={`Movement ${index + 1} set ${i + 1}`}
             />
             {movement.sets.length > 1 ? (
               <Button

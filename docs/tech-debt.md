@@ -47,3 +47,16 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   read surfaces stabilize (post-V1-8), so each row carries only its own fields. Deferred — not worth churning
   the last V1-8 slice.
 - **Severity:** low.
+
+## Set-edit LWW uses server-`now()`, not the client-supplied timestamp (V1-9)
+
+- **What:** `updateStrengthSetById` (`packages/db/src/writers/strength-session.ts`, V1-9) advances
+  `entry_sets.updated_at` to the DB `now()` on each edit. The AGENTS.md schema convention mandates
+  last-writer-wins on the **client-supplied** `updated_at`/`version` (`setWhere incoming >= stored`) so
+  offline clock-skew resolves correctly.
+- **Impact:** none today — there is a single ONLINE writer (no offline outbox until v1.5), so `now()` is
+  always `> created_at` and no two devices race an edit. Correct for the current deployment.
+- **Proposed fix:** at **v1.5** (offline + TanStack Query + the sync outbox), take the client `updated_at`
+  in `editStrengthSetSchema`, thread it into the writer, and add `.where(incoming >= stored)` to the UPDATE
+  (the same LWW guard the sync path applies to every mutable row). The writer edge already flags the spot.
+- **Severity:** low (deferred with the rest of the offline/LWW work).

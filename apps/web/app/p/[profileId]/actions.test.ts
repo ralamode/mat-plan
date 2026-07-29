@@ -22,6 +22,8 @@ vi.mock('next/headers', () => ({ cookies: vi.fn(async () => ({ get: () => undefi
 vi.mock('@/lib/dal/entries', () => ({
   logBodyweight: vi.fn(async () => ({ id: 'entry-pub-id' })),
   logStrengthSession: vi.fn(async () => ({ sessionId: 'session-pub-id' })),
+  // Default: the set was found + edited. The not-found test overrides to null.
+  editStrengthSet: vi.fn(async () => ({ setId: 'set-pub-id' })),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
@@ -37,7 +39,12 @@ vi.mock('@/lib/dal/profiles', () => ({
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
-import { logBodyweight, logCheckinEntries, logStrengthSession } from '@/lib/dal/entries';
+import {
+  editStrengthSet,
+  logBodyweight,
+  logCheckinEntries,
+  logStrengthSession,
+} from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
@@ -54,12 +61,13 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+import { type ActionState } from './action-state';
 import {
+  editStrengthSetAction,
   logBodyweightAction,
   logCheckinsAction,
   logLifeActivitiesAction,
   logStrengthSessionAction,
-  type ActionState,
 } from './actions';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
@@ -899,5 +907,85 @@ describe('logLifeActivitiesAction — happy path', () => {
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake }),
     );
     expect(res.ok).toBe(true);
+  });
+});
+
+// A fresh set id (UUIDv7) for the edit tests — the DAL is mocked, so it just needs to pass uuidSchema.
+function editForm(fields: Record<string, string>): FormData {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  return fd;
+}
+
+describe('editStrengthSetAction — boundary (bad body → zod-reject)', () => {
+  it('rejects a non-numeric reps without touching the DAL', async () => {
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: PROFILE_ID, setId: newId(), reps: 'abc', weight: '135' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.reps).toBeTruthy();
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(editStrengthSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a blank weight (blank must not slip past as 0)', async () => {
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.weight).toBeTruthy();
+    expect(editStrengthSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-UUID setId', async () => {
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: PROFILE_ID, setId: 'not-a-uuid', reps: '5', weight: '135' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.setId).toBeTruthy();
+    expect(editStrengthSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed profileId without touching the DAL', async () => {
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: 'not-a-uuid', setId: newId(), reps: '5', weight: '135' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.profileId).toBeTruthy();
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(editStrengthSet).not.toHaveBeenCalled();
+  });
+});
+
+describe('editStrengthSetAction — happy path + not-found', () => {
+  it('edits a valid set via the DAL and revalidates the scoped Today', async () => {
+    const setId = newId();
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: PROFILE_ID, setId, reps: '7', weight: '142.5' }),
+    );
+    expect(res.ok).toBe(true);
+    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
+    expect(editStrengthSet).toHaveBeenCalledWith(
+      expect.objectContaining({ profilePublicId: PROFILE_ID, setId, reps: 7, weight: 142.5 }),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('maps a not-found set (wrong owner / stale id) to a typed error, no revalidate', async () => {
+    // The guarded UPDATE matched no row → the DAL returns null. That is an EXPECTED outcome, so the
+    // action returns { ok:false }, never a throw to error.tsx.
+    vi.mocked(editStrengthSet).mockResolvedValueOnce(null);
+    const res = await editStrengthSetAction(
+      initial,
+      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '7', weight: '142.5' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error).toBeTruthy();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -41,7 +41,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
-import { writeStrengthSession } from '../src/writers/strength-session';
+import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 import {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
@@ -1673,6 +1673,97 @@ const ssMembersAfter = await db
 assert.equal(ssMembersAfter.length, 5, 'V1-8-3c: replay creates no duplicate members');
 console.log(
   '✓ V1-8-3c: superset write branch (2- and 3-movement) via the real writer; ordered; idempotent replay',
+);
+
+// ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
+// Proves the ownership-scoped UPDATE (the same guard the DAL runs): the owner's edit persists + advances
+// updated_at (LWW server-now), while a cross-profile or soft-deleted-set edit matches no row → null.
+const [editTarget] = await db
+  .select({ publicId: schema.entrySets.publicId, updatedAt: schema.entrySets.updatedAt })
+  .from(schema.entrySets)
+  .innerJoin(schema.entries, eq(schema.entrySets.entryId, schema.entries.id))
+  .where(and(eq(schema.entries.sessionId, ssSession.id), isNull(schema.entrySets.deletedAt)))
+  .orderBy(schema.entrySets.id)
+  .limit(1);
+
+// (a) happy path — the owner corrects reps/weight.
+const edited = await updateStrengthSetById(asPg, {
+  profilePublicId: ssArgs.profilePublicId,
+  setId: editTarget.publicId,
+  reps: 7,
+  weight: 142.5,
+});
+assert.ok(edited, 'V1-9: an owner edit returns the set public id');
+const [afterEdit] = await db
+  .select({
+    reps: schema.entrySets.reps,
+    weightNum: schema.entrySets.weightNum,
+    updatedAt: schema.entrySets.updatedAt,
+  })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, editTarget.publicId));
+assert.equal(afterEdit.reps, 7, 'V1-9: reps updated');
+assert.equal(
+  Number(afterEdit.weightNum),
+  142.5,
+  'V1-9: weight_num updated (precision-safe string)',
+);
+assert.ok(
+  afterEdit.updatedAt >= editTarget.updatedAt,
+  'V1-9: updated_at advanced (LWW server-now)',
+);
+
+// (b) ownership scope — a DIFFERENT profile editing the SAME setId matches nothing (BOLA guard).
+const foreignEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009b0', // sessionProfileB — not the owner
+  setId: editTarget.publicId,
+  reps: 999,
+  weight: 999,
+});
+assert.equal(foreignEdit, null, 'V1-9: a cross-profile edit matches no row');
+const [afterForeign] = await db
+  .select({ reps: schema.entrySets.reps })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, editTarget.publicId));
+assert.equal(afterForeign.reps, 7, 'V1-9: the cross-profile edit left the set unchanged');
+
+// (c) numeric-set-only guard — a labeled set (weight_label set) is not editable, even by its owner, so a
+// crafted edit can't leave weight_num coexisting with a label. Matches the client's isEditableSet.
+await db
+  .update(schema.entrySets)
+  .set({ weightLabel: 'BW' })
+  .where(eq(schema.entrySets.publicId, editTarget.publicId));
+const labeledEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: ssArgs.profilePublicId,
+  setId: editTarget.publicId,
+  reps: 4,
+  weight: 4,
+});
+assert.equal(labeledEdit, null, 'V1-9: a labeled set is not editable (numeric-set-only guard)');
+const [afterLabeled] = await db
+  .select({ reps: schema.entrySets.reps })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, editTarget.publicId));
+assert.equal(afterLabeled.reps, 7, 'V1-9: the rejected labeled edit left the set unchanged');
+await db
+  .update(schema.entrySets)
+  .set({ weightLabel: null })
+  .where(eq(schema.entrySets.publicId, editTarget.publicId)); // restore for the soft-delete case
+
+// (d) soft-deleted set — an edit never writes it (guards V1-9b, when deleted sets exist).
+await db
+  .update(schema.entrySets)
+  .set({ deletedAt: sql`now()` })
+  .where(eq(schema.entrySets.publicId, editTarget.publicId));
+const deletedEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: ssArgs.profilePublicId,
+  setId: editTarget.publicId,
+  reps: 3,
+  weight: 3,
+});
+assert.equal(deletedEdit, null, 'V1-9: a soft-deleted set is not editable');
+console.log(
+  '✓ V1-9: edit-set writer — owner edit persists (LWW); cross-profile, labeled, + soft-deleted rejected',
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,

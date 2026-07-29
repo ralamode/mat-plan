@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { schema, writeStrengthSession } from '@mat-plan/db';
+import { schema, updateStrengthSetById, writeStrengthSession } from '@mat-plan/db';
 import {
   ENTRY_KIND,
   ENTRY_STATUS,
@@ -32,6 +32,7 @@ import { db } from './db';
  * once Clerk lands (V1-1/v1.5).
  */
 export type SetDTO = {
+  publicId: string; // entry_sets.public_id (UUIDv7) — the stable, non-enumerable id the V1-9 edit addresses
   idx: number;
   reps: number | null;
   weight: number | null;
@@ -155,6 +156,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     ? await db
         .select({
           entryId: schema.entrySets.entryId,
+          publicId: schema.entrySets.publicId,
           idx: schema.entrySets.idx,
           reps: schema.entrySets.reps,
           weightNum: schema.entrySets.weightNum,
@@ -171,6 +173,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
   for (const s of setRows) {
     const list = setsByEntry.get(s.entryId) ?? [];
     list.push({
+      publicId: s.publicId,
       idx: s.idx,
       reps: s.reps,
       weight: s.weightNum === null ? null : Number(s.weightNum),
@@ -415,4 +418,21 @@ export async function logStrengthSession(
     supersets: args.supersets,
     movements,
   });
+}
+
+/**
+ * Edit ONE logged strength set's reps/weight (V1-9). Thin: hands off to the single-sourced
+ * `updateStrengthSetById` core (which `db:verify` also runs), whose guarded UPDATE proves the set
+ * belongs to the live `profilePublicId` — so no ownership check leaks out here. Returns the edited
+ * set's public id, or `null` when nothing matched (wrong owner / stale-or-deleted set) — the action
+ * maps `null` to a typed error, never a throw.
+ */
+export async function editStrengthSet(args: {
+  profilePublicId: string;
+  setId: string;
+  reps: number;
+  weight: number;
+}): Promise<{ setId: string } | null> {
+  const updated = await updateStrengthSetById(db, args);
+  return updated ? { setId: updated.publicId } : null;
 }

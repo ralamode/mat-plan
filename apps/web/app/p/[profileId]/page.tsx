@@ -21,6 +21,8 @@ import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 import { BodyweightForm } from './bodyweight-form';
 import { CheckinForm } from './checkin-form';
+import { EditableSet } from './editable-set';
+import { formatSetLine, isEditableSet } from './set-display';
 import { LifeForm } from './life-form';
 import { StrengthForm } from './strength-form';
 import { TimeZoneSync } from './tz-sync';
@@ -217,12 +219,16 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                             </span>
                             <ul className="flex flex-col gap-1.5">
                               {item.members.map((m) => (
-                                <SessionMovementItem key={m.id} entry={m} />
+                                <SessionMovementItem key={m.id} entry={m} profileId={profile.id} />
                               ))}
                             </ul>
                           </li>
                         ) : (
-                          <SessionMovementItem key={item.entry.id} entry={item.entry} />
+                          <SessionMovementItem
+                            key={item.entry.id}
+                            entry={item.entry}
+                            profileId={profile.id}
+                          />
                         ),
                       )}
                     </ul>
@@ -231,7 +237,7 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
               }
               return (
                 <li key={row.entry.id} className="flex flex-col gap-1 rounded-lg border px-4 py-3">
-                  <MovementLine entry={row.entry} />
+                  <MovementLine entry={row.entry} profileId={profile.id} />
                 </li>
               );
             })}
@@ -247,10 +253,10 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
  * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
  * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
  */
-function SessionMovementItem({ entry }: { entry: EntryDTO }) {
+function SessionMovementItem({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
   return (
     <li className="flex flex-col gap-1">
-      <MovementLine entry={entry} />
+      <MovementLine entry={entry} profileId={profileId} />
     </li>
   );
 }
@@ -260,22 +266,35 @@ function SessionMovementItem({ entry }: { entry: EntryDTO }) {
  * `{kind:'entry'}` row and each movement inside a session block, so the reps × weight/label fallback
  * lives once. The caller supplies the `<li>` wrapper (flat = a bordered row; session = a nested item).
  */
-function MovementLine({ entry }: { entry: EntryDTO }) {
+function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
+  const label = entryLabel(entry);
   return (
     <>
       <div className="flex items-center justify-between">
-        <span className="font-medium">{entryLabel(entry)}</span>
+        <span className="font-medium">{label}</span>
         {entry.status !== ENTRY_STATUS.done ? (
           <span className="text-muted-foreground text-sm">{entry.status}</span>
         ) : null}
       </div>
       {entry.sets.length > 0 ? (
-        <ul className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
-          {entry.sets.map((s) => (
-            <li key={s.idx}>
-              {s.reps ?? '?'} × {s.weightLabel ?? `${s.weight ?? '?'} ${entry.unit}`}
-            </li>
-          ))}
+        // A vertical list (was a horizontal wrap) so each set is a tappable row. V1-9: a numeric set gets
+        // an inline Edit affordance via the <EditableSet> CLIENT island; a read-only set (labeled/null)
+        // stays SERVER-rendered here — so only editable sets hydrate (RSC-first). The read line format is
+        // single-sourced in formatSetLine, shared by both branches.
+        <ul className="text-muted-foreground flex flex-col gap-0.5 text-sm tabular-nums">
+          {entry.sets.map((s) =>
+            isEditableSet(s) ? (
+              <EditableSet
+                key={s.publicId}
+                set={s}
+                profileId={profileId}
+                unit={entry.unit}
+                ariaLabel={`${label} set ${s.idx}`}
+              />
+            ) : (
+              <li key={s.publicId}>{formatSetLine(s, entry.unit)}</li>
+            ),
+          )}
         </ul>
       ) : null}
     </>

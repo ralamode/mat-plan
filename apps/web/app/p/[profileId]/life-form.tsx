@@ -6,9 +6,8 @@ import { useActionState, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 
-import { logLifeActivitiesAction, type ActionState } from './actions';
-
-const initialState: ActionState = { ok: false, error: null };
+import { INITIAL_ACTION_STATE } from './action-state';
+import { logLifeActivitiesAction } from './actions';
 
 /**
  * One life-activity button (V1-7). Its OWN `<form>` so a single tap submits immediately (no batch
@@ -30,7 +29,10 @@ function LifeButton({
   label: string;
   logged: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(logLifeActivitiesAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    logLifeActivitiesAction,
+    INITIAL_ACTION_STATE,
+  );
   const [clientId] = useState(newId);
 
   if (logged) {
