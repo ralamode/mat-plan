@@ -177,11 +177,23 @@ function StrengthFormBody({
       </ul>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={addMovement}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-11"
+          onClick={addMovement}
+        >
           Add movement
         </Button>
         {selectedCount >= 2 ? (
-          <Button type="button" variant="outline" size="sm" onClick={groupSelectedMovements}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="min-h-11"
+            onClick={groupSelectedMovements}
+          >
             Group {selectedCount} as superset
           </Button>
         ) : null}
@@ -278,18 +290,23 @@ function MovementCard({
             type="button"
             variant="ghost"
             size="sm"
+            className="min-h-11"
             onClick={onUngroup}
-            aria-label={`Ungroup movement ${index + 1}`}
+            // The control dissolves the WHOLE superset this movement belongs to (ungroupSuperset
+            // untags every member), not just this one card — the label says so plainly.
+            aria-label="Ungroup this superset"
           >
             Ungroup
           </Button>
         ) : (
-          <label className="text-muted-foreground flex items-center gap-2 text-sm">
+          // The <label> is the tap target (a tap toggles the checkbox), sized to the ≥44px phone-first
+          // minimum — the 20px box alone would be an easy mis-tap on the gym floor.
+          <label className="text-muted-foreground flex min-h-11 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={selected}
               onChange={onToggleSelect}
-              className="h-4 w-4"
+              className="h-5 w-5"
               aria-label={`Select movement ${index + 1} for a superset`}
             />
             Superset

@@ -217,16 +217,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                             </span>
                             <ul className="flex flex-col gap-1.5">
                               {item.members.map((m) => (
-                                <li key={m.id} className="flex flex-col gap-1">
-                                  <MovementLine entry={m} />
-                                </li>
+                                <SessionMovementItem key={m.id} entry={m} />
                               ))}
                             </ul>
                           </li>
                         ) : (
-                          <li key={item.entry.id} className="flex flex-col gap-1">
-                            <MovementLine entry={item.entry} />
-                          </li>
+                          <SessionMovementItem key={item.entry.id} entry={item.entry} />
                         ),
                       )}
                     </ul>
@@ -243,6 +239,19 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
         )}
       </section>
     </main>
+  );
+}
+
+/**
+ * A movement line as a nested session `<li>` item — shared by superset members and standalone
+ * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
+ * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
+ */
+function SessionMovementItem({ entry }: { entry: EntryDTO }) {
+  return (
+    <li className="flex flex-col gap-1">
+      <MovementLine entry={entry} />
+    </li>
   );
 }
 

@@ -282,4 +282,16 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     expect(s.items.every((it) => it.kind === 'movement')).toBe(true); // no orphan bracket
     expect(s.items).toHaveLength(2);
   });
+
+  it('renders a superset reduced to a LONE surviving member as standalone, not a 1-member bracket', () => {
+    // A member soft-deleted (v1.5-sync / V1-9) drops the group under ≥2 while the survivor keeps its
+    // live supersetId — the read path must not bracket a single movement.
+    const rows = todayRows([
+      move({ id: 'a', movementName: 'Squat' }), // standalone
+      move({ id: 'b', movementName: 'Bench', supersetId: 'ss1', supersetOrder: 1 }), // lone survivor
+    ]);
+    const s = rows[0] as SessionRow;
+    expect(s.items.map((it) => it.kind)).toEqual(['movement', 'movement']); // no 'superset' item
+    expect(s.movementCount).toBe(2);
+  });
 });

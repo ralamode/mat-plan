@@ -96,9 +96,12 @@ export type TodayRow =
  * Group a session's id-sorted members into two-level items (V1-8-3d). Superset members (same public
  * `supersetId`) collapse into ONE `{kind:'superset'}` item at their EARLIEST member's position (the
  * members are already id-sorted, so first-encounter = earliest); the bracket's members re-sort by
- * `supersetOrder` (the alternating order — robust under LWW where id order isn't). A member whose
- * superset was soft-deleted has `supersetId` NULL (the join missed) → it renders standalone, not an
- * orphan bracket. Everything else is a `{kind:'movement'}` item.
+ * `supersetOrder` (the alternating order — robust under LWW where id order isn't). Two degradation
+ * cases render standalone rather than a broken bracket: a member whose superset was soft-deleted has
+ * `supersetId` NULL (the join missed), and a group reduced to a LONE surviving member (a member
+ * soft-deleted at v1.5-sync / V1-9) fails the ≥2 guard below — the write path enforces ≥2, but a
+ * later delete can drop a group under it, so the read path must not bracket a single movement.
+ * Everything else is a `{kind:'movement'}` item.
  */
 function buildSessionItems(members: readonly EntryDTO[]): SessionItem[] {
   const supersetMembers = new Map<string, EntryDTO[]>();
@@ -115,14 +118,14 @@ function buildSessionItems(members: readonly EntryDTO[]): SessionItem[] {
   const emittedSupersets = new Set<string>();
   const items: SessionItem[] = [];
   for (const m of members) {
-    if (m.supersetId !== null) {
-      if (emittedSupersets.has(m.supersetId)) continue;
-      emittedSupersets.add(m.supersetId);
-      items.push({
-        kind: 'superset',
-        superset: { id: m.supersetId },
-        members: supersetMembers.get(m.supersetId)!,
-      });
+    // A superset brackets 2+ members. A group that still has ≥2 emits ONE bracket at its earliest
+    // member; a group down to a lone survivor falls through to a standalone movement (no 1-member
+    // bracket) — same graceful degradation as the supersetId-NULL (deleted-superset) case.
+    const group = m.supersetId !== null ? supersetMembers.get(m.supersetId)! : null;
+    if (group !== null && group.length >= 2) {
+      if (emittedSupersets.has(m.supersetId!)) continue;
+      emittedSupersets.add(m.supersetId!);
+      items.push({ kind: 'superset', superset: { id: m.supersetId! }, members: group });
       continue;
     }
     items.push({ kind: 'movement', entry: m });
