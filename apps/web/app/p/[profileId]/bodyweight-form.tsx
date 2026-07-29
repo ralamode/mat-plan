@@ -4,17 +4,14 @@ import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT, newId } from '@mat-plan/shar
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { INPUT_CLASS } from '@/lib/constants';
 
-import { logBodyweightAction, type ActionState } from './actions';
+import { INITIAL_ACTION_STATE } from './action-state';
+import { logBodyweightAction } from './actions';
 import { DayField } from './day-field';
 
-const initialState: ActionState = { ok: false, error: null };
-
-const inputClass =
-  'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
-
 export function BodyweightForm({ profileId, day }: { profileId: string; day: string }) {
-  const [state, formAction, pending] = useActionState(logBodyweightAction, initialState);
+  const [state, formAction, pending] = useActionState(logBodyweightAction, INITIAL_ACTION_STATE);
   // Client-stamped idempotency key: generated once, rotated after a successful
   // write (via the DOM, not state — avoids a cascading re-render).
   const [initialClientId] = useState(newId);
@@ -51,7 +48,7 @@ export function BodyweightForm({ profileId, day }: { profileId: string; day: str
             autoComplete="off"
             aria-invalid={valueErr ? true : undefined}
             aria-describedby={valueErr ? 'value-error' : undefined}
-            className={inputClass}
+            className={INPUT_CLASS}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -62,7 +59,7 @@ export function BodyweightForm({ profileId, day }: { profileId: string; day: str
             id="unit"
             name="unit"
             defaultValue={DEFAULT_BODYWEIGHT_UNIT}
-            className={inputClass}
+            className={INPUT_CLASS}
           >
             {BODYWEIGHT_UNITS.map((u) => (
               <option key={u} value={u}>

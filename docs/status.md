@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-28
 
 ## Where we are right now
 
@@ -45,14 +45,20 @@ loose rows. Pure read change (a `sessions` LEFT JOIN + `sessionId`/`sessionType`
 `{kind:'session'}` grouping variant + a shared `<MovementLine>`), hardened by a 4-lens panel + a code-review
 round. See [v1-8-3-session-grouping-and-supersets.md](./plans/v1-8-3-session-grouping-and-supersets.md).
 
-**In flight** — **V1-8-3b**: **session feel** — the optional "how did it feel?" note logs to `sessions.feel`
-and shows in the 3a session-block header. A self-contained write→read vertical (schema `feel` field, blank→NULL;
-threaded through the writer/DAL/action; a discrete form field; header display; a hoisted `FREE_TEXT_NOTE_MAX`).
-The 4-lens panel split the remaining V1-8-3 work into **3b (feel)** + **3c (superset write core)** + **3d
-(superset UI + read bracketing)**; see [v1-8-3-remainder-feel-and-supersets.md](./plans/v1-8-3-remainder-feel-and-supersets.md).
+**Merged (#56, #59)** — **V1-8-3b/3c/3d — V1-8 COMPLETE**: session **feel** (#56), then the superset **write
+core** + **UI/read bracketing** (#59 — landed 3c+3d in one commit after a stacked-base merge slip). Supersets
+now work end-to-end: tick "Superset" on 2+ movement cards → "Group as superset" → they log as a group and read
+as a labeled **SUPERSET** bracket on the day's log (in alternating order). Same interaction for the kids' light
+superset and Ray's v2 PPL pairings. See [v1-8-3-remainder-feel-and-supersets.md](./plans/v1-8-3-remainder-feel-and-supersets.md).
 
-**Remaining to the MVP:** V1-8-3b (feel, in flight) → V1-8-3c (superset write core) → V1-8-3d (superset UI) → V1-9
-(edit/fix-a-set; **+V1-9a** per-exercise notes, **+V1-9b** delete/clear-day) → V1-10/11/12 (template
+**In flight** — **V1-9**: **fix-a-set / edit UX** — a mistyped **reps/weight** on a logged strength set gets an
+inline **Edit** affordance (numeric sets only; labeled/null sets stay read-only) → corrects in place → Today
+reflects the fix. Ownership-scoped UPDATE single-sourced in `packages/db` (proven by `db:verify`), LWW on
+`updated_at` (server-`now()`; client-ts compare is v1.5 — see tech-debt), and a shared `SetRepsWeightFields` +
+hoisted `INPUT_CLASS` so the edit inputs reuse the log form's exactly. See [v1-9-edit-set.md](./plans/v1-9-edit-set.md).
+
+**Remaining to the MVP:** V1-9 (edit/fix-a-set, in flight; **+V1-9a** per-exercise notes, **+V1-9b**
+delete/clear-day) → V1-10/11/12 (template
 prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E +
 rate-limit/Sentry) = MVP done. _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
 calisthenics / max-strength.)_
@@ -70,10 +76,10 @@ migrations).
 
 ## Progress toward MVP (v1)
 
-- **Feature PRs merged:** ~14 of ~15 numbered v1 items (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a ·
-  V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a). Data foundation complete; the back third is
-  the superset write/UI (V1-8-3c/3d), editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-8-3b** (session feel).
+- **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
+  V1-6a · V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d). Data foundation + strength
+  logging complete; the back third is editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-9** (fix-a-set / edit).
 
 ## Phases
 
@@ -124,10 +130,10 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-8-1  | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                        | ✅     |
 | V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                        | ✅     |
 | V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                       | ✅     |
-| V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                  | 🟡     |
-| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                        | 🟡     |
-| V1-8-3d | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                 | 🟡     |
-| V1-9    | fix-a-set / edit (LWW)                                                                                 | ⚪     |
+| V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                  | ✅     |
+| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                        | ✅     |
+| V1-8-3d | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                 | ✅     |
+| V1-9    | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                              | 🟡     |
 | V1-10   | block-template prefill                                                                                 | ⚪     |
 | V1-11   | copy-set-to-other-kid                                                                                  | ⚪     |
 | V1-12   | a11y pass                                                                                              | ⚪     |
