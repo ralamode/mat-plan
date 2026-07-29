@@ -29,7 +29,8 @@ export type MetricTotal = {
   /** How many bouts were logged today — the paper tally's "sets". */
   readings: number;
   /** Each bout's value, oldest → newest — the DAL now returns oldest-first (V1-17), so this is the
-   *  input order (rendered in both the entries row and the "Calisthenics today" tally card). */
+   *  input order. Rendered in the grouped "Logged entries" row (the "Calisthenics today" tally card
+   *  shows only `total` + `readings`, not `values`). */
   values: number[];
 };
 
@@ -160,10 +161,11 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   for (const list of sessionMembers.values()) list.sort((a, b) => a.id.localeCompare(b.id));
 
   // Emit each session block at its OLDEST member (list[0] after the id-asc sort) so the block anchors
-  // where the session STARTED. Under the DAL's asc order the oldest member is the FIRST-encountered, so
-  // the block lands at the session's start position and a later replay-appended (newer created_at)
-  // member — which iterates AFTER the originals — doesn't move it. (Keeping the explicit anchor also
-  // makes this pass robust to the input order, not just correct for asc.)
+  // where the session STARTED, not at a later replay-appended (newer created_at) member. Like the
+  // calisthenics group below, block PLACEMENT follows the DAL's asc iteration order (both emit at the
+  // first-encountered = oldest occurrence); both would need revisiting together if the DAL order flips.
+  // The anchor differs from the calisthenics `emitted` Set only because a session member isn't uniquely
+  // keyed by the loop var the way a metricKey is — it needs the precomputed "which member is the anchor".
   const sessionAnchor = new Map<string, string>();
   for (const [sid, list] of sessionMembers) sessionAnchor.set(sid, list[0].id);
 
