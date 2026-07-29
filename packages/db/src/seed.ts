@@ -26,9 +26,13 @@ import * as schema from './schema';
 export const SEED_SCARLETT_ROUTINE = {
   version: 1,
   order: [
+    // Check-ins FIRST (before strength) — a genuine reorder vs Liam's default — and CONTIGUOUS (rice bucket
+    // + the push-up count in ONE block), so the check-in-logging e2e has a single, full surface. Then
+    // strength (cosmetic `conditional` marker), then a life SUBSET (wake only, not wrestling). Demonstrates
+    // A≠B via order + selection without splitting the check-in form.
     { key: 'checkin:rice_bucket' },
+    { key: 'checkin:calisthenics:pushups' },
     { key: 'strength', conditional: true },
-    { key: 'checkin:brush_teeth:stance' },
     { key: 'life:wake' },
   ],
 } as const satisfies RoutineConfig;

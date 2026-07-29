@@ -51,10 +51,7 @@ now work end-to-end: tick "Superset" on 2+ movement cards → "Group as superset
 as a labeled **SUPERSET** bracket on the day's log (in alternating order). Same interaction for the kids' light
 superset and Ray's v2 PPL pairings. See [v1-8-3-remainder-feel-and-supersets.md](./plans/v1-8-3-remainder-feel-and-supersets.md).
 
-**In flight** — **V1-18 PR 1a**: **per-kid routine builder — data slice** — a nullable `profiles.routine_config`
-JSONB + a single-sourced `routineConfigSchema`/`resolveRoutine` in `@mat-plan/shared` + two seed kids with
-different routines. Ships **dark** (NULL → the default routine). Reframed from "reorder sections" into a per-kid
-ordered activity checklist via a 4-phase design→eng investigation (docs/plans/v1-18-*). Render is PR 1b.
+**In flight** — **V1-18 PR 1b**: **per-kid routine builder — render slice** — Today now renders each kid's OWN routine order (`profile.routine`, resolved by the DAL from PR 1a's config), reusing the existing forms via a contiguous-run collapse. Weigh-in pinned first; a NULL config = today's exact order (ships dark). Seeded Scarlett shows the reorder/split/life-subset; Liam (default) is byte-stable. PR 1a (#63) merged.
 
 **Merged (#62)** — **V1-17**: **performed-order log** — the day's "Logged entries" list reads oldest-first
 (`listEntriesForDay` → `asc(created_at), asc(id)`) so it flows top-down in the order things were done (wake →

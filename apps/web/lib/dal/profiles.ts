@@ -1,8 +1,10 @@
 import 'server-only';
 
 import { schema } from '@mat-plan/db';
-import { type ProfileKind, uuidSchema } from '@mat-plan/shared';
+import { type ProfileKind, resolveRoutine, type RoutineConfig, uuidSchema } from '@mat-plan/shared';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+
+import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import { db } from './db';
 
@@ -47,7 +49,17 @@ export async function listProfiles(): Promise<ProfileDTO[]> {
  * household. Returns null when the id is unknown or soft-deleted — callers treat
  * that as not-found (page → `notFound()`, action → typed `{ ok:false }`).
  */
-export async function getProfileByPublicId(publicId: string): Promise<ProfileDTO | null> {
+/**
+ * The Today page's profile DTO — the tile fields PLUS the resolved per-kid routine (V1-18). Its own type
+ * rather than a wider `ProfileDTO` so the picker tiles (`listProfiles`) don't have to carry a routine.
+ * `routine` is ALWAYS resolved (never null/raw): `resolveRoutine` maps a null/stale `routine_config` to the
+ * default routine, so the page renders a real ordered routine unconditionally.
+ */
+export type ProfileWithRoutineDTO = ProfileDTO & { routine: RoutineConfig };
+
+export async function getProfileByPublicId(
+  publicId: string,
+): Promise<ProfileWithRoutineDTO | null> {
   // The public id column is `uuid`; a malformed value (e.g. a garbage URL segment)
   // would make Postgres throw on the comparison. Treat a non-UUID as not-found so
   // callers get a clean null (page → 404), never a 500.
@@ -59,12 +71,19 @@ export async function getProfileByPublicId(publicId: string): Promise<ProfileDTO
       name: schema.profiles.name,
       kind: schema.profiles.kind,
       avatar: schema.profiles.avatar,
+      routineConfig: schema.profiles.routineConfig, // untrusted JSON — resolved below, never returned raw
     })
     .from(schema.profiles)
     .where(and(eq(schema.profiles.publicId, publicId), isNull(schema.profiles.deletedAt)))
     .limit(1);
 
   return row
-    ? { id: row.publicId, name: row.name, kind: row.kind as ProfileKind, avatar: row.avatar }
+    ? {
+        id: row.publicId,
+        name: row.name,
+        kind: row.kind as ProfileKind,
+        avatar: row.avatar,
+        routine: resolveRoutine(row.routineConfig, ROUTINE_CATALOG),
+      }
     : null;
 }
