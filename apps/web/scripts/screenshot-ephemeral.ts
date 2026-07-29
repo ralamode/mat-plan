@@ -320,9 +320,11 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
     const movementRows = await db
       .select({ id: schema.movements.id, name: schema.movements.name })
       .from(schema.movements)
-      .limit(2);
-    if (movementRows.length < 2) throw new Error('seeded movements not found — did db:seed run?');
+      .limit(3);
+    if (movementRows.length < 3) throw new Error('seeded movements not found — did db:seed run?');
 
+    // V1-8-3d: one standalone movement + a 2-movement SUPERSET, so the screenshot shows the bracket.
+    const supersetClientId = newId();
     await writeStrengthSession(db, {
       profilePublicId: SEED_PROFILE_PUBLIC_ID,
       day: localDayIso(DEFAULT_TIME_ZONE),
@@ -330,7 +332,7 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
       sessionClientId: newId(),
       activityTypeId: scLift.id,
       feel: 'strong, easy warmup', // V1-8-3b: session feel shows in the block header
-
+      supersets: [{ clientId: supersetClientId }],
       movements: [
         {
           movementName: movementRows[0].name,
@@ -348,11 +350,22 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
           movementId: movementRows[1].id,
           clientId: newId(),
           sets: [{ reps: 8, weight: 95 }],
+          supersetClientId,
+          supersetOrder: 1,
+        },
+        {
+          movementName: movementRows[2].name,
+          unit: 'lb',
+          movementId: movementRows[2].id,
+          clientId: newId(),
+          sets: [{ reps: 10, weight: 30 }],
+          supersetClientId,
+          supersetOrder: 2,
         },
       ],
     });
     console.log(
-      `✓ seeded strength-session fixture (${movementRows[0].name} + ${movementRows[1].name}, flat)`,
+      `✓ seeded strength-session fixture (${movementRows[0].name} standalone + ${movementRows[1].name}/${movementRows[2].name} superset)`,
     );
   } finally {
     await pool.end();

@@ -1,4 +1,9 @@
-import { DEFAULT_SESSION_TYPE, ENTRY_STATUS, SESSION_TYPE_LABELS } from '@mat-plan/shared';
+import {
+  DEFAULT_SESSION_TYPE,
+  DEFAULT_SUPERSET_LABEL,
+  ENTRY_STATUS,
+  SESSION_TYPE_LABELS,
+} from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -176,11 +181,10 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 );
               }
               if (row.kind === 'session') {
-                // V1-8-3a: a logged strength session as ONE block — a type header + movement count,
-                // with its movements nested (each via the shared <MovementLine>). Supersets sub-bracket
-                // within this block in V1-8-3b.
+                // V1-8-3a: a logged strength session as ONE block — a type header + movement count, its
+                // items nested (each via the shared <MovementLine>). V1-8-3d: superset members sub-bracket.
                 const typeLabel = SESSION_TYPE_LABELS[row.session.type ?? DEFAULT_SESSION_TYPE];
-                const count = row.movements.length;
+                const count = row.movementCount;
                 return (
                   <li
                     key={`s:${row.session.id}`}
@@ -200,11 +204,27 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                       </p>
                     ) : null}
                     <ul className="flex flex-col gap-2">
-                      {row.movements.map((m) => (
-                        <li key={m.id} className="flex flex-col gap-1">
-                          <MovementLine entry={m} />
-                        </li>
-                      ))}
+                      {row.items.map((item) =>
+                        item.kind === 'superset' ? (
+                          // V1-8-3d: a superset bracket — its members alternate, so group them under a
+                          // labeled sub-list (each member still via the shared <MovementLine>).
+                          <li
+                            key={`ss:${item.superset.id}`}
+                            className="border-foreground/25 flex flex-col gap-1.5 border-l-2 pl-3"
+                          >
+                            <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                              {DEFAULT_SUPERSET_LABEL}
+                            </span>
+                            <ul className="flex flex-col gap-1.5">
+                              {item.members.map((m) => (
+                                <SessionMovementItem key={m.id} entry={m} />
+                              ))}
+                            </ul>
+                          </li>
+                        ) : (
+                          <SessionMovementItem key={item.entry.id} entry={item.entry} />
+                        ),
+                      )}
                     </ul>
                   </li>
                 );
@@ -219,6 +239,19 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
         )}
       </section>
     </main>
+  );
+}
+
+/**
+ * A movement line as a nested session `<li>` item — shared by superset members and standalone
+ * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
+ * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
+ */
+function SessionMovementItem({ entry }: { entry: EntryDTO }) {
+  return (
+    <li className="flex flex-col gap-1">
+      <MovementLine entry={entry} />
+    </li>
   );
 }
 
