@@ -8,6 +8,7 @@ import {
   METRIC_KEYS,
   METRIC_VALUE_TYPE,
   uuidSchema,
+  validateRoutineForWrite,
 } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -28,8 +29,9 @@ import {
   logStrengthSession,
   type CheckinItemInput,
 } from '@/lib/dal/entries';
-import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
+import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
@@ -410,5 +412,50 @@ export async function editStrengthSetAction(
   if (!updated) return { ok: false, error: 'That set could not be found.' };
 
   revalidatePath(`/p/${profile.id}`);
+  return { ok: true, error: null };
+}
+
+/**
+ * Server Action: save a kid's routine (V1-18 PR 2, coach editor). Like the strength log, the ordered
+ * routine is one hidden `routine` JSON field (parallel repeated fields can't encode an ordered,
+ * variable-length list). The `JSON.parse` is wrapped so a malformed body is a typed envelope, never
+ * `error.tsx`. `validateRoutineForWrite` is the trust boundary: it REJECTS (not silently drops) an empty
+ * / non-catalog / duplicate order, single-sourcing the membership + dedupe rule with the read path's
+ * `resolveRoutine` — so the coach can't save a routine that would render as something else. The profile
+ * is re-resolved via `getProfileByPublicId` (the ownership seam + the non-UUID guard); the DAL's
+ * `.returning` maps a soft-deleted/unknown profile to a typed error. Same authZ gap as the other writers
+ * (existence-only until Clerk v1.5 — see docs/tech-debt.md).
+ */
+export async function editRoutineAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const raw = formData.get('routine');
+  let submitted: unknown;
+  try {
+    submitted = typeof raw === 'string' ? JSON.parse(raw) : undefined;
+  } catch {
+    return { ok: false, error: 'Could not read the routine. Reload and try again.' };
+  }
+
+  // Strict write validation (empty / non-catalog / duplicate → reject), reusing resolveRoutine's rule.
+  const config = validateRoutineForWrite(submitted, ROUTINE_CATALOG);
+  if (!config) {
+    return { ok: false, error: 'Pick at least one activity, with no duplicates, then save.' };
+  }
+
+  const profileId = formData.get('profileId');
+  if (typeof profileId !== 'string') {
+    return { ok: false, error: 'No profile found to save against.' };
+  }
+  const profile = await getProfileByPublicId(profileId);
+  if (!profile) return { ok: false, error: 'No profile found to save against.' };
+
+  const saved = await updateProfileRoutine(profile.id, config);
+  if (!saved) return { ok: false, error: 'No profile found to save against.' };
+
+  // Refresh both the kid's Today (renders the new order) and this editor (re-reads the saved routine).
+  revalidatePath(`/p/${profile.id}`);
+  revalidatePath(`/p/${profile.id}/routine`);
   return { ok: true, error: null };
 }

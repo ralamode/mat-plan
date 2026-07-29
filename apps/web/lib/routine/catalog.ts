@@ -1,4 +1,4 @@
-import { makeRoutineKey, parseRoutineKey, STRENGTH_KEY } from '@mat-plan/shared';
+import { makeRoutineKey, parseRoutineKey, STRENGTH_KEY, STRENGTH_LABEL } from '@mat-plan/shared';
 
 import { type CheckinField, CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
@@ -69,4 +69,35 @@ export function lifeActivitiesForKeys(keys: readonly string[]): LifeActivity[] {
   return keys
     .map((k) => LIFE_ACTIVITY_BY_KEY.get(k))
     .filter((a): a is LifeActivity => a !== undefined);
+}
+
+/** One entry in the labelled catalog the coach editor renders — a routine key + its human label. */
+export type RoutineCatalogItem = { key: string; label: string };
+
+/**
+ * The labelled routine catalog (V1-18 PR 2) — every `ROUTINE_CATALOG` key paired with its human label, in
+ * catalog order, for the coach editor's checklist. Labels are single-sourced, NOT re-typed: `strength` →
+ * the shared `STRENGTH_LABEL`; `checkin:*` / `life:*` → the live registry object's `.label`, resolved via
+ * `parseRoutineKey` + the already-hoisted maps (the same maps `checkinFieldsForKeys`/`lifeActivitiesForKeys`
+ * use). Order comes free from `ROUTINE_CATALOG` (itself derived from the registries — can't drift). A key
+ * whose object has gone missing is dropped (can't happen while the catalog IS derived from the registries).
+ */
+export function routineCatalogItems(): RoutineCatalogItem[] {
+  const items: RoutineCatalogItem[] = [];
+  for (const key of ROUTINE_CATALOG) {
+    const { namespace, catalogKey } = parseRoutineKey(key);
+    if (namespace === STRENGTH_KEY) {
+      items.push({ key, label: STRENGTH_LABEL });
+      continue;
+    }
+    if (!catalogKey) continue; // no namespace tail — skip (mirrors buildRoutineBlocks)
+    const label =
+      namespace === 'checkin'
+        ? CHECKIN_FIELD_BY_KEY.get(catalogKey)?.label
+        : namespace === 'life'
+          ? LIFE_ACTIVITY_BY_KEY.get(catalogKey)?.label
+          : undefined;
+    if (label !== undefined) items.push({ key, label });
+  }
+  return items;
 }

@@ -6,6 +6,7 @@ import {
   routineConfigSchema,
   routineKeySchema,
   type RoutineConfig,
+  validateRoutineForWrite,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -141,6 +142,46 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
       { key: 'checkin:rice_bucket' },
       { key: 'strength' },
     ]);
+  });
+});
+
+describe('validateRoutineForWrite — STRICT (rejects, never silently drops)', () => {
+  it('accepts a clean config and returns it verbatim (conditional marker preserved)', () => {
+    const cfg = {
+      version: 1,
+      order: [{ key: 'checkin:rice_bucket' }, { key: 'strength', conditional: true }],
+    };
+    expect(validateRoutineForWrite(cfg, CATALOG)).toEqual(cfg);
+  });
+
+  it('rejects a non-config (null / wrong version / unknown field / bad item) → null', () => {
+    expect(validateRoutineForWrite(null, CATALOG)).toBeNull();
+    expect(
+      validateRoutineForWrite({ version: 2, order: [{ key: 'strength' }] }, CATALOG),
+    ).toBeNull();
+    expect(
+      validateRoutineForWrite({ version: 1, order: [{ key: 'strength' }], extra: 1 }, CATALOG),
+    ).toBeNull();
+    expect(
+      validateRoutineForWrite(
+        { version: 1, order: [{ key: 'strength', conditional: false }] },
+        CATALOG,
+      ),
+    ).toBeNull();
+  });
+
+  it('rejects an EMPTY order (would resolve back to the full default on read)', () => {
+    expect(validateRoutineForWrite({ version: 1, order: [] }, CATALOG)).toBeNull();
+  });
+
+  it('rejects a duplicate key (where resolveRoutine would forgivingly dedupe)', () => {
+    const dup = { version: 1, order: [{ key: 'strength' }, { key: 'strength' }] };
+    expect(validateRoutineForWrite(dup, CATALOG)).toBeNull();
+  });
+
+  it('rejects a non-catalog key (where resolveRoutine would forgivingly drop it)', () => {
+    const stale = { version: 1, order: [{ key: 'strength' }, { key: 'checkin:gone' }] };
+    expect(validateRoutineForWrite(stale, CATALOG)).toBeNull();
   });
 });
 

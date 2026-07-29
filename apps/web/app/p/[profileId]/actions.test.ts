@@ -35,7 +35,10 @@ vi.mock('@/lib/dal/profiles', () => ({
     name: 'Liam',
     kind: 'kid',
     avatar: null,
+    routine: { version: 1, order: [] },
   })),
+  // Default: the routine was persisted. The not-found test overrides to null.
+  updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
@@ -45,7 +48,8 @@ import {
   logCheckinEntries,
   logStrengthSession,
 } from '@/lib/dal/entries';
-import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
+import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { DEFAULT_TIME_ZONE } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
@@ -63,6 +67,7 @@ function localDay(offsetDays = 0): string {
 
 import { type ActionState } from './action-state';
 import {
+  editRoutineAction,
   editStrengthSetAction,
   logBodyweightAction,
   logCheckinsAction,
@@ -986,6 +991,108 @@ describe('editStrengthSetAction — happy path + not-found', () => {
     );
     expect(res.ok).toBe(false);
     expect(res.error).toBeTruthy();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// ── V1-18 PR 2: the coach routine editor ─────────────────────────────────────────
+// The routine rides as ONE hidden `routine` JSON field (an ordered variable-length list, the
+// strength-form idiom). `validateRoutineForWrite` is the trust boundary — it REJECTS an empty /
+// non-catalog / duplicate order against the REAL ROUTINE_CATALOG (no drop-and-store). Two real catalog
+// keys keep these tests bound to the live catalog, not re-typed strings.
+const [ROUTINE_K1, ROUTINE_K2] = ROUTINE_CATALOG; // 'strength', then the first check-in key
+function routineForm(opts: { profileId?: string; routineRaw?: string; order?: unknown }): FormData {
+  const fd = new FormData();
+  if (opts.profileId !== undefined) fd.append('profileId', opts.profileId);
+  if (opts.routineRaw !== undefined) fd.append('routine', opts.routineRaw);
+  else if (opts.order !== undefined)
+    fd.append('routine', JSON.stringify({ version: 1, order: opts.order }));
+  return fd;
+}
+
+describe('editRoutineAction — boundary (bad body → reject, no write)', () => {
+  it('rejects a malformed routine JSON body without touching the DAL', async () => {
+    const res = await editRoutineAction(
+      initial,
+      routineForm({ profileId: PROFILE_ID, routineRaw: '{not valid json' }),
+    );
+    expect(res.ok).toBe(false);
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+  });
+
+  it('rejects an EMPTY order (an empty routine is not authorable — it would revert to the default)', async () => {
+    const res = await editRoutineAction(initial, routineForm({ profileId: PROFILE_ID, order: [] }));
+    expect(res.ok).toBe(false);
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+  });
+
+  it('rejects a duplicate key (the strict write matches resolveRoutine — no store-then-diverge)', async () => {
+    const res = await editRoutineAction(
+      initial,
+      routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }, { key: ROUTINE_K1 }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+  });
+
+  it('rejects a key not in the catalog (grammar-valid but not a live activity)', async () => {
+    const res = await editRoutineAction(
+      initial,
+      routineForm({ profileId: PROFILE_ID, order: [{ key: 'finisher:sprints' }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing profileId AFTER a valid routine (no owner to save against)', async () => {
+    const res = await editRoutineAction(initial, routineForm({ order: [{ key: ROUTINE_K1 }] }));
+    expect(res.ok).toBe(false);
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+  });
+});
+
+describe('editRoutineAction — happy path + ownership', () => {
+  it('persists a valid routine and revalidates BOTH Today and the editor', async () => {
+    const res = await editRoutineAction(
+      initial,
+      routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K2 }, { key: ROUTINE_K1 }] }),
+    );
+    expect(res.ok).toBe(true);
+    expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
+    expect(updateProfileRoutine).toHaveBeenCalledWith(PROFILE_ID, {
+      version: 1,
+      order: [{ key: ROUTINE_K2 }, { key: ROUTINE_K1 }],
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}/routine`);
+  });
+
+  it('PRESERVES the opaque conditional marker through to the write (the V1-10 down-payment)', async () => {
+    await editRoutineAction(
+      initial,
+      routineForm({
+        profileId: PROFILE_ID,
+        order: [{ key: ROUTINE_K1, conditional: true }, { key: ROUTINE_K2 }],
+      }),
+    );
+    expect(updateProfileRoutine).toHaveBeenCalledWith(
+      PROFILE_ID,
+      expect.objectContaining({
+        order: [{ key: ROUTINE_K1, conditional: true }, { key: ROUTINE_K2 }],
+      }),
+    );
+  });
+
+  it('fails gracefully (no write) when the profile is unknown', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await editRoutineAction(
+      initial,
+      routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+    );
+    expect(res.ok).toBe(false);
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 });

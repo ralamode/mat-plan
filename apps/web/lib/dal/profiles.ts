@@ -87,3 +87,28 @@ export async function getProfileByPublicId(
       }
     : null;
 }
+
+/**
+ * Persist a kid's routine config (V1-18 PR 2, coach editor). A single-column `UPDATE profiles SET
+ * routine_config = …` keyed on the profile's own `public_id` — DAL-local (NOT a `packages/db` writer):
+ * unlike the strength set-edit, a routine write carries no cross-table ownership join, so there is no
+ * IDOR-load-bearing SQL to single-source + prove via `db:verify`. It mirrors the simple single-table
+ * writers (`logBodyweight`/`logCheckinEntries`), which also live in the DAL. `.returning` distinguishes a
+ * live match from none: a soft-deleted / unknown id yields `null`, which the action maps to a typed error.
+ *
+ * The config is validated STRICTLY by the action (`validateRoutineForWrite`) BEFORE this call — the DAL
+ * stores what it is given. Non-UUID ids never reach here: the action re-resolves via `getProfileByPublicId`
+ * first (its `uuidSchema` guard), the same ownership seam every other writer uses.
+ */
+export async function updateProfileRoutine(
+  publicId: string,
+  config: RoutineConfig,
+): Promise<{ id: string } | null> {
+  const [row] = await db
+    .update(schema.profiles)
+    .set({ routineConfig: config })
+    .where(and(eq(schema.profiles.publicId, publicId), isNull(schema.profiles.deletedAt)))
+    .returning({ id: schema.profiles.publicId });
+
+  return row ? { id: row.id } : null;
+}
