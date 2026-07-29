@@ -304,6 +304,26 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
+  it('rejects a crafted superset order without a superset id (bad body → zod-reject)', async () => {
+    // `supersetOrder` rides in the forwarded movements JSON, so this reaches the schema — the pairing
+    // superRefine must reject it as a typed envelope, not let it hit the DB CHECK as a raw 500 (V1-8-3c).
+    const badMovements = JSON.stringify([
+      {
+        movementName: 'Back squat',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '5', weight: '135' }],
+        supersetOrder: 5,
+      },
+    ]);
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movementsRaw: badMovements }),
+    );
+    expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing profileId without touching the DAL', async () => {
     const res = await logStrengthSessionAction(
       initial,
@@ -400,6 +420,68 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(res.ok).toBe(false);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('derives supersets from the tagged movements and threads them to the DAL (V1-8-3d)', async () => {
+    const ss = newId();
+    // Two movements tagged into one superset; the action derives `supersets: [{clientId: ss}]`.
+    const raw = JSON.stringify([
+      {
+        movementName: 'Bench',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '8', weight: '40' }],
+        supersetClientId: ss,
+        supersetOrder: 1,
+      },
+      {
+        movementName: 'OHP',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '8', weight: '30' }],
+        supersetClientId: ss,
+        supersetOrder: 2,
+      },
+    ]);
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movementsRaw: raw }),
+    );
+    expect(logStrengthSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supersets: [{ clientId: ss }],
+        movements: expect.arrayContaining([
+          expect.objectContaining({ supersetClientId: ss, supersetOrder: 1 }),
+        ]),
+      }),
+    );
+  });
+
+  it('rejects a lone superset member (≥2) with a locatable superset error (V1-8-3d)', async () => {
+    const ss = newId();
+    const raw = JSON.stringify([
+      {
+        movementName: 'Bench',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '8', weight: '40' }],
+        supersetClientId: ss,
+        supersetOrder: 1,
+      },
+      {
+        movementName: 'Squat',
+        unit: 'lb',
+        clientId: newId(),
+        sets: [{ reps: '5', weight: '135' }],
+      }, // standalone → ss has 1 member
+    ]);
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({ profileId: PROFILE_ID, movementsRaw: raw }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.supersets).toBeTruthy(); // surfaced, not a locked banner
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 

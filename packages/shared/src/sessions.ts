@@ -48,6 +48,10 @@ export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   core: 'Core',
 };
 
+/** Heading for a superset bracket in the Today log (V1-8-3d). A single source so the view and its test
+ *  can't drift; v1 supersets carry no user label, so this is shown for every bracket. */
+export const DEFAULT_SUPERSET_LABEL = 'Superset';
+
 /** Session log status — reuses the entry status vocabulary (single source). */
 export const SESSION_STATUSES = ENTRY_STATUSES;
 

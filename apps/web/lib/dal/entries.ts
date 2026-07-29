@@ -63,8 +63,7 @@ export type EntryDTO = {
   activityLabel: string | null;
   // V1-8-3a: the grouping session (a strength session groups N movement entries). `sessionId` is the
   // session's PUBLIC id (never the internal id — anti-IDOR), NULL for non-session entries; `sessionType`
-  // is the raw enum (rendered via SESSION_TYPE_LABELS at the view). `supersetId`/`supersetOrder` are
-  // added in V1-8-3b with their bracketing reader — no dead DTO fields here.
+  // is the raw enum (rendered via SESSION_TYPE_LABELS at the view).
   sessionId: string | null;
   // The session's type from a CHECK-constrained column, so it's the SessionType union (not bare
   // string) — the view indexes SESSION_TYPE_LABELS with no cast, and a stray value fails the build.
@@ -72,6 +71,12 @@ export type EntryDTO = {
   // V1-8-3b: the optional session "how did it feel?" note, shown in the session-block header. NULL when
   // no feel was logged (the schema normalizes a blank input to NULL) or for non-session entries.
   sessionFeel: string | null;
+  // V1-8-3d: the superset this movement belongs to. `supersetId` is the superset's PUBLIC id (anti-IDOR),
+  // NULL for a standalone movement or a soft-deleted superset (the join misses → renders standalone);
+  // `supersetOrder` is its 1-based position within the superset (for the alternating read order). No
+  // superset label field — v1 supersets carry no user label (the bracket shows DEFAULT_SUPERSET_LABEL).
+  supersetId: string | null;
+  supersetOrder: number | null;
   sets: SetDTO[]; // strength sets, ordered by idx; empty for bodyweight
 };
 
@@ -104,6 +109,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       sessionId: schema.sessions.publicId,
       sessionType: schema.sessions.sessionType,
       sessionFeel: schema.sessions.feel,
+      // V1-8-3d: the superset's PUBLIC id (anti-IDOR) + the member's order within it. Same PK-join idiom.
+      supersetId: schema.supersets.publicId,
+      supersetOrder: schema.entries.supersetOrder,
     })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
@@ -115,6 +123,12 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     .leftJoin(
       schema.sessions,
       and(eq(schema.entries.sessionId, schema.sessions.id), isNull(schema.sessions.deletedAt)),
+    )
+    // V1-8-3d: same idiom for the superset — `deleted_at` in the ON so a soft-deleted superset degrades
+    // its members to standalone (supersetId NULL) rather than dropping them.
+    .leftJoin(
+      schema.supersets,
+      and(eq(schema.entries.supersetId, schema.supersets.id), isNull(schema.supersets.deletedAt)),
     )
     .where(
       and(
@@ -184,6 +198,8 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     // The sessions_session_type_check column only holds SessionType values (or NULL).
     sessionType: r.sessionType as SessionType | null,
     sessionFeel: r.sessionFeel,
+    supersetId: r.supersetId,
+    supersetOrder: r.supersetOrder,
     sets: setsByEntry.get(r.id) ?? [],
   }));
 }
@@ -361,7 +377,10 @@ export type LogStrengthSessionArgs = {
   clientId: string; // client-stamped UUIDv7 (parent SESSION)
   day: string;
   feel?: string; // optional session feel note (V1-8-3b)
-  movements: readonly SessionMovementInput[]; // { movementName, unit, clientId, sets }
+  // V1-8-3d: the supersets to create; each movement references one via `supersetClientId` (on the
+  // SessionMovementInput). No catalog resolution needed — a pass-through, like `feel`.
+  supersets?: readonly { clientId: string; label?: string }[];
+  movements: readonly SessionMovementInput[]; // { movementName, unit, clientId, sets, superset tags }
 };
 
 /**
@@ -393,6 +412,7 @@ export async function logStrengthSession(
     sessionClientId: args.clientId,
     activityTypeId,
     feel: args.feel,
+    supersets: args.supersets,
     movements,
   });
 }
