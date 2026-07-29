@@ -51,7 +51,13 @@ now work end-to-end: tick "Superset" on 2+ movement cards → "Group as superset
 as a labeled **SUPERSET** bracket on the day's log (in alternating order). Same interaction for the kids' light
 superset and Ray's v2 PPL pairings. See [v1-8-3-remainder-feel-and-supersets.md](./plans/v1-8-3-remainder-feel-and-supersets.md).
 
-**In flight** — **V1-9**: **fix-a-set / edit UX** — a mistyped **reps/weight** on a logged strength set gets an
+**In flight** — **V1-17**: **performed-order log** — the day's "Logged entries" list now reads oldest-first
+(`listEntriesForDay` → `asc(created_at), asc(id)`) so it flows top-down in the order things were done (wake →
+bodyweight → rice bucket) instead of newest-logged-first. Pure read change, no migration; the fold keeps its
+newest-first contract via a call-site reverse. Stacked on V1-9 (#60). See
+[v1-17-performed-order.md](./plans/v1-17-performed-order.md).
+
+**Merge-ready (#60)** — **V1-9**: **fix-a-set / edit UX** — a mistyped **reps/weight** on a logged strength set gets an
 inline **Edit** affordance (numeric sets only; labeled/null sets stay read-only) → corrects in place → Today
 reflects the fix. Ownership-scoped UPDATE single-sourced in `packages/db` (proven by `db:verify`), LWW on
 `updated_at` (server-`now()`; client-ts compare is v1.5 — see tech-debt), and a shared `SetRepsWeightFields` +
