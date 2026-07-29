@@ -28,9 +28,15 @@ export type MetricTotal = {
   total: number;
   /** How many bouts were logged today — the paper tally's "sets". */
   readings: number;
-  /** Each bout's value, oldest → newest (the DAL returns desc, so this is reversed). */
+  /** Each bout's value, oldest → newest — the DAL now returns oldest-first (V1-17), so this is the
+   *  input order. Rendered in the grouped "Logged entries" row (the "Calisthenics today" tally card
+   *  shows only `total` + `readings`, not `values`). */
   values: number[];
 };
+
+// Precondition (V1-17): `entries` arrive OLDEST-FIRST (`listEntriesForDay` orders asc(created_at), asc(id)).
+// `values` is displayed oldest→newest directly; the fold kernel keeps its NEWEST-FIRST precondition (for
+// `last`), so it is fed a reversed copy — see `total` below.
 
 export function calisthenicsTotals(entries: readonly EntryDTO[]): MetricTotal[] {
   const byMetric = new Map<string, EntryDTO[]>();
@@ -55,14 +61,17 @@ export function calisthenicsTotals(entries: readonly EntryDTO[]): MetricTotal[] 
   for (const metricKey of ACTIVITY_METRIC_MAP[ACTIVITY_TYPE_KEYS.calisthenics]) {
     const rows = byMetric.get(metricKey);
     if (!rows?.length) continue;
-    const values = rows.map((r) => r.value as number);
+    const values = rows.map((r) => r.value as number); // oldest-first (DAL asc, V1-17)
     totals.push({
       metricKey,
       label: rows[0].metricLabel ?? metricKey,
-      // aggregation is a per-metric constant; every row for this key carries the same value.
-      total: foldAggregation(rows[0].aggregation as MetricAggregation, values),
+      // aggregation is a per-metric constant; every row for this key carries the same value. `foldAggregation`
+      // documents a NEWEST-FIRST precondition (`last` returns values[0]), so feed it a reversed copy — keeps
+      // the shared kernel's contract true and future-proofs a `last`/`avg` calisthenics metric (today all are
+      // sum/max → order-independent, so `total` is unchanged either way).
+      total: foldAggregation(rows[0].aggregation as MetricAggregation, [...values].reverse()),
       readings: rows.length,
-      values: [...values].reverse(), // DAL desc(createdAt) → show oldest-first: "20, 30"
+      values, // oldest → newest for display: "20, 30"
     });
   }
   return totals;
@@ -71,8 +80,9 @@ export function calisthenicsTotals(entries: readonly EntryDTO[]): MetricTotal[] 
 /**
  * One display row per line of the "Logged entries" list (V1-6a). Non-accumulating entries
  * render individually as before; the day's calisthenics bouts are GROUPED into ONE row per
- * exercise (so N bouts don't read as N duplicate rows). The grouped row appears at the
- * position of the exercise's newest bout, preserving the desc(createdAt) order of the rest.
+ * exercise (so N bouts don't read as N duplicate rows). Input is OLDEST-FIRST (DAL asc, V1-17),
+ * so the grouped row appears at the position of the exercise's OLDEST bout, preserving the
+ * performed (oldest→newest) order of the rest.
  */
 /** One item inside a session block (V1-8-3d): a standalone movement, or a superset bracketing 2+
  *  movements performed alternating. */
@@ -138,7 +148,7 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
 
   // V1-8-3a: gather each session's members in a FULL PASS keyed by sessionId (the `byMetric` idiom) —
   // NOT a contiguous run: a replay-appended member has a later created_at, so in the DAL's
-  // desc(createdAt),asc(id) order it is non-adjacent to the originals, and a run collector would split
+  // asc(createdAt),asc(id) order it is non-adjacent to the originals, and a run collector would split
   // one session into two blocks. Members are then sorted by public id (== insertion order: uuidv7 is
   // monotonic and the writer mints ids in insertion order) so an appended member re-orders into place.
   const sessionMembers = new Map<string, EntryDTO[]>();
@@ -150,10 +160,12 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   }
   for (const list of sessionMembers.values()) list.sort((a, b) => a.id.localeCompare(b.id));
 
-  // Emit each session block at its OLDEST member (list[0] after the id-asc sort) so the block stays
-  // where the session STARTED, and a later replay-appended (newer created_at) movement doesn't yank
-  // the whole block to the top of the day. For a normal single-tx session (all members one created_at)
-  // the oldest member is also the first-encountered, so placement is unchanged.
+  // Emit each session block at its OLDEST member (list[0] after the id-asc sort) so the block anchors
+  // where the session STARTED, not at a later replay-appended (newer created_at) member. Like the
+  // calisthenics group below, block PLACEMENT follows the DAL's asc iteration order (both emit at the
+  // first-encountered = oldest occurrence); both would need revisiting together if the DAL order flips.
+  // The anchor differs from the calisthenics `emitted` Set only because a session member isn't uniquely
+  // keyed by the loop var the way a metricKey is — it needs the precomputed "which member is the anchor".
   const sessionAnchor = new Map<string, string>();
   for (const [sid, list] of sessionMembers) sessionAnchor.set(sid, list[0].id);
 
@@ -161,8 +173,8 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   const rows: TodayRow[] = [];
   for (const e of entries) {
     if (e.activityKey === ACTIVITY_TYPE_KEYS.calisthenics && e.metricKey !== null) {
-      // Emit the grouped row once, at the newest bout; skip the rest. Skip entirely if the
-      // metric was filtered out of the totals (null value / non-done) so it doesn't render raw.
+      // Emit the grouped row once, at the OLDEST bout (first-encountered under asc); skip the rest. Skip
+      // entirely if the metric was filtered out of the totals (null value / non-done) so it doesn't render.
       if (emitted.has(e.metricKey)) continue;
       emitted.add(e.metricKey);
       const total = totalByMetric.get(e.metricKey);

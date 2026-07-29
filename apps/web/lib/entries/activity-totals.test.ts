@@ -9,8 +9,8 @@ import { calisthenicsTotals, todayRows, type SessionRow } from './activity-total
 const members = (s: SessionRow): EntryDTO[] =>
   s.items.flatMap((it) => (it.kind === 'movement' ? [it.entry] : it.members));
 
-// A calisthenics reading DTO. Rows arrive from the DAL desc(createdAt); tests pass them
-// newest-first when order matters.
+// A calisthenics reading DTO. Rows arrive from the DAL OLDEST-FIRST (asc(createdAt), V1-17); tests
+// pass them oldest-first when order matters (e.g. bouts [reading(20), reading(30)] → values [20, 30]).
 function reading(overrides: Partial<EntryDTO>): EntryDTO {
   return {
     id: 'e',
@@ -50,14 +50,14 @@ const habit = (): EntryDTO =>
 
 describe('calisthenicsTotals', () => {
   it('sums a metric across the day, counts the bouts, lists them oldest-first', () => {
-    // Passed newest-first (desc); `values` comes back oldest-first for display ("20, 30").
-    const totals = calisthenicsTotals([reading({ value: 30 }), reading({ value: 20 })]);
+    // The DAL returns OLDEST-FIRST (asc, V1-17); `values` is that order for display ("20, 30").
+    const totals = calisthenicsTotals([reading({ value: 20 }), reading({ value: 30 })]);
     expect(totals).toEqual([
       { metricKey: 'pushups', label: 'Push-ups', total: 50, readings: 2, values: [20, 30] },
     ]);
   });
 
-  it('folds the skill step by max, not sum', () => {
+  it('folds the skill step by max, not sum (order-independent under the reversed fold input)', () => {
     const skill = (value: number) =>
       reading({
         metricKey: 'vsit_skill_step',
@@ -65,7 +65,8 @@ describe('calisthenicsTotals', () => {
         aggregation: 'max',
         value,
       });
-    const totals = calisthenicsTotals([skill(3), skill(5), skill(4)]);
+    // Oldest → newest: 4, 5, 3. `values` mirrors that; `total` is the max (5) regardless of order.
+    const totals = calisthenicsTotals([skill(4), skill(5), skill(3)]);
     expect(totals).toEqual([
       {
         metricKey: 'vsit_skill_step',
@@ -119,10 +120,10 @@ describe('calisthenicsTotals', () => {
 
 describe('todayRows — the "Logged entries" list composition (V1-6a)', () => {
   it('groups N calisthenics bouts of one exercise into ONE row, not N', () => {
-    // Two push-up bouts (desc) + a one-off habit → 2 rows total, not 3.
+    // Two push-up bouts (oldest-first, V1-17) + a one-off habit → 2 rows total, not 3.
     const rows = todayRows([
-      reading({ id: 'b2', value: 30 }),
       reading({ id: 'b1', value: 20 }),
+      reading({ id: 'b2', value: 30 }),
       habit(),
     ]);
     expect(rows).toHaveLength(2);
@@ -134,14 +135,14 @@ describe('todayRows — the "Logged entries" list composition (V1-6a)', () => {
     expect(rows.filter((r) => r.kind === 'entry')).toHaveLength(1); // the habit, individually
   });
 
-  it('emits the grouped calisthenics row at the position of the newest bout', () => {
-    // desc order: newest push-up bout, then the habit, then the older bout.
+  it('emits the grouped calisthenics row at the position of the OLDEST bout (performed order)', () => {
+    // asc order (V1-17): oldest push-up bout, then the habit, then the newer bout.
     const rows = todayRows([
-      reading({ id: 'b2', value: 30 }),
-      habit(),
       reading({ id: 'b1', value: 20 }),
+      habit(),
+      reading({ id: 'b2', value: 30 }),
     ]);
-    expect(rows.map((r) => r.kind)).toEqual(['calisthenics', 'entry']); // grouped once, at the top
+    expect(rows.map((r) => r.kind)).toEqual(['calisthenics', 'entry']); // grouped once, at the oldest bout
   });
 
   it('renders non-calisthenics entries individually and in order', () => {
@@ -152,7 +153,7 @@ describe('todayRows — the "Logged entries" list composition (V1-6a)', () => {
 
 describe('todayRows — strength session grouping (V1-8-3a)', () => {
   // A session movement DTO: kind-NULL, movement-shaped, tagged with a session public id. `id` is the
-  // entry's public id (uuidv7 == insertion order); DTOs arrive from the DAL desc(createdAt), asc(id).
+  // entry's public id (uuidv7 == insertion order); DTOs arrive from the DAL asc(createdAt), asc(id) (V1-17).
   const move = (o: Partial<EntryDTO>): EntryDTO =>
     reading({
       activityKey: ACTIVITY_TYPE_KEYS.sc_lift,
@@ -190,28 +191,28 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
   });
 
   it('gathers a non-contiguous replay-appended member into the SAME block, re-ordered by id', () => {
-    // The appended movement 'd' has a later created_at → appears first in the desc list, and a check-in
-    // sits between it and the original block. A contiguous-run collector would split the session in two.
+    // asc order (V1-17): the original session (a, b) is oldest, then a check-in, then the appended 'd'
+    // (later created_at) LAST. A contiguous-run collector would split the session in two across the habit.
     const rows = todayRows([
-      move({ id: 'd', movementName: 'Deadlift' }), // appended later (newest)
-      habit(),
       move({ id: 'a', movementName: 'Back squat' }),
       move({ id: 'b', movementName: 'Bench press' }),
+      habit(),
+      move({ id: 'd', movementName: 'Deadlift' }), // appended later (newest created_at)
     ]);
     const sessions = rows.filter((r) => r.kind === 'session');
     expect(sessions).toHaveLength(1); // ONE block, not two
     const session = sessions[0] as Extract<(typeof rows)[number], { kind: 'session' }>;
     // Sorted by id asc == insertion order: a, b, then the appended d.
     expect(members(session).map((m) => m.id)).toEqual(['a', 'b', 'd']);
-    // The block anchors at the session's OLDEST member ('a'), so it stays BELOW the later-logged habit
-    // (which is newer than 'a') rather than jumping to the top at the appended 'd' — no relocation.
-    expect(rows.map((r) => r.kind)).toEqual(['entry', 'session']);
+    // The block anchors at the session's OLDEST member ('a') = first-encountered under asc, so it sits
+    // ABOVE the later-logged habit — performed order — and the appended 'd' doesn't relocate the block.
+    expect(rows.map((r) => r.kind)).toEqual(['session', 'entry']);
   });
 
   it('keeps a mixed day intact: session block + calisthenics grouping + flat habit', () => {
     const rows = todayRows([
-      reading({ id: 'p2', value: 30 }), // push-up bouts (calisthenics)
-      reading({ id: 'p1', value: 20 }),
+      reading({ id: 'p1', value: 20 }), // push-up bouts (calisthenics), oldest-first (V1-17)
+      reading({ id: 'p2', value: 30 }),
       move({ id: 'a', movementName: 'Back squat' }),
       move({ id: 'b', movementName: 'Bench press' }),
       habit(),
