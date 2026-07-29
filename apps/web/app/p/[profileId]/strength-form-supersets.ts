@@ -51,3 +51,26 @@ export function dissolveSmallSupersets<T extends SupersetTaggable>(movements: re
       : m,
   );
 }
+
+/** The minimal shape the untouched-card check reads. */
+export type MovementDraft = {
+  movementName: string;
+  sets: readonly { reps: string; weight: string }[];
+};
+
+/** A movement card is "untouched" — safe to drop on submit — ONLY when its name is blank AND every set's
+ *  reps and weight are blank. A card with ANY field typed is a partial entry, NOT untouched, so it still
+ *  validates rather than being silently discarded. */
+export function isUntouchedMovement(m: MovementDraft): boolean {
+  return (
+    m.movementName.trim() === '' &&
+    m.sets.every((s) => s.reps.trim() === '' && s.weight.trim() === '')
+  );
+}
+
+/** Drop the fully-untouched movement cards before building the submit payload, so a user who added a card
+ *  and left it blank isn't blocked by its (empty-field) validation errors. Preserves the schema's min(1):
+ *  if EVERY card is untouched the result is empty → the "add at least one movement" error still fires. */
+export function dropUntouchedMovements<T extends MovementDraft>(movements: readonly T[]): T[] {
+  return movements.filter((m) => !isUntouchedMovement(m));
+}

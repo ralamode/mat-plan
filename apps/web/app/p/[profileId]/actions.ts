@@ -45,10 +45,10 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
  * `useActionState` (expected errors don't throw). Sentry
  * `withServerActionInstrumentation` wrapping lands with observability (V1-14).
  */
-// The result envelope + its initial value live in ./action-state (a 'use server' module can only
-// export async functions, so the type/const can't live here); re-exported so existing importers of
-// `ActionState` from './actions' keep working.
-export type { ActionState };
+// The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
+// export ONLY async functions — the Server Actions compiler registers every export as an action
+// reference, so even a re-exported TYPE trips a runtime `ReferenceError: ActionState is not defined`.
+// So DO NOT re-export it here; consumers import `ActionState` straight from ./action-state.
 
 export async function logBodyweightAction(
   _prev: ActionState,

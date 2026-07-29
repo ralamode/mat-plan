@@ -61,13 +61,13 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+import { type ActionState } from './action-state';
 import {
   editStrengthSetAction,
   logBodyweightAction,
   logCheckinsAction,
   logLifeActivitiesAction,
   logStrengthSessionAction,
-  type ActionState,
 } from './actions';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;

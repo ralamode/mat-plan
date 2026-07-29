@@ -16,7 +16,12 @@ import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
 import { SetRepsWeightFields } from './set-fields';
-import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
+import {
+  dissolveSmallSupersets,
+  dropUntouchedMovements,
+  groupSelected,
+  ungroupSuperset,
+} from './strength-form-supersets';
 
 // Form-held movement/set state. Values are strings (the schema's `strengthSetSchema` z.coerce's
 // reps/weight), serialized into the hidden `movements` JSON field on each render. Each movement
@@ -122,10 +127,16 @@ function StrengthFormBody({
 
   const selectedCount = movements.filter((m) => selected.has(m.clientId)).length;
 
+  // Before serializing: drop fully-untouched movement cards (blank name + all-blank sets) so an
+  // added-but-unused card doesn't block the log with empty-field errors — then dissolve any superset a
+  // drop left with a lone member. A partially-typed card is NOT dropped (it validates). If every card is
+  // untouched the payload is [] and the schema's "add at least one movement" still fires.
+  const submittable = dissolveSmallSupersets(dropUntouchedMovements(movements));
+
   // The wire shape the action JSON.parses + zod-validates (strings; the schema coerces numbers). Superset
   // tags ride here per-movement; the action DERIVES the supersets[] from these distinct ids.
   const movementsJson = JSON.stringify(
-    movements.map((m) => ({
+    submittable.map((m) => ({
       movementName: m.movementName,
       unit: m.unit,
       clientId: m.clientId,
