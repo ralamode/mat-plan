@@ -9,8 +9,8 @@ import { calisthenicsTotals, todayRows, type SessionRow } from './activity-total
 const members = (s: SessionRow): EntryDTO[] =>
   s.items.flatMap((it) => (it.kind === 'movement' ? [it.entry] : it.members));
 
-// A calisthenics reading DTO. Rows arrive from the DAL desc(createdAt); tests pass them
-// newest-first when order matters.
+// A calisthenics reading DTO. Rows arrive from the DAL OLDEST-FIRST (asc(createdAt), V1-17); tests
+// pass them oldest-first when order matters (e.g. bouts [reading(20), reading(30)] → values [20, 30]).
 function reading(overrides: Partial<EntryDTO>): EntryDTO {
   return {
     id: 'e',
