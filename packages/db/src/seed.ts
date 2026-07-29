@@ -16,6 +16,24 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
 /**
+ * V1-18: Scarlett's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
+ * demonstrates A≠B vs Liam (NULL → the default routine). Exported so an app-side test can bind these keys
+ * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
+ * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
+ * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an EMPTY
+ * target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
+ */
+export const SEED_SCARLETT_ROUTINE = {
+  version: 1,
+  order: [
+    { key: 'checkin:rice_bucket' },
+    { key: 'strength', conditional: true },
+    { key: 'checkin:brush_teeth:stance' },
+    { key: 'life:wake' },
+  ],
+} as const satisfies RoutineConfig;
+
+/**
  * Idempotent seed (AGENTS.md: seed reference data ON CONFLICT DO NOTHING; runs
  * twice → identical result). Seeds the `units` + `activity_type_categories`
  * reference tables, the root household, two kid profiles scoped to it (V1-3: Liam +
@@ -73,19 +91,7 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
         name: 'Scarlett',
         kind: 'kid',
         householdId: household.id,
-        // V1-18: Scarlett gets an EXPLICIT routine (rice bucket before strength, a metric habit, wake)
-        // so a fresh DB demonstrates A≠B vs Liam (NULL → the default routine). The keys are grammar-valid
-        // (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an
-        // EMPTY target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
-        routineConfig: {
-          version: 1,
-          order: [
-            { key: 'checkin:rice_bucket' },
-            { key: 'strength', conditional: true },
-            { key: 'checkin:brush_teeth:stance' },
-            { key: 'life:wake' },
-          ],
-        } as const satisfies RoutineConfig,
+        routineConfig: SEED_SCARLETT_ROUTINE,
       },
     ])
     .onConflictDoNothing({ target: schema.profiles.publicId });

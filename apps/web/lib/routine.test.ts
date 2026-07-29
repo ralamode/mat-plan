@@ -1,13 +1,17 @@
-import { describe, expect, it } from 'vitest';
-
+import { SEED_SCARLETT_ROUTINE } from '@mat-plan/db';
 import {
   buildDefaultRoutine,
   parseRoutineKey,
   resolveRoutine,
   routineConfigSchema,
   routineKeySchema,
+  STRENGTH_KEY,
   type RoutineConfig,
 } from '@mat-plan/shared';
+import { describe, expect, it } from 'vitest';
+
+import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
+import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 // A fixture catalog standing in for the app-side derived one (strength → check-ins → life). Includes a
 // TWO-COLON metric key to pin the colon-in-tail behaviour that the existing `activityKey:metricKey` scheme
@@ -118,5 +122,37 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
       ],
     };
     expect(resolveRoutine(scarlett, CATALOG)).not.toEqual(buildDefaultRoutine(CATALOG));
+  });
+
+  it('a fully-stale config (every item dropped) falls back to the default, never a blank routine', () => {
+    const allStale = { version: 1, order: [{ key: 'checkin:gone_a' }, { key: 'life:gone_b' }] };
+    expect(resolveRoutine(allStale, CATALOG)).toEqual(buildDefaultRoutine(CATALOG));
+  });
+
+  it('tolerates an unknown additive top-level field (forward-compat for PR 3), keeping the order', () => {
+    const withFuture = { version: 1, order: [{ key: 'strength' }], checkinAllowlist: ['x'] };
+    expect(resolveRoutine(withFuture, CATALOG).order).toEqual([{ key: 'strength' }]);
+  });
+});
+
+describe('parseRoutineKey — no-colon guard', () => {
+  it('returns a clean sentinel for a colon-less non-strength key (no truncated namespace)', () => {
+    expect(parseRoutineKey('foo')).toEqual({ namespace: 'foo', catalogKey: null });
+  });
+});
+
+// Binds the SEEDED routine (packages/db) to the REAL app catalog (CHECKIN_FIELDS / LIFE_ACTIVITY_KEYS,
+// which live app-side): a stale seed key is grammar-valid but silently DROPPED on render, weakening the
+// A≠B demo — this catches that drift at CI time.
+describe('the seeded routine binds to the live app catalog', () => {
+  it('every key in Scarlett’s seed resolves against the real catalog (nothing dropped)', () => {
+    const realCatalog = [
+      STRENGTH_KEY,
+      ...CHECKIN_FIELDS.map((f) => `checkin:${f.key}`),
+      ...LIFE_ACTIVITY_KEYS.map((k) => `life:${k}`),
+    ];
+    const resolved = resolveRoutine(SEED_SCARLETT_ROUTINE, realCatalog);
+    expect(resolved.order.length).toBe(SEED_SCARLETT_ROUTINE.order.length);
+    expect(resolved).not.toEqual(buildDefaultRoutine(realCatalog)); // A≠B holds against the live catalog
   });
 });

@@ -51,6 +51,9 @@ export type RoutineConfig = z.infer<typeof routineConfigSchema>;
 export function parseRoutineKey(key: string): { namespace: string; catalogKey: string | null } {
   if (key === STRENGTH_KEY) return { namespace: STRENGTH_KEY, catalogKey: null };
   const i = key.indexOf(':');
+  // A colon-less non-strength key has no valid namespace (a grammar-valid key always has one) — return a
+  // clean sentinel so a caller dispatches on the whole key + a null tail, never a truncated garbage prefix.
+  if (i === -1) return { namespace: key, catalogKey: null };
   return { namespace: key.slice(0, i), catalogKey: key.slice(i + 1) };
 }
 
@@ -66,12 +69,15 @@ export function buildDefaultRoutine(orderedCatalogKeys: readonly string[]): Rout
  * catalog` by construction). Forgiving, item-by-item:
  *   - null / non-object / wrong `version` → the default routine (the ships-dark path);
  *   - a valid config → keep only the items whose key is (a) grammar-valid AND (b) a live catalog key,
- *     dropping any stale/invalid item WITHOUT discarding the rest (a single bad key never nukes the routine).
+ *     dropping any stale/invalid item WITHOUT discarding the rest (a single bad key never nukes the routine);
+ *   - a config whose items ALL drop out (fully stale) → the default too, so a kid never renders a blank Today.
  */
 export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string[]): RoutineConfig {
+  // Loose outer parse: `version` reused from `routineConfigSchema` (so the two can't drift), `order` an array
+  // of opaque items filtered below. Deliberately NOT `.strict()` — a future additive top-level field (PR 3's
+  // check-in allowlist) must not fail the parse and silently discard the kid's authored order.
   const outer = z
-    .object({ version: z.literal(1), order: z.array(z.unknown()) })
-    .strict()
+    .object({ version: routineConfigSchema.shape.version, order: z.array(z.unknown()) })
     .safeParse(raw);
   if (!outer.success) return buildDefaultRoutine(orderedCatalogKeys);
 
@@ -81,5 +87,6 @@ export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string
     const item = routineItemSchema.safeParse(rawItem);
     if (item.success && allow.has(item.data.key)) order.push(item.data);
   }
-  return { version: 1, order };
+  // All items stale/invalid → fall back to the default (never a blank routine from a gone-stale config).
+  return order.length > 0 ? { version: 1, order } : buildDefaultRoutine(orderedCatalogKeys);
 }
