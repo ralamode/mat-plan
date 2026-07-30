@@ -7,10 +7,12 @@ import {
   MOVEMENT_SEED_ROWS,
   newId,
   PROFILE_KIND,
+  PROGRAM_SEED,
+  type ProgramBlockSeedRow,
   type RoutineConfig,
   UNITS,
 } from '@mat-plan/shared';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
@@ -156,5 +158,125 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
         ],
         where: isNull(schema.rampTargets.deletedAt),
       });
+  }
+
+  // V1-10: the programming blocks + prescriptions + per-kid load targets. Ships EMPTY today (PROGRAM_SEED =
+  // []); the loop below is a no-op until Ray's real block lands in a data-only PR (the LLM never authors loads).
+  await seedProgram(db, PROGRAM_SEED);
+}
+
+/**
+ * Expand a program seed (V1-10) into `program_blocks` → `prescriptions` → `prescription_targets`, idempotent
+ * by each table's partial-unique natural key. Row-by-row (config data, few rows): resolve each FK by its
+ * natural key (household + block by public_id/slug, movement by `movements.slug`, profile by public_id) with
+ * the existing `select({id}).where(eq(...))` idiom, insert with `onConflictDoNothing` whose arbiter REPEATS
+ * the partial index's `WHERE deleted_at IS NULL` (the V1-5 lesson), then re-resolve the id so children attach
+ * whether the parent was just inserted or already existed. Re-seed is INSERT-ONLY (a moved/replaced slot is a
+ * future authoring path, not re-seed). An empty seed makes every loop a no-op — no empty-VALUES insert to
+ * guard. Exported so `db:verify` can drive a non-empty fixture through the REAL resolver, not just the DDL.
+ * INVARIANT (caller's responsibility, mirroring the supersets writer): a target's profile belongs to the
+ * block's household — the seed authors profiles within the block's household; the slice-2 DAL scopes reads by
+ * that household join (BOLA). Unknown household/movement/profile refs are skipped defensively.
+ */
+export async function seedProgram(
+  db: NodePgDatabase<typeof schema>,
+  blocks: readonly ProgramBlockSeedRow[],
+): Promise<void> {
+  for (const block of blocks) {
+    const [household] = await db
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, block.householdPublicId));
+    if (!household) continue; // unknown household — skip (defensive; empty seed never reaches here)
+
+    await db
+      .insert(schema.programBlocks)
+      .values({
+        publicId: newId(),
+        householdId: household.id,
+        slug: block.slug,
+        name: block.name,
+        notes: block.notes,
+      })
+      .onConflictDoNothing({
+        target: [schema.programBlocks.householdId, schema.programBlocks.slug],
+        where: isNull(schema.programBlocks.deletedAt),
+      });
+    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key.
+    const [blockRow] = await db
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(
+        and(
+          eq(schema.programBlocks.householdId, household.id),
+          eq(schema.programBlocks.slug, block.slug),
+          isNull(schema.programBlocks.deletedAt),
+        ),
+      );
+    if (!blockRow) continue;
+
+    for (const p of block.prescriptions) {
+      const [movement] = await db
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(eq(schema.movements.slug, p.movementSlug));
+      if (!movement) continue; // unknown movement slug — skip
+
+      await db
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: blockRow.id,
+          dayRole: p.dayRole,
+          movementId: movement.id,
+          idx: p.idx,
+          sets: p.sets,
+          targetReps: p.targetReps,
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.prescriptions.blockId,
+            schema.prescriptions.dayRole,
+            schema.prescriptions.idx,
+          ],
+          where: isNull(schema.prescriptions.deletedAt),
+        });
+      const [presRow] = await db
+        .select({ id: schema.prescriptions.id })
+        .from(schema.prescriptions)
+        .where(
+          and(
+            eq(schema.prescriptions.blockId, blockRow.id),
+            eq(schema.prescriptions.dayRole, p.dayRole),
+            eq(schema.prescriptions.idx, p.idx),
+            isNull(schema.prescriptions.deletedAt),
+          ),
+        );
+      if (!presRow) continue;
+
+      for (const target of p.targets) {
+        const [profile] = await db
+          .select({ id: schema.profiles.id })
+          .from(schema.profiles)
+          .where(eq(schema.profiles.publicId, target.profilePublicId));
+        if (!profile) continue; // unknown profile — skip
+
+        await db
+          .insert(schema.prescriptionTargets)
+          .values({
+            publicId: newId(),
+            prescriptionId: presRow.id,
+            profileId: profile.id,
+            load: target.load,
+          })
+          .onConflictDoNothing({
+            target: [
+              schema.prescriptionTargets.prescriptionId,
+              schema.prescriptionTargets.profileId,
+            ],
+            where: isNull(schema.prescriptionTargets.deletedAt),
+          });
+      }
+    }
   }
 }

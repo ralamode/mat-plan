@@ -25,6 +25,10 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  DAY_ROLES,
+  newId,
+  PROGRAM_SEED,
+  type ProgramBlockSeedRow,
   type RoutineConfig,
   routineConfigSchema,
   ROUTINE_VERSION,
@@ -50,6 +54,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   seed,
+  seedProgram,
 } from '../src/seed';
 
 /**
@@ -1860,5 +1865,248 @@ await expectRejectedBy('ramp_targets_target_value_check', () =>
 console.log(
   '✓ V1-6b-1: ramp_targets rejections (natural-key UNIQUE, metric FK, profile FK, target CHECK)',
 );
+
+// ── V1-10 (PR 1): the programming data model (program_blocks → prescriptions → prescription_targets) ──
+// DB-only, ships dark; the seed ships EMPTY. Prove the SCHEMA (columns, CHECK↔const parity, FK/unique/CHECK
+// rejections) AND the seed RESOLVER — a test-only fixture driven through the REAL seedProgram, since the empty
+// PROGRAM_SEED otherwise leaves the resolve-by-slug/public_id + ON CONFLICT arbiter unexercised until real data.
+
+// The column set of a table, keyed by name → data_type. Extracted — the information_schema.columns cast
+// recurs (routine_config at ~line 133, entries earlier); one helper so the cast shape lives once.
+async function columnsOf(tableName: string): Promise<Map<string, string>> {
+  const res = await db.execute(
+    sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
+  );
+  const rows = (res as unknown as { rows: { column_name: string; data_type: string }[] }).rows;
+  return new Map(rows.map((r) => [r.column_name, r.data_type]));
+}
+
+const V1_10_COLUMNS = [
+  ['program_blocks', { public_id: 'uuid', household_id: 'bigint', slug: 'text', name: 'text' }],
+  [
+    'prescriptions',
+    {
+      public_id: 'uuid',
+      block_id: 'bigint',
+      day_role: 'text',
+      movement_id: 'bigint',
+      idx: 'integer',
+      sets: 'integer',
+      target_reps: 'text',
+    },
+  ],
+  [
+    'prescription_targets',
+    { public_id: 'uuid', prescription_id: 'bigint', profile_id: 'bigint', load: 'text' },
+  ],
+] as const;
+for (const [table, expected] of V1_10_COLUMNS) {
+  const cols = await columnsOf(table);
+  for (const [col, type] of Object.entries(expected)) {
+    assert.equal(cols.get(col), type, `V1-10: ${table}.${col} is ${type}`);
+  }
+}
+console.log('✓ V1-10: program_blocks / prescriptions / prescription_targets columns + types');
+
+// The frozen migration day_role list can't silently drift from the shared DAY_ROLES const.
+await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
+
+// The seed ships EMPTY — nothing is programmed until the data-only PR (the LLM never authors loads).
+assert.equal(PROGRAM_SEED.length, 0, 'V1-10: PROGRAM_SEED ships empty (mechanism only)');
+const seededBlocks = (
+  (await db.execute(sql`select count(*)::int as count from program_blocks`)).rows as unknown as {
+    count: number;
+  }[]
+)[0].count;
+assert.equal(seededBlocks, 0, 'V1-10: no program_blocks seeded (empty seed)');
+
+// Drive a TEST-ONLY fixture through the REAL seedProgram (its own household/profile/block slug so a future
+// real data-PR block can never collide). Proves resolve-by-slug + resolve-by-public_id + the arbiter.
+const VERIFY_HH_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e0';
+const VERIFY_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e1';
+await db
+  .insert(schema.households)
+  .values({ publicId: VERIFY_HH_PUBLIC_ID, name: 'Verify Programming HH' });
+const [verifyHh] = await db
+  .select({ id: schema.households.id })
+  .from(schema.households)
+  .where(eq(schema.households.publicId, VERIFY_HH_PUBLIC_ID));
+await db.insert(schema.profiles).values({
+  publicId: VERIFY_PROFILE_PUBLIC_ID,
+  name: 'Verify Kid',
+  kind: 'kid',
+  householdId: verifyHh.id,
+});
+const [anyMovement] = await db
+  .select({ id: schema.movements.id, slug: schema.movements.slug })
+  .from(schema.movements)
+  .limit(1);
+
+const programFixture: ProgramBlockSeedRow = {
+  householdPublicId: VERIFY_HH_PUBLIC_ID,
+  slug: 'verify_test_block',
+  name: 'Verify Test Block',
+  notes: null,
+  prescriptions: [
+    {
+      dayRole: 'strength',
+      movementSlug: anyMovement.slug,
+      idx: 0,
+      sets: 3,
+      targetReps: '5',
+      targets: [{ profilePublicId: VERIFY_PROFILE_PUBLIC_ID, load: '65' }],
+    },
+  ],
+};
+
+await seedProgram(asPg, [programFixture]);
+const graph = (
+  await db.execute(sql`
+    select pb.slug as block_slug, pr.day_role, pr.idx, pr.target_reps, m.slug as movement_slug,
+           pt.load, p.public_id as profile_public_id
+    from prescription_targets pt
+    join prescriptions pr on pr.id = pt.prescription_id
+    join program_blocks pb on pb.id = pr.block_id
+    join movements m on m.id = pr.movement_id
+    join profiles p on p.id = pt.profile_id
+    where pb.slug = 'verify_test_block'`)
+).rows as unknown as {
+  block_slug: string;
+  day_role: string;
+  idx: number;
+  target_reps: string;
+  movement_slug: string;
+  load: string;
+  profile_public_id: string;
+}[];
+assert.equal(graph.length, 1, 'V1-10: seedProgram wrote the block→prescription→target graph');
+assert.equal(graph[0].load, '65', 'V1-10: per-kid load round-trips verbatim');
+assert.equal(graph[0].target_reps, '5', 'V1-10: prescription target_reps round-trips');
+assert.equal(
+  graph[0].movement_slug,
+  anyMovement.slug,
+  'V1-10: prescription resolves movement by slug',
+);
+assert.equal(
+  graph[0].profile_public_id,
+  VERIFY_PROFILE_PUBLIC_ID,
+  'V1-10: target resolves profile by public_id',
+);
+
+// Idempotent re-run — exercises each ON CONFLICT arbiter's WHERE deleted_at IS NULL (the V1-5 lesson).
+await seedProgram(asPg, [programFixture]);
+const reseed = (
+  await db.execute(sql`
+    select
+      (select count(*)::int from program_blocks where slug = 'verify_test_block') as blocks,
+      (select count(*)::int from prescriptions pr
+        join program_blocks pb on pb.id = pr.block_id where pb.slug = 'verify_test_block') as prescriptions,
+      (select count(*)::int from prescription_targets pt
+        join prescriptions pr on pr.id = pt.prescription_id
+        join program_blocks pb on pb.id = pr.block_id where pb.slug = 'verify_test_block') as targets`)
+).rows as unknown as { blocks: number; prescriptions: number; targets: number }[];
+assert.deepEqual(
+  reseed[0],
+  { blocks: 1, prescriptions: 1, targets: 1 },
+  'V1-10: re-seed is idempotent (ON CONFLICT arbiters match the partial-unique indexes)',
+);
+console.log(
+  '✓ V1-10: seedProgram resolver + idempotent re-seed (block→prescription→target round-trips)',
+);
+
+// Resolve the fixture ids for the rejection probes.
+const [verifyBlock] = await db
+  .select({ id: schema.programBlocks.id })
+  .from(schema.programBlocks)
+  .where(
+    and(
+      eq(schema.programBlocks.householdId, verifyHh.id),
+      eq(schema.programBlocks.slug, 'verify_test_block'),
+    ),
+  );
+const [verifyPres] = await db
+  .select({ id: schema.prescriptions.id })
+  .from(schema.prescriptions)
+  .where(eq(schema.prescriptions.blockId, verifyBlock.id));
+const [verifyProfile] = await db
+  .select({ id: schema.profiles.id })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, VERIFY_PROFILE_PUBLIC_ID));
+
+// FK rejections (valid movement id so the row fails ONLY on the probed FK).
+await expectRejectedBy('prescriptions_block_id_program_blocks_id_fk', () =>
+  db.insert(schema.prescriptions).values({
+    publicId: newId(),
+    blockId: 9_999_999,
+    dayRole: 'strength',
+    movementId: anyMovement.id,
+    idx: 0,
+  }),
+);
+await expectRejectedBy('prescription_targets_profile_id_profiles_id_fk', () =>
+  db.insert(schema.prescriptionTargets).values({
+    publicId: newId(),
+    prescriptionId: verifyPres.id,
+    profileId: 9_999_999,
+    load: '1',
+  }),
+);
+
+// CHECK rejections (each row violates exactly one CHECK; distinct idx values avoid a unique collision masking it).
+await expectRejectedBy('prescriptions_day_role_check', () =>
+  db.insert(schema.prescriptions).values({
+    publicId: newId(),
+    blockId: verifyBlock.id,
+    dayRole: 'not_a_role',
+    movementId: anyMovement.id,
+    idx: 5,
+  }),
+);
+await expectRejectedBy('prescriptions_idx_check', () =>
+  db.insert(schema.prescriptions).values({
+    publicId: newId(),
+    blockId: verifyBlock.id,
+    dayRole: 'strength',
+    movementId: anyMovement.id,
+    idx: -1,
+  }),
+);
+await expectRejectedBy('prescriptions_sets_check', () =>
+  db.insert(schema.prescriptions).values({
+    publicId: newId(),
+    blockId: verifyBlock.id,
+    dayRole: 'strength',
+    movementId: anyMovement.id,
+    idx: 6,
+    sets: 0,
+  }),
+);
+
+// Partial-unique BOTH directions (the V1-5 soft-delete lesson): a LIVE duplicate target is rejected...
+await expectRejectedBy('uq_prescription_targets_prescription_profile', () =>
+  db.insert(schema.prescriptionTargets).values({
+    publicId: newId(),
+    prescriptionId: verifyPres.id,
+    profileId: verifyProfile.id,
+    load: 'dup',
+  }),
+);
+// ...but soft-deleting it frees the slot to re-insert (the partial WHERE deleted_at IS NULL arbiter).
+await db
+  .update(schema.prescriptionTargets)
+  .set({ deletedAt: new Date() })
+  .where(
+    and(
+      eq(schema.prescriptionTargets.prescriptionId, verifyPres.id),
+      eq(schema.prescriptionTargets.profileId, verifyProfile.id),
+    ),
+  );
+await db.insert(schema.prescriptionTargets).values({
+  publicId: newId(),
+  prescriptionId: verifyPres.id,
+  profileId: verifyProfile.id,
+  load: '70',
+}); // must NOT throw — the partial index excludes the soft-deleted row
+console.log('✓ V1-10: FK + CHECK + partial-unique (both directions) rejections');
 
 console.log('✓ verify passed');
