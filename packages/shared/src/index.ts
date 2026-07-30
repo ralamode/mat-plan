@@ -22,4 +22,5 @@ export * from './bodyweight';
 export * from './strength';
 export * from './strength-session';
 export * from './routine';
+export * from './seed-ids';
 export * from './programming';
