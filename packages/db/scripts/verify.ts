@@ -86,6 +86,18 @@ async function expectRejectedBy(constraintName: string, fn: () => Promise<unknow
   );
 }
 
+/**
+ * The column set of a table, keyed by name → data_type — the `information_schema.columns` cast shape lives
+ * ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
+ */
+async function columnsOf(tableName: string): Promise<Map<string, string>> {
+  const res = await db.execute(
+    sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
+  );
+  const rows = (res as unknown as { rows: { column_name: string; data_type: string }[] }).rows;
+  return new Map(rows.map((r) => [r.column_name, r.data_type]));
+}
+
 await migrate(db, { migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)) });
 console.log('✓ migration applied to PGlite');
 
@@ -135,11 +147,11 @@ for (const p of profiles) {
 console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 
 // V1-18 (PR 1a): the per-kid routine_config column + the two-kid A≠B seed.
-const routineColRes = await db.execute(
-  sql`select data_type from information_schema.columns where table_name = 'profiles' and column_name = 'routine_config'`,
+assert.equal(
+  (await columnsOf('profiles')).get('routine_config'),
+  'jsonb',
+  'V1-18: profiles.routine_config is jsonb',
 );
-const routineColRows = (routineColRes as unknown as { rows: { data_type: string }[] }).rows;
-assert.equal(routineColRows[0]?.data_type, 'jsonb', 'V1-18: profiles.routine_config is jsonb');
 const liam = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
 const scarlett = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
 // A≠B on a fresh DB: Liam is NULL (→ the app's default routine, ships-dark), Scarlett is explicit.
@@ -455,20 +467,15 @@ console.log('✓ round-trip one entry per input_shape (all satisfy the at-most-o
 
 // (9) NO bespoke column: `entries` has no json/jsonb column and no column named after any
 // activity key (proves the tagged union, not an EAV/per-activity-column sprawl).
-const entryColsRes = await db.execute(sql`
-  SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'entries'`);
-const entryCols = (
-  entryColsRes as unknown as { rows: { column_name: string; data_type: string }[] }
-).rows;
-for (const c of entryCols) {
+const entryCols = await columnsOf('entries');
+for (const [name, dataType] of entryCols) {
   assert.ok(
-    c.data_type !== 'json' && c.data_type !== 'jsonb',
-    `entries.${c.column_name} is not json/jsonb (no EAV)`,
+    dataType !== 'json' && dataType !== 'jsonb',
+    `entries.${name} is not json/jsonb (no EAV)`,
   );
 }
-const entryColNames = new Set(entryCols.map((c) => c.column_name));
 for (const key of Object.keys(ACTIVITY_METRIC_MAP)) {
-  assert.ok(!entryColNames.has(key), `no bespoke per-activity column named '${key}'`);
+  assert.ok(!entryCols.has(key), `no bespoke per-activity column named '${key}'`);
 }
 console.log(
   '✓ no bespoke column: entries is a tagged union (no json/jsonb, no per-activity column)',
@@ -710,12 +717,20 @@ async function assertCheckCoversConst(conname: string, values: readonly string[]
     SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = ${conname}`);
   const rows = (res as unknown as { rows: { def: string }[] }).rows;
   assert.equal(rows.length, 1, `${conname} exists`);
+  const def = rows[0].def;
   for (const value of values) {
-    assert.ok(
-      rows[0].def.includes(`'${value}'`),
-      `${conname} includes shared const member '${value}'`,
-    );
+    assert.ok(def.includes(`'${value}'`), `${conname} includes shared const member '${value}'`);
   }
+  // BOTH directions: the CHECK's accepted set must equal the shared const EXACTLY — an inlined literal the
+  // const doesn't have (a misspelling, or a value the app can't map) is drift the coverage loop above misses.
+  // pg_get_constraintdef quotes enum literals with single quotes (identifiers use double quotes), so every
+  // single-quoted token IS an accepted value.
+  const inlined = [...new Set([...def.matchAll(/'([^']*)'/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(
+    inlined,
+    [...values].sort(),
+    `${conname} accepts EXACTLY its shared const (no extra/misspelled literal)`,
+  );
 }
 await assertCheckCoversConst('activity_types_input_shape_check', ACTIVITY_INPUT_SHAPES);
 await assertCheckCoversConst('movements_pattern_check', MOVEMENT_PATTERNS);
@@ -1871,16 +1886,6 @@ console.log(
 // rejections) AND the seed RESOLVER — a test-only fixture driven through the REAL seedProgram, since the empty
 // PROGRAM_SEED otherwise leaves the resolve-by-slug/public_id + ON CONFLICT arbiter unexercised until real data.
 
-// The column set of a table, keyed by name → data_type. Extracted — the information_schema.columns cast
-// recurs (routine_config at ~line 133, entries earlier); one helper so the cast shape lives once.
-async function columnsOf(tableName: string): Promise<Map<string, string>> {
-  const res = await db.execute(
-    sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
-  );
-  const rows = (res as unknown as { rows: { column_name: string; data_type: string }[] }).rows;
-  return new Map(rows.map((r) => [r.column_name, r.data_type]));
-}
-
 const V1_10_COLUMNS = [
   ['program_blocks', { public_id: 'uuid', household_id: 'bigint', slug: 'text', name: 'text' }],
   [
@@ -2108,5 +2113,40 @@ await db.insert(schema.prescriptionTargets).values({
   load: '70',
 }); // must NOT throw — the partial index excludes the soft-deleted row
 console.log('✓ V1-10: FK + CHECK + partial-unique (both directions) rejections');
+
+// The seed resolver fails LOUDLY on an unresolved ref (here a typo'd movement slug), not a silent skip — so
+// a future data-only PR's authoring mistake is caught at seed time, never shipped as a missing prescription.
+await assert.rejects(
+  seedProgram(asPg, [
+    {
+      householdPublicId: VERIFY_HH_PUBLIC_ID,
+      slug: 'verify_typo_block',
+      name: 'Verify Typo Block',
+      notes: null,
+      prescriptions: [
+        {
+          dayRole: 'strength',
+          movementSlug: 'definitely_not_a_movement',
+          idx: 0,
+          sets: 1,
+          targetReps: null,
+          targets: [],
+        },
+      ],
+    },
+  ]),
+  /unknown movement slug/,
+  'V1-10: seedProgram throws on an unresolved movement slug (no silent skip)',
+);
+// Refs are resolved BEFORE the block insert, so the throw left nothing written.
+const typoBlocks = (
+  (
+    await db.execute(
+      sql`select count(*)::int as count from program_blocks where slug = 'verify_typo_block'`,
+    )
+  ).rows as unknown as { count: number }[]
+)[0].count;
+assert.equal(typoBlocks, 0, 'V1-10: a resolver throw leaves no partial block written');
+console.log('✓ V1-10: seedProgram fails loudly (+ writes nothing) on an unresolved ref');
 
 console.log('✓ verify passed');
