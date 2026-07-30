@@ -428,3 +428,107 @@ export const rampTargets = pgTable(
     check('ramp_targets_target_value_check', sql`${t.targetValue} >= 0`),
   ],
 );
+
+/**
+ * program_block — a household's named training plan (V1-10; spec.md §4). Household-scoped AUTHORED content
+ * (the profiles idiom), not a global reference catalog. Config data → NO client_id; idempotency = the
+ * partial-unique natural key `(household_id, slug)` (like ramp_targets/day_readiness). `slug` (not raw
+ * `name`) is the identity so a re-seed can't duplicate a block on whitespace/casing (the movements.slug
+ * idiom); the seed sets slug = movementSlug(name).
+ */
+export const programBlocks = pgTable(
+  'program_blocks',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    householdId: bigint('household_id', { mode: 'number' })
+      .notNull()
+      .references(() => households.id),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    notes: text('notes'),
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_program_blocks_household').on(t.householdId), // covering index for the household FK
+    uniqueIndex('uq_program_blocks_household_slug')
+      .on(t.householdId, t.slug)
+      .where(sql`${t.deletedAt} is null`),
+  ],
+);
+
+/**
+ * prescription — one movement in a block's day (V1-10; spec.md §4). `day_role` (text+CHECK ∈ shared
+ * DAY_ROLES — its OWN vocabulary, a superset of SESSION_TYPES incl. strength_a/strength_b) + `idx` order it
+ * within the day; `sets`/`target_reps` are the prescription shared across kids (per-kid loads live in
+ * `prescription_targets`). Config → no client_id; natural key `(block_id, day_role, idx)` is a SLOT arbiter
+ * (a movement may legitimately appear twice in a day — warm-up + working — so the key is NOT movement_id),
+ * which means a re-seed is INSERT-ONLY (onConflictDoNothing never reorders/replaces a slot — the ramp_targets
+ * precedent; block edits are a future authoring path, not re-seed). `target_reps` is TEXT (lossless "8-12"/
+ * "AMRAP", like entries.raw_reps).
+ */
+export const prescriptions = pgTable(
+  'prescriptions',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(),
+    blockId: bigint('block_id', { mode: 'number' })
+      .notNull()
+      .references(() => programBlocks.id),
+    dayRole: text('day_role').notNull(), // mirrors shared DAY_ROLES (pinned by db:verify)
+    movementId: bigint('movement_id', { mode: 'number' })
+      .notNull()
+      .references(() => movements.id),
+    idx: integer('idx').notNull(), // 0-based order within the day (matches entry_sets.idx idiom)
+    sets: integer('sets'), // prescribed set count (nullable — a movement-only prescription)
+    targetReps: text('target_reps'), // verbatim/lossless: "3", "8-12", "AMRAP"
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_prescriptions_block').on(t.blockId), // covering index for the block FK
+    index('idx_prescriptions_movement').on(t.movementId), // covering index for the movement FK
+    uniqueIndex('uq_prescriptions_block_day_role_idx')
+      .on(t.blockId, t.dayRole, t.idx)
+      .where(sql`${t.deletedAt} is null`),
+    // Inlines the shared DAY_ROLES literals (a CHECK can't import a const); db:verify pins the accepted set
+    // to DAY_ROLES via assertCheckCoversConst so this frozen list can't silently drift from shared.
+    check(
+      'prescriptions_day_role_check',
+      sql`${t.dayRole} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'strength_a', 'strength_b')`,
+    ),
+    check('prescriptions_idx_check', sql`${t.idx} >= 0`),
+    check('prescriptions_sets_check', sql`${t.sets} is null or ${t.sets} > 0`),
+  ],
+);
+
+/**
+ * prescription_target — a per-profile SUGGESTED LOAD on a prescription (V1-10; spec.md §4: "per-profile
+ * loads, a real table not jsonb"). HUMAN-AUTHORED — the LLM never authors loads (AGENTS.md). `load` is
+ * verbatim/lossless TEXT ("65"/"BW"/"50ft", like entries.raw_load). Config → no client_id; natural key
+ * `(prescription_id, profile_id)`. INVARIANT (writer-enforced, not schema — the supersets precedent): the
+ * target's profile must belong to the block's household; the slice-2 DAL scopes reads by that household join
+ * (BOLA), and the data-PR seed resolves profiles within the block's household. A composite-FK hardening
+ * (denormalized household_id) is a future option if a writer ever needs schema-level enforcement.
+ */
+export const prescriptionTargets = pgTable(
+  'prescription_targets',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(),
+    prescriptionId: bigint('prescription_id', { mode: 'number' })
+      .notNull()
+      .references(() => prescriptions.id),
+    profileId: bigint('profile_id', { mode: 'number' })
+      .notNull()
+      .references(() => profiles.id),
+    load: text('load'), // per-kid suggested load, verbatim (nullable)
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_prescription_targets_prescription').on(t.prescriptionId), // covering index for the FK
+    index('idx_prescription_targets_profile').on(t.profileId), // covering index for the profile FK
+    uniqueIndex('uq_prescription_targets_prescription_profile')
+      .on(t.prescriptionId, t.profileId)
+      .where(sql`${t.deletedAt} is null`),
+  ],
+);

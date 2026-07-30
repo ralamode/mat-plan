@@ -7,10 +7,12 @@ import {
   MOVEMENT_SEED_ROWS,
   newId,
   PROFILE_KIND,
+  PROGRAM_SEED,
+  type ProgramBlockSeedRow,
   type RoutineConfig,
   UNITS,
 } from '@mat-plan/shared';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
@@ -156,5 +158,169 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
         ],
         where: isNull(schema.rampTargets.deletedAt),
       });
+  }
+
+  // V1-10: the programming blocks + prescriptions + per-kid load targets. Ships EMPTY today (PROGRAM_SEED =
+  // []); the loop below is a no-op until Ray's real block lands in a data-only PR (the LLM never authors loads).
+  await seedProgram(db, PROGRAM_SEED);
+}
+
+/**
+ * Expand a program seed (V1-10) into `program_blocks` → `prescriptions` → `prescription_targets`, idempotent
+ * by each table's partial-unique natural key. Row-by-row (config data, few rows): resolve each FK by its
+ * natural key (household + block by public_id/slug, movement by `movements.slug`, profile by public_id) with
+ * the existing `select({id}).where(eq(...))` idiom, insert with `onConflictDoNothing` whose arbiter REPEATS
+ * the partial index's `WHERE deleted_at IS NULL` (the V1-5 lesson), then re-resolve the id so children attach
+ * whether the parent was just inserted or already existed. Re-seed is INSERT-ONLY (a moved/replaced slot is a
+ * future authoring path, not re-seed). An empty seed makes every loop a no-op.
+ * Every referenced id is resolved among LIVE rows (`isNull(deleted_at)`) and an unresolved ref THROWS —
+ * a misspelled movement slug / household / profile public_id in a future data-only PR fails the seed LOUDLY
+ * (caught by CI's `db:seed`/`db:verify`) instead of silently dropping a prescription or an entire block. Refs
+ * are resolved BEFORE the block insert, so a typo throws with nothing written. Each block resolves its
+ * movements + profiles ONCE (one `inArray` query each, not an N+1 per prescription/target). Exported so
+ * `db:verify` drives a non-empty fixture through the REAL resolver, not just the DDL.
+ * INVARIANT (caller's responsibility, mirroring the supersets writer): a target's profile belongs to the
+ * block's household — the seed authors profiles within the block's household; the slice-2 DAL scopes reads by
+ * that household join (BOLA).
+ */
+export async function seedProgram(
+  db: NodePgDatabase<typeof schema>,
+  blocks: readonly ProgramBlockSeedRow[],
+): Promise<void> {
+  for (const block of blocks) {
+    const [household] = await db
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(
+        and(
+          eq(schema.households.publicId, block.householdPublicId),
+          isNull(schema.households.deletedAt),
+        ),
+      );
+    if (!household) {
+      throw new Error(
+        `seedProgram: unknown household "${block.householdPublicId}" for block "${block.slug}"`,
+      );
+    }
+
+    // Resolve every referenced movement + profile ONCE for the block (one query each, no N+1), among LIVE
+    // rows; a ref that doesn't resolve is an authoring typo → throw (before any write) rather than skip.
+    const movementSlugs = [...new Set(block.prescriptions.map((p) => p.movementSlug))];
+    const movementRows = movementSlugs.length
+      ? await db
+          .select({ id: schema.movements.id, slug: schema.movements.slug })
+          .from(schema.movements)
+          .where(inArray(schema.movements.slug, movementSlugs))
+      : [];
+    const movementIdBySlug = new Map(movementRows.map((m) => [m.slug, m.id]));
+    for (const slug of movementSlugs) {
+      if (!movementIdBySlug.has(slug)) {
+        throw new Error(`seedProgram: unknown movement slug "${slug}" in block "${block.slug}"`);
+      }
+    }
+
+    const profilePublicIds = [
+      ...new Set(block.prescriptions.flatMap((p) => p.targets.map((t) => t.profilePublicId))),
+    ];
+    const profileRows = profilePublicIds.length
+      ? await db
+          .select({ id: schema.profiles.id, publicId: schema.profiles.publicId })
+          .from(schema.profiles)
+          .where(
+            and(
+              inArray(schema.profiles.publicId, profilePublicIds),
+              isNull(schema.profiles.deletedAt),
+            ),
+          )
+      : [];
+    const profileIdByPublicId = new Map(profileRows.map((p) => [p.publicId, p.id]));
+    for (const publicId of profilePublicIds) {
+      if (!profileIdByPublicId.has(publicId)) {
+        throw new Error(`seedProgram: unknown profile "${publicId}" in block "${block.slug}"`);
+      }
+    }
+
+    await db
+      .insert(schema.programBlocks)
+      .values({
+        publicId: newId(),
+        householdId: household.id,
+        slug: block.slug,
+        name: block.name,
+        notes: block.notes,
+      })
+      .onConflictDoNothing({
+        target: [schema.programBlocks.householdId, schema.programBlocks.slug],
+        where: isNull(schema.programBlocks.deletedAt),
+      });
+    // Re-resolve the block id (just-inserted OR pre-existing) by its natural key.
+    const [blockRow] = await db
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(
+        and(
+          eq(schema.programBlocks.householdId, household.id),
+          eq(schema.programBlocks.slug, block.slug),
+          isNull(schema.programBlocks.deletedAt),
+        ),
+      );
+    if (!blockRow)
+      throw new Error(`seedProgram: block "${block.slug}" failed to resolve after upsert`);
+
+    for (const p of block.prescriptions) {
+      await db
+        .insert(schema.prescriptions)
+        .values({
+          publicId: newId(),
+          blockId: blockRow.id,
+          dayRole: p.dayRole,
+          movementId: movementIdBySlug.get(p.movementSlug)!,
+          idx: p.idx,
+          sets: p.sets,
+          targetReps: p.targetReps,
+        })
+        .onConflictDoNothing({
+          target: [
+            schema.prescriptions.blockId,
+            schema.prescriptions.dayRole,
+            schema.prescriptions.idx,
+          ],
+          where: isNull(schema.prescriptions.deletedAt),
+        });
+      const [presRow] = await db
+        .select({ id: schema.prescriptions.id })
+        .from(schema.prescriptions)
+        .where(
+          and(
+            eq(schema.prescriptions.blockId, blockRow.id),
+            eq(schema.prescriptions.dayRole, p.dayRole),
+            eq(schema.prescriptions.idx, p.idx),
+            isNull(schema.prescriptions.deletedAt),
+          ),
+        );
+      if (!presRow) {
+        throw new Error(
+          `seedProgram: prescription (block "${block.slug}", ${p.dayRole}#${p.idx}) failed to resolve after upsert`,
+        );
+      }
+
+      for (const target of p.targets) {
+        await db
+          .insert(schema.prescriptionTargets)
+          .values({
+            publicId: newId(),
+            prescriptionId: presRow.id,
+            profileId: profileIdByPublicId.get(target.profilePublicId)!,
+            load: target.load,
+          })
+          .onConflictDoNothing({
+            target: [
+              schema.prescriptionTargets.prescriptionId,
+              schema.prescriptionTargets.profileId,
+            ],
+            where: isNull(schema.prescriptionTargets.deletedAt),
+          });
+      }
+    }
   }
 }
