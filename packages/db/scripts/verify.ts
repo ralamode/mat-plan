@@ -1902,7 +1902,13 @@ const V1_10_COLUMNS = [
   ],
   [
     'prescription_targets',
-    { public_id: 'uuid', prescription_id: 'bigint', profile_id: 'bigint', load: 'text' },
+    {
+      public_id: 'uuid',
+      prescription_id: 'bigint',
+      profile_id: 'bigint',
+      load: 'text',
+      reps: 'text',
+    },
   ],
 ] as const;
 for (const [table, expected] of V1_10_COLUMNS) {
@@ -1916,14 +1922,78 @@ console.log('✓ V1-10: program_blocks / prescriptions / prescription_targets co
 // The frozen migration day_role list can't silently drift from the shared DAY_ROLES const.
 await assertCheckCoversConst('prescriptions_day_role_check', DAY_ROLES);
 
-// The seed ships EMPTY — nothing is programmed until the data-only PR (the LLM never authors loads).
-assert.equal(PROGRAM_SEED.length, 0, 'V1-10: PROGRAM_SEED ships empty (mechanism only)');
+// The seed is now POPULATED with Ray's real block (V1-10 PR 1b) — prove it seeded + resolved end-to-end.
+assert.ok(PROGRAM_SEED.length >= 1, 'V1-10: PROGRAM_SEED is populated (Ray’s real block)');
 const seededBlocks = (
   (await db.execute(sql`select count(*)::int as count from program_blocks`)).rows as unknown as {
     count: number;
   }[]
 )[0].count;
-assert.equal(seededBlocks, 0, 'V1-10: no program_blocks seeded (empty seed)');
+// EXACT count (not just ≥1): the DB must hold precisely the blocks PROGRAM_SEED declares — nothing extra
+// (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard provided).
+assert.equal(
+  seededBlocks,
+  PROGRAM_SEED.length,
+  'V1-10: exactly PROGRAM_SEED’s blocks are seeded (no unexpected extras)',
+);
+
+// The kids_s&c_foundation block resolved all 3 strength days × 7 movements, with per-kid loads/reps intact.
+const realBlock = (
+  await db.execute(sql`
+    select pr.day_role, pr.idx, pr.target_reps, m.slug as movement_slug, p.public_id as profile_public_id,
+           pt.load, pt.reps
+    from prescription_targets pt
+    join prescriptions pr on pr.id = pt.prescription_id
+    join program_blocks pb on pb.id = pr.block_id
+    join movements m on m.id = pr.movement_id
+    join profiles p on p.id = pt.profile_id
+    where pb.slug = 'kids_s&c_foundation'`)
+).rows as unknown as {
+  day_role: string;
+  idx: number;
+  target_reps: string;
+  movement_slug: string;
+  profile_public_id: string;
+  load: string | null;
+  reps: string | null;
+}[];
+// 3 days × 7 movements × 2 kids = 42 target rows; 21 distinct prescriptions.
+assert.equal(
+  realBlock.length,
+  42,
+  'V1-10: the seeded block has 42 per-kid targets (21 prescriptions × 2 kids)',
+);
+assert.equal(
+  new Set(realBlock.map((r) => `${r.day_role}#${r.idx}`)).size,
+  21,
+  'V1-10: 21 distinct (day_role, idx) prescription slots',
+);
+const find = (dayRole: string, slug: string, profile: string) =>
+  realBlock.find(
+    (r) => r.day_role === dayRole && r.movement_slug === slug && r.profile_public_id === profile,
+  );
+// Spot-check the transcription: shared load, per-kid load, and a per-kid reps override.
+assert.equal(
+  find('strength_a', 'front_squat', SEED_PROFILE_PUBLIC_ID)?.load,
+  '60',
+  'V1-10: Liam front squat 60',
+);
+assert.equal(
+  find('strength_a', 'front_squat', SEED_PROFILE_2_PUBLIC_ID)?.load,
+  '65',
+  'V1-10: Scarlett front squat 65',
+);
+assert.equal(
+  find('strength_a', 'pull-up', SEED_PROFILE_2_PUBLIC_ID)?.reps,
+  '5, last AMRAP',
+  'V1-10: Scarlett’s per-kid pull-up reps override round-trips',
+);
+assert.equal(
+  find('strength_a', 'pull-up', SEED_PROFILE_PUBLIC_ID)?.reps,
+  '4',
+  'V1-10: Liam’s per-kid pull-up reps override round-trips',
+);
+console.log('✓ V1-10: Ray’s real block seeded — 21 prescriptions, per-kid loads + reps intact');
 
 // Drive a TEST-ONLY fixture through the REAL seedProgram (its own household/profile/block slug so a future
 // real data-PR block can never collide). Proves resolve-by-slug + resolve-by-public_id + the arbiter.
@@ -1959,7 +2029,7 @@ const programFixture: ProgramBlockSeedRow = {
       idx: 0,
       sets: 3,
       targetReps: '5',
-      targets: [{ profilePublicId: VERIFY_PROFILE_PUBLIC_ID, load: '65' }],
+      targets: [{ profilePublicId: VERIFY_PROFILE_PUBLIC_ID, load: '65', reps: '4, last AMRAP' }],
     },
   ],
 };
@@ -1968,7 +2038,7 @@ await seedProgram(asPg, [programFixture]);
 const graph = (
   await db.execute(sql`
     select pb.slug as block_slug, pr.day_role, pr.idx, pr.target_reps, m.slug as movement_slug,
-           pt.load, p.public_id as profile_public_id
+           pt.load, pt.reps, p.public_id as profile_public_id
     from prescription_targets pt
     join prescriptions pr on pr.id = pt.prescription_id
     join program_blocks pb on pb.id = pr.block_id
@@ -1982,10 +2052,12 @@ const graph = (
   target_reps: string;
   movement_slug: string;
   load: string;
+  reps: string | null;
   profile_public_id: string;
 }[];
 assert.equal(graph.length, 1, 'V1-10: seedProgram wrote the block→prescription→target graph');
 assert.equal(graph[0].load, '65', 'V1-10: per-kid load round-trips verbatim');
+assert.equal(graph[0].reps, '4, last AMRAP', 'V1-10: per-kid reps override round-trips verbatim');
 assert.equal(graph[0].target_reps, '5', 'V1-10: prescription target_reps round-trips');
 assert.equal(
   graph[0].movement_slug,

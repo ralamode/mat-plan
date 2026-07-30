@@ -206,6 +206,74 @@ export const MOVEMENT_SEED_ROWS = [
     unitDefault: 'lb',
     isBodyweight: false,
   },
+  // ── V1-10: movements from Ray's Kids S&C Foundation block (docs/plans/v1-10-two-week-program-source.md).
+  //    Pull-Up / Weighted
+  //    Chin reuse `pull-up` (…053), DB OHP reuses `overhead_shoulder_press` (…058), Weighted Dips reuse `dips`
+  //    (…059) via the load field — only genuinely-distinct movements are added here.
+  {
+    publicId: seedPublicId('065'),
+    slug: 'med-ball_slam',
+    name: 'Med-Ball Slam',
+    pattern: 'hinge',
+    unitDefault: null,
+    isBodyweight: false,
+  },
+  {
+    publicId: seedPublicId('066'),
+    slug: 'trap-bar_deadlift',
+    name: 'Trap-Bar Deadlift',
+    pattern: 'hinge',
+    unitDefault: 'lb',
+    isBodyweight: false,
+  },
+  {
+    publicId: seedPublicId('067'),
+    slug: '1-arm_db_row',
+    name: '1-Arm DB Row',
+    pattern: 'horizontal_pull',
+    unitDefault: 'lb',
+    isBodyweight: false,
+  },
+  {
+    publicId: seedPublicId('068'),
+    slug: 'ab_rollout',
+    name: 'Ab Rollout',
+    pattern: 'core',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    publicId: seedPublicId('069'),
+    slug: 'broad_jump',
+    name: 'Broad Jump',
+    pattern: 'jump',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    publicId: seedPublicId('06a'),
+    slug: 'barbell_hip_thrust',
+    name: 'Barbell Hip Thrust',
+    pattern: 'hinge',
+    unitDefault: 'lb',
+    isBodyweight: false,
+  },
+  {
+    publicId: seedPublicId('06b'),
+    slug: 'farmer_carry',
+    name: 'Farmer Carry',
+    pattern: 'carry',
+    unitDefault: 'lb',
+    isBodyweight: false,
+  },
+  {
+    publicId: seedPublicId('06c'),
+    slug: 'hollow-body_hold',
+    name: 'Hollow-Body Hold',
+    pattern: 'core',
+    unitDefault: null,
+    isBodyweight: true,
+  },
 ] as const satisfies readonly MovementSeedRow[];
 
 /** Runtime guard the coverage test also pins: seed slug must equal `movementSlug(name)`. */

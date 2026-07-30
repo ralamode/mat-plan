@@ -10,6 +10,9 @@ import {
   PROGRAM_SEED,
   type ProgramBlockSeedRow,
   type RoutineConfig,
+  SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_PUBLIC_ID,
   UNITS,
 } from '@mat-plan/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
@@ -51,14 +54,14 @@ export const SEED_SCARLETT_ROUTINE = {
  * DO NOTHING).
  */
 
-// Fixed UUIDv7s for the single-tenant v0/v1 seed rows (stable identity for idempotency).
-export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
-// V1-3: two kid profiles (Liam + Scarlett) under the root household — the picker tiles.
-// SEED_PROFILE_PUBLIC_ID keeps the v0 id (was "Athlete One", now Liam) so prod's existing
-// row is matched by public_id on re-seed (ON CONFLICT DO NOTHING → prod keeps its name;
-// a prod rename is out of scope). SEED_PROFILE_2_PUBLIC_ID (Scarlett) is a new fixed id.
-export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
-export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
+// The fixed seed public_ids now live in `@mat-plan/shared` (packages/shared/src/seed-ids.ts) so the app-side
+// PROGRAM_SEED can reference the same household + kids; re-exported here so existing importers (db:verify,
+// tests) keep resolving them from '../src/seed'.
+export {
+  SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_PUBLIC_ID,
+  SEED_PROFILE_2_PUBLIC_ID,
+} from '@mat-plan/shared';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
   await db.insert(schema.units).values(UNITS).onConflictDoNothing({ target: schema.units.code });
@@ -312,6 +315,7 @@ export async function seedProgram(
             prescriptionId: presRow.id,
             profileId: profileIdByPublicId.get(target.profilePublicId)!,
             load: target.load,
+            reps: target.reps ?? null, // per-kid reps override (null → the prescription's shared target_reps)
           })
           .onConflictDoNothing({
             target: [

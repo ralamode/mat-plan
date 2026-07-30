@@ -494,7 +494,7 @@ export const prescriptions = pgTable(
     // to DAY_ROLES via assertCheckCoversConst so this frozen list can't silently drift from shared.
     check(
       'prescriptions_day_role_check',
-      sql`${t.dayRole} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'strength_a', 'strength_b')`,
+      sql`${t.dayRole} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'strength_a', 'strength_b', 'strength_c')`,
     ),
     check('prescriptions_idx_check', sql`${t.idx} >= 0`),
     check('prescriptions_sets_check', sql`${t.sets} is null or ${t.sets} > 0`),
@@ -522,6 +522,9 @@ export const prescriptionTargets = pgTable(
       .notNull()
       .references(() => profiles.id),
     load: text('load'), // per-kid suggested load, verbatim (nullable)
+    // V1-10 PR 1b: per-kid REPS override. null → use prescriptions.target_reps (the common case); non-null →
+    // this kid deviates (Ray's kids differ on some pull/chin sets). Verbatim/lossless text, like target_reps.
+    reps: text('reps'),
     ...timestamps,
   },
   (t) => [
