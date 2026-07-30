@@ -5,7 +5,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
-import { SESSION_TYPES, type SessionType } from './sessions';
+import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions';
 
 /**
  * Programming contract (V1-10) — the shared grammar for `program_block` → `prescription` →
@@ -46,6 +46,23 @@ export const DAY_ROLE_TO_SESSION_TYPE: Record<DayRole, SessionType> = {
   strength_b: 'strength',
   strength_c: 'strength',
 };
+
+/**
+ * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
+ * header. DERIVED from `SESSION_TYPE_LABELS` (never re-typed): `SESSION_TYPE_LABELS` alone collapses
+ * strength_a/b/c → "Strength", so the split days append their letter suffix. Built as a map (not a
+ * function) so it is exhaustive over `DayRole` at compile time, like `DAY_ROLE_TO_SESSION_TYPE`.
+ */
+export const DAY_ROLE_LABELS: Record<DayRole, string> = Object.fromEntries(
+  DAY_ROLES.map((role) => {
+    const base = SESSION_TYPE_LABELS[DAY_ROLE_TO_SESSION_TYPE[role]];
+    // 'strength_a' → ' A'; a 1:1 role (its own name) gets no suffix.
+    const split = role.startsWith('strength_')
+      ? ` ${role.slice('strength_'.length).toUpperCase()}`
+      : '';
+    return [role, `${base}${split}`];
+  }),
+) as Record<DayRole, string>;
 
 /**
  * A per-profile suggested load on a prescription — HUMAN-AUTHORED (never the LLM). `load` is verbatim and

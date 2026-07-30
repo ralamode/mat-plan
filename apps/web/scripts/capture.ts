@@ -39,6 +39,14 @@ export async function captureScreenshot(opts: {
   baseUrl: string;
   /** Filename stem (no extension). Defaults to a slug of the route. */
   name?: string;
+  /**
+   * IANA zone to emulate in the browser (V1-10). The app derives "today" — and therefore the day's
+   * PROGRAM — from the device's local calendar date (V1-6c: `TimeZoneSync` reports the browser zone via
+   * the `tz` cookie, and the RSC re-renders on it). Setting this captures a screen as it renders on a
+   * chosen local day, which is the only way to shoot a weekday-conditional surface (the Mon/Wed/Fri
+   * program card) without waiting for that weekday. Omitted → the host's zone, the normal case.
+   */
+  timeZone?: string;
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
@@ -55,9 +63,12 @@ export async function captureScreenshot(opts: {
         deviceScaleFactor: vp.touch ? 2 : 1,
         isMobile: vp.touch,
         hasTouch: vp.touch,
+        ...(opts.timeZone ? { timezoneId: opts.timeZone } : {}),
       });
       const page = await context.newPage();
       await gateLogin(page);
+      // `networkidle` covers the TimeZoneSync `router.refresh()` an emulated zone triggers, so the
+      // shot is of the re-rendered (correct local day) page, not the first-paint default-zone one.
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       const path = `.screenshots/${name}-${vp.suffix}.png`;
       await page.screenshot({ path, fullPage: true });

@@ -387,7 +387,12 @@ async function waitForServer(baseUrl: string, timeoutMs = 90_000): Promise<void>
   throw new Error(`server did not become ready at ${baseUrl} within ${timeoutMs}ms`);
 }
 
-async function runEphemeral(route: string, state: StateName, name: string): Promise<void> {
+async function runEphemeral(
+  route: string,
+  state: StateName,
+  name: string,
+  timeZone?: string,
+): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-screenshot-pg-'));
   const pgPort = await freePort();
   let server: ChildProcess | undefined;
@@ -437,7 +442,7 @@ async function runEphemeral(route: string, state: StateName, name: string): Prom
 
     // gateLogin reads ACCESS_GATE_PASSWORD from our env — match the server's gate code.
     process.env.ACCESS_GATE_PASSWORD = SCREENSHOT_GATE_PASSWORD;
-    await captureScreenshot({ route, baseUrl, name });
+    await captureScreenshot({ route, baseUrl, name, timeZone });
   } finally {
     if (server) await stopChildProcess(server);
     await pg.stop().catch(() => {});
@@ -458,8 +463,17 @@ async function main(): Promise<void> {
   const state = rawState as StateName;
   const allowLive = argv.includes('--use-live-db') || process.env.SCREENSHOT_ALLOW_LIVE_DB === '1';
 
-  // First non-flag token is the route (skip the value consumed by --state).
-  const positionals = argv.filter((a, i) => !a.startsWith('-') && i !== stateFlagIdx + 1);
+  // `--tz <IANA>` emulates the browser's zone, so a weekday-conditional screen (V1-10's Mon/Wed/Fri
+  // program card) can be captured on any host day — the app derives "today" from the DEVICE zone
+  // (V1-6c). E.g. `--tz Pacific/Kiritimati` (UTC+14) renders tomorrow's local day.
+  const tzFlagIdx = argv.indexOf('--tz');
+  const timeZone = tzFlagIdx >= 0 ? argv[tzFlagIdx + 1] : undefined;
+  if (tzFlagIdx >= 0 && !timeZone)
+    throw new Error('--tz requires an IANA zone (e.g. America/New_York)');
+
+  // First non-flag token is the route (skip the values consumed by --state / --tz).
+  const consumed = new Set([stateFlagIdx + 1, tzFlagIdx + 1].filter((i) => i > 0));
+  const positionals = argv.filter((a, i) => !a.startsWith('-') && !consumed.has(i));
   let route = positionals[0] ?? '/';
   if (route === '/p') route = SEED_PROFILE_ROUTE; // shorthand → seeded profile's Today page
   const base = route === SEED_PROFILE_ROUTE ? 'today' : routeSlug(route);
@@ -473,11 +487,11 @@ async function main(): Promise<void> {
     console.warn(
       '⚠️  --use-live-db: capturing against the already-running server (no embedded DB).',
     );
-    await captureScreenshot({ route, baseUrl, name });
+    await captureScreenshot({ route, baseUrl, name, timeZone });
     return;
   }
 
-  await runEphemeral(route, state, name);
+  await runEphemeral(route, state, name, timeZone);
 }
 
 main().catch((err) => {
