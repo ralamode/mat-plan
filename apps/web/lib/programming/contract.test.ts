@@ -2,6 +2,7 @@ import {
   DAY_ROLE_TO_SESSION_TYPE,
   DAY_ROLES,
   dayRoleSchema,
+  MOVEMENT_SEED_ROWS,
   movementSlug,
   PROGRAM_SEED,
   prescriptionSeedRowSchema,
@@ -51,7 +52,7 @@ describe('seed-row schemas', () => {
     idx: 0,
     sets: 3,
     targetReps: '5',
-    targets: [{ profilePublicId: 'p1', load: '65' }],
+    targets: [{ profilePublicId: 'p1', load: '65', reps: null }],
   };
 
   it('accepts a well-formed block → prescription → target graph', () => {
@@ -83,18 +84,34 @@ describe('seed-row schemas', () => {
         ...goodPrescription,
         sets: null,
         targetReps: null,
-        targets: [{ profilePublicId: 'p1', load: null }],
+        targets: [{ profilePublicId: 'p1', load: null, reps: null }],
       }).success,
     ).toBe(true);
   });
 });
 
-describe('PROGRAM_SEED — ships empty, and stays authoring-consistent when it grows', () => {
-  it('ships EMPTY in slice 1 (mechanism only; real blocks are a later data PR)', () => {
-    expect(PROGRAM_SEED).toHaveLength(0);
+describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
+  it('is populated (the Kids S&C Foundation block)', () => {
+    expect(PROGRAM_SEED.length).toBeGreaterThanOrEqual(1);
+    expect(PROGRAM_SEED.some((b) => b.slug === 'kids_s&c_foundation')).toBe(true);
   });
 
-  // Guards the future data-only PR (vacuous while empty): the DB seed is INSERT-ONLY via onConflictDoNothing,
+  it('validates against the seed-row schemas (every block, prescription, target)', () => {
+    for (const block of PROGRAM_SEED) {
+      expect(programBlockSeedRowSchema.safeParse(block).success).toBe(true);
+    }
+  });
+
+  it('every prescription references a real catalog movement slug', () => {
+    const slugs = new Set<string>(MOVEMENT_SEED_ROWS.map((m) => m.slug));
+    for (const block of PROGRAM_SEED) {
+      for (const p of block.prescriptions) {
+        expect(slugs.has(p.movementSlug)).toBe(true);
+      }
+    }
+  });
+
+  // The DB seed is INSERT-ONLY via onConflictDoNothing, so these authoring mistakes would be silently
   // so an authoring mistake — a slug that doesn't match its name, a duplicate (day_role, idx) slot, or a
   // repeated profile in one prescription's targets — would be silently swallowed at seed time. Catch it here.
   it('every block slug equals movementSlug(name)', () => {
