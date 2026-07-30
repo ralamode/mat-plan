@@ -1929,7 +1929,13 @@ const seededBlocks = (
     count: number;
   }[]
 )[0].count;
-assert.ok(seededBlocks >= 1, 'V1-10: the real program block(s) seeded');
+// EXACT count (not just ≥1): the DB must hold precisely the blocks PROGRAM_SEED declares — nothing extra
+// (an accidental / LLM-drafted block would fail here, the safety the old `== 0` empty-guard provided).
+assert.equal(
+  seededBlocks,
+  PROGRAM_SEED.length,
+  'V1-10: exactly PROGRAM_SEED’s blocks are seeded (no unexpected extras)',
+);
 
 // The kids_s&c_foundation block resolved all 3 strength days × 7 movements, with per-kid loads/reps intact.
 const realBlock = (

@@ -206,7 +206,8 @@ export const MOVEMENT_SEED_ROWS = [
     unitDefault: 'lb',
     isBodyweight: false,
   },
-  // ── V1-10: movements from Ray's Kids S&C Foundation block (seed-two-week-program.md). Pull-Up / Weighted
+  // ── V1-10: movements from Ray's Kids S&C Foundation block (docs/plans/v1-10-two-week-program-source.md).
+  //    Pull-Up / Weighted
   //    Chin reuse `pull-up` (…053), DB OHP reuses `overhead_shoulder_press` (…058), Weighted Dips reuse `dips`
   //    (…059) via the load field — only genuinely-distinct movements are added here.
   {

@@ -111,9 +111,9 @@ describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
     }
   });
 
-  // The DB seed is INSERT-ONLY via onConflictDoNothing, so these authoring mistakes would be silently
-  // so an authoring mistake — a slug that doesn't match its name, a duplicate (day_role, idx) slot, or a
-  // repeated profile in one prescription's targets — would be silently swallowed at seed time. Catch it here.
+  // The DB seed is INSERT-ONLY via onConflictDoNothing, so an authoring mistake — a slug that doesn't match
+  // its name, a duplicate (day_role, idx) slot, or a repeated profile in one prescription's targets — would
+  // be silently swallowed at seed time. Catch it here instead.
   it('every block slug equals movementSlug(name)', () => {
     for (const block of PROGRAM_SEED) {
       expect(block.slug).toBe(movementSlug(block.name));

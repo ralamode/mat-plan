@@ -98,10 +98,8 @@ export type ProgramBlockSeedRow = z.infer<typeof programBlockSeedRowSchema>;
 const LIAM = SEED_PROFILE_PUBLIC_ID;
 const SCARLETT = SEED_PROFILE_2_PUBLIC_ID;
 function both(load: string | null): PrescriptionTargetSeedRow[] {
-  return [
-    { profilePublicId: LIAM, load, reps: null },
-    { profilePublicId: SCARLETT, load, reps: null },
-  ];
+  // Both kids, same load, shared reps — just `perKid` with the same load and no override (one row shape).
+  return perKid({ load }, { load });
 }
 function perKid(
   liam: { load: string | null; reps?: string },
