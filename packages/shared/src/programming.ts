@@ -49,20 +49,19 @@ export const DAY_ROLE_TO_SESSION_TYPE: Record<DayRole, SessionType> = {
 
 /**
  * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
- * header. DERIVED from `SESSION_TYPE_LABELS` (never re-typed): `SESSION_TYPE_LABELS` alone collapses
- * strength_a/b/c → "Strength", so the split days append their letter suffix. Built as a map (not a
- * function) so it is exhaustive over `DayRole` at compile time, like `DAY_ROLE_TO_SESSION_TYPE`.
+ * header. The 1:1 roles SPREAD `SESSION_TYPE_LABELS` (never re-typed); only the split strength days,
+ * which `SESSION_TYPE_LABELS` collapses to a single "Strength", add their letter — and they take the
+ * "Strength" noun from that same map. An annotated object literal, NOT a computed `Object.fromEntries`
+ * + cast: this way TypeScript actually enforces exhaustiveness over `DayRole` (a cast would assert the
+ * checking away), exactly like `DAY_ROLE_TO_SESSION_TYPE` above. It also avoids deriving the label by
+ * string-surgery on the role name, which would silently collide the day a `conditioning_a` appears.
  */
-export const DAY_ROLE_LABELS: Record<DayRole, string> = Object.fromEntries(
-  DAY_ROLES.map((role) => {
-    const base = SESSION_TYPE_LABELS[DAY_ROLE_TO_SESSION_TYPE[role]];
-    // 'strength_a' → ' A'; a 1:1 role (its own name) gets no suffix.
-    const split = role.startsWith('strength_')
-      ? ` ${role.slice('strength_'.length).toUpperCase()}`
-      : '';
-    return [role, `${base}${split}`];
-  }),
-) as Record<DayRole, string>;
+export const DAY_ROLE_LABELS: Record<DayRole, string> = {
+  ...SESSION_TYPE_LABELS,
+  strength_a: `${SESSION_TYPE_LABELS.strength} A`,
+  strength_b: `${SESSION_TYPE_LABELS.strength} B`,
+  strength_c: `${SESSION_TYPE_LABELS.strength} C`,
+};
 
 /**
  * A per-profile suggested load on a prescription — HUMAN-AUTHORED (never the LLM). `load` is verbatim and

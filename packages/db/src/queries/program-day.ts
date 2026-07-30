@@ -1,3 +1,4 @@
+import { type DayRole } from '@mat-plan/shared';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
@@ -15,9 +16,15 @@ import { schema } from '../client';
  * block → zero rows.
  *
  * Shape notes:
- * - **Deterministic single block.** A household may accumulate blocks; a bare join would fan the day out
- *   across all of them. `ORDER BY program_blocks.id DESC LIMIT 1` in the block subquery pins it to the
- *   newest — the MVP's "the household's one block" (multi-block "active block" selection is backlogged).
+ * - **Deterministic single block, chosen among the blocks that actually PROGRAM this day.** A household
+ *   accumulates blocks (a new mesocycle gets a new `slug` — `uq_program_blocks_household_slug` encourages
+ *   that over editing in place), and a bare join would fan the day out across all of them. So the block
+ *   subquery takes the newest — but only from blocks holding a live prescription for the REQUESTED
+ *   `day_role`. Ordering by `id DESC` alone would be a silent blanking bug: seed a new block that programs
+ *   `strength`/`conditioning`, and Monday's `strength_a` card goes empty with no error and no fallback to
+ *   the block that does have the data. Restricting the candidate set makes "newest wins" degrade to "the
+ *   newest block that can answer this question". (An explicit active-block marker is the real fix when
+ *   multi-block authoring lands; this keeps the MVP's "the household's one block" honest until then.)
  * - **LEFT JOIN `prescription_targets`**, scoped in the `ON` to `(this prescription, THIS profile)`. In the
  *   `WHERE` it would silently inner-join (a kid with no target vanishes) or, worse, match the sibling's row.
  *   No target → `load`/`reps` come back NULL and the caller renders the shared prescription.
@@ -25,27 +32,46 @@ import { schema } from '../client';
  */
 export function programDayRows(
   db: NodePgDatabase<typeof schema>,
-  args: { profilePublicId: string; dayRole: string },
+  args: { profilePublicId: string; dayRole: DayRole },
 ) {
-  // The profile's own household's newest live block. A scalar subquery (not a join) so the LIMIT 1 applies
-  // to the BLOCK, not to the prescription rows we want all of.
+  // THE ownership predicate — "the live profile this request is for". Named once and used by BOTH
+  // sub-selects below (the household hop and the per-kid target scope) so the two can never drift into
+  // scoping by different rules — which is exactly how a BOLA hole gets introduced by a later edit.
+  const isThisProfile = and(
+    eq(schema.profiles.publicId, args.profilePublicId),
+    isNull(schema.profiles.deletedAt),
+  );
+
+  // The newest of the profile's own household's live blocks THAT PROGRAMS THIS DAY — see the shape note.
+  // A scalar subquery (not a join) so the LIMIT 1 picks a BLOCK, not one of the prescription rows we want
+  // all of; the inner join to `prescriptions` only narrows the candidate blocks.
   const blockId = db
     .select({ id: schema.programBlocks.id })
     .from(schema.programBlocks)
     .innerJoin(schema.profiles, eq(schema.profiles.householdId, schema.programBlocks.householdId))
-    .where(
+    .innerJoin(
+      schema.prescriptions,
       and(
-        eq(schema.profiles.publicId, args.profilePublicId),
-        isNull(schema.profiles.deletedAt),
-        isNull(schema.programBlocks.deletedAt),
+        eq(schema.prescriptions.blockId, schema.programBlocks.id),
+        eq(schema.prescriptions.dayRole, args.dayRole),
+        isNull(schema.prescriptions.deletedAt),
       ),
     )
+    .where(and(isThisProfile, isNull(schema.programBlocks.deletedAt)))
     .orderBy(desc(schema.programBlocks.id))
     .limit(1);
+
+  // This request's profile id — the scalar the per-kid target join scopes to, built from the SAME
+  // `isThisProfile` predicate as the household hop.
+  const profileId = db
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(isThisProfile);
 
   return (
     db
       .select({
+        idx: schema.prescriptions.idx,
         movementName: schema.movements.name,
         sets: schema.prescriptions.sets,
         targetReps: schema.prescriptions.targetReps,
@@ -60,18 +86,7 @@ export function programDayRows(
         and(
           eq(schema.prescriptionTargets.prescriptionId, schema.prescriptions.id),
           isNull(schema.prescriptionTargets.deletedAt),
-          eq(
-            schema.prescriptionTargets.profileId,
-            db
-              .select({ id: schema.profiles.id })
-              .from(schema.profiles)
-              .where(
-                and(
-                  eq(schema.profiles.publicId, args.profilePublicId),
-                  isNull(schema.profiles.deletedAt),
-                ),
-              ),
-          ),
+          eq(schema.prescriptionTargets.profileId, profileId),
         ),
       )
       .where(
@@ -79,6 +94,9 @@ export function programDayRows(
           eq(schema.prescriptions.blockId, blockId),
           eq(schema.prescriptions.dayRole, args.dayRole),
           isNull(schema.prescriptions.deletedAt),
+          // A retired movement drops off the card rather than being prescribed from the grave. Every
+          // other table in this query excludes soft deletes; the inner join to `movements` must too.
+          isNull(schema.movements.deletedAt),
         ),
       )
       .orderBy(asc(schema.prescriptions.idx))

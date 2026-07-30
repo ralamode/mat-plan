@@ -2148,23 +2148,28 @@ assert.equal(
   'V1-10: an unprogrammed day_role returns no rows',
 );
 
-// (d) BOLA: a profile in a DIFFERENT household sees only ITS household's block — never the kids' block.
-// The verify household's block is `verify_test_block` (day_role 'strength'); asking for 'strength_a'
-// (which only exists in the kids' block) must return nothing, not another household's program.
-const otherHouseholdA = await programDayRows(asPg, {
-  profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
-  dayRole: 'strength_a',
-});
+// (d) BOLA, probed in BOTH directions. The two households program DISJOINT day_roles — Ray's block only
+// has strength_a/b/c, the verify block only has plain 'strength' — so each direction is a real leak test:
+// whichever household you ask from, the OTHER household's day_role must come back empty. (Asking only one
+// way would pass even with the household scoping deleted, since the globally-newest block happens to be
+// the verify one — the assertion would then be proving fixture ordering, not ownership.)
 assert.equal(
-  otherHouseholdA.length,
+  (await programDayRows(asPg, { profilePublicId: VERIFY_PROFILE_PUBLIC_ID, dayRole: 'strength_a' }))
+    .length,
   0,
-  'V1-10: programDayRows never leaks another household’s block (BOLA)',
+  'V1-10: another household’s profile cannot read the kids’ strength_a (BOLA)',
+);
+assert.equal(
+  (await programDayRows(asPg, { profilePublicId: SEED_PROFILE_PUBLIC_ID, dayRole: 'strength' }))
+    .length,
+  0,
+  'V1-10: …and a kid cannot read the other household’s plain-strength day (BOLA, reverse)',
 );
 const otherHouseholdOwn = await programDayRows(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   dayRole: 'strength',
 });
-assert.equal(otherHouseholdOwn.length, 1, 'V1-10: …but does return its OWN household’s block');
+assert.equal(otherHouseholdOwn.length, 1, 'V1-10: …but each DOES return its OWN household’s block');
 assert.equal(otherHouseholdOwn[0].load, '65', 'V1-10: with this profile’s own target');
 
 // (e) A sibling with NO target on a prescription gets the row with a NULL load — never the other kid's.
@@ -2229,9 +2234,149 @@ const twoBlocks = await programDayRows(asPg, {
 });
 assert.equal(twoBlocks.length, 1, 'V1-10: two blocks do NOT fan the day out (one block wins)');
 assert.equal(twoBlocks[0].targetReps, 'newer', 'V1-10: the NEWEST block wins deterministically');
-console.log(
-  '✓ V1-10: programDayRows (the DAL query) — idx order, per-kid loads, BOLA + block scoping',
+
+// (g2) …but "newest" is chosen only among blocks that PROGRAM THE REQUESTED DAY. Seed a third, even
+// newer block that programs a DIFFERENT day_role: asking for 'strength' must still fall back to
+// `verify_newer_block`, NOT blank the card. A plain `ORDER BY id DESC LIMIT 1` would pick this block,
+// find no 'strength' prescriptions in it, and silently return zero rows — the real-world failure is Ray
+// seeding next mesocycle under a new slug and Monday's card quietly going empty.
+await seedProgram(asPg, [
+  {
+    householdPublicId: VERIFY_HH_PUBLIC_ID,
+    slug: 'verify_newest_other_role_block',
+    name: 'Verify Newest Other Role Block',
+    notes: null,
+    prescriptions: [
+      {
+        dayRole: 'skill', // deliberately NOT 'strength'
+        movementSlug: anyMovement.slug,
+        idx: 0,
+        sets: 1,
+        targetReps: 'other-role',
+        targets: [{ profilePublicId: VERIFY_PROFILE_PUBLIC_ID, load: '1', reps: null }],
+      },
+    ],
+  },
+]);
+const stillFallsBack = await programDayRows(asPg, {
+  profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+  dayRole: 'strength',
+});
+assert.equal(
+  stillFallsBack.length,
+  1,
+  'V1-10: a newer block that does NOT program this day must not blank the card',
 );
+assert.equal(
+  stillFallsBack[0].targetReps,
+  'newer',
+  'V1-10: …it falls back to the newest block that DOES program this day',
+);
+// …and that newest block still answers for the day it does program.
+assert.equal(
+  (await programDayRows(asPg, { profilePublicId: VERIFY_PROFILE_PUBLIC_ID, dayRole: 'skill' }))[0]
+    ?.targetReps,
+  'other-role',
+  'V1-10: the newest block still wins for the day_role it programs',
+);
+console.log(
+  '✓ V1-10: programDayRows (the DAL query) — idx order, per-kid loads, BOLA + day-aware block scoping',
+);
+
+// (h) SOFT DELETES — the query filters `deleted_at` on all four tables it touches; without coverage a
+// later refactor drops one silently. The `prescription_targets` filter is the sharpest: its unique index
+// is partial (`WHERE deleted_at IS NULL`), so a future "change a kid's load" writer that soft-deletes and
+// re-inserts legally leaves TWO target rows — and an unfiltered LEFT JOIN would then render the movement
+// TWICE, once with a stale load. Probed on a dedicated block so nothing above is disturbed.
+const VERIFY_SD_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e4';
+await db.insert(schema.profiles).values({
+  publicId: VERIFY_SD_PROFILE_PUBLIC_ID,
+  name: 'Verify Soft-Delete Kid',
+  kind: 'kid',
+  householdId: verifyHh.id,
+});
+await seedProgram(asPg, [
+  {
+    householdPublicId: VERIFY_HH_PUBLIC_ID,
+    slug: 'verify_soft_delete_block',
+    name: 'Verify Soft Delete Block',
+    notes: null,
+    prescriptions: [
+      {
+        dayRole: 'core',
+        movementSlug: anyMovement.slug,
+        idx: 0,
+        sets: 2,
+        targetReps: '10',
+        targets: [{ profilePublicId: VERIFY_SD_PROFILE_PUBLIC_ID, load: 'sd-load', reps: null }],
+      },
+    ],
+  },
+]);
+const sdArgs = { profilePublicId: VERIFY_SD_PROFILE_PUBLIC_ID, dayRole: 'core' } as const;
+const [sdBaseline] = await programDayRows(asPg, sdArgs);
+assert.equal(sdBaseline?.load, 'sd-load', 'V1-10: soft-delete fixture renders before any deletion');
+
+// h1 — a soft-deleted TARGET: the movement still shows (LEFT JOIN), but with NO load, and exactly once.
+const [sdPrescription] = await db
+  .select({ id: schema.prescriptions.id, movementId: schema.prescriptions.movementId })
+  .from(schema.prescriptions)
+  .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+  .where(eq(schema.programBlocks.slug, 'verify_soft_delete_block'));
+await db
+  .update(schema.prescriptionTargets)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.prescriptionTargets.prescriptionId, sdPrescription.id));
+const afterTargetDelete = await programDayRows(asPg, sdArgs);
+assert.equal(
+  afterTargetDelete.length,
+  1,
+  'V1-10: a soft-deleted target does not duplicate the row',
+);
+assert.equal(afterTargetDelete[0].load, null, 'V1-10: …and its load is gone, not stale');
+
+// h2 — a soft-deleted MOVEMENT drops the row (it is prescribed from the grave otherwise).
+await db
+  .update(schema.movements)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.movements.id, sdPrescription.movementId));
+assert.equal(
+  (await programDayRows(asPg, sdArgs)).length,
+  0,
+  'V1-10: a soft-deleted movement drops off the card',
+);
+await db
+  .update(schema.movements)
+  .set({ deletedAt: null })
+  .where(eq(schema.movements.id, sdPrescription.movementId)); // restore — other probes share the catalog
+
+// h3 — a soft-deleted PRESCRIPTION drops the row.
+await db
+  .update(schema.prescriptions)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.prescriptions.id, sdPrescription.id));
+assert.equal(
+  (await programDayRows(asPg, sdArgs)).length,
+  0,
+  'V1-10: a soft-deleted prescription drops off the card',
+);
+
+// h4 — a soft-deleted BLOCK takes its whole day with it (and, with the day-aware selection above, a
+// household whose only remaining block programs other days simply renders nothing).
+await db
+  .update(schema.prescriptions)
+  .set({ deletedAt: null })
+  .where(eq(schema.prescriptions.id, sdPrescription.id)); // restore the prescription…
+await db
+  .update(schema.programBlocks)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.programBlocks.slug, 'verify_soft_delete_block')); // …then delete its block
+assert.equal(
+  (await programDayRows(asPg, sdArgs)).length,
+  0,
+  'V1-10: a soft-deleted block takes its prescriptions off the card',
+);
+console.log('✓ V1-10: programDayRows excludes soft-deleted blocks/prescriptions/targets/movements');
 
 // Resolve the fixture ids for the rejection probes.
 const [verifyBlock] = await db

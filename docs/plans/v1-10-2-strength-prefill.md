@@ -155,9 +155,46 @@ Pure app code — **no migration**. The strength form is byte-untouched.
 | `apps/web/app/p/[profileId]/page.tsx`                     | resolve `dayRole` from the already-computed active-tz `day`, add `getProgramDay` to the existing `Promise.all` (skipped entirely on a non-strength day), render the card inside the **existing** `buildRoutineBlocks` strength gate.                                                               |
 | `apps/web/scripts/capture.ts` + `screenshot-ephemeral.ts` | `--tz <IANA>` — emulate the browser zone so a weekday-conditional screen can be captured on any host day (the app derives "today" from the device zone, V1-6c).                                                                                                                                    |
 
+### Post-implementation code review (4 lenses)
+
+A second adversarial pass ran against the implemented diff (correctness/data-integrity · architecture ·
+simplicity · code-reuse). No CRITICAL findings — the injury-safety property was independently
+re-verified (`strength-form.tsx` / `actions.ts` / the entry schemas are byte-unchanged vs `main`; the card
+renders as a sibling BEFORE `<StrengthForm>`, outside its `<form>`, emitting only text). Applied:
+
+- **Day-aware block selection (correctness, real bug).** `ORDER BY id DESC LIMIT 1` picked the newest block
+  _regardless of whether it programs the requested day_. Seeding next mesocycle under a new slug — the shape
+  PR 1b established, and what `uq_program_blocks_household_slug` encourages — would have silently blanked
+  Monday's card with no error and no fallback. The candidate set is now restricted to blocks holding a live
+  prescription for that `day_role`, so "newest wins" degrades to "the newest block that can answer this".
+- **The BOLA assertion didn't prove ownership.** It passed even with household scoping deleted (the
+  globally-newest block happened to lack `strength_a` — it was proving fixture ordering). Now probed in
+  **both** directions across two households programming disjoint day roles.
+- **Zero soft-delete coverage** on the four `deleted_at` filters. Added; the sharpest is
+  `prescription_targets`, whose unique index is partial, so a future soft-delete-then-reinsert load edit
+  legally leaves two rows — an unfiltered join would render the movement twice with one stale load.
+- All three new probes were **mutation-tested**: each fails when its filter is removed.
+- `movements.deleted_at` was unfiltered (every other table checked it).
+- `DAY_ROLE_LABELS` was `Object.fromEntries(...) as Record<DayRole, string>` — the cast asserted away the
+  compile-time exhaustiveness its own comment claimed, and derived the label by string-surgery on the role
+  name (a future `conditioning_a` would collide). Now an annotated literal spreading `SESSION_TYPE_LABELS`.
+- `4 × 3` collided with the page's established `reps × weight` grammar for a _logged_ set — same glyph, same
+  muted style, same screen. Now `4 sets × 3`.
+- The row→DTO map and the prescription formatter were unreachable by unit test (one `server-only`, one
+  module-private in a `.tsx`). Extracted to a pure `lib/programming/program-day.ts` + tests.
+- `<h2>` nested inside the "Log strength" `<section>` announced the card as a sibling of the section it
+  belongs to → `<h3>`; the hardcoded DOM id is now derived from the day role; `key={i}` → `key={r.idx}`.
+- `dayRole: string` widened a closed shared enum → `DayRole`.
+- **`--tz` could silently capture the wrong weekday.** `timezoneId` only changes what the browser reports;
+  the RSC reads the `tz` cookie, which `TimeZoneSync` writes only after hydration — a race against
+  `networkidle` on the very artifact a reviewer approves from. The cookie is now seeded directly. `--tz` is
+  also validated with the app's own `isIanaTimeZone`.
+- A dangling `" · "` when both `sets` and `target_reps` are null (a legal movement-only prescription).
+- CLS note (first-paint zone fallback can pop the card in) recorded in `docs/tech-debt.md`.
+
 ### Proofs
 
-- **`db:verify`** (`packages/db/scripts/verify.ts`) runs the SHIPPED `programDayRows`: `idx` order over Ray's real Strength A; per-kid loads (Liam 60 / Scarlett 65 on the same prescription) and the per-kid reps override; an unprogrammed `day_role` → 0 rows; **BOLA** — another household's profile gets 0 rows for `strength_a` but its own block for `strength`; a kid with **no target** still sees the movement with a NULL load (never the sibling's); an unknown profile → 0 rows; a household with **two** blocks resolves to the newest only (no fan-out).
+- **`db:verify`** (`packages/db/scripts/verify.ts`) runs the SHIPPED `programDayRows`: `idx` order over Ray's real Strength A; per-kid loads (Liam 60 / Scarlett 65 on the same prescription) and the per-kid reps override; an unprogrammed `day_role` → 0 rows; **BOLA both directions** across two households programming disjoint day roles; a kid with **no target** still sees the movement with a NULL load (never the sibling's); an unknown profile → 0 rows; a household with **two** blocks resolves to one (no fan-out) **and falls back past a newer block that doesn't program that day**; and all four `deleted_at` filters (block / prescription / target / movement). The three ownership- and staleness-critical probes are mutation-tested — each fails when its filter is removed.
 - **Unit:** `localWeekday` across the week + an explicit west-of-UTC regression; `resolveDayRole` for all 7 days + a schedule-validity test (only real, only _strength_, day roles); `DAY_ROLE_LABELS` derivation + A/B/C distinctness.
 - **Screenshots** (tri-viewport): Liam's Strength C, Scarlett's Strength C (loads visibly differ), and a rest day (no card, form unchanged).
 

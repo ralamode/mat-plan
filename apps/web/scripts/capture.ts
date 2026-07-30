@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 
 import { gateLogin } from '../e2e/gate-login';
+import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
  * Shared Playwright capture: log through the access gate (the SAME `gate-login.ts`
@@ -65,10 +66,25 @@ export async function captureScreenshot(opts: {
         hasTouch: vp.touch,
         ...(opts.timeZone ? { timezoneId: opts.timeZone } : {}),
       });
+      if (opts.timeZone) {
+        // Seed the `tz` cookie DIRECTLY, don't rely on `TimeZoneSync` writing it. `timezoneId` only
+        // changes what the BROWSER reports; the RSC reads the cookie. The gate login lands on `/`,
+        // which doesn't render TimeZoneSync, so without this the first paint uses DEFAULT_TIME_ZONE and
+        // the correct day arrives only via a post-hydration `router.refresh()` — a race against
+        // `networkidle` that, when lost, silently yields a screenshot of the WRONG WEEKDAY. That is the
+        // one failure this flag exists to prevent, on the artifact a reviewer approves from.
+        await context.addCookies([
+          {
+            name: TZ_COOKIE_NAME,
+            value: opts.timeZone,
+            url: opts.baseUrl,
+            expires: Math.floor(Date.now() / 1000) + COOKIE_MAX_AGE,
+            sameSite: 'Lax',
+          },
+        ]);
+      }
       const page = await context.newPage();
       await gateLogin(page);
-      // `networkidle` covers the TimeZoneSync `router.refresh()` an emulated zone triggers, so the
-      // shot is of the re-rendered (correct local day) page, not the first-paint default-zone one.
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       const path = `.screenshots/${name}-${vp.suffix}.png`;
       await page.screenshot({ path, fullPage: true });

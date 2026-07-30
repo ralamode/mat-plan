@@ -22,7 +22,7 @@ import {
 import { eq, isNull } from 'drizzle-orm';
 
 import { DEFAULT_TIME_ZONE } from '../lib/constants';
-import { localDayIso, localWeekStartIso } from '../lib/date';
+import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -468,8 +468,13 @@ async function main(): Promise<void> {
   // (V1-6c). E.g. `--tz Pacific/Kiritimati` (UTC+14) renders tomorrow's local day.
   const tzFlagIdx = argv.indexOf('--tz');
   const timeZone = tzFlagIdx >= 0 ? argv[tzFlagIdx + 1] : undefined;
-  if (tzFlagIdx >= 0 && !timeZone)
-    throw new Error('--tz requires an IANA zone (e.g. America/New_York)');
+  // Validated with the SAME helper the app uses on the `tz` cookie — so `--tz --state calisthenics`
+  // (value swallowed by the next flag) fails here with a clear message instead of deep inside Playwright.
+  if (tzFlagIdx >= 0 && !isIanaTimeZone(timeZone)) {
+    throw new Error(
+      `--tz requires a valid IANA zone (e.g. America/New_York), got: ${timeZone ?? ''}`,
+    );
+  }
 
   // First non-flag token is the route (skip the values consumed by --state / --tz).
   const consumed = new Set([stateFlagIdx + 1, tzFlagIdx + 1].filter((i) => i > 0));

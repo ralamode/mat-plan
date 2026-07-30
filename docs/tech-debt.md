@@ -34,6 +34,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   **strength subset only** (`DAY_ROLE_TO_SESSION_TYPE[x] === 'strength'`), never all of `DAY_ROLES` — else a
   conditioning role could be forced into a strength session.
 - **Severity:** low (accepted for the pre-Clerk single-household deployment; same class as the access gate).
+- **Related, same slice — the card can shift layout on first paint (CLS).** `getActiveTimeZone()` falls
+  back to `DEFAULT_TIME_ZONE` until `TimeZoneSync` writes the `tz` cookie and triggers `router.refresh()`
+  (V1-6c). For a device in a zone whose local weekday differs at that moment, the first paint can resolve a
+  different `day_role` — so this ~150px card can appear or disappear above the strength form after
+  hydration. Inherited from V1-6c, but the card is a much larger shifting block than anything V1-6c
+  introduced, and CLS < 0.1 is a stated budget. Harmless for Ray's household (one zone, cookie set after
+  the first visit). **Fix when it bites:** reserve height for the card, or resolve the zone before first
+  paint (a `middleware` hint) — the same change that would remove the V1-6c refresh flash generally.
 
 ### Coach routine editor: no real authz, and two accepted write semantics (V1-18 PR 2)
 
