@@ -1,4 +1,12 @@
+import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import { expect, type Page } from '@playwright/test';
+
+/**
+ * The seeded profile's Today route. Single-sourced here (V1-12) because three callers need it — the
+ * smoke, the a11y spec, and the screenshot script — and it is derived from the seed's stable public id
+ * rather than a re-typed UUID (AGENTS.md constants rule).
+ */
+export const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
 
 /**
  * From the profile picker (`/`), tap a profile tile and land on its scoped Today

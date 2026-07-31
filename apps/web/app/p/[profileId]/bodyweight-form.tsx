@@ -68,7 +68,7 @@ export function BodyweightForm({ profileId, day }: { profileId: string; day: str
             ))}
           </select>
         </div>
-        <Button type="submit" size="lg" disabled={pending} className="h-11 text-base">
+        <Button type="submit" size="lg" disabled={pending} className="text-base">
           {pending ? 'Logging…' : 'Log weight'}
         </Button>
       </div>
