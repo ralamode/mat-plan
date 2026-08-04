@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { INPUT_CLASS } from '@/lib/constants';
 
 import { submitGate, type GateState } from './actions';
 
@@ -27,7 +28,7 @@ export function GateForm({ from }: { from: string }) {
           required
           aria-invalid={state.error ? true : undefined}
           aria-describedby={state.error ? 'gate-error' : undefined}
-          className="border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className={INPUT_CLASS}
         />
       </div>
       {state.error ? (
@@ -35,7 +36,7 @@ export function GateForm({ from }: { from: string }) {
           {state.error}
         </p>
       ) : null}
-      <Button type="submit" size="lg" disabled={pending} className="h-11 text-base">
+      <Button type="submit" size="lg" disabled={pending} className="text-base">
         {pending ? 'Checking…' : 'Enter'}
       </Button>
     </form>

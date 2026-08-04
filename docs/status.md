@@ -109,7 +109,7 @@ migrations).
 - **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
   V1-6a · V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d). Data foundation + strength
   logging complete; the back third is editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-10 PR 2** (the day's program on Today).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-10 PR 2** (program card) → **V1-12** (a11y, enforced). **V1-11 deferred past the MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)).
 
 ## Phases
 
@@ -166,7 +166,7 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 | V1-9    | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                                                     | ✅     |
 | V1-10   | programming — data model (#66) · real block seeded (#67) · Today's program card ([plan](./plans/v1-10-2-strength-prefill.md)) | 🔵     |
 | V1-11   | copy-set-to-other-kid                                                                                                         | ⚪     |
-| V1-12   | a11y pass                                                                                                                     | ⚪     |
+| V1-12   | a11y + tap-target pass, ENFORCED in CI ([plan](./plans/v1-12-a11y-pass.md))                                                   | 🔵     |
 | V1-13   | CSV export endpoint (golden-file)                                                                                             | ⚪     |
 | V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
 

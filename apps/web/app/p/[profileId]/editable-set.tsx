@@ -50,7 +50,6 @@ export function EditableSet({
           type="button"
           variant="ghost"
           size="sm"
-          className="min-h-11"
           onClick={() => {
             // Re-seed from the current (possibly just-revalidated) value each time edit opens.
             setReps(String(set.reps ?? ''));
@@ -80,14 +79,13 @@ export function EditableSet({
             nameReps="reps"
             nameWeight="weight"
           />
-          <Button type="submit" size="sm" className="min-h-11" disabled={pending}>
+          <Button type="submit" size="sm" disabled={pending}>
             {pending ? 'Saving…' : 'Save'}
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="min-h-11"
             onClick={() => setEditing(false)}
             disabled={pending}
           >

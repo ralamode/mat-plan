@@ -19,10 +19,13 @@ import { DayField } from './day-field';
 // The shared field styling + this form's fixed number-input width (single-sourced in lib/constants).
 const numberInputClass = `${INPUT_CLASS} w-24`;
 
-// A padded label row gives the >=44px tap target; the focus ring must live on the ROW,
-// not the ~16px native checkbox, or we meet the tap-target rule and fail focus-visible.
+// A 44px label row gives the tap target; the focus ring must live on the ROW, not the ~20px native
+// checkbox, or we meet the tap-target rule and fail focus-visible.
+// NO vertical padding (V1-12): `py-2` shrank the row's CONTENT box to 28px, so the `self-stretch`
+// label — the only part of the row that actually toggles the checkbox — was 28px inside a 44px row.
+// `min-h-11` alone gives the full 44px to the label.
 const rowClass =
-  'has-[:focus-visible]:ring-ring flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 has-[:focus-visible]:ring-3';
+  'has-[:focus-visible]:ring-ring flex min-h-11 items-center gap-3 rounded-lg px-2 has-[:focus-visible]:ring-3';
 
 /**
  * The check-ins form (V1-5). Fields arrive as a PROP from the RSC page — this component
@@ -170,7 +173,16 @@ export function CheckinForm({
               );
 
               const labelEl = (
-                <label htmlFor={id} className={checkbox ? 'flex-1 text-base' : 'text-base'}>
+                <label
+                  htmlFor={id}
+                  // V1-12: `self-stretch items-center` makes the LABEL fill the 44px row vertically.
+                  // The row was already `min-h-11`, but `items-center` on the row sizes each flex child
+                  // to its content — so the label (the thing a thumb actually aims at, since the native
+                  // box is 20px) was only ~24px tall. `flex-1` gave it the width; this gives it the height.
+                  className={
+                    checkbox ? 'flex flex-1 items-center self-stretch text-base' : 'text-base'
+                  }
+                >
                   {f.label}
                   {f.valueType === METRIC_VALUE_TYPE.scale_10 ? (
                     <span className="text-muted-foreground text-sm">
@@ -216,7 +228,7 @@ export function CheckinForm({
       ))}
 
       <div className="flex items-center gap-3">
-        <Button type="submit" size="lg" disabled={pending} className="h-11 text-base">
+        <Button type="submit" size="lg" disabled={pending} className="text-base">
           {pending ? 'Logging…' : 'Log check-ins'}
         </Button>
         {/* Results render further down the page, so announce them for screen readers. */}

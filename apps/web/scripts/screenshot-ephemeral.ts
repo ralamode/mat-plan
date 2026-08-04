@@ -23,6 +23,7 @@ import { eq, isNull } from 'drizzle-orm';
 
 import { DEFAULT_TIME_ZONE } from '../lib/constants';
 import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
+import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
@@ -75,8 +76,8 @@ const EPHEMERAL_DB_PASSWORD = 'screenshot';
 // The access-gate code for the throwaway server. We own BOTH sides (server env +
 // gateLogin), so a fixed value ≥8 chars satisfies env.ts and needs no real secret.
 const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
-// Bare `/p` (no id) → the seeded profile's Today page (where the check-ins form lives).
-const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
+// Bare `/p` (no id) → the seeded profile's Today page (where the check-ins form lives). The route is
+// single-sourced in `e2e/steps.ts` (V1-12) — the a11y spec and the smoke need the same one.
 
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
