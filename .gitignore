@@ -26,8 +26,13 @@ dist/
 coverage/
 playwright-report/
 test-results/
-# Playwright gate-auth storage state (carries the gate cookie — never commit)
-e2e/.auth/
+# Playwright gate-auth storage state (carries the gate cookie — never commit).
+# `**/` PREFIX IS LOAD-BEARING: a pattern containing a mid-path slash is anchored to the directory
+# holding this .gitignore, so the old bare `e2e/.auth/` only matched <repo-root>/e2e/.auth/ — NOT
+# apps/web/e2e/.auth/, which is where Playwright actually writes it. The rule silently never applied
+# and the cookie was committed (V1-12). Rules WITHOUT an internal slash (`.screenshots/`, `.next/`)
+# match at any depth, which is why they were never affected.
+**/e2e/.auth/
 
 # local scratch (playwright screenshots, etc.)
 .screenshots/

@@ -50,7 +50,7 @@ function LifeButton({
       <input type="hidden" name="day" value={day} readOnly />
       <input type="hidden" name="clientId" value={clientId} readOnly />
       <input type="hidden" name="activityKey" value={activityKey} readOnly />
-      <Button type="submit" size="lg" disabled={pending} className="h-11 text-base">
+      <Button type="submit" size="lg" disabled={pending} className="text-base">
         {pending ? 'Logging…' : label}
       </Button>
       {state.error ? (

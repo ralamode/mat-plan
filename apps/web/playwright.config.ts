@@ -47,7 +47,30 @@ export default defineConfig({
     { name: 'setup', testMatch: /global\.setup\.ts$/ },
     {
       name: 'chromium',
+      testIgnore: /a11y\.spec\.ts$/, // owned by the `a11y` project below
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+      dependencies: ['setup'],
+    },
+    {
+      // V1-12: the a11y scan gets its own project for two reasons. (1) It pins a MOBILE viewport —
+      // the primary device — rather than Desktop Chrome. (2) `bypassCSP`: the server emits a strict
+      // nonce-based `script-src` (see proxy.ts) and Playwright boots the PRODUCTION build, which is a
+      // known failure mode for axe's injected script. Scoping the bypass here keeps CSP live for the
+      // functional smoke, which is where a CSP regression would actually matter.
+      name: 'a11y',
+      testMatch: /a11y\.spec\.ts$/,
+      use: {
+        // Chromium with phone emulation — NOT `devices['iPhone 14']`, whose default browser is WEBKIT
+        // (only chromium is installed, in CI and locally). Mirrors `scripts/capture.ts`'s mobile
+        // viewport so the scan and the screenshots describe the same rendering.
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+        storageState: STORAGE_STATE,
+        bypassCSP: true,
+      },
       dependencies: ['setup'],
     },
   ],

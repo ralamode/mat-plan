@@ -190,23 +190,11 @@ function StrengthFormBody({
       </ul>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="min-h-11"
-          onClick={addMovement}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={addMovement}>
           Add movement
         </Button>
         {selectedCount >= 2 ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11"
-            onClick={groupSelectedMovements}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={groupSelectedMovements}>
             Group {selectedCount} as superset
           </Button>
         ) : null}
@@ -230,7 +218,7 @@ function StrengthFormBody({
       </div>
 
       <div>
-        <Button type="submit" size="lg" disabled={pending} className="h-11 text-base">
+        <Button type="submit" size="lg" disabled={pending} className="text-base">
           {pending ? 'Logging…' : 'Log strength'}
         </Button>
       </div>
@@ -303,7 +291,6 @@ function MovementCard({
             type="button"
             variant="ghost"
             size="sm"
-            className="min-h-11"
             onClick={onUngroup}
             // The control dissolves the WHOLE superset this movement belongs to (ungroupSuperset
             // untags every member), not just this one card — the label says so plainly.
