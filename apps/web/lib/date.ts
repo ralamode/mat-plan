@@ -126,6 +126,19 @@ export function localWeekStartIso(day: string): string {
 }
 
 /**
+ * The weekday of the calendar date `day` (`YYYY-MM-DD`) as `0=Sun … 6=Sat`.
+ *
+ * THE V1-6c off-by-one trap: `new Date("2026-07-30").getDay()` parses the bare date as UTC midnight and
+ * then reports it in the RUNTIME's zone — west of UTC that's the PREVIOUS day, so a Monday program would
+ * render on Sunday. This uses the same safe `…T00:00:00Z` parse + `getUTCDay()` idiom as
+ * `localWeekStartIso`: `day` is already a bare LOCAL calendar date (from `localDayIso(activeTz)`), it has
+ * exactly one weekday, and no zone is reinterpreted. Feed it the local day, never a UTC-derived one.
+ */
+export function localWeekday(day: string): number {
+  return new Date(Date.parse(`${day}T00:00:00Z`)).getUTCDay();
+}
+
+/**
  * Human-readable long date from a `YYYY-MM-DD` calendar date.
  *
  * Anchored at UTC midnight and formatted in UTC BY DESIGN — and it deliberately takes NO

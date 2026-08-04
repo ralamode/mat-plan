@@ -5,7 +5,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
-import { SESSION_TYPES, type SessionType } from './sessions';
+import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions';
 
 /**
  * Programming contract (V1-10) — the shared grammar for `program_block` → `prescription` →
@@ -45,6 +45,22 @@ export const DAY_ROLE_TO_SESSION_TYPE: Record<DayRole, SessionType> = {
   strength_a: 'strength',
   strength_b: 'strength',
   strength_c: 'strength',
+};
+
+/**
+ * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card
+ * header. The 1:1 roles SPREAD `SESSION_TYPE_LABELS` (never re-typed); only the split strength days,
+ * which `SESSION_TYPE_LABELS` collapses to a single "Strength", add their letter — and they take the
+ * "Strength" noun from that same map. An annotated object literal, NOT a computed `Object.fromEntries`
+ * + cast: this way TypeScript actually enforces exhaustiveness over `DayRole` (a cast would assert the
+ * checking away), exactly like `DAY_ROLE_TO_SESSION_TYPE` above. It also avoids deriving the label by
+ * string-surgery on the role name, which would silently collide the day a `conditioning_a` appears.
+ */
+export const DAY_ROLE_LABELS: Record<DayRole, string> = {
+  ...SESSION_TYPE_LABELS,
+  strength_a: `${SESSION_TYPE_LABELS.strength} A`,
+  strength_b: `${SESSION_TYPE_LABELS.strength} B`,
+  strength_c: `${SESSION_TYPE_LABELS.strength} C`,
 };
 
 /**

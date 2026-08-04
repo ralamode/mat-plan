@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 
 import { gateLogin } from '../e2e/gate-login';
+import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
  * Shared Playwright capture: log through the access gate (the SAME `gate-login.ts`
@@ -39,6 +40,14 @@ export async function captureScreenshot(opts: {
   baseUrl: string;
   /** Filename stem (no extension). Defaults to a slug of the route. */
   name?: string;
+  /**
+   * IANA zone to emulate in the browser (V1-10). The app derives "today" — and therefore the day's
+   * PROGRAM — from the device's local calendar date (V1-6c: `TimeZoneSync` reports the browser zone via
+   * the `tz` cookie, and the RSC re-renders on it). Setting this captures a screen as it renders on a
+   * chosen local day, which is the only way to shoot a weekday-conditional surface (the Mon/Wed/Fri
+   * program card) without waiting for that weekday. Omitted → the host's zone, the normal case.
+   */
+  timeZone?: string;
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
@@ -55,7 +64,25 @@ export async function captureScreenshot(opts: {
         deviceScaleFactor: vp.touch ? 2 : 1,
         isMobile: vp.touch,
         hasTouch: vp.touch,
+        ...(opts.timeZone ? { timezoneId: opts.timeZone } : {}),
       });
+      if (opts.timeZone) {
+        // Seed the `tz` cookie DIRECTLY, don't rely on `TimeZoneSync` writing it. `timezoneId` only
+        // changes what the BROWSER reports; the RSC reads the cookie. The gate login lands on `/`,
+        // which doesn't render TimeZoneSync, so without this the first paint uses DEFAULT_TIME_ZONE and
+        // the correct day arrives only via a post-hydration `router.refresh()` — a race against
+        // `networkidle` that, when lost, silently yields a screenshot of the WRONG WEEKDAY. That is the
+        // one failure this flag exists to prevent, on the artifact a reviewer approves from.
+        await context.addCookies([
+          {
+            name: TZ_COOKIE_NAME,
+            value: opts.timeZone,
+            url: opts.baseUrl,
+            expires: Math.floor(Date.now() / 1000) + COOKIE_MAX_AGE,
+            sameSite: 'Lax',
+          },
+        ]);
+      }
       const page = await context.newPage();
       await gateLogin(page);
       await page.goto(opts.route, { waitUntil: 'networkidle' });

@@ -114,6 +114,38 @@ flowchart LR
   DAL -->|"revalidatePath('/p/'+id)"| TODAY
 ```
 
+## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
+
+The programming tables (§4) surface on Today as a **read-only** card. The weekday comes from the
+active-tz local day (V1-6c), maps through a hardcoded app-config schedule (`DAY_ROLE_BY_WEEKDAY` —
+a documented stopgap, see [tech-debt.md](./tech-debt.md)) to a `day_role`, and one single-sourced
+query resolves that day's prescriptions **plus this kid's own suggested loads**.
+
+Two properties are load-bearing. **Ownership**: the household is resolved INSIDE the query
+(`profiles.public_id → household_id → program_blocks`), so no caller can name a household and read
+another one's program. **Read-only**: the card never writes and never pre-fills the log form — the
+suggested load is Ray-authored text ("BW", "~75-85") that must be **typed** by a human to become a
+logged, performed value. A prescription and a log entry stay strictly separate records.
+
+```mermaid
+flowchart LR
+  RSC["/p/[profileId] RSC<br/>day = localDayIso(activeTz)"]
+  SCHED["resolveDayRole(day)<br/>localWeekday → DAY_ROLE_BY_WEEKDAY<br/>(Mon/Wed/Fri → strength_a/b/c)"]
+  DAL["DAL getProgramDay(publicId, dayRole)<br/>server-only · uuid guard · → DTO"]
+  Q["packages/db programDayRows<br/>(single-sourced, db:verify-proven)"]
+  DB[("program_blocks → prescriptions<br/>⟕ prescription_targets (this profile)")]
+  CARD["&lt;ProgramReference&gt; RSC<br/>read-only, zero client JS"]
+  FORM["&lt;StrengthForm&gt;<br/>UNCHANGED — empty + required"]
+
+  RSC --> SCHED
+  SCHED -->|"null → no card, no query"| FORM
+  SCHED -->|"day_role"| DAL
+  DAL --> Q
+  Q -->|"profile → household → newest block<br/>(ownership resolved internally)"| DB
+  DB -->|"movements in idx order<br/>+ THIS kid's load/reps, verbatim"| CARD
+  CARD -.->|"coach reads it,<br/>TYPES what was performed"| FORM
+```
+
 ## 3. Offline outbox → sync
 
 ```mermaid
