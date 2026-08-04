@@ -23,6 +23,16 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
+ * The project's minimum tap-target size in CSS px (AGENTS.md: "≥44px tap targets" — the kids log on a
+ * phone on the gym floor). This is the TEST-SIDE mirror of the `min-h-11` in `buttonVariants`' base and
+ * the `h-11` in `INPUT_CLASS`: Tailwind classes are what actually drive the CSS, so this const does NOT
+ * single-source the value — the only thing binding the two is `e2e/a11y.spec.ts`, which asserts every
+ * rendered control clears this height. Changing one without the other makes that spec fail, which is the
+ * point.
+ */
+export const MIN_TAP_TARGET_PX = 44;
+
+/**
  * The shared text/number `<input>` styling — the single source for the app's form fields (the
  * bodyweight, strength, check-in, and V1-9 edit-set inputs), so the ≥44px height (`h-11`), focus ring,
  * and invalid-border tokens can't drift between forms. Callers append width utilities as needed

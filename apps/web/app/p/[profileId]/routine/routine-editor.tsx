@@ -82,7 +82,6 @@ export function RoutineEditor({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="min-h-11 min-w-11"
                     aria-disabled={i === 0}
                     onClick={() => setOrder((o) => moveUp(o, i))}
                     aria-label={`Move ${label} up`}
@@ -93,7 +92,6 @@ export function RoutineEditor({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="min-h-11 min-w-11"
                     aria-disabled={i === order.length - 1}
                     onClick={() => setOrder((o) => moveDown(o, i))}
                     aria-label={`Move ${label} down`}
@@ -104,7 +102,6 @@ export function RoutineEditor({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="min-h-11"
                     onClick={() => setOrder((o) => toggle(o, item))}
                     aria-label={`Remove ${label} from the routine`}
                   >
@@ -129,7 +126,6 @@ export function RoutineEditor({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="min-h-11"
                   // Re-add the ORIGINAL item if this key was in the kid's routine (keeps `conditional`);
                   // otherwise a fresh bare item.
                   onClick={() =>
@@ -149,7 +145,7 @@ export function RoutineEditor({
           type="submit"
           size="lg"
           disabled={pending || order.length === 0}
-          className="h-11 text-base"
+          className="text-base"
         >
           {pending ? 'Saving…' : 'Save routine'}
         </Button>
