@@ -14,6 +14,8 @@ import { formatDayLong, localDayIso, localWeekStartIso } from '@/lib/date';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
+import { getProgramDay } from '@/lib/dal/programming';
+import { resolveDayRole } from '@/lib/programming/day-role-schedule';
 import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
 import {
   buildRoutineBlocks,
@@ -29,6 +31,7 @@ import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
 import { formatSetLine, isEditableSet } from './set-display';
 import { LifeForm } from './life-form';
+import { ProgramReference } from './program-reference';
 import { StrengthForm } from './strength-form';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
@@ -51,11 +54,17 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
   const timeZone = await getActiveTimeZone();
   const day = localDayIso(timeZone);
   const weekStart = localWeekStartIso(day);
-  // Two independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the
-  // ramp schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today.
-  const [entries, adherence] = await Promise.all([
+  // V1-10: which day the PROGRAM says this is (Mon/Wed/Fri → Strength A/B/C), from the same active-tz
+  // `day` the header renders — so the card can't claim Monday while the header says Sunday. null on a
+  // non-strength day → no program read, no card.
+  const dayRole = resolveDayRole(day);
+  // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
+  // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today;
+  // `programDay` is [] on a rest day or when the kid's household has no block.
+  const [entries, adherence, programDay] = await Promise.all([
     listEntriesForDay(profile.id, day),
     getWeeklyAdherence(profile.id, weekStart),
+    dayRole ? getProgramDay(profile.id, dayRole) : [],
   ]);
 
   // Which check-in fields are already logged today — derived from the entries we just
@@ -121,6 +130,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 <h2 id={`str-${i}`} className="text-lg font-medium">
                   Log strength
                 </h2>
+                {/* V1-10: today's programmed movements, read-only, directly above the form the coach
+                    types the PERFORMED values into. Inside the routine's strength gate — a kid whose
+                    routine has no strength block sees no program card either. */}
+                {dayRole && programDay.length > 0 ? (
+                  <ProgramReference dayRole={dayRole} rows={programDay} />
+                ) : null}
                 <StrengthForm profileId={profile.id} day={day} />
               </section>
             );

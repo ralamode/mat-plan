@@ -15,6 +15,34 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The weekday → `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
+
+- **What & why (V1-10 slice 2):** which `day_role` a weekday programs lives in
+  `apps/web/lib/programming/day-role-schedule.ts` as `DAY_ROLE_BY_WEEKDAY` — Ray's split hardcoded
+  (Mon/Wed/Fri → Strength A/B/C, everything else → nothing). The schedule genuinely belongs on the
+  `program_block` (a block _is_ a weekly plan), but a `block_schedule` table would ship a migration plus an
+  authoring UI for data exactly one household can author, in a slice whose whole point was "no migration".
+  So it is app **policy**, deliberately in `apps/web` and not `packages/shared` — it is not part of the
+  cross-boundary contract, and nothing in the DB or engine may depend on it.
+- **Impact:** low today (one household, one block, a split that hasn't changed). Two real limits: a second
+  household would silently inherit Ray's split, and changing a training day is a **code change + deploy**,
+  not an edit. There is no override affordance either (the panel deferred the `?strengthDay=` selector), so
+  lifting Strength B on a Tuesday shows no card — the coach just types the movements, today's behavior.
+- **Proposed fix:** **Clerk / multi-household (v1.5)** is the promotion trigger. At that point the map
+  becomes per-block schedule rows (or a `program_blocks.schedule` column), `resolveDayRole` takes the
+  block, and this const is deleted. If a day-role override lands before then it must validate against the
+  **strength subset only** (`DAY_ROLE_TO_SESSION_TYPE[x] === 'strength'`), never all of `DAY_ROLES` — else a
+  conditioning role could be forced into a strength session.
+- **Severity:** low (accepted for the pre-Clerk single-household deployment; same class as the access gate).
+- **Related, same slice — the card can shift layout on first paint (CLS).** `getActiveTimeZone()` falls
+  back to `DEFAULT_TIME_ZONE` until `TimeZoneSync` writes the `tz` cookie and triggers `router.refresh()`
+  (V1-6c). For a device in a zone whose local weekday differs at that moment, the first paint can resolve a
+  different `day_role` — so this ~150px card can appear or disappear above the strength form after
+  hydration. Inherited from V1-6c, but the card is a much larger shifting block than anything V1-6c
+  introduced, and CLS < 0.1 is a stated budget. Harmless for Ray's household (one zone, cookie set after
+  the first visit). **Fix when it bites:** reserve height for the card, or resolve the zone before first
+  paint (a `middleware` hint) — the same change that would remove the V1-6c refresh flash generally.
+
 ### Coach routine editor: no real authz, and two accepted write semantics (V1-18 PR 2)
 
 - **What & why (V1-18 PR 2):** the routine editor (`/p/[profileId]/routine` + `editRoutineAction`) ships

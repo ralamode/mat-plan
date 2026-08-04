@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-28
+**Last updated:** 2026-07-30
 
 ## Where we are right now
 
@@ -51,7 +51,25 @@ now work end-to-end: tick "Superset" on 2+ movement cards → "Group as superset
 as a labeled **SUPERSET** bracket on the day's log (in alternating order). Same interaction for the kids' light
 superset and Ray's v2 PPL pairings. See [v1-8-3-remainder-feel-and-supersets.md](./plans/v1-8-3-remainder-feel-and-supersets.md).
 
-**In flight** — **V1-10 PR 1b**: **programming — seed Ray's real block** — the DATA PR that lights up the (empty) programming tables. Seeds the **Kids S&C Foundation** block: 3 strength days (A/B/C), 21 prescriptions, per-kid loads (+ per-kid reps where the kids differ) — all transcribed VERBATIM from Ray's 2-week program doc (the LLM authors no loads). Migration `0008` adds `prescription_targets.reps` (per-kid override) + widens the `day_role` CHECK for `strength_c` (three strength days); 8 new catalog movements. The seed-row forward-guards + a `db:verify` real-block round-trip now exercise real data. Still ships dark — the strength-form prefill (weekday → day_role → greyed suggestions) is slice 2. Opens backlog: conditioning-day model, RIR/RPE-per-set logging, a prescription cue field for the prefill. See [v1-10-1b-seed-real-program.md](./plans/v1-10-1b-seed-real-program.md).
+**In flight** — **V1-10 PR 2**: **the day's program on Today** — the payoff of the programming data. On a
+strength day a **read-only "Today's program" card** renders above the **UNCHANGED** strength form: that
+`day_role`'s movements in the coach's `idx` order, with each kid's `sets × target_reps · load` **verbatim**
+(Liam's "BW" vs Scarlett's "BW +5-10"). The weekday → `day_role` map (Mon/Wed/Fri → Strength A/B/C) is a
+documented app-config **stopgap** (tech-debt; Clerk/multi-household is the promotion trigger). The query
+(`programDayRows`) is single-sourced in `packages/db` and `db:verify`-proven — `idx` order, per-kid loads, a
+target-less kid → NULL load (never the sibling's), **BOLA** (another household's profile gets nothing), and a
+two-block household resolving deterministically to one. Pure app code, **no migration**; the strength form is
+byte-untouched. The panel unanimously **rejected the planned editable prefill** — ~90% of the authored loads
+are text a numeric field can't hold, and pre-filling the `required` weight field would let a PRESCRIBED load
+log as a PERFORMED one without a human typing it. See [v1-10-2-strength-prefill.md](./plans/v1-10-2-strength-prefill.md).
+
+**Merged (#67)** — **V1-10 PR 1b**: **programming — seed Ray's real block** — the DATA PR that lit up the
+(empty) programming tables. Seeds the **Kids S&C Foundation** block: 3 strength days (A/B/C), 21 prescriptions,
+per-kid loads (+ per-kid reps where the kids differ) — all transcribed VERBATIM from Ray's 2-week program doc
+(the LLM authors no loads). Migration `0008` adds `prescription_targets.reps` (per-kid override) + widens the
+`day_role` CHECK for `strength_c`; 8 new catalog movements. Shipped dark — PR 2 is the surface. Opens backlog:
+conditioning-day model, RIR/RPE-per-set logging, a prescription cue field.
+See [v1-10-1b-seed-real-program.md](./plans/v1-10-1b-seed-real-program.md).
 
 **Merged (#66)** — **V1-10 PR 1**: **programming — data model** — three net-new tables `program_blocks → prescriptions → prescription_targets` (spec.md §4), migration `0007`, shared seed-row schemas + a dedicated `DAY_ROLES` enum, an empty seed mechanism + a `db:verify` proof driving a test-only fixture through the real `seedProgram` resolver. DB-only, ships dark.
 
@@ -70,10 +88,9 @@ reflects the fix. Ownership-scoped UPDATE single-sourced in `packages/db` (prove
 `updated_at` (server-`now()`; client-ts compare is v1.5 — see tech-debt), and a shared `SetRepsWeightFields` +
 hoisted `INPUT_CLASS` so the edit inputs reuse the log form's exactly. See [v1-9-edit-set.md](./plans/v1-9-edit-set.md).
 
-**Remaining to the MVP:** V1-9 (edit/fix-a-set, in flight; **+V1-9a** per-exercise notes, **+V1-9b**
-delete/clear-day) → V1-10/11/12 (template
-prefill · copy-set · a11y) → **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E +
-rate-limit/Sentry) = MVP done. _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
+**Remaining to the MVP:** V1-10 (programming; PR 2 in flight) → V1-11/12 (copy-set · a11y) →
+**V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
+_(Backlogged alongside: **V1-9a** per-exercise notes, **V1-9b** delete/clear-day.)_ _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
 calisthenics / max-strength.)_
 
 **Newly brainstormed (post-MVP, backlogged):** **V1-15 day navigation** (page back through previous
@@ -92,7 +109,7 @@ migrations).
 - **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
   V1-6a · V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d). Data foundation + strength
   logging complete; the back third is editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-9** (fix-a-set / edit).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-10 PR 2** (the day's program on Today).
 
 ## Phases
 
@@ -128,30 +145,30 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v1 backlog (14 PRs) — completes the MVP
 
-| PR      | Scope                                                                                                  | Status |
-| ------- | ------------------------------------------------------------------------------------------------------ | ------ |
-| V1-1    | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)                                | ✅     |
-| V1-2    | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                  | ✅     |
-| V1-3    | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                                  | ✅     |
-| V1-4    | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                        | ✅     |
-| V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                   | ✅     |
-| V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                      | ✅     |
-| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md)) | ✅     |
-| V1-6c   | timezone / local-calendar-date correctness ([plan](./plans/v1-6c-timezone-local-date.md))              | ✅     |
-| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                         | ✅     |
-| V1-7    | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                              | ✅     |
-| V1-8-1  | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                        | ✅     |
-| V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                        | ✅     |
-| V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                       | ✅     |
-| V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                  | ✅     |
-| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                        | ✅     |
-| V1-8-3d | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                 | ✅     |
-| V1-9    | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                              | 🟡     |
-| V1-10   | block-template prefill                                                                                 | ⚪     |
-| V1-11   | copy-set-to-other-kid                                                                                  | ⚪     |
-| V1-12   | a11y pass                                                                                              | ⚪     |
-| V1-13   | CSV export endpoint (golden-file)                                                                      | ⚪     |
-| V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                            | ⚪     |
+| PR      | Scope                                                                                                                         | Status |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ------ |
+| V1-1    | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)                                                       | ✅     |
+| V1-2    | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                                         | ✅     |
+| V1-3    | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                                                         | ✅     |
+| V1-4    | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                                               | ✅     |
+| V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                                          | ✅     |
+| V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                                             | ✅     |
+| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md))                        | ✅     |
+| V1-6c   | timezone / local-calendar-date correctness ([plan](./plans/v1-6c-timezone-local-date.md))                                     | ✅     |
+| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                                                | ✅     |
+| V1-7    | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                                                     | ✅     |
+| V1-8-1  | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                                               | ✅     |
+| V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                                               | ✅     |
+| V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                                              | ✅     |
+| V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                                         | ✅     |
+| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                                               | ✅     |
+| V1-8-3d | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                                        | ✅     |
+| V1-9    | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                                                     | ✅     |
+| V1-10   | programming — data model (#66) · real block seeded (#67) · Today's program card ([plan](./plans/v1-10-2-strength-prefill.md)) | 🔵     |
+| V1-11   | copy-set-to-other-kid                                                                                                         | ⚪     |
+| V1-12   | a11y pass                                                                                                                     | ⚪     |
+| V1-13   | CSV export endpoint (golden-file)                                                                                             | ⚪     |
+| V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
 
 ## Changelog (merged PRs)
 

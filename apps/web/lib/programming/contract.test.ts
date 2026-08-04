@@ -1,4 +1,5 @@
 import {
+  DAY_ROLE_LABELS,
   DAY_ROLE_TO_SESSION_TYPE,
   DAY_ROLES,
   dayRoleSchema,
@@ -7,6 +8,7 @@ import {
   PROGRAM_SEED,
   prescriptionSeedRowSchema,
   programBlockSeedRowSchema,
+  SESSION_TYPE_LABELS,
   SESSION_TYPES,
   sessionTypeSchema,
 } from '@mat-plan/shared';
@@ -42,6 +44,25 @@ describe('DAY_ROLE_TO_SESSION_TYPE — every day role maps to a valid session ty
     expect(DAY_ROLE_TO_SESSION_TYPE.strength_a).toBe('strength');
     expect(DAY_ROLE_TO_SESSION_TYPE.strength_b).toBe('strength');
     for (const s of SESSION_TYPES) expect(DAY_ROLE_TO_SESSION_TYPE[s]).toBe(s);
+  });
+});
+
+describe('DAY_ROLE_LABELS — derived from SESSION_TYPE_LABELS, never re-typed', () => {
+  it('labels every day role', () => {
+    for (const role of DAY_ROLES) {
+      expect(DAY_ROLE_LABELS[role]).toBeTruthy();
+    }
+  });
+
+  it('distinguishes the split strength days (SESSION_TYPE_LABELS alone collapses them)', () => {
+    expect(DAY_ROLE_LABELS.strength_a).toBe('Strength A');
+    expect(DAY_ROLE_LABELS.strength_b).toBe('Strength B');
+    expect(DAY_ROLE_LABELS.strength_c).toBe('Strength C');
+    expect(new Set(DAY_ROLES.map((r) => DAY_ROLE_LABELS[r])).size).toBe(DAY_ROLES.length);
+  });
+
+  it('is the session-type label verbatim for a 1:1 role', () => {
+    for (const s of SESSION_TYPES) expect(DAY_ROLE_LABELS[s]).toBe(SESSION_TYPE_LABELS[s]);
   });
 });
 

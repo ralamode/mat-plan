@@ -28,6 +28,16 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   timed out in `fill()`, looking like a fresh bug rather than leftover state. → Make writing steps
   **retry-safe**: check `isEditable()` and, when the state is already there, skip the write and
   assert the end state. (V1-5)
+- **Today's render is now WEEKDAY-DEPENDENT, so CI sees a different page on a Monday than on a
+  Thursday.** → V1-10 slice 2 renders the "Today's program" card only when the local weekday maps to a
+  `day_role` (Mon/Wed/Fri). Nothing in the current suite collides with it — every step locates by
+  ROLE + ACCESSIBLE NAME (`getByRole('region', { name: 'Check-ins' })`), which is immune to a new
+  sibling section appearing above the strength form. → Keep it that way: **never locate an e2e element
+  by position, nth-match, or section ORDER on Today**, or the suite will pass Tue/Thu and fail Mon/Wed/Fri
+  — a failure that reproduces only two days in three and looks like flake. If a test ever needs the card
+  present or absent deterministically, pin the browser zone (`timezoneId`) so the local weekday is
+  chosen, the same lever `screenshot --tz` uses. (V1-10)
+
 - **`notFound()` route returns HTTP 200, not 404, so `expect(res.status()).toBe(404)` fails.** → The
   app is `force-dynamic` (nonce CSP), so Next **streams the 200 header before the RSC throws
   `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
