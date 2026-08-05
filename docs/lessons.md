@@ -43,6 +43,34 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
   not-found **content** (`getByText(/this page could not be found/i)`), not the HTTP status. (V1-3)
 
+- **UNRESOLVED: the check-ins smoke (`log-bodyweight.spec.ts:23`) fails locally and flakes in CI.**
+  Symptom: `getByRole('button', { name: 'Log check-ins' })` "element(s) not found", snapshot showing
+  `button "Logging…" [disabled]` — a Server Action still in flight past 15s. The failure POINT MOVES
+  within that one test (sometimes the check-ins submit, sometimes `Wake · logged today`), and only that
+  test — the longest and most write-heavy — is affected; the other four pass consistently.
+  **Ruled out so far** (V1-14a), so the next attempt doesn't repeat them:
+  - _Not_ caused by the Sentry action wrapper: identical results with and without it (3 runs each).
+  - _Not_ (only) per-action cold start: warming the check-ins path in `global.setup` made test 2 drop to
+    ~1s but did **not** fix the smoke.
+  - _Not_ worker contention alone: reproduces at `--workers=1` (CI's config) as well as `--workers=5`.
+  - _Not_ the setup timeout — though that WAS a real latent bug found on the way (see next entry).
+    A moving failure point in the longest sequential-write test points at write/revalidation latency
+    rather than a single bad assertion. CI's `retries: 1` usually masks it as `flaky`; it has also failed
+    outright with the retry. **Needs its own investigation — do not bolt another guess onto a feature PR.**
+
+- **Playwright's default TEST timeout (30s) applies to `global.setup` too — and a warm-up step can blow
+  it.** → `global.setup` did gate login + a cold bodyweight write with a 30s _assertion_ timeout inside
+  a 30s _test_ timeout. Zero headroom: on a slow runner the setup itself times out, the warming silently
+  never happens, and the cold cost lands in the coverage test — the exact thing the setup exists to
+  prevent. Adding a second warm-up made it fail outright. → **`setup.setTimeout()` explicitly whenever
+  the setup does real work**, well above the sum of its own assertion timeouts. (V1-14a)
+
+- **Attribute a flake before "fixing" it — stash your branch and re-run without your changes.** → This
+  surfaced during V1-14a (which wraps every action in Sentry), so the wrapper was the obvious suspect.
+  Running the same spec with and without the branch's changes, 3 runs each, gave identical results and
+  killed that theory in minutes. Also: read the numbers carefully — "1 failed, 4 passed" is one TEST of
+  five, not one RUN in five. Misreading that turned into an overstated claim in a PR description. (V1-14a)
+
 - **Test "flaky" (fails attempt 1, passes on retry) after a form submit.** → The _first_ Server Action
   after a cold `next start` pays JIT + first-DB-connection cost, exceeding the assertion timeout; the
   warm retry passes, masking the race. → **Warm the cold path once in `global.setup`** (submit one

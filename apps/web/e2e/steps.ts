@@ -85,7 +85,12 @@ export async function logCheckins(
  */
 export async function submitCheckins(
   page: Page,
-  opts: { checks?: string[]; numbers?: { label: string; value: string }[] },
+  opts: {
+    checks?: string[];
+    numbers?: { label: string; value: string }[];
+    /** Only overridden for the COLD warm-up in global.setup.ts — see `logBodyweight`'s note. */
+    timeout?: number;
+  },
 ): Promise<void> {
   const form = page.getByRole('region', { name: 'Check-ins' });
   const submit = page.getByRole('button', { name: 'Log check-ins' });
@@ -97,7 +102,7 @@ export async function submitCheckins(
     await form.getByRole('spinbutton', { name: new RegExp(`^${n.label}`) }).fill(n.value);
   }
   await submit.click();
-  await expect(submit).toBeEnabled({ timeout: 15_000 }); // slow action — see logCheckins
+  await expect(submit).toBeEnabled({ timeout: opts.timeout ?? 15_000 }); // slow action — see logCheckins
 }
 
 /**
