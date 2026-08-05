@@ -15,6 +15,37 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Mutating Server Actions are not rate-limited (V1-14a)
+
+- **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The six mutating Server Actions
+  in `app/p/[profileId]/actions.ts` are deliberately unlimited, because there is nothing meaningful to
+  key a limit on yet. Their only identifier is `profileId`, read from `formData.get('profileId')` —
+  caller-supplied and unauthenticated. An attacker rotates a fresh UUID per request for a fresh bucket;
+  worse, real ids are non-enumerable UUIDv7 (SECURITY.md's anti-IDOR design), so an attacker cannot land
+  in a real bucket even by accident. Such a limit would constrain **only the household**, while adding a
+  Redis round-trip to every tap on the gym floor (an INP cost against the ADR-0001 budget).
+- **Impact:** low today. Reaching these actions at all requires the gate cookie, which IS now rate
+  limited; the app is a single household on an unlisted URL. The residual exposure is a gate-holder
+  writing unbounded rows — annoying, not dangerous, and visible in the log.
+- **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
+  and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
+  in that PR, keyed by user id, reusing the existing `checkRateLimit` seam (already fail-open + tested).
+  `/api/sync` should land limited from day one — the batch flush is the genuine amplification endpoint.
+- **Severity:** low (accepted until Clerk; the seam and its contract already exist).
+
+### Sentry ships without source maps, so stack frames are minified (V1-14a)
+
+- **What & why:** `next.config.ts` sets `sourcemaps.disable: true` and `pnpm-workspace.yaml` sets
+  `'@sentry/cli': false`. Uploading source maps requires `@sentry/cli`, whose postinstall pulls a ~20MB
+  binary into **every** install including CI (which never uploads) — the same complaint already logged
+  against `@embedded-postgres` below — and would make a production build depend on that binary plus an
+  auth token.
+- **Impact:** Sentry stack traces point at bundled/minified frames. Diagnosis is slower, not impossible;
+  server frames retain function names reasonably well.
+- **Proposed fix:** flip BOTH switches together and add `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/
+  `SENTRY_PROJECT` — worth doing the first time a real incident is hard to read, not before.
+- **Severity:** low (a legibility cost on a 3-user app).
+
 ### The weekday → `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
 
 - **What & why (V1-10 slice 2):** which `day_role` a weekday programs lives in

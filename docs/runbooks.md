@@ -83,3 +83,38 @@ _TODO — restore-from-branch procedure + how to reconcile the migration journal
 ## First-time environment setup (Neon + Vercel + secrets)
 
 _See [deploy.md](./deploy.md) — the one-time Neon/Vercel/secret wiring lives there._
+
+## Verifying V1-14a hardening after wiring the credentials
+
+Neither system can be verified without live credentials, so this is the manual pass to run **once**
+after setting the Vercel env. Until then both features no-op by design and the app behaves exactly as
+it did pre-V1-14a — that absence path is what CI and local dev exercise.
+
+### 1. Sentry is receiving — and is NOT leaking
+
+1. Set `SENTRY_DSN` in Vercel (all three environments) and redeploy.
+2. Trigger a real server error on the **preview** URL (easiest: temporarily point `DATABASE_URL` at a
+   bad host, load Today, then revert). The page should render `error.tsx` as before.
+3. In Sentry, open the new issue and confirm **all** of:
+   - it arrived at all (the DSN is wired);
+   - **no `mp_gate` cookie** anywhere in the event — check Request → Headers and Request → Cookies;
+   - **no `server_action_form_data.*`** entries under Additional Data;
+   - no bodyweight value anywhere in the payload.
+     If any of those appear, `lib/sentry-scrub.ts` is not running — treat it as a **security incident**,
+     revoke the DSN, and rotate `ACCESS_GATE_PASSWORD`.
+
+### 2. The gate rate limit is enforcing
+
+1. Set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel and redeploy.
+2. On the preview URL, submit a **wrong** access code 11 times in under 10 minutes.
+3. Expect the first ~10 to say "Incorrect access code." and the next to say **"Too many attempts. Try
+   again in a few minutes."** — rendered in the form, NOT an error page. An error page means the limit
+   is throwing instead of returning its envelope.
+4. Wait out the window, confirm a correct code works again.
+5. Sanity-check the fail-open path: temporarily set a bogus `UPSTASH_REDIS_REST_TOKEN`. The gate must
+   still **work** (fail-open), and later Sentry events should carry a `rate-limit` breadcrumb.
+
+### 3. Confirm CI is unaffected
+
+CI deliberately has **no** Upstash or Sentry credentials — no external service may gate a build. If a
+CI failure ever mentions either, something has been added to GitHub Actions secrets that should not be.

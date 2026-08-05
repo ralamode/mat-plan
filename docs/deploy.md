@@ -59,6 +59,26 @@ The migrator runs in GitHub Actions, so the **direct** string is a repo secret, 
 - Repo → **Settings → Secrets and variables → Actions → New repository secret**
 - Name: `DATABASE_URL_UNPOOLED` · Value: Neon **direct/unpooled** string.
 
+## 3b. Optional hardening vars (V1-14a)
+
+Both are **optional**; absent means the feature no-ops and the app behaves exactly as it did before.
+They go in **Vercel only** — CI never calls either service, deliberately, so that no external outage
+can redden a build.
+
+| Variable                   | Where to get it                              | Vercel envs                      |
+| -------------------------- | -------------------------------------------- | -------------------------------- |
+| `UPSTASH_REDIS_REST_URL`   | Upstash console -> your Redis DB -> REST API | Production, Preview, Development |
+| `UPSTASH_REDIS_REST_TOKEN` | same panel                                   | Production, Preview, Development |
+| `SENTRY_DSN`               | Sentry -> Settings -> Client Keys (DSN)      | Production, Preview, Development |
+
+No `SENTRY_AUTH_TOKEN`/`ORG`/`PROJECT`: source-map upload is deliberately disabled (see
+`next.config.ts` and docs/tech-debt.md), so the DSN is the only Sentry credential.
+
+Account **recovery codes** for Upstash and Sentry belong in `.local-secrets/`, not here — that folder
+is for account-recovery material, while env vars live in `apps/web/.env.local`.
+
+Verify both with the manual pass in [runbooks.md](./runbooks.md) after wiring.
+
 ## 4. First migration
 
 Migrations apply automatically on merge to `main` whenever `packages/db/migrations/**` changes
