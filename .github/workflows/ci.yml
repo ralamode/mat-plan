@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload report + traces on failure
         if: failure() && steps.guard.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
