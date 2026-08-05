@@ -140,6 +140,22 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## CI / secrets
 
+- **A Dependabot MAJOR can be an ecosystem-readiness problem, not a code problem — pin the toolchain,
+  don't chase npm.** → Dependabot proposed `typescript` 5.9 → **7.0** (the Go rewrite) two days after
+  publication. `@typescript-eslint/typescript-estree@8` cannot parse it —
+  `TypeError: Cannot read properties of undefined (reading 'Cjs')` — so `quality`, `e2e` **and** the
+  Vercel build all failed with nothing fixable on our side, and Dependabot would have re-proposed it
+  weekly, burning a full CI run each time for a guaranteed red. → **`ignore` semver-major for
+  compiler/parser-coupled deps** (`typescript`) until the tooling that parses them catches up, with a
+  comment naming the condition to remove it. Conversely, **GitHub Action majors are safe to group** —
+  they're almost always runner-image/Node bumps, not semantics. (V1-14a follow-up)
+
+- **A known-flaky e2e makes routine dependency bumps look broken.** → Three green Dependabot PRs
+  (`checkout`, `cache`, `commitlint`) showed red purely from the check-ins flake. That is the failure
+  mode that trains a reviewer to ignore red checks — the cost of an unfixed flake is not the flake, it
+  is the signal it destroys elsewhere. → When triaging a red bump, check WHICH job failed before
+  assuming the bump caused it. (V1-14a follow-up)
+
 - **gitleaks red on a CI placeholder** (e.g. `ci-e2e-placeholder-1234`). → A high-entropy dummy value
   trips the generic-api-key rule. → Allowlist the **specific** string in `.gitleaks.toml` (tight regex,
   not a path exclusion, so real secrets in those files are still caught). Low-entropy placeholders
