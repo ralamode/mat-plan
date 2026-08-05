@@ -13,6 +13,12 @@ allowBuilds:
   '@embedded-postgres/darwin-x64': true
   '@embedded-postgres/linux-arm64': true
   '@embedded-postgres/linux-x64': true
+  # @sentry/cli: DELIBERATELY false. Its postinstall downloads a ~20MB binary used ONLY to upload
+  # source maps at build time. We disable source-map upload entirely (see next.config.ts), so the
+  # binary is dead weight in every install — including CI, which is the exact complaint already logged
+  # against @embedded-postgres in docs/tech-debt.md. Trade-off: Sentry stack frames are minified.
+  # Acceptable for a 3-user app; flip this AND `sourcemaps.disable` together if traces prove unreadable.
+  '@sentry/cli': false
   esbuild: true
   sharp: true
   unrs-resolver: true

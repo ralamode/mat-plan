@@ -1,5 +1,7 @@
 'use server';
 
+import * as Sentry from '@sentry/nextjs';
+
 import {
   ACTIVITY_TYPE_KEYS,
   editStrengthSetSchema,
@@ -56,40 +58,51 @@ export async function logBodyweightAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = logBodyweightSchema.safeParse({
-    profileId: formData.get('profileId'),
-    value: formData.get('value'),
-    unit: formData.get('unit'),
-    clientId: formData.get('clientId'),
-    notes: formData.get('notes') ?? undefined,
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
+    const parsed = logBodyweightSchema.safeParse({
+      profileId: formData.get('profileId'),
+      value: formData.get('value'),
+      unit: formData.get('unit'),
+      clientId: formData.get('clientId'),
+      notes: formData.get('notes') ?? undefined,
+    });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: 'Please fix the errors below.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    // The write lands on the day the page rendered (bounded ±1 against the active-tz today),
+    // so a weigh-in never stamps a date the header didn't show — the same seam check-ins use.
+    const day = await resolveDeclaredDay(formData.get('day'));
+    if (!day.ok) return { ok: false, error: day.error };
+
+    const profile = await getProfileByPublicId(parsed.data.profileId);
+    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+    await logBodyweight({
+      profilePublicId: profile.id,
+      value: parsed.data.value,
+      unit: parsed.data.unit,
+      clientId: parsed.data.clientId,
+      day: day.day,
+      notes: parsed.data.notes ?? null,
+    });
+
+    revalidatePath(`/p/${profile.id}`);
+    return { ok: true, error: null };
   });
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: 'Please fix the errors below.',
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
-  // The write lands on the day the page rendered (bounded ±1 against the active-tz today),
-  // so a weigh-in never stamps a date the header didn't show — the same seam check-ins use.
-  const day = await resolveDeclaredDay(formData.get('day'));
-  if (!day.ok) return { ok: false, error: day.error };
-
-  const profile = await getProfileByPublicId(parsed.data.profileId);
-  if (!profile) return { ok: false, error: 'No profile found to log against.' };
-
-  await logBodyweight({
-    profilePublicId: profile.id,
-    value: parsed.data.value,
-    unit: parsed.data.unit,
-    clientId: parsed.data.clientId,
-    day: day.day,
-    notes: parsed.data.notes ?? null,
-  });
-
-  revalidatePath(`/p/${profile.id}`);
-  return { ok: true, error: null };
 }
 
 /**
@@ -136,68 +149,79 @@ export async function logCheckinsAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
-  //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
-  const items = [];
-  const fieldErrors: Record<string, string[]> = {};
-  for (const f of CHECKIN_FIELDS) {
-    const raw = formData.get(valueInputName(f.key));
-    if (raw === null || String(raw).trim() === '') continue; // unchecked / blank → not submitted
-    const value = valueSchemaFor(f).safeParse(raw);
-    if (!value.success) {
-      fieldErrors[f.key] = value.error.issues.map((i) => i.message);
-      continue;
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
+    // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
+    //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
+    const items = [];
+    const fieldErrors: Record<string, string[]> = {};
+    for (const f of CHECKIN_FIELDS) {
+      const raw = formData.get(valueInputName(f.key));
+      if (raw === null || String(raw).trim() === '') continue; // unchecked / blank → not submitted
+      const value = valueSchemaFor(f).safeParse(raw);
+      if (!value.success) {
+        fieldErrors[f.key] = value.error.issues.map((i) => i.message);
+        continue;
+      }
+      const clientId = uuidSchema.safeParse(formData.get(clientIdInputName(f.key)));
+      if (!clientId.success) {
+        fieldErrors[f.key] = ['Could not submit this item. Reload and try again.'];
+        continue;
+      }
+      // Carry the descriptor's identity straight through — no re-encoding a key and
+      // re-parsing it back out of a lookup map.
+      items.push({
+        activityKey: f.activityKey,
+        metricKey: f.metricKey,
+        value: value.data,
+        clientId: clientId.data,
+      });
     }
-    const clientId = uuidSchema.safeParse(formData.get(clientIdInputName(f.key)));
-    if (!clientId.success) {
-      fieldErrors[f.key] = ['Could not submit this item. Reload and try again.'];
-      continue;
+
+    if (Object.keys(fieldErrors).length > 0) {
+      return { ok: false, error: 'Please fix the errors below.', fieldErrors };
     }
-    // Carry the descriptor's identity straight through — no re-encoding a key and
-    // re-parsing it back out of a lookup map.
-    items.push({
-      activityKey: f.activityKey,
-      metricKey: f.metricKey,
-      value: value.data,
-      clientId: clientId.data,
+    if (items.length === 0) return { ok: false, error: 'Check at least one thing to log.' };
+
+    // 2. The genuinely untrusted scalars.
+    const profileId = uuidSchema.safeParse(formData.get('profileId'));
+    const day = await resolveDeclaredDay(formData.get('day'));
+    if (!profileId.success) {
+      return {
+        ok: false,
+        error: 'Please fix the errors below.',
+        fieldErrors: { profileId: ['Invalid profile.'] },
+      };
+    }
+    if (!day.ok) return { ok: false, error: day.error };
+
+    // 3. Re-resolve the profile server-side (never trust the hidden field).
+    const profile = await getProfileByPublicId(profileId.data);
+    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+    const results = await logCheckinEntries({
+      profilePublicId: profile.id,
+      day: day.day,
+      items,
     });
-  }
 
-  if (Object.keys(fieldErrors).length > 0) {
-    return { ok: false, error: 'Please fix the errors below.', fieldErrors };
-  }
-  if (items.length === 0) return { ok: false, error: 'Check at least one thing to log.' };
+    revalidatePath(`/p/${profile.id}`);
 
-  // 2. The genuinely untrusted scalars.
-  const profileId = uuidSchema.safeParse(formData.get('profileId'));
-  const day = await resolveDeclaredDay(formData.get('day'));
-  if (!profileId.success) {
-    return {
-      ok: false,
-      error: 'Please fix the errors below.',
-      fieldErrors: { profileId: ['Invalid profile.'] },
-    };
-  }
-  if (!day.ok) return { ok: false, error: day.error };
-
-  // 3. Re-resolve the profile server-side (never trust the hidden field).
-  const profile = await getProfileByPublicId(profileId.data);
-  if (!profile) return { ok: false, error: 'No profile found to log against.' };
-
-  const results = await logCheckinEntries({
-    profilePublicId: profile.id,
-    day: day.day,
-    items,
+    // A conflict on every item means nothing was written. `client_id` UNIQUE is GLOBAL
+    // (not profile-scoped), so silently reporting success here would mask a lost write.
+    if (!results.some((r) => r.created)) {
+      return { ok: false, error: 'Those check-ins were already logged.' };
+    }
+    return { ok: true, error: null };
   });
-
-  revalidatePath(`/p/${profile.id}`);
-
-  // A conflict on every item means nothing was written. `client_id` UNIQUE is GLOBAL
-  // (not profile-scoped), so silently reporting success here would mask a lost write.
-  if (!results.some((r) => r.created)) {
-    return { ok: false, error: 'Those check-ins were already logged.' };
-  }
-  return { ok: true, error: null };
 }
 
 /**
@@ -235,69 +259,80 @@ export async function logStrengthSessionAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const raw = formData.get('movements');
-  let movements: unknown;
-  try {
-    movements = typeof raw === 'string' ? JSON.parse(raw) : undefined;
-  } catch {
-    return { ok: false, error: 'Could not read the session. Reload and try again.' };
-  }
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
+    const raw = formData.get('movements');
+    let movements: unknown;
+    try {
+      movements = typeof raw === 'string' ? JSON.parse(raw) : undefined;
+    } catch {
+      return { ok: false, error: 'Could not read the session. Reload and try again.' };
+    }
 
-  const parsed = logStrengthSessionSchema.safeParse({
-    profileId: formData.get('profileId'),
-    clientId: formData.get('clientId'),
-    // `feel` is a session-level scalar (a discrete field, NOT part of the movements JSON). `?? undefined`
-    // maps an absent field to undefined so `.optional()` fires; a blank value is normalized to NULL by
-    // the schema's transform.
-    feel: formData.get('feel') ?? undefined,
-    movements,
-    // V1-8-3d: supersets are DERIVED from the movements' distinct superset tags (v1 has no superset
-    // label), so there's no second wire field to keep in sync with the movement tags. Built before
-    // validation so the schema's membership check (movement.supersetClientId ∈ supersets[]) passes.
-    supersets: deriveSupersets(movements),
-    // sessionType omitted on purpose → schema default (see the note above).
+    const parsed = logStrengthSessionSchema.safeParse({
+      profileId: formData.get('profileId'),
+      clientId: formData.get('clientId'),
+      // `feel` is a session-level scalar (a discrete field, NOT part of the movements JSON). `?? undefined`
+      // maps an absent field to undefined so `.optional()` fires; a blank value is normalized to NULL by
+      // the schema's transform.
+      feel: formData.get('feel') ?? undefined,
+      movements,
+      // V1-8-3d: supersets are DERIVED from the movements' distinct superset tags (v1 has no superset
+      // label), so there's no second wire field to keep in sync with the movement tags. Built before
+      // validation so the schema's membership check (movement.supersetClientId ∈ supersets[]) passes.
+      supersets: deriveSupersets(movements),
+      // sessionType omitted on purpose → schema default (see the note above).
+    });
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
+      // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
+      // (a multi-card form otherwise shows an unlocatable "reps must be positive").
+      const movementMsgs = parsed.error.issues
+        .filter((i) => i.path[0] === 'movements')
+        .map((i) =>
+          typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
+        );
+      if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
+      // Superset-level issues (≥2 members, distinct order) key on `['supersets', i]` — surface them too,
+      // or a form bug in the grouping logic shows only the generic banner with no recoverable message.
+      const supersetMsgs = parsed.error.issues
+        .filter((i) => i.path[0] === 'supersets')
+        .map((i) => i.message);
+      if (supersetMsgs.length > 0) fieldErrors.supersets = supersetMsgs;
+      return { ok: false, error: 'Please fix the errors below.', fieldErrors };
+    }
+
+    const day = await resolveDeclaredDay(formData.get('day'));
+    if (!day.ok) return { ok: false, error: day.error };
+
+    const profile = await getProfileByPublicId(parsed.data.profileId);
+    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+    await logStrengthSession({
+      profilePublicId: profile.id,
+      sessionType: parsed.data.sessionType,
+      clientId: parsed.data.clientId,
+      day: day.day,
+      feel: parsed.data.feel,
+      supersets: parsed.data.supersets,
+      movements: parsed.data.movements,
+    });
+
+    revalidatePath(`/p/${profile.id}`);
+    // Idempotent by the session's `client_id`: a replay (network retry) dedupes via ON CONFLICT and
+    // the end state is identical — that IS success (the form rotates the clientId on ok, so a
+    // resubmit is a genuine retry, not a new session), not a destructive "already logged" error.
+    return { ok: true, error: null };
   });
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.flatten().fieldErrors;
-    // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
-    // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
-    // (a multi-card form otherwise shows an unlocatable "reps must be positive").
-    const movementMsgs = parsed.error.issues
-      .filter((i) => i.path[0] === 'movements')
-      .map((i) =>
-        typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
-      );
-    if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
-    // Superset-level issues (≥2 members, distinct order) key on `['supersets', i]` — surface them too,
-    // or a form bug in the grouping logic shows only the generic banner with no recoverable message.
-    const supersetMsgs = parsed.error.issues
-      .filter((i) => i.path[0] === 'supersets')
-      .map((i) => i.message);
-    if (supersetMsgs.length > 0) fieldErrors.supersets = supersetMsgs;
-    return { ok: false, error: 'Please fix the errors below.', fieldErrors };
-  }
-
-  const day = await resolveDeclaredDay(formData.get('day'));
-  if (!day.ok) return { ok: false, error: day.error };
-
-  const profile = await getProfileByPublicId(parsed.data.profileId);
-  if (!profile) return { ok: false, error: 'No profile found to log against.' };
-
-  await logStrengthSession({
-    profilePublicId: profile.id,
-    sessionType: parsed.data.sessionType,
-    clientId: parsed.data.clientId,
-    day: day.day,
-    feel: parsed.data.feel,
-    supersets: parsed.data.supersets,
-    movements: parsed.data.movements,
-  });
-
-  revalidatePath(`/p/${profile.id}`);
-  // Idempotent by the session's `client_id`: a replay (network retry) dedupes via ON CONFLICT and
-  // the end state is identical — that IS success (the form rotates the clientId on ok, so a
-  // resubmit is a genuine retry, not a new session), not a destructive "already logged" error.
-  return { ok: true, error: null };
 }
 
 /**
@@ -317,62 +352,73 @@ export async function logLifeActivitiesAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const profileId = uuidSchema.safeParse(formData.get('profileId'));
-  const clientId = uuidSchema.safeParse(formData.get('clientId'));
-  const activityKey = formData.get('activityKey');
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
+    const profileId = uuidSchema.safeParse(formData.get('profileId'));
+    const clientId = uuidSchema.safeParse(formData.get('clientId'));
+    const activityKey = formData.get('activityKey');
 
-  if (!profileId.success || !clientId.success) {
-    return { ok: false, error: 'Please fix the errors below.' };
-  }
-  // Trust boundary: only the life activities are loggable here.
-  if (
-    typeof activityKey !== 'string' ||
-    !(LIFE_ACTIVITY_KEYS as readonly string[]).includes(activityKey)
-  ) {
-    return { ok: false, error: "That isn't a life activity we can log." };
-  }
+    if (!profileId.success || !clientId.success) {
+      return { ok: false, error: 'Please fix the errors below.' };
+    }
+    // Trust boundary: only the life activities are loggable here.
+    if (
+      typeof activityKey !== 'string' ||
+      !(LIFE_ACTIVITY_KEYS as readonly string[]).includes(activityKey)
+    ) {
+      return { ok: false, error: "That isn't a life activity we can log." };
+    }
 
-  // Build the entry item + its calendar `day` per activity — the ONLY life-specific logic. The dispatch
-  // is EXHAUSTIVE: a key that's in the trust set but has no arm here fails loudly (never silently written
-  // with wrestling's metric/value).
-  let item: CheckinItemInput;
-  let entryDay: string;
-  if (activityKey === ACTIVITY_TYPE_KEYS.wake) {
-    // Wake is a "now" event: day, clock minutes, and event_at all from the same instant + active tz.
-    const timeZone = await getActiveTimeZone();
-    const eventAt = new Date();
-    entryDay = localDayIso(timeZone, eventAt);
-    item = {
-      activityKey,
-      metricKey: null, // neither-source: unit resolves to the wake activity's 'timing'
-      value: localMinutesSinceMidnight(timeZone, eventAt),
-      clientId: clientId.data,
-      eventAt,
-    };
-  } else if (activityKey === ACTIVITY_TYPE_KEYS.wrestling_practice) {
-    const day = await resolveDeclaredDay(formData.get('day'));
-    if (!day.ok) return { ok: false, error: day.error };
-    entryDay = day.day;
-    item = {
-      activityKey,
-      metricKey: METRIC_KEYS.practice_minutes,
-      value: DEFAULT_PRACTICE_MINUTES,
-      clientId: clientId.data,
-    };
-  } else {
-    return { ok: false, error: "That isn't a life activity we can log." };
-  }
+    // Build the entry item + its calendar `day` per activity — the ONLY life-specific logic. The dispatch
+    // is EXHAUSTIVE: a key that's in the trust set but has no arm here fails loudly (never silently written
+    // with wrestling's metric/value).
+    let item: CheckinItemInput;
+    let entryDay: string;
+    if (activityKey === ACTIVITY_TYPE_KEYS.wake) {
+      // Wake is a "now" event: day, clock minutes, and event_at all from the same instant + active tz.
+      const timeZone = await getActiveTimeZone();
+      const eventAt = new Date();
+      entryDay = localDayIso(timeZone, eventAt);
+      item = {
+        activityKey,
+        metricKey: null, // neither-source: unit resolves to the wake activity's 'timing'
+        value: localMinutesSinceMidnight(timeZone, eventAt),
+        clientId: clientId.data,
+        eventAt,
+      };
+    } else if (activityKey === ACTIVITY_TYPE_KEYS.wrestling_practice) {
+      const day = await resolveDeclaredDay(formData.get('day'));
+      if (!day.ok) return { ok: false, error: day.error };
+      entryDay = day.day;
+      item = {
+        activityKey,
+        metricKey: METRIC_KEYS.practice_minutes,
+        value: DEFAULT_PRACTICE_MINUTES,
+        clientId: clientId.data,
+      };
+    } else {
+      return { ok: false, error: "That isn't a life activity we can log." };
+    }
 
-  const profile = await getProfileByPublicId(profileId.data);
-  if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    const profile = await getProfileByPublicId(profileId.data);
+    if (!profile) return { ok: false, error: 'No profile found to log against.' };
 
-  await logCheckinEntries({ profilePublicId: profile.id, day: entryDay, items: [item] });
-  revalidatePath(`/p/${profile.id}`);
+    await logCheckinEntries({ profilePublicId: profile.id, day: entryDay, items: [item] });
+    revalidatePath(`/p/${profile.id}`);
 
-  // A one-tap life activity is idempotent by its fixed `client_id`: a replay (double-tap) dedupes via
-  // ON CONFLICT and the end state is identical — that IS success, not the destructive "already logged"
-  // error the batch check-in path returns (where a partial conflict can mean a genuinely lost write).
-  return { ok: true, error: null };
+    // A one-tap life activity is idempotent by its fixed `client_id`: a replay (double-tap) dedupes via
+    // ON CONFLICT and the end state is identical — that IS success, not the destructive "already logged"
+    // error the batch check-in path returns (where a partial conflict can mean a genuinely lost write).
+    return { ok: true, error: null };
+  });
 }
 
 /**
@@ -386,33 +432,44 @@ export async function editStrengthSetAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = editStrengthSetSchema.safeParse({
-    profileId: formData.get('profileId'),
-    setId: formData.get('setId'),
-    reps: formData.get('reps'),
-    weight: formData.get('weight'),
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
+    const parsed = editStrengthSetSchema.safeParse({
+      profileId: formData.get('profileId'),
+      setId: formData.get('setId'),
+      reps: formData.get('reps'),
+      weight: formData.get('weight'),
+    });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: 'Please fix the errors below.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const profile = await getProfileByPublicId(parsed.data.profileId);
+    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+
+    const updated = await editStrengthSet({
+      profilePublicId: profile.id,
+      setId: parsed.data.setId,
+      reps: parsed.data.reps,
+      weight: parsed.data.weight,
+    });
+    if (!updated) return { ok: false, error: 'That set could not be found.' };
+
+    revalidatePath(`/p/${profile.id}`);
+    return { ok: true, error: null };
   });
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: 'Please fix the errors below.',
-      fieldErrors: parsed.error.flatten().fieldErrors,
-    };
-  }
-
-  const profile = await getProfileByPublicId(parsed.data.profileId);
-  if (!profile) return { ok: false, error: 'No profile found to log against.' };
-
-  const updated = await editStrengthSet({
-    profilePublicId: profile.id,
-    setId: parsed.data.setId,
-    reps: parsed.data.reps,
-    weight: parsed.data.weight,
-  });
-  if (!updated) return { ok: false, error: 'That set could not be found.' };
-
-  revalidatePath(`/p/${profile.id}`);
-  return { ok: true, error: null };
 }
 
 /**
@@ -430,32 +487,43 @@ export async function editRoutineAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const raw = formData.get('routine');
-  let submitted: unknown;
-  try {
-    submitted = typeof raw === 'string' ? JSON.parse(raw) : undefined;
-  } catch {
-    return { ok: false, error: 'Could not read the routine. Reload and try again.' };
-  }
+  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
+  // every export in a 'use server' module to be `export async function` (the compiler registers each
+  // export as an action reference). `return await` is load-bearing — the SDK returns
+  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
+  //
+  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+  // convention for free rather than needing a filter.
+  return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
+    const raw = formData.get('routine');
+    let submitted: unknown;
+    try {
+      submitted = typeof raw === 'string' ? JSON.parse(raw) : undefined;
+    } catch {
+      return { ok: false, error: 'Could not read the routine. Reload and try again.' };
+    }
 
-  // Strict write validation (empty / non-catalog / duplicate → reject), reusing resolveRoutine's rule.
-  const config = validateRoutineForWrite(submitted, ROUTINE_CATALOG);
-  if (!config) {
-    return { ok: false, error: 'Pick at least one activity, with no duplicates, then save.' };
-  }
+    // Strict write validation (empty / non-catalog / duplicate → reject), reusing resolveRoutine's rule.
+    const config = validateRoutineForWrite(submitted, ROUTINE_CATALOG);
+    if (!config) {
+      return { ok: false, error: 'Pick at least one activity, with no duplicates, then save.' };
+    }
 
-  const profileId = formData.get('profileId');
-  if (typeof profileId !== 'string') {
-    return { ok: false, error: 'No profile found to save against.' };
-  }
-  const profile = await getProfileByPublicId(profileId);
-  if (!profile) return { ok: false, error: 'No profile found to save against.' };
+    const profileId = formData.get('profileId');
+    if (typeof profileId !== 'string') {
+      return { ok: false, error: 'No profile found to save against.' };
+    }
+    const profile = await getProfileByPublicId(profileId);
+    if (!profile) return { ok: false, error: 'No profile found to save against.' };
 
-  const saved = await updateProfileRoutine(profile.id, config);
-  if (!saved) return { ok: false, error: 'No profile found to save against.' };
+    const saved = await updateProfileRoutine(profile.id, config);
+    if (!saved) return { ok: false, error: 'No profile found to save against.' };
 
-  // Refresh both the kid's Today (renders the new order) and this editor (re-reads the saved routine).
-  revalidatePath(`/p/${profile.id}`);
-  revalidatePath(`/p/${profile.id}/routine`);
-  return { ok: true, error: null };
+    // Refresh both the kid's Today (renders the new order) and this editor (re-reads the saved routine).
+    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(`/p/${profile.id}/routine`);
+    return { ok: true, error: null };
+  });
 }

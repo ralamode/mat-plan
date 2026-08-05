@@ -109,7 +109,7 @@ migrations).
 - **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
   V1-6a · V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d). Data foundation + strength
   logging complete; the back third is editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. In flight: **V1-10 PR 2** (program card) → **V1-12** (a11y, enforced). **V1-11 deferred past the MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)).
+- **Phase:** v0 ✅ complete → v1 🔵 in progress. Merged: **V1-10** (program card, #68), **V1-12** (a11y enforced, #69/#70). In flight: **V1-14a** (hardening). **V1-11 deferred past the MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)). **V1-13 (CSV export) is BLOCKED** on the four legacy CSV samples — and V1-14b depends on it.
 
 ## Phases
 
