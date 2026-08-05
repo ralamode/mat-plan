@@ -18,7 +18,7 @@ jobs:
     name: quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v5
@@ -85,7 +85,7 @@ jobs:
       DATABASE_URL_UNPOOLED: postgres://mat:mat@localhost:5432/mat_plan_test
       ACCESS_GATE_PASSWORD: ci-e2e-placeholder-1234
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The smoke is SKIPPED (heavy steps gated) but the job still SUCCEEDS in two
       # cases — so once `e2e` is a required check (planned at V0/PR-28), neither
@@ -197,7 +197,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
