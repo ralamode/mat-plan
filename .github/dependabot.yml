@@ -1,0 +1,45 @@
+# Dependabot (V1-14a). SECURITY.md's supply-chain concern: a freshly published version may be
+# compromised, and the window between publication and discovery is when the risk is highest. The
+# `cooldown` keys below make Dependabot WAIT before opening a PR, so a malicious release is usually
+# yanked before it ever reaches this repo.
+#
+# Grouping is a scope-discipline choice, not cosmetic: at ~4h/wk, a dozen individual bump PRs a week
+# would drown the real work. Minor/patch land as one PR per ecosystem; MAJORS stay individual because
+# they need reading.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      # A week is long enough for a compromised package to be reported and yanked, and short enough
+      # that a genuine security patch is not meaningfully delayed (those arrive via security alerts,
+      # which cooldown does NOT gate).
+      default-days: 7
+      semver-patch-days: 7
+      semver-minor-days: 7
+      # Majors are read by a human anyway, so the extra soak costs nothing.
+      semver-major-days: 14
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+    commit-message:
+      # commitlint enforces Conventional Commits on this repo — an unprefixed Dependabot commit would
+      # fail the hook on merge.
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: ['minor', 'patch']
+    commit-message:
+      prefix: chore
+      include: scope

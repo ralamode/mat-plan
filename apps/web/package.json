@@ -19,7 +19,10 @@
   "dependencies": {
     "@mat-plan/db": "workspace:*",
     "@mat-plan/shared": "workspace:*",
+    "@sentry/nextjs": "^10.69.0",
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.1",
     "@vercel/functions": "^3.7.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
