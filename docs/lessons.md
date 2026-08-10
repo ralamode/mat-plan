@@ -133,6 +133,13 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## CI / secrets
 
+- **Before closing OR fixing a red dependency major, check the ecosystem's peer ranges — it takes one
+  command and it settles the question.** → `npm view eslint-plugin-react peerDependencies` showed
+  `eslint: "... || ^9.7"` on its LATEST version, proving ESLint 10 was unfixable on our side rather than
+  a config problem worth debugging. The same check on `eslint-config-next` showed the plugin arrives
+  transitively, so it couldn't be swapped independently either. Two commands turned "this CI failure
+  needs investigation" into "no version combination passes today; close it." (V1-14a follow-up)
+
 - **A Dependabot MAJOR can be an ecosystem-readiness problem, not a code problem — pin the toolchain,
   don't chase npm.** → Dependabot proposed `typescript` 5.9 → **7.0** (the Go rewrite) two days after
   publication. `@typescript-eslint/typescript-estree@8` cannot parse it —
