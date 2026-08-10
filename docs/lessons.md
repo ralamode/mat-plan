@@ -43,20 +43,13 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
   `notFound()`** — the not-found UI renders but the status is already 200. → Assert the rendered
   not-found **content** (`getByText(/this page could not be found/i)`), not the HTTP status. (V1-3)
 
-- **UNRESOLVED: the check-ins smoke (`log-bodyweight.spec.ts:23`) fails locally and flakes in CI.**
-  Symptom: `getByRole('button', { name: 'Log check-ins' })` "element(s) not found", snapshot showing
-  `button "Logging…" [disabled]` — a Server Action still in flight past 15s. The failure POINT MOVES
-  within that one test (sometimes the check-ins submit, sometimes `Wake · logged today`), and only that
-  test — the longest and most write-heavy — is affected; the other four pass consistently.
-  **Ruled out so far** (V1-14a), so the next attempt doesn't repeat them:
-  - _Not_ caused by the Sentry action wrapper: identical results with and without it (3 runs each).
-  - _Not_ (only) per-action cold start: warming the check-ins path in `global.setup` made test 2 drop to
-    ~1s but did **not** fix the smoke.
-  - _Not_ worker contention alone: reproduces at `--workers=1` (CI's config) as well as `--workers=5`.
-  - _Not_ the setup timeout — though that WAS a real latent bug found on the way (see next entry).
-    A moving failure point in the longest sequential-write test points at write/revalidation latency
-    rather than a single bad assertion. CI's `retries: 1` usually masks it as `flaky`; it has also failed
-    outright with the retry. **Needs its own investigation — do not bolt another guess onto a feature PR.**
+- **UNRESOLVED: a form submit is silently lost (the "check-ins flake").** Full dossier —
+  timeline, evidence, killed hypotheses, and the next experiment — in
+  **[docs/bugs/e2e-lost-form-submit.md](./bugs/e2e-lost-form-submit.md)**. Short version: the click
+  produces **no server request, no row, no error**; server timings are 1–26ms, so it is NOT a
+  performance problem. Killed: the Sentry wrapper, per-action cold start, worker contention, the setup
+  timeout, and click-before-hydration. **Do not pad timeouts or add warm-ups** — both were tried and one
+  made it worse. First seen 2026-07-24; 12+ CI occurrences. (V1-14a → ongoing)
 
 - **Playwright's default TEST timeout (30s) applies to `global.setup` too — and a warm-up step can blow
   it.** → `global.setup` did gate login + a cold bodyweight write with a 30s _assertion_ timeout inside
