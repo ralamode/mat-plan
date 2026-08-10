@@ -22,6 +22,17 @@ updates:
       semver-minor-days: 7
       # Majors are read by a human anyway, so the extra soak costs nothing.
       semver-major-days: 14
+    ignore:
+      # TypeScript MAJORs are pinned to the TOOLCHAIN's support, not to whatever npm publishes.
+      # Learned the hard way: Dependabot proposed 5.9 -> 7.0 (the Go rewrite), and
+      # `@typescript-eslint/typescript-estree@8` cannot parse it —
+      # `TypeError: Cannot read properties of undefined (reading 'Cjs')`. quality, e2e AND the Vercel
+      # build all failed; there was nothing to fix on our side. Without this rule Dependabot re-proposes
+      # it every week and each attempt burns a full CI run for a guaranteed red.
+      # REMOVE THIS once @typescript-eslint ships TS 7 support (track its release notes), then take the
+      # major deliberately in its own PR alongside the eslint bump.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
     groups:
       minor-and-patch:
         update-types: ['minor', 'patch']
@@ -38,8 +49,11 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Actions majors are grouped TOO (unlike npm, where a major can be a compiler swap). A GitHub
+      # Action major is almost always a runner-image or Node-version bump — routine, and reviewing five
+      # of them as five separate PRs costs more attention than it saves at ~4h/wk.
       actions:
-        update-types: ['minor', 'patch']
+        update-types: ['minor', 'patch', 'major']
     commit-message:
       prefix: chore
       include: scope
