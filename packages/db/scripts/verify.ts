@@ -1524,7 +1524,7 @@ const flatArgs = {
   feel: 'strong', // V1-8-3b: the session feel persists on the first (non-conflict) insert path
   movements: [
     {
-      movementName: 'Back Squat',
+      movementName: movY.name,
       unit: 'lb',
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001201',
@@ -1748,6 +1748,114 @@ assert.equal(ssMembersAfter.length, 5, 'V1-8-3c: replay creates no duplicate mem
 console.log(
   '✓ V1-8-3c: superset write branch (2- and 3-movement) via the real writer; ordered; idempotent replay',
 );
+
+// ── GAP-1 P0-2: TEXT loads (`BW`, `band`, `30s`) via the shipped writer ────────────────────────────
+// Before this, `strengthSetSchema` accepted only a number, so every bodyweight movement in Ray's
+// program logged as `weight: 0` — the record said zero where the kid did bodyweight work.
+const LABELED_SESSION_CLIENT_ID = newId();
+const LABELED_MOVEMENT_CLIENT_ID = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  day: '2026-02-10',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: LABELED_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: LABELED_MOVEMENT_CLIENT_ID,
+      // The three shapes that matter: a canonical label, a free-text label, and a DURATION (the CSV
+      // puts `30s` in the load column, which is why `entry_sets.seconds` is deliberately deferred).
+      sets: [
+        { reps: 5, weightLabel: 'BW' },
+        { reps: 3, weightLabel: 'BW+8 (vest)' },
+        { reps: 1, weightLabel: '30s' },
+      ],
+    },
+  ],
+});
+const labeledSets = (
+  await db.execute(sql`
+    select es.idx, es.reps, es.weight_num, es.weight_label
+    from entry_sets es
+    join entries e on e.id = es.entry_id
+    where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID}
+    order by es.idx`)
+).rows as unknown as {
+  idx: number;
+  reps: number;
+  weight_num: string | null;
+  weight_label: string | null;
+}[];
+assert.equal(labeledSets.length, 3, 'GAP-1: all three labeled sets persisted');
+assert.deepEqual(
+  labeledSets.map((r) => r.weight_label),
+  ['BW', 'BW+8 (vest)', '30s'],
+  'GAP-1: text loads round-trip VERBATIM (inner spaces + casing preserved)',
+);
+assert.ok(
+  labeledSets.every((r) => r.weight_num === null),
+  'GAP-1: a labeled set stores NO weight_num (it would be masked at the read seam anyway)',
+);
+// THE guard: an empty label is unrecoverable — it wins over the weight at the read seam and both the
+// V1-9 edit affordance and updateStrengthSetById's isNull(weightLabel) refuse to fix it.
+const emptyLabels = (
+  (await db.execute(sql`select count(*)::int as count from entry_sets where weight_label = ''`))
+    .rows as unknown as { count: number }[]
+)[0].count;
+assert.equal(emptyLabels, 0, 'GAP-1: NO set carries an empty-string weight_label');
+
+// A labeled set on a SUPERSET member — that path had no other coverage.
+const LABELED_SS_SESSION = newId();
+const LABELED_SS_GROUP = newId();
+const LABELED_SS_A = newId();
+const LABELED_SS_B = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  day: '2026-02-11',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: LABELED_SS_SESSION,
+  activityTypeId: scLiftActivityId,
+  supersets: [{ clientId: LABELED_SS_GROUP }],
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: LABELED_SS_A,
+      sets: [{ reps: 5, weightLabel: 'BW' }],
+      supersetClientId: LABELED_SS_GROUP,
+      supersetOrder: 1,
+    },
+    {
+      movementName: movY.name,
+      unit: 'lb',
+      movementId: movY.id,
+      clientId: LABELED_SS_B,
+      sets: [{ reps: 5, weight: 60 }], // the numeric path must be unaffected alongside a labeled one
+      supersetClientId: LABELED_SS_GROUP,
+      supersetOrder: 2,
+    },
+  ],
+});
+const ssSets = (
+  await db.execute(sql`
+    select e.client_id, es.weight_num, es.weight_label
+    from entry_sets es join entries e on e.id = es.entry_id
+    where e.client_id in (${LABELED_SS_A}, ${LABELED_SS_B})`)
+).rows as unknown as {
+  client_id: string;
+  weight_num: string | null;
+  weight_label: string | null;
+}[];
+const ssLabeled = ssSets.find((r) => r.client_id === LABELED_SS_A);
+const ssNumeric = ssSets.find((r) => r.client_id === LABELED_SS_B);
+assert.equal(ssLabeled?.weight_label, 'BW', 'GAP-1: a superset MEMBER can carry a text load');
+assert.equal(ssNumeric?.weight_label, null, 'GAP-1: the numeric sibling is unaffected');
+assert.equal(ssNumeric?.weight_num, '60.000', 'GAP-1: …and still stores its number');
+console.log('✓ GAP-1: text loads (BW / BW+8 (vest) / 30s) round-trip, incl. on a superset member');
 
 // ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
 // Proves the ownership-scoped UPDATE (the same guard the DAL runs): the owner's edit persists + advances

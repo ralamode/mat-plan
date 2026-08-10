@@ -15,6 +15,36 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### A labeled set can't be edited, and a duration isn't structurally queryable (GAP-1 P0-2)
+
+- **What & why:** GAP-1 P0-2 made `entry_sets.weight_label` writable, so a set can finally record `BW`,
+  `band`, `30in` or `30s` instead of the lie of `weight: 0`. Two knowingly-accepted consequences:
+  - **A labeled set has no inline edit.** `isEditableSet` excludes it (an edited `weight_num` would be
+    masked at the read seam, since `formatSetLine` prefers the label) and `updateStrengthSetById` refuses
+    it in SQL. So a mistyped `BW` can only be fixed by deleting the entry — which needs **V1-9b**
+    (delete/clear-day), not yet built. Mitigated by the chips: the common labels are one tap, not typed.
+  - **A duration lives in `weight_label` as `30s`, not in `entry_sets.seconds`.** That column stays
+    unwritten. It reproduces the CSV exactly (the contract puts duration in the `load` column), but the
+    value is text, so nothing can sum time-under-tension.
+- **Impact:** low. Labels are a minority of sets, and the chips make the common ones un-typoable.
+- **Proposed fix:** V1-9b closes the edit gap. `seconds` gets written when something queries duration
+  structurally — **V1-16 progress charts is the promotion trigger**; at that point a timed set writes
+  both `seconds` and the label (the two columns are deliberately not mutually exclusive — see below).
+- **Severity:** low (accepted; both have named triggers).
+
+### `weight_num` and `weight_label` are deliberately NOT mutually exclusive (GAP-1 P0-2)
+
+- **What & why:** no CHECK enforces "exactly one of". That is a decision, not an oversight. Several real
+  loads carry a recoverable number inside a text form — `123 (50ft)`, `30 (2x 15 DB)`, `BW+8 (vest)`. A
+  later slice should store **both** (`weight_num = 123` _and_ the label) so volume charts aren't blind to
+  them, and the read seam already prefers the label while the edit guard already refuses any labeled set,
+  so coexistence is pre-defended.
+- **Impact:** none today — the writer emits exactly one. The cost is that a future reader must not assume
+  exclusivity.
+- **Proposed fix:** implement numeric-prefix extraction when V1-16 needs the volume. **Do not add a
+  mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
+- **Severity:** informational.
+
 ### Mutating Server Actions are not rate-limited (V1-14a)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The six mutating Server Actions
