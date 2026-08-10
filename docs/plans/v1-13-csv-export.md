@@ -104,8 +104,8 @@ rice_bucket, splits, brain_rep) which stay app-only until the v3 API; auth on th
 
 ## Open questions for the panel
 
-1. **C1 is resolved** (prefer the float). The remaining decision is Ray's, not the panel's: is `71.0`
-   (always one decimal) the canonical rendering for the one-off conversion of the legacy files?
+1. **C1 is fully resolved** — prefer the float, exactly one decimal (`toFixed(1)`), no snapping. Nothing
+   left for the panel here beyond confirming the input/export granularity assertion is worth having.
 2. **C2** — `prescribed` for a movement with no matching prescription: empty string, or is the whole
    column only populated when a program row exists?
 3. Should the endpoint stream (`ReadableStream`) or buffer? A month is ~40 rows — buffering seems

@@ -23,9 +23,15 @@ Consequences:
   remain unused and available for the genuinely-lossy strength cases below.)
 - **The bodyweight golden fixture must be regenerated**, not copied verbatim — it currently mixes `71`,
   `71.0`, `71.4`. Pick one canonical rendering and apply it everywhere.
-- **A one-off conversion of the existing CSVs is in scope**, and needs its own decision: what is the
-  canonical float rendering? `71` → `71.0` (always one decimal) is the obvious choice, since weights are
-  recorded to 0.1 lb. **Open — needs Ray's confirmation before the fixtures are frozen.**
+- **RESOLVED (Ray, 2026-08-10): exactly ONE decimal place, always. No snapping.**
+  `71` → `71.0`, `71.4` → `71.4`, `71.5` → `71.5`. A 0.25 quantization was considered and **rejected**:
+  Ray's real file records to 0.1 lb (`71.4`, `71.2`), so snapping would have rewritten genuine scale
+  readings — a data change, not a formatting one. Plate-style 0.25 increments belong to strength LOADS,
+  not to a bodyweight scale.
+  Pleasingly, `bodyweight-form.tsx` already ships `step="0.1"`, so the input and the export now agree by
+  construction rather than by coincidence — worth an assertion so they cannot drift.
+- **A one-off conversion of the existing CSVs is in scope** and is now unambiguous: render every
+  historical `weight_lb` with `toFixed(1)`.
 - **This is a deliberate, narrow relaxation of byte-faithfulness**, applied to _numeric normalisation
   only_. It does **not** extend to the text shapes below: `BW`, `band`, `SKIPPED` carry meaning a number
   cannot, so those still require write-path work.
