@@ -88,6 +88,13 @@ reflects the fix. Ownership-scoped UPDATE single-sourced in `packages/db` (prove
 `updated_at` (server-`now()`; client-ts compare is v1.5 — see tech-debt), and a shared `SetRepsWeightFields` +
 hoisted `INPUT_CLASS` so the edit inputs reuse the log form's exactly. See [v1-9-edit-set.md](./plans/v1-9-edit-set.md).
 
+**Newly added by Ray (post-MVP unless he re-prioritises):** **V1-19** "Start today's program" — one tap
+builds the strength form from the V1-10 card (movement names + blank set rows only; loads/reps stay blank,
+preserving the V1-10 panel's no-authored-values rule); **V1-20** coach editor made discoverable + editable
+for both athletes at once; **V1-21** an interaction-design review of the entry UI followed by mobile/tablet/
+desktop comps to choose from — deliberately upstream of V1-19, since it asks whether the
+form-with-set-rows model is the right shape at all.
+
 **Remaining to the MVP:** V1-10 (programming; PR 2 in flight) → V1-11/12 (copy-set · a11y) →
 **V1-13 CSV export** (the MVP's whole point) → **V1-14** (full-day E2E + rate-limit/Sentry) = MVP done.
 _(Backlogged alongside: **V1-9a** per-exercise notes, **V1-9b** delete/clear-day.)_ _(Interleaved: **V1-7a** practice-minutes input, **V1-8a** weighted
