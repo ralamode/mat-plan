@@ -31,7 +31,24 @@ updates:
       # it every week and each attempt burns a full CI run for a guaranteed red.
       # REMOVE THIS once @typescript-eslint ships TS 7 support (track its release notes), then take the
       # major deliberately in its own PR alongside the eslint bump.
+      #
+      # THE RULE: ignore the major of any tool whose PLUGIN ECOSYSTEM must catch up before the major is
+      # usable. For these, a green build depends on a third party we don't control, so Dependabot would
+      # re-propose the same guaranteed-red PR every week, burning a full CI run each time.
+      # Each entry names the condition that retires it — delete the entry, don't just bump past it.
+      #
+      # typescript: 5.9 -> 7.0 is the Go rewrite; @typescript-eslint/typescript-estree@8 cannot parse it
+      # (`TypeError: Cannot read properties of undefined (reading 'Cjs')`) — quality, e2e AND the Vercel
+      # build all failed (#79). RETIRE WHEN: @typescript-eslint ships TS 7 support.
       - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # eslint: 9 -> 10 changed the rule-context API; eslint-plugin-react throws
+      # `contextOrFilename.getFilename is not a function` (#90). Its LATEST version (7.37.5) still
+      # declares `peerDependencies.eslint: "... || ^9.7"`, and it reaches us transitively through
+      # eslint-config-next, so it cannot be swapped independently — no version combination passes today.
+      # RETIRE WHEN: eslint-plugin-react declares eslint ^10 (check `npm view eslint-plugin-react
+      # peerDependencies`), which in practice means a new eslint-config-next.
+      - dependency-name: 'eslint'
         update-types: ['version-update:semver-major']
     groups:
       minor-and-patch:
