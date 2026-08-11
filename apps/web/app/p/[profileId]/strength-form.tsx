@@ -15,6 +15,7 @@ import { INPUT_CLASS } from '@/lib/constants';
 import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
+import { LoadChips } from './load-chips';
 import { SetRepsWeightFields } from './set-fields';
 import {
   dissolveSmallSupersets,
@@ -362,13 +363,23 @@ function MovementCard({
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">Sets</span>
         {movement.sets.map((s, i) => (
-          <div key={s.key} className="flex items-center gap-2">
+          <div key={s.key} className="flex flex-wrap items-center gap-2">
             <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
             <SetRepsWeightFields
               reps={s.reps}
               weight={s.weight}
               onReps={(v) => onSet(s.key, { reps: v })}
               onWeight={(v) => onSet(s.key, { weight: v })}
+              ariaLabel={`Movement ${index + 1} set ${i + 1}`}
+              // GAP-1 P0-2: the LOG form accepts a text load (BW / band / 30in / 30s). The V1-9 edit
+              // form keeps the default numeric mode — its schema and its SQL guard are numeric-only.
+              mode="load"
+            />
+            {/* One-tap canonical labels. Without these, `BW` — the most common load in the program —
+                would be the hardest thing to enter on a phone. */}
+            <LoadChips
+              active={s.weight}
+              onPick={(v) => onSet(s.key, { weight: v })}
               ariaLabel={`Movement ${index + 1} set ${i + 1}`}
             />
             {movement.sets.length > 1 ? (
