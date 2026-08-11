@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx scripts/dev-local.ts",
-    "dev:prod": "echo '⚠️  dev:prod → LIVE Neon via .env.local. Writes hit REAL prod data. Use `pnpm dev` for the local sandbox.' && next dev",
+    "dev:prod": "echo '\u26a0\ufe0f  dev:prod \u2192 LIVE Neon via .env.local. Writes hit REAL prod data. Use `pnpm dev` for the local sandbox.' && next dev",
     "db:local:reset": "tsx scripts/db-local-reset.ts",
     "build": "next build",
     "start": "next start",
@@ -14,7 +14,8 @@
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium",
     "screenshot": "tsx scripts/screenshot.ts",
-    "screenshot:ephemeral": "tsx scripts/screenshot-ephemeral.ts"
+    "screenshot:ephemeral": "tsx scripts/screenshot-ephemeral.ts",
+    "screenshots:publish": "tsx scripts/publish-screenshots.ts"
   },
   "dependencies": {
     "@mat-plan/db": "workspace:*",
