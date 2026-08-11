@@ -1,0 +1,92 @@
+name: Prune screenshots
+
+# Keeps the orphan `screenshots` branch from growing forever.
+#
+# Two independent rules:
+#   1. When a PR CLOSES (merged or not), delete its `pr-<n>/` directory. An abandoned PR's screenshots
+#      are just as dead as a merged one's, so this deliberately does not check `merged`.
+#   2. Cap the branch at MAX_IMAGES, oldest-first by last-commit time. A backstop for anything rule 1
+#      misses — a PR closed before this workflow existed, a manual upload, a re-opened PR.
+#
+# The branch is an ORPHAN (no shared history with main), so nothing here can touch source history.
+# See apps/web/scripts/publish-screenshots.ts for why the images are hosted here at all.
+
+on:
+  pull_request:
+    types: [closed]
+  # Manual run for a one-off tidy, or to apply the cap after changing it.
+  workflow_dispatch:
+
+# Least privilege: this job writes ONLY to the screenshots branch.
+permissions:
+  contents: write
+
+concurrency:
+  # Serialised: two concurrent runs would race on the same branch and one would fail to push.
+  group: prune-screenshots
+  cancel-in-progress: false
+
+env:
+  BRANCH: screenshots
+  MAX_IMAGES: 50
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the screenshots branch
+        uses: actions/checkout@v5
+        continue-on-error: true # the branch may not exist yet — nothing to prune
+        with:
+          ref: screenshots
+          # Full history: the cap sorts by each file's last-commit time, which a shallow clone can't see.
+          fetch-depth: 0
+
+      - name: Prune
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -d .git ] || ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+            echo "No '$BRANCH' branch yet — nothing to prune."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # ── Rule 1: this PR's directory ───────────────────────────────────────────────────────────
+          PR="${{ github.event.pull_request.number }}"
+          if [ -n "$PR" ] && [ -d "pr-$PR" ]; then
+            echo "Removing pr-$PR/ (PR closed)"
+            git rm -rq "pr-$PR"
+          fi
+
+          # ── Rule 2: cap the total, oldest first ───────────────────────────────────────────────────
+          # Sort by each file's LAST COMMIT time (not mtime — a fresh checkout makes every mtime "now").
+          mapfile -t RANKED < <(
+            git ls-files '*.png' | while read -r f; do
+              printf '%s\t%s\n' "$(git log -1 --format=%ct -- "$f")" "$f"
+            done | sort -rn | cut -f2-
+          )
+          TOTAL=${#RANKED[@]}
+          echo "$TOTAL image(s) after rule 1; cap is $MAX_IMAGES"
+          if [ "$TOTAL" -gt "$MAX_IMAGES" ]; then
+            for f in "${RANKED[@]:$MAX_IMAGES}"; do
+              echo "Pruning (over cap): $f"
+              git rm -q "$f"
+            done
+          fi
+
+          # Drop any directory left empty by the above (git won't track empty dirs, but be explicit).
+          find . -mindepth 1 -type d -empty -not -path './.git/*' -delete 2>/dev/null || true
+
+          if git diff --cached --quiet && git diff --quiet; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          git add -A
+          git commit -qm "chore(screenshots): prune${PR:+ pr-$PR} (cap $MAX_IMAGES)"
+          git push origin "HEAD:$BRANCH"
+          echo "Pruned and pushed."

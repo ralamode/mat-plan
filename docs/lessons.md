@@ -5,6 +5,27 @@ person (or agent) fixes them in one. Read this **before** debugging a CI / test 
 grep for the symptom. Keep entries to 1–3 lines: **Symptom → Cause → Fix**. Newest on top within a
 section. This is a debugging index, not prose — link out to a plan/ADR for depth.
 
+## GitHub / PRs
+
+- **Screenshots never actually reached any PR for months — `gh` has no image-upload path, and the
+  obvious workarounds all fail on a PRIVATE repo.** → Verified in a real logged-in browser by reading
+  `img.naturalWidth` (the only proof that pixels loaded, rather than that markdown looked right):
+  `github.com/<o>/<r>/raw/<branch>/<path>` **renders**; `raw.githubusercontent.com/...` is **broken**
+  (needs an `Authorization` header a browser never sends); base64 `data:` URIs are **stripped**
+  server-side, leaving an `<img>` with an empty `src` — and a comment caps at 65,536 chars, so one
+  176KB screenshot (~235KB base64) is 3.6x over regardless. GitHub does **not** camo-proxy these, so
+  the rendered HTML keeps the original `src` and everything _looks_ correct until you view it.
+  **On a PUBLIC repo all forms work**, which is exactly why the trap is invisible. There is also no
+  official upload API (`repos/:o/:r/assets` → 404; the web UI's endpoint needs a session cookie + CSRF,
+  422 for a PAT). → Use `pnpm --filter web screenshots:publish`. (chore/screenshot-publishing)
+
+- **`GH_TOKEN` in the local env shadows the keyring credential and silently loses scopes.** → `gh run
+view`, `gh pr checks` and the Actions API all returned `403 Resource not accessible by personal
+access token`, which reads like a permissions problem with the repo. The cause was a fine-grained PAT
+  in `GH_TOKEN` taking precedence over a keyring token that HAS `repo`+`workflow`. → `env -u GH_TOKEN
+-u GITHUB_TOKEN gh ...` restores the good credential; check `gh auth status` for BOTH entries when a
+  403 appears. (V1-14a)
+
 ## E2E / Playwright
 
 - **An assertion on a form's own label is a FALSE POSITIVE — it goes green while nothing was
