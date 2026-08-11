@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { BODYWEIGHT_UNITS } from './bodyweight';
 import { uuidSchema } from './id';
+import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
 import { freeTextNoteSchema } from './text';
@@ -56,6 +57,10 @@ export const logStrengthSessionSchema = z
     // Optional "how did it feel?" note for the whole session — the shared free-text shape (blank → NULL,
     // capped at FREE_TEXT_NOTE_MAX), single-sourced with bodyweight `notes`.
     feel: freeTextNoteSchema,
+    // GAP-1 P0-1: WHICH programmed day this was, as ASSERTED by the athlete (never derived here — see
+    // the schema comment on `sessions.day_role`). Optional: a session on a non-programmed day is normal.
+    // `optionalDayRoleSchema` normalises BOTH absent and '' to undefined — the `sessionType` trap above.
+    dayRole: optionalDayRoleSchema,
     movements: z
       .array(sessionMovementSchema)
       .min(1, 'Add at least one movement.')
@@ -69,6 +74,19 @@ export const logStrengthSessionSchema = z
   // (or, for the DB ones, would surface as a raw 500); the cross-row distinct-`superset_order` IS enforced
   // by `uq_entries_superset_order`, so it's deliberately left DB-only.
   .superRefine((val, ctx) => {
+    // (0) The day role must agree with the session type it claims. Expressed against the shared
+    // DAY_ROLE_TO_SESSION_TYPE map rather than a hardcoded 'strength', so it stays DRY and stays correct
+    // if `sessionType` ever becomes settable. Without this a crafted body could file a `conditioning`
+    // role on a strength session. (The DB CHECK is the wider net; this is the narrow one — and the pair
+    // is deliberately NOT a DB CHECK, which would break db:verify's exact-set CHECK assertion.)
+    if (val.dayRole && DAY_ROLE_TO_SESSION_TYPE[val.dayRole] !== val.sessionType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['dayRole'],
+        message: 'That day doesn’t belong to this kind of session.',
+      });
+    }
+
     const supersets = val.supersets ?? [];
 
     // (1) Movement client_ids distinct — a dup would silently drop the second member (ON CONFLICT).

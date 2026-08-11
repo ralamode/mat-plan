@@ -36,6 +36,7 @@ function entry(overrides: Partial<EntryDTO>): EntryDTO {
     activityLabel: null,
     sessionId: null,
     sessionType: null,
+    sessionDayRole: null,
     sessionFeel: null,
     supersetId: null,
     supersetOrder: null,

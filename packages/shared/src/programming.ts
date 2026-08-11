@@ -30,6 +30,20 @@ export type DayRole = (typeof DAY_ROLES)[number];
 export const dayRoleSchema = z.enum(DAY_ROLES);
 
 /**
+ * A day role that may legitimately be ABSENT (GAP-1 P0-1) — for a session on a non-programmed day.
+ *
+ * The blank→undefined transform is load-bearing, and is the exact trap `logStrengthSessionSchema`
+ * already documents for `sessionType`: `FormData.get()` returns `null` when a field is absent and `''`
+ * when the form's "Not a programmed day" option is selected, and a bare `z.enum().optional()` REJECTS
+ * BOTH — making the happy path unreachable. Mirrors `freeTextNoteSchema`'s shape rather than
+ * re-deriving it.
+ */
+export const optionalDayRoleSchema = z.preprocess(
+  (v) => (v === null || v === '' ? undefined : v),
+  dayRoleSchema.optional(),
+);
+
+/**
  * Which `session_type` a `day_role` prefills (slice 2): the split strength days fold to `strength`; every
  * other day_role maps 1:1 to the same-named session_type. Explicit map (TS-exhaustive over `DayRole`) so the
  * day↔session alignment is stated once here, not implied by a shared enum.
@@ -46,6 +60,15 @@ export const DAY_ROLE_TO_SESSION_TYPE: Record<DayRole, SessionType> = {
   strength_b: 'strength',
   strength_c: 'strength',
 };
+
+/**
+ * The day roles that belong to a STRENGTH session — the only ones the log form offers, and the only
+ * ones its schema accepts. DERIVED from `DAY_ROLE_TO_SESSION_TYPE` rather than re-listed, so adding a
+ * `strength_d` needs one edit, and a conditioning role can never leak into a strength session's picker.
+ */
+export const STRENGTH_DAY_ROLES = DAY_ROLES.filter(
+  (role) => DAY_ROLE_TO_SESSION_TYPE[role] === 'strength',
+);
 
 /**
  * Display labels for the day roles (V1-10 slice 2) — the single source for the "Today's program" card

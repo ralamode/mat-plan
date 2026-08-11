@@ -1,4 +1,5 @@
 import {
+  DAY_ROLE_LABELS,
   DEFAULT_SESSION_TYPE,
   DEFAULT_SUPERSET_LABEL,
   ENTRY_STATUS,
@@ -136,7 +137,9 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 {dayRole && programDay.length > 0 ? (
                   <ProgramReference dayRole={dayRole} rows={programDay} />
                 ) : null}
-                <StrengthForm profileId={profile.id} day={day} />
+                {/* GAP-1 P0-1: the weekday's role PRE-SELECTS the form's day picker; it is never
+                    submitted implicitly (see the note on that select). */}
+                <StrengthForm profileId={profile.id} day={day} defaultDayRole={dayRole} />
               </section>
             );
           }
@@ -236,7 +239,12 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
               if (row.kind === 'session') {
                 // V1-8-3a: a logged strength session as ONE block — a type header + movement count, its
                 // items nested (each via the shared <MovementLine>). V1-8-3d: superset members sub-bracket.
-                const typeLabel = SESSION_TYPE_LABELS[row.session.type ?? DEFAULT_SESSION_TYPE];
+                // GAP-1 P0-1: prefer the ASSERTED programmed day ("Strength B") over the generic
+                // session type ("Strength"). Surfacing it is what makes the stored value auditable —
+                // a role nobody sees is one nobody can notice is wrong.
+                const typeLabel = row.session.dayRole
+                  ? DAY_ROLE_LABELS[row.session.dayRole]
+                  : SESSION_TYPE_LABELS[row.session.type ?? DEFAULT_SESSION_TYPE];
                 const count = row.movementCount;
                 return (
                   <li

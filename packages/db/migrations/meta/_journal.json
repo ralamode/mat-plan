@@ -64,6 +64,13 @@
       "when": 1785397684759,
       "tag": "0008_flat_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786472445604,
+      "tag": "0009_illegal_sabretooth",
+      "breakpoints": true
     }
   ]
 }

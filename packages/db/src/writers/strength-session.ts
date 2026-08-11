@@ -75,7 +75,14 @@ export type ResolvedSessionMovement = {
  */
 async function insertStrengthSessionRow(
   exec: Executor,
-  args: { profileId: number; day: string; sessionType: string; clientId: string; feel?: string },
+  args: {
+    profileId: number;
+    day: string;
+    sessionType: string;
+    clientId: string;
+    feel?: string;
+    dayRole?: string;
+  },
 ): Promise<{ id: number; publicId: string }> {
   const [row] = await exec
     .insert(schema.sessions)
@@ -85,6 +92,9 @@ async function insertStrengthSessionRow(
       profileId: args.profileId,
       activityDate: args.day,
       sessionType: args.sessionType,
+      // Write-once at creation, exactly like `feel`: the ON CONFLICT below no-ops on replay, so a
+      // corrected role resubmitted under the same client_id is silently ignored (GAP-1 P0-1).
+      dayRole: args.dayRole ?? null,
       feel: args.feel ?? null, // write-once at creation (onConflictDoNothing → replay never updates it)
     })
     .onConflictDoNothing({
@@ -216,6 +226,8 @@ export async function writeStrengthSession(
     sessionClientId: string;
     activityTypeId: number;
     feel?: string;
+    /** GAP-1 P0-1: the programmed day the athlete ASSERTED (never derived here). */
+    dayRole?: string;
     supersets?: readonly { clientId: string; label?: string }[];
     movements: readonly ResolvedSessionMovement[];
   },
@@ -236,6 +248,7 @@ export async function writeStrengthSession(
       sessionType: args.sessionType,
       clientId: args.sessionClientId,
       feel: args.feel,
+      dayRole: args.dayRole,
     });
 
     // Create the supersets FIRST (before the members) so the client_id → superset_id map holds real ids
