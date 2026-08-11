@@ -35,15 +35,33 @@ import { basename, join } from 'node:path';
  * AGENTS.md's "never commit them" intact in spirit. Files land at `pr-<n>/<name>.png`, so a PR's shots
  * are self-contained and prunable.
  *
+ * Also tested and REJECTED: inlining images as base64 `data:` URIs, which would need no hosting at all.
+ * GitHub strips them — the `<img>` survives with an EMPTY `src` and `data:image/png` appears nowhere in
+ * the rendered HTML (sanitized server-side, a long-standing XSS/exfil defence). And even if it rendered,
+ * a comment body caps at 65,536 characters while one 176KB screenshot is ~235KB of base64 — a single
+ * image is ~3.6x over the limit. Two independent blockers, so hosting is unavoidable.
+ *
  * Usage:
  *   pnpm --filter web screenshots:publish --pr 92                  # upload + print markdown
  *   pnpm --filter web screenshots:publish --pr 92 --comment        # …and post it as a PR comment
  *   pnpm --filter web screenshots:publish --pr 92 --only today     # filter by filename substring
+ *   pnpm --filter web screenshots:publish --pr 92 --comment \
+ *     --note 'Chips moved below the row so they wrap at 390px'     # REQUIRED on a re-post
+ *
+ * Rounds are numbered and `--note` is REQUIRED from round 2 onward: a PR that accumulates several
+ * screenshot comments is unreadable without a line saying what changed. The script refuses rather than
+ * letting a reviewer diff two images by eye.
+ *
+ * Images are pruned automatically when the PR closes — see `.github/workflows/prune-screenshots.yml`.
  */
 
 const BRANCH = 'screenshots';
 const REPO = 'ralamode/mat-plan';
 const SCREENSHOT_DIR = '.screenshots';
+
+/** Hidden marker identifying a comment this script wrote — used to number rounds. Invisible in the
+ *  rendered comment, so it costs the reader nothing. */
+const MARKER = '<!-- mat-plan:screenshots -->';
 
 /** `gh api` with the keyring token — GH_TOKEN is a fine-grained PAT that cannot read/write everything
  *  this needs, so it is deliberately unset (see docs/runbooks.md). */
@@ -162,12 +180,28 @@ async function main(): Promise<void> {
   const onlyIdx = argv.indexOf('--only');
   const only = onlyIdx >= 0 ? argv[onlyIdx + 1] : undefined;
   const postComment = argv.includes('--comment');
+  const noteIdx = argv.indexOf('--note');
+  const note = noteIdx >= 0 ? argv[noteIdx + 1] : undefined;
 
   const all = (await readdir(SCREENSHOT_DIR)).filter((f) => f.endsWith('.png'));
   const files = only ? all.filter((f) => f.includes(only)) : all;
   if (files.length === 0) {
     throw new Error(
       `no PNGs in ${SCREENSHOT_DIR}${only ? ` matching "${only}"` : ''} — run \`pnpm --filter web screenshot:ephemeral <route>\` first`,
+    );
+  }
+
+  // Which round is this? Counted from our own marker, so a reviewer can follow the progression — and so
+  // a re-post can be REQUIRED to explain itself.
+  const existing = JSON.parse(
+    await gh(['api', `repos/${REPO}/issues/${pr}/comments`, '--paginate']),
+  ) as { body: string }[];
+  const round = existing.filter((c) => c.body.includes(MARKER)).length + 1;
+  if (round > 1 && !note) {
+    throw new Error(
+      `this is screenshot round ${round} on PR #${pr} — pass --note "<what changed>".\n` +
+        'A PR with several screenshot comments is unreadable without it; a reviewer should not have to\n' +
+        'diff two images by eye to work out what you changed.',
     );
   }
 
@@ -180,13 +214,16 @@ async function main(): Promise<void> {
     links.push({ name: basename(file, '.png'), url });
   }
 
-  // Group by viewport so the comment reads as one row per screen, not a wall of images.
+  // Round 1 renders expanded; later rounds collapse, so a stack of superseded shots doesn't bury the
+  // current ones. The `--note` is the first thing a reviewer reads.
   const markdown = [
-    '## Screenshots',
+    MARKER,
+    round === 1 ? '## Screenshots' : `## Screenshots — round ${round}`,
     '',
+    ...(note ? [`**What changed:** ${note}`, ''] : []),
     ...links.map(
       (l) =>
-        `<details open><summary><code>${l.name}</code></summary>\n\n![${l.name}](${l.url})\n\n</details>`,
+        `<details${round === 1 ? ' open' : ''}><summary><code>${l.name}</code></summary>\n\n![${l.name}](${l.url})\n\n</details>`,
     ),
   ].join('\n');
 

@@ -227,10 +227,22 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   screenshot each changed screen/state). **Each capture is taken at THREE widths — mobile (~390px),
   tablet (~820px), and desktop (~1280px)** — so the reviewer sees the primary phone/tablet experience,
   not just desktop; the `screenshot` scripts emit `<name>-mobile.png` / `-tablet.png` / `-desktop.png`
-  automatically (attach at least mobile + desktop). Save to the gitignored `.screenshots/` folder and
-  attach to the PR — never commit them. The repeatable procedure is the `ui-screenshot` skill, which
-  runs the committed `pnpm --filter web screenshot <route>` script (since V0-11, on the shared
+  automatically (attach at least mobile + desktop). Save to the gitignored `.screenshots/` folder, then
+  **publish with `pnpm --filter web screenshots:publish --pr <n> --comment`** — never commit them to a
+  source branch. The repeatable procedure is the `ui-screenshot` skill, which runs the committed
+  `pnpm --filter web screenshot:ephemeral <route>` script (since V0-11, on the shared
   `e2e/gate-login.ts` helper); the Playwright-MCP path is the fallback.
+  - **Screenshots go in a COMMENT, not the description.** A **second** round on the same PR **requires**
+    `--note "<what changed>"` — the script refuses without it, because a reviewer should not have to
+    diff two images by eye to work out what moved.
+  - **Why the tooling exists** (all three tested in a real browser, reading `naturalWidth`): GitHub
+    **strips base64 `data:` URIs**, leaving an `<img>` with an empty `src` — and a comment caps at
+    65,536 chars anyway, so one screenshot (~235KB base64) is 3.6x over. On a **private** repo
+    `raw.githubusercontent.com` links **404 in the browser** (they need an `Authorization` header a
+    browser never sends), while `github.com/<owner>/<repo>/raw/<branch>/<path>` uses the viewer's
+    session and works. GitHub does **not** camo-proxy either, so the markdown looks right until the
+    image is broken. **On a PUBLIC repo all forms work** — which is why this is easy to get wrong.
+    Images are pruned automatically when the PR closes (`.github/workflows/prune-screenshots.yml`).
   - **Placement:** the **first** screenshots for a PR go **in the PR description** — the reviewer's
     baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a **PR
     comment** rather than editing the description, so the description stays the original baseline and
