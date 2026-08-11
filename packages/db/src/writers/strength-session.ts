@@ -1,4 +1,4 @@
-import { newId } from '@mat-plan/shared';
+import { newId, type StrengthSetInput } from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
@@ -61,7 +61,7 @@ export type ResolvedSessionMovement = {
   unit: string;
   movementId: number;
   clientId: string; // per-movement entry idempotency key
-  sets: readonly { reps: number; weight: number }[];
+  sets: readonly StrengthSetInput[];
   supersetClientId?: string;
   supersetOrder?: number;
 };
@@ -141,7 +141,7 @@ async function writeSessionStrengthEntry(
     activityTypeId: number;
     day: string;
     clientId: string;
-    sets: readonly { reps: number; weight: number }[];
+    sets: readonly StrengthSetInput[];
     supersetId?: number | null;
     supersetOrder?: number | null;
   },
@@ -185,7 +185,12 @@ async function writeSessionStrengthEntry(
         entryId: entry.id,
         idx: i + 1, // 1-based
         reps: s.reps,
-        weightNum: String(s.weight), // numeric column takes a string (precision-safe)
+        // GAP-1 P0-2: a set carries EITHER a number or a text load, never both and never neither —
+        // the shared `parseLoad` guarantees it, and a blank is rejected before it reaches here (an
+        // empty `weight_label` would render as a hidden load and be uneditable forever).
+        // The two columns are deliberately NOT mutually exclusive at the schema level: a later slice
+        // may store `123 (50ft)` as weight_num 123 PLUS the label so volume charts aren't blind to it.
+        ...('weightLabel' in s ? { weightLabel: s.weightLabel } : { weightNum: String(s.weight) }), // numeric column takes a string (precision-safe)
       })),
     );
   }
