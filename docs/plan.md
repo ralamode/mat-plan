@@ -88,6 +88,79 @@ In-app retro/summary; LLM progression **adapter** (explain-why first); expand ev
 so Claude fetches from the app** (exposes logs _and_ block/program state); optional Python/FastAPI +
 pgvector where they earn it. Each AI capability is its own PR; pgvector stays gated.
 
+## OSS-1 — open-source readiness (gate before the repo is made public)
+
+The repo is going public as a portfolio artifact. This section records a **full audit of committed
+personal data performed 2026-08-11** and the (small) work that audit actually justifies.
+
+### Audit findings — what is and isn't in the repo
+
+Audited across all 221 commits, not just the working tree.
+
+**Present:**
+
+| #   | What                                                                                                                                                                                    | Where                                                                                                                                    | Severity                             |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 1   | Two kids' **first names** (`Liam`, `Scarlett`) — no surnames                                                                                                                            | 123 refs across 29 files: `packages/db/src/seed.ts`, `packages/shared/src/{seed-ids,programming}.ts`, tests, e2e, and ~14 `docs/plans/*` | Low                                  |
+| 2   | The kids' **prescribed S&C program** — sets/reps/loads, transcribed verbatim (`BW`, `BW +5-10`, `65`, `60`, `30`, `25`, `20/DB`, `15/DB`; reps like `4, last AMRAP` vs `5, last AMRAP`) | `packages/shared/src/programming.ts`, `docs/plans/v1-10-*`                                                                               | Low                                  |
+| 3   | One **bodyweight fixture value** — `72.5` lb                                                                                                                                            | `apps/web/lib/entries/entry-label.test.ts` (×2, a label assertion)                                                                       | Negligible                           |
+| 4   | Ray's own full name                                                                                                                                                                     | `docs/plans/v1-10-two-week-program-source.md` frontmatter (`author:`)                                                                    | None — desirable on a portfolio repo |
+| 5   | Ray's own PPL movement templates                                                                                                                                                        | `packages/shared` catalog seed                                                                                                           | None                                 |
+
+**Confirmed absent** (each checked, not assumed):
+
+- ❌ **No birthdates.** `profiles.birthdate` exists as a column but is explicitly _reserved_ — never seeded, never written, no UI.
+- ❌ **No real logged training history.** Actual entries live in the Neon database, not the repo. The repo ships schema + catalog seed + fixtures only.
+- ❌ **No screenshots.** `.screenshots/` is gitignored — `git ls-files` returns **0** tracked files.
+- ❌ **No data dumps.** Zero committed `.csv` / `.sql` / dump files; no deleted-then-recoverable data files anywhere in history.
+- ❌ **No contact data.** No emails, phone numbers, addresses, or photos.
+- ❌ **No secrets.** The only file ever committed under `.local-secrets/` is its `README.md`, which deliberately documents _which_ files are gitignored without containing any of them. `.env*` was never committed. `gitleaks` runs on every PR (`.github/workflows/ci.yml`).
+
+### Assessment
+
+**The exposure is two first names plus a youth strength program.** There is no measurement history, no
+date of birth, no health record, and no log data. Earlier planning notes described this as "minors'
+health data" — that was **inferred from the schema's capability rather than from what is actually
+committed**, and the audit does not support it.
+
+The one real (and modest) consideration: the repo will be linked from a resume and LinkedIn under
+Ray's real name, so publishing creates a permanent, searchable association of the form _"Ray Baker's
+kids are named Liam and Scarlett, and this is their training program."_ That is a mild disclosure, but
+unlike mentioning it at a meet it does not decay. Whether that matters is a judgment call, not a
+security finding.
+
+### Tasks
+
+| #   | Task                                                                                                                                                                                                                                                                                                                                         | Required?                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| 1   | **Decide the names question** (see below). If renaming: swap `Liam`/`Scarlett` for neutral fixture names across seeds, tests, and plans. `db:verify` proofs, golden vectors, and e2e must stay green — same schema, same row counts, same edge cases (the A≠B routine contrast in `SEED_SCARLETT_ROUTINE` is load-bearing and must survive). | Judgment call             |
+| 2   | Change the `72.5` bodyweight fixture to an obviously-synthetic value.                                                                                                                                                                                                                                                                        | Nice-to-have              |
+| 3   | **Public-facing `README` rewrite** — the current one is written for Ray. Lead with the architecture, the migration discipline, and the AI-1 eval harness: the parts that carry portfolio signal.                                                                                                                                             | **Yes**                   |
+| 4   | **Add a `LICENSE`.**                                                                                                                                                                                                                                                                                                                         | **Yes**                   |
+| 5   | Confirm no Neon / Vercel / Clerk project identifiers, deploy URLs, or org slugs leak via docs or CI config.                                                                                                                                                                                                                                  | **Yes**                   |
+| 6   | Ensure the AI-1 15-case golden eval fixture uses synthetic data from the start.                                                                                                                                                                                                                                                              | **Yes** (when AI-1 lands) |
+
+### The names question — it's binary
+
+A working-tree-only rename is **security theater**: `git log -S Liam` still finds it across 221
+commits. So there are exactly two coherent options:
+
+- **(a) Leave the names.** Justified by the audit — the exposure is genuinely small.
+- **(b) Rename _and_ rewrite history** with `git-filter-repo`, then verify against a fresh clone.
+
+⚠️ **`git-filter-repo` rewrites every commit SHA.** With branch protection on `main` this means a
+force-push and a re-clone. The ~40-PR incremental narrative survives a filter-repo (unlike a squash,
+which would destroy it — squashing is _not_ recommended for this repo, since that history is itself
+portfolio evidence).
+
+**Recommendation: (a).** The marginal privacy gain does not justify rewriting 221 commits, and the
+risk of botching the rewrite is real. Revisit only if the names turn out to matter to Ray.
+
+### Sequencing
+
+Land **AI-1 first**, then OSS-1, then flip visibility. AI-1 is the reason the repo is worth
+publishing; publishing before it lands ships the artifact without its headline.
+
 ## i18n — externalize strings (post-MVP, near the bottom)
 
 Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
