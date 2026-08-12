@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { uuidSchema } from './id';
+import { hasCommaOrLineBreak } from './text';
 
 /**
  * A NUMERIC set — reps × a number. This is the original `strengthSetSchema`, preserved **unchanged**
@@ -123,7 +124,9 @@ export function parseLoad(raw: unknown): ParsedLoad {
 
   // The CSV is written by joining fields raw (it is deliberately not RFC-4180 — real rows carry bare
   // inch marks), so a comma or newline here would split a row. `"` IS allowed: `30"` is in active use.
-  if (/[,\n\r]/.test(value)) {
+  // The predicate is shared with the movement name (GAP-1 P2-2) — one definition, authored messages
+  // stay per-call-site.
+  if (hasCommaOrLineBreak(value)) {
     return { kind: 'invalid', message: 'A load can’t contain a comma or a line break.' };
   }
 

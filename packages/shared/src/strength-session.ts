@@ -5,7 +5,7 @@ import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
-import { freeTextNoteSchema } from './text';
+import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
 
 /** Max movements per session, and max supersets (each needs ≥2 of the movements → floor(N/2)). Named
  *  so the derivation is expressed in code, not two magic numbers that can drift. */
@@ -21,7 +21,22 @@ export const MAX_SESSION_SUPERSETS = Math.floor(MAX_SESSION_MOVEMENTS / 2);
  * movement has neither); paired + validated in the schema's superRefine.
  */
 export const sessionMovementSchema = z.object({
-  movementName: z.string().trim().min(1, 'Enter a movement.').max(100),
+  // GAP-1 P2-2 — the name reaches the CSV's `movement` column, which is joined raw, so a comma shifts
+  // every downstream field in the row and a newline splits it. REJECTED at the boundary (the same call
+  // `parseLoad` makes for the load field), never sanitised: the name is persisted VERBATIM in two
+  // columns — `movements.name` and `entries.movement_name` — so laundering the derived `movements.slug`
+  // would leave both commas in place and fix nothing. `"` stays legal (`30" Box Jump`), matching
+  // `parseLoad`. Nothing is lost by rejecting: `Bench, Close Grip` and `Bench Close Grip` already slug
+  // identically, so the comma carries no information the DB keeps.
+  movementName: z
+    .string()
+    .trim()
+    .min(1, 'Enter a movement.')
+    .max(100)
+    .refine(
+      (v) => !hasCommaOrLineBreak(v),
+      'A movement name can’t contain a comma or a line break.',
+    ),
   unit: z.enum(BODYWEIGHT_UNITS),
   clientId: uuidSchema,
   sets: z.array(strengthSetSchema).min(1, 'Add at least one set.').max(20),
@@ -34,7 +49,7 @@ export type SessionMovementInput = z.infer<typeof sessionMovementSchema>;
  *  optional free-text `label` (blank → NULL, shared shape). Members reference it by `supersetClientId`. */
 export const supersetInputSchema = z.object({
   clientId: uuidSchema,
-  label: freeTextNoteSchema, // borrows freeTextNoteSchema's blank→undefined+cap normalization only
+  label: freeTextNoteSchema, // borrows the blank→undefined+cap normalization AND the single-line guard
 });
 export type SupersetInput = z.infer<typeof supersetInputSchema>;
 
