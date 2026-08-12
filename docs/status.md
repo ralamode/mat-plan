@@ -179,6 +179,20 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **GAP-1 P2-2 / P2-3**: reject **CSV-unsafe input at the write boundary**. The CSVs are
+  deliberately not RFC-4180 (joined raw, nothing quoted), so a comma in a movement name shifted every
+  downstream field and an interior newline in a note split the record. One shared pair of predicates in
+  `packages/shared/src/text.ts` (`hasLineBreak`, `hasCommaOrLineBreak`), three consumers: `parseLoad`
+  (de-duplicated, behaviour unchanged), the movement **name**, and `freeTextNoteSchema` (newline only —
+  the contract quotes a comma-bearing `notes` on export). `"` stays legal everywhere (`30"` is real).
+  **A panel reversed the original plan**, which would have sanitised `movementSlug`: that fixes nothing
+  (the raw name persists in `movements.name` **and** `entries.movement_name`, and the CSV `movement`
+  column is kebab-rendered, not the snake slug) and is a **persisted natural-key change** — the
+  derivation is inlined as SQL in applied migration `0002`, so altering it would split a movement's
+  history across two rows, uncaught by `db:verify` check 6 (it iterates seed constants, not DB rows).
+  The no-change decision is pinned as an executable test. Two latent defects that GAP-1 P1-1 will make
+  reachable were filed as **BUG-2**.
+
 - **2026-07-23** — **V1-6b-1** (in review): the `ramp_targets` table + migration + seed mechanism +
   a `db:verify` adherence proof ([plan](./plans/v1-6b-calisthenics-ramp.md)). **Significant migration
   PR — DB-only (no DAL, no UI).** Migration `0004` adds `ramp_targets` (per-profile, per-week
