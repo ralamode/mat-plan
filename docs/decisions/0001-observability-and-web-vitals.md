@@ -31,6 +31,43 @@ First-party, near-zero-config real-user monitoring: route-level **LCP / INP / CL
 This is the Core Web Vitals dashboard. (Sentry also captures Web Vitals; we keep Vercel as the primary
 CWV RUM and Sentry for error/trace correlation, to avoid two CWV dashboards.)
 
+#### Amendment (Ray, 2026-08-11): deferred to the production cutover, and **production-ONLY when it lands**
+
+Still not installed, and deliberately so — it now waits for production rather than the V1-12 perf pass.
+"Near-zero-config" is **not** true in this repo. None of the points below is a blocker, but each one
+fails **silently** if missed — no build error, no crash, just an empty dashboard or noise in a console
+nobody trusts any more.
+
+**1. It must not mount outside production.** Not a preference — outside prod it is pure noise:
+
+- the script is **blocked by our CSP** (below), so every dev/preview page load logs a console CSP
+  violation. Console errors that are expected are console errors that get ignored, including the real
+  ones. That is the whole reason for this constraint.
+- preview and local traffic would pollute the very p75 the budget above is measured against.
+
+So gate the mount, and gate it **through `lib/env.ts`** — AGENTS.md forbids reading `process.env`
+outside the DAL / that module, so a bare `process.env.VERCEL_ENV` check in `layout.tsx` is not the way.
+Add a validated, **optional** var (absent ⇒ feature off), matching the V1-14a precedent where every
+hardening var is optional so `pnpm dev` and CI behave exactly as before. Render `<SpeedInsights/>` only
+when it is on. Note `@vercel/speed-insights` injects a _debug_ script in dev rather than no script, so
+"it disables itself in development" is **not** something to rely on.
+
+**2. Our CSP will block it unless the nonce is threaded.** `proxy.ts` sets
+`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`. **`'strict-dynamic'` makes browsers ignore
+`'self'` entirely** — only a script carrying the nonce, or injected by one that does, executes. There is
+no precedent to copy: Sentry here is server-side only, so this would be the app's **first** third-party
+client script, and `layout.tsx` has no nonce plumbing today. `connect-src 'self'` is already fine, since
+the beacon posts to same-origin `/_vercel/speed-insights/vitals`.
+
+**3. Confirm what it reports for `/p/[profileId]` before enabling.** Routes carry a profile UUID, and
+`profileId` is currently the only thing gating who can read a kid's data (the BOLA gap
+[SECURITY.md](../../.github/SECURITY.md) documents until Clerk). Verify it sends the **route pattern**,
+not the resolved URL — this ADR's own "never send PII" line makes that a check, not an assumption. If it
+sends resolved URLs, that is a decision to bring back to Ray, not to absorb.
+
+**Verification when it ships:** load a production page, confirm the beacon fires with **no** CSP
+violation in the console, then confirm a preview deploy renders **no** Speed Insights script at all.
+
 ### 3. Structured-log dashboard → **Vercel Observability** now; **Axiom** (log drain) if we outgrow it
 
 Vercel's built-in function logs + Observability cover immediate needs. If we need queryable log
@@ -45,14 +82,14 @@ strong Vercel integration. Deferred until the need is real.
 
 ## Phasing (tooling)
 
-| Capability                                     | Tool                              | Lands                                                      |
-| ---------------------------------------------- | --------------------------------- | ---------------------------------------------------------- |
-| Typed error envelopes + structured log _shape_ | (convention, no tool)             | now (AGENTS.md)                                            |
-| Error monitoring + API tracing (FE+BE)         | Sentry                            | **V1-14** (pull earlier if errors bite)                    |
-| Core Web Vitals RUM + analytics                | Vercel Speed Insights / Analytics | as soon as real UI exists (≥ V0-7; target V1-12 perf pass) |
-| DB metrics                                     | Neon console                      | now (zero code)                                            |
-| Slow-query insight                             | `pg_stat_statements`              | with real data (V1)                                        |
-| Queryable log dashboards                       | Axiom via Vercel Log Drain        | only if needed                                             |
+| Capability                                     | Tool                              | Lands                                                                        |
+| ---------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| Typed error envelopes + structured log _shape_ | (convention, no tool)             | now (AGENTS.md)                                                              |
+| Error monitoring + API tracing (FE+BE)         | Sentry                            | **V1-14** (pull earlier if errors bite)                                      |
+| Core Web Vitals RUM + analytics                | Vercel Speed Insights / Analytics | **production cutover** (Ray, 2026-08-11) — prod-ONLY mount; see §2 amendment |
+| DB metrics                                     | Neon console                      | now (zero code)                                                              |
+| Slow-query insight                             | `pg_stat_statements`              | with real data (V1)                                                          |
+| Queryable log dashboards                       | Axiom via Vercel Log Drain        | only if needed                                                               |
 
 ## Front-end best practices (standing commitment)
 

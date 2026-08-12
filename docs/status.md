@@ -179,6 +179,17 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **Speed Insights deferred to production, prod-ONLY when it lands** (Ray) —
+  [ADR 0001](./decisions/0001-observability-and-web-vitals.md) §2 amendment. It was phased for "≥ V0-7,
+  target V1-12" and never installed; the decision is now explicit rather than drift. The reason it must
+  not mount outside prod is concrete: our CSP is `script-src 'self' 'nonce-…' 'strict-dynamic'`, and
+  **`'strict-dynamic'` makes browsers ignore `'self'`**, so the injected script is blocked and every
+  dev/preview load would log a CSP violation — expected console errors are how real ones get missed. The
+  ADR records the gate (via `lib/env.ts`, since AGENTS.md bans bare `process.env` reads outside the DAL),
+  the nonce work (this would be the app's first third-party client script — Sentry here is server-side
+  only), an open check that it reports the `/p/[profileId]` route PATTERN rather than resolved profile
+  UUIDs, and how to verify all of it at cutover.
+
 - **2026-08-11** — **GAP-1 P1-1a**: a movement can be logged as **SKIPPED**, storing
   `entries.status='skipped'` with **ZERO** `entry_sets` ([plan](./plans/gap1-p1-1a-skipped-write.md)).
   Write path only — **no migration, no UI, and no read-path change**: `MovementLine` already renders a
