@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { BODYWEIGHT_UNITS } from './bodyweight';
+import { ENTRY_STATUS, movementStatusSchema } from './enums';
 import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
@@ -39,7 +40,22 @@ export const sessionMovementSchema = z.object({
     ),
   unit: z.enum(BODYWEIGHT_UNITS),
   clientId: uuidSchema,
-  sets: z.array(strengthSetSchema).min(1, 'Add at least one set.').max(20),
+  // GAP-1 P1-1a. `skipped` means a human SAID the movement was skipped — never inferred from an empty
+  // set list (the P0-1 provenance rule). `sub_failure` is deliberately NOT accepted here: it is a
+  // per-ATTEMPT observation and belongs on `entry_sets` (P1-1b) — see MOVEMENT_STATUSES for the rule.
+  //
+  // `.default()` (not `.optional()`) is safe here because `movements` rides as a JSON string the action
+  // `JSON.parse`s, so an absent key arrives as `undefined` and the default fires. The `FormData.get →
+  // null` trap that made `sessionType` unreachable applies only to discrete form fields, not to keys
+  // inside this JSON payload.
+  status: movementStatusSchema.default(ENTRY_STATUS.done),
+  // `.min(1)` MOVED to the session-level superRefine below (check 6), because the rule is now
+  // cross-field: ≥1 set normally, exactly 0 when skipped. It cannot live here — this schema must stay
+  // a plain ZodObject, and a `.superRefine` on it would make it ZodEffects, killing `.extend`/`.shape`
+  // (the trap `strength.ts`'s header documents at length). The rendered error is unchanged: the action
+  // maps any issue with a numeric `path[1]` to `Movement N: <message>`, and `path[1]` is the movement
+  // index whether the issue sits at ['movements', i] or ['movements', i, 'sets'].
+  sets: z.array(strengthSetSchema).max(20),
   supersetClientId: uuidSchema.optional(),
   supersetOrder: z.coerce.number().int().positive().optional(),
 });
@@ -139,6 +155,27 @@ export const logStrengthSessionSchema = z
           code: z.ZodIssueCode.custom,
           path: ['movements', i],
           message: 'A superset member needs both a superset id and an order.',
+        });
+      }
+
+      // (3b) GAP-1 P1-1a — the set-count rule, now cross-field with `status` (it moved off
+      // `sessionMovementSchema.sets`; see the note there). Both directions matter:
+      //   · a NON-skipped movement with no sets is the empty-log accident `.min(1)` always guarded;
+      //   · a SKIPPED movement WITH sets is only reachable from a crafted body, and would store a
+      //     contradiction the export can render as neither the `0,0,SKIPPED` triple nor a real row.
+      const isSkipped = m.status === ENTRY_STATUS.skipped;
+      if (!isSkipped && m.sets.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['movements', i],
+          message: 'Add at least one set.', // verbatim the message `.min(1)` produced
+        });
+      }
+      if (isSkipped && m.sets.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['movements', i],
+          message: 'A skipped movement can’t have sets.',
         });
       }
     }

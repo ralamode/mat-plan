@@ -1343,7 +1343,11 @@ const s1sets = await db
   .select({ id: schema.entrySets.id })
   .from(schema.entrySets)
   .where(inArray(schema.entrySets.entryId, [memberA, memberB, standaloneC]));
-assert.equal(s1sets.length, 3, 'V1-8-1: each session entry expands to an entry_set');
+assert.equal(
+  s1sets.length,
+  3,
+  'V1-8-1: each of THESE THREE fixture entries expands to an entry_set (insertSessionEntry always\n   inserts one) — NOT a universal: GAP-1 P1-1a makes a skipped movement legitimately set-less',
+);
 
 // Session 2 (profile A): a 3-movement superset — NO arity cap (the PPL-generality property).
 const session2 = await insertSession('20', sessionProfileA.id);
@@ -1932,6 +1936,128 @@ await expectRejectedBy('sessions_day_role_check', () =>
 );
 console.log(
   '✓ GAP-1: sessions.day_role — CHECK parity, asserted round-trip, NULL, bad-literal reject',
+);
+
+// ── GAP-1 P1-1a: a movement logged as SKIPPED, carrying ZERO entry_sets ───────────────────────────
+// Through the SHIPPED writer (not a hand-rolled insert), so this proves the path the app runs. The
+// point of the fixture is the MIX: one skipped movement and one done sibling in the SAME session, so
+// "zero sets" is demonstrably scoped to the skipped entry rather than a session that wrote no sets.
+const SKIP_SESSION_CLIENT_ID = newId();
+const SKIPPED_MOVEMENT_CLIENT_ID = newId();
+const DONE_MOVEMENT_CLIENT_ID = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  day: '2026-03-05',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: SKIP_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: SKIPPED_MOVEMENT_CLIENT_ID,
+      status: ENTRY_STATUS.skipped,
+      sets: [], // the whole point — unrepresentable before P1-1a
+    },
+    {
+      movementName: movY.name,
+      unit: 'lb',
+      movementId: movY.id,
+      clientId: DONE_MOVEMENT_CLIENT_ID,
+      // status omitted → the writer omits the column → the DB default. The `done` path is untouched.
+      sets: [
+        { reps: 5, weight: 60 },
+        { reps: 5, weight: 65 },
+      ],
+    },
+  ],
+});
+
+const skipRows = await db
+  .select({
+    id: schema.entries.id,
+    clientId: schema.entries.clientId,
+    status: schema.entries.status,
+  })
+  .from(schema.entries)
+  .where(inArray(schema.entries.clientId, [SKIPPED_MOVEMENT_CLIENT_ID, DONE_MOVEMENT_CLIENT_ID]));
+const skippedEntry = skipRows.find((r) => r.clientId === SKIPPED_MOVEMENT_CLIENT_ID);
+const doneEntry = skipRows.find((r) => r.clientId === DONE_MOVEMENT_CLIENT_ID);
+assert.ok(skippedEntry && doneEntry, 'GAP-1 P1-1a: both movements were written');
+assert.equal(
+  skippedEntry.status,
+  ENTRY_STATUS.skipped,
+  'GAP-1 P1-1a: the skipped movement persists entries.status = skipped',
+);
+assert.equal(
+  doneEntry.status,
+  ENTRY_STATUS.done,
+  'GAP-1 P1-1a: an omitted status still takes the DB default `done` (the existing path is byte-identical)',
+);
+
+const skippedSets = await db
+  .select({ id: schema.entrySets.id })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.entryId, skippedEntry.id));
+assert.equal(
+  skippedSets.length,
+  0,
+  'GAP-1 P1-1a: a skipped movement stores ZERO entry_sets (the CSV 0,0,SKIPPED triple is a RENDER, never stored)',
+);
+const doneSets = await db
+  .select({ id: schema.entrySets.id, idx: schema.entrySets.idx })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.entryId, doneEntry.id))
+  .orderBy(schema.entrySets.idx);
+assert.deepEqual(
+  doneSets.map((r) => r.idx),
+  [1, 2],
+  'GAP-1 P1-1a: the done sibling in the same session keeps its sets, 1-based',
+);
+
+// The parent session is NOT marked skipped — one skipped movement does not skip the session, and
+// writing it there would give the export a third source of truth for "did this happen" (plan D3).
+const [skipSession] = (
+  await db.execute(sql`select status from sessions where client_id = ${SKIP_SESSION_CLIENT_ID}`)
+).rows as unknown as { status: string }[];
+assert.equal(
+  skipSession.status,
+  ENTRY_STATUS.done,
+  'GAP-1 P1-1a: sessions.status stays `done` — a session is not skipped because one movement was',
+);
+
+// Idempotent replay: the same payload re-run yields ONE entry and STILL zero sets (a retry must not
+// resurrect set rows onto a skipped movement).
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  day: '2026-03-05',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: SKIP_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: SKIPPED_MOVEMENT_CLIENT_ID,
+      status: ENTRY_STATUS.skipped,
+      sets: [],
+    },
+  ],
+});
+const replayedSkipped = await db
+  .select({ id: schema.entries.id })
+  .from(schema.entries)
+  .where(eq(schema.entries.clientId, SKIPPED_MOVEMENT_CLIENT_ID));
+assert.equal(replayedSkipped.length, 1, 'GAP-1 P1-1a: replay does not duplicate the skipped entry');
+const replayedSets = await db
+  .select({ id: schema.entrySets.id })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.entryId, skippedEntry.id));
+assert.equal(replayedSets.length, 0, 'GAP-1 P1-1a: replay leaves the skipped movement set-less');
+console.log(
+  '✓ GAP-1 P1-1a: skipped movement — status persisted, ZERO sets, done sibling intact, session unmarked, replay-safe',
 );
 
 // ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
