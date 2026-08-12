@@ -1,4 +1,11 @@
-import { logStrengthSessionSchema, movementSlug, newId } from '@mat-plan/shared';
+import {
+  ENTRY_STATUS,
+  ENTRY_STATUSES,
+  logStrengthSessionSchema,
+  MOVEMENT_STATUSES,
+  movementSlug,
+  newId,
+} from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 // The shared `logStrengthSessionSchema` superRefine is the write-path trust boundary for supersets
@@ -183,5 +190,61 @@ describe('freeTextNoteSchema via `feel` — single-line, but commas are fine (GA
     const res = withFeel('\nfelt strong\n');
     expect(res.success).toBe(true);
     expect(res.success && res.data.feel).toBe('felt strong');
+  });
+});
+
+// GAP-1 P1-1a — a movement can be logged as SKIPPED, carrying zero sets. The `≥1 set` rule moved off
+// `sessionMovementSchema.sets` into the session-level superRefine because it is now cross-field with
+// `status`; these pin both directions AND the issue PATH, since the path is what keeps the rendered
+// "Movement N: …" string identical (actions.ts keys on a numeric path[1]).
+describe('logStrengthSessionSchema — skipped movements (GAP-1 P1-1a)', () => {
+  const withMovement = (extra: Record<string, unknown>) =>
+    logStrengthSessionSchema.safeParse(
+      base({ movements: [{ ...move({ clientId: newId() }), ...extra }] }),
+    );
+
+  it('accepts status: skipped with ZERO sets', () => {
+    const res = withMovement({ status: ENTRY_STATUS.skipped, sets: [] });
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.movements[0]!.status).toBe(ENTRY_STATUS.skipped);
+    expect(res.success && res.data.movements[0]!.sets).toEqual([]);
+  });
+
+  it('defaults an omitted status to done (the byte-identical existing path)', () => {
+    const res = withMovement({});
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.movements[0]!.status).toBe(ENTRY_STATUS.done);
+  });
+
+  it('still REJECTS an ordinary movement with zero sets — at path ["movements", 0]', () => {
+    const res = withMovement({ sets: [] });
+    expect(res.success).toBe(false);
+    const issue =
+      !res.success && res.error.issues.find((i) => i.message === 'Add at least one set.');
+    expect(issue).toBeTruthy();
+    // The path is the contract with actions.ts: a numeric path[1] is what renders "Movement 1: …".
+    expect(issue && issue.path).toEqual(['movements', 0]);
+    expect(issue && typeof issue.path[1]).toBe('number');
+  });
+
+  it('rejects a SKIPPED movement that still carries sets (the crafted-body converse)', () => {
+    const res = withMovement({ status: ENTRY_STATUS.skipped });
+    expect(res.success).toBe(false);
+  });
+
+  it('rejects sub_failure as a MOVEMENT status — it is a set-level observation (P1-1b)', () => {
+    const res = withMovement({ status: ENTRY_STATUS.sub_failure, sets: [] });
+    expect(res.success).toBe(false);
+  });
+
+  it('leaves an ordinary 1-set done movement parsing exactly as before', () => {
+    const res = withMovement({});
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.movements[0]!.sets).toEqual([{ reps: 5, weight: 135 }]);
+  });
+
+  it('MOVEMENT_STATUSES is a strict subset of ENTRY_STATUSES', () => {
+    expect(ENTRY_STATUSES).toEqual(expect.arrayContaining([...MOVEMENT_STATUSES]));
+    expect(MOVEMENT_STATUSES).not.toContain(ENTRY_STATUS.sub_failure);
   });
 });

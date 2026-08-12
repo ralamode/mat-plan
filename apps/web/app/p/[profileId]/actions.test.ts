@@ -204,6 +204,7 @@ function strengthForm(opts: {
     movementName?: string;
     unit?: string;
     clientId?: string;
+    status?: string;
     sets: Array<{ reps: string; weight: string }>;
   }>;
   movementsRaw?: string;
@@ -224,6 +225,9 @@ function strengthForm(opts: {
           movementName: m.movementName ?? 'Back squat',
           unit: m.unit ?? BODYWEIGHT_UNITS[0],
           clientId: m.clientId ?? newId(),
+          // Omitted unless the test sets it, so every existing case still exercises the
+          // status-absent path that must default to `done` (GAP-1 P1-1a).
+          ...(m.status !== undefined ? { status: m.status } : {}),
           sets: m.sets,
         })),
       ),
@@ -432,6 +436,29 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(vi.mocked(logStrengthSession).mock.calls[0]![0].dayRole).toBeUndefined();
+  });
+
+  // GAP-1 P1-1a. The action forwards `parsed.data.movements` wholesale, so `status` threads itself —
+  // but "it threads itself" is exactly the assumption that made #98's `dayRole` silently inert. Assert
+  // the VALUE reaching the DAL, and via mock.calls rather than `objectContaining`, which cannot see a
+  // field going missing. This test is the guard on that whole class of bug.
+  it('threads a skipped movement (status + zero sets) through to the DAL', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementName: 'Bulgarian split squat', status: 'skipped', sets: [] },
+          { movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    const arg = vi.mocked(logStrengthSession).mock.calls[0]![0];
+    expect(arg.movements[0]).toMatchObject({ status: 'skipped', sets: [] });
+    // The sibling still logs normally, and an omitted status defaults to `done` on the wire.
+    expect(arg.movements[1]).toMatchObject({ status: 'done' });
+    expect(arg.movements[1]!.sets).toHaveLength(1);
   });
 
   it('threads a session feel to the DAL', async () => {
