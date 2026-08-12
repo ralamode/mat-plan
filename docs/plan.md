@@ -188,8 +188,8 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   occasionally Mac. Per-profile schedules + quiet hours; opt-in per kid. Builds on the v1.5 PWA + Clerk
   foundation. Scope + delivery mechanism TBD.
 - **ONB-1 — self-serve onboarding: bring-your-own-program**
-  ([brief](./plans/onb-1-self-serve-onboarding-brief.md)) — _(Ray, 2026-08-11)_ **BRIEF ONLY, not
-  scoped.** Onboarding a new family today costs a code change + a deploy: `seed.ts` is the only writer
+  ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)) — _(Ray, 2026-08-11; UX panel 2026-08-12)_
+  **PRD ONLY — not a plan, not scoped.** Onboarding a new family today costs a code change + a deploy: `seed.ts` is the only writer
   of profiles, and the strength program is a TypeScript const with no authoring UI. The data model is
   already multi-tenant (`households` + `profiles.household_id`), so the gap is **authoring surfaces +
   auth**, not the schema. Shape: a first-run **questionnaire** that writes a **`routine_config`** (V1-18
@@ -200,8 +200,17 @@ prescription_targets` for per-row confirmation. BYO-program is load-bearing: it 
   did by hand in V1-10 PR 1b), and it makes the confirm gate meaningful for non-experts, since the
   question becomes "does this match your sheet?" rather than "is this load right for your kid?" —
   proofreading, not coaching judgment. Load calibration, when it comes, belongs in **`packages/engine`**
-  (deterministic, golden-vector tested, auditable), never an LLM. Open: equipment is unmodelled, and
-  `movements` is global rather than household-scoped. **v2+ territory.**
+  (deterministic, golden-vector tested, auditable), never an LLM.
+  **A 2-lens UX panel reshaped it:** parent-written plans ("100 push-ups a day") are **`ramp_targets` on
+  the shipped calisthenics metrics — typed, no AI, no new tables** (and must never render as `1 × 100`,
+  which would break the accumulation model); only a structured trainer sheet needs import. Risky values
+  (external load, height, distance, reps) should **arrive BLANK** rather than be confirmed — V1-19's
+  "loads stay blank" boundary applied to import — since per-row confirm is theatre at 20+ rows on a phone.
+  Units are unmodelled and are the largest silent-error surface (a kg sheet read as lb is a 2.2× error
+  that looks plausible). **Separately, and independent of ONB-1: first-run is broken TODAY** — a new
+  household inherits Ray's routine (Rice bucket / Brain rep / Splits) and `page.tsx` tells a human to
+  "Seed the database to get started". A P0 fix that can ship long before any of this. Open: equipment may
+  not be needed at all; `movements` is global rather than household-scoped. **v2+ territory.**
 - **Brain-reps content.** Surface daily **motivational quotes / inspiration** for the `brain_rep`
   activity — a rotating quote for the day, maybe a small home widget. Content source, rotation, and
   "already seen" tracking TBD.
