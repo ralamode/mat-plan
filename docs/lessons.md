@@ -169,6 +169,17 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Vitest / RTL (component tests)
 
+- **A whole feature shipped INERT with every gate green — an action parsed a field and then forgot to
+  forward it.** → GAP-1 P0-1 validated `dayRole` and omitted it from the `logStrengthSession({…})`
+  call, so `sessions.day_role` was never written from the app. Three gates missed it independently:
+  the DAL arg is **optional** (`dayRole?: string`) so `tsc` was clean; `db:verify` drives the WRITER
+  directly, bypassing the action; and the happy-path assertion used **`expect.objectContaining`,
+  which is blind to a key that is simply ABSENT** (it only checks the keys you list). → For any
+  field threaded action → DAL, assert the **value** — `expect(vi.mocked(dep).mock.calls[0][0])
+.toMatchObject({ field: 'x' })` — and prove the test fails with the line removed. **An optional
+  parameter is a silent-drop hazard**: prefer asserting each threaded field explicitly over trusting
+  a spread. (GAP-1 P0-1 → fix/gap1-p01-forward-day-role)
+
 - **Test "passes" but the run exits non-zero: `ReferenceError: window is not defined` (unhandled,
   after the tests).** → An RTL component test didn't **unmount** — clearing `document.body.innerHTML`
   isn't enough; React/`next/link` scheduler work stays pending and flushes _after_ jsdom is torn down.
