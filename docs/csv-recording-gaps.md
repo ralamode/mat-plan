@@ -114,10 +114,33 @@ Exporting a kg entry into it is a silent fidelity bug. Fix: convert on export, o
 
 ### P2-2 — Free-text movement names can inject a comma
 
-`findOrCreateMovementId` slugs arbitrary text, and `movementName` has no charset restriction. A movement
-called `Bench, Close Grip` becomes `bench,-close-grip` and **shifts every downstream field**. The files
-have no quoting, so this corrupts the row. Fix: reject/sanitise `,` `"` and newlines at the movement-name
-boundary — cheap, and it prevents a class of silent corruption.
+`movementName` has no charset restriction. A movement called `Bench, Close Grip` **shifts every downstream
+field**; the files have no quoting, so this corrupts the row. Fix: reject `,` and CR/LF **at the
+movement-name boundary** — cheap, and it prevents a class of silent corruption.
+
+**Panel finding (2026-08-11) — do NOT "fix" this in `movementSlug`.** Three things make the slug the
+wrong seam, and the plan that proposed it was corrected before implementation:
+
+- **It doesn't fix the bug.** The comma is in the NAME, and the name is persisted raw in **two** columns
+  — `movements.name` (`findOrCreateMovementId` inserts it verbatim) and `entries.movement_name`
+  (`writers/strength-session.ts`). `entryLabel` renders it verbatim. A clean slug leaves both commas in
+  place.
+- **The CSV `movement` column is not the slug.** The contract emits **kebab** (`front-squat`,
+  `bulgarian-split-squat`); `movementSlug` emits **snake** (`front_squat`). The export is already a
+  render, not a passthrough.
+- **`movementSlug` is a persisted natural key, not a pure function.** Its derivation is inlined as SQL in
+  applied, forward-only migration `0002` (steps 3 and 4b). Change the TS and an existing row keeps its old
+  slug → `ON CONFLICT (slug)` stops firing → a **second** `movements` row for the same lift, splitting one
+  movement's history across two ids. `db:verify` check 6 would **not** catch it — it iterates
+  `MOVEMENT_SEED_ROWS` (a constant), never DB rows. Same exposure for `program_blocks.slug`, whose seeded
+  `kids_s&c_foundation` also rules out an `[a-z0-9_-]` whitelist.
+
+Precedent to follow: `parseLoad` already handles this exact hazard for the load field by **rejecting**
+`,`/CR/LF with an authored message while deliberately **allowing `"`** (`30"` is real data, and the file
+is intentionally not RFC-4180). Extract that predicate to `packages/shared` and share it across all three
+call sites. Rows written _before_ the guard still carry commas, so V1-13 needs an export-seam assertion
+regardless — which is also the contract's own precedent for `notes` ("going forward, quote a `notes`
+value containing a comma").
 
 ### P2-3 — `notes` can contain a newline
 
