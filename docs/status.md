@@ -179,6 +179,20 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **GAP-1 P1-1a**: a movement can be logged as **SKIPPED**, storing
+  `entries.status='skipped'` with **ZERO** `entry_sets` ([plan](./plans/gap1-p1-1a-skipped-write.md)).
+  Write path only — **no migration, no UI, and no read-path change**: `MovementLine` already renders a
+  non-`done` entry status and already guards `sets.length > 0`, so this ships provable by `db:verify` +
+  unit tests and the UI PR inherits a working store. New `MOVEMENT_STATUSES` (`{done, skipped}`) is built
+  from `ENTRY_STATUS` members and constrains at the **zod boundary**, not the CHECK — widening a CHECK is
+  cheap, narrowing one is a migration. `sub_failure` is rejected as a movement status: _a status belongs
+  on the entry only if it can be true with zero sets_. The `≥1 set` rule moved into the existing
+  session-level `superRefine` (a `.superRefine` on `sessionMovementSchema` would make it `ZodEffects` and
+  kill `.extend`/`.shape`), keeping the rendered `Movement N: Add at least one set.` byte-identical. The
+  writer **spreads** `status` so an unset status omits the column and takes the DB default, leaving the
+  `done` path untouched. Includes an action-boundary test asserting the value reaching the DAL — the
+  guard against the silent-drop class that made #98's `dayRole` inert.
+
 - **2026-08-11** — **GAP-1 P1-1 plans** (docs only): the combined P2+P1-1 plan was **reversed by an
   adversarial panel** and is replaced by a 4-PR split. Committed:
   [1a — skipped write path](./plans/gap1-p1-1a-skipped-write.md) (`entries.status='skipped'` with zero

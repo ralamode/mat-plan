@@ -1,4 +1,4 @@
-import { newId, type StrengthSetInput } from '@mat-plan/shared';
+import { newId, type MovementStatus, type StrengthSetInput } from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
@@ -62,6 +62,9 @@ export type ResolvedSessionMovement = {
   movementId: number;
   clientId: string; // per-movement entry idempotency key
   sets: readonly StrengthSetInput[];
+  // GAP-1 P1-1a. Optional so every existing caller (and `db:verify`'s bare fixtures) keeps compiling
+  // and keeps taking the column default — see `writeSessionStrengthEntry` for why that matters.
+  status?: MovementStatus;
   supersetClientId?: string;
   supersetOrder?: number;
 };
@@ -152,6 +155,7 @@ async function writeSessionStrengthEntry(
     day: string;
     clientId: string;
     sets: readonly StrengthSetInput[];
+    status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
   },
@@ -169,6 +173,11 @@ async function writeSessionStrengthEntry(
       activityTypeId: args.activityTypeId,
       movementId: args.movementId,
       sessionId: args.sessionId,
+      // GAP-1 P1-1a. SPREAD, not `status: args.status ?? 'done'` — when the caller says nothing the
+      // column is OMITTED from the INSERT and Postgres applies its own `.notNull().default('done')`.
+      // That keeps the `done` path byte-identical (one default, in the DB, not forked into the writer)
+      // and means every pre-existing caller writes exactly the row it wrote before.
+      ...(args.status !== undefined ? { status: args.status } : {}),
       supersetId: args.supersetId ?? null,
       supersetOrder: args.supersetOrder ?? null,
     })
@@ -291,6 +300,7 @@ export async function writeStrengthSession(
         day: args.day,
         clientId: m.clientId,
         sets: m.sets,
+        status: m.status,
         supersetId,
         supersetOrder: m.supersetOrder ?? null,
       });
