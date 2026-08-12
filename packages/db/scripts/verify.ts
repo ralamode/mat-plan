@@ -2060,6 +2060,104 @@ console.log(
   '✓ GAP-1 P1-1a: skipped movement — status persisted, ZERO sets, done sibling intact, session unmarked, replay-safe',
 );
 
+// ── GAP-1 P1-1b: a SET can be marked sub_failure, and a sub-failure set is NOT editable ───────────
+// Through the SHIPPED writer. The mix matters again: one `done` set and one `sub_failure` set on the
+// SAME movement, which is the realistic shape ("3 sets, the last one failed") and the one entry-level
+// storage could never express.
+const SF_SESSION_CLIENT_ID = newId();
+const SF_MOVEMENT_CLIENT_ID = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  day: '2026-03-06',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: SF_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: SF_MOVEMENT_CLIENT_ID,
+      sets: [
+        { reps: 5, weight: 60 }, // status omitted → DB default
+        { reps: 3, weight: 60, status: ENTRY_STATUS.sub_failure },
+      ],
+    },
+  ],
+});
+
+const [sfEntry] = await db
+  .select({ id: schema.entries.id })
+  .from(schema.entries)
+  .where(eq(schema.entries.clientId, SF_MOVEMENT_CLIENT_ID));
+assert.ok(sfEntry, 'GAP-1 P1-1b: the movement was written');
+const sfSets = await db
+  .select({
+    publicId: schema.entrySets.publicId,
+    idx: schema.entrySets.idx,
+    reps: schema.entrySets.reps,
+    status: schema.entrySets.status,
+  })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.entryId, sfEntry.id))
+  .orderBy(schema.entrySets.idx);
+
+assert.deepEqual(
+  sfSets.map((r) => r.status),
+  [ENTRY_STATUS.done, ENTRY_STATUS.sub_failure],
+  'GAP-1 P1-1b: per-set status persists, and an omitted status takes the DB default `done`',
+);
+assert.deepEqual(
+  sfSets.map((r) => r.reps),
+  [5, 3],
+  'GAP-1 P1-1b: a sub-failure set KEEPS its real reps (the DB is the richer record; the export re-derives `sub-failure`)',
+);
+// The count is the export's `sets` value — it must stay 2, which is why a `skipped` SET is refused
+// at the boundary rather than stored (it would silently over-count here).
+assert.equal(sfSets.length, 2, 'GAP-1 P1-1b: COUNT(entry_sets) is unaffected by a sub-failure set');
+
+// BUG-2(a), the SERVER half: the V1-9 edit must refuse a sub-failure set. It is NUMERIC, so every
+// other guard in updateStrengthSetById passes it — without the status clause this would succeed and
+// silently leave `status = 'sub_failure'` on a row now claiming reps it never achieved.
+const subFailureSet = sfSets.find((r) => r.status === ENTRY_STATUS.sub_failure)!;
+const doneSet = sfSets.find((r) => r.status === ENTRY_STATUS.done)!;
+const refused = await updateStrengthSetById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  setId: subFailureSet.publicId,
+  reps: 99,
+  weight: 999,
+});
+assert.equal(
+  refused,
+  null,
+  'GAP-1 P1-1b (BUG-2a): editing a sub_failure set matches no row → null',
+);
+const [unchanged] = await db
+  .select({ reps: schema.entrySets.reps, status: schema.entrySets.status })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, subFailureSet.publicId));
+assert.equal(unchanged.reps, 3, 'GAP-1 P1-1b (BUG-2a): the refused edit changed NOTHING');
+assert.equal(
+  unchanged.status,
+  ENTRY_STATUS.sub_failure,
+  'GAP-1 P1-1b (BUG-2a): the status survives the refused edit',
+);
+
+// …and the `done` sibling is still editable, so the guard is scoped to status, not a blanket freeze.
+const stillEditable = await updateStrengthSetById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  setId: doneSet.publicId,
+  reps: 6,
+  weight: 65,
+});
+assert.ok(
+  stillEditable,
+  'GAP-1 P1-1b: a done set in the same movement is STILL editable (V1-9 intact)',
+);
+console.log(
+  '✓ GAP-1 P1-1b: per-set sub_failure — status + reps persisted, count intact, edit refused server-side, done sibling still editable',
+);
+
 // ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
 // Proves the ownership-scoped UPDATE (the same guard the DAL runs): the owner's edit persists + advances
 // updated_at (LWW server-now), while a cross-profile or soft-deleted-set edit matches no row → null.

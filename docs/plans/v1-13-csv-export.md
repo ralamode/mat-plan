@@ -83,8 +83,29 @@ asserts `sets === splitList(reps).length` (and `load`) independently of the diff
 - `movement`: `movementSlug(name).replace(/_/g, '-')` — our slugs are `front_squat`, the CSV wants
   `front-squat`. **Open Q:** verify against every seeded movement; `trap-bar_deadlift` →
   `trap-bar-deadlift` looks right but `pull-up` must not become `pull--up`.
-- `SKIPPED` (uppercase) into `load` with `sets=0,reps=0` when `status='skipped'`
-- `sub-failure` into `reps` when `status='sub_failure'`
+- `SKIPPED` (uppercase) into `load` with `sets=0,reps=0` when `entries.status='skipped'`. The
+  `0,0,SKIPPED` triple is a **status-driven RENDER** — never read from storage. A skipped movement
+  stores ZERO `entry_sets` (GAP-1 P1-1a), and `reps` is `.positive()` so a stored `reps=0` cannot
+  exist. `sets = COUNT(entry_sets)` therefore yields 0 with no special case.
+- `sub-failure` into `reps` when a set carries `entry_sets.status='sub_failure'` (GAP-1 P1-1b). The
+  status is **per-SET**, so this is a COLLAPSE, not a lookup — and it rides the uniform-collapse rule
+  D4 already requires rather than needing a branch of its own:
+
+  ```
+  reps ← collapse(sets.map(s => s.status === 'sub_failure' ? 'sub-failure' : String(s.reps)))
+  ```
+
+  All-sub-failure collapses to the scalar `sub-failure`, reproducing the observed row
+  (`pull-ups,2,sub-failure,…`) via the rule that has to exist anyway. A **MIXED** movement emits e.g.
+  `5/5/sub-failure` — a slash-list with exactly `sets` elements, so it satisfies D6's arity assertion.
+  That shape is unobserved in the legacy files but is not illegal, and it is the honest rendering:
+  emitting the achieved `3` for a failed set would silently reclassify it as completed, destroying the
+  entire signal being recorded. **Note the DB is the richer record here** — a sub-failure set keeps its
+  real `reps`, and the export drops the number deliberately, not accidentally.
+
+- A `skipped` SET row is never written, so `sets = COUNT(entry_sets)` needs no `WHERE status <>
+'skipped'`. That is enforced at the write boundary (`SET_STATUSES`), not here — if it ever changes,
+  this is the line that breaks.
 
 **D8 — Scope: one athlete, one month, one kind per request.** Matches the file layout
 (`data/<type>/<athlete>/<YYYY-MM>.csv`). No zip, no all-kinds endpoint — the skills read one file at a

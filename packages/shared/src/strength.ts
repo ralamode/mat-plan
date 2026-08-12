@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
 import { hasCommaOrLineBreak } from './text';
 
@@ -152,6 +153,22 @@ export const strengthSetSchema = z
   .object({
     reps: numericSetSchema.shape.reps, // identical rules, one source
     weight: z.unknown(),
+    // GAP-1 P1-1b. `sub_failure` = went to failure short of the prescribed reps. It rides on the SET
+    // because it describes ONE attempt (see SET_STATUSES); `skipped` is excluded here — a movement
+    // that didn't happen carries zero set rows (P1-1a), never a placeholder set.
+    //
+    // `.optional()` and NOT `.default('done')`, deliberately: `.default()` would make `status` REQUIRED
+    // in the output type, forcing a `status` key onto every bare `{ reps, weight }` set literal in the
+    // codebase (db:verify alone has ~15) and forking the default across zod and the column. Omitted
+    // here → the writer omits the column → Postgres applies `.notNull().default('done')`. One default,
+    // in one place, and every existing payload stores a byte-identical row.
+    //
+    // NOTE `reps` stays REQUIRED and positive for a sub-failure set. The CSV loses the number into
+    // `notes`, but that is a limitation of the FILE, not an instruction to lose it in the DB —
+    // byte-faithfulness is a property of the export, not of storage. A nullable `reps` would also
+    // recreate a known-unrecoverable state (`formatSetLine` renders `? × BW` and `isEditableSet` then
+    // refuses to fix it), which is exactly what `parseLoad`'s blank-check above exists to prevent.
+    status: setStatusSchema.optional(),
   })
   .superRefine((val, ctx) => {
     const parsed = parseLoad(val.weight);
@@ -161,11 +178,14 @@ export const strengthSetSchema = z
   })
   .transform((val) => {
     const parsed = parseLoad(val.weight);
+    // Spread so an absent status stays ABSENT (never `status: undefined`), which is what lets the
+    // writer's `!== undefined` check omit the column and take the DB default.
+    const status = val.status !== undefined ? { status: val.status } : {};
     // Unreachable after superRefine, but the transform must be total for the types to work out.
-    if (parsed.kind === 'invalid') return { reps: val.reps, weight: 0 };
+    if (parsed.kind === 'invalid') return { reps: val.reps, weight: 0, ...status };
     return parsed.kind === 'numeric'
-      ? { reps: val.reps, weight: parsed.weight }
-      : { reps: val.reps, weightLabel: parsed.weightLabel };
+      ? { reps: val.reps, weight: parsed.weight, ...status }
+      : { reps: val.reps, weightLabel: parsed.weightLabel, ...status };
   });
 
 /** A validated set: either a numeric weight or a text label, never both, never neither. */

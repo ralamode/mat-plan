@@ -179,6 +179,20 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **GAP-1 P1-1b**: a **SET** can be marked `sub_failure`, keeping its real `reps`
+  ([plan](./plans/gap1-p1-1b-subfailure-write.md)). Per-SET, not per-movement: `sub-failure` in the CSV's
+  `reps` column is the **uniform collapse of a per-set list**, structurally identical to `5/5/5` → `5`,
+  not a granularity signal — so entry-level storage would have thrown away _which_ set failed. `reps`
+  stays required (the file loses the number to `notes`; that's a limitation of the FILE, not of the DB —
+  byte-faithfulness is a property of the output). New `SET_STATUSES` = `{done, sub_failure}` with a
+  `satisfies readonly EntryStatus[]` compile-time subset proof; `skipped` is excluded because the export
+  derives `sets` from `COUNT(entry_sets)` and a placeholder set row would over-count. **Closes BUG-2(a)**:
+  a sub-failure set is numeric, so it passed every `isEditableSet` guard — a V1-9 edit would have changed
+  its reps and left the status behind, exporting as `sub-failure` while claiming reps it never achieved.
+  Fixed on BOTH halves (the client predicate and `updateStrengthSetById`'s WHERE), with a `db:verify`
+  case on the server half, since a crafted POST bypasses the client entirely. Also plumbs `SetDTO.status`
+  (per-set status was unrenderable without it) and records the export collapse rule in V1-13 D7.
+  No migration. The badge itself is PR 1c.
 - **2026-08-11** — **Speed Insights deferred to production, prod-ONLY when it lands** (Ray) —
   [ADR 0001](./decisions/0001-observability-and-web-vitals.md) §2 amendment. It was phased for "≥ V0-7,
   target V1-12" and never installed; the decision is now explicit rather than drift. The reason it must
