@@ -179,6 +179,15 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **GAP-1 P0-1 fix**: `sessions.day_role` was **never written from the app**.
+  `logStrengthSessionAction` parsed `dayRole` and then omitted it from the `logStrengthSession({…})`
+  call, so the column P0-1 exists to populate stayed NULL for every UI-logged session. Three gates
+  missed it independently: `LogStrengthSessionArgs.dayRole` is optional so `tsc` was clean,
+  `db:verify` drives the writer directly (bypassing the action), and the happy-path assertion used
+  `expect.objectContaining`, which cannot see an ABSENT key. One-line fix plus two regression tests
+  that assert the VALUE reaching the DAL (`strength_a` forwarded; `''` normalised to `undefined`),
+  verified to fail with the line removed. Recorded in [lessons.md](./lessons.md).
+
 - **2026-08-11** — **GAP-1 P2-2 / P2-3**: reject **CSV-unsafe input at the write boundary**. The CSVs are
   deliberately not RFC-4180 (joined raw, nothing quoted), so a comma in a movement name shifted every
   downstream field and an interior newline in a note split the record. One shared pair of predicates in

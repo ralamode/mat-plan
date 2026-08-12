@@ -326,6 +326,13 @@ export async function logStrengthSessionAction(
       clientId: parsed.data.clientId,
       day: day.day,
       feel: parsed.data.feel,
+      // GAP-1 P0-1. Validated above but previously NOT forwarded, so `sessions.day_role` was never
+      // written from the app: `LogStrengthSessionArgs.dayRole` is optional, so omitting it typechecked
+      // clean, and `db:verify` drives the writer directly rather than through this action — so both
+      // gates stayed green while the feature was inert. The regression test submits a `dayRole` and
+      // asserts the DAL receives it; assert on the VALUE, since `objectContaining` is blind to a key
+      // that is simply absent.
+      dayRole: parsed.data.dayRole,
       supersets: parsed.data.supersets,
       movements: parsed.data.movements,
     });
