@@ -56,3 +56,26 @@ export const MOVEMENT_STATUSES = [ENTRY_STATUS.done, ENTRY_STATUS.skipped] as co
 export type MovementStatus = (typeof MOVEMENT_STATUSES)[number];
 export const movementStatusSchema = z.enum(MOVEMENT_STATUSES);
 export const MOVEMENT_STATUS = keyBySelf(MOVEMENT_STATUSES);
+
+/**
+ * The statuses a SET (`entry_sets` row) may carry (GAP-1 P1-1b) — the other half of the split above.
+ *
+ * `sub_failure` means "went to failure short of the prescribed reps". It is an observation about ONE
+ * attempt, which is why it lives here and not on the entry: by the same criterion, it cannot be true
+ * with zero sets (no attempt means no failed attempt — that is `skipped`).
+ *
+ * `skipped` is deliberately EXCLUDED. A skipped SET row is never written, and pinning that now is
+ * free: the CSV export derives `sets` from `COUNT(entry_sets)`, so a skipped set row would silently
+ * over-count and force a `WHERE status <> 'skipped'` nobody would remember to add. A movement that
+ * did not happen carries zero set rows (P1-1a), not a placeholder.
+ *
+ * `satisfies readonly EntryStatus[]` makes the subset relationship a COMPILE-TIME proof against
+ * `ENTRY_STATUSES` — a typo or a removed member fails the build here.
+ */
+export const SET_STATUSES = [
+  ENTRY_STATUS.done,
+  ENTRY_STATUS.sub_failure,
+] as const satisfies readonly EntryStatus[];
+export type SetStatus = (typeof SET_STATUSES)[number];
+export const setStatusSchema = z.enum(SET_STATUSES);
+export const SET_STATUS = keyBySelf(SET_STATUSES);

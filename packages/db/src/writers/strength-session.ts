@@ -1,4 +1,4 @@
-import { newId, type MovementStatus, type StrengthSetInput } from '@mat-plan/shared';
+import { ENTRY_STATUS, newId, type MovementStatus, type StrengthSetInput } from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
@@ -210,6 +210,9 @@ async function writeSessionStrengthEntry(
         // The two columns are deliberately NOT mutually exclusive at the schema level: a later slice
         // may store `123 (50ft)` as weight_num 123 PLUS the label so volume charts aren't blind to it.
         ...('weightLabel' in s ? { weightLabel: s.weightLabel } : { weightNum: String(s.weight) }), // numeric column takes a string (precision-safe)
+        // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
+        // omits the column entirely, so every pre-existing caller writes a byte-identical row.
+        ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
       })),
     );
   }
@@ -319,11 +322,15 @@ export async function writeStrengthSession(
  * profile so a soft-deleted set/entry/profile (post-V1-9b) is never edited. Only `reps` + `weight_num`
  * change; `idx` (the `uq_entry_sets_entry_idx` slot) is untouched, so no unique/CHECK is disturbed.
  *
- * The WHERE also enforces, server-side, the SAME "numeric set only" invariant the client's `isEditableSet`
- * uses (`weight_label IS NULL AND reps/weight_num NOT NULL`) — never trusting the client. Without it a
- * crafted POST could set `weight_num` on a labeled ('BW'/'50ft') or timing (seconds-only) set, leaving
- * `weight_num` coexisting with `weight_label`/`seconds` — a masked or bogus read line. Such a set matches
- * no row → `null` → typed error, exactly like a wrong-owner id.
+ * The WHERE also enforces, server-side, the SAME "numeric AND done set only" invariant the client's
+ * `isEditableSet` uses (`weight_label IS NULL AND reps/weight_num NOT NULL AND status = 'done'`) — never
+ * trusting the client. Without the numeric half a crafted POST could set `weight_num` on a labeled
+ * ('BW'/'50ft') or timing (seconds-only) set, leaving `weight_num` coexisting with
+ * `weight_label`/`seconds` — a masked or bogus read line. Without the **status** half (GAP-1 P1-1b) it
+ * could edit a `sub_failure` set's reps and leave the status behind, so the row would export as
+ * `sub-failure` while claiming reps it never achieved. Such a set matches no row → `null` → typed error,
+ * exactly like a wrong-owner id. **Keep these guards identical to `isEditableSet`'s** — that is the whole
+ * contract; the client half is advisory, this one is the boundary.
  *
  * A single atomic UPDATE — NO `db.transaction` (that wraps only the multi-row session graph). Returns the
  * edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, a
@@ -366,6 +373,13 @@ export async function updateStrengthSetById(
         isNull(schema.entrySets.weightLabel),
         isNotNull(schema.entrySets.reps),
         isNotNull(schema.entrySets.weightNum),
+        // GAP-1 P1-1b (BUG-2a) — and "done only". A `sub_failure` set is NUMERIC, so every guard above
+        // passes it: editing its reps 3 → 5 would silently leave `status = 'sub_failure'` behind, and
+        // the row would still export as `sub-failure` while claiming reps it no longer had. Correcting
+        // a sub-failure set means changing its STATUS, which this endpoint cannot do — so it refuses
+        // the row rather than half-editing it. Mirrors `isEditableSet`; the client guard is advisory
+        // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
+        eq(schema.entrySets.status, ENTRY_STATUS.done),
         inArray(schema.entrySets.entryId, ownedEntryIds),
       ),
     )

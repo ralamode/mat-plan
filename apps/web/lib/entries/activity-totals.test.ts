@@ -168,7 +168,9 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       sessionId: 's1',
       sessionType: DEFAULT_SESSION_TYPE,
       sessionDayRole: null,
-      sets: [{ publicId: 'set-1', idx: 1, reps: 5, weight: 135, weightLabel: null }],
+      sets: [
+        { publicId: 'set-1', idx: 1, reps: 5, weight: 135, weightLabel: null, status: 'done' },
+      ],
       ...o,
     });
 

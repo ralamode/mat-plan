@@ -1,9 +1,12 @@
 import {
   CANONICAL_LOAD_LABELS,
   editStrengthSetSchema,
+  ENTRY_STATUS,
+  ENTRY_STATUSES,
   LOAD_MAX_LENGTH,
   numericSetSchema,
   parseLoad,
+  SET_STATUSES,
   strengthSetSchema,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -128,8 +131,13 @@ describe('strengthSetSchema — the wire keeps ONE weight key', () => {
   it('keeps the AUTHORED per-field message (a union would collapse it to "Invalid input")', () => {
     const r = strengthSetSchema.safeParse({ reps: '5', weight: '-5' });
     expect(r.success).toBe(false);
-    const msg = r.success ? '' : (r.error.flatten().fieldErrors.weight?.[0] ?? '');
-    expect(msg).toMatch(/negative/i);
+    // Read the ISSUE, not `flatten().fieldErrors.weight`. `flatten()` is typed off the OUTPUT shape,
+    // which is a union of the numeric / labeled branches — since GAP-1 P1-1b added `status`, TS can no
+    // longer prove `.weight` exists on every branch. Going via the issue is also the stronger
+    // assertion: it pins the PATH as well as the message, which is what makes the action render
+    // "Movement N: Weight can't be negative." rather than a generic banner.
+    const issue = r.success ? undefined : r.error.issues.find((i) => i.path[0] === 'weight');
+    expect(issue?.message ?? '').toMatch(/negative/i);
   });
 
   it('still enforces the reps rules', () => {
@@ -168,5 +176,56 @@ describe('CANONICAL_LOAD_LABELS', () => {
     for (const label of CANONICAL_LOAD_LABELS) {
       expect(parseLoad(label)).toEqual({ kind: 'label', weightLabel: label });
     }
+  });
+});
+
+// GAP-1 P1-1b — per-set `status` on the wire.
+describe('strengthSetSchema — per-set status (GAP-1 P1-1b)', () => {
+  it('accepts sub_failure and KEEPS the real reps', () => {
+    const out = strengthSetSchema.parse({ reps: '3', weight: '60', status: 'sub_failure' });
+    // reps stays required + positive: the CSV loses the number into `notes`, but that is a limitation
+    // of the FILE, not an instruction to lose it in the DB. The export re-derives `sub-failure`.
+    expect(out).toEqual({ reps: 3, weight: 60, status: 'sub_failure' });
+  });
+
+  it('omits `status` entirely when not supplied — so the writer omits the column', () => {
+    const out = strengthSetSchema.parse({ reps: '5', weight: '60' });
+    expect(out).toEqual({ reps: 5, weight: 60 });
+    expect('status' in out).toBe(false); // NOT `status: undefined` — the DB default depends on absence
+  });
+
+  it('carries status alongside a TEXT load too', () => {
+    const out = strengthSetSchema.parse({ reps: '4', weight: 'BW', status: 'sub_failure' });
+    expect(out).toEqual({ reps: 4, weightLabel: 'BW', status: 'sub_failure' });
+  });
+
+  it('REJECTS skipped as a set status — a skipped movement carries zero sets, not a placeholder', () => {
+    // Load-bearing for the export: `sets` is COUNT(entry_sets), so a skipped set row would over-count.
+    expect(
+      strengthSetSchema.safeParse({ reps: '5', weight: '60', status: 'skipped' }).success,
+    ).toBe(false);
+  });
+
+  it.each(['SUB_FAILURE', 'done ', 'subfailure', ''])('rejects the bad status %j', (bad) => {
+    expect(strengthSetSchema.safeParse({ reps: '5', weight: '60', status: bad }).success).toBe(
+      false,
+    );
+  });
+
+  it('SET_STATUSES is a strict subset of ENTRY_STATUSES, and excludes skipped', () => {
+    expect(ENTRY_STATUSES).toEqual(expect.arrayContaining([...SET_STATUSES]));
+    expect(SET_STATUSES).not.toContain(ENTRY_STATUS.skipped);
+  });
+
+  it('editStrengthSetSchema is untouched — it still strips an injected status', () => {
+    // The V1-9 edit path is numeric-only AND done-only; it must not gain a status lever.
+    const parsed = editStrengthSetSchema.parse({
+      profileId: '019826b4-0000-7000-8000-000000000001',
+      setId: '019826b4-0000-7000-8000-000000000002',
+      reps: 5,
+      weight: 100,
+      status: 'sub_failure',
+    });
+    expect('status' in parsed).toBe(false);
   });
 });
