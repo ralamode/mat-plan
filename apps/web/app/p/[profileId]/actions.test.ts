@@ -199,6 +199,7 @@ function strengthForm(opts: {
   clientId?: string;
   day?: string;
   feel?: string;
+  dayRole?: string;
   movements?: Array<{
     movementName?: string;
     unit?: string;
@@ -212,6 +213,7 @@ function strengthForm(opts: {
   fd.append('clientId', opts.clientId ?? newId());
   fd.append('day', opts.day ?? localDay());
   if (opts.feel !== undefined) fd.append('feel', opts.feel);
+  if (opts.dayRole !== undefined) fd.append('dayRole', opts.dayRole);
   if (opts.movementsRaw !== undefined) {
     fd.append('movements', opts.movementsRaw);
   } else if (opts.movements !== undefined) {
@@ -397,6 +399,39 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
       }),
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  // GAP-1 P0-1 regression. `dayRole` was parsed and then DROPPED on the way to the DAL, so
+  // `sessions.day_role` was never written from the app — the whole point of the column. Nothing
+  // caught it: `LogStrengthSessionArgs.dayRole` is optional so `tsc` was clean, `db:verify` drives
+  // the writer directly (bypassing this action), and the happy-path assertion above uses
+  // `objectContaining`, which is BLIND to a key that is simply absent. Hence asserting the VALUE.
+  it('threads the declared dayRole to the DAL (it was parsed but never forwarded)', async () => {
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        dayRole: 'strength_a',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
+      dayRole: 'strength_a',
+    });
+  });
+
+  it('sends dayRole: undefined when the day is not a programmed one', async () => {
+    // The "Not a programmed day" option submits '', which `optionalDayRoleSchema` normalises to
+    // undefined — it must NOT reach the DAL as '' and land in a CHECK-constrained column.
+    await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        dayRole: '',
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0].dayRole).toBeUndefined();
   });
 
   it('threads a session feel to the DAL', async () => {
