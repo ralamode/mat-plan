@@ -2,9 +2,12 @@
 
 import {
   BODYWEIGHT_UNITS,
+  DAY_ROLE_LABELS,
+  type DayRole,
   DEFAULT_BODYWEIGHT_UNIT,
   FREE_TEXT_NOTE_MAX,
   newId,
+  STRENGTH_DAY_ROLES,
 } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
@@ -55,7 +58,19 @@ const emptyMovement = (): MovementVals => ({
  * body, so its `useState` initializers mint FRESH idempotency keys (session + per-movement) and clear
  * the inputs — a stale id would otherwise make the next submit a silent ON CONFLICT no-op.
  */
-export function StrengthForm({ profileId, day }: { profileId: string; day: string }) {
+export function StrengthForm({
+  profileId,
+  day,
+  defaultDayRole,
+}: {
+  profileId: string;
+  day: string;
+  /**
+   * GAP-1 P0-1: the programmed day the weekday map resolves for `day`, or null. Used ONLY to
+   * pre-select the control below — it is never submitted implicitly. See the note on the select.
+   */
+  defaultDayRole: DayRole | null;
+}) {
   const [state, formAction, pending] = useActionState(
     logStrengthSessionAction,
     INITIAL_ACTION_STATE,
@@ -72,6 +87,7 @@ export function StrengthForm({ profileId, day }: { profileId: string; day: strin
       key={gen}
       profileId={profileId}
       day={day}
+      defaultDayRole={defaultDayRole}
       state={state}
       formAction={formAction}
       pending={pending}
@@ -82,12 +98,16 @@ export function StrengthForm({ profileId, day }: { profileId: string; day: strin
 function StrengthFormBody({
   profileId,
   day,
+  defaultDayRole,
   state,
   formAction,
   pending,
 }: {
   profileId: string;
   day: string;
+  /** Pre-selects the day picker only — see the note on that select. The `key={gen}` remount means an
+   *  override resets to this default for the NEXT session on the same day, which is intended. */
+  defaultDayRole: DayRole | null;
   state: ActionState;
   formAction: (formData: FormData) => void;
   pending: boolean;
@@ -199,6 +219,33 @@ function StrengthFormBody({
             Group {selectedCount} as superset
           </Button>
         ) : null}
+      </div>
+
+      {/* GAP-1 P0-1 — WHICH programmed day this was.
+          VISIBLE and never a hidden input, deliberately. The stored value's whole worth is PROVENANCE:
+          a non-null day_role must mean a human asserted it. The weekday map (`DAY_ROLE_BY_WEEKDAY`) is
+          a documented stopgap, so a value it silently supplied would be a guess frozen into a row
+          forever — whereas the same derivation applied at EXPORT time re-corrects every historical row
+          when the map is replaced. Pre-selecting the default keeps the common path one submit; showing
+          it is what makes the assertion real. "Not a programmed day" is a first-class option (and the
+          default on Tue/Thu/Sat/Sun) so "no role" is distinguishable from "never asked". */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="session-day-role" className="text-sm font-medium">
+          Which day is this?
+        </label>
+        <select
+          id="session-day-role"
+          name="dayRole"
+          defaultValue={defaultDayRole ?? ''}
+          className={INPUT_CLASS}
+        >
+          <option value="">Not a programmed day</option>
+          {STRENGTH_DAY_ROLES.map((role) => (
+            <option key={role} value={role}>
+              {DAY_ROLE_LABELS[role]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Session-level feel — a discrete named field (NOT in the movements JSON); uncontrolled, so the

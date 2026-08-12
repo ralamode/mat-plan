@@ -4,6 +4,7 @@ import {
   ENTRY_STATUS,
   foldAggregation,
   type MetricAggregation,
+  type DayRole,
   type SessionType,
 } from '@mat-plan/shared';
 
@@ -94,7 +95,13 @@ export type SessionItem =
  *  members sub-bracket within (V1-8-3d); standalone movements render individually. */
 export type SessionRow = {
   kind: 'session';
-  session: { id: string; type: SessionType | null; feel: string | null };
+  session: {
+    id: string;
+    type: SessionType | null;
+    /** GAP-1 P0-1: the asserted programmed day, preferred over `type` for the block heading. */
+    dayRole: DayRole | null;
+    feel: string | null;
+  };
   items: SessionItem[];
   movementCount: number; // total movements (standalone + all superset members) — computed here, read by the view
 };
@@ -188,7 +195,12 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
       rows.push({
         kind: 'session',
         // per-session data, same on every member — read from the anchor (first-encountered) member.
-        session: { id: e.sessionId, type: e.sessionType, feel: e.sessionFeel },
+        session: {
+          id: e.sessionId,
+          type: e.sessionType,
+          dayRole: e.sessionDayRole,
+          feel: e.sessionFeel,
+        },
         items: buildSessionItems(members),
         movementCount: members.length, // every member is a movement (standalone or in a superset)
       });
