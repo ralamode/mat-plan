@@ -7,6 +7,30 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## GitHub / PRs
 
+- **A red "Build Failed" on Vercel for a branch that contains no app — `The specified Root Directory
+"apps/web" does not exist`.** → Vercel builds **every pushed branch** by default, and the
+  `screenshots` branch is a true orphan holding only `README.md` + `pr-<n>/*.png`. So every screenshot
+  upload and every prune posted a failed preview deployment that means nothing — and looks, at a
+  glance, exactly like a real build break on your PR. **Check the deployment's Source branch/commit
+  before debugging: if it says `screenshots`, it is not your PR.** → Every commit to that branch now
+  carries `[skip ci]` (`SKIP_CI` in `apps/web/scripts/publish-screenshots.ts`, mirrored by hand in
+  `.github/workflows/prune-screenshots.yml` — YAML can't import the const). Note a `vercel.json`
+  `git.deploymentEnabled` would NOT work here: Vercel reads it from the Root Directory, which is the
+  very thing missing on that branch. (chore/skip-vercel-on-screenshots-branch)
+
+- **Writing the skip-CI marker literally in a COMMIT MESSAGE skips that commit's own CI.** → GitHub and
+  Vercel substring-match the **head commit message**, anywhere in it — body included, backticks and
+  all. So a commit message that merely _describes_ adding the marker can suppress its own checks, and a
+  **squash-merge** carries that body onto `main`, where it can skip `migrate.yml` — a schema change
+  deploying without its migration. → **Spell it out in prose** ("the standard skip-CI marker") in any
+  commit message that talks _about_ it; keep the literal form in code/config only. **Not** a diagnosed
+  incident here — this is a documented mechanism and a cheap precaution. Note the tell is a PR with
+  **zero** Actions runs (checks never appear) rather than a failing one, which is easy to confuse with
+  a transient Actions queue delay; distinguish them with
+  `gh api "repos/<o>/<r>/actions/runs?head_sha=<sha>" --jq .total_count` on the OLD sha — a delay
+  eventually produces a run for that sha, a skip never does.
+  (chore/skip-vercel-on-screenshots-branch)
+
 - **Screenshots never actually reached any PR for months — `gh` has no image-upload path, and the
   obvious workarounds all fail on a PRIVATE repo.** → Verified in a real logged-in browser by reading
   `img.naturalWidth` (the only proof that pixels loaded, rather than that markdown looked right):

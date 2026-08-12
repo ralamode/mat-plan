@@ -63,6 +63,22 @@ const SCREENSHOT_DIR = '.screenshots';
  *  rendered comment, so it costs the reader nothing. */
 const MARKER = '<!-- mat-plan:screenshots -->';
 
+/**
+ * Appended to EVERY commit this script makes to `screenshots`.
+ *
+ * The branch is a true orphan holding only `README.md` + `pr-<n>/*.png` — it has no `apps/web`, which
+ * is the Vercel project's Root Directory. Vercel builds every pushed branch by default, so without
+ * this marker each screenshot upload and each prune produces a **failed** preview deployment ("The
+ * specified Root Directory 'apps/web' does not exist"), spamming the deployments list with red that
+ * means nothing. Vercel honours `[skip ci]` in the commit message and skips the build entirely.
+ *
+ * GitHub Actions honours the same marker, which is also what we want: no workflow has any business
+ * running against an images-only branch. `prune-screenshots.yml` is unaffected — it triggers on
+ * `pull_request: closed` / `workflow_dispatch`, never on a push to this branch — and it appends the
+ * same marker (kept in sync by the comment there, since YAML can't import this const).
+ */
+const SKIP_CI = '[skip ci]';
+
 /** `gh api` with the keyring token — GH_TOKEN is a fine-grained PAT that cannot read/write everything
  *  this needs, so it is deliberately unset (see docs/runbooks.md). */
 async function gh(args: string[], stdin?: string): Promise<string> {
@@ -131,7 +147,7 @@ async function createOrphanBranch(): Promise<void> {
     await gh(
       ['api', '-X', 'POST', `repos/${REPO}/git/commits`, '--input', '-'],
       JSON.stringify({
-        message: 'chore: initialise screenshot host branch',
+        message: `chore: initialise screenshot host branch ${SKIP_CI}`,
         tree: tree.sha,
         parents: [], // parentless => a true orphan
       }),
@@ -159,7 +175,7 @@ async function upload(localPath: string, remotePath: string): Promise<string> {
   const content = (await readFile(localPath)).toString('base64');
   const sha = await existingSha(remotePath);
   const body: Record<string, unknown> = {
-    message: `chore(screenshots): ${remotePath}`,
+    message: `chore(screenshots): ${remotePath} ${SKIP_CI}`,
     content,
     branch: BRANCH,
   };

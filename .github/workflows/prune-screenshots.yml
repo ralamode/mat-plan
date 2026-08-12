@@ -87,6 +87,11 @@ jobs:
           fi
 
           git add -A
-          git commit -qm "chore(screenshots): prune${PR:+ pr-$PR} (cap $MAX_IMAGES)"
+          # `[skip ci]` is LOAD-BEARING, not decoration. This orphan branch has no `apps/web` — the
+          # Vercel project's Root Directory — so a build here always fails ("The specified Root
+          # Directory 'apps/web' does not exist"), and Vercel builds every pushed branch by default.
+          # Without the marker every prune posts a red deployment that means nothing. Kept in sync by
+          # hand with SKIP_CI in apps/web/scripts/publish-screenshots.ts (YAML can't import a const).
+          git commit -qm "chore(screenshots): prune${PR:+ pr-$PR} (cap $MAX_IMAGES) [skip ci]"
           git push origin "HEAD:$BRANCH"
           echo "Pruned and pushed."
