@@ -316,6 +316,19 @@ export const sessions = pgTable(
     activityDate: date('activity_date').notNull(), // declared date (not device clock)
     loggedAt: timestamp('logged_at', { withTimezone: true }), // device clock, informational
     sessionType: text('session_type'), // mirrors SESSION_TYPES (nullable)
+    // GAP-1 P0-1: WHICH PROGRAMMED DAY this session was (mirrors shared DAY_ROLES). Distinct from
+    // `session_type` on purpose — session_type is what a session IS, day_role is which program day it
+    // fulfilled — and DAY_ROLES is a superset carrying strength_a/b/c, which session_type cannot express.
+    //
+    // PROVENANCE IS THE POINT: a non-null value means A HUMAN ASSERTED IT (the log form's day-role
+    // select). It is deliberately NOT derived from the weekday at write time: `DAY_ROLE_BY_WEEKDAY` is a
+    // documented stopgap, and a derivation persisted here would be frozen into rows forever, whereas one
+    // applied at EXPORT time re-corrects every historical row when the map is replaced.
+    //
+    // INVARIANT (writer/action-enforced, not schema): DAY_ROLE_TO_SESSION_TYPE[day_role] === session_type.
+    // Deliberately NOT a DB CHECK — folding role↔type pairs into the CHECK below would inject extra
+    // literals and break db:verify's exact-set assertCheckCoversConst assertion.
+    dayRole: text('day_role'),
     status: text('status').notNull().default('done'), // mirrors SESSION_STATUSES
     source: text('source'),
     feel: text('feel'), // session-grain feel/soreness (spec.md §4)
@@ -331,6 +344,13 @@ export const sessions = pgTable(
       sql`${t.sessionType} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core')`,
     ),
     check('sessions_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
+    // Inlines the shared DAY_ROLES literals (a CHECK can't import a const); db:verify pins the accepted
+    // set to DAY_ROLES via assertCheckCoversConst. NULL passes (`NULL in (...)` is NULL, and a CHECK
+    // fails only on FALSE) — the same mechanism that makes session_type nullable today.
+    check(
+      'sessions_day_role_check',
+      sql`${t.dayRole} in ('strength', 'conditioning', 'skill', 'push', 'pull', 'legs', 'core', 'strength_a', 'strength_b', 'strength_c')`,
+    ),
   ],
 );
 

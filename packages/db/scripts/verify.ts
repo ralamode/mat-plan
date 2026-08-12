@@ -1857,6 +1857,83 @@ assert.equal(ssNumeric?.weight_label, null, 'GAP-1: the numeric sibling is unaff
 assert.equal(ssNumeric?.weight_num, '60.000', 'GAP-1: …and still stores its number');
 console.log('✓ GAP-1: text loads (BW / BW+8 (vest) / 30s) round-trip, incl. on a superset member');
 
+// ── GAP-1 P0-1: `sessions.day_role` — WHICH programmed day a session was ───────────────────────────
+// The CHECK's frozen literals can't silently drift from the shared const (the prescriptions precedent).
+await assertCheckCoversConst('sessions_day_role_check', DAY_ROLES);
+
+// Round-trips through the SHIPPED writer, not a raw insert — the writer's pass-through is precisely the
+// thing most likely to be forgotten, so a raw insert would prove nothing about the code that ships.
+const DAY_ROLE_SESSION_CLIENT_ID = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  day: '2026-03-02',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: DAY_ROLE_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  dayRole: 'strength_b',
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: newId(),
+      sets: [{ reps: 5, weight: 60 }],
+    },
+  ],
+});
+const [withRole] = (
+  await db.execute(sql`
+    select day_role, session_type from sessions where client_id = ${DAY_ROLE_SESSION_CLIENT_ID}`)
+).rows as unknown as { day_role: string | null; session_type: string | null }[];
+assert.equal(withRole.day_role, 'strength_b', 'GAP-1: the asserted day_role round-trips');
+assert.equal(
+  withRole.session_type,
+  'strength',
+  'GAP-1: session_type is UNCHANGED — day_role is a second column, not a replacement',
+);
+
+// NULL is a first-class value: a session on a non-programmed day is normal, and every pre-existing row
+// is NULL. `NULL in (...)` is NULL, and a CHECK fails only on FALSE, so the constraint permits it.
+const NO_ROLE_SESSION_CLIENT_ID = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  day: '2026-03-03',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: NO_ROLE_SESSION_CLIENT_ID,
+  activityTypeId: scLiftActivityId,
+  // dayRole deliberately omitted
+  movements: [
+    {
+      movementName: movX.name,
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: newId(),
+      sets: [{ reps: 5, weight: 60 }],
+    },
+  ],
+});
+const [noRole] = (
+  await db.execute(
+    sql`select day_role from sessions where client_id = ${NO_ROLE_SESSION_CLIENT_ID}`,
+  )
+).rows as unknown as { day_role: string | null }[];
+assert.equal(noRole.day_role, null, 'GAP-1: an omitted day_role stores NULL, not a guess');
+
+// A garbage literal is refused by the CHECK.
+await expectRejectedBy('sessions_day_role_check', () =>
+  db.insert(schema.sessions).values({
+    publicId: newId(),
+    clientId: newId(),
+    profileId: sessionProfileA.id,
+    activityDate: '2026-03-04',
+    sessionType: SESSION_TYPES[0],
+    dayRole: 'not_a_day_role',
+  }),
+);
+console.log(
+  '✓ GAP-1: sessions.day_role — CHECK parity, asserted round-trip, NULL, bad-literal reject',
+);
+
 // ── V1-9: edit a logged set's reps/weight via the single-sourced `updateStrengthSetById` ──────────
 // Proves the ownership-scoped UPDATE (the same guard the DAL runs): the owner's edit persists + advances
 // updated_at (LWW server-now), while a cross-profile or soft-deleted-set edit matches no row → null.

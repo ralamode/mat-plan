@@ -284,6 +284,9 @@ export async function logStrengthSessionAction(
       // maps an absent field to undefined so `.optional()` fires; a blank value is normalized to NULL by
       // the schema's transform.
       feel: formData.get('feel') ?? undefined,
+      // `?? undefined` for the SAME reason as `feel`: FormData.get returns null when absent, and the
+      // shared optionalDayRoleSchema also maps '' (the "Not a programmed day" option) to undefined.
+      dayRole: formData.get('dayRole') ?? undefined,
       movements,
       // V1-8-3d: supersets are DERIVED from the movements' distinct superset tags (v1 has no superset
       // label), so there's no second wire field to keep in sync with the movement tags. Built before

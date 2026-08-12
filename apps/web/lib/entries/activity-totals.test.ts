@@ -28,6 +28,7 @@ function reading(overrides: Partial<EntryDTO>): EntryDTO {
     activityLabel: 'Calisthenics',
     sessionId: null,
     sessionType: null,
+    sessionDayRole: null,
     sessionFeel: null,
     supersetId: null,
     supersetOrder: null,
@@ -166,6 +167,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       movementName: 'Back squat',
       sessionId: 's1',
       sessionType: DEFAULT_SESSION_TYPE,
+      sessionDayRole: null,
       sets: [{ publicId: 'set-1', idx: 1, reps: 5, weight: 135, weightLabel: null }],
       ...o,
     });
@@ -228,6 +230,7 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       id: 'x',
       sessionId: null,
       sessionType: null,
+      sessionDayRole: null,
       movementName: 'Front squat',
     });
     const rows = todayRows([legacy]);

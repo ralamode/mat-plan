@@ -8,6 +8,7 @@ import {
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
   type BodyweightUnit,
+  type DayRole,
   type EntryKind,
   type EntryStatus,
   type SessionMovementInput,
@@ -69,6 +70,10 @@ export type EntryDTO = {
   // The session's type from a CHECK-constrained column, so it's the SessionType union (not bare
   // string) — the view indexes SESSION_TYPE_LABELS with no cast, and a stray value fails the build.
   sessionType: SessionType | null;
+  // GAP-1 P0-1: WHICH programmed day the athlete asserted this session was, or NULL. Surfaced on the
+  // read path deliberately — a persisted role that nothing displays is a value nobody can discover is
+  // wrong until an export months later, which is exactly what makes storing it risky.
+  sessionDayRole: DayRole | null;
   // V1-8-3b: the optional session "how did it feel?" note, shown in the session-block header. NULL when
   // no feel was logged (the schema normalizes a blank input to NULL) or for non-session entries.
   sessionFeel: string | null;
@@ -109,6 +114,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       // V1-8-3a: the grouping session's PUBLIC id + type (raw enum). PK join → ≤1 match, no fan-out.
       sessionId: schema.sessions.publicId,
       sessionType: schema.sessions.sessionType,
+      sessionDayRole: schema.sessions.dayRole,
       sessionFeel: schema.sessions.feel,
       // V1-8-3d: the superset's PUBLIC id (anti-IDOR) + the member's order within it. Same PK-join idiom.
       supersetId: schema.supersets.publicId,
@@ -201,6 +207,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     sessionId: r.sessionId,
     // The sessions_session_type_check column only holds SessionType values (or NULL).
     sessionType: r.sessionType as SessionType | null,
+    sessionDayRole: r.sessionDayRole as DayRole | null,
     sessionFeel: r.sessionFeel,
     supersetId: r.supersetId,
     supersetOrder: r.supersetOrder,
@@ -381,6 +388,7 @@ export type LogStrengthSessionArgs = {
   clientId: string; // client-stamped UUIDv7 (parent SESSION)
   day: string;
   feel?: string; // optional session feel note (V1-8-3b)
+  dayRole?: string; // GAP-1 P0-1: the programmed day the athlete asserted (never derived)
   // V1-8-3d: the supersets to create; each movement references one via `supersetClientId` (on the
   // SessionMovementInput). No catalog resolution needed — a pass-through, like `feel`.
   supersets?: readonly { clientId: string; label?: string }[];
@@ -414,6 +422,7 @@ export async function logStrengthSession(
     day: args.day,
     sessionType: args.sessionType,
     sessionClientId: args.clientId,
+    dayRole: args.dayRole,
     activityTypeId,
     feel: args.feel,
     supersets: args.supersets,
