@@ -187,6 +187,21 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **web push** works on iOS 16.4+; a thin native shell only if web push proves too limited),
   occasionally Mac. Per-profile schedules + quiet hours; opt-in per kid. Builds on the v1.5 PWA + Clerk
   foundation. Scope + delivery mechanism TBD.
+- **ONB-1 — self-serve onboarding: bring-your-own-program**
+  ([brief](./plans/onb-1-self-serve-onboarding-brief.md)) — _(Ray, 2026-08-11)_ **BRIEF ONLY, not
+  scoped.** Onboarding a new family today costs a code change + a deploy: `seed.ts` is the only writer
+  of profiles, and the strength program is a TypeScript const with no authoring UI. The data model is
+  already multi-tenant (`households` + `profiles.household_id`), so the gap is **authoring surfaces +
+  auth**, not the schema. Shape: a first-run **questionnaire** that writes a **`routine_config`** (V1-18
+  already ships that storage and its editor), plus **bring-your-own-program** — the coach pastes or
+  uploads the plan they already use and the LLM **extracts** it into `program_blocks → prescriptions →
+prescription_targets` for per-row confirmation. BYO-program is load-bearing: it keeps the inviolable
+  rule intact **by construction** (extraction is transcription, not authorship — it automates what Ray
+  did by hand in V1-10 PR 1b), and it makes the confirm gate meaningful for non-experts, since the
+  question becomes "does this match your sheet?" rather than "is this load right for your kid?" —
+  proofreading, not coaching judgment. Load calibration, when it comes, belongs in **`packages/engine`**
+  (deterministic, golden-vector tested, auditable), never an LLM. Open: equipment is unmodelled, and
+  `movements` is global rather than household-scoped. **v2+ territory.**
 - **Brain-reps content.** Surface daily **motivational quotes / inspiration** for the `brain_rep`
   activity — a rotating quote for the day, maybe a small home widget. Content source, rotation, and
   "already seen" tracking TBD.
