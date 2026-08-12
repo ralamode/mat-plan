@@ -179,6 +179,17 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-11** — **GAP-1 P1-1 plans** (docs only): the combined P2+P1-1 plan was **reversed by an
+  adversarial panel** and is replaced by a 4-PR split. Committed:
+  [1a — skipped write path](./plans/gap1-p1-1a-skipped-write.md) (`entries.status='skipped'` with zero
+  `entry_sets`) and [1b — sub-failure](./plans/gap1-p1-1b-subfailure-write.md) (`entry_sets.status`, the
+  `SetDTO.status` plumbing the original plan omitted, and closing BUG-2(a) — a numeric `sub_failure` set
+  currently passes `isEditableSet`, so a V1-9 edit would leave the status stale). PR 1c is the UI.
+  The headline decision: **`sub_failure` lives on the SET, not the entry** — `sub-failure` in the CSV's
+  `reps` column is the uniform collapse of a per-set list, exactly like `5/5/5` → `5`, not a granularity
+  signal. The criterion, reusable: _a status belongs on the entry only if it can be true with zero sets._
+  The superseded plan is kept as the historical record the panel reviewed, with a SUPERSEDED banner.
+
 - **2026-08-11** — **GAP-1 P0-1 fix**: `sessions.day_role` was **never written from the app**.
   `logStrengthSessionAction` parsed `dayRole` and then omitted it from the `logStrengthSession({…})`
   call, so the column P0-1 exists to populate stayed NULL for every UI-logged session. Three gates
