@@ -38,6 +38,11 @@ export type SetDTO = {
   reps: number | null;
   weight: number | null;
   weightLabel: string | null;
+  // GAP-1 P1-1b. Carried so the read seam can tell a `sub_failure` set from a `done` one — WITHOUT it
+  // per-set status is unrenderable and `isEditableSet` can't refuse to edit one. Typed as the full
+  // `EntryStatus` (not the narrower SetStatus) because this is a READ of whatever the column holds,
+  // including a value written before the boundary narrowed; the write path is where the subset applies.
+  status: EntryStatus;
 };
 
 export type EntryDTO = {
@@ -168,6 +173,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
           reps: schema.entrySets.reps,
           weightNum: schema.entrySets.weightNum,
           weightLabel: schema.entrySets.weightLabel,
+          status: schema.entrySets.status,
         })
         .from(schema.entrySets)
         .where(
@@ -185,6 +191,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       reps: s.reps,
       weight: s.weightNum === null ? null : Number(s.weightNum),
       weightLabel: s.weightLabel,
+      status: s.status as EntryStatus,
     });
     setsByEntry.set(s.entryId, list);
   }
