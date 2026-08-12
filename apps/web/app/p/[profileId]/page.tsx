@@ -3,6 +3,7 @@ import {
   DEFAULT_SESSION_TYPE,
   DEFAULT_SUPERSET_LABEL,
   ENTRY_STATUS,
+  ENTRY_STATUS_LABELS,
   SESSION_TYPE_LABELS,
 } from '@mat-plan/shared';
 import Link from 'next/link';
@@ -332,7 +333,9 @@ function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string
       <div className="flex items-center justify-between">
         <span className="font-medium">{label}</span>
         {entry.status !== ENTRY_STATUS.done ? (
-          <span className="text-muted-foreground text-sm">{entry.status}</span>
+          // GAP-1 P1-1c: humanized via the SHARED map, not the raw enum. `sub-failure` is the CSV
+          // export byte (V1-13 D7), so the badge and the exporter must emit the same string.
+          <span className="text-muted-foreground text-sm">{ENTRY_STATUS_LABELS[entry.status]}</span>
         ) : null}
       </div>
       {entry.sets.length > 0 ? (
@@ -351,7 +354,20 @@ function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string
                 ariaLabel={`${label} set ${s.idx}`}
               />
             ) : (
-              <li key={s.publicId}>{formatSetLine(s, entry.unit)}</li>
+              // GAP-1 P1-1c. The badge is a SIBLING of the read line, never inside `formatSetLine` —
+              // a status is a distinct affordance, and folding it into the string would leak an
+              // un-styleable blob into any future aria-label. `flex-wrap items-baseline` so a long
+              // load (`12 × BW+8 (vest)`) plus a badge doesn't overflow at 360px.
+              // NOTE only this read-only branch can carry a badge: `isEditableSet` requires
+              // status === 'done', so <EditableSet> never receives a non-done set.
+              <li key={s.publicId} className="flex flex-wrap items-baseline gap-2">
+                <span>{formatSetLine(s, entry.unit)}</span>
+                {s.status !== ENTRY_STATUS.done ? (
+                  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+                    {ENTRY_STATUS_LABELS[s.status]}
+                  </span>
+                ) : null}
+              </li>
             ),
           )}
         </ul>

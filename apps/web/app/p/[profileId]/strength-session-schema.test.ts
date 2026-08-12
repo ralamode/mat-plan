@@ -243,6 +243,30 @@ describe('logStrengthSessionSchema — skipped movements (GAP-1 P1-1a)', () => {
     expect(res.success && res.data.movements[0]!.sets).toEqual([{ reps: 5, weight: 135 }]);
   });
 
+  // GAP-1 P1-1c (D5). `dissolveSmallSupersets` counts MEMBERSHIP, not sets, and the ≥2-member refine
+  // does the same — so a zero-set skipped member is a coherent group member and parses. That is the
+  // intended behaviour (a skipped member is still part of the group the athlete programmed), pinned
+  // here rather than left to fall out. The alternative — stripping tags on skip — would need the
+  // toggle handler to re-run dissolveSmallSupersets, or the surviving partner hits the ≥2 refine alone
+  // and submit dies with an unrecoverable-looking error caused by a skip tap.
+  it('accepts a SKIPPED, zero-set movement that is still a superset member', () => {
+    const ss = newId();
+    const res = logStrengthSessionSchema.safeParse(
+      base({
+        supersets: [{ clientId: ss }],
+        movements: [
+          {
+            ...move({ clientId: newId(), supersetClientId: ss, supersetOrder: 1 }),
+            status: ENTRY_STATUS.skipped,
+            sets: [],
+          },
+          move({ clientId: newId(), supersetClientId: ss, supersetOrder: 2 }),
+        ],
+      }),
+    );
+    expect(res.success).toBe(true);
+  });
+
   it('MOVEMENT_STATUSES is a strict subset of ENTRY_STATUSES', () => {
     expect(ENTRY_STATUSES).toEqual(expect.arrayContaining([...MOVEMENT_STATUSES]));
     expect(MOVEMENT_STATUSES).not.toContain(ENTRY_STATUS.sub_failure);

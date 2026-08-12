@@ -1,4 +1,6 @@
 import { type ChildProcess, spawn } from 'node:child_process';
+
+import type { Page } from '@playwright/test';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -79,6 +81,64 @@ const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
 // Bare `/p` (no id) → the seeded profile's Today page (where the check-ins form lives). The route is
 // single-sourced in `e2e/steps.ts` (V1-12) — the a11y spec and the smoke need the same one.
 
+/**
+ * GAP-1 P1-1c: a logged session that exercises BOTH status badges — a SKIPPED movement (zero sets)
+ * and a movement whose last set is `sub_failure`. Written through the SHIPPED writer, so the capture
+ * shows exactly what the app produces rather than a hand-built fixture. This is the read side, which
+ * no amount of form interaction can reach.
+ */
+async function seedStatusBadges(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [scLift] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift))
+      .limit(1);
+    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
+    const movementRows = await db
+      .select({ id: schema.movements.id, name: schema.movements.name })
+      .from(schema.movements)
+      .limit(2);
+    if (movementRows.length < 2) throw new Error('seeded movements not found — did db:seed run?');
+
+    await writeStrengthSession(db, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      day: localDayIso(DEFAULT_TIME_ZONE),
+      sessionType: DEFAULT_SESSION_TYPE,
+      sessionClientId: newId(),
+      activityTypeId: scLift.id,
+      movements: [
+        {
+          // The realistic sub-failure shape: the LAST set failed, the earlier ones didn't — which is
+          // precisely what entry-level storage could never express.
+          movementName: movementRows[0].name,
+          unit: 'lb',
+          movementId: movementRows[0].id,
+          clientId: newId(),
+          sets: [
+            { reps: 5, weight: 60 },
+            { reps: 5, weight: 60 },
+            { reps: 2, weight: 60, status: ENTRY_STATUS.sub_failure },
+          ],
+        },
+        {
+          // A skipped movement: zero sets, `drop-if-yellow`.
+          movementName: movementRows[1].name,
+          unit: 'lb',
+          movementId: movementRows[1].id,
+          clientId: newId(),
+          status: ENTRY_STATUS.skipped,
+          sets: [],
+        },
+      ],
+    });
+  } finally {
+    await pool.end();
+  }
+}
+
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
   empty: null,
@@ -87,8 +147,42 @@ const STATES = {
   calisthenics: seedCalisthenics,
   // V1-8-2: a logged flat multi-movement strength session (via the shipped write core).
   'strength-session': seedStrengthSession,
+  // GAP-1 P1-1c — interaction-only states (no fixtures; see INTERACTIONS below).
+  'form-skipped': null,
+  'form-sub-failure': null,
+  // GAP-1 P1-1c — the READ side: a skipped entry badge + a sub-failure set badge.
+  'status-badges': seedStatusBadges,
 } as const;
 type StateName = keyof typeof STATES;
+
+/**
+ * Post-load interactions, keyed by `--state`. Some UI states only exist AFTER a tap and cannot be
+ * seeded: GAP-1 P1-1c's Skipped checkbox collapses the set rows, and the per-set sub-failure toggle
+ * marks one attempt. A reviewer approving those needs to see them, so the capture performs the taps.
+ * Runs per viewport against a fresh page → must be idempotent from a clean load.
+ */
+const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
+  'form-skipped': async (page) => {
+    await page.getByLabel(/movement 1 skipped/i).check();
+  },
+  'form-sub-failure': async (page) => {
+    // Build the CROWDED case the panel asked for: 3 sets, one sub-failure, one canonical chip
+    // active — a 1-set card hides the width pressure the new control adds at 360px.
+    // `exact: true` is LOAD-BEARING: getByLabel is substring + case-insensitive by default, so a
+    // bare 'Movement' also matches "Select movement 1 for a superset" and "Movement 1 set 1 reps"
+    // → strict-mode violation (docs/lessons.md has this exact trap).
+    await page.getByLabel('Movement', { exact: true }).fill('Pull-up');
+    await page.getByLabel(/movement 1 set 1 reps/i).fill('5');
+    await page.getByLabel('Movement 1 set 1: BW').click(); // chips are `${ctx}: ${label}`
+    await page.getByRole('button', { name: /add set/i }).click();
+    await page.getByLabel(/movement 1 set 2 reps/i).fill('4');
+    await page.getByLabel('Movement 1 set 2: band').click();
+    await page.getByRole('button', { name: /add set/i }).click();
+    await page.getByLabel(/movement 1 set 3 reps/i).fill('2');
+    await page.getByLabel(/movement 1 set 3 weight or load/i).fill('BW');
+    await page.getByLabel(/sub-failure — movement 1 set 3/i).check();
+  },
+};
 
 /**
  * The teeth of the durable fix: refuse a non-local DB target unless explicitly
@@ -443,7 +537,7 @@ async function runEphemeral(
 
     // gateLogin reads ACCESS_GATE_PASSWORD from our env — match the server's gate code.
     process.env.ACCESS_GATE_PASSWORD = SCREENSHOT_GATE_PASSWORD;
-    await captureScreenshot({ route, baseUrl, name, timeZone });
+    await captureScreenshot({ route, baseUrl, name, timeZone, interact: INTERACTIONS[state] });
   } finally {
     if (server) await stopChildProcess(server);
     await pg.stop().catch(() => {});

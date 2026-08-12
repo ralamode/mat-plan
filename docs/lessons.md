@@ -52,6 +52,20 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **`screenshot:ephemeral` reuses `.next`, so you can screenshot your UI change and get a picture of
+  `main`.** → The script only builds when `.next/BUILD_ID` is absent (or `--build` is passed), so with a
+  warm build the capture silently shows the PREVIOUS UI. Nothing errors — the shot just looks subtly
+  wrong, and the failure mode is attaching it to a PR as evidence for a change it does not contain. The
+  tell: the new control you added isn't in the image. → **Always pass `--build` when capturing a change
+  you just made**; the reuse is only safe for re-shooting an unchanged screen. (GAP-1 P1-1c)
+
+- **`getByLabel('Movement')` is a strict-mode violation waiting to happen — it is substring +
+  case-insensitive.** → A bare `'Movement'` also matched `aria-label="Select movement 1 for a superset"`
+  and `"Movement 1 set 1 reps"`. Same root cause as the `getByLabel`/`getByText` entry under Vitest/RTL
+  below, but it bites in Playwright too, including in **screenshot interaction hooks**, where the failure
+  surfaces as a capture that never happens rather than a red test. → `{ exact: true }`, or scope to the
+  region. (GAP-1 P1-1c)
+
 - **An assertion on a form's own label is a FALSE POSITIVE — it goes green while nothing was
   written.** → `getByText('Rice bucket', { exact: true })` matched the check-in `<label>` inside the
   form, not only the logged-entry list. The write assertion "passed", the run then failed one line

@@ -1,4 +1,4 @@
-import { ENTRY_STATUS } from '@mat-plan/shared';
+import { ENTRY_STATUS, ENTRY_STATUS_LABELS, ENTRY_STATUSES } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { SetDTO } from '@/lib/dal/entries';
@@ -81,5 +81,17 @@ describe('formatSetLine — status is NOT rendered here (GAP-1 P1-1b, S8)', () =
     const sub = formatSetLine(set({ status: ENTRY_STATUS.sub_failure }), 'lb');
     expect(sub).toBe(done);
     expect(sub).toBe('5 × 135 lb');
+  });
+});
+
+// GAP-1 P1-1c. The label map lives in `packages/shared`, not app-local, because `sub-failure` is the
+// CSV export byte (V1-13 D7) — the badge and the exporter must emit the identical string.
+describe('ENTRY_STATUS_LABELS (GAP-1 P1-1c)', () => {
+  it('humanizes sub_failure to the CSV byte `sub-failure`', () => {
+    expect(ENTRY_STATUS_LABELS[ENTRY_STATUS.sub_failure]).toBe('sub-failure');
+  });
+
+  it('covers every status, so a new one cannot render as a raw enum', () => {
+    for (const s of ENTRY_STATUSES) expect(ENTRY_STATUS_LABELS[s]).toBeTruthy();
   });
 });
