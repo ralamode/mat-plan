@@ -10,6 +10,11 @@
 >
 > Reviewed by a **2-lens UX panel** (first-run/cognitive-load; trust/safety/data-entry) on 2026-08-12.
 > Their findings are folded in below; the discussion log at the end records what changed and why.
+>
+> **Ray answered the decision-shaping questions on 2026-08-20** ([PR #106](https://github.com/ralamode/mat-plan/pull/106)).
+> Six of the eight are now closed and are written into the requirements as decisions, not options; the
+> discussion log records each one. The largest consequence: **no questionnaire is needed at all**, and
+> **`movements` gets household scoping** before any multi-tenant writing.
 
 ## The problem
 
@@ -36,7 +41,9 @@ stance/ladder/bridge/pressure sub-metrics — a new coach reads it as dental hyg
 started."**
 
 This is the cheapest thing in this document to fix, it blocks any self-serve onboarding, and **it is not
-caused by anything else here**. It should be its own backlog item and can ship long before ONB-1.
+caused by anything else here**. Filed as its own backlog row — **ONB-0** in [plan.md](../plan.md) — and it
+can ship long before ONB-1. Ray's Q1 answer (R2) is its spec: an explained empty state plus a route into
+the movement editor, not a questionnaire.
 
 ## Who this is for
 
@@ -59,6 +66,12 @@ part that already works.
 The single most important product finding. **"100 push-ups a day + 50 pull-ups a day + a couple sets of
 wall sit"** is not a prescription and must never be routed through prescription machinery.
 
+**They arrive together.** Ray (Q2): parents give a daily calisthenics goal — 100 push-ups, 50 pull-ups —
+**on top of** a structured 2–5×/week S&C plan, because calisthenics is the baseline thing a wrestler can
+do anywhere, at practice or at home. So the two shapes are not a fork the user picks between; **one
+document routinely contains both**, and the extractor's job is to **split** it: structured rows to
+prescriptions, daily counts to `ramp_targets`, prose to neither (R7a).
+
 | Shape                                                      | Storage                                                        | How it gets in                                                    |
 | ---------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
 | **Daily targets on a counter** ("100 push-ups a day")      | `ramp_targets` on accumulating calisthenics metrics (V1-6a/6b) | **Typed. Three numbers in a form.** No LLM, no confirm gate, ~30s |
@@ -77,18 +90,22 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
 ### First run
 
 - **R1.** A new household must never see another household's routine or any developer-facing string.
-- **R2.** Time-to-first-value is **one screen and two fields**: an athlete's name, then a weigh-in. The
-  app already holds this opinion structurally — `bodyweight` is deliberately not a legal member of
-  `order`; weigh-in is pinned first by construction. Onboarding should mirror that, not put six
-  questions in front of it.
+- **R2. There is no questionnaire.** _(Ray, Q1.)_ A stranger's first Today is an **explained empty
+  state**: what this app is, what happens next, and a control that takes them to — or inlines — the
+  place they author their movements. Time-to-first-value is still one screen and two fields (a name,
+  then a weigh-in; `bodyweight` is deliberately not a legal member of `order`, so weigh-in is pinned
+  first by construction), but nothing is _asked_ before that. This removes an entire subsystem from the
+  document: the first-run flow is now an empty state plus surfaces that already exist.
 - **R3.** Athlete creation is a form with "+ Add another", **not** a "how many athletes?" counter that
   gates everything behind it.
 - **R4.** Routine authoring **reuses the shipped editor** (`/p/[profileId]/routine`). Building a second
   way to write `routine_config` is the thing to avoid; a wizard that duplicates an existing surface is
-  cost with no new capability.
-- **R5.** Equipment and "what do you want to get better at?" are **cut from onboarding** until something
-  actually reads them. Equipment is unmodelled (`movements` has no equipment column), and the goals
-  question is a vaguer version of the routine editor's concrete activity picker.
+  cost with no new capability. With R2, this is the whole of "setup".
+- **R5. Equipment is cut, permanently, not deferred.** _(Ray: the parent/coach authoring the plan
+  already knows their own equipment situation and will only write movements their kid can do.)_ Combined
+  with "the app never suggests movements" (Q11, closed), **nothing will ever read an equipment column**,
+  so it should not be modelled. "What do you want to get better at?" is likewise cut — it is a vaguer
+  version of the routine editor's concrete activity picker.
 
 ### Import (only for the structured shape)
 
@@ -97,13 +114,42 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
 - **R7.** The extractor emits only what the source **literally states**. Every field is nullable;
   anything not literally present is `null`, never inferred. `"a couple of sets"` → `sets: null`. This is
   what makes "transcription, not authorship" true rather than aspirational.
-- **R8.** **Risky values are not imported at all — they arrive blank**, with the source shown beside the
-  empty field, and the coach types them. Risky = _error is not self-limiting_: external load, height,
-  distance, rep counts, plus movement identity. Self-limiting values (`BW`, `band`, durations) import
-  freely. This is V1-19's "names and structure only, loads stay BLANK" applied to import.
-- **R9.** **Units are asked once per import, unskippable, never inferred.** A kg sheet read as lb is a
-  2.2× load error that looks entirely plausible on screen. Note `prescription_targets.load` stores `65`
-  as verbatim text with **no unit recorded anywhere in the system** today.
+- **R7a. The extractor refuses free-form prose outright.** _(Ray, Q3: "Yes it should refuse prose.")_
+  When it cannot find structure, it does **not** guess — it says so and routes the user to the
+  daily-targets form. The reasoning: a structured row (`Back squat 3×8 @ 65`) is _transcribable_ — every
+  number is on the page, so the model copies and the human proofreads. Prose has **no ground truth**:
+  `"a couple" → 2` is the model inventing a number, and once that number sits in a field the human's
+  confirm is a rubber stamp against nothing. Refusing removes the only real rule violation in the
+  feature. Because both shapes arrive in one document (above), "refuse" means **refuse that fragment**
+  and route it — never reject the whole import.
+- **R8. Risky values are never model-written — but they are one tap to fill.** _(Ray, revising the
+  panel's "type it" position.)_ Risky = _error is not self-limiting_: external load, height, distance,
+  rep counts, plus movement identity. The extracted text is shown as **static, unwritable source**
+  beside an **empty** field — _"your sheet says 65"_ — and a **tap fills it**. Self-limiting values
+  (`BW`, `band`, durations) import directly.
+  - **What makes tap-to-fill safe here, and the constraints that must hold.** It is a single deliberate
+    gesture on **one** value, at the **moment of use** (R8a), with the source **visible beside it**.
+    That is categorically different from a bulk confirm screen, where one habituated gesture accepts
+    twenty numbers the user never read. The safety is entirely in those three properties, so:
+    **there is no "fill all", no "accept remaining", and no multi-load bulk affordance — ever.** A
+    control that fills more than one load at a time re-creates exactly the theatre R8 exists to prevent.
+  - The value written is **still the human's act**, and nothing is written to `prescription_targets`
+    until the tap. Note `program-reference.tsx` is currently read-only by deliberate design (~90% of
+    authored loads are text a `type="number"` field cannot hold, and prefilling would let a
+    **prescribed** load be submitted as a **performed** one). **The edit target here is the
+    prescription, not the log field** — that distinction is load-bearing and must survive into the plan.
+    `docs/plan.md`'s GAP-1 P0-2 (text loads) is already noted as unblocking the V1-10 editable prefill.
+- **R8a. Confirmation is deferred to first use.** _(Ray, Q4.)_ There is **no bulk confirm screen.** An
+  imported load surfaces on the existing V1-10 reference card the day that movement comes up, and is
+  filled/confirmed there, standing at the bar. This deletes the majority of the import UI, and with it
+  the "20+ rows on a 390px screen" problem both panels raised.
+- **R9. Units are selected by the human — at first run and again at import — never inferred.** _(Ray.)_
+  **The gap is wider than import.** Verified against the tree: `entry_sets.weight_num` is `numeric` with
+  **no unit column** (`packages/db/src/schema.ts:191`), and `prescription_targets.load` is verbatim text
+  with no unit (`:544`). `movements.unit_default` exists and FKs to `units.code` (`:255`) but **nothing
+  in the app reads it**. Only weigh-ins carry `lb | kg`. So **a kg household is unrepresentable across
+  the entire strength path today** — ONB-1 merely exposes it. Fixing it is its own backlog row and a
+  prerequisite for import, not a sub-task of it.
 - **R10.** **Athlete↔column mapping on a multi-athlete sheet is an explicit human step**, confirmed
   before any row renders. A silent column swap assigns the 13-year-old's loads to the 8-year-old — the
   highest-consequence single failure available in this feature.
@@ -111,7 +157,28 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
   fix only the deltas. Never a two-column confirm on the narrowest screen. In `PROGRAM_SEED`, `both()`
   covers most rows and `perKid()` a minority, so the sibling pass is a handful of edits.
 - **R12.** Nothing is written until confirmed, and a partially-finished import **survives leaving the
-  page**.
+  page**. With R8a, "unfinished" is the normal steady state — loads fill in over the first cycle, not in
+  one sitting — so this is a permanent property of the model, not a crash-recovery nicety.
+
+### Tenancy — `movements` is scoped by household
+
+- **R12a. `movements` gets household scoping, and it lands before any multi-tenant writing.** _(Ray,
+  closing an open question.)_ Free-text names are the **right** product call — different coaches
+  genuinely say "RDL" and "Romanian deadlift" and neither should be forced to adopt the other's word.
+  The defect is not the free text, it is that `movements` is a **single global table with no
+  `household_id`** (`packages/db/src/schema.ts:247-268`). Four consequences, all verified:
+  1. **`slug` is `.notNull().unique()` globally** (`:252`) — two households both adding "RDL" **collide
+     at the database level**. That is a hard write failure, not an annoyance.
+  2. **Every movement picker shows every household's names** — a stranger's catalog fills with other
+     families' shorthand.
+  3. **Split history.** Progression and "last performed" key off `movement_id`, so one kid's "RDL" and
+     "Romanian deadlift" accumulate as two unrelated histories of the same lift — which silently
+     corrupts exactly the input R18's progression engine depends on.
+  4. **Leakage.** Free text carries a child's name or a gym's name into a globally-visible table
+     (OSS-1's data-audit discipline applies).
+- **R12b.** The shape: `movements.household_id` **nullable** — `null` = the seeded global catalog
+  everyone sees, non-null = this household's own — with the uniqueness constraint moving from `slug` to
+  **`(household_id, slug)`**. Aliases/synonyms are a later, optional refinement, not part of this.
 
 ### Safety model
 
@@ -122,6 +189,11 @@ engine`), because a row is legitimately half-imported and half-typed. One marker
   every surface a number appears. _Alternative worth costing: a **staging table** for unconfirmed
   imports, which makes "unconfirmed in the live program" unrepresentable and needs no migration on
   `prescription_targets`._
+- **R14a. The marker is visible for the first workout after import, then it clears.** _(Ray, Q4.)_ It
+  earns its place exactly once — the first time you meet that movement, when the number in front of you
+  came off a sheet you haven't checked in the app yet. After that first use it is noise on a number the
+  human filled themselves. **Provenance is still stored permanently** (R14/R15 need it for drift
+  detection and whole-import undo); what expires is the **display**, not the record.
 - **R15.** An **`imports` record** holds the raw source, model + version, timestamp, and per-field source
   anchors, with every extracted row FK'd to it — which is what makes **whole-import undo** possible.
 - **R16.** **Error recovery has a detection signal, and it already exists in the data.** The app logs
@@ -129,14 +201,37 @@ engine`), because a row is legitimately half-imported and half-typed. One marker
   A persistent gap on an imported-unconfirmed load is the only automated smoke alarm available — and
   computing it is **arithmetic on two human-written values, not authorship**. The dangerous case is not
   `170` for `70` (self-limiting — the kid fails the rep) but `85` for `65`, which they grind while
-  nothing notices.
+  nothing notices. _(Ray agrees `170`-for-`70` is not a real scenario — a parent won't load it and the
+  kid can't lift it. That is the case this requirement already discounts; `85`-for-`65` is what it is
+  for. And with R8 — no model-written load — the misread case is largely designed out rather than
+  detected.)_
+- **R16a. Verification after import is loads-only.** _(Ray, Q5.)_ Nothing asks the coach to re-read the
+  whole plan against the paper. A wrong movement name or rep count is **visible and self-correcting** the
+  first time the card is read; only the numbers that can hurt get a check. This is ~4× less work than a
+  full field-by-field re-read, and it largely dissolves under R8 + R8a anyway: a load the human tapped to
+  fill, at the moment of use, with the source beside it, **has already been verified by construction.**
 - **R17.** Correction is **one tap from where the load is displayed**, not buried in an editor the coach
   must discover. (The routine editor is URL-only and unreachable today — V1-20. Don't repeat that.)
+  Ray's framing for the reference card: the load is right there, editable, with a light nudge that it
+  can be changed — _"this is the suggested load, feel free to change it."_
 - **R18.** Progression is deterministic, in `packages/engine`, never an LLM. Two invariants:
   **bounded step** — a load may only move a bounded step from something already performed, never a leap;
   and **staleness** — beyond a threshold the engine **proposes nothing** and the card shows a dated fact
   (`Last performed: 65 lb · 14 Apr`). The absence of a suggestion is the message: no warning, no block,
   no "detraining" (clinical, judgmental, and often wrong — the kid may have been in season).
+- **R18a. Suggested loads are an explicit goal — and this requirement is how they arrive.** _(Ray: the
+  model should not write loads, but eventually the app should suggest a load and reps from past
+  performance using known progressive-overload systems.)_ That is precisely R18's engine, and the
+  distinction that makes it safe is worth stating plainly rather than leaving implicit:
+  - The input is the **athlete's own logged, human-entered performance** — so a suggestion is
+    arithmetic over human-written values, the same principle that makes R16's drift check legitimate.
+  - The rule is a **named, published progression scheme**, not a judgment. It is deterministic, covered
+    by golden vectors, and **auditable** — you can point at the rule that moved the load, which an LLM
+    can never offer.
+  - It stays a **suggestion on a card the human fills**, subject to R8's bounded step and R18's
+    staleness rule. The engine proposing a number is not the engine writing one.
+  - **This is where "calibration" lives, and it is not an AI feature.** Nothing in it needs a model, and
+    routing it through one would trade determinism and explainability for nothing.
 - **R19.** An imported plan may **never** touch the log path (`entries`/`entry_sets`). Worth an explicit
   invariant test.
 
@@ -148,54 +243,65 @@ engine`), because a row is legitimately half-imported and half-typed. One marker
   with no legal furniture. "Import your plan", never "Set up your training program". The empty state is
   the strongest position available and it is free: _"No plan yet — you can log without one."_
 
+## Closed (Ray, 2026-08-20)
+
+The decision-shaping set is answered. Each is now written into a requirement; kept here so a later
+reader can see what was chosen and what it displaced.
+
+| #                    | Question                               | Decision                                                                                         | Lands in     |
+| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
+| 1                    | Stranger's first Today                 | Explained empty state + a route into the movement/workout editor. **No questionnaire.**          | R2, R4       |
+| 2                    | Daily targets vs. structured week      | **Both, layered** — calisthenics goals on top of a structured plan. One document, two paths.     | "Two shapes" |
+| 3                    | Refuse prose?                          | **Yes** — refuse the fragment, route it to the daily-targets form.                               | R7a          |
+| 4                    | Defer confirmation to first use?       | **Yes**, with a marker for the **first workout after import** only.                              | R8a, R14a    |
+| 5                    | Re-read everything, or just the loads? | **Just the loads.**                                                                              | R16a         |
+| 6                    | Is import phone-capable?               | **Yes for CSV / Sheets**; a photo of a paper sheet is a separate, later, non-phone problem.      | phasing      |
+| 11                   | Ever suggest movements?                | **No** → equipment is never modelled. Cut permanently.                                           | R5           |
+| _(also, unprompted)_ | `movements` scoping                    | **Scope by household**, before any multi-tenant writing.                                         | R12a, R12b   |
+| _(also)_             | Units                                  | **Human selects** — at first run and at import.                                                  | R9           |
+| _(also)_             | Load suggestion                        | Wanted eventually, from past performance + a published overload scheme — **the engine, not AI.** | R18a         |
+
 ## Open questions
 
-**Decision-shaping — these change the design:**
+**Still need a decision:**
 
-1. **What should a stranger's first Today show** before they've set anything up? Nearly-nothing plus the
-   weigh-in / a generic starter you'd pick / blank until they choose. **This decides whether a
-   questionnaire is needed at all.**
-2. **Of the parent-written plans you've seen, what share are daily rep targets vs. a structured week?**
-   If mostly the former, those families need a typed form on machinery that already exists, and
-   import only ever serves trainer plans.
-3. **Should the extractor refuse free-form prose** and route it to the daily-targets form? Refusing
-   removes the worst rule violation entirely (`"a couple sets"` has no ground truth to proofread).
-4. **Do you accept deferring confirmation to first use** — the load appears on the existing V1-10
-   reference card marked "from your sheet — unconfirmed", and you confirm it the day that movement comes
-   up, standing at the bar? This removes the bulk-confirm screen entirely. **Biggest single fork.**
-5. **Would you re-read everything against the paper, or just the loads?** ~4× difference in effort.
-6. **Is import phone-capable, or explicitly a tablet/desktop setup task?** Both panels landed here
-   independently: a photo of a sheet and a legible editable row do not coexist at 390px.
-7. **Provenance column, or staging table?** (R14)
-8. **Correcting an imported load — version or overwrite?** `prescription_targets` has no versioning, and
+1. **Provenance column, or staging table?** (R14) — R8a makes this sharper, not softer: with
+   confirmation deferred across a whole cycle, "unconfirmed rows live in the program for weeks" is the
+   normal state, which is an argument for the staging table _or_ an argument that the column is
+   unavoidable. Worth costing both.
+2. **Correcting an imported load — version or overwrite?** `prescription_targets` has no versioning, and
    the V1-10 review already found a two-live-rows hazard in the soft-delete + reinsert idiom. Determines
    whether historical `prescribed` export stays faithful.
-
-**Smaller, but real:**
-
-9. Are "Rice bucket" / "Brain rep" / "Brush teeth" names a stranger should see, or family shorthand?
-10. Wall-sit: counted in seconds, ticked off as done, or ignored? (No timed calisthenics metric exists.)
-11. Do you ever want the app to **suggest** movements? If never, equipment need never be modelled.
-12. Retention of an uploaded source image — how long, and where? It is a stranger's child's plan and may
-    carry other kids' names (OSS-1's data-audit discipline applies).
-13. **How long is too long** for setup before the first weigh-in? Your number is the budget for all of
-    the above.
-14. **Would you launch with no import at all** — profiles, routine, logging only — and wait to see if
-    anyone asks? Import is the majority of the cost in this document.
+3. Are "Rice bucket" / "Brain rep" / "Brush teeth" names a stranger should see, or family shorthand?
+   (Bears directly on the P0 default routine.)
+4. Wall-sit: counted in seconds, ticked off as done, or ignored? (No timed calisthenics metric exists —
+   and with R7a refusing `"a couple sets of wall sit"`, this is now the question of where that input
+   goes instead.)
+5. Retention of an uploaded source image — how long, and where? It is a stranger's child's plan and may
+   carry other kids' names (OSS-1's data-audit discipline applies). _Deferred with photo import._
+6. **How long is too long** for setup before the first weigh-in? Your number is the budget for the rest.
+   Much cheaper to hit now that R2 removed the questionnaire.
+7. **Would you launch with no import at all** — profiles, routine, logging only — and wait to see if
+   anyone asks? Import is still the majority of the cost in this document, even after R8a deleted its
+   biggest screen.
 
 ## Phasing sketch (illustrative, not committed)
 
-| Slice  | Scope                                                          | Why here                                                          |
-| ------ | -------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **P0** | Fix first-run: real empty state + a neutral default routine    | Independent of everything else; blocks any stranger using the app |
-| **0**  | **Clerk** (v1.5, already planned)                              | The tenancy boundary. Nothing below is safe without it            |
-| **1**  | Profile CRUD                                                   | Small; `seed.ts` is the only writer today                         |
-| **2**  | Daily-targets form → `ramp_targets`                            | **A stranger has a working app here.** No AI, no new tables       |
-| **3**  | Import: paste text → literal extraction → blanks → typed loads | The first LLM surface. Reuses AI-1's structured-output machinery  |
-| **4**  | Screenshot/multimodal import                                   | **Not** a simple "input widening" — see the discussion log        |
-| **5+** | Equipment · movement scoping · engine progression              | Only once real users show which of these bites                    |
+| Slice   | Scope                                                                           | Why here                                                                     |
+| ------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **P0**  | Fix first-run: real empty state (R2) + a neutral default routine                | Independent of everything else; blocks any stranger using the app            |
+| **0**   | **Clerk** (v1.5, already planned)                                               | The tenancy boundary. Nothing below is safe without it                       |
+| **0.5** | **`movements` household scoping** (R12a/R12b) + **units on the load path** (R9) | Both are **prerequisites**, not cleanups — a global `slug` UNIQUE fails hard |
+| **1**   | Profile CRUD                                                                    | Small; `seed.ts` is the only writer today                                    |
+| **2**   | Daily-targets form → `ramp_targets`                                             | **A stranger has a working app here.** No AI, no new tables                  |
+| **3**   | Import: paste/CSV → literal extraction → prose refused → tap-to-fill loads      | The first LLM surface. Reuses AI-1's structured-output machinery             |
+| **4**   | Photo / multimodal import                                                       | **Not** a simple "input widening" — and the one part that isn't phone-shaped |
+| **5+**  | Engine progression + suggested loads (R18a)                                     | Wanted, deterministic, and independent of import                             |
 
 **Slices P0–2 contain no AI at all**, and both panels independently concluded that is where the value is.
+
+Ray's answers moved two things: **0.5 came into existence** (scoping and units were open questions and
+are now blocking prerequisites), and **equipment left the table entirely** rather than sitting in "5+".
 
 ## Discussion log — what the UX panel changed
 
@@ -218,6 +324,36 @@ sit"` has **no ground truth to proofread against**; `a couple → 2` is authorsh
   from the start, or the confirm UI gets rebuilt. → moved down the phasing with that noted.
 - **First-run brokenness was invisible to both the brief and to me** until the panel walked the flow. →
   the new P0 section.
+
+### 2026-08-20 — Ray's decisions, and what they changed
+
+- **The questionnaire is gone.** Q1's answer — an explained empty state and a route into the editor —
+  removes the feature the original brief was _named for_. Setup is now "fix the empty state and point at
+  V1-18's shipped editor," which is a materially smaller document. → R2.
+- **Tap-to-fill replaces "type it".** The panel's R8 said risky values arrive blank and the coach
+  **types** them; Ray asked for a cheaper gesture. Accepted, with the reasoning recorded: the panel's
+  objection was always to **bulk** confirmation, where one habituated gesture accepts twenty unread
+  numbers. A single tap on **one** load, at the **moment of use**, with the source **visible beside
+  it**, is a different act — and the value is still written by a human decision, not by the model. The
+  constraint that keeps this true is now explicit and absolute: **no "fill all" affordance, ever.**
+  → R8.
+- **Prose is refused outright**, which closes the one place the "transcription, not authorship" claim
+  genuinely broke. → R7a.
+- **Q2's answer was more consequential than the question anticipated.** "Both, layered" means the two
+  plan shapes are not a fork the user picks — one document contains both, so the extractor must **split**
+  rather than classify. That is a design consequence the PRD did not previously have.
+- **Ray is right about `170`-for-`70`**, and it is the case R16 already discounted; `85`-for-`65` stands.
+  With loads no longer model-written, this is mostly designed out rather than detected.
+- **Units turned out to be an app-wide gap, not an import requirement.** Checking the tree to write R9:
+  `entry_sets.weight_num` and `prescription_targets.load` are both unitless, and `movements.unit_default`
+  is read by nothing. **A kg household is broken today, with or without ONB-1.** Promoted to a
+  prerequisite slice and worth its own backlog row. → R9, slice 0.5.
+- **`movements` scoping moved from open question to blocking prerequisite.** Writing R12a surfaced that
+  `slug` is **globally `UNIQUE`** — so this is not a tidiness concern that can wait for real users; the
+  second household to type "RDL" gets a **write failure**. → R12a/R12b, slice 0.5.
+- **Suggested loads are an explicit product goal now**, not a someday. Stated as R18a rather than left
+  implicit in R18, because "the app suggests a load" and "an LLM suggests a load" are one word apart in
+  conversation and very far apart in this codebase.
 
 ## Out of scope
 

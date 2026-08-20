@@ -187,30 +187,47 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **web push** works on iOS 16.4+; a thin native shell only if web push proves too limited),
   occasionally Mac. Per-profile schedules + quiet hours; opt-in per kid. Builds on the v1.5 PWA + Clerk
   foundation. Scope + delivery mechanism TBD.
+- **ONB-0 — first run is broken TODAY (P0, independent of everything below)** — a brand-new household has
+  `routine_config = null`, which `resolveRoutine` maps to `buildDefaultRoutine` over the seeded catalog,
+  so **a stranger's first screen is Ray's family's routine** in Ray's family's shorthand — Rice bucket ·
+  Brain rep · Splits · **Brush teeth** (a wrestling drill block with stance/ladder/bridge sub-metrics,
+  which a new coach reads as dental hygiene). And before that, `apps/web/app/page.tsx:25` says, to a
+  human: **"No profiles found. Seed the database to get started."** Spec is
+  [ONB-1's R2](./plans/onb-1-self-serve-onboarding-prd.md): an **explained empty state** (what this app
+  is, what happens next) plus a control that routes to — or inlines — the movement/workout editor, and a
+  **neutral** default routine. **Not** a questionnaire. Cheapest item in the onboarding story, blocks any
+  stranger using the app, and depends on nothing else. UI change ⇒ **needs a UX panel before
+  implementation** (AGENTS.md).
+- **UNIT-1 — the strength path has no units at all** — verified against the tree: `entry_sets.weight_num`
+  is `numeric` with **no unit column** (`packages/db/src/schema.ts:191`); `prescription_targets.load` is
+  verbatim text with no unit (`:544`); `movements.unit_default` exists and FKs to `units.code` (`:255`)
+  but **nothing in the app reads it**. Only weigh-ins carry `lb | kg`. So **a kg household is
+  unrepresentable across the whole strength path today**, with or without onboarding. Surfaced by the
+  ONB-1 PRD (R9) but not caused by it, and a **prerequisite** for any import feature — a kg sheet read as
+  lb is a 2.2× error that looks entirely plausible on screen. Scope + migration shape TBD.
 - **ONB-1 — self-serve onboarding: bring-your-own-program**
-  ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)) — _(Ray, 2026-08-11; UX panel 2026-08-12)_
-  **PRD ONLY — not a plan, not scoped.** Onboarding a new family today costs a code change + a deploy: `seed.ts` is the only writer
-  of profiles, and the strength program is a TypeScript const with no authoring UI. The data model is
-  already multi-tenant (`households` + `profiles.household_id`), so the gap is **authoring surfaces +
-  auth**, not the schema. Shape: a first-run **questionnaire** that writes a **`routine_config`** (V1-18
-  already ships that storage and its editor), plus **bring-your-own-program** — the coach pastes or
-  uploads the plan they already use and the LLM **extracts** it into `program_blocks → prescriptions →
-prescription_targets` for per-row confirmation. BYO-program is load-bearing: it keeps the inviolable
-  rule intact **by construction** (extraction is transcription, not authorship — it automates what Ray
-  did by hand in V1-10 PR 1b), and it makes the confirm gate meaningful for non-experts, since the
-  question becomes "does this match your sheet?" rather than "is this load right for your kid?" —
-  proofreading, not coaching judgment. Load calibration, when it comes, belongs in **`packages/engine`**
-  (deterministic, golden-vector tested, auditable), never an LLM.
-  **A 2-lens UX panel reshaped it:** parent-written plans ("100 push-ups a day") are **`ramp_targets` on
-  the shipped calisthenics metrics — typed, no AI, no new tables** (and must never render as `1 × 100`,
-  which would break the accumulation model); only a structured trainer sheet needs import. Risky values
-  (external load, height, distance, reps) should **arrive BLANK** rather than be confirmed — V1-19's
-  "loads stay blank" boundary applied to import — since per-row confirm is theatre at 20+ rows on a phone.
-  Units are unmodelled and are the largest silent-error surface (a kg sheet read as lb is a 2.2× error
-  that looks plausible). **Separately, and independent of ONB-1: first-run is broken TODAY** — a new
-  household inherits Ray's routine (Rice bucket / Brain rep / Splits) and `page.tsx` tells a human to
-  "Seed the database to get started". A P0 fix that can ship long before any of this. Open: equipment may
-  not be needed at all; `movements` is global rather than household-scoped. **v2+ territory.**
+  ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)) — _(Ray, 2026-08-11; UX panel 2026-08-12; Ray's
+  decisions 2026-08-20)_ **PRD ONLY — not a plan, not scoped.** Onboarding a new family today costs a code
+  change + a deploy: `seed.ts` is the only writer of profiles, and the strength program is a TypeScript
+  const with no authoring UI. The data model is already multi-tenant (`households` +
+  `profiles.household_id`), so the gap is **authoring surfaces + auth**, not the schema.
+  **Shape, after Ray's 2026-08-20 answers closed the decision-shaping questions:** **no questionnaire** —
+  first run is an explained empty state plus V1-18's **already-shipped** routine editor (→ ONB-0). Import
+  serves only the **structured** plan shape; parent-written daily goals ("100 push-ups a day") are
+  **`ramp_targets` on the shipped calisthenics metrics — typed, no AI, no new tables** (and must never
+  render as `1 × 100`, which would break the accumulation model). The two shapes **arrive layered in one
+  document**, so the extractor **splits** rather than classifies, and **refuses free-form prose** outright
+  (`"a couple sets"` has no ground truth to proofread — that was the one real break in the
+  "transcription, not authorship" claim). Loads are **never model-written**: the extracted text shows as
+  static source beside an empty field and the coach **taps to fill it**, one load at a time, **at the
+  moment of use** on the existing V1-10 card — **no bulk confirm screen** (theatre at 20+ rows on a
+  phone) and **no "fill all", ever**. Provenance is marked for the **first workout after import** only,
+  then clears. Verification is **loads-only**. Equipment is **cut permanently** (the app will never
+  suggest movements, so nothing would ever read it). **Suggested loads are an explicit goal** — from past
+  logged performance via a published progressive-overload scheme, in **`packages/engine`**
+  (deterministic, golden-vector tested, auditable), **never an LLM**. **Two blocking prerequisites:**
+  `movements` must be **household-scoped** before any multi-tenant writing — `slug` is globally `UNIQUE`,
+  so the second household to type "RDL" gets a **hard write failure** — and **UNIT-1**. **v2+ territory.**
 - **Brain-reps content.** Surface daily **motivational quotes / inspiration** for the `brain_rep`
   activity — a rotating quote for the day, maybe a small home widget. Content source, rotation, and
   "already seen" tracking TBD.
