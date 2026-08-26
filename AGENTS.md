@@ -219,6 +219,30 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
 
 ## UI PR rules
 
+- **Every PR that touches the UI gets a UX / interaction-design panel — BEFORE implementation.**
+  Non-negotiable, and separate from the engineering panel in
+  [docs/plans/README.md](./docs/plans/README.md): that one asks "is this correct and well-built?", this
+  one asks "is this the right thing to put in front of a person, and can they use it?" An engineering
+  reviewer will not catch a flow that loses the user on screen two, a control that reads as broken when
+  it works, or copy that quietly asks a parent for coaching judgment they don't have.
+  - **Reviewers are prompted to find flaws, not to praise**, each holding a distinct lens. Standing
+    lenses for UI work: **interaction design + first-run/cognitive load** (what's the fastest path to
+    value; where does this lose people; is this the right pattern at all — argue it against alternatives),
+    **a11y + adaptive/responsive** (semantic HTML, keyboard, focus-visible, ≥44px targets, the layout at
+    ~360px — do the width math, don't trust flex-wrap), and, whenever the screen asks a human to confirm,
+    approve or enter something consequential, **trust + data-entry burden** (does the confirm question
+    demand expertise the user came here lacking; is the mitigation real or theatre; what's the recovery
+    path when it goes wrong).
+  - **Scale the depth, never the existence.** A new screen or flow gets the full multi-lens panel; a
+    small visual change gets a single reviewer. Both get one.
+  - The author **reconciles each critique** — incorporate, or push back with justification — and records
+    a **review-response log** in the plan (or the PR description when the change is plan-exempt), the
+    same loop the engineering panel uses. The log stays committed, pushbacks included.
+  - **Ground every critique in the code and the real constraint.** This app is used by kids and parents
+    on a **phone, on a gym floor** — a critique that ignores that, or that speculates about code it
+    hasn't opened, is noise. Panels have earned their keep here repeatedly: they caught a 44px tap-target
+    CI gate an `aria-label`-only checkbox would have failed, a 360px row that only fit by wrap luck, and
+    an onboarding flow whose safety argument silently collapsed on a phone.
 - Tests pass locally (full suite runs in CI as a required check).
 - Lint must pass to commit (pre-commit blocks a failing lint). Prettier runs on staged files +
   `prettier --check` in CI — no style debates.
