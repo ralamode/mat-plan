@@ -179,6 +179,21 @@ Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
 
 ## Changelog (merged PRs)
 
+- **2026-08-12** — **GAP-1 P1-1c — P1-1 COMPLETE**: the UI for both statuses
+  ([plan](./plans/gap1-p1-1c-status-ui.md)). A **Skipped** checkbox on the movement card (set rows
+  unmount — not CSS-hidden, since `required` inputs left in the tree block the native submit with an
+  invisible browser error — and the typed sets survive in state, so unchecking restores them), a per-set
+  **Sub-failure** toggle, and status badges in the day's log humanized through a shared
+  `ENTRY_STATUS_LABELS` in `packages/shared` (`sub-failure` is the CSV export byte, so the badge and
+  V1-13 must emit one string). **Closes BUG-2(b)** — `[].every(...)` is vacuously true, so a skipped
+  card with a blank name was silently dropped; fixed at BOTH levels, since a card whose only input is a
+  SET status had the same hole. Statuses compare to their DEFAULT, never to `undefined`, so a mis-tap
+  that is undone doesn't wedge the form. A skipped movement KEEPS its superset tags (a skipped member is
+  still part of the group the athlete programmed), pinned by a schema test. New RTL component test
+  asserts the **serialized payload**, not React state — the seam where #98's `dayRole` went missing.
+  Screenshot tooling gained an `interact` hook plus a `status-badges` fixture, because the states a
+  reviewer needs only exist after a tap or in seeded rows. No migration.
+
 - **2026-08-11** — **GAP-1 P1-1b**: a **SET** can be marked `sub_failure`, keeping its real `reps`
   ([plan](./plans/gap1-p1-1b-subfailure-write.md)). Per-SET, not per-movement: `sub-failure` in the CSV's
   `reps` column is the **uniform collapse of a per-set list**, structurally identical to `5/5/5` → `5`,

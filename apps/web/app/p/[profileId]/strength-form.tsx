@@ -5,8 +5,11 @@ import {
   DAY_ROLE_LABELS,
   type DayRole,
   DEFAULT_BODYWEIGHT_UNIT,
+  ENTRY_STATUS,
   FREE_TEXT_NOTE_MAX,
+  type MovementStatus,
   newId,
+  type SetStatus,
   STRENGTH_DAY_ROLES,
 } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
@@ -32,12 +35,16 @@ import {
 // owns its OWN `sets` array in this parent state, so add-set on one card can never mutate another
 // (the independence the panel flagged) — no shared set-key list. React keys are UUIDs: a set's own
 // `key`, a movement's `clientId` (which doubles as its entry idempotency key).
-type SetVals = { key: string; reps: string; weight: string };
+type SetVals = { key: string; reps: string; weight: string; status?: SetStatus };
 type MovementVals = {
   clientId: string;
   movementName: string;
   unit: string;
   sets: SetVals[];
+  // GAP-1 P1-1c. The WIRE value, not a `skipped: boolean` — a boolean would need mapping in both
+  // directions at the payload seam and would drift from the schema the moment a third status appears.
+  // Absent means `done`; the payload spreads it, so absent stays absent (matching 1a/1b's writers).
+  status?: MovementStatus;
   // V1-8-3d superset tags — set when the movement is grouped; serialized into the movements JSON.
   supersetClientId?: string;
   supersetOrder?: number;
@@ -161,7 +168,21 @@ function StrengthFormBody({
       movementName: m.movementName,
       unit: m.unit,
       clientId: m.clientId,
-      sets: m.sets.map((s) => ({ reps: s.reps, weight: s.weight })),
+      // GAP-1 P1-1c. A skipped movement submits ZERO sets — computed HERE, at serialization, and
+      // deliberately NOT by emptying `m.sets` in the toggle handler: that would make a blank-named
+      // skipped card `name:'' + sets:[]`, which `[].every(...)` reports as vacuously untouched, and
+      // `dropUntouchedMovements` above would silently discard it — reopening the exact bug this PR
+      // closes, with the fix in place and looking correct. State keeps the typed sets so unchecking
+      // restores them.
+      sets:
+        m.status === ENTRY_STATUS.skipped
+          ? []
+          : m.sets.map((s) => ({
+              reps: s.reps,
+              weight: s.weight,
+              ...(s.status !== undefined ? { status: s.status } : {}),
+            })),
+      ...(m.status !== undefined ? { status: m.status } : {}),
       ...(m.supersetClientId != null
         ? { supersetClientId: m.supersetClientId, supersetOrder: m.supersetOrder }
         : {}),
@@ -188,6 +209,14 @@ function StrengthFormBody({
               index={i}
               movement={m}
               canRemove={movements.length > 1}
+              // GAP-1 P1-1c. `undefined` (not 'done') on uncheck, so the payload spread keeps
+              // "absent stays absent" and `isUntouchedMovement` sees a card returned to droppable —
+              // otherwise a mis-tap on a spare blank card would wedge the submit permanently.
+              onSkipped={(skipped) =>
+                patchMovement(m.clientId, {
+                  status: skipped ? ENTRY_STATUS.skipped : undefined,
+                })
+              }
               selected={selected.has(m.clientId)}
               onToggleSelect={() => toggleSelect(m.clientId)}
               onUngroup={m.supersetClientId ? () => ungroup(m.supersetClientId!) : undefined}
@@ -295,6 +324,7 @@ function MovementCard({
   index,
   movement,
   canRemove,
+  onSkipped,
   selected,
   onToggleSelect,
   onUngroup,
@@ -308,6 +338,7 @@ function MovementCard({
   index: number;
   movement: MovementVals;
   canRemove: boolean;
+  onSkipped: (skipped: boolean) => void;
   selected: boolean;
   onToggleSelect: () => void;
   onUngroup?: () => void; // present only when the movement is in a superset
@@ -316,11 +347,12 @@ function MovementCard({
   onRemove: () => void;
   onAddSet: () => void;
   onRemoveSet: (setKey: string) => void;
-  onSet: (setKey: string, patch: Partial<Pick<SetVals, 'reps' | 'weight'>>) => void;
+  onSet: (setKey: string, patch: Partial<Pick<SetVals, 'reps' | 'weight' | 'status'>>) => void;
 }) {
   const nameId = `movement-${movement.clientId}-name`;
   const unitId = `movement-${movement.clientId}-unit`;
   const inSuperset = movement.supersetClientId != null;
+  const isSkipped = movement.status === ENTRY_STATUS.skipped;
   return (
     <fieldset className="flex flex-col gap-3 rounded-lg border px-4 py-3">
       <legend className="flex items-center gap-2 px-1 text-sm font-medium">
@@ -407,47 +439,98 @@ function MovementCard({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Sets</span>
-        {movement.sets.map((s, i) => (
-          <div key={s.key} className="flex flex-wrap items-center gap-2">
-            <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
-            <SetRepsWeightFields
-              reps={s.reps}
-              weight={s.weight}
-              onReps={(v) => onSet(s.key, { reps: v })}
-              onWeight={(v) => onSet(s.key, { weight: v })}
-              ariaLabel={`Movement ${index + 1} set ${i + 1}`}
-              // GAP-1 P0-2: the LOG form accepts a text load (BW / band / 30in / 30s). The V1-9 edit
-              // form keeps the default numeric mode — its schema and its SQL guard are numeric-only.
-              mode="load"
-            />
-            {/* One-tap canonical labels. Without these, `BW` — the most common load in the program —
+      {/* GAP-1 P1-1c — mark the whole movement skipped. A checkbox wrapped in its own label, matching
+          the superset toggle above: `e2e/a11y.spec.ts` measures the BOUND label as the tap target and
+          fails an aria-label-only checkbox outright. Placed BEFORE the sets region so a screen reader
+          meets the cause before the effect. */}
+      <label className="flex min-h-11 w-fit items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="h-5 w-5"
+          checked={isSkipped}
+          onChange={(e) => onSkipped(e.target.checked)}
+          aria-label={`Movement ${index + 1} skipped`}
+        />
+        Skipped
+      </label>
+
+      {isSkipped ? (
+        // The set rows are UNMOUNTED, not CSS-hidden: `SetRepsWeightFields` marks its inputs
+        // `required`, and a hidden-but-present required input blocks the native submit with an
+        // invisible browser error ("not focusable") — the form would simply appear dead. This line
+        // also answers "did I break it?" for a sighted user and is the non-visual carrier for a
+        // screen reader. The typed sets survive in parent state; unchecking brings them back.
+        <p className="text-muted-foreground text-sm">Marked skipped — no sets will be logged.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Sets</span>
+          {movement.sets.map((s, i) => (
+            // Two EXPLICIT lines, not flex-wrap luck. At 360px the usable width is ~296px
+            // (main px-4 + fieldset px-4) and line 1 alone is ~262px, so the chips + toggle + remove
+            // must be their own row or they overflow on the phone this is used on.
+            <div key={s.key} className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
+                <SetRepsWeightFields
+                  reps={s.reps}
+                  weight={s.weight}
+                  onReps={(v) => onSet(s.key, { reps: v })}
+                  onWeight={(v) => onSet(s.key, { weight: v })}
+                  ariaLabel={`Movement ${index + 1} set ${i + 1}`}
+                  // GAP-1 P0-2: the LOG form accepts a text load (BW / band / 30in / 30s). The V1-9 edit
+                  // form keeps the default numeric mode — its schema and its SQL guard are numeric-only.
+                  mode="load"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pl-7">
+                {/* One-tap canonical labels. Without these, `BW` — the most common load in the program —
                 would be the hardest thing to enter on a phone. */}
-            <LoadChips
-              active={s.weight}
-              onPick={(v) => onSet(s.key, { weight: v })}
-              ariaLabel={`Movement ${index + 1} set ${i + 1}`}
-            />
-            {movement.sets.length > 1 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemoveSet(s.key)}
-                aria-label={`Remove movement ${index + 1} set ${i + 1}`}
-              >
-                Remove
-              </Button>
-            ) : null}
+                <LoadChips
+                  active={s.weight}
+                  onPick={(v) => onSet(s.key, { weight: v })}
+                  ariaLabel={`Movement ${index + 1} set ${i + 1}`}
+                />
+                {/* GAP-1 P1-1c — this ATTEMPT went to failure short of the prescribed reps. Same idiom as
+                the Skipped checkbox (one toggle pattern per card). The accessible name is unique per
+                set — five controls all named "Sub-failure" are indistinguishable in a screen-reader
+                forms list — and the visible text is a SUBSTRING of it (WCAG 2.5.3 Label in Name).
+                `reps` stays required: a sub-failure set records what WAS achieved. */}
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5"
+                    checked={s.status === ENTRY_STATUS.sub_failure}
+                    onChange={(e) =>
+                      onSet(s.key, {
+                        // undefined, never 'done', on untoggle — so "absent stays absent" on the wire.
+                        status: e.target.checked ? ENTRY_STATUS.sub_failure : undefined,
+                      })
+                    }
+                    aria-label={`Sub-failure — movement ${index + 1} set ${i + 1}`}
+                  />
+                  Sub-failure
+                </label>
+                {movement.sets.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemoveSet(s.key)}
+                    aria-label={`Remove movement ${index + 1} set ${i + 1}`}
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={onAddSet}>
+              Add set
+            </Button>
           </div>
-        ))}
-        <div>
-          <Button type="button" variant="outline" size="sm" onClick={onAddSet}>
-            Add set
-          </Button>
         </div>
-      </div>
+      )}
     </fieldset>
   );
 }

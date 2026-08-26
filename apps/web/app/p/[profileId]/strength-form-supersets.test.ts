@@ -5,6 +5,7 @@ import {
   dropUntouchedMovements,
   groupSelected,
   isUntouchedMovement,
+  type MovementDraft,
   type SupersetTaggable,
   ungroupSuperset,
 } from './strength-form-supersets';
@@ -98,5 +99,57 @@ describe('dropUntouchedMovements / isUntouchedMovement (V1-9 log ergonomics)', (
 
   it('returns [] when every card is untouched (so the min(1) schema error still fires)', () => {
     expect(dropUntouchedMovements([blank(), blank()])).toEqual([]);
+  });
+});
+
+// GAP-1 P1-1c (BUG-2b). `[].every(...)` is VACUOUSLY TRUE, so before this fix a skipped movement —
+// which legitimately carries zero sets — with a blank name was silently discarded on submit: no row,
+// no validation message. The same argument applies one level down to a set status.
+describe('isUntouchedMovement — a status is a typed field (GAP-1 P1-1c / BUG-2b)', () => {
+  const card = (o: Partial<MovementDraft> = {}): MovementDraft => ({
+    movementName: '',
+    sets: [{ reps: '', weight: '' }],
+    ...o,
+  });
+
+  it('an ordinary blank card is STILL untouched (the existing drop behaviour is unchanged)', () => {
+    expect(isUntouchedMovement(card())).toBe(true);
+  });
+
+  it('a SKIPPED card with a blank name and ZERO sets is NOT untouched', () => {
+    // The regression. Without the guard, `[].every(...)` → true → dropUntouchedMovements discards it.
+    expect(isUntouchedMovement(card({ status: 'skipped', sets: [] }))).toBe(false);
+  });
+
+  it('a card whose ONLY input is a SET status is NOT untouched', () => {
+    // The other direction — guarding only the movement level would ship the same bug in this PR.
+    expect(
+      isUntouchedMovement(card({ sets: [{ reps: '', weight: '', status: 'sub_failure' }] })),
+    ).toBe(false);
+  });
+
+  it('check-then-UNCHECK returns the card to droppable (a mis-tap must not wedge the form)', () => {
+    // The toggle sets `undefined`, not 'done'. Presence-checking would leave this card permanently
+    // un-droppable, blocking submit behind "Movement N: Enter a movement." with Remove as the only out.
+    expect(isUntouchedMovement(card({ status: undefined, sets: [] }))).toBe(true);
+  });
+
+  it('an explicit `done` at either level is still untouched (compare to the DEFAULT, not to undefined)', () => {
+    expect(isUntouchedMovement(card({ status: 'done' }))).toBe(true);
+    expect(isUntouchedMovement(card({ sets: [{ reps: '', weight: '', status: 'done' }] }))).toBe(
+      true,
+    );
+  });
+
+  it('a typed name still wins regardless of status', () => {
+    expect(isUntouchedMovement(card({ movementName: 'Back squat', sets: [] }))).toBe(false);
+  });
+
+  it('dropUntouchedMovements keeps a skipped blank card so it can produce a real error', () => {
+    const kept = dropUntouchedMovements([
+      { clientId: 'a', ...card({ status: 'skipped', sets: [] }) },
+      { clientId: 'b', ...card() },
+    ]);
+    expect(kept.map((m) => m.clientId)).toEqual(['a']);
   });
 });

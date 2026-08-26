@@ -4,6 +4,8 @@
  * are the form's highest-risk new logic (a bug here makes the ≥2 superRefine reject on submit). Generic
  * over the minimal movement shape (`clientId` + the optional superset tags).
  */
+
+import { ENTRY_STATUS } from '@mat-plan/shared';
 export type SupersetTaggable = {
   clientId: string;
   supersetClientId?: string;
@@ -52,19 +54,39 @@ export function dissolveSmallSupersets<T extends SupersetTaggable>(movements: re
   );
 }
 
-/** The minimal shape the untouched-card check reads. */
+/** The minimal shape the untouched-card check reads. `status` at both levels is GAP-1 P1-1c — see below. */
 export type MovementDraft = {
   movementName: string;
-  sets: readonly { reps: string; weight: string }[];
+  status?: string;
+  sets: readonly { reps: string; weight: string; status?: string }[];
 };
 
-/** A movement card is "untouched" — safe to drop on submit — ONLY when its name is blank AND every set's
- *  reps and weight are blank. A card with ANY field typed is a partial entry, NOT untouched, so it still
- *  validates rather than being silently discarded. */
+/** True when a status is absent or explicitly the default — i.e. the athlete has expressed nothing.
+ *  Compares to the DEFAULT, never to `undefined`: a card that was marked skipped and then UNMARKED must
+ *  become droppable again, or a mis-tap on a spare blank card wedges the submit behind
+ *  "Movement 3: Enter a movement." with Remove as the only escape. */
+const isDefaultStatus = (status: string | undefined): boolean =>
+  (status ?? ENTRY_STATUS.done) === ENTRY_STATUS.done;
+
+/**
+ * A movement card is "untouched" — safe to drop on submit — ONLY when its name is blank, every set's
+ * reps and weight are blank, AND no status has been set at either level. A card with ANY field typed is
+ * a partial entry, NOT untouched, so it still validates rather than being silently discarded.
+ *
+ * GAP-1 P1-1c (BUG-2b): **a status IS a typed field**, and both levels matter.
+ *
+ * - `sets.every(...)` on an EMPTY array is **vacuously true**, so before this fix a skipped movement
+ *   (which legitimately carries zero sets) with a blank name was silently discarded — no row, no error.
+ *   That hazard only became reachable once P1-1a let a card have zero sets.
+ * - The identical argument applies one level down: tapping "Sub-failure" on a spare card and submitting
+ *   would drop it just as silently. Guarding only the movement level would have shipped the same bug in
+ *   the other direction, in the very PR that closes it.
+ */
 export function isUntouchedMovement(m: MovementDraft): boolean {
   return (
     m.movementName.trim() === '' &&
-    m.sets.every((s) => s.reps.trim() === '' && s.weight.trim() === '')
+    isDefaultStatus(m.status) &&
+    m.sets.every((s) => s.reps.trim() === '' && s.weight.trim() === '' && isDefaultStatus(s.status))
   );
 }
 

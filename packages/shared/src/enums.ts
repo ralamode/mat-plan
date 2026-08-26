@@ -79,3 +79,19 @@ export const SET_STATUSES = [
 export type SetStatus = (typeof SET_STATUSES)[number];
 export const setStatusSchema = z.enum(SET_STATUSES);
 export const SET_STATUS = keyBySelf(SET_STATUSES);
+
+/**
+ * Human-facing spelling of each status (GAP-1 P1-1c). Lives HERE, not app-local, for one reason that
+ * matters more than tidiness: **`sub-failure` is the CSV export byte.** The contract writes the literal
+ * `sub-failure` into the `reps` column (V1-13 D7, pinned by P1-1b), so the badge and the exporter must
+ * emit the SAME string — an app-local map guarantees the exporter re-types it and they drift.
+ *
+ * Sibling maps (`DAY_ROLE_LABELS`, `SESSION_TYPE_LABELS`) already live in `shared` for the same reason.
+ * `done` is included for totality even though no surface renders it — a `done` status is the absence of
+ * a badge, never the word "done".
+ */
+export const ENTRY_STATUS_LABELS: Record<EntryStatus, string> = {
+  [ENTRY_STATUS.done]: 'done',
+  [ENTRY_STATUS.skipped]: 'skipped',
+  [ENTRY_STATUS.sub_failure]: 'sub-failure', // underscore → hyphen: the CSV byte, not a cosmetic choice
+};
