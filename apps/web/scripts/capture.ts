@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 
-import { chromium } from '@playwright/test';
+import { chromium, type Page } from '@playwright/test';
 
 import { gateLogin } from '../e2e/gate-login';
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
@@ -48,6 +48,13 @@ export async function captureScreenshot(opts: {
    * program card) without waiting for that weekday. Omitted → the host's zone, the normal case.
    */
   timeZone?: string;
+  /**
+   * Optional post-navigation interaction, run before the shot. Some states only exist AFTER a tap —
+   * GAP-1 P1-1c's "Skipped checked" collapses the set rows, and a set marked sub-failure — and a
+   * reviewer approving a UI change needs to see those, not just the pristine load. Runs once per
+   * viewport (each gets a fresh context), so it must be idempotent from a clean page.
+   */
+  interact?: (page: Page) => Promise<void>;
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
@@ -86,6 +93,7 @@ export async function captureScreenshot(opts: {
       const page = await context.newPage();
       await gateLogin(page);
       await page.goto(opts.route, { waitUntil: 'networkidle' });
+      if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;
       await page.screenshot({ path, fullPage: true });
       paths.push(path);
