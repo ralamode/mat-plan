@@ -270,7 +270,10 @@ pull`, then spot-check `main` has your final work (`git show HEAD:<file> | grep 
   **What does NOT work:** `pnpm dedupe` (won't re-resolve an already-pinned peer, zero churn);
   `pnpm.overrides` (same, zero churn); hand-editing the peer refs (leaves duplicate snapshot keys and
   fails `--frozen-lockfile`); `@dependabot recreate` (its lockfile updater is minimal by design, so it
-  reproduces the identical commit). Deleting the lockfile _does_ fix it but silently widens the PR to
+  reproduces the identical commit). **What DOES also work — and is the cheaper path when a dep PR
+  conflicts:** resolve the `package.json` conflicts, then take main's lockfile and **regenerate** it
+  with `pnpm install`. That re-resolves the whole peer key at once, so no segment can stay stale
+  (#112 bumped two peer-key packages and never split, purely because the conflict forced this). Deleting the lockfile _does_ fix it but silently widens the PR to
   dozens of unreviewed packages — never do that on a dependency PR. Also note `pnpm install
 --frozen-lockfile` is a **no-op against stale `node_modules`**: verify with `rm -rf node_modules
 */node_modules */*/node_modules` first, or you will 'confirm' a fix that isn't there. (PR #111)
