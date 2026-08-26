@@ -66,7 +66,9 @@ part that already works.
 The single most important product finding. **"100 push-ups a day + 50 pull-ups a day + a couple sets of
 wall sit"** is not a prescription and must never be routed through prescription machinery.
 
-**They arrive together.** Ray (Q2): parents give a daily calisthenics goal — 100 push-ups, 50 pull-ups —
+**They arrive together.** Ray (Q2): a daily calisthenics goal — 100 push-ups, 50 pull-ups — is a **common
+add-on** to a structured plan. _(Note the precise claim: common add-on. Ray explicitly does **not** know
+what share of parents use them, and nothing here should assume a prevalence he didn't state.)_ Parents give it —
 **on top of** a structured 2–5×/week S&C plan, because calisthenics is the baseline thing a wrestler can
 do anywhere, at practice or at home. So the two shapes are not a fork the user picks between; **one
 document routinely contains both**, and the extractor's job is to **split** it: structured rows to
@@ -122,6 +124,15 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
   confirm is a rubber stamp against nothing. Refusing removes the only real rule violation in the
   feature. Because both shapes arrive in one document (above), "refuse" means **refuse that fragment**
   and route it — never reject the whole import.
+- **R7a-1. Import normalizes to OUR schema — never the reverse.** _(Ray, 2026-08-26: "when they upload
+  their CSV it could look any way; we need AI to scrape the data and normalize it to fit our system, not
+  the other way around.")_ The extractor's job is **conformance**, not accommodation. A value that cannot
+  be normalized into a typed field is **surfaced for a human — never stored as a string "for later."**
+  This is the rule that stops import from silently re-widening the schema every time someone uploads an
+  odd sheet, and it is why a **native** user — one who authors their program in the app and performs it
+  there — can never produce these shapes at all. Depends on **GAP-3**
+  ([ADR 0004](../decisions/0004-typed-measurements.md)), which removes free-text values from the log path
+  so there is a typed target to normalize _into_.
 - **R8. Risky values are never model-written — but they are one tap to fill.** _(Ray, revising the
   panel's "type it" position.)_ Risky = _error is not self-limiting_: external load, height, distance,
   rep counts, plus movement identity. The extracted text is shown as **static, unwritable source**
@@ -138,7 +149,19 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
     authored loads are text a `type="number"` field cannot hold, and prefilling would let a
     **prescribed** load be submitted as a **performed** one). **The edit target here is the
     prescription, not the log field** — that distinction is load-bearing and must survive into the plan.
-    `docs/plan.md`'s GAP-1 P0-2 (text loads) is already noted as unblocking the V1-10 editable prefill.
+  - **Placeholder, not value (Ray, 2026-08-26).** On the **performed** field the suggestion is a
+    `placeholder`, never a `value`: the field is `required`, and **a placeholder cannot satisfy
+    `required`**, so affirmative human entry is enforced _mechanically_ rather than by discipline. Its
+    one flaw — a placeholder clears on the first keystroke — is already covered here, because
+    `program-reference.tsx` renders the card **directly above the form** and states the load durably as
+    `65 suggested`. Placeholder-**only** would be wrong: it signals "suggestion, not entry" through grey
+    styling alone, which the card's own comment (`:58-59`) deliberately refuses. Tap-to-fill is retained
+    for the **import** flow, where no such card exists and 20 loads of typing is the burden import exists
+    to remove.
+  - **Superseded premise:** the V1-10 card was read-only partly because ~90% of authored loads were text
+    a `type="number"` field could not hold. GAP-1 P0-2 removed that constraint, and **GAP-3 removes text
+    loads entirely** — so under GAP-3 the performed field is numeric again and this argument is spent.
+    What survives is the _other_ half: a prescribed load must never be submittable as a performed one.
 - **R8a. Confirmation is deferred to first use.** _(Ray, Q4.)_ There is **no bulk confirm screen.** An
   imported load surfaces on the existing V1-10 reference card the day that movement comes up, and is
   filled/confirmed there, standing at the bar. This deletes the majority of the import UI, and with it
@@ -148,8 +171,12 @@ so "a couple sets of wall sit" has nowhere to go. That is one catalog row, not a
   **no unit column** (`packages/db/src/schema.ts:191`), and `prescription_targets.load` is verbatim text
   with no unit (`:544`). `movements.unit_default` exists and FKs to `units.code` (`:255`) but **nothing
   in the app reads it**. Only weigh-ins carry `lb | kg`. So **a kg household is unrepresentable across
-  the entire strength path today** — ONB-1 merely exposes it. Fixing it is its own backlog row and a
-  prerequisite for import, not a sub-task of it.
+  the entire strength path today** — ONB-1 merely exposes it. **Now owned by GAP-3**
+  ([ADR 0004 §6](../decisions/0004-typed-measurements.md)), which absorbed the standalone UNIT-1 row:
+  units come from the reference table, the movement declares the dimension, the household sets the
+  magnitude once, and **the resolved unit is stored on the row** — because a household-preference-only
+  design silently reinterprets all history the day the preference changes (45 lb → 45 kg, the same 2.2×
+  error class). Still a **prerequisite** for import, not a sub-task of it.
 - **R10.** **Athlete↔column mapping on a multi-athlete sheet is an explicit human step**, confirmed
   before any row renders. A silent column swap assigns the 13-year-old's loads to the 8-year-old — the
   highest-consequence single failure available in this feature.
@@ -248,18 +275,18 @@ engine`), because a row is legitimately half-imported and half-typed. One marker
 The decision-shaping set is answered. Each is now written into a requirement; kept here so a later
 reader can see what was chosen and what it displaced.
 
-| #                    | Question                               | Decision                                                                                         | Lands in     |
-| -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------ |
-| 1                    | Stranger's first Today                 | Explained empty state + a route into the movement/workout editor. **No questionnaire.**          | R2, R4       |
-| 2                    | Daily targets vs. structured week      | **Both, layered** — calisthenics goals on top of a structured plan. One document, two paths.     | "Two shapes" |
-| 3                    | Refuse prose?                          | **Yes** — refuse the fragment, route it to the daily-targets form.                               | R7a          |
-| 4                    | Defer confirmation to first use?       | **Yes**, with a marker for the **first workout after import** only.                              | R8a, R14a    |
-| 5                    | Re-read everything, or just the loads? | **Just the loads.**                                                                              | R16a         |
-| 6                    | Is import phone-capable?               | **Yes for CSV / Sheets**; a photo of a paper sheet is a separate, later, non-phone problem.      | phasing      |
-| 11                   | Ever suggest movements?                | **No** → equipment is never modelled. Cut permanently.                                           | R5           |
-| _(also, unprompted)_ | `movements` scoping                    | **Scope by household**, before any multi-tenant writing.                                         | R12a, R12b   |
-| _(also)_             | Units                                  | **Human selects** — at first run and at import.                                                  | R9           |
-| _(also)_             | Load suggestion                        | Wanted eventually, from past performance + a published overload scheme — **the engine, not AI.** | R18a         |
+| #                    | Question                               | Decision                                                                                                                    | Lands in     |
+| -------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1                    | Stranger's first Today                 | Explained empty state + a route into the movement/workout editor. **No questionnaire.**                                     | R2, R4       |
+| 2                    | Daily targets vs. structured week      | **Both, layered** — calisthenics goals are a _common add-on_ to a structured plan (share unknown). One document, two paths. | "Two shapes" |
+| 3                    | Refuse prose?                          | **Yes** — refuse the fragment, route it to the daily-targets form.                                                          | R7a          |
+| 4                    | Defer confirmation to first use?       | **Yes**, with a marker for the **first workout after import** only.                                                         | R8a, R14a    |
+| 5                    | Re-read everything, or just the loads? | **Just the loads.**                                                                                                         | R16a         |
+| 6                    | Is import phone-capable?               | **Yes for CSV / Sheets**; a photo of a paper sheet is a separate, later, non-phone problem.                                 | phasing      |
+| 11                   | Ever suggest movements?                | **No** → equipment is never modelled. Cut permanently.                                                                      | R5           |
+| _(also, unprompted)_ | `movements` scoping                    | **Scope by household**, before any multi-tenant writing.                                                                    | R12a, R12b   |
+| _(also)_             | Units                                  | **Human selects** — at first run and at import.                                                                             | R9           |
+| _(also)_             | Load suggestion                        | Wanted eventually, from past performance + a published overload scheme — **the engine, not AI.**                            | R18a         |
 
 ## Open questions
 
