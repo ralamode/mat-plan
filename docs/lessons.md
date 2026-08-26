@@ -258,6 +258,23 @@ pull`, then spot-check `main` has your final work (`git show HEAD:<file> | grep 
 
 ## pnpm / build
 
+- **A dependency bump makes `next build` fail type-check in files it never touched, with**
+  `Type 'drizzle-orm/sql/sql'.SQL<unknown> is not assignable to type 'drizzle-orm/sql/sql'.SQL<unknown>`
+  **/ `Types have separate declarations of a private property 'shouldInlineParams'`.** → **Two copies of
+  the SAME `drizzle-orm` version**, differing only in the `pg` peer they resolved against. Dependabot
+  bumped `pg` in `packages/db` but left `apps/web`'s **optional `pg` peer** pinned to the old version —
+  `apps/web` declares `drizzle-orm` but not `pg`, so its peer was resolved incidentally. TS treats the two
+  as nominally distinct because of the private field. Read the **full `.pnpm/` paths** in the error: they
+  differ only in `_pg@8.22.0` vs `_pg@8.23.0`. That is the whole diagnosis. → **`pnpm update pg --recursive`**,
+  then commit the lockfile (−38/+3 lines; repoints the peer and prunes the orphaned entries).
+  **What does NOT work:** `pnpm dedupe` (won't re-resolve an already-pinned peer, zero churn);
+  `pnpm.overrides` (same, zero churn); hand-editing the peer refs (leaves duplicate snapshot keys and
+  fails `--frozen-lockfile`); `@dependabot recreate` (its lockfile updater is minimal by design, so it
+  reproduces the identical commit). Deleting the lockfile _does_ fix it but silently widens the PR to
+  dozens of unreviewed packages — never do that on a dependency PR. Also note `pnpm install
+--frozen-lockfile` is a **no-op against stale `node_modules`**: verify with `rm -rf node_modules
+*/node_modules */*/node_modules` first, or you will 'confirm' a fix that isn't there. (PR #111)
+
 - **Native/esbuild build script blocked on install.** → pnpm 11 blocks unlisted build scripts. → Add
   the package to `allowBuilds` in `pnpm-workspace.yaml`.
 
