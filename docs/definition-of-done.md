@@ -5,6 +5,9 @@ Every PR must satisfy:
 - [ ] Significant PR (CI / migration / auth / new subsystem / non-trivial multi-file logic): file-by-file plan at `docs/plans/<id>-<slug>.md` exists, was reviewed before coding, and was followed
 - [ ] Typecheck (`tsc --noEmit`) + lint (ESLint) + `prettier --check` pass
 - [ ] Unit / integration test for new logic (see test pyramid below)
+- [ ] **UI change: a UX / interaction-design panel ran BEFORE implementation**, and its review-response
+      log is in the plan (or the PR description when plan-exempt) — see AGENTS.md → "UI PR rules".
+      Depth scales with the change; a small visual tweak still gets one reviewer
 - [ ] Loading / empty / error states present for any new UI
 - [ ] Playwright screenshot(s) of any changed screen/state attached to the PR (via the `ui-screenshot` skill; saved to `.screenshots/`, not committed)
 - [ ] Semantic HTML: correct native elements (button/a/nav/main/ul-li/label), proper heading order — no div-soup

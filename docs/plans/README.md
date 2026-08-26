@@ -33,6 +33,11 @@ panel** before any code is written. The loop:
      single-source rule and existing `packages/shared` + `lib/` helpers.
      (These four lenses are standing panel members. Add further lenses for the PR's nature — a
      migration plan additionally gets a dedicated DB-safety reviewer, etc.)
+   - **UI work additionally gets a UX / interaction-design panel, and it is REQUIRED, not optional** —
+     see [AGENTS.md](../../AGENTS.md) → "UI PR rules" for the lenses and the reconcile loop. It runs
+     alongside the engineering panel and answers a different question: not "is this correct?" but "is
+     this the right thing to put in front of a person, and can they use it on a phone, on a gym floor?"
+     Both panels' review-response logs live in the same plan.
 3. **Reconcile (author responds).** The author agent reviews each critique and either **incorporates**
    it (revises the plan) or **pushes back with justification**. It records a short **review-response
    log** in the plan doc: each material critique → accepted (what changed) or rejected (why).
