@@ -17,6 +17,20 @@ The goal of NL logging is to capture natural language log input from a parent/co
 
 ## Decisions
 
+S1
+
+Beat 1: a load is safe to write only by provenance. A load may only be written if a human performed it, or a readable rule derived it. An LLM never emits a load.
+
+Beat 2: A logged load has 3 origins:
+
+- A human typed what the athlete performed
+- The engine derived it from rules the parent can read
+- A model producted it.
+
+Once in the row, the origin is indistinguishable - the first two carry a property that the third does not - someone did the work or a readble rule accounts for the number.
+
+Beat 3: Rejected: A write path can refuse, a prompt can only ask.
+
 S4 - Accuracy and the invariant get separate gates. A threshold may only average over measurements that fail the same way. Accuracy, latency, and cost are scalar and negotiable; "the model never emits a load" is binary, and averaging is the one operation a binary property cannot survive.
 
 Fifteen cases behind one 90% gate returns 14/15 = 93.3%. Green, merged. Which
