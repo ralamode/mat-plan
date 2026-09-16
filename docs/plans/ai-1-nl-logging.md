@@ -2,7 +2,8 @@
 
 > Backlog: [plan.md](../plan.md) → AI-1 · spec: [spec.md](../spec.md):203.
 > Branch: `docs/ai-1-nl-logging` (off `main`). **Plan only** — implementation
-> follows as its own PR. Sections land incrementally.
+> follows as its own PR. **Decisions complete (S1–S5).** Still to come before any
+> implementation: the engineering + UX panels, and **GAP-3 must land first (S5).**
 
 ## Goal
 
@@ -100,7 +101,7 @@ So what the chip is actually for: it catches **parse errors**. The model may hav
 natural-language input — wrong movement, wrong reps, wrong kid. It is a correctness check on the
 extraction, not a safety check on the authority. Different failure, different mechanism.
 
-**S3** — the structured output carries performed facts only.** A prescription is a target and can be
+**S3 — the structured output carries performed facts only.** A prescription is a target and can be
 a range — `25-35` means "work somewhere in this range." A performance is a single fact of what was
 actually performed. The model extracts performances, so range-shaped and target-shaped values are
 out of bounds by construction.
@@ -167,12 +168,12 @@ the extractor and spends the fixture, which is the more expensive half.
 
 ## Open — next pass
 
-- **S1's rejection is only its punchline.** It needs the rejected design (enforcing the invariant in
-  the prompt) and why that is tempting, in the shape S2 and S4 use.
-- **Goal states what the feature does, not what is broken.** The motivation is `V1-21`: a phone,
-  mid-set, hand-typing movement names and set rows. Also resolve the hedged
-  "(or to the form they are filling in…)" — does confirm write directly, or populate the form?
-- **Acceptance criteria are not all checkable.** "Model extracts what was performed" cannot be
-  verified as written.
-- **S3 — what the structured output may contain.** Must not reintroduce the free-text `load` that
-  [ADR 0004](../decisions/0004-typed-measurements.md) removed.
+_Clear._ S1–S5 are written, the Goal states the problem, and every acceptance criterion names a
+comparison a test can fail.
+
+**Not open, but load-bearing — the gates this plan must pass before implementation:**
+
+- The **engineering panel** (≥3 adversarial lenses) and, because the chip is UI, the **UX panel** —
+  both **before** implementation code, per [AGENTS.md](../../AGENTS.md).
+- **S5's sequencing** means the panels are not the next action either. AI-1 sits behind GAP-3, which
+  sits behind the four legacy CSV samples. Those samples are the live blocker.
