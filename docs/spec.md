@@ -1,6 +1,7 @@
 # mat-plan — Spec
 
-Architecture, data model, and engineering standards. Reviewed by a 3-agent adversarial stress-test
+**Architecture, data model, and engineering standards** — the _how_. For the _why_ (product, users,
+market, what is actually shipped) see **[product-spec.md](./product-spec.md)**. Reviewed by a 3-agent adversarial stress-test
 (schema / architecture / phasing) plus four research tracks (Postgres/Drizzle, Neon-serverless,
 Next.js server, API/security); findings are folded in. The phased PR backlog lives in
 [plan.md](./plan.md); agent rules in [../AGENTS.md](../AGENTS.md).
