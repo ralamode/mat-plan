@@ -183,11 +183,38 @@ _Exit: zero hardcoded user-facing strings; a second locale could be added by dro
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
-- **Notifications / reminders.** Push reminders to log entries and finish blocks (e.g. "log your
-  weigh-in", "conditioning is due today"). Primary surface is **iPad / iPhone / tablet** (installed-PWA
-  **web push** works on iOS 16.4+; a thin native shell only if web push proves too limited),
-  occasionally Mac. Per-profile schedules + quiet hours; opt-in per kid. Builds on the v1.5 PWA + Clerk
-  foundation. Scope + delivery mechanism TBD.
+- **MOT — motivation & retention (the behavior-change layer).** _(Ray, 2026-09-16.)_ The product spec's
+  **top risk** is that nobody logs: the premise is behavior change and the app is **entirely schema** —
+  today the only motivational surface in the whole product is the calisthenics `<progress>` bar
+  (V1-6b-2). These three rows are that risk's answer, grouped because they share machinery (a
+  "did this athlete log today" query, a per-profile schedule, a rotation-with-memory) and because
+  scattered singles don't get built. See [product-spec.md §12](./product-spec.md).
+
+  - **MOT-1 — streaks.** Consecutive days logged, per athlete, surfaced on their Today screen.
+    **Two design constraints that are not optional**, both arising from what this app is:
+    1. **A streak must not break on a programmed rest day.** The schedule already knows a rest day is a
+       rest day (V1-10 `day_role`); a streak that punishes a kid for correctly resting is worse than no
+       streak, and directly contradicts the program.
+    2. **A broken streak must not read as failure.** The known failure mode for streak mechanics is that
+       loss triggers abandonment — the exact outcome this exists to prevent. Prefer a forgiving shape
+       (best-streak retained, a "most days this week" framing, or a repairable miss) over a counter that
+       resets to zero and stays there. Needs a **UX panel**: this is a motivational surface aimed at a
+       child, and getting it wrong costs retention rather than correctness.
+  - **MOT-2 — reminders / notifications.** Push reminders to log entries and finish blocks (e.g. "log
+    your weigh-in", "conditioning is due today"). Primary surface is **iPad / iPhone / tablet**
+    (installed-PWA **web push** works on iOS 16.4+; a thin native shell only if web push proves too
+    limited), occasionally Mac. Per-profile schedules + quiet hours; **opt-in per kid**. Builds on the
+    v1.5 PWA + auth foundation. Note the ordering trap: a reminder to log is only useful once logging is
+    fast — shipping it ahead of the strength-entry fix (V1-19/V1-21) nags a kid toward a slow form.
+  - **MOT-3 — daily motivational quote.** A rotating quote for the day, surfaced for the `brain_rep`
+    activity and/or on Today. **Source (Ray): wrestling Hall of Famers, NCAA champions** — real,
+    attributed quotes from the sport, not generic gym-poster filler; the attribution is most of the
+    value for a wrestler. Needs: a seeded quote list (a catalog table, consistent with the
+    reference-table pattern — **not** LLM-generated, same authorship principle as loads), a rotation
+    that doesn't repeat until exhausted, and per-profile "already seen" tracking. Verify quotes are
+    genuinely attributable before seeding — a misattributed quote to a HOFer is embarrassing in exactly
+    the community this targets.
+
 - **ONB-0 — first run is broken TODAY (P0, independent of everything below)** — a brand-new household has
   `routine_config = null`, which `resolveRoutine` maps to `buildDefaultRoutine` over the seeded catalog,
   so **a stranger's first screen is Ray's family's routine** in Ray's family's shorthand — Rice bucket ·
@@ -228,9 +255,9 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   (deterministic, golden-vector tested, auditable), **never an LLM**. **Two blocking prerequisites:**
   `movements` must be **household-scoped** before any multi-tenant writing — `slug` is globally `UNIQUE`,
   so the second household to type "RDL" gets a **hard write failure** — and **UNIT-1**. **v2+ territory.**
-- **Brain-reps content.** Surface daily **motivational quotes / inspiration** for the `brain_rep`
-  activity — a rotating quote for the day, maybe a small home widget. Content source, rotation, and
-  "already seen" tracking TBD.
+- **Brain-reps content — FOLDED INTO MOT-3** (2026-09-16). The daily-quote idea now lives in the **MOT**
+  group above, with a source named (wrestling HOF / NCAA champions) and the rotation + "already seen"
+  requirements written down. Kept as a pointer so the original idea's thread isn't lost.
 
 ## Verification (per phase)
 
