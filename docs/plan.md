@@ -64,12 +64,16 @@ _Exit: one feature works UI → Server Action → Drizzle → Neon in prod, CI-g
 
 _Exit: kids log a real full day online; CSV keeps the Claude `/retro` workflow alive._
 
-## AI-1 — pull forward (single highest-signal PR)
+## AI-1 — NL logging ([plan](./plans/ai-1-nl-logging.md))
 
 NL logging via Anthropic structured outputs → human-confirm chip → write, with a 15-case golden eval
 
-- CI accuracy assertion. Only needs the entry schema + a write path (both present after v1). The
-  confirm-chip flow **never auto-writes a load.**
+- CI accuracy assertion; two separate gates (accuracy is scalar, the never-emits-a-load invariant is
+  binary — plan **S4**). The confirm-chip flow **never auto-writes a load.**
+- **No longer "pull forward."** It needed "the entry schema + a write path (both present after v1)" —
+  both are present, neither is settled. **[ADR 0004](./decisions/0004-typed-measurements.md) replaces
+  the measurement columns AI-1 extracts into**, so AI-1 sequences **behind GAP-3**: legacy CSV samples
+  → GAP-3 plan + panels → GAP-3 → V1-13 → AI-1. Rationale + the two rejected alternatives: plan **S5**.
 
 ## v1.5 — offline + auth (the local-first / distributed-systems phase, isolated)
 
@@ -162,6 +166,10 @@ risk of botching the rewrite is real. Revisit only if the names turn out to matt
 
 Land **AI-1 first**, then OSS-1, then flip visibility. AI-1 is the reason the repo is worth
 publishing; publishing before it lands ships the artifact without its headline.
+
+**Amended (AI-1 plan S5):** AI-1 still precedes OSS-1, but it is no longer the _next_ thing — it sits
+behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
+going public, not just on V1-13.
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
