@@ -25,7 +25,24 @@ rules the parent can read, or a model produced it. Once in the row, the origin i
 the first two carry a property that the third does not, in that someone did the work or a readable
 rule accounts for the number.
 
-Rejected: A write path can refuse, a prompt can only ask.
+Rejected: enforce the invariant in the prompt — instruct the model never to emit a load, and rely on
+it obeying. Tempting because it is the cheapest possible implementation: one sentence of English, no
+schema change, no write-path work, and it is genuinely effective most of the time — a good model
+following a clear instruction will comply on the overwhelming majority of inputs. It reads like the
+constraint has been implemented, and a high pass rate on the eval would appear to confirm that.
+
+It costs the difference between a constraint and a request. A write path can refuse; a prompt can
+only ask. The gap shows up exactly where it matters least often and hurts most: the odd input, the
+ambiguous phrasing, the case nobody wrote a golden vector for. And it degrades silently — the prompt
+does not report that it was overridden, so the first evidence is a load in a row with no human and no
+rule behind it, indistinguishable from the two legitimate origins once stored.
+
+There is a second, quieter cost. A prompt-enforced invariant is **not testable as an invariant** — the
+same objection S2 raises about the chip. You can measure how often the model complied on fifteen
+cases; you cannot assert that it will comply on the sixteenth. That makes it a scalar, which is
+precisely the thing S4 refuses to let the binary property become. Put the constraint in the schema and
+the write path — where a violation is a rejected request rather than an unlucky sample — and the
+property is one CI can actually gate.
 
 **S2 — the confirm chip is UX, not the safety mechanism.** Approval is a behavior, and behaviors
 become routine under repetition. If the chip were the safety mechanism, approving it day after day
