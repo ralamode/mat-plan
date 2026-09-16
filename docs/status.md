@@ -111,6 +111,14 @@ V1-15 depends on V1-6c's tz-aware "today."
 standing lenses — correctness · simplicity · architecture · code-reuse — plus a DB-safety reviewer for
 migrations).
 
+**Roadmap change (AI-1 plan, S5)** — the **AI-1 plan is decision-complete** (S1–S5;
+[plan](./plans/ai-1-nl-logging.md)) and it moved. AI-1 was "pull forward", on the grounds that it only
+needed the entry schema and a write path, "both present after v1". Both are present; **neither is
+settled**, because [ADR 0004](./decisions/0004-typed-measurements.md) replaces the measurement columns
+AI-1 extracts into. AI-1 now sequences **behind GAP-3**: legacy CSV samples → GAP-3 → V1-13 → AI-1 →
+OSS-1. So the **four legacy CSV samples now gate going public**, not just V1-13 — the single
+highest-leverage unblock in the backlog, and a find-four-files task rather than engineering.
+
 ## Progress toward MVP (v1)
 
 - **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
@@ -120,17 +128,17 @@ migrations).
 
 ## Phases
 
-| Phase     | Goal                                                                     | Status         |
-| --------- | ------------------------------------------------------------------------ | -------------- |
-| Bootstrap | Repo + planning docs                                                     | ✅ done        |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done        |
-| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🔵 in review   |
-| AI-1      | NL logging via structured outputs + eval                                 | ⚪ not started |
-| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started |
-| v2        | Ray's PPL + progression engine                                           | ⚪ not started |
-| v3        | AI depth + MCP/REST API                                                  | ⚪ not started |
+| Phase     | Goal                                                                     | Status                                                                                 |
+| --------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                |
+| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🔵 in review                                                                           |
+| AI-1      | NL logging via structured outputs + eval                                 | 📋 plan decision-complete; **blocked behind GAP-3** ([S5](./plans/ai-1-nl-logging.md)) |
+| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                         |
+| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                         |
+| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                         |
 
-Legend: ⚪ not started · 🔵 in review · 🟡 in progress · ✅ done
+Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 
