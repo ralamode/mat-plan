@@ -66,6 +66,35 @@ Rejected: a single gate over all 15. Tempting because it's one config value and 
 and 93% reads as healthy. It costs the ability to distinguish a bug from a breach — the two failures
 that most need different responses become the same line in the log.
 
+**S5 — AI-1 waits for GAP-3, because the schema it extracts into is being replaced.**
+[plan.md](../plan.md):70 says AI-1 "only needs the entry schema + a write path (both present after
+v1)." Both are present. Neither is settled — and "present" is true of the wrong thing.
+
+[ADR 0004](../decisions/0004-typed-measurements.md) replaces the measurement columns in the log path:
+`weight_label` drops, `weight_num`/`weight_unit`/`is_band` and the distance/height overrides arrive,
+and `parseLoad` becomes numeric-only. Its implementation plan is **deliberately unwritten**, pending
+the four legacy CSV samples that also block V1-13. So the target of the extraction is a moving
+schema, and AI-1 has carried an undocumented dependency on GAP-3 since the day ADR 0004 was accepted.
+
+Three ways out: scope AI-1's emitted fields around GAP-3's blast radius; ship against today's columns
+and rewrite later; or sequence AI-1 behind GAP-3. **Taken: sequence behind it** — legacy CSV samples
+→ GAP-3 plan + panels → GAP-3 → V1-13 → AI-1. The extractor is written once, against the schema it
+will live on.
+
+Rejected: ship the extractor against today's columns and rewrite it when GAP-3 lands. Tempting
+because AI-1 is the repo's headline and the thing blocking it is a find-four-files task rather than
+engineering — which reads like waiting on nothing, and makes the wait feel like a choice rather than
+a dependency. It costs the extractor twice, and that is the **exact** cost ADR 0004 already priced
+when it put V1-13 behind GAP-3 for the same reason ("doing V1-13 first means writing the formatter
+twice"). Paying it a second time, for a second consumer, would promote a named one-off into the way
+this repo sequences work.
+
+Also rejected: narrow the emitted fields until they miss GAP-3 — defensible, since S1 already forbids
+the load and the load is most of what GAP-3 touches, leaving only `seconds` and `is_band` genuinely
+overlapping. It fails on the eval. The golden cases are the artifact AI-1 is judged on, and cases
+written against a schema mid-replacement have to be re-authored with it — so the narrow scope saves
+the extractor and spends the fixture, which is the more expensive half.
+
 ---
 
 ## Open — next pass
