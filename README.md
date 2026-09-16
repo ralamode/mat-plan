@@ -36,6 +36,7 @@ downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.
 | File                                                       | What                                                                                             |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | [AGENTS.md](./AGENTS.md)                                   | Rules for AI coding agents: stack, conventions, file hierarchy, PR/CI gates, git/branch workflow |
+| [docs/product-spec.md](./docs/product-spec.md)             | **The product** — who it's for, why it exists, what it simplifies, target market, what's shipped |
 | [docs/spec.md](./docs/spec.md)                             | Architecture, entity/data model, coexistence, offline, server & DB standards                     |
 | [docs/architecture.md](./docs/architecture.md)             | System diagrams (containers, write path, offline sync, ERD, CI, roadmap)                         |
 | [docs/design.md](./docs/design.md)                         | Design language + tokens (shadcn/ui + Tailwind, adult-first)                                     |
