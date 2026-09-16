@@ -6,14 +6,51 @@
 
 ## Goal
 
-The goal of NL logging is to capture natural language log input from a parent/coach, convert it into structured output using anthropic structured outputs that match this app's entry schema. Once converted, these NL logging entries will surface as chips (part of the UX), the parent or coach can confirm the chip which will then write the entry to the DB (or to the form they are filling in during the workout or log entry to add to the db).
+**What's broken.** Logging a strength session today is hand-typing, on a phone, mid-set. The V1-10
+card shows the day's movements; the athlete then types every movement name and adds a set row per
+set — and does it between sets, one-handed, in a gym. `V1-21` exists because of this: it asks whether
+the form-with-set-rows model is the right shape at all. `V1-19` is the incremental answer (one tap
+builds the form from the program). **AI-1 is the answer for everything not in the program** — the
+ad-hoc set, the substitution, the thing a kid did that nobody planned, which no prefill can reach
+because there is no prescription to prefill from.
+
+**What it does.** A parent or coach says what happened in natural language. Anthropic structured
+outputs extract it into fields that match this app's entry schema. The extraction surfaces as a
+**chip** — the parse, shown back for correction, not approval theatre (**S2**).
+
+**Confirm prefills the form; it does not write.** The chip's confirm lands the extracted values in the
+existing strength form — movement names, set count, reps — with the **load field empty**. The human
+types the loads and submits through the shipped V1-8-2 write path, which stays the single writer. Two
+things fall out of that, rather than being bolted on: **S1** holds structurally (the model's output
+never reaches a load field, because it never reaches the database at all — a human does), and the
+whole validated write path, its zod schemas and its error envelope are reused rather than duplicated
+for a second caller. It is the same shape V1-19 uses, for the same reason.
+
+The friction is real and accepted: an entry that carries no load — a wake time, practice minutes —
+still routes through a form it does not need. Worth one branch fewer and one write path fewer.
 
 ## Acceptance
 
-- Structured output from the NL log should never be directly saved to the DB, storage only comes from confirm chip
-- LLM never emits a load, load comes from packages/engine.
-- Model extracts what was performed
-- Eval is run on every PR against golden cases, CI gates change if it fails the run.
+Each is stated so a test can fail it.
+
+- **The extraction never reaches the database.** Confirm prefills the form; the V1-8-2 strength write
+  path stays the only writer. Asserted by exercising the extraction path and showing it performs no
+  write.
+- **The model never emits a load.** Enforced by the emit-schema — there is no load field to
+  populate — not by prompt instruction (**S1**). Asserted as a **binary** gate over the invariant
+  cases (**S4**): any violation fails, regardless of accuracy.
+- **The extraction matches what was performed.** The 15-case golden set asserts field-level equality
+  against expected output on the fields the model may emit — profile, movement, activity, set count,
+  reps, duration. (Replaces "model extracts what was performed", which named no comparison and so
+  could not fail.)
+- **The eval runs on every PR**, as a required check, under **two separate gates** — an accuracy
+  threshold over the accuracy cases, and the binary invariant above (**S4**).
+
+> **On `packages/engine`:** an earlier draft said "load comes from `packages/engine`." It does not,
+> and cannot — `packages/engine/src/index.ts` is `export {}`, a placeholder whose real contents land
+> at **v2**. Under **S1** a load has two legitimate origins; at AI-1 only the first exists, so **the
+> human types it** into the prefilled form. The engine becomes the second origin at v2. Stating it as
+> an AI-1 acceptance criterion made AI-1 silently depend on all of v2.
 
 ## Decisions
 
