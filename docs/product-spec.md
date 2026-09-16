@@ -192,6 +192,13 @@ was bought for.
 
 **The buyer is the parent.** They feel the problem, they own the program, and they have the phone.
 
+**Rollout, in order.** (1) **Ray's own athletes** — the real users today, wrestling programming, the
+only validation that currently matters. (2) **Friends' kids**, onboarded by invitation. This is the
+first outside test, and the reason self-serve onboarding and real sign-in are being built now rather
+than later — the channel has to exist before anyone can walk through it. (3) **Wrestling families
+generally**, if and only if step 2 produces evidence anyone wants this. Each step is a real gate, not
+a phase of a launch plan.
+
 **Honest evidence gap — read this before treating the market as validated.** No customer discovery has
 been done. No interviews, no survey, no waitlist, no second family. The market case above is reasoning
 from one household's experience, and reasoning is not evidence. The cheapest way to get real signal is
@@ -237,12 +244,12 @@ Precision matters more than optimism. **Shipped** means merged and working today
 | Rate limiting + error monitoring                                                   | ✅ Shipped                                    |
 | **CSV export**                                                                     | 🔜 Next _(blocked — see §9)_                  |
 | **One-tap "start today's program"** — builds the log form from the plan            | 🔜 Next                                       |
-| **Real accounts** (household login)                                                | ⏳ Later — today: one shared password         |
+| **Real accounts** — one-tap OAuth household sign-in                                | ⏳ Later — today: one shared password         |
 | **Offline**                                                                        | ⏳ Later                                      |
 | **Natural-language logging**                                                       | ⏳ Later                                      |
 | **Progression suggestions** from logged history                                    | ⏳ Later — the engine is an empty placeholder |
 | **History / past days / dashboard**                                                | ⏳ Later                                      |
-| **Self-serve setup for a new family**                                              | ⏳ Later — first run is broken for strangers  |
+| **Self-serve setup for a new family** — sign in, add athletes, author a program    | ⏳ Later — first run is broken for strangers  |
 
 ### What protects the app today
 
@@ -285,7 +292,9 @@ find-four-files task, not engineering.
 **Goals**
 
 1. An athlete logs a full training day on a phone faster than they could type it into Notes.
-2. An adult sets up an athlete, their routine, and their program without a developer.
+2. An adult sets up an athlete, their routine, and their program without a developer — signing in
+   with **one-tap OAuth**, not a form. Onboarding friction decides whether an invited family ever
+   becomes a user, so it is a product requirement, not a setup detail.
 3. What was prescribed and what was performed are both recorded, and comparable.
 4. The data belongs to the family — exportable in a format they can read.
 5. Nothing in the system originates a training load except a human or a rule that human can read.
@@ -324,15 +333,15 @@ weeks, everything above is a plan, and the build is unvalidated against the only
 
 ## 12. Risks
 
-| Risk                                                                                                                                                                       | Severity   |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| **Nobody logs.** The premise is behavior change; the app is all schema. There is no reminder, no streak, no nudge — the only motivational surface is one adherence bar.    | **High**   |
-| **The kid's path is slower than Notes** for the hardest task. Losing to the real incumbent on the core job.                                                                | **High**   |
-| **Children's data.** Fine for one family; a real gate for strangers' kids. Under-13 data, no child accounts, bodyweight as sensitive data. Must be resolved before launch. | **High**   |
-| **No market evidence.** §6 is a hypothesis. Building the onboarding story before anyone asks is the expensive version of being wrong.                                      | **Medium** |
-| **A second household hard-fails today.** Movement names are globally unique, so the second family to add a common lift hits a write error. Known; unfixed.                 | **Medium** |
-| **Units.** Pounds only. No kilograms, no heights or distances. A metric household is unrepresentable.                                                                      | **Medium** |
-| **~4 hours a week** against a backlog with 20+ open items.                                                                                                                 | **Medium** |
+| Risk                                                                                                                                                                                                                                                                                                                                                                                                            | Severity            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| **Nobody logs.** The premise is behavior change; the app is all schema. There is no reminder, no streak, no nudge — the only motivational surface is one adherence bar.                                                                                                                                                                                                                                         | **High**            |
+| **The kid's path is slower than Notes** for the hardest task. Losing to the real incumbent on the core job.                                                                                                                                                                                                                                                                                                     | **High**            |
+| **Children's data.** **Decided: post-MVP.** Ray's own athletes are the users today, and family use raises no external obligation. Becomes a hard gate **before the first friend's kid onboards** — under-13 data, no child accounts, bodyweight as sensitive data, and a parent-consent path. The onboarding channel is built first; the compliance work lands before it opens to anyone outside the household. | **Deferred, dated** |
+| **No market evidence.** §6 is a hypothesis. Building the onboarding story before anyone asks is the expensive version of being wrong.                                                                                                                                                                                                                                                                           | **Medium**          |
+| **A second household hard-fails today.** Movement names are globally unique, so the second family to add a common lift hits a write error. Known; unfixed.                                                                                                                                                                                                                                                      | **Medium**          |
+| **Units.** Pounds only. No kilograms, no heights or distances. A metric household is unrepresentable.                                                                                                                                                                                                                                                                                                           | **Medium**          |
+| **~4 hours a week** against a backlog with 20+ open items.                                                                                                                                                                                                                                                                                                                                                      | **Medium**          |
 
 ---
 
@@ -344,9 +353,10 @@ weeks, everything above is a plan, and the build is unvalidated against the only
    smaller, real export unblock the chain sooner?
 3. **How does a second family actually get in?** Needs first-run, household-scoped movement names, and
    real accounts. Which is the true first domino?
-4. **What is the children's-data posture** for a product used by other people's kids?
-5. **Where does the market signal come from?** If the open-source release is the cheapest source, does
+4. **Where does the market signal come from?** If the open-source release is the cheapest source, does
    it move ahead of the AI feature it currently sits behind?
+5. **Which OAuth provider, and what does an invited family's first 60 seconds look like?** "Quick" is
+   the requirement; the flow is unspecified.
 
 ---
 
