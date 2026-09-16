@@ -53,6 +53,20 @@ out of bounds by construction.
 
 Given this - the fields the model emits will not contain ranges, or odd abbreviations that might be done in handwriting or typed into a spreadsheet as shortcuts. They will be shapes that are compatible with the entry schema for mat-plan.
 
+Rejected: let the model emit the parent's raw string and parse it afterward. Tempting because
+`parseLoad` already does exactly this — it is a working, tested, shipped function that turns
+`"62.5"`, `"BW"`, `"30in"` into a stored value, so routing model output through it looks like reuse
+rather than a new decision. It costs the thing [ADR 0004](../decisions/0004-typed-measurements.md)
+spent a PR buying. That function's last branch is a **permissive fallthrough** — every guard is a
+named rejection (`~75`, `12-15`, `1e3`, `SKIPPED`, a comma), and anything reaching the end becomes a
+text label (`packages/shared/src/strength.ts:137`). A blocklist is only as good as its authors'
+imagination of what arrives, which is an acceptable bet against a parent typing on a phone and a bad
+one against a model: it produces the unanticipated shape at a volume no human matches, and each one
+that slips through is stored, not surfaced. ADR 0004 §3 already settles the direction — the
+extractor's job is **conformance, not accommodation**, and a value that cannot be normalized is shown
+to a human rather than kept as a string "for later." Emitting a raw string inverts that on the one
+path best equipped to abuse it.
+
 **S4 — accuracy and the invariant get separate gates.** A threshold may only average over
 measurements that fail the same way. Accuracy, latency, and cost are scalar and negotiable; "the
 model never emits a load" is binary, and averaging is the one operation a binary property cannot
