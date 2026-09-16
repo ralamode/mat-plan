@@ -46,7 +46,12 @@ So what the chip is actually for: it catches **parse errors**. The model may hav
 natural-language input — wrong movement, wrong reps, wrong kid. It is a correctness check on the
 extraction, not a safety check on the authority. Different failure, different mechanism.
 
-**S3** — _(TBD.)_
+**S3** — the structured output carries performed facts only.** A prescription is a target and can be
+a range — `25-35` means "work somewhere in this range." A performance is a single fact of what was
+actually performed. The model extracts performances, so range-shaped and target-shaped values are
+out of bounds by construction.
+
+Given this - the fields the model emits will not contain ranges, or odd abbreviations that might be done in handwriting or typed into a spreadsheet as shortcuts. They will be shapes that are compatible with the entry schema for mat-plan.
 
 **S4 — accuracy and the invariant get separate gates.** A threshold may only average over
 measurements that fail the same way. Accuracy, latency, and cost are scalar and negotiable; "the
