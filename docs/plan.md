@@ -208,14 +208,32 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
        the current counter returns to `0`, with LONGEST STREAK shown beside it** — so the achievement is
        never destroyed, only the run is. That solves it cleanly: a kid who hit 100 still has 100 on
        screen, and the thing they lost is recoverable rather than erased.
-    3. **The streak counts the DAILY ROUTINE, not S&C.** _(This is the design's keystone — see the
-       reframe below.)_ Ray's primary use is daily-habit consistency; S&C is an overlay on certain days
-       "based on load with practices." A world-champion kid at his club runs 90+ day streaks on daily
-       basics — pull-ups, push-ups, the routine — not on programmed lifting. So the streak tracks the
-       habits, which have **no rest days**, and S&C adherence stays a separate measure (the existing
-       weekly `<progress>`). This also dissolves constraint 1: a programmed S&C rest day never threatens
-       a streak that was never counting S&C. Constraint 1 still applies to anyone who wants a streak that
-       includes lifting.
+    3. **The PROGRAMMER decides what counts toward the streak** — configuration, not a rule the app
+       imposes. _(Ray, 2026-09-17, superseding an earlier draft of this row that hard-split "daily habits
+       count, S&C doesn't.")_ That split was wrong on its own evidence: the world-champion kid's 90+ day
+       run included **stance-in-motion in a weighted vest, several rounds daily** — loaded work, done every
+       day. "Daily habits are unloaded, S&C is loaded" does not survive contact with a real athlete, and
+       the app should not encode a taxonomy the sport doesn't have. The coach picks the inclusion set; if
+       they want the weekly S&C in it, it counts.
+
+       **This extends V1-18 rather than adding a mechanism.** `routineItemSchema` is already
+       `{ key, conditional? }`, and `routineConfigSchema` is deliberately an **object rather than a bare
+       array** so additions are "additive with no shape bump" (`packages/shared/src/routine.ts:44-54`) —
+       exactly what a per-item `streak: true` flag is. The authoring surface exists too: the V1-18 coach
+       editor at `/p/[profileId]/routine` is already a per-kid activity checklist, so streak inclusion is
+       one more column on a screen that ships today.
+
+    4. **Mixed cadence is the real design problem — and constraint 1 returns with it.** A streak is daily;
+       "three S&C sessions this week" is weekly. Including S&C re-opens the rest-day trap: Wednesday is
+       correctly a rest day, so a naive daily counter breaks on a day the athlete did exactly right.
+
+       **Proposed resolution: a day counts when everything DUE that day is done.** Due = the streak-flagged
+       items, filtered by whether they are scheduled today. Daily habits are due daily; S&C is due only on
+       days the program schedules it. Rest days are handled by construction (nothing due, nothing missed),
+       and a weekly requirement decomposes into the specific days it lands on — no second "weekly streak"
+       concept. Note `conditional` already exists on a routine item as "an OPAQUE cosmetic marker…
+       scheduling flips it functional later" (`routine.ts:43`), which is precisely this. **Proposal only —
+       needs the UX panel below.**
 
        Needs a **UX panel**: this is a motivational surface aimed at a child, and getting it wrong costs
        retention rather than correctness.
@@ -224,11 +242,16 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   > treated **strength programming** as the core and habits as the supporting cast. Ray's actual primary
   > use is the inverse: **daily-habit consistency is the product**, and S&C is programmed on top of it on
   > certain days depending on practice load. The evidence he cites is a world-champion kid at his club
-  > running 90+ day streaks on daily basics. If that is the core loop, then the **daily routine + streak**
-  > is the retention engine and the strength form is the _secondary_ surface — which reorders a good deal
-  > of the backlog, and partly answers the premise-drift finding in
-  > [product-spec.md §9](./product-spec.md). **Not acted on here; flagged for Ray to confirm before it
-  > moves anything.**
+  > running 90+ day streaks — on daily basics **plus weighted-vest stance work**, so the loop is "something
+  > every day," not "unloaded work only." If that is the core loop, then the **daily routine + streak** is
+  > the retention engine and the strength form is the _secondary_ surface — which reorders a good deal of
+  > the backlog, and partly answers the premise-drift finding in
+  > [product-spec.md §9](./product-spec.md).
+  >
+  > **Weaker than it first looked, deliberately noted.** Once the coach can fold S&C into the streak
+  > (MOT-1.3), "habits are the core, S&C is the overlay" stops being a clean architectural split and
+  > becomes one configuration among several. The reframe may be about **emphasis and sequencing** rather
+  > than a change of product. **Not acted on; flagged for Ray to confirm before it moves anything.**
   - **MOT-2 — reminders / notifications.** Push reminders to log entries and finish blocks (e.g. "log
     your weigh-in", "conditioning is due today"). Primary surface is **iPad / iPhone / tablet**
     (installed-PWA **web push** works on iOS 16.4+; a thin native shell only if web push proves too
