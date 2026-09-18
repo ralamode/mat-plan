@@ -191,6 +191,57 @@ _Exit: zero hardcoded user-facing strings; a second locale could be added by dro
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
+- **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_ Today an athlete
+  has exactly one daily routine and one implicit strength split. Ray's model: **an athlete has several
+  programs, each with its own schedule** — a "daily" program (the habit routine), an S&C program on
+  Mon/Wed/Fri, conditioning on other days — and the coach decides which of them feed the streak (MOT-1.3).
+
+  **The reason this is worth its own row: three unrelated-looking problems are the same missing
+  primitive — a schedule that lives in data.**
+
+  1. **The weekday → `day_role` map is a hardcoded app const.** `DAY_ROLE_BY_WEEKDAY` in
+     `apps/web/lib/programming/day-role-schedule.ts` — Ray's Mon/Wed/Fri split, in code. Changing a
+     training day is **a deploy, not an edit**, and a second household silently inherits Ray's split
+     ([tech-debt](./tech-debt.md)).
+  2. **`routine_config` has no schedule at all** — it is implicitly every day, so "this kid does mobility
+     only on practice days" is unrepresentable.
+  3. **MOT-1's streak needs to know what is DUE today**, or it breaks on a correctly-taken rest day.
+
+  Build the primitive once and all three close. That three independent needs converge on it is the best
+  evidence the abstraction is real rather than invented.
+
+  **What already exists to build on** — this is less net-new than it sounds:
+  - `program_blocks → prescriptions → prescription_targets` (V1-10), with `day_role` already on the
+    prescription. A block **is** a weekly plan; it just can't say which weekday it lands on.
+  - `profiles.routine_config` (V1-18) + its shipped coach editor at `/p/[profileId]/routine`.
+  - `routineItemSchema`'s `conditional` marker, documented as "an OPAQUE cosmetic marker… **scheduling
+    flips it functional later**" (`packages/shared/src/routine.ts:43`) — the down-payment, already made.
+  - `localDayIso` / the `tz` cookie (V1-6c). **"Due today" must resolve on the athlete's local calendar
+    date**, not UTC — the same correctness V1-6c already bought, and a streak that rolls over at the wrong
+    hour is exactly the bug that destroys trust in a streak.
+
+  **The design constraint, and the way to get this wrong: unify the SCHEDULING layer, not the CONTENT
+  shape.** `routine_config` is an ordered list of activity keys; `prescriptions` are movement + sets +
+  reps + load. They are different shapes because they answer different questions. Collapsing them into
+  one "program" table would force a one-tap rice-bucket check-in through prescription machinery it does
+  not need — and the JSONB routine was a deliberate, documented exception in the first place. A program
+  should be **a thing with a schedule**; what is _inside_ one may stay two shapes.
+
+  **On multiple streaks** _(Ray raised "S&C could have its own streak")_: possible, but flagged as a
+  dilution risk — three counters a kid ignores is worse than one they care about. MOT-1.3 already covers
+  the real need (the coach chooses the inclusion set, which may include S&C). Suggest a **single primary
+  streak plus secondary stats** ("12 of 15 sessions this block") over independent competing streaks;
+  settle it at MOT-1's UX panel.
+
+  **Changes a stated assumption:** tech-debt names **Clerk / multi-household (v1.5)** as the promotion
+  trigger for the hardcoded schedule. MOT-1 now pulls it forward **independently of Clerk** — the streak
+  needs scheduling for a single household. The trigger is whichever lands first.
+
+  **Open:** does a schedule live on `program_blocks` or on a block↔athlete assignment row (multiple
+  athletes, one block, different days)? · does a "program" subsume the daily routine or sit beside it? ·
+  how does a mid-season block change interact with an in-flight streak? · **needs a UX panel** (it
+  reshapes the coach editor) and an engineering panel (migration + a new subsystem).
+
 - **MOT — motivation & retention (the behavior-change layer).** _(Ray, 2026-09-16.)_ The product spec's
   **top risk** is that nobody logs: the premise is behavior change and the app is **entirely schema** —
   today the only motivational surface in the whole product is the calisthenics `<progress>` bar
