@@ -303,11 +303,16 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   not need — and the JSONB routine was a deliberate, documented exception in the first place. A program
   should be **a thing with a schedule**; what is _inside_ one may stay two shapes.
 
-  **On multiple streaks** _(Ray raised "S&C could have its own streak")_: possible, but flagged as a
-  dilution risk — three counters a kid ignores is worse than one they care about. MOT-1.3 already covers
-  the real need (the coach chooses the inclusion set, which may include S&C). Suggest a **single primary
-  streak plus secondary stats** ("12 of 15 sessions this block") over independent competing streaks;
-  settle it at MOT-1's UX panel.
+  **One schedule shape: assigned days.** _(Ray, 2026-09-19.)_ A schedule says **which days** a program is
+  due — `daily`, or `Mon/Wed/Fri`. A **quota** shape (`3×/week`, any days) was considered and **explicitly
+  rejected**: the coach selects the days. That keeps "is this due today?" a lookup rather than a
+  computation, and it is the single decision that keeps MOT-1's streak arithmetic-free. See MOT-1.4 for
+  the tradeoff accepted.
+
+  **On multiple streaks — SETTLED (2026-09-19): there is one.** An intermediate draft proposed
+  per-program streaks with configurable periods; Ray dropped it in favour of one daily streak with
+  inclusion flags (MOT-1.4). My earlier dilution objection and the counter-argument that these are
+  genuinely different commitments are both moot — the simpler model covers every case posed.
 
   **Changes a stated assumption:** tech-debt names **Clerk / multi-household (v1.5)** as the promotion
   trigger for the hardcoded schedule. MOT-1 now pulls it forward **independently of Clerk** — the streak
@@ -350,17 +355,39 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
        editor at `/p/[profileId]/routine` is already a per-kid activity checklist, so streak inclusion is
        one more column on a screen that ships today.
 
-    4. **Mixed cadence is the real design problem — and constraint 1 returns with it.** A streak is daily;
-       "three S&C sessions this week" is weekly. Including S&C re-opens the rest-day trap: Wednesday is
-       correctly a rest day, so a naive daily counter breaks on a day the athlete did exactly right.
+    4. **ONE daily streak, and every program has ASSIGNED DAYS.** _(Ray, 2026-09-19 — two decisions that
+       together settle a design which had started to sprawl.)_
 
-       **Proposed resolution: a day counts when everything DUE that day is done.** Due = the streak-flagged
-       items, filtered by whether they are scheduled today. Daily habits are due daily; S&C is due only on
-       days the program schedules it. Rest days are handled by construction (nothing due, nothing missed),
-       and a weekly requirement decomposes into the specific days it lands on — no second "weekly streak"
-       concept. Note `conditional` already exists on a routine item as "an OPAQUE cosmetic marker…
-       scheduling flips it functional later" (`routine.ts:43`), which is precisely this. **Proposal only —
-       needs the UX panel below.**
+       **(a) One streak, not many.** An intermediate draft went toward per-program streaks with
+       configurable periods — a daily streak, a weekly S&C streak, a weekly sprint streak. **Dropped.**
+       There is one streak, its period is **a day**, and a program that is not daily is simply **included
+       or not** by the coach (constraint 3). That deletes streak _periods_, the weekly _unit_, and
+       _competing counters_ — and still covers every case posed, including "wrap it all into one program,"
+       which now falls out for free. One number is also the only shape a kid actually tracks.
+
+       **(b) No `n`-times-per-week programming.** The coach selects **the days** a program is due —
+       Monday, Wednesday, Friday — never "three times a week." This is a statement about how programs are
+       **authored**, not just about streaks, and it removes a whole shape from the model.
+
+       **Together these make the streak arithmetic-free.** A day counts when everything **due** that day is
+       done; "due" is a lookup against assigned days, not a computation. Rest days are handled by
+       construction — nothing assigned, nothing due, nothing missed. Note `conditional` already exists on a
+       routine item as "an OPAQUE cosmetic marker… scheduling flips it functional later"
+       (`routine.ts:43`), which is exactly this lookup.
+
+       **The tradeoff, considered and accepted.** A quota model (`3×/week`, any days) was worked through
+       and rejected. It would have been more forgiving — an athlete who moved Wednesday's session to
+       Thursday would keep their streak — but it costs a dueness rule with real arithmetic, a "due because
+       you are out of runway" state the UI has to explain, and a partial-first-week question. With assigned
+       days, **a session done on the wrong day does not save the streak**: Wednesday breaks it, and
+       Thursday's work counts toward nothing. That is the accepted cost, and it is also how a written
+       program actually reads — the kid was asked to lift Wednesday.
+
+       **Watch this against constraint 2.** Fixed days make a break easier to hit, so the forgiveness has
+       to come from the _response_ rather than the rule: the counter returns to `0`, **longest streak stays
+       on screen**. If real use shows breaks landing on kids who did the work on a shifted day, the cheap
+       mitigation is a coach-marked **excused day** — not a return to quotas. Flagged for the UX panel to
+       watch, not to build.
 
        Needs a **UX panel**: this is a motivational surface aimed at a child, and getting it wrong costs
        retention rather than correctness.
