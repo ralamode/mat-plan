@@ -3,13 +3,22 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-07-30
+**Last updated:** 2026-09-16
 
 ## Where we are right now
 
-📍 **v1 (the MVP) — mid-build. The data foundation + core logging surfaces are in; the weekly-ramp
-data layer just landed.** The MVP finish line is: **kids log a full day online + CSV export keeps the
-Claude workflow alive.**
+📍 **v1 (the MVP) — feature-complete except its finish line.** Every logging surface is built and
+merged: per-kid routines, weigh-ins, check-ins, calisthenics + weekly adherence, life activities,
+strength sessions with supersets, edit-a-set, skipped/sub-failure, and the Today's-program card. The
+MVP finish line is **CSV export**, and it is **blocked** — on four legacy CSV sample files, a
+find-four-files task that now also gates GAP-3, AI-1 and the open-source release. **That block is the
+single highest-leverage action in the project.**
+
+⚠️ **Two things this tracker did not say for six weeks, now recorded.** (1) **No athlete has used the
+app yet.** v1's own verification — _"hand the URL to the kids; observe a real day logged"_ — is unrun,
+so the build is unvalidated against the only user who matters. (2) **The last feature merge was #107
+on 2026-08-12**; everything since has been docs and dependabot. See
+[product-spec.md §11](./product-spec.md) for what "working" would actually have to mean.
 
 **Merged & live** — the generalized data model (V1-1a/b/c), full seed catalog (V1-2), per-kid Today
 via profile tiles (V1-3), bodyweight/measurements (V1-4), habits + brush-teeth check-ins (V1-5),
@@ -186,6 +195,19 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 | V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-16** — **Docs catch-up + two planning PRs.** **#117** completed the **AI-1 NL-logging plan**
+  (S1–S5): the load-provenance invariant, why the confirm chip is UX and not the safety mechanism, what
+  the structured output may contain, separate CI gates for accuracy (scalar) and the never-emits-a-load
+  invariant (binary), and **S5 — AI-1 sequences behind GAP-3**, an undocumented dependency that had been
+  live since ADR 0004. **#118** added **[product-spec.md](./product-spec.md)**, the first human-readable
+  product spec, written against a 3-lens panel (Director of Product Development · Sr PM · Staff SWE).
+  Two findings: the premise had **drifted** (the docs say the app is for the kid to log their day, but
+  nearly everything since July serves the adult — root cause was an over-correction conflating
+  _authoring a program_ with _recording a set already performed_), and several **present-tense claims in
+  the repo are false** (no offline, no Clerk dependency, no CSV exporter, empty engine — each verified
+  against the tree). #118 also added the **MOT** group (streaks · reminders · daily quote), the first
+  coherent answer to the spec's top risk: nobody logs.
 
 - **2026-08-12** — **GAP-1 P1-1c — P1-1 COMPLETE**: the UI for both statuses
   ([plan](./plans/gap1-p1-1c-status-ui.md)). A **Skipped** checkbox on the movement card (set rows
