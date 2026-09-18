@@ -118,7 +118,13 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   household would silently inherit Ray's split, and changing a training day is a **code change + deploy**,
   not an edit. There is no override affordance either (the panel deferred the `?strengthDay=` selector), so
   lifting Strength B on a Tuesday shows no card — the coach just types the movements, today's behavior.
-- **Proposed fix:** **Clerk / multi-household (v1.5)** is the promotion trigger. At that point the map
+- **Proposed fix:** ~~**Clerk / multi-household (v1.5)** is the promotion trigger.~~ **Amended 2026-09-18
+  — the trigger is now whichever of Clerk or MOT-1 lands first.** MOT-1's streak has to know what is
+  **due** on a given day or it breaks on a correctly-taken rest day, and that needs the same schedule
+  rows — for a **single** household, with no Clerk involved. Folded into **SCHED-1**
+  ([plan.md](./plan.md)), which treats scheduling as one primitive serving this const, `routine_config`'s
+  missing schedule, and the streak. Original reasoning, still correct as far as it went: Clerk /
+  multi-household (v1.5) is the promotion trigger. At that point the map
   becomes per-block schedule rows (or a `program_blocks.schedule` column), `resolveDayRole` takes the
   block, and this const is deleted. If a day-role override lands before then it must validate against the
   **strength subset only** (`DAY_ROLE_TO_SESSION_TYPE[x] === 'strength'`), never all of `DAY_ROLES` — else a
