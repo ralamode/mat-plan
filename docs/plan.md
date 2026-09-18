@@ -162,6 +162,82 @@ portfolio evidence).
 **Recommendation: (a).** The marginal privacy gain does not justify rewriting 221 commits, and the
 risk of botching the rewrite is real. Revisit only if the names turn out to matter to Ray.
 
+### ✅ Audit revision — 2026-09-18 — RESOLVED before merge (supersedes findings #2 and #3, and the Assessment)
+
+> **Outcome first: the exposure below never reached `main`.** Option (c) was taken — the samples were
+> **synthesised on the PR branch before merge**, so findings #2 and #3 revert to their original
+> severities and no history rewrite is needed. The analysis is kept because it is the reasoning that
+> produced the fix, and because it records _why_ the audit's own logic had to be re-derived.
+
+The audit above was performed **2026-08-11** and was accurate then. **Landing the legacy CSV samples
+([`docs/samples/legacy-csv/`](./samples/legacy-csv/README.md), PR #121) falsifies four of its
+load-bearing claims.** The original is kept verbatim above as the dated record; this revision is what
+holds.
+
+**What the samples changed:**
+
+| Original claim                                                                             | Now                                                                                         |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| ❌ "No real logged training history… the repo ships schema + catalog seed + fixtures only" | **False.** 44 rows of real logged sessions, two named athletes, June–July 2026              |
+| ❌ "No data dumps. Zero committed `.csv` / `.sql` / dump files"                            | **False.** 8 committed CSVs                                                                 |
+| #3 "One bodyweight fixture value — `72.5` lb" · **Negligible**                             | **14 real dated weigh-ins** (7 per athlete) with `context` — a _time series_, not a fixture |
+| Assessment: "no measurement history… no log data"                                          | **False on both.**                                                                          |
+
+**Re-rated findings:**
+
+| #         | What                                                                                                                                        | Severity                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| 3 _(rev)_ | **A named minor's bodyweight time series** — 14 dated weigh-ins, plus **both athletes' ages (10 and 12)**, stated in `bodyweight/README.md` | **Medium** _(was Negligible)_ |
+| 2 _(rev)_ | The prescribed program, **plus 44 rows of what was actually performed** — loads, failures, `SKIPPED`, coaching notes naming each kid        | **Low–Medium** _(was Low)_    |
+
+**The assessment's central argument no longer holds.** It dismissed the "minors' health data" framing
+explicitly:
+
+> _"that was **inferred from the schema's capability rather than from what is actually committed**, and
+> the audit does not support it."_
+
+That reasoning was sound on 2026-08-11 and is now simply out of date — the data is committed. Whether
+a child's bodyweight series is "health data" in a regulatory sense is a separate question; what matters
+here is that **the stated grounds for dismissing the concern are gone.**
+
+**What is now jointly disclosed**, which is the thing to weigh: Ray's real full name (desirable, #4) +
+two first names + **both ages** + a dated bodyweight series + complete training logs. That is a
+materially different object from "two first names," and it is the combination — not any single
+field — that makes it so.
+
+### The revised decision — and it is time-sensitive
+
+The original "names question" framed this as binary: leave it, or rewrite 221 commits. **The samples
+open a third option that did not exist before, and it is the cheapest of the three.**
+
+- **(c) Synthesise the samples. _(Recommended.)_** Their job is to be **evidence for GAP-3's column
+  design** — and that value lives entirely in the **shape vocabulary** (`BW`, `BW+8 (vest)`, `30in`,
+  `20s`, `123 (50ft)`, `65/65/65`, `sub-failure`, `SKIPPED`), not in which child weighed what on which
+  date. Replace names, dates and values; **keep every distinct shape and its frequency** — frequency
+  matters, since ADR 0004's whole worry was "a `distance_unit` for one sled row while missing something
+  that appears thirty times." The shape taxonomy is already extracted (this README and PR #121), so the
+  synthesis is mechanical and loses nothing.
+- **(a) Leave everything.** Still defensible for findings #1/#2 in isolation; much weaker now that ages
+  and a weight series are in the set.
+- **(b) Rename + `git-filter-repo`.** Unchanged, and now strictly larger — it would have to cover the
+  CSVs too.
+
+✅ **Done — (c) was taken, 2026-09-18, before merge.** Athlete names, dates and bodyweight values are
+replaced; **all 44 strength rows and 14 weigh-ins are kept**, and a **68-shape taxonomy** across `load`,
+`reps`, `sets`, `prescribed` and `session_type` was extracted before the scrub and diffed after —
+**byte-identical**, so the GAP-3 evidence is intact. Frequency was preserved as well as presence, which
+is what ADR 0004 actually asked for. See
+[samples/legacy-csv/README.md](./samples/legacy-csv/README.md).
+
+**Net effect on this audit:** findings #2 and #3 return to **Low** and **Negligible** — not because the
+original assessment was re-argued, but because the data it was re-rating is no longer in the repo. The
+2026-08-11 assessment's conclusion stands; the samples never became a counter-example to it.
+
+**The names question (#1) is untouched** and its recommendation **(a)** still holds on its own merits.
+
+**Note (a) and (c) are independent.** (c) removes the new exposure without touching the names question;
+the original recommendation of (a) for findings #1/#2 can stand on its own merits.
+
 ### Sequencing
 
 Land **AI-1 first**, then OSS-1, then flip visibility. AI-1 is the reason the repo is worth
@@ -284,7 +360,12 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   `units.code` (`:255`) but **nothing in the app reads it**. Only weigh-ins carry `lb | kg`, so **a kg household is
   unrepresentable across the whole strength path today**. It is no longer its own row because units and typed
   measurements are the same migration — see **GAP-3** and [ADR 0004 §6](./decisions/0004-typed-measurements.md).
-- **ONB-1 — self-serve onboarding: bring-your-own-program**
+- **ONB-1 — self-serve onboarding: bring-your-own-program** — **scope clarified 2026-09-18:** "import"
+  here means a **program** (prescriptions, targets, the plan going forward). **Importing a family's
+  historical logged data is NOT a goal** — a new household enters their program and starts logging;
+  they already know the loads their child uses. Consequence: the legacy CSVs' N-sets-in-one-cell shapes
+  (`65/65/65`, `4/3/4/2`) never need a split-on-import path. See
+  [samples/legacy-csv/README.md](./samples/legacy-csv/README.md).
   ([PRD](./plans/onb-1-self-serve-onboarding-prd.md)) — _(Ray, 2026-08-11; UX panel 2026-08-12; Ray's
   decisions 2026-08-20)_ **PRD ONLY — not a plan, not scoped.** Onboarding a new family today costs a code
   change + a deploy: `seed.ts` is the only writer of profiles, and the strength program is a TypeScript
