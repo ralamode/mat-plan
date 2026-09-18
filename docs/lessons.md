@@ -7,6 +7,16 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## GitHub / PRs
 
+- **A Mermaid diagram in a PR description fails with `Lexical error on line 2. Unrecognized text`,
+  pointing at the first node label.** → **Backticks inside a node label.** Mermaid reads `` ` `` as its
+  markdown-string delimiter, so the natural instinct of code-formatting a column or file name —
+  ``L["`load` — ONE text column"]`` — breaks the lexer before the diagram parses. The error names the
+  line but not the character, so it reads like a syntax problem with the arrow or the quotes. → **Never
+  put backticks in a Mermaid label**; write the identifier bare (`L["load — ONE text column"]`). Note
+  GitHub renders the failure as a pink "Unable to render rich display" box with the raw source below it,
+  which is easy to miss if you post a PR and don't look at it. `<br/>`, `·`, `+`, `/` and parentheses
+  inside a quoted label are all fine — backticks are the trap. (docs/gap3-csv-samples, PR #121)
+
 - **A red "Build Failed" on Vercel for a branch that contains no app — `The specified Root Directory
 "apps/web" does not exist`.** → Vercel builds **every pushed branch** by default, and the
   `screenshots` branch is a true orphan holding only `README.md` + `pr-<n>/*.png`. So every screenshot
