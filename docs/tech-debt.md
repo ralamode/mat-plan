@@ -15,6 +15,35 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### `apps/web`'s drizzle peers are incidental, so a dep bump can split `drizzle-orm` in two
+
+- **What & why:** `apps/web` declares `drizzle-orm` but **none of its optional peers** — `pg`,
+  `@types/pg`, `@electric-sql/pglite` are declared **only in `packages/db`**. So `apps/web`'s peer
+  resolution is whatever pnpm happened to pick, not something we state. Dependabot's lockfile updater is
+  **minimal by design**: it rewrites the input it bumped and leaves the rest of drizzle's five-part peer
+  key frozen. Bump one peer package and the two workspaces can end up on **two copies of the same
+  `drizzle-orm` version**, which TypeScript treats as nominally distinct (private `shouldInlineParams`) —
+  so every `eq()`/`and()` across the seam fails and `next build` dies at type-check **in files the PR
+  never touched**.
+- **Impact:** medium, and **recurring**. Two samples so far:
+  - **#111** — `pg` ^8.22.0 → ^8.23.0 **broke it**. `@dependabot recreate` reproduced a byte-identical
+    commit; `pnpm dedupe` and `pnpm.overrides` both produced **zero churn**. Fixed with
+    `pnpm update pg --recursive`.
+  - **#112** — bumped **two** more peer-key packages (`@types/pg`, `@electric-sql/pglite`) and **did not
+    break**, because the merge conflict forced a lockfile **regeneration**, which re-resolves the whole
+    peer key at once. The weakness wasn't fixed there, it just wasn't triggered.
+  - **The tell:** read the full `.pnpm/` paths in the type error — they differ only in one peer segment.
+    Diagnosis is that one line; without it this reads as an inscrutable drizzle bug.
+- **Proposed fix:** declare `pg`, `@types/pg` and `@electric-sql/pglite` in `apps/web` so dependabot bumps
+  both workspaces together and the peer is **stated rather than inferred**. Costs three declared-but-
+  unimported devDeps. (`pnpm.overrides` is the alternative, but it only takes effect at lockfile-creation
+  time — verified inert on an already-pinned peer — and needs manual bumping.)
+- **Trigger:** the next dependency PR that bumps **exactly one** peer-key package **and merges without a
+  conflict**. A conflict masks the bug by forcing regeneration, so a _clean_ dep PR is the dangerous one.
+- **Severity:** medium — never reaches production (it fails the build), but it burns a full debugging
+  cycle each time and looks nothing like its cause. Symptom → fix is in
+  [lessons.md](./lessons.md) → **pnpm / build**.
+
 ### A labeled set can't be edited, and a duration isn't structurally queryable (GAP-1 P0-2)
 
 - **What & why:** GAP-1 P0-2 made `entry_sets.weight_label` writable, so a set can finally record `BW`,
