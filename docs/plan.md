@@ -303,20 +303,69 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   not need — and the JSONB routine was a deliberate, documented exception in the first place. A program
   should be **a thing with a schedule**; what is _inside_ one may stay two shapes.
 
-  **On multiple streaks** _(Ray raised "S&C could have its own streak")_: possible, but flagged as a
-  dilution risk — three counters a kid ignores is worse than one they care about. MOT-1.3 already covers
-  the real need (the coach chooses the inclusion set, which may include S&C). Suggest a **single primary
-  streak plus secondary stats** ("12 of 15 sessions this block") over independent competing streaks;
-  settle it at MOT-1's UX panel.
+  **One schedule shape: assigned days.** _(Ray, 2026-09-19.)_ A schedule says **which days** a program is
+  due — `daily`, or `Mon/Wed/Fri`. A **quota** shape (`3×/week`, any days) was considered and **explicitly
+  rejected**: the coach selects the days. That keeps "is this due today?" a lookup rather than a
+  computation, and it is the single decision that keeps MOT-1's streak arithmetic-free. See MOT-1.4 for
+  the tradeoff accepted.
+
+  **On multiple streaks — SETTLED (2026-09-19): there is one.** An intermediate draft proposed
+  per-program streaks with configurable periods; Ray dropped it in favour of one daily streak with
+  inclusion flags (MOT-1.4). My earlier dilution objection and the counter-argument that these are
+  genuinely different commitments are both moot — the simpler model covers every case posed.
 
   **Changes a stated assumption:** tech-debt names **Clerk / multi-household (v1.5)** as the promotion
   trigger for the hardcoded schedule. MOT-1 now pulls it forward **independently of Clerk** — the streak
   needs scheduling for a single household. The trigger is whichever lands first.
 
-  **Open:** does a schedule live on `program_blocks` or on a block↔athlete assignment row (multiple
-  athletes, one block, different days)? · does a "program" subsume the daily routine or sit beside it? ·
-  how does a mid-season block change interact with an in-flight streak? · **needs a UX panel** (it
-  reshapes the coach editor) and an engineering panel (migration + a new subsystem).
+  ### SCHED-1 — three requirements from Ray's real case (2026-09-21)
+
+  Ray's actual programming: **calisthenics daily, year-round, in the streak. Off-season, add S&C on
+  assigned days.** Checked against the schema, that case needs three things the model does not have.
+  Together they **resolve this row's first open question** and add one requirement that is cheap now and
+  a data migration later.
+
+  **1. A program is assigned to an ATHLETE, not just a household — and that assignment row is where
+  everything lands.** Today `program_blocks.householdId` has **no `profile_id`**
+  (`packages/db/src/schema.ts`); the only per-athlete link is `prescription_targets.profile_id`, which
+  carries per-kid **loads and reps on a shared block**. So the model currently says _"both kids do this
+  program, at different loads"_ — fine for the shared calisthenics case, but it cannot express _"Liam
+  does S&C, Scarlett doesn't,"_ which is exactly what adding a seasonal program to one athlete requires.
+
+  **This answers the open question: the schedule belongs on a block↔athlete assignment row**, not on
+  `program_blocks`. And the same row is the natural home for all three of these — one row saying _this
+  athlete does this program, on these days, between these dates, and it counts toward the streak._ That
+  convergence is the argument for the assignment row, not just a convenience.
+
+  **2. Programs need a date range — nothing models seasonality.** Grepped: no `active_from`,
+  `starts_at`, `season` or `effective` column exists anywhere in the schema. A block has `slug`, `name`,
+  `notes`, timestamps — it is active forever until soft-deleted. Ray's year-round calisthenics is an
+  **open-ended** assignment; the off-season S&C is a **bounded** one. Nullable `active_from` /
+  `active_to` on the assignment covers both. Note soft-delete is **not** a substitute: deleting the block
+  destroys the record of what was programmed last November, which requirement 3 depends on.
+
+  **3. The streak's daily result must be RECORDED, not recomputed — decide this before building, not
+  after.** If "what counted" is derived live from current config, then **editing a program rewrites
+  history.** Add S&C to the streak on 1 November and every prior day is re-judged against a bar that did
+  not exist then; drop it in-season and the reverse. For an athlete whose programming legitimately
+  changes twice a year, **the streak number would move when the coach edits a program**, retroactively,
+  for reasons the kid cannot see. That is the single worst thing a streak can do — constraint 2 is about
+  not making a break feel like failure, and an unexplained retroactive break is worse than a break.
+
+  **Fix:** when a day closes, persist its verdict as a fact. History becomes immutable and a program
+  change affects only the future — so a kid at 200 days keeps 200 when S&C is added, and the harder bar
+  applies from that day forward. This also makes the streak a cheap read instead of a recomputation over
+  all history.
+
+  **Open, arising from 3:** **when does a day close?** The lazy form — on the next read, evaluate every
+  unevaluated day up to _yesterday_ in the athlete's local zone — avoids a scheduled job and is probably
+  right, but it is **tz-sensitive** and must use V1-6c's `localDayIso`. · **What happens to a recorded
+  verdict when an entry is logged LATE** (a backdated set, once V1-15 day navigation exists)? Either the
+  day reopens and re-scores, or it does not — both are defensible, neither is free, and picking one late
+  means a backfill.
+
+  **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
+  panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
 - **MOT — motivation & retention (the behavior-change layer).** _(Ray, 2026-09-16.)_ The product spec's
   **top risk** is that nobody logs: the premise is behavior change and the app is **entirely schema** —
@@ -350,17 +399,39 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
        editor at `/p/[profileId]/routine` is already a per-kid activity checklist, so streak inclusion is
        one more column on a screen that ships today.
 
-    4. **Mixed cadence is the real design problem — and constraint 1 returns with it.** A streak is daily;
-       "three S&C sessions this week" is weekly. Including S&C re-opens the rest-day trap: Wednesday is
-       correctly a rest day, so a naive daily counter breaks on a day the athlete did exactly right.
+    4. **ONE daily streak, and every program has ASSIGNED DAYS.** _(Ray, 2026-09-19 — two decisions that
+       together settle a design which had started to sprawl.)_
 
-       **Proposed resolution: a day counts when everything DUE that day is done.** Due = the streak-flagged
-       items, filtered by whether they are scheduled today. Daily habits are due daily; S&C is due only on
-       days the program schedules it. Rest days are handled by construction (nothing due, nothing missed),
-       and a weekly requirement decomposes into the specific days it lands on — no second "weekly streak"
-       concept. Note `conditional` already exists on a routine item as "an OPAQUE cosmetic marker…
-       scheduling flips it functional later" (`routine.ts:43`), which is precisely this. **Proposal only —
-       needs the UX panel below.**
+       **(a) One streak, not many.** An intermediate draft went toward per-program streaks with
+       configurable periods — a daily streak, a weekly S&C streak, a weekly sprint streak. **Dropped.**
+       There is one streak, its period is **a day**, and a program that is not daily is simply **included
+       or not** by the coach (constraint 3). That deletes streak _periods_, the weekly _unit_, and
+       _competing counters_ — and still covers every case posed, including "wrap it all into one program,"
+       which now falls out for free. One number is also the only shape a kid actually tracks.
+
+       **(b) No `n`-times-per-week programming.** The coach selects **the days** a program is due —
+       Monday, Wednesday, Friday — never "three times a week." This is a statement about how programs are
+       **authored**, not just about streaks, and it removes a whole shape from the model.
+
+       **Together these make the streak arithmetic-free.** A day counts when everything **due** that day is
+       done; "due" is a lookup against assigned days, not a computation. Rest days are handled by
+       construction — nothing assigned, nothing due, nothing missed. Note `conditional` already exists on a
+       routine item as "an OPAQUE cosmetic marker… scheduling flips it functional later"
+       (`routine.ts:43`), which is exactly this lookup.
+
+       **The tradeoff, considered and accepted.** A quota model (`3×/week`, any days) was worked through
+       and rejected. It would have been more forgiving — an athlete who moved Wednesday's session to
+       Thursday would keep their streak — but it costs a dueness rule with real arithmetic, a "due because
+       you are out of runway" state the UI has to explain, and a partial-first-week question. With assigned
+       days, **a session done on the wrong day does not save the streak**: Wednesday breaks it, and
+       Thursday's work counts toward nothing. That is the accepted cost, and it is also how a written
+       program actually reads — the kid was asked to lift Wednesday.
+
+       **Watch this against constraint 2.** Fixed days make a break easier to hit, so the forgiveness has
+       to come from the _response_ rather than the rule: the counter returns to `0`, **longest streak stays
+       on screen**. If real use shows breaks landing on kids who did the work on a shifted day, the cheap
+       mitigation is a coach-marked **excused day** — not a return to quotas. Flagged for the UX panel to
+       watch, not to build.
 
        Needs a **UX panel**: this is a motivational surface aimed at a child, and getting it wrong costs
        retention rather than correctness.
