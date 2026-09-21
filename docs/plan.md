@@ -318,10 +318,54 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   trigger for the hardcoded schedule. MOT-1 now pulls it forward **independently of Clerk** — the streak
   needs scheduling for a single household. The trigger is whichever lands first.
 
-  **Open:** does a schedule live on `program_blocks` or on a block↔athlete assignment row (multiple
-  athletes, one block, different days)? · does a "program" subsume the daily routine or sit beside it? ·
-  how does a mid-season block change interact with an in-flight streak? · **needs a UX panel** (it
-  reshapes the coach editor) and an engineering panel (migration + a new subsystem).
+  ### SCHED-1 — three requirements from Ray's real case (2026-09-21)
+
+  Ray's actual programming: **calisthenics daily, year-round, in the streak. Off-season, add S&C on
+  assigned days.** Checked against the schema, that case needs three things the model does not have.
+  Together they **resolve this row's first open question** and add one requirement that is cheap now and
+  a data migration later.
+
+  **1. A program is assigned to an ATHLETE, not just a household — and that assignment row is where
+  everything lands.** Today `program_blocks.householdId` has **no `profile_id`**
+  (`packages/db/src/schema.ts`); the only per-athlete link is `prescription_targets.profile_id`, which
+  carries per-kid **loads and reps on a shared block**. So the model currently says _"both kids do this
+  program, at different loads"_ — fine for the shared calisthenics case, but it cannot express _"Liam
+  does S&C, Scarlett doesn't,"_ which is exactly what adding a seasonal program to one athlete requires.
+
+  **This answers the open question: the schedule belongs on a block↔athlete assignment row**, not on
+  `program_blocks`. And the same row is the natural home for all three of these — one row saying _this
+  athlete does this program, on these days, between these dates, and it counts toward the streak._ That
+  convergence is the argument for the assignment row, not just a convenience.
+
+  **2. Programs need a date range — nothing models seasonality.** Grepped: no `active_from`,
+  `starts_at`, `season` or `effective` column exists anywhere in the schema. A block has `slug`, `name`,
+  `notes`, timestamps — it is active forever until soft-deleted. Ray's year-round calisthenics is an
+  **open-ended** assignment; the off-season S&C is a **bounded** one. Nullable `active_from` /
+  `active_to` on the assignment covers both. Note soft-delete is **not** a substitute: deleting the block
+  destroys the record of what was programmed last November, which requirement 3 depends on.
+
+  **3. The streak's daily result must be RECORDED, not recomputed — decide this before building, not
+  after.** If "what counted" is derived live from current config, then **editing a program rewrites
+  history.** Add S&C to the streak on 1 November and every prior day is re-judged against a bar that did
+  not exist then; drop it in-season and the reverse. For an athlete whose programming legitimately
+  changes twice a year, **the streak number would move when the coach edits a program**, retroactively,
+  for reasons the kid cannot see. That is the single worst thing a streak can do — constraint 2 is about
+  not making a break feel like failure, and an unexplained retroactive break is worse than a break.
+
+  **Fix:** when a day closes, persist its verdict as a fact. History becomes immutable and a program
+  change affects only the future — so a kid at 200 days keeps 200 when S&C is added, and the harder bar
+  applies from that day forward. This also makes the streak a cheap read instead of a recomputation over
+  all history.
+
+  **Open, arising from 3:** **when does a day close?** The lazy form — on the next read, evaluate every
+  unevaluated day up to _yesterday_ in the athlete's local zone — avoids a scheduled job and is probably
+  right, but it is **tz-sensitive** and must use V1-6c's `localDayIso`. · **What happens to a recorded
+  verdict when an entry is logged LATE** (a backdated set, once V1-15 day navigation exists)? Either the
+  day reopens and re-scores, or it does not — both are defensible, neither is free, and picking one late
+  means a backfill.
+
+  **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
+  panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
 - **MOT — motivation & retention (the behavior-change layer).** _(Ray, 2026-09-16.)_ The product spec's
   **top risk** is that nobody logs: the premise is behavior change and the app is **entirely schema** —
