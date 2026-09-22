@@ -11,7 +11,7 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 merged: per-kid routines, weigh-ins, check-ins, calisthenics + weekly adherence, life activities,
 strength sessions with supersets, edit-a-set, skipped/sub-failure, and the Today's-program card. The
 MVP finish line is **CSV export**. It was **blocked** on the legacy CSV sample files for six weeks;
-**#121 landed them** and **#125 turned them into a shape census**
+**#121 landed them** and **#126 turned them into a shape census**
 ([gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)) — so the chain that gated GAP-3,
 V1-13, AI-1 and the open-source release is **clear**, and GAP-3's column design is the next thing to
 write.
@@ -128,7 +128,7 @@ needed the entry schema and a write path, "both present after v1". Both are pres
 settled**, because [ADR 0004](./decisions/0004-typed-measurements.md) replaces the measurement columns
 AI-1 extracts into. AI-1 now sequences **behind GAP-3**: legacy CSV samples → GAP-3 → V1-13 → AI-1 →
 OSS-1 — so the legacy CSV samples gated **going public**, not just V1-13. **That gate is now open:**
-the samples merged in #121 and the shape census in #125.
+the samples merged in #121 and the shape census in #126.
 
 ## Progress toward MVP (v1)
 
@@ -198,7 +198,7 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 
 ## Changelog (merged PRs)
 
-- **2026-09-22** — **GAP-3 evidence: the shape census** (#125,
+- **2026-09-22** — **GAP-3 evidence: the shape census** (#126,
   [gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)). Every distinct `load` and
   `prescribed` shape in the four `strength-log` samples, counted — **12 shapes each**, from 22 and 23
   distinct strings over 44 rows / 22 movement-slots. Three findings the column design has to answer
