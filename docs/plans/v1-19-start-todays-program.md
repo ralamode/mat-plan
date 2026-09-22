@@ -1,6 +1,7 @@
 # V1-19 — "Start today's program": scaffold the log form from the program
 
-> Backlog: [plan.md](../plan.md) row **V1-19**. Branch: `feat/v1-19-start-program`.
+> Backlog: [plan.md](../plan.md) row **V1-19**. Branch: `feat/v1-19-scaffold-impl`. **SHIPPED** — the
+> plan merged first (#124); this records what was built against it.
 > Upstream analysis: [logging-speed-brainstorm.md](./logging-speed-brainstorm.md) (idea **A**, ranked the
 > single biggest win available). Related: [v1-10-2-strength-prefill.md](./v1-10-2-strength-prefill.md)
 > (the panel that rejected load prefill — its boundary is preserved here, enforced more precisely).

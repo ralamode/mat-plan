@@ -128,6 +128,15 @@ AI-1 extracts into. AI-1 now sequences **behind GAP-3**: legacy CSV samples → 
 OSS-1. So the **four legacy CSV samples now gate going public**, not just V1-13 — the single
 highest-leverage unblock in the backlog, and a find-four-files task rather than engineering.
 
+**Merged — V1-19: "Fill in today's movements".** One tap builds the strength form from the day's
+program — a card per prescription, in the coach's order, with the right number of set rows — so the
+athlete stops retyping names off the card directly above the form. **Structure only: every reps and
+weight field arrives blank**, which is the V1-10 panel's confirm-gate boundary (a blank `required`
+field IS the human confirmation) and is now pinned by a structural unit test. Scaffolded cards render
+**collapsed** with a `done/total` counter, because 7 movements × 4 sets is ~6,600px of blank inputs at
+360px otherwise. Plan + both review-response logs:
+[v1-19-start-todays-program.md](./plans/v1-19-start-todays-program.md).
+
 ## Progress toward MVP (v1)
 
 - **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
