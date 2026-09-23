@@ -23,8 +23,10 @@ import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
 import { LoadChips } from './load-chips';
 import { SetRepsWeightFields } from './set-fields';
+import { isUntouchedScaffold, type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
 import {
   dissolveSmallSupersets,
+  isUntouchedMovement,
   dropUntouchedMovements,
   groupSelected,
   ungroupSuperset,
@@ -35,8 +37,8 @@ import {
 // owns its OWN `sets` array in this parent state, so add-set on one card can never mutate another
 // (the independence the panel flagged) — no shared set-key list. React keys are UUIDs: a set's own
 // `key`, a movement's `clientId` (which doubles as its entry idempotency key).
-type SetVals = { key: string; reps: string; weight: string; status?: SetStatus };
-type MovementVals = {
+export type SetVals = { key: string; reps: string; weight: string; status?: SetStatus };
+export type MovementVals = {
   clientId: string;
   movementName: string;
   unit: string;
@@ -48,6 +50,11 @@ type MovementVals = {
   // V1-8-3d superset tags — set when the movement is grouped; serialized into the movements JSON.
   supersetClientId?: string;
   supersetOrder?: number;
+  // V1-19. TRANSIENT — never serialized into the payload (the wire shape has no such field); it marks
+  // a card the SCAFFOLD placed rather than the athlete. `dropUntouchedMovements` keys off a blank name
+  // to decide a card is disposable, and a scaffolded card always has one, so without this flag doing
+  // 5 of 7 programmed movements would block submit behind the other 2's empty required fields.
+  scaffolded?: boolean;
 };
 
 const emptySet = (): SetVals => ({ key: newId(), reps: '', weight: '' });
@@ -69,6 +76,7 @@ export function StrengthForm({
   profileId,
   day,
   defaultDayRole,
+  programDay,
 }: {
   profileId: string;
   day: string;
@@ -77,6 +85,9 @@ export function StrengthForm({
    * pre-select the control below — it is never submitted implicitly. See the note on the select.
    */
   defaultDayRole: DayRole | null;
+  /** V1-19 — today's prescribed movements, for the scaffold button. NARROWED (no `load`): the authored
+   *  load must never cross into client state, so the boundary is the type, not a test. */
+  programDay: readonly ScaffoldRow[];
 }) {
   const [state, formAction, pending] = useActionState(
     logStrengthSessionAction,
@@ -95,6 +106,7 @@ export function StrengthForm({
       profileId={profileId}
       day={day}
       defaultDayRole={defaultDayRole}
+      programDay={programDay}
       state={state}
       formAction={formAction}
       pending={pending}
@@ -106,6 +118,7 @@ function StrengthFormBody({
   profileId,
   day,
   defaultDayRole,
+  programDay,
   state,
   formAction,
   pending,
@@ -115,6 +128,7 @@ function StrengthFormBody({
   /** Pre-selects the day picker only — see the note on that select. The `key={gen}` remount means an
    *  override resets to this default for the NEXT session on the same day, which is intended. */
   defaultDayRole: DayRole | null;
+  programDay: readonly ScaffoldRow[];
   state: ActionState;
   formAction: (formData: FormData) => void;
   pending: boolean;
@@ -123,6 +137,43 @@ function StrengthFormBody({
   const [movements, setMovements] = useState<MovementVals[]>(() => [emptyMovement()]);
   // TRANSIENT selection for grouping — never serialized (it's not part of the wire shape).
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // V1-19 — which scaffolded card is open. Scaffolding 7 movements × 4 sets renders ~6,600px of blank
+  // inputs at 360px, which would invert the form's one useful signal: today its length grows with work
+  // DONE, so a wall of empty rows is maximum length at minimum progress. One card open at a time.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  // Announcement + one-step undo for the scaffold. `null` = nothing to announce.
+  const [scaffoldMsg, setScaffoldMsg] = useState<string | null>(null);
+  const [undoStash, setUndoStash] = useState<MovementVals[] | null>(null);
+
+  /** Replace the form with today's program. Ids are minted INSIDE the handler, never memoised — a
+   *  replayed scaffold would reuse entry `client_id`s and the write path's ON CONFLICT would silently
+   *  turn the next submit into a no-op. */
+  const fillFromProgram = () => {
+    const replaced = movements.filter((m) => !isUntouchedMovement(m) && !isUntouchedScaffold(m));
+    const next = scaffoldMovements(programDay, DEFAULT_BODYWEIGHT_UNIT);
+    setUndoStash(movements);
+    setMovements(next);
+    // Stale clientIds would otherwise linger and let "Group N as superset" act on removed cards.
+    setSelected(new Set());
+    setExpanded(next[0]?.clientId ?? null);
+    // Deliberately does NOT repeat the static caption above ("weights and reps stay blank") — that
+    // line is always on screen, and echoing it here reads as two sentences saying one thing. This
+    // carries only what the tap CHANGED, which is what a screen-reader user has no other way to learn.
+    setScaffoldMsg(
+      replaced.length > 0
+        ? `Loaded ${next.length} movements, replacing the ${replaced.length} you had typed.`
+        : `Loaded ${next.length} movements.`,
+    );
+  };
+
+  const undoScaffold = () => {
+    if (!undoStash) return;
+    setMovements(undoStash);
+    setUndoStash(null);
+    setSelected(new Set());
+    setExpanded(null);
+    setScaffoldMsg('Undone — your typed movements are back.');
+  };
 
   const patchMovement = (
     clientId: string,
@@ -202,12 +253,49 @@ function StrengthFormBody({
       <input type="hidden" name="clientId" value={sessionClientId} readOnly />
       <input type="hidden" name="movements" value={movementsJson} readOnly />
 
+      {/* V1-19 — the scaffold. Rendered HERE and not on the program card, because `ProgramReference` is
+          a server component that deliberately ships zero client JS; a button that seeds form state
+          would drag it into the client graph. Gated on ROWS, not on `dayRole`: the weekday map returns
+          a role on every Mon/Wed/Fri whether or not the household actually has a block, so gating on
+          the role would show a button that scaffolds nothing. */}
+      {programDay.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <Button type="button" variant="outline" onClick={fillFromProgram} className="w-full">
+            Fill in today&rsquo;s movements
+          </Button>
+          <p className="text-muted-foreground text-sm">
+            Weights and reps stay blank &mdash; type what you actually lifted.
+          </p>
+          {/* The confirmation a screen reader would otherwise never get: the cards re-flow below the
+              fold and nothing else announces the change. Also the only place the blank-fields rule is
+              stated to the athlete in words rather than living in docblocks and tests. */}
+          <p role="status" className="text-muted-foreground text-sm">
+            {scaffoldMsg}
+          </p>
+          {undoStash ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={undoScaffold}
+              className="self-start"
+            >
+              Undo
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       <ul className="flex flex-col gap-4">
         {movements.map((m, i) => (
           <li key={m.clientId}>
             <MovementCard
               index={i}
               movement={m}
+              // V1-19 — a scaffolded card collapses to a one-line summary until opened. A hand-added
+              // card is always open: the athlete just asked for it, and there is only ever one.
+              collapsed={m.scaffolded === true && expanded !== m.clientId}
+              onExpand={() => setExpanded(m.clientId)}
               canRemove={movements.length > 1}
               // GAP-1 P1-1c. `undefined` (not 'done') on uncheck, so the payload spread keeps
               // "absent stays absent" and `isUntouchedMovement` sees a card returned to droppable —
@@ -334,10 +422,15 @@ function MovementCard({
   onAddSet,
   onRemoveSet,
   onSet,
+  collapsed,
+  onExpand,
 }: {
   index: number;
   movement: MovementVals;
   canRemove: boolean;
+  /** V1-19 — render only the summary row. Its set rows are UNMOUNTED while collapsed (see below). */
+  collapsed: boolean;
+  onExpand: () => void;
   onSkipped: (skipped: boolean) => void;
   selected: boolean;
   onToggleSelect: () => void;
@@ -353,6 +446,35 @@ function MovementCard({
   const unitId = `movement-${movement.clientId}-unit`;
   const inSuperset = movement.supersetClientId != null;
   const isSkipped = movement.status === ENTRY_STATUS.skipped;
+
+  // V1-19 — the collapsed summary. NOT a native <details>, and the set rows are UNMOUNTED rather than
+  // CSS-hidden: `SetRepsWeightFields` marks its inputs `required`, and a hidden-but-present required
+  // input blocks the native submit with an invisible "not focusable" error — the form simply appears
+  // dead. That is the identical trap the Skipped branch already documents below, at a scale of 25 rows.
+  if (collapsed) {
+    const filled = movement.sets.filter(
+      (s) => s.reps.trim() !== '' || s.weight.trim() !== '',
+    ).length;
+    return (
+      <button
+        type="button"
+        onClick={onExpand}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left"
+      >
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate font-medium">
+            {index + 1}. {movement.movementName}
+          </span>
+          {isSkipped ? <span className="text-muted-foreground text-sm">Skipped</span> : null}
+        </span>
+        {/* The progress the current form has never had: "where am I" across a 7-movement day. */}
+        <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
+          {filled}/{movement.sets.length}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <fieldset className="flex flex-col gap-3 rounded-lg border px-4 py-3">
       <legend className="flex items-center gap-2 px-1 text-sm font-medium">

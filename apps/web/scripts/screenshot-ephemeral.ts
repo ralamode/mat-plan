@@ -152,6 +152,9 @@ const STATES = {
   'form-sub-failure': null,
   // GAP-1 P1-1c — the READ side: a skipped entry badge + a sub-failure set badge.
   'status-badges': seedStatusBadges,
+  // V1-19 — the scaffolded form. Interaction-only; needs a PROGRAMMED day, so pair it with
+  // `--tz` on a non-strength weekday (e.g. `--tz Pacific/Kiritimati` renders tomorrow).
+  'form-scaffolded': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -162,6 +165,19 @@ type StateName = keyof typeof STATES;
  * Runs per viewport against a fresh page → must be idempotent from a clean load.
  */
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
+  // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:
+  // collapsed cards with a per-movement done/total counter, because scaffolding 7 movements × 4 sets
+  // renders ~6,600px of blank inputs at 360px otherwise. A reviewer cannot approve that from the
+  // before-state, so the capture performs the tap.
+  'form-scaffolded': async (page) => {
+    const fill = page.getByRole('button', { name: /Fill in today.s movements/i });
+    if ((await fill.count()) === 0) {
+      throw new Error(
+        'no "Fill in today\'s movements" button — this state needs a PROGRAMMED day; pass --tz (e.g. Pacific/Kiritimati) on a non-strength weekday',
+      );
+    }
+    await fill.click();
+  },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();
   },

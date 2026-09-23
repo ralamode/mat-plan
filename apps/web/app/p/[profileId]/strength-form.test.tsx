@@ -26,7 +26,7 @@ function payload(): Array<Record<string, unknown>> {
 }
 
 const renderForm = () =>
-  render(<StrengthForm profileId="p1" day="2026-08-12" defaultDayRole={null} />);
+  render(<StrengthForm profileId="p1" day="2026-08-12" defaultDayRole={null} programDay={[]} />);
 
 const nameInput = () => screen.getByLabelText('Movement');
 const skippedBox = () => screen.getByLabelText(/movement 1 skipped/i);
@@ -108,5 +108,89 @@ describe('StrengthForm — sub-failure set payload (GAP-1 P1-1c)', () => {
     expect((payload()[0]!.sets as Array<Record<string, unknown>>)[0]!.status).toBe('sub_failure');
     fireEvent.click(toggle);
     expect('status' in (payload()[0]!.sets as Array<Record<string, unknown>>)[0]!).toBe(false);
+  });
+});
+
+// ── V1-19 — the program scaffold ────────────────────────────────────────────────────────────────
+const PROGRAM = [
+  { idx: 0, movementName: 'Med-Ball Slam', sets: 2 },
+  { idx: 1, movementName: 'Trap-Bar Deadlift', sets: 2 },
+  { idx: 2, movementName: 'Pull-Up', sets: 1 },
+];
+
+const renderWithProgram = () =>
+  render(
+    <StrengthForm profileId="p1" day="2026-08-12" defaultDayRole={null} programDay={PROGRAM} />,
+  );
+
+const fillButton = () => screen.getByRole('button', { name: /fill in today.s movements/i });
+
+describe('StrengthForm — program scaffold (V1-19)', () => {
+  it('offers no button when the day has no programmed movements', () => {
+    renderForm(); // programDay: []
+    expect(screen.queryByRole('button', { name: /fill in today.s movements/i })).toBeNull();
+  });
+
+  it('builds a card per prescription — first open, the rest collapsed, all fields blank', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+
+    // Card 1 opens so the athlete can start immediately; 2 and 3 are one-line summaries.
+    expect(screen.getByDisplayValue('Med-Ball Slam')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /2\. Trap-Bar Deadlift/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /3\. Pull-Up/ })).toBeTruthy();
+
+    // The V1-10 confirm-gate boundary, at the DOM: nothing arrives pre-filled.
+    for (const el of screen.getAllByPlaceholderText(/reps|weight/)) {
+      expect((el as HTMLInputElement).value).toBe('');
+    }
+  });
+
+  // Right after scaffolding, EVERY card is untouched — so the payload is legitimately empty and the
+  // schema's "add at least one movement" still fires. Scaffolding proposes structure; it never logs.
+  it('submits nothing until the athlete types something', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    expect(payload()).toHaveLength(0);
+  });
+
+  /**
+   * THE regression guard. `dropUntouchedMovements` decides a card is disposable by its BLANK NAME, and
+   * every scaffolded card has one — so without `isUntouchedScaffold` an athlete who performed 1 of 3
+   * programmed movements could not submit until they explicitly skipped or removed the other 2, behind
+   * a native focus-bubble on an off-screen required input. Both review panels found this independently.
+   */
+  it('drops the scaffolded movements the athlete never touched', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    fireEvent.change(screen.getAllByPlaceholderText('reps')[0]!, { target: { value: '5' } });
+    fireEvent.change(screen.getAllByPlaceholderText(/weight/)[0]!, { target: { value: '20' } });
+
+    const p = payload();
+    expect(p).toHaveLength(1);
+    expect(p[0]!.movementName).toBe('Med-Ball Slam');
+  });
+
+  it('collapses the other cards, unmounting their required inputs', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    // A hidden-but-present `required` input blocks the native submit with an invisible error, so a
+    // collapsed card's rows must be ABSENT from the DOM, not merely styled away. Card 1 (2 sets) only.
+    expect(screen.getAllByPlaceholderText('reps')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /2\. Trap-Bar Deadlift/ }));
+    expect(screen.getAllByPlaceholderText('reps')).toHaveLength(2);
+    expect(screen.getByDisplayValue('Trap-Bar Deadlift')).toBeTruthy();
+  });
+
+  it('announces what happened, and offers Undo that restores typed work', () => {
+    renderWithProgram();
+    fireEvent.change(nameInput(), { target: { value: 'Front squat' } });
+    fireEvent.click(fillButton());
+
+    expect(screen.getByRole('status').textContent).toMatch(/replacing the 1 you had typed/i);
+    expect(payload().map((m) => m.movementName)).not.toContain('Front squat');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(payload().map((m) => m.movementName)).toEqual(['Front squat']);
   });
 });

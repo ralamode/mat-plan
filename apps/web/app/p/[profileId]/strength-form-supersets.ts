@@ -6,6 +6,8 @@
  */
 
 import { ENTRY_STATUS } from '@mat-plan/shared';
+
+import { isUntouchedScaffold } from './strength-form-scaffold';
 export type SupersetTaggable = {
   clientId: string;
   supersetClientId?: string;
@@ -65,7 +67,7 @@ export type MovementDraft = {
  *  Compares to the DEFAULT, never to `undefined`: a card that was marked skipped and then UNMARKED must
  *  become droppable again, or a mis-tap on a spare blank card wedges the submit behind
  *  "Movement 3: Enter a movement." with Remove as the only escape. */
-const isDefaultStatus = (status: string | undefined): boolean =>
+export const isDefaultStatus = (status: string | undefined): boolean =>
   (status ?? ENTRY_STATUS.done) === ENTRY_STATUS.done;
 
 /**
@@ -92,7 +94,13 @@ export function isUntouchedMovement(m: MovementDraft): boolean {
 
 /** Drop the fully-untouched movement cards before building the submit payload, so a user who added a card
  *  and left it blank isn't blocked by its (empty-field) validation errors. Preserves the schema's min(1):
- *  if EVERY card is untouched the result is empty → the "add at least one movement" error still fires. */
+ *  if EVERY card is untouched the result is empty → the "add at least one movement" error still fires.
+ *
+ *  TWO predicates, not one (V1-19). `isUntouchedMovement` needs a BLANK NAME, which a hand-added card has
+ *  and a SCAFFOLDED one never does — so a scaffolded card would be undroppable forever, and an athlete who
+ *  performed 5 of 7 programmed movements could not submit until they explicitly skipped or removed the
+ *  other 2. `isUntouchedScaffold` is the same test with the name clause dropped, gated on the `scaffolded`
+ *  flag so it can only ever apply to a card the app placed. */
 export function dropUntouchedMovements<T extends MovementDraft>(movements: readonly T[]): T[] {
-  return movements.filter((m) => !isUntouchedMovement(m));
+  return movements.filter((m) => !isUntouchedMovement(m) && !isUntouchedScaffold(m));
 }

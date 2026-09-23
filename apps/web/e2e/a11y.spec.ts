@@ -167,6 +167,40 @@ test('the strength form meets the tap-target bar in its EXPANDED state', async (
   await expectNoAxeViolations(page, 'strength form (expanded)');
 });
 
+test('the strength form meets the bar in its SCAFFOLDED state (V1-19)', async ({ page }) => {
+  // The scaffold renders controls the two scans above never see: a collapsed-card disclosure per
+  // movement, an Undo, and — once a card is opened — a full card nested among six siblings. Seven
+  // cards' worth of chips and toggles is also precisely where horizontal overflow would first appear
+  // at 390px, which the single-card expanded scan cannot surface.
+  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  const fill = strength.getByRole('button', { name: /Fill in today.s movements/i });
+
+  // The seed only programs strength on certain weekdays, so the button is legitimately absent on
+  // others. Skip rather than fail — a red check here would mean "it is Tuesday", not "a11y broke".
+  if ((await fill.count()) === 0) {
+    test.skip(true, 'no programmed movements today — nothing to scaffold');
+    return;
+  }
+
+  await fill.click();
+  // Prove the scaffolded DOM really is present, so this cannot pass by measuring the default form.
+  await expect(strength.getByRole('button', { name: 'Undo' })).toBeVisible();
+  await expect(strength.getByRole('status')).toContainText(/Loaded \d+ movements/);
+
+  await expectTapTargets(page, 'strength form (scaffolded, collapsed)');
+  await expectNoAxeViolations(page, 'strength form (scaffolded, collapsed)');
+
+  // Then with a card open — the collapsed summary and a full card coexist only in this state.
+  const summary = strength.getByRole('button', { name: /^\d+\. / }).first();
+  if ((await summary.count()) > 0) {
+    await summary.click();
+    await expectTapTargets(page, 'strength form (scaffolded, one card open)');
+    await expectNoAxeViolations(page, 'strength form (scaffolded, one card open)');
+  }
+});
+
 test('profile tiles are large touch targets (the link-card exception to the inline-link rule)', async ({
   page,
 }) => {
