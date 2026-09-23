@@ -4,7 +4,7 @@
 > [docs/samples/legacy-csv/](../samples/legacy-csv/). Decision context:
 > [ADR 0004](../decisions/0004-typed-measurements.md).
 
-**Status: inventory (§§1–6) + column design (§7). NOT yet panelled.** This file currently holds the shape census that
+**Status: inventory (§§1–6) + column design (§7) + panel (§8). Q1 unresolved — no file-by-file yet.** This file currently holds the shape census that
 [ADR 0004](../decisions/0004-typed-measurements.md) said the column design was blocked on — _"which
 shapes actually occur"_. Nothing here proposes columns. The plan sections (goal, file-by-file,
 panels, review-response log) come after, and are deliberately empty so the count is read on its own
@@ -178,45 +178,89 @@ own rows disagree with their prescription, one annotated "cut from @20". This is
 support for ADR 0004 §2's refusal to unify prescribed and performed, and it means the export must never
 reconstruct one from the other.
 
-### 7.2 The scope that disappears — multi-slot loads need no columns
+### 7.2 Stance in Motion — RETRACTED: the scope does not disappear
 
-**YDP-2 (Stance in Motion: `duration_minutes` + independent `vest_lbs` / `ankle_lbs` / `wrist_lbs`) was
-filed as needing new columns. It does not.** Verified: `entries` already carries `unit` (FK →
-`units.code`) and `value_num`, and `brush_teeth` already stores **seven** sub-metrics as separate entries
-under one activity type (`activity-metric-map.ts:38-46`). Stance in Motion is the same shape — a timed
-activity with measured attributes — not a strength movement with sets.
+An earlier draft of this section claimed Stance in Motion's `duration_minutes` +
+`vest_lbs`/`ankle_lbs`/`wrist_lbs` needed **no migration**, because `entries` already carries
+`unit`+`value_num` and `brush_teeth` already stores seven sub-metrics. **The panel found that half-true,
+and the half that fails is the half that matters.**
 
-So it is **four `metric_definitions` and one `activity_type`: catalog rows, no migration.** All four units
-already exist in `UNIT_CODES` (`min`, `lb`). This is the V1-7 generality proof applying exactly as
-intended, and the earlier framing's mistake was assuming a worn load must live on `entry_sets.weight_num`
-because that is where a barbell's load lives.
+**What holds** (verified): `logCheckinEntries` really does write N metric rows in one insert
+(`apps/web/lib/dal/entries.ts:345-372`); no uniqueness blocks four rows; `min` and `lb` are both in
+`UNIT_CODES`; `entries_shape_check` is satisfied because every metric write sets `value_num`.
 
-**One weight per _set_ remains the right model for strength**, because that is the thing that varies per
-set. Nothing here reopens it.
+**What collapses:**
 
-### 7.3 Columns
+1. **A metric-modelled Stance in Motion can never be PRESCRIBED.** `prescriptions.movementId` is
+   `.notNull()` FK → `movements` (`schema.ts:499-501`), so anything routed through
+   `metric_definitions` cannot reach `prescriptions` or `prescription_targets` at all. But the YDP seed
+   makes Stance in Motion a **program item with a progression rule** — _"Advance duration first, then add
+   one load slot at a time"_ (`seed.json:95`). The metric route makes that rule unexpressible and
+   invisible to the future engine, while V1-22 scope B is blocked on GAP-3 _for these very shapes_.
+2. **"No migration" was read as "no work."** `CHECKIN_FIELDS` hard-codes two activity keys and its own
+   docblock calls that _"a deliberate render scope, NOT a general seam"_; `metricField`'s bounds cover
+   only `scale_10` and `count`; `accumulates` is a hard-coded set; and `activity-totals.ts` dispatches on
+   an `aggregation` whose honest value here (`last`) is one `assertRollupAggregation` throws on.
+3. **`vest_lbs: null` is explicit in the data** (`seed.json:147`) — "logged, and no vest" — but a metric
+   model represents it as a _missing row_, indistinguishable from "not logged". That distinction is
+   exactly what the progression rule reads.
 
-**`entry_sets`** — gains two, per the varies-per-set test:
+**So the three worn loads are the strongest argument FOR a load-slot design, not evidence against needing
+one.** The retraction is recorded rather than quietly edited: the original claim is the kind that looks
+like a win precisely because it removes work.
 
-| Column        | Type                                                   | Why                                                                                                                                                                                                  |
-| ------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `weight_unit` | text FK → `units.code`, NULL when `weight_num` is NULL | Resolved from the movement's dimension + the household's magnitude preference, **stored on the row** so a later preference change cannot reinterpret history.                                        |
-| `is_band`     | boolean NOT NULL DEFAULT false                         | Not a quantity and **not exclusive with bodyweight** (a band-assisted pull-up is both), so its own boolean rather than a `load_kind` enum (ADR 0004 §7). Which band goes in `entries.notes` (V1-9a). |
+**Decision deferred to §7.6 Q5**, because it is the plan's largest remaining fork.
 
-`weight_num` already exists. `seconds` already exists and gains its first writer.
+### 7.2a The alternative the panel raised, and why it now leads
 
-**`prescriptions`** — gains the dimensions that do not vary per set, each with a nullable `entry_sets`
-override (ADR 0004 §5): `height_num`/`height_unit`, `distance_num`/`distance_unit`, `per_side` boolean.
-Prescription-only would break ad-hoc logging (ONB-1 R20); folding into movement identity would fragment
-history the way ONB-1 R12a spends a migration to prevent.
+**Fixed columns per dimension have already overflowed on the second real program.** ADR 0004 sized them
+against one program; YDP needs three simultaneous worn loads on one activity, and a fixed-column design
+answers that with three more columns that the _next_ program will overflow again.
 
-**`units`** — gains `dimension` (`mass` | `length` | `time` | `count`), and the length codes
-`in`/`cm`/`ft`/`m`/`yd`, which **do not exist at all today**. The dimension column is what makes `lb` in a
-box-jump height **unrepresentable** rather than merely discouraged — an FK + CHECK, not a convention.
+A **typed child table** — `entry_set_loads(entry_set_id, slot, value_num, unit)` — handles vest + ankle +
+wrist, sled weight + distance, and box height with **one shape**, keeps the `units` dimension guard on
+every row, and is **not EAV**: values stay in typed columns with real FKs, which is the property
+`verify.ts` pins ("no json/jsonb, no per-activity column"). It costs a join and an arity rule.
 
-**`movements.is_bodyweight`** starts being read. It covers `BW` (14 rows), and with `weight_num` it makes
-`BW+8 (vest)` representable — the shape ADR 0004's own mapping table flags as impossible today and which
-the youth daily program needs on four movements.
+This plan does **not** decide it. But §7.3's fixed columns must now answer the question the panel asked:
+**why does a fixed-column design survive the next program, when it did not survive this one?**
+
+### 7.3 Columns — corrected after the panel
+
+**The set is the primary home; the prescription is the plan.** An earlier draft had height/distance on
+`prescriptions` with a nullable `entry_sets` "override" — but ADR 0004 §5 rejects prescription-only
+_precisely because ad-hoc logging has no prescription_ (ONB-1 R20), and §7.6 Q2 admits the backfill has no
+prescription to write into. So the set-level column is not an override; it is where the fact lives. That is
+§7.1-D's own argument applied consistently: **the prescription is the plan, the set is what happened.**
+
+That also fixes a self-contradiction: "`entry_sets` gains **two**" while the prescription row silently
+added four more.
+
+| Table           | Columns                                                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `entry_sets`    | `weight_unit`, `is_band`, **`height_num`/`height_unit`, `distance_num`/`distance_unit`** | `weight_num` and `seconds` already exist. Pairing CHECKs are **required, not prose**: `(weight_num IS NULL) = (weight_unit IS NULL)` and `weight_num >= 0` (today enforced only in `parseLoad`), in the `entries_value_source_check` idiom. Numeric precision must be stated — `weight_num` is `(7,3)`, `entries.value_num` is `(8,3)`; pick one and justify.                                    |
+| `prescriptions` | the same dimensions, as the **plan**                                                     | plus `per_side`.                                                                                                                                                                                                                                                                                                                                                                                 |
+| `units`         | `dimension`                                                                              | **Needs the full single-sourcing treatment**: `UNIT_DIMENSIONS` as-const + zod in `packages/shared`, the reference-table seed, and a `db:verify` parity assertion in **both** directions (the `assertCheckCoversConst` idiom). A migration that inserts `in/cm/ft/m/yd` directly is exactly the drift that rule exists to stop — they belong in `UNIT_CODES`/`UNIT_LABELS`, which feed the seed. |
+| `movements`     | **`dimension`**                                                                          | **New, and the earlier draft had no home for it.** "Resolved from the movement's declared dimension" had no source: `movements` has only a nullable `unit_default` (a _unit_, and `null` for every bodyweight movement), and a sled has mass _and_ length so `unit_default` cannot stand in.                                                                                                     |
+
+**`is_bodyweight` moves to `entry_sets`** — the UX panel's finding, and it overturns ADR 0004 §4's
+"varies per set? No". Two independent reasons:
+
+1. **The movement field is free text.** A kid typing "Pushups" (seed slug is `push_up`) creates a new
+   movement that `findOrCreateMovementId` hardcodes `isBodyweight: false` — so the weight becomes required
+   with **no chip left to escape with**, on a gym floor. The client cannot know the flag at typing time
+   anyway; gating on it needs a movement _picker_, which does not exist.
+2. **The vest.** Four YDP movements are bodyweight-**or**-loaded, sometimes in the same session. "Push-ups
+   with the vest today" vs "push-ups plain" is the same movement on consecutive days, so bodyweight is
+   genuinely a property of the _set_.
+
+The movement flag can still drive the **default**, once a picker exists.
+
+**The invariant claim needs weakening or a mechanism.** "An FK + CHECK, not a convention" is not
+achievable as written — a CHECK cannot read another table, and an FK → `units.code` cannot constrain
+dimension. Either add `UNIQUE (code, dimension)` on `units` plus a stored dimension column per measure and
+a **composite FK**, or concede it is writer-enforced (the `prescription_targets` household precedent) and
+drop the claim.
 
 ### 7.4 What this does NOT do
 
@@ -230,6 +274,22 @@ the youth daily program needs on four movements.
 - **It does not add an entry→prescription link** (GAP-1 P1-2), which remains unbuilt and, per V1-22's
   panel, carries its own constraint when it lands.
 
+**The `weight_label` fallout, inventoried properly.** An earlier draft named only `parseLoad`,
+`CANONICAL_LOAD_LABELS` and `LoadChips`. The panel found six more, and two are data-integrity issues
+rather than cleanup:
+
+- **`formatSetLine`** — `weightLabel ?? \`${weight} ${unit}\`` (`set-display.ts:14`). Drop the column
+without shipping the backfill *and* a new formatter in the same deploy and every historical `BW`/`30in`
+  set renders **"10 × ? lb"**.
+- **`isEditableSet`** (`set-display.ts:34`) and **`updateStrengthSetById`**'s `isNull(weightLabel)`
+  (`writers/strength-session.ts:373`) both gate on the label being null. After the drop, **every
+  historical labeled set silently becomes editable** — including the `30in` and `20s` ones whose own
+  docblock says a numeric edit would mask their value. That is a data-integrity regression wearing a UI
+  hat, and it must be an explicit contract-deploy task.
+- The writer's `'weightLabel' in s` branch · `set-fields.tsx`'s whole `mode: 'numeric' | 'load'` prop and
+  its `inputMode="text"`, which exist _only_ for labels and should collapse · `db:verify`'s labeled
+  fixtures · and **`entries.raw_load`**, a second verbatim column the plan had never mentioned.
+
 ### 7.5 Migration shape
 
 Expand → backfill → contract, across separate deploys, per AGENTS.md:
@@ -239,24 +299,93 @@ Expand → backfill → contract, across separate deploys, per AGENTS.md:
 lock_timeout` + `statement_timeout`.
 2. **Backfill** — parse the existing `weight_label` rows into the typed columns in bounded batches.
    `BW` → `is_bodyweight`; `band` → `is_band`; `30in` → height; `123 (50ft)` → weight + distance.
-3. **Contract, in a LATER deploy** — drop `weight_label`, and `parseLoad` loses its label branch. Squawk
-   hard-fails a `DROP COLUMN` alongside app code, which is the rule working as intended.
+3. **Contract, in a LATER deploy** — drop `weight_label`, and `parseLoad` loses its label branch.
+
+⚠️ **An earlier draft justified step 3 by saying "Squawk hard-fails a `DROP COLUMN` alongside app code,
+which is the rule working as intended." There is no Squawk in CI.** The panel checked; the audit is in
+[tech-debt](../tech-debt.md) and AGENTS.md is corrected. Also absent: the Neon-branch apply and the
+forward-only guard that blocks an edited migration. **This migration therefore has no mechanical
+protection at all** beyond the drift guard and `db:verify` (which runs on PGlite and cannot prove lock
+behaviour, `VALIDATE` timing or `CONCURRENTLY`). Wire the forward-only guard and Squawk **before** the
+migration lands, or stop citing them.
+
+**Backfill specifics the draft omitted:** it parses _prod_ `weight_label` rows, not the census corpus —
+and prod holds whatever `parseLoad`'s permissive fallthrough accepted (`75 x 4`, `seventy five pounds`).
+State that an unparseable label **keeps `weight_label` and leaves the typed columns NULL**, write the
+backfill idempotently (`WHERE <col> IS NULL`, bounded by id), and **gate the contract deploy** on
+`count(*) WHERE weight_label IS NOT NULL AND weight_num IS NULL AND NOT is_bodyweight AND NOT is_band` = 0.
+Note DML inside a migration file runs in migrate's transaction, so "bounded batches" is fiction unless the
+backfill is a separate script. Four of the census's twelve shapes (`BW (unassisted)`, `BW (modified)`,
+`30 (2x 15 DB)`) still have **no destination** — say where they go.
 
 `CANONICAL_LOAD_LABELS` / `LoadChips` are superseded by the booleans — but the chips' _ergonomic_
 argument survives (a one-tap affordance beats typing on a phone, and iOS's numeric pad has no letters),
 so it carries over to the new controls rather than being deleted.
 
-### 7.6 Open questions for the panel
+### 7.6 Open questions — after the panel
 
-1. Does the **household magnitude preference** (lb/kg, in/cm) exist anywhere yet, or does this PR create
-   it? Nothing reads `movements.unit_default` today.
-2. Backfill of `123 (50ft)` writes a **prescription-level** distance from a **set-level** string — which
-   prescription, when the row has none?
-3. Is `per_side` on the prescription enough, given `3x10 (5/5) @ 20` puts it in `prescribed` text?
-4. Does §7.2's metric-model route for Stance in Motion need a UX panel of its own (it is a new logging
-   surface), or does it ride V1-5's shipped check-in form?
+1. **Q5 (new, and the largest): fixed columns or a typed child table?** §7.2a. Fixed columns overflowed on
+   the second real program; the child table absorbs vest+ankle+wrist, sled weight+distance and box height
+   in one shape at the cost of a join. **This is the fork to settle before any file-by-file.**
+2. **Stance in Motion: movement or metric?** §7.2. As a _movement_ its duration uses the `seconds` column
+   this plan already activates and it becomes prescribable; as a _metric_ it is unprescribable and the
+   YDP progression rule cannot be expressed. If the metric route is kept, **YDP-2 moves back out of GAP-3**
+   into its own row with the app scope stated.
+3. Does the **household magnitude preference** exist, or does this PR create it? Nothing reads
+   `movements.unit_default` today, and `weight_unit` has no deterministic resolution without it.
+4. `per_side` on the prescription, given `3x10 (5/5) @ 20` puts it in `prescribed` _text_?
+5. Where do `BW (unassisted)`, `BW (modified)` and `30 (2x 15 DB)` land? (`entries.notes`, via V1-9a?)
+6. Does the new logging surface need its own UX panel, or does it ride V1-5's check-in form?
+
+### 7.6a Scope — this is five PRs
+
+A migration + a units seed + a backfill + a form rewrite + a later contract deploy, against a <400-line
+one-concern target at ~4h/wk. Split:
+
+1. `units.dimension` + the length codes, **shared-const first**, no behaviour change.
+2. The `entry_sets` expand migration.
+3. The form/parse rewrite — **needs its own UX panel**; the numeric keypad returns and `LoadChips` is
+   replaced.
+4. The backfill (a script, not a migration file).
+5. The contract drop — a separate deploy, with the `formatSetLine`/`isEditableSet` work in the same one.
 
 ### 7.7 File-by-file
 
-_Written after the panel — the design above is what the panel should attack first, and a file list would
-imply a settledness it has not earned._
+_Still deliberately empty — but for a sharper reason than before: **§7.6 Q1 (fixed columns vs a child
+table) changes what the files are.** A file list written now would encode the fixed-column answer by
+default, which is the decision the panel says is least settled._
+
+## 8. Review-response log (adversarial panel)
+
+Three lenses run 2026-09-23 **before implementation**, with a **dedicated DB-safety reviewer** as
+AGENTS.md requires for a migration, plus the UX panel ADR 0004 mandates. Every finding re-verified against
+the tree before acceptance.
+
+### Blocking
+
+| #   | Lens        | Critique                                                                                                                                                                                                    | Response                                                                                                                                                                                                                          |
+| --- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | DB-safety   | §7.5's safety argument cites **Squawk, which is not in CI** — nor are the Neon-branch apply or the forward-only guard.                                                                                      | **Accepted, and it is bigger than this plan.** Verified; AGENTS.md claimed five gates that do not exist. Audited and corrected separately (#132). §7.5 now says this migration has no mechanical protection until they are wired. |
+| B2  | DB-safety   | "Resolved from the movement's declared dimension" **has no source** — `movements` has no `dimension` column, only a nullable `unit_default` that is NULL for every bodyweight movement.                     | **Accepted.** `movements.dimension` added to §7.3.                                                                                                                                                                                |
+| B3  | DB-safety   | "An FK + CHECK, not a convention" is **not achievable** — a CHECK cannot read another table.                                                                                                                | **Accepted.** §7.3 now offers the composite-FK mechanism or concedes writer-enforcement; the unqualified claim is gone.                                                                                                           |
+| B4  | Correctness | **§7.2's scope reduction is half-wrong.** A metric-modelled Stance in Motion is **unprescribable** (`prescriptions.movementId` is NOT NULL FK → `movements`), yet the YDP seed gives it a progression rule. | **Accepted — retracted, not edited.** Verified at `schema.ts:499-501` and `seed.json:95`. §7.2 now records the retraction, because a claim that _removes_ work is exactly the kind that should not vanish quietly.                |
+| B5  | Correctness | §7.3 **contradicts its own column count**, and the set-level column should be **primary, not an override** — ad-hoc logging has no prescription.                                                            | **Accepted.** §7.3 inverted: the prescription is the plan, the set is the fact.                                                                                                                                                   |
+| B6  | UX          | `movements.is_bodyweight` **cannot gate this form** — the movement field is free text, and a kid typing "Pushups" gets `is_bodyweight=false` with no chip to escape with.                                   | **Accepted.** `is_bodyweight` moves to `entry_sets`, overturning ADR 0004 §4.                                                                                                                                                     |
+| B7  | UX          | **The vest.** Four YDP movements are bodyweight-or-loaded _in the same session_, which kills bodyweight-as-movement-property independently of B6.                                                           | **Accepted** — the second, stronger reason for the same move.                                                                                                                                                                     |
+
+### Major — all accepted
+
+`units.dimension` needs the full **shared-const → zod → seed → `db:verify` parity** treatment, and the
+length codes belong in `UNIT_CODES`, not in a raw migration insert · the **backfill parses prod labels,
+not the census corpus**, is non-total, and needs an explicit unparseable-row rule plus a gate on the
+contract deploy · **six more `weight_label` consumers**, two of them data-integrity (`formatSetLine`
+blanking history; `isEditableSet` silently making every labeled set editable) · the set-level override
+columns had **no names, types or precision** · pairing CHECKs existed only in prose · **five PRs, not
+one** · the seed's `onConflictDoNothing` would leave existing `units` rows with `dimension = NULL` forever.
+
+### Pushed back — partially
+
+| #   | Lens        | Critique                                                                  | Response                                                                                                                                                                                                                                                                                               |
+| --- | ----------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P1  | Correctness | §7.1 overstates the census: A and C are _confirmations_, not corrections. | **Accepted on the facts, and §7.1 now says so** — one genuine correction (B), two confirmations. Recorded as a pushback only because the confirmations still earn their place: ADR 0004 argued A from first principles, and a census that independently confirms it is evidence, not filler.           |
+| P2  | Correctness | Prefer the typed child table outright.                                    | **Not decided here.** It is now **§7.6 Q1, the plan's largest fork**, with the panel's argument stated in §7.2a — including the question the fixed-column design must answer. Deciding a schema shape inside a review-response row would be exactly the kind of quiet call this log exists to prevent. |
