@@ -42,7 +42,36 @@ _log_ against a program and _display_ one, but a human cannot _write_ one.
 — using tables that already exist, and it is testable today. B is not blocked by taste but by two
 unbuilt dependencies, and building the editor twice is cheaper than building it once and wrong.
 
-**What A cannot do, stated plainly so it is not discovered later:** it cannot author the daily A/B
+### They are not phases. They must CO-EXIST — permanently
+
+_(Ray, 2026-09-23 — and this reframes the whole plan.)_ A-then-B reads like a migration where B replaces
+A. **It is not**, because **Ray's own athletes run both program shapes at the same time:**
+
+- the **weekday S&C block** — `day_role`, assigned days, prescribed per-kid loads → the **A** shape
+- the **daily A/B program** — every day, session-indexed, no prescribed loads → the **B** shape
+
+Off-season he adds the first **on top of** the second. So "does the app support A or B" was the wrong
+question: **it has to hold both at once, for one athlete, on the same day.**
+
+Three consequences, and they make the design simpler rather than harder:
+
+1. **The schedule shape is a per-program field, never a global mode or a setting.** It belongs on
+   SCHED-1's block↔athlete assignment row — `schedule_kind ∈ { assigned_days, session_rotation }` plus
+   its shape-specific config. A household can then run one of each, which is exactly Ray's case.
+2. **B is purely ADDITIVE — expand, never contract.** A new `schedule_kind` (defaulting to
+   `assigned_days`) and new measurement columns leave every A-shaped program byte-identical. That is the
+   repo's standing migration discipline (AGENTS.md: expand → backfill → contract) applied to a feature
+   rather than a column, and it means shipping A first costs nothing that B has to undo.
+3. **One editor, not two.** The screen's shape is the same — a list of movements with per-athlete
+   values. B adds a schedule control and more measurement field types to the _same_ rows. Two editors
+   would be the real error: a coach should not have to know which kind of program they are editing
+   before they can open it.
+
+**So the revised recommendation is A first _because_ B is additive** — not as a compromise, and not as a
+phase to be superseded. The question "could they co-exist?" has to be answered **yes** for the product to
+serve the household it was built for.
+
+**What A alone cannot do, stated plainly so it is not discovered later:** it cannot author the daily A/B
 program in [`samples/youth-daily-program`](../samples/youth-daily-program/README.md). That program needs
 session-indexed rotation (SCHED-1's missing third shape), three simultaneous load slots on Stance in
 Motion (GAP-3), and a box-height field (no length dimension exists). **A coach could author Ray's
@@ -137,7 +166,9 @@ targets. Say this in the UI rather than implying more.
 
 ## Open questions
 
-1. **Scope A or B?** The plan recommends A; it is Ray's call, and B's dependencies make it a multi-PR arc.
+1. ~~**Scope A or B?**~~ **Answered 2026-09-23: both, permanently.** A ships first because B is purely
+   additive; see "They must co-exist" above. What remains open is only the _ordering_ of B's pieces,
+   which is SCHED-1's and GAP-3's to sequence.
 2. Does the editor create blocks, or only edit seeded ones, in A?
 3. Where does the daily A/B program get authored in the meantime — hardcoded seed, as today?
 4. Does editing a `day_role`'s movements need an audit trail, given risk 2?

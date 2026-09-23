@@ -377,6 +377,44 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
+- **YDP — run the youth daily program (the second real program).** _(Ray, 2026-09-23.)_ Everything the
+  app needs before [Ray's daily A/B program](./samples/youth-daily-program/README.md) — the one his kids
+  actually run, every day, on paper — can be logged in mat-plan. Grouped because they share one goal and
+  one piece of evidence, and because a scattered finding gets re-derived rather than built.
+
+  **They must co-exist with the weekday S&C block, not replace it** — Ray runs both at once, adding the
+  block on top of the daily program in the off-season. So every item below is **additive**: an existing
+  weekday program keeps working byte-identically.
+
+  - **YDP-1 — session-indexed rotation** _(also SCHED-1's third schedule shape)_. The program runs daily,
+    alternating `A → B → A`, with the letter from **completed-session count, never the calendar** — the
+    spec gives the failure mode (`date % 2` doubles up box jumps after a missed day) and a sample session
+    proves it. Needs `schedule_kind` on SCHED-1's assignment row and the **recorded daily verdicts**
+    SCHED-1 already requires, since "completed sessions" is a question about history. **Blocked on
+    SCHED-1.**
+  - **YDP-2 — multi-slot loads + duration on one activity.** Stance in Motion carries
+    `duration_minutes` with **independent** `vest_lbs` / `ankle_lbs` / `wrist_lbs`, any combination
+    including none. Today a set has ONE `weight_num`, and `entry_sets.seconds` has no writer outside the
+    strength path. **ADR 0004's mapping table does not anticipate three simultaneous load slots** — it
+    handles one weight plus at most one other dimension (`123 (50ft)`). This is the same class of
+    surprise the legacy CSVs produced with per-set slash lists, and it is **daily** work, not an edge
+    case. **GAP-3 must see this before its columns are fixed.**
+  - **YDP-3 — read `movements.is_bodyweight`.** It exists on the table, and
+    `findOrCreateMovementId` hardcodes `false` (`apps/web/lib/dal/catalog.ts:80`); nothing in the app
+    reads it. Four movements in this program have no meaningful weight field, so the log asks for a
+    number that does not exist. Small, concrete, and unblocks a cleaner `BW` story ahead of GAP-3.
+  - **YDP-4 — the extras: box height, ladder rounds, fixed-set checkboxes.** Box height is a **length**
+    dimension, which `UNIT_CODES` does not have at all (GAP-3/ADR 0004 §6). Ladder rounds fits the
+    existing `ladder` metric's `value_num`. Hip thrusts are `3 × 10 per side` tracked as three completion
+    checkboxes rather than a rep field — loggable as three sets today, but the affordance and `per_side`
+    are not modelled.
+  - **YDP-5 — youth guardrails as engine limits.** _No forced eccentrics · no max-effort grip work · no
+    loaded jumping_, with an anatomical rationale (an unfused apophysis is not a mature tendon
+    attachment). The repo's **first domain-specific safety constraints**. They belong to `packages/engine`
+    (v2): **AI-1 S1** already permits a load derived by _a readable rule_, and these are what such a rule
+    must respect. Recorded now so they are inherited rather than rediscovered — and per the spec they are
+    **hard limits, not defaults.**
+
 - **MOT — motivation & retention (the behavior-change layer).** _(Ray, 2026-09-16.)_ The product spec's
   **top risk** is that nobody logs: the premise is behavior change and the app is **entirely schema** —
   today the only motivational surface in the whole product is the calisthenics `<progress>` bar
