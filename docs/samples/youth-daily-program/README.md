@@ -110,12 +110,21 @@ anatomical rather than a matter of preference, which is why they are limits and 
 
 ## What this implies
 
-1. **SCHED-1** gains a third schedule shape (finding 1) and inherits the streak completion rule
-   (finding 3).
-2. **GAP-3's column design should read finding 2 before it is fixed** — the same role the legacy CSVs
-   played, for a shape they did not contain.
-3. **The program editor** ([v1-22 plan](../../plans/v1-22-program-editor.md)) must be able to author
-   this program, not just Ray's weekday block. It is the harder of the two and therefore the better
-   design target.
-4. **`movements.is_bodyweight` should start being read.** It exists, the app hardcodes `false`, and this
-   program has four movements where a weight field is meaningless.
+Each finding is now a backlog row, not a note — see **YDP** in [plan.md](../../plan.md):
+
+| Finding                                 | Row       | Blocked on     |
+| --------------------------------------- | --------- | -------------- |
+| Session-indexed rotation                | **YDP-1** | SCHED-1        |
+| Three load slots + duration             | **YDP-2** | GAP-3          |
+| `movements.is_bodyweight` unread        | **YDP-3** | nothing        |
+| Box height · ladder rounds · fixed sets | **YDP-4** | GAP-3 (height) |
+| Youth guardrails                        | **YDP-5** | v2 engine      |
+
+Also folded into the rows they correct: **SCHED-1** gains the third schedule shape, **MOT-1** adopts this
+program's completion rule, and **GAP-3's** column design should read finding 2 before it is fixed — the
+same role the legacy CSVs played, for a shape they did not contain.
+
+**The two program shapes co-exist permanently.** Ray runs the weekday S&C block _on top of_ this daily
+program in the off-season, so the app must hold both at once for one athlete on the same day. That is why
+every YDP row is additive and why the schedule shape belongs on a per-program assignment row rather than
+being a mode — see [V1-22](../../plans/v1-22-program-editor.md) → "They must co-exist".
