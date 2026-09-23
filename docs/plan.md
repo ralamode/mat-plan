@@ -399,10 +399,29 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
     handles one weight plus at most one other dimension (`123 (50ft)`). This is the same class of
     surprise the legacy CSVs produced with per-set slash lists, and it is **daily** work, not an edge
     case. **GAP-3 must see this before its columns are fixed.**
-  - **YDP-3 — read `movements.is_bodyweight`.** It exists on the table, and
-    `findOrCreateMovementId` hardcodes `false` (`apps/web/lib/dal/catalog.ts:80`); nothing in the app
-    reads it. Four movements in this program have no meaningful weight field, so the log asks for a
-    number that does not exist. Small, concrete, and unblocks a cleaner `BW` story ahead of GAP-3.
+  - **YDP-3 — ~~read `movements.is_bodyweight`~~ → FOLDED INTO GAP-3 (2026-09-23).** Investigated before
+    implementing; **the row rested on two claims that are false**, so it is corrected here rather than
+    built.
+
+    1. **`findOrCreateMovementId`'s `isBodyweight: false` is not a bug.** The insert is
+       `ON CONFLICT DO NOTHING` on `slug` (`apps/web/lib/dal/catalog.ts:76-88`), so the 7 seeded
+       bodyweight movements keep their correct `true`. The hardcode only applies to a genuinely NEW
+       movement typed as free text, where the app has no way to know — `false` is the safe default, not
+       an oversight.
+    2. **"These movements have no meaningful weight field" is wrong for this very program.** Push-ups,
+       pull-ups, leg raises and inverted rows are all
+       `"weight": { "applies": true, "required": false, "source": "vest" }` in
+       [seed.json](./samples/youth-daily-program/seed.json) — bodyweight movements that **can** be
+       weighted. So auto-filling `BW` would **silently mis-log a vest session**, which is the V1-10
+       confirm-gate failure in a new costume. Today's design — field required, `BW` one tap via
+       `LoadChips` — is correct and should not change.
+
+    **Where the column's value actually lands:** [ADR 0004](./decisions/0004-typed-measurements.md)
+    already assigns it a consumer — its mapping table has `BW → movements.is_bodyweight (already)` and
+    `BW+8 (vest) → is_bodyweight + weight_num`, the shape it flags as **not representable today** and
+    exactly what this program needs. So `is_bodyweight` becomes load-bearing **as part of GAP-3**, not
+    before it. Tracked there; no separate row.
+
   - **YDP-4 — the extras: box height, ladder rounds, fixed-set checkboxes.** Box height is a **length**
     dimension, which `UNIT_CODES` does not have at all (GAP-3/ADR 0004 §6). Ladder rounds fits the
     existing `ladder` metric's `value_num`. Hip thrusts are `3 × 10 per side` tracked as three completion
