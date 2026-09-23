@@ -3,16 +3,18 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-22
 
 ## Where we are right now
 
 📍 **v1 (the MVP) — feature-complete except its finish line.** Every logging surface is built and
 merged: per-kid routines, weigh-ins, check-ins, calisthenics + weekly adherence, life activities,
 strength sessions with supersets, edit-a-set, skipped/sub-failure, and the Today's-program card. The
-MVP finish line is **CSV export**, and it is **blocked** — on four legacy CSV sample files, a
-find-four-files task that now also gates GAP-3, AI-1 and the open-source release. **That block is the
-single highest-leverage action in the project.**
+MVP finish line is **CSV export**. It was **blocked** on the legacy CSV sample files for six weeks;
+**#121 landed them** and **#126 turned them into a shape census**
+([gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)) — so the chain that gated GAP-3,
+V1-13, AI-1 and the open-source release is **clear**, and GAP-3's column design is the next thing to
+write.
 
 ⚠️ **Two things this tracker did not say for six weeks, now recorded.** (1) **No athlete has used the
 app yet.** v1's own verification — _"hand the URL to the kids; observe a real day logged"_ — is unrun,
@@ -125,8 +127,8 @@ migrations).
 needed the entry schema and a write path, "both present after v1". Both are present; **neither is
 settled**, because [ADR 0004](./decisions/0004-typed-measurements.md) replaces the measurement columns
 AI-1 extracts into. AI-1 now sequences **behind GAP-3**: legacy CSV samples → GAP-3 → V1-13 → AI-1 →
-OSS-1. So the **four legacy CSV samples now gate going public**, not just V1-13 — the single
-highest-leverage unblock in the backlog, and a find-four-files task rather than engineering.
+OSS-1 — so the legacy CSV samples gated **going public**, not just V1-13. **That gate is now open:**
+the samples merged in #121 and the shape census in #126.
 
 **Merged — V1-19: "Fill in today's movements".** One tap builds the strength form from the day's
 program — a card per prescription, in the coach's order, with the right number of set rows — so the
@@ -204,6 +206,20 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 | V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-22** — **GAP-3 evidence: the shape census** (#126,
+  [gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)). Every distinct `load` and
+  `prescribed` shape in the four `strength-log` samples, counted — **12 shapes each**, from 22 and 23
+  distinct strings over 44 rows / 22 movement-slots. Three findings the column design has to answer
+  to: (1) **ADR 0004's "something that appears thirty times" does not exist** — the head is two shapes
+  (bare `BW`, per-set slash list) covering 20 of 44 rows, and **seven of the twelve `load` shapes rest
+  on one authored cell each**, so this corpus is strong evidence for _which_ shapes exist and weak
+  evidence for _how often_; (2) **box-jump height changes columns between the two months** (`load=30in`
+  in June, `load=BW, prescribed=4x3 @ 30in` in July — same movement, same author); (3) the **em dash is
+  not a measurement shape at all** — 21 of 44 rows carry U+2014 and every one is in `notes`. Also:
+  `~`/ranges are prescribed-only (0 rows in `load`), neither column is ever blank (`SKIPPED` is the
+  sentinel), weight units are never written while `s`/`in`/`ft` always are, and **30 of 44 `load` rows
+  are not a number**. Inventory only — the plan sections are deliberately empty.
 
 - **2026-09-16** — **Docs catch-up + two planning PRs.** **#117** completed the **AI-1 NL-logging plan**
   (S1–S5): the load-provenance invariant, why the confirm chip is UX and not the safety mechanism, what
