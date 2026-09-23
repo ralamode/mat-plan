@@ -1,0 +1,230 @@
+{
+  "program": {
+    "id": "youth-daily-v1",
+    "name": "Youth Daily Training Program",
+    "description": "Daily home conditioning for youth wrestlers. No rest day; load is managed by rotating movements rather than by days off.",
+    "rotation": {
+      "type": "session_indexed",
+      "sequence": ["A", "B"],
+      "note": "Derive the letter from the count of completed sessions, not from the calendar date. A calendar-derived letter will double up box jumps after any missed day."
+    },
+    "tracking": {
+      "max_sets": 10,
+      "set_value": "reps",
+      "empty_set_means": "not_performed",
+      "weight_field": "number_lbs | BW | null"
+    }
+  },
+
+  "exercises": [
+    {
+      "id": "push_ups",
+      "name": "Push-Ups",
+      "block": "core",
+      "days": ["A", "B"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": true, "required": false, "source": "vest" }
+    },
+    {
+      "id": "pull_ups",
+      "name": "Pull-Ups",
+      "block": "core",
+      "days": ["A", "B"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": true, "required": false, "source": "vest" },
+      "progression": "At 10 clean reps in a set, advance the variation rather than the rep count."
+    },
+    {
+      "id": "leg_raises",
+      "name": "Leg Raises",
+      "block": "core",
+      "days": ["A", "B"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": true, "required": false, "source": "ankle" }
+    },
+    {
+      "id": "v_sit_crunches",
+      "name": "V-Sit Crunches",
+      "block": "core",
+      "days": ["A", "B"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": false }
+    },
+    {
+      "id": "box_jumps",
+      "name": "Box Jumps",
+      "block": "rotating",
+      "days": ["A"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": false },
+      "extra_fields": [{ "id": "box_height_in", "type": "number" }],
+      "progression": "Advance box height, not rep count. High-rep jumping is fatigue work, not power work.",
+      "guardrail": "No loaded jumping for youth athletes."
+    },
+    {
+      "id": "inverted_rows",
+      "name": "Inverted Rows",
+      "block": "rotating",
+      "days": ["A"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": true, "required": false, "source": "vest" },
+      "progression": "Lower the bar toward horizontal before adding external weight."
+    },
+    {
+      "id": "kb_swings",
+      "name": "KB Swings",
+      "block": "rotating",
+      "days": ["B"],
+      "tracks": "reps_per_set",
+      "weight": { "applies": true, "required": true, "source": "bell", "unit": "lbs" },
+      "progression": "Advance bell weight once 3 sets of 15 are crisp."
+    }
+  ],
+
+  "every_day_block": [
+    {
+      "id": "stance_in_motion",
+      "name": "Stance in Motion",
+      "tracks": "fields",
+      "fields": [
+        { "id": "duration_minutes", "type": "number", "required": true },
+        { "id": "vest_lbs", "type": "number_or_none", "required": false },
+        { "id": "ankle_lbs", "type": "number_or_none", "required": false },
+        { "id": "wrist_lbs", "type": "number_or_none", "required": false }
+      ],
+      "progression": "Advance duration first, then add one load slot at a time."
+    },
+    {
+      "id": "rice_bucket",
+      "name": "Rice Bucket",
+      "tracks": "boolean",
+      "purpose": "Grip, forearm and extensor balance work."
+    },
+    {
+      "id": "ladder_drills",
+      "name": "Ladder Drills",
+      "tracks": "boolean_plus_count",
+      "count_field": { "id": "rounds", "type": "integer" }
+    },
+    {
+      "id": "single_leg_hip_thrusts",
+      "name": "Single-Leg Hip Thrusts",
+      "tracks": "fixed_set_checkboxes",
+      "prescription": { "sets": 3, "reps": 10, "per_side": true },
+      "purpose": "Posterior chain and single-leg stability."
+    }
+  ],
+
+  "guardrails": {
+    "population": "youth",
+    "rationale": "The medial epicondyle in a growing athlete is an unfused apophysis, not a mature tendon attachment. Repeated maximal eccentric flexor load is the mechanism behind Little League elbow.",
+    "hard_limits": ["no_forced_eccentrics", "no_max_effort_grip_work", "no_loaded_jumping"]
+  },
+
+  "streak": {
+    "displayed": true,
+    "manual_on_paper": true,
+    "completion_rule": "core_block_plus_every_day_block",
+    "note": "The rotating movement is optional for streak purposes so a missing box does not punish a kid who did the work. Streak resets on a missed day; rotation does not."
+  },
+
+  "sample_sessions": [
+    {
+      "athlete_id": "athlete_1",
+      "date": "2026-09-15",
+      "day_letter": "A",
+      "streak_number": 1,
+      "exercises": [
+        { "exercise_id": "push_ups", "weight": "BW", "sets": [15, 12, 10] },
+        { "exercise_id": "pull_ups", "weight": "BW", "sets": [5, 4, 3] },
+        { "exercise_id": "leg_raises", "weight": "BW", "sets": [12, 12, 10] },
+        { "exercise_id": "v_sit_crunches", "weight": "BW", "sets": [20, 15] },
+        { "exercise_id": "box_jumps", "weight": null, "sets": [8, 8, 8], "box_height_in": 18 },
+        { "exercise_id": "inverted_rows", "weight": "BW", "sets": [10, 8, 8] }
+      ],
+      "stance_in_motion": {
+        "duration_minutes": 5,
+        "vest_lbs": null,
+        "ankle_lbs": null,
+        "wrist_lbs": null
+      },
+      "rice_bucket": true,
+      "ladder_drills": true,
+      "ladder_rounds": 4,
+      "hip_thrust_sets": [true, true, true]
+    },
+    {
+      "athlete_id": "athlete_1",
+      "date": "2026-09-16",
+      "day_letter": "B",
+      "streak_number": 2,
+      "exercises": [
+        { "exercise_id": "push_ups", "weight": "BW", "sets": [15, 13, 11, 8] },
+        { "exercise_id": "pull_ups", "weight": "BW", "sets": [5, 4, 4] },
+        { "exercise_id": "leg_raises", "weight": "BW", "sets": [12, 12, 12] },
+        { "exercise_id": "v_sit_crunches", "weight": "BW", "sets": [20, 18] },
+        { "exercise_id": "kb_swings", "weight": 20, "sets": [15, 15, 12] }
+      ],
+      "stance_in_motion": {
+        "duration_minutes": 6,
+        "vest_lbs": 5,
+        "ankle_lbs": null,
+        "wrist_lbs": null
+      },
+      "rice_bucket": true,
+      "ladder_drills": true,
+      "ladder_rounds": 5,
+      "hip_thrust_sets": [true, true, true]
+    },
+    {
+      "athlete_id": "athlete_2",
+      "date": "2026-09-16",
+      "day_letter": "A",
+      "streak_number": 1,
+      "_comment": "Partial session — common with younger athletes. Should still count as logged.",
+      "exercises": [
+        { "exercise_id": "push_ups", "weight": "BW", "sets": [10, 8] },
+        { "exercise_id": "pull_ups", "weight": "BW", "sets": [2, 1] },
+        { "exercise_id": "leg_raises", "weight": "BW", "sets": [10] },
+        { "exercise_id": "v_sit_crunches", "weight": "BW", "sets": [12, 10] },
+        { "exercise_id": "box_jumps", "weight": null, "sets": [], "box_height_in": 12 },
+        { "exercise_id": "inverted_rows", "weight": "BW", "sets": [8, 6] }
+      ],
+      "stance_in_motion": {
+        "duration_minutes": 3,
+        "vest_lbs": null,
+        "ankle_lbs": null,
+        "wrist_lbs": null
+      },
+      "rice_bucket": true,
+      "ladder_drills": false,
+      "ladder_rounds": 0,
+      "hip_thrust_sets": [true, true, false]
+    },
+    {
+      "athlete_id": "athlete_1",
+      "date": "2026-09-18",
+      "day_letter": "A",
+      "streak_number": 1,
+      "_comment": "Missed 9/17. Streak reset to 1, but the rotation still advanced B -> A rather than jumping to match the calendar.",
+      "exercises": [
+        { "exercise_id": "push_ups", "weight": "BW", "sets": [16, 13, 11] },
+        { "exercise_id": "pull_ups", "weight": "BW", "sets": [6, 4, 3] },
+        { "exercise_id": "leg_raises", "weight": "BW", "sets": [12, 12, 12] },
+        { "exercise_id": "v_sit_crunches", "weight": "BW", "sets": [22, 18] },
+        { "exercise_id": "box_jumps", "weight": null, "sets": [8, 8, 8, 8], "box_height_in": 18 },
+        { "exercise_id": "inverted_rows", "weight": "BW", "sets": [10, 10, 8] }
+      ],
+      "stance_in_motion": {
+        "duration_minutes": 5,
+        "vest_lbs": null,
+        "ankle_lbs": 2,
+        "wrist_lbs": null
+      },
+      "rice_bucket": true,
+      "ladder_drills": true,
+      "ladder_rounds": 4,
+      "hip_thrust_sets": [true, true, true]
+    }
+  ]
+}
