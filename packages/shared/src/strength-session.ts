@@ -12,6 +12,10 @@ import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
  *  so the derivation is expressed in code, not two magic numbers that can drift. */
 export const MAX_SESSION_MOVEMENTS = 12;
 export const MAX_SESSION_SUPERSETS = Math.floor(MAX_SESSION_MOVEMENTS / 2);
+/** Max sets on one movement. Was an inline `.max(20)`; V1-19's scaffold has to clamp to the SAME
+ *  number when it builds set rows from a prescription (`prescriptions_sets_check` allows any
+ *  `sets > 0`), and two copies of that bound would drift into a form that cannot submit. */
+export const MAX_SETS_PER_MOVEMENT = 20;
 
 /**
  * One movement within a logged session: a named movement, its unit, its own idempotency
@@ -55,7 +59,7 @@ export const sessionMovementSchema = z.object({
   // (the trap `strength.ts`'s header documents at length). The rendered error is unchanged: the action
   // maps any issue with a numeric `path[1]` to `Movement N: <message>`, and `path[1]` is the movement
   // index whether the issue sits at ['movements', i] or ['movements', i, 'sets'].
-  sets: z.array(strengthSetSchema).max(20),
+  sets: z.array(strengthSetSchema).max(MAX_SETS_PER_MOVEMENT),
   supersetClientId: uuidSchema.optional(),
   supersetOrder: z.coerce.number().int().positive().optional(),
 });

@@ -140,7 +140,20 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 ) : null}
                 {/* GAP-1 P0-1: the weekday's role PRE-SELECTS the form's day picker; it is never
                     submitted implicitly (see the note on that select). */}
-                <StrengthForm profileId={profile.id} day={day} defaultDayRole={dayRole} />
+                <StrengthForm
+                  profileId={profile.id}
+                  day={day}
+                  defaultDayRole={dayRole}
+                  // V1-19 — NARROWED on purpose: `ProgramDayDTO` also carries this kid's prescribed
+                  // `load`, and the one invariant the scaffold exists to protect is that no authored
+                  // load reaches an input. Mapping it away here makes that a property of the type
+                  // rather than something a unit test has to notice.
+                  programDay={programDay.map(({ idx, movementName, sets }) => ({
+                    idx,
+                    movementName,
+                    sets,
+                  }))}
+                />
               </section>
             );
           }
