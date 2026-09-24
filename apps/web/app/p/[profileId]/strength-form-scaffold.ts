@@ -90,12 +90,25 @@ function clampSetCount(sets: number | null): number {
  */
 export function isUntouchedScaffold(m: {
   scaffolded?: boolean;
-  sets: readonly { reps: string; weight: string; status?: string }[];
+  sets: readonly {
+    reps: string;
+    weight: string;
+    status?: string;
+    isBodyweight?: boolean;
+    isBand?: boolean;
+  }[];
   status?: string;
 }): boolean {
   return (
     m.scaffolded === true &&
     isDefaultStatus(m.status) &&
-    m.sets.every((s) => s.reps.trim() === '' && s.weight.trim() === '' && isDefaultStatus(s.status))
+    m.sets.every(
+      (s) =>
+        s.reps.trim() === '' &&
+        s.weight.trim() === '' &&
+        !s.isBodyweight &&
+        !s.isBand &&
+        isDefaultStatus(s.status),
+    )
   );
 }

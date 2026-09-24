@@ -1,16 +1,22 @@
 'use client';
 
 import {
-  BODYWEIGHT_UNITS,
   DAY_ROLE_LABELS,
   type DayRole,
   DEFAULT_BODYWEIGHT_UNIT,
   ENTRY_STATUS,
   FREE_TEXT_NOTE_MAX,
+  LOGGABLE_DIMENSION_LABELS,
+  LOGGABLE_DIMENSIONS,
   type MovementStatus,
   newId,
   type SetStatus,
   STRENGTH_DAY_ROLES,
+  type Unit,
+  UNIT_DIMENSION_BY_CODE,
+  UNIT_LABELS,
+  type UnitDimension,
+  unitsOfDimension,
 } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
@@ -21,7 +27,7 @@ import { INPUT_CLASS } from '@/lib/constants';
 import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
-import { LoadChips } from './load-chips';
+import { SetModeToggles } from './set-mode-toggles';
 import { SetRepsWeightFields } from './set-fields';
 import { isUntouchedScaffold, type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
 import {
@@ -37,7 +43,18 @@ import {
 // owns its OWN `sets` array in this parent state, so add-set on one card can never mutate another
 // (the independence the panel flagged) — no shared set-key list. React keys are UUIDs: a set's own
 // `key`, a movement's `clientId` (which doubles as its entry idempotency key).
-export type SetVals = { key: string; reps: string; weight: string; status?: SetStatus };
+export type SetVals = {
+  key: string;
+  reps: string;
+  weight: string;
+  // GAP-3 PR 4a. The two load MODES, as booleans — they replaced the `BW`/`band` STRINGS the old chips
+  // wrote into `weight`. ⚠️ Anything added here must also be taught to the two "is this card
+  // untouched?" predicates (`strength-form-supersets.ts`, `strength-form-scaffold.ts`) or a set
+  // carrying ONLY the new field is silently DELETED at submit.
+  isBodyweight?: boolean;
+  isBand?: boolean;
+  status?: SetStatus;
+};
 export type MovementVals = {
   clientId: string;
   movementName: string;
@@ -231,6 +248,12 @@ function StrengthFormBody({
           : m.sets.map((s) => ({
               reps: s.reps,
               weight: s.weight,
+              // Spread so FALSE stays ABSENT on the wire, matching the status idiom: the schema
+              // defaults both to false, and the writer omits the column so Postgres applies its own
+              // default. One default, in one place — and an untouched set serializes byte-identically
+              // to how it did before PR 4a.
+              ...(s.isBodyweight ? { isBodyweight: true } : {}),
+              ...(s.isBand ? { isBand: true } : {}),
               ...(s.status !== undefined ? { status: s.status } : {}),
             })),
       ...(m.status !== undefined ? { status: m.status } : {}),
@@ -440,10 +463,17 @@ function MovementCard({
   onRemove: () => void;
   onAddSet: () => void;
   onRemoveSet: (setKey: string) => void;
-  onSet: (setKey: string, patch: Partial<Pick<SetVals, 'reps' | 'weight' | 'status'>>) => void;
+  onSet: (
+    setKey: string,
+    patch: Partial<Pick<SetVals, 'reps' | 'weight' | 'status' | 'isBodyweight' | 'isBand'>>,
+  ) => void;
 }) {
   const nameId = `movement-${movement.clientId}-name`;
   const unitId = `movement-${movement.clientId}-unit`;
+  const dimensionId = `movement-${movement.clientId}-dimension`;
+  // The movement carries only a UNIT; its dimension is derived, so there is no second field to keep in
+  // sync and no way for the pair to disagree with `units(code, dimension)`.
+  const dimension = UNIT_DIMENSION_BY_CODE[movement.unit as Unit];
   const inSuperset = movement.supersetClientId != null;
   const isSkipped = movement.status === ENTRY_STATUS.skipped;
 
@@ -453,7 +483,10 @@ function MovementCard({
   // dead. That is the identical trap the Skipped branch already documents below, at a scale of 25 rows.
   if (collapsed) {
     const filled = movement.sets.filter(
-      (s) => s.reps.trim() !== '' || s.weight.trim() !== '',
+      // GAP-3 PR 4a: a BW-only set IS progress. Without the flags the collapsed card's counter reads
+      // 0/3 for a fully-tapped bodyweight movement, and that counter is the only "where am I" signal
+      // across a 7-movement day.
+      (s) => s.reps.trim() !== '' || s.weight.trim() !== '' || s.isBodyweight || s.isBand,
     ).length;
     return (
       <button
@@ -531,6 +564,36 @@ function MovementCard({
             className={INPUT_CLASS}
           />
         </div>
+        {/* GAP-3 PR 4a — DIMENSION FIRST, then the units of that dimension.
+            The panel killed a single widened select: nine 1-2 character codes (`m`/`min`/`in`/`cm`)
+            adjacent on an iOS wheel picker is a trap, and the mistake is UNRECOVERABLE — a squat
+            logged in `sec` has dimension `time`, so `isEditableSet` refuses it and there is no delete
+            action in this app. Asking the plain-words question first makes a squat-in-seconds
+            unreachable rather than merely unlikely, and `mass` is the default so the common movement
+            costs zero extra taps. */}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={dimensionId} className="text-sm font-medium">
+            Measuring
+          </label>
+          <select
+            id={dimensionId}
+            value={dimension}
+            onChange={(e) => {
+              // Switching dimension re-homes the unit to that dimension's first code — the pair can
+              // never be left inconsistent, which is what the composite FK would otherwise reject.
+              const next = unitsOfDimension(e.target.value as UnitDimension)[0];
+              if (next) onUnit(next);
+            }}
+            className={INPUT_CLASS}
+            aria-label={`What movement ${index + 1} measures`}
+          >
+            {LOGGABLE_DIMENSIONS.map((d) => (
+              <option key={d} value={d}>
+                {LOGGABLE_DIMENSION_LABELS[d] ?? d}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor={unitId} className="text-sm font-medium">
             Unit
@@ -540,10 +603,13 @@ function MovementCard({
             value={movement.unit}
             onChange={(e) => onUnit(e.target.value)}
             className={INPUT_CLASS}
+            aria-label={`Unit for movement ${index + 1}`}
           >
-            {BODYWEIGHT_UNITS.map((u) => (
+            {/* UNIT_LABELS, not the raw codes: `in` and `m` are unreadable aloud and near-invisible
+                on a wheel picker. The labels already exist in packages/shared and had no consumer. */}
+            {unitsOfDimension(dimension).map((u) => (
               <option key={u} value={u}>
-                {u}
+                {UNIT_LABELS[u]}
               </option>
             ))}
           </select>
@@ -599,18 +665,25 @@ function MovementCard({
                   onReps={(v) => onSet(s.key, { reps: v })}
                   onWeight={(v) => onSet(s.key, { weight: v })}
                   ariaLabel={`Movement ${index + 1} set ${i + 1}`}
-                  // GAP-1 P0-2: the LOG form accepts a text load (BW / band / 30in / 30s). The V1-9 edit
-                  // form keeps the default numeric mode — its schema and its SQL guard are numeric-only.
-                  mode="load"
+                  // ⚠️ LOAD-BEARING. A BW or band set legitimately has NO magnitude, and a `required`
+                  // input that must be empty blocks the native submit with an error the browser will
+                  // not render — the form just appears dead. `strengthSetSchema`'s superRefine is what
+                  // actually enforces "a set must carry some load", because it can see all three
+                  // fields at once and reports through fieldErrors.
+                  weightRequired={!s.isBodyweight && !s.isBand}
+                  unitLabel={movement.unit}
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2 pl-7">
-                {/* One-tap canonical labels. Without these, `BW` — the most common load in the program —
-                would be the hardest thing to enter on a phone. */}
-                <LoadChips
-                  active={s.weight}
-                  onPick={(v) => onSet(s.key, { weight: v })}
-                  ariaLabel={`Movement ${index + 1} set ${i + 1}`}
+                {/* One-tap load modes. Without these, `BW` — the most common load in the program —
+                would be the hardest thing to enter on a phone, because iOS's numeric keypad has no
+                letters. Since PR 4a they write BOOLEANS rather than text into the weight field, so
+                `BW` and a weight can now coexist (that pairing is `BW+8 (vest)`). */}
+                <SetModeToggles
+                  isBodyweight={s.isBodyweight ?? false}
+                  isBand={s.isBand ?? false}
+                  onChange={(patch) => onSet(s.key, patch)}
+                  ariaLabel={`movement ${index + 1} set ${i + 1}`}
                 />
                 {/* GAP-1 P1-1c — this ATTEMPT went to failure short of the prescribed reps. Same idiom as
                 the Skipped checkbox (one toggle pattern per card). The accessible name is unique per

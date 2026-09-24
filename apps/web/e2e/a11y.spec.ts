@@ -25,6 +25,17 @@ import { SEED_PROFILE_ROUTE } from './steps';
 /** ~iPhone 14 — the primary device. Matches the mobile viewport the screenshot script captures at. */
 const MOBILE = { width: 390, height: 844 };
 
+/**
+ * The NARROWEST width AGENTS.md commits to ("every screen must work from ~360px up"). 390 is the
+ * device; 360 is the contract, and the two are not the same test — the strength set row's own
+ * comments budget against ~294px of usable width, which only exists at 360.
+ *
+ * Added at GAP-3 PR 4a, because the panel found this spec asserted neither 360 nor overflow: the
+ * acceptance criterion "works at 360px with no horizontal scroll" was being claimed by a file that
+ * never measured either.
+ */
+const NARROW = { width: 360, height: 780 };
+
 /** The routes the household actually uses. `/gate` is deliberately excluded — the project's
  *  `storageState` lands every test past it, and scanning it needs a storage-state-free context
  *  (see the plan's Out of scope). */
@@ -165,6 +176,47 @@ test('the strength form meets the tap-target bar in its EXPANDED state', async (
 
   await expectTapTargets(page, 'strength form (expanded)');
   await expectNoAxeViolations(page, 'strength form (expanded)');
+});
+
+/**
+ * Horizontal overflow, at the narrowest committed width.
+ *
+ * `expectTapTargets` measures control HEIGHT only, so a row that runs off the side of the phone
+ * passes every other scan in this file. That is the exact failure mode a new control in the set row
+ * introduces, and PR 4a adds two (the Measuring select, and the unit echo after the weight field).
+ */
+async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    const d = document.documentElement;
+    return { scrollWidth: d.scrollWidth, clientWidth: d.clientWidth };
+  });
+  expect(
+    overflow.scrollWidth,
+    `${label}: the page scrolls horizontally at ${NARROW.width}px ` +
+      `(scrollWidth ${overflow.scrollWidth} > clientWidth ${overflow.clientWidth})`,
+  ).toBeLessThanOrEqual(overflow.clientWidth);
+}
+
+test('the strength form does not overflow horizontally at 360px', async ({ page }) => {
+  await page.setViewportSize(NARROW);
+  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  await strength.getByRole('button', { name: 'Add movement' }).click();
+  await strength.getByRole('button', { name: 'Add set' }).first().click();
+
+  // Drive the set row into its WIDEST state — both mode toggles on — so the measurement covers the
+  // row as it actually renders when a bodyweight movement is logged, not the emptiest case.
+  //
+  // Clicked by LABEL, not `.check()` on the input: the checkbox is `sr-only` (visually hidden but
+  // focusable and operable), so its own box is 1px and Playwright's actionability check fails on it.
+  // The label IS the chip a thumb aims at, so this drives it exactly as a person does.
+  await strength.getByText('BW', { exact: true }).first().click();
+  await strength.getByText('band', { exact: true }).first().click();
+  await expect(strength.getByRole('checkbox', { name: /^BW — Bodyweight/ }).first()).toBeChecked();
+
+  await expectNoHorizontalOverflow(page, 'strength form (360px, modes on)');
+  await expectTapTargets(page, 'strength form (360px)');
 });
 
 test('the strength form meets the bar in its SCAFFOLDED state (V1-19)', async ({ page }) => {

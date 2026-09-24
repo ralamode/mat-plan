@@ -391,13 +391,13 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
             movementName: 'Back squat',
             unit: BODYWEIGHT_UNITS[0],
             sets: [
-              { reps: 5, load: { kind: 'numeric', weight: 135 } }, // coerced to numbers by the schema
-              { reps: 3, load: { kind: 'numeric', weight: 155 } },
+              { reps: 5, weight: 135 }, // coerced to numbers by the schema
+              { reps: 3, weight: 155 },
             ],
           }),
           expect.objectContaining({
             movementName: 'Bench press',
-            sets: [{ reps: 8, load: { kind: 'numeric', weight: 95 } }],
+            sets: [{ reps: 8, weight: 95 }],
           }),
         ],
       }),

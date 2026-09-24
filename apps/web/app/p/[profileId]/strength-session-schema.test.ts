@@ -240,9 +240,7 @@ describe('logStrengthSessionSchema — skipped movements (GAP-1 P1-1a)', () => {
   it('leaves an ordinary 1-set done movement parsing exactly as before', () => {
     const res = withMovement({});
     expect(res.success).toBe(true);
-    expect(res.success && res.data.movements[0]!.sets).toEqual([
-      { reps: 5, load: { kind: 'numeric', weight: 135 } },
-    ]);
+    expect(res.success && res.data.movements[0]!.sets).toEqual([{ reps: 5, weight: 135 }]);
   });
 
   // GAP-1 P1-1c (D5). `dissolveSmallSupersets` counts MEMBERSHIP, not sets, and the ≥2-member refine

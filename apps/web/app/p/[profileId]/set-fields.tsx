@@ -1,7 +1,5 @@
 'use client';
 
-import { LOAD_MAX_LENGTH } from '@mat-plan/shared';
-
 import { INPUT_CLASS } from '@/lib/constants';
 
 /**
@@ -20,7 +18,8 @@ export function SetRepsWeightFields({
   ariaLabel,
   nameReps,
   nameWeight,
-  mode = 'numeric',
+  weightRequired = true,
+  unitLabel,
 }: {
   reps: string;
   weight: string;
@@ -28,16 +27,23 @@ export function SetRepsWeightFields({
   onWeight: (v: string) => void;
   ariaLabel: string;
   /**
-   * `'numeric'` (the DEFAULT) renders exactly the pre-GAP-1 markup — `type="number"` with the numeric
-   * keypad, `min`/`step` and native validation. The V1-9 edit form relies on it and must not change:
-   * its schema is numeric-only, and `editable-set.tsx` renders only `state.error`, never `fieldErrors`,
-   * so a text value there would fail with no field-level explanation.
+   * ⚠️ **`required` must be FALSE whenever the set can legitimately have no magnitude** — i.e. when BW
+   * or band is toggled (GAP-3 PR 4a). A hidden-or-empty `required` input blocks the native submit with
+   * an error the browser will not show, and the form simply appears DEAD — the trap `strength-form.tsx`
+   * documents twice, at a scale of 25 rows. The real validity rule lives in `strengthSetSchema`'s
+   * superRefine, which can see all three fields at once and reports through `fieldErrors`.
    *
-   * `'load'` (the log form) accepts a TEXT load. Note `inputMode="text"`, NOT `"decimal"`: the iOS
-   * decimal pad has no letters and no ABC toggle, so `inputMode="decimal"` would make `BW` literally
-   * unenterable on the primary device — the one thing this feature exists to allow.
+   * The V1-9 edit form leaves this TRUE: its schema is numeric-only and `editable-set.tsx` renders
+   * only `state.error`, never `fieldErrors`, so native validation is the only feedback it has.
    */
-  mode?: 'numeric' | 'load';
+  weightRequired?: boolean;
+  /**
+   * The movement's unit, rendered as static text after the field and folded into the accessible name.
+   * Since PR 4a a movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled "weight" is
+   * ambiguous to a sighted user and meaningless to a screen reader. Omitted by the edit form, which
+   * is mass-only by construction.
+   */
+  unitLabel?: string;
   // When the fields submit via a native <form> (the V1-9 edit form), pass field names so FormData
   // captures them. The log form omits them — its set values ride the hidden `movements` JSON instead.
   nameReps?: string;
@@ -59,34 +65,25 @@ export function SetRepsWeightFields({
         className={`${INPUT_CLASS} w-24`}
       />
       <span className="text-muted-foreground text-sm">×</span>
-      {mode === 'numeric' ? (
-        <input
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="0.5"
-          required
-          name={nameWeight}
-          placeholder="weight"
-          aria-label={`${ariaLabel} weight`}
-          value={weight}
-          onChange={(e) => onWeight(e.target.value)}
-          className={`${INPUT_CLASS} w-28`}
-        />
-      ) : (
-        <input
-          type="text"
-          inputMode="text"
-          required
-          maxLength={LOAD_MAX_LENGTH}
-          name={nameWeight}
-          placeholder="weight or BW"
-          aria-label={`${ariaLabel} weight or load`}
-          value={weight}
-          onChange={(e) => onWeight(e.target.value)}
-          className={`${INPUT_CLASS} w-28`}
-        />
-      )}
+      {/* GAP-3 PR 4a: ONE numeric input again. GAP-1 P0-2 had to make this `type="text"` so `BW` could
+          be typed at all — iOS's decimal pad has no letters and no ABC toggle. `BW` is a toggle now,
+          so the keypad comes back for the ~90% case that is genuinely a number. */}
+      <input
+        type="number"
+        inputMode="decimal"
+        min="0"
+        step="0.5"
+        required={weightRequired}
+        name={nameWeight}
+        placeholder="weight"
+        aria-label={unitLabel ? `${ariaLabel} weight in ${unitLabel}` : `${ariaLabel} weight`}
+        value={weight}
+        onChange={(e) => onWeight(e.target.value)}
+        className={`${INPUT_CLASS} w-24`}
+      />
+      {unitLabel ? (
+        <span className="text-muted-foreground text-sm whitespace-nowrap">{unitLabel}</span>
+      ) : null}
     </>
   );
 }
