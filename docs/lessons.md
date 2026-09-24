@@ -32,7 +32,9 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   `prevId === id`, a self-referential link. `generate` reports `No schema changes` even so, because it
   only walks the chain when appending, so the break stays latent until the NEXT migration fails with
   `are pointing to a parent snapshot … which is a collision`. Set `prevId` to the id of the snapshot
-  BEFORE it. (migration 0011 shipped this bug in #139; found and fixed while generating 0012.)
+  BEFORE it. (migration 0011 shipped this bug in #139; found while generating 0012, repaired in #147.)
+  → **Now CI-enforced**: the forward-only guard checks the whole chain on every PR, so this cannot
+  recur. If you hit the collision error, the guard's output names the file and the expected id.
 
 - **`pnpm typecheck` is green while `packages/**` is broken.** → It is `pnpm --filter web exec tsc
 --noEmit`, so it only covers `apps/web`. `packages/db/scripts/verify.ts` and the seed are typechecked
