@@ -46,28 +46,55 @@ worst defect available in this feature.
 | **Numeric formatting**     | **One shared `formatNumeric`, used by `load` AND bodyweight.** Drizzle returns `numeric` as a **string**, so every mass reads back `70.000` — without trimming, _every load value in the file is wrong_, not just `weight_lb`. Must be decimal-aware: a naive `replace(/0+$/,'')` turns `90` into `9`.                                                                                                                                                                       |
 | **Non-ASCII**              | Pass `notes` through **byte-for-byte**; no transliteration of anything. The contract names only the em dash (×21), but the corpus also carries **`→` U+2192 ×2**. An acceptance criterion written to the letter of "em dash preserved" passes while an ASCII-folding sanitiser eats the arrow.                                                                                                                                                                               |
 
-## Still open — Ray's call
+## Resolved by Ray (2026-09-24)
 
-1. **`<athlete>` directory name.** `profiles` has `name` and **no slug column**, and the contract says
-   the kid _is_ the directory. Deriving from `name` means a rename ("Liam" → "Liam B") **relocates the
-   whole tree** and the workflow sees a new athlete with no history; two kids named Liam collide into
-   one directory. A stored `profiles.slug` is correct but is a migration in the MVP's last PR.
-   **Recommendation: derive, and fail loudly** on a collision or an unsafe character, with the rename
-   hazard recorded in tech-debt and a promotion trigger. Cheap now, honest about the risk.
-2. **Bodyweight `.0`.** Trim trailing zeros, accepting the loss. **My draft's justification was
-   false** — I wrote "a trailing `.0` nobody will type"; the corpus has `92.0` and `74.0`, **2 of 14
-   rows (14%)**, and the samples README says the scrub deliberately preserved all three numeric forms.
-   Worse, the precision is already gone at the form boundary (`bodyweight.ts:22` is
-   `z.coerce.number()`), so **no export-layer or column decision recovers it** without a form change.
-   The recommendation stands; the reasoning was wrong and you should decide on the real one.
-3. **`checkins` / `calisthenics-log`.** My draft contradicted itself: derive months from
-   `SELECT DISTINCT` **and** emit all four types — but those two files have zero rows ever, so DISTINCT
-   yields nothing and neither is written. A _missing_ file and a _header-only_ file are different
-   inputs to the workflow. **Recommendation: cut file 4 (`calisthenics-log`) from V1-13** — it is "the
-   one schema the app defines" and defining it properly is its own decision (the daily program
-   prescribes `leg_raises`, which has no column; `reps_per_set` across 10 sets vs one daily scalar;
-   `vsit_skill_step` has no representation in the data model at all). Emit `checkins` header-only for
-   every month that has any data.
+### 1. The athlete directory is backed by `profiles.slug` — a real column, not a derived string
+
+Ray asked the right question: _"why do we need an athlete directory? Should this not be something in
+the database?"_ Both halves have an answer.
+
+**Why a directory:** it is not our choice. The legacy layout is `data/<type>/<athlete>/<YYYY-MM>.csv`,
+and the contract's _"no `athlete` column — the kid is the directory"_ (L21) **describes those files**.
+Emit a different shape and the workflow does not recognise it.
+
+**Why a column:** because the identity behind that path must be stable. **My "avoid a migration in the
+MVP's last PR" reasoning was backwards** — deriving the slug from `profiles.name` makes a filesystem
+path a function of a _mutable display string_. Rename "Liam" → "Liam B" and the entire tree relocates;
+the workflow sees a new athlete with no history. That is permanent damage to the thing this feature
+exists to protect, traded for a scheduling convenience.
+
+**And it is not a novel design — it is the third instance of a documented precedent.** `movements.slug`
+(`schema.ts:388`, `.notNull().unique()`) and `program_blocks.slug` already exist, and the schema states
+the rule outright (`schema.ts:591-593`): _"`slug` (not raw `name`) is the identity so a re-seed can't
+duplicate a block on whitespace/casing."_ A profile is the same case with higher stakes, because its
+slug is a **path segment**.
+
+**Shape:** `profiles.slug text`, unique per household (the `(household_id, slug)` partial-unique idiom
+the schema already uses for `ramp_targets`/`day_readiness`). NOT NULL, arrived at via the house
+sequence — add nullable → backfill the two seeded rows → `SET NOT NULL` — because
+`drizzle-kit generate` emits `ADD COLUMN … NOT NULL` with no default, which fails on a populated table
+([lessons.md](../lessons.md), migration 0010).
+
+**Sequencing: a small precursor PR** (`db(v1-13): profiles.slug`) rather than folding a migration into
+13a. One concern, its own Squawk/forward-only pass, and it unblocks the path shape 13a needs.
+
+### 2. Bodyweight: trim trailing zeros, accept the loss
+
+**Ray: _"that is fine, we can assume .0 if no tenth or decimal is used."_** So `92.000` → `92`, and a
+reader takes a bare integer to mean `.0`. Decided on the **correct** premise this time: the corpus
+really does contain `92.0` and `74.0` (2 of 14 rows, deliberately preserved by the scrub), and the
+precision is already gone at the form boundary (`bodyweight.ts:22` is `z.coerce.number()`), so no
+export-layer or column choice could have recovered it anyway.
+
+⚠️ The trim must be **decimal-aware** — a naive `replace(/0+$/,'')` turns `90` into `9`.
+
+### 3. `calisthenics-log` is cut from V1-13 → fast follow
+
+**Ray took the recommendation and asked for a fast-follow row.** It is the one file _the app defines_
+rather than matches, and defining it is its own decision with three unanswered questions: the daily
+program prescribes **`leg_raises`**, which has no column; it tracks `reps_per_set` across up to 10 sets
+against a **single daily scalar**; and `vsit_skill_step` (1–5) has **no representation in the data model
+at all**. Backlog: **V1-13a-fu**.
 
 ## Scope: 13a = strength-log end-to-end · 13b = the rest
 
@@ -126,7 +153,7 @@ written against this contract) rather than re-deriving the predicates.
 ## Out of scope
 
 An importer · GAP-1 P1-2 (`entries.prescription_id`) · V1-9a notes · V1-14b's round-trip ·
-`calisthenics-log` (see open question 3).
+`calisthenics-log` (**V1-13a-fu**, per Ray).
 
 ## Review-response log
 
