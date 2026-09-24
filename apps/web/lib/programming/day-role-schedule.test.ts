@@ -1,60 +1,55 @@
-import { DAY_ROLES, DAY_ROLE_TO_SESSION_TYPE } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import { DAY_ROLE_BY_WEEKDAY, resolveDayRole } from './day-role-schedule';
+import { resolveDayRole } from './day-role-schedule';
 
-// V1-10 slice 2 — the weekday → day_role stopgap schedule (Ray's Mon/Wed/Fri split). Pure, so the whole
-// week is a fast unit test; the DB read it feeds is proven separately by `db:verify`.
-
-describe('resolveDayRole — Ray’s Mon/Wed/Fri split', () => {
-  it.each([
-    ['2026-01-05', 'strength_a'], // Mon
-    ['2026-01-07', 'strength_b'], // Wed
-    ['2026-01-09', 'strength_c'], // Fri
-  ])('programs a strength day on %s → %s', (day, role) => {
-    expect(resolveDayRole(day)).toBe(role);
+/**
+ * The youth daily A/B rotation (2026-09-24).
+ *
+ * ⚠️ These pin a DECISION, not just behaviour. The program spec says the letter must come from the
+ * count of COMPLETED SESSIONS, and warns that a calendar-derived letter doubles up box jumps after a
+ * missed day. Ray accepted that deliberately — the motivation model is streak and consistency. So a
+ * future reader who "fixes" the calendar rotation will turn these red, which is the point.
+ */
+describe('resolveDayRole — every calendar day is A or B', () => {
+  it('anchors 2026-09-24 — the day the kids moved off paper — as a B day', () => {
+    expect(resolveDayRole('2026-09-24')).toBe('strength_b');
   });
 
-  it.each([
-    ['2026-01-04'], // Sun
-    ['2026-01-06'], // Tue
-    ['2026-01-08'], // Thu
-    ['2026-01-10'], // Sat
-  ])('programs nothing on %s (rest / unmodelled conditioning)', (day) => {
-    expect(resolveDayRole(day)).toBeNull();
+  it('alternates on consecutive days', () => {
+    const days = ['2026-09-24', '2026-09-25', '2026-09-26', '2026-09-27', '2026-09-28'];
+    expect(days.map(resolveDayRole)).toEqual([
+      'strength_b',
+      'strength_a',
+      'strength_b',
+      'strength_a',
+      'strength_b',
+    ]);
   });
 
-  it('uses the local calendar date, not the runtime zone (no V1-6c off-by-one)', () => {
-    // A Monday must resolve to Strength A even when the process zone is west of UTC — the trap that
-    // `new Date(day).getDay()` would fall into, shifting the whole week back a day.
-    const priorTz = process.env.TZ;
+  // THE reason this is date parity and not a weekday map: seven is odd, so a weekday map repeats a
+  // letter across every Saturday→Sunday boundary.
+  it('alternates ACROSS a week boundary', () => {
+    expect(resolveDayRole('2026-09-26')).not.toBe(resolveDayRole('2026-09-27')); // Sat → Sun
+  });
+
+  it('never returns null — the program runs every day, with no rest day', () => {
+    for (let i = 0; i < 40; i++) {
+      const d = new Date(Date.UTC(2026, 8, 24) + i * 86_400_000).toISOString().slice(0, 10);
+      expect(['strength_a', 'strength_b']).toContain(resolveDayRole(d));
+    }
+  });
+
+  // The V1-6c off-by-one trap: `new Date("2026-07-30").getDay()` parses as UTC midnight and reports
+  // in the runtime's zone, which west of UTC is the PREVIOUS day. The epoch-day parse avoids it.
+  it('does not shift west of UTC', () => {
+    const before = process.env.TZ;
     process.env.TZ = 'America/Los_Angeles';
-    try {
-      expect(resolveDayRole('2026-01-05')).toBe('strength_a');
-      expect(resolveDayRole('2026-01-04')).toBeNull();
-    } finally {
-      if (priorTz === undefined) delete process.env.TZ;
-      else process.env.TZ = priorTz;
-    }
-  });
-});
-
-describe('DAY_ROLE_BY_WEEKDAY — a valid, complete schedule', () => {
-  it('covers all seven weekdays', () => {
-    for (let weekday = 0; weekday <= 6; weekday += 1) {
-      expect(DAY_ROLE_BY_WEEKDAY).toHaveProperty(String(weekday));
-    }
+    expect(resolveDayRole('2026-09-24')).toBe('strength_b');
+    process.env.TZ = before;
   });
 
-  it('only ever names a real day role', () => {
-    for (const role of Object.values(DAY_ROLE_BY_WEEKDAY)) {
-      if (role !== null) expect(DAY_ROLES).toContain(role);
-    }
-  });
-
-  it('only programs STRENGTH day roles (a conditioning role has no prescriptions yet)', () => {
-    for (const role of Object.values(DAY_ROLE_BY_WEEKDAY)) {
-      if (role !== null) expect(DAY_ROLE_TO_SESSION_TYPE[role]).toBe('strength');
-    }
+  it('alternates correctly across a month and a year boundary', () => {
+    expect(resolveDayRole('2026-09-30')).not.toBe(resolveDayRole('2026-10-01'));
+    expect(resolveDayRole('2026-12-31')).not.toBe(resolveDayRole('2027-01-01'));
   });
 });

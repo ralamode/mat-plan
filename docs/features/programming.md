@@ -82,6 +82,25 @@ flowchart TD
 3. **`programDayRows` returns ONE block by design.** It is not a bug that a second block does not
    appear. Anything wanting multiple concurrent programs is SCHED-1, a different model.
 
+   ⚠️ **This is why only ONE block is seeded.** Since 2026-09-24 that is the **Youth Daily Program**
+   — the A/B rotation the kids actually run. The Kids S&C Foundation block it replaced is archived
+   verbatim at [docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)
+   and can be re-seeded when it returns. Seeding both would silently hijack one card with the other,
+   because the newest block per day-role wins.
+
+3b. **The day letter comes from the CALENDAR, and that is a decision.** `resolveDayRole` is
+epoch-day parity — every calendar day is A or B, alternating, with no rest day. Date parity, not
+a weekday map: seven is odd, so a weekday map repeats a letter across every Sat→Sun boundary.
+
+The program spec says the letter must come from the count of COMPLETED SESSIONS and warns that a
+calendar-derived letter doubles up box jumps after a missed day. **Ray accepted that deliberately**
+— the motivation model is streak and consistency. **Do not "fix" it without asking**; session
+indexing is YDP-1, blocked on SCHED-1. The tests pin the decision, so a "fix" turns them red.
+
+3c. **`strength_a`/`strength_b` are REUSED as Day A / Day B** — temporary. Proper `ydp_a`/`ydp_b`
+roles need a migration altering two `day_role` CHECKs; reusing them is what let the athletes log
+the same evening instead of on paper.
+
 4. **Every read is scoped by profile `public_id` and filters soft-deleted rows at every level** —
    block, prescription, target, movement. `db:verify` proves each one independently.
 
