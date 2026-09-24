@@ -7,6 +7,7 @@ export type * from './types';
 export * from './queries/weekly-adherence';
 // The single-sourced programmed-day query (V1-10 slice 2), run by both the app DAL and db:verify.
 export * from './queries/program-day';
+export * from './queries/export-month';
 // The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
 export * from './writers/strength-session';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
