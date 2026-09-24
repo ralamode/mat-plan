@@ -1,138 +1,166 @@
-# V1-13 — CSV export (the MVP's whole point)
+# V1-13 — CSV export
 
-> Backlog: [plan.md](../plan.md) row V1-13. Branch: `feat/v1-13-csv-export` (off `main`).
-> **Contract: [csv-export-contract.md](../csv-export-contract.md)** — authoritative, sourced from Ray's
-> real workflow repo. Significant PR → committed plan + adversarial panel before implementation.
+> Backlog: [plan.md](../plan.md) row V1-13. Branch: `feat/v1-13-csv-export`.
+> Contract: **[csv-export-contract.md](../csv-export-contract.md)** — authoritative.
+> **Revised after two panels (engineering + contract-fidelity). Nine blocking findings; two of them
+> would have silently corrupted the workflow this feature exists to serve.** Log at the end.
 
 ## Goal
 
-`docs/status.md` states the MVP as "kids log a full day online **+ CSV export keeps the Claude workflow
-alive**". Everything else in v1 exists to make the first half true; this PR is the second half. Until it
-ships, adopting the app means abandoning the `/retro` workflow that reads these files.
+**The MVP finish line.** v1 is "kids log a full day online **+ CSV export keeps the Claude workflow
+alive**". Blocked twice — six weeks on the legacy samples (#121), then behind GAP-3 (#141). Nothing
+blocks it now.
 
-The bar is **byte-faithfulness**, not "a reasonable CSV". These files are parsed by existing skills; an
-export that differs by a column, a separator, or a trailing newline breaks them **silently**.
+## The two that would have shipped broken
 
-## What the contract changed (read it first — this plan assumes it)
+**1. Every movement would have silently forked into two series.** Legacy bytes are kebab-case —
+`front-squat`, `bulgarian-split-squat`, `ghd-back-extension`. `movementSlug()`
+(`shared/movements.ts:35`) emits **underscores** (`front_squat`), and `EntryDTO` carries no slug at
+all — only free-text `movementName`. So the export would emit `front_squat` forever, the workflow
+would group by movement string, and _"what did he back-squat across the last four Tuesdays"_ returns
+nothing. The contract flags this trap **for `session_type` only** (L37); my draft dutifully handled
+that column and missed the identical trap on the one next to it.
 
-Five assumptions were wrong; each would have shipped a broken file. The two with **schema consequences**
-are the reason this needs a plan rather than a straight implementation:
+**2. A kilogram load would have exported as a bare number meaning pounds.** Every legacy `load` number
+is unit-less and means lb. GAP-3 made units first-class, and the form now offers `LOGGABLE_UNITS`. A
+set logged in `kg` exported as `85` is read by the workflow as 85 lb — **a 2.2× error in the exact
+column that drives load progression**, invisible to the contract's own `sets`-vs-list-length check.
+Given the project's one inviolable rule is that bad loads are an injury risk, a silent 2.2× is the
+worst defect available in this feature.
 
-### C1 — RESOLVED by Ray (2026-08-10): prefer the float, convert the legacy data
+## Decisions, taken
 
-The contract's bodyweight column mixes `71`, `71.0`, `71.4` — the operator's literal keystrokes — and
-`entries.value_num` is `numeric(8,3)`, so `71` reads back `71.000`. The plan had been to plumb the raw
-string past `z.coerce.number()` so the keystrokes could round-trip.
+| #                          | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Units**                  | **Refuse, do not convert.** The exporter emits only `lb` / `in` / `sec`. If any row in range carries another unit, the export **fails loudly and names the rows**. Conversion was rejected: it invents a number the athlete never logged, and ADR 0004 §6's whole point is that the resolved unit rides the row. Incidence today is ~0 (`DEFAULT_BODYWEIGHT_UNIT` is lb) — so this is a tripwire, not a tax, and the first time it fires is a real decision with real data.  |
+| **`movement`**             | `movements.slug`, `_` → `-`. **Never `movements.name`** (`"Front Squat"` would be catastrophic). Needs a new read: `EntryDTO` has no slug.                                                                                                                                                                                                                                                                                                                                   |
+| **`session_type`**         | Source is **`sessions.day_role`, not `session_type`.** `strength_a` lives only in `DAY_ROLES`; `SESSION_TYPES` is `strength\|conditioning\|skill\|push\|pull\|legs\|core`, so reading the obvious column collapses every A/B/C day into `strength` and destroys the distinction all 14 current legacy rows are built on. `day_role ?? session_type`, hyphenated; **both are nullable and `entries.session_id` is nullable too** — a sessionless entry emits the empty field. |
+| **`SKIPPED`**              | Source is **`entries.status`** (movement-level), never `entry_sets.status` — `SET_STATUSES` is `['done','sub_failure']` and `enums.ts:67-70` explains why: a skipped set row is never written _precisely because_ the export derives `sets` from `COUNT(entry_sets)`. The aggregator branches on the entry **before** it counts.                                                                                                                                             |
+| **Partial skips**          | `sets` counts sets with `status != 'skipped'`; skipped sets are excluded from both slash-lists, so `sets` == list length still holds. A fully-skipped movement emits `0,0,SKIPPED`.                                                                                                                                                                                                                                                                                          |
+| **`sub-failure`**          | The 12th shape, which my draft missed entirely — the only non-numeric `reps` value besides a slash-list, real in both kids' files. Emitted via **`ENTRY_STATUS_LABELS`**, never re-typed (`enums.ts:84-95` says the badge and the exporter must emit the same byte).                                                                                                                                                                                                         |
+| **Aggregation grain**      | **`(session, movement)`, not `(date, movement)`.** The latter merges a trainer AM and a home PM session into one row with two different `session_type`s, silently discarding one and summing the slash-lists.                                                                                                                                                                                                                                                                |
+| **Row order**              | `ORDER BY activity_date, session id, entries.created_at, entries.id` — the V1-17 clause (`entries.ts:173`), which is also what makes superset members read in order. **Stated limitation:** there is deliberately no `position` column (`schema.ts:498`), so intra-session order is _insertion_ order; an offline set flushed late from a second device lands at the bottom of a session it happened at the top of.                                                          |
+| **`prescribed` commas**    | **Quote `prescribed` as well as `notes`.** 8 of 21 seeded prescriptions contain a comma (`'5, last set to failure'`, `'3 (top triple, then 2 back-offs)'`, `'40 yd, to grip failure'`) — ~38%. Unquoted, each splits the row into 9 fields. Guarded at the joiner with the existing `hasCommaOrLineBreak` (`text.ts`), not a new predicate.                                                                                                                                  |
+| **`prescribed` ambiguity** | `(day_role, movement)` is **documented non-unique** — `schema.ts:620-622`: _"a movement may legitimately appear twice in a day — warm-up + working — so the key is NOT movement_id."_ On an ambiguous match, **emit empty `prescribed`**. A silent arbitrary pick is the one option ruled out: the column's entire purpose is being _not_ reconciled with actuals. Resolving it properly is GAP-1 P1-2, out of scope.                                                        |
+| **`prescribed` source**    | Reuse **`queries/program-day.ts`**, which already selects `{idx, movementName, sets, targetReps, load, reps}` household- and profile-scoped, soft-delete-guarded, `idx`-ordered. My draft omitted `prescription_targets.reps` (the V1-10 per-kid override), which would have exported Liam's pull-up as `4x4-5` instead of `4x4`.                                                                                                                                            |
+| **Numeric formatting**     | **One shared `formatNumeric`, used by `load` AND bodyweight.** Drizzle returns `numeric` as a **string**, so every mass reads back `70.000` — without trimming, _every load value in the file is wrong_, not just `weight_lb`. Must be decimal-aware: a naive `replace(/0+$/,'')` turns `90` into `9`.                                                                                                                                                                       |
+| **Non-ASCII**              | Pass `notes` through **byte-for-byte**; no transliteration of anything. The contract names only the em dash (×21), but the corpus also carries **`→` U+2192 ×2**. An acceptance criterion written to the letter of "em dash preserved" passes while an ASCII-folding sanitiser eats the arrow.                                                                                                                                                                               |
 
-**Ray's call:** _"we should always prefer the float. If existing data in the CSV needs to be converted,
-we should convert it."_
+## Still open — Ray's call
 
-So: **`value_num` is the source of truth, and the legacy files are normalised once to match.** No
-`raw_load` plumbing, no migration, no keystroke fidelity. This is a deliberate, narrow relaxation of
-byte-faithfulness applied to **numeric normalisation only** — it does not extend to `BW`/`band`/`SKIPPED`,
-which carry meaning a number cannot (see [csv-recording-gaps.md](../csv-recording-gaps.md)).
+1. **`<athlete>` directory name.** `profiles` has `name` and **no slug column**, and the contract says
+   the kid _is_ the directory. Deriving from `name` means a rename ("Liam" → "Liam B") **relocates the
+   whole tree** and the workflow sees a new athlete with no history; two kids named Liam collide into
+   one directory. A stored `profiles.slug` is correct but is a migration in the MVP's last PR.
+   **Recommendation: derive, and fail loudly** on a collision or an unsafe character, with the rename
+   hazard recorded in tech-debt and a promotion trigger. Cheap now, honest about the risk.
+2. **Bodyweight `.0`.** Trim trailing zeros, accepting the loss. **My draft's justification was
+   false** — I wrote "a trailing `.0` nobody will type"; the corpus has `92.0` and `74.0`, **2 of 14
+   rows (14%)**, and the samples README says the scrub deliberately preserved all three numeric forms.
+   Worse, the precision is already gone at the form boundary (`bodyweight.ts:22` is
+   `z.coerce.number()`), so **no export-layer or column decision recovers it** without a form change.
+   The recommendation stands; the reasoning was wrong and you should decide on the real one.
+3. **`checkins` / `calisthenics-log`.** My draft contradicted itself: derive months from
+   `SELECT DISTINCT` **and** emit all four types — but those two files have zero rows ever, so DISTINCT
+   yields nothing and neither is written. A _missing_ file and a _header-only_ file are different
+   inputs to the workflow. **Recommendation: cut file 4 (`calisthenics-log`) from V1-13** — it is "the
+   one schema the app defines" and defining it properly is its own decision (the daily program
+   prescribes `leg_raises`, which has no column; `reps_per_set` across 10 sets vs one daily scalar;
+   `vsit_skill_step` has no representation in the data model at all). Emit `checkins` header-only for
+   every month that has any data.
 
-**Still open, and it must be settled before the fixtures are frozen:** what is the canonical rendering?
-`71` → `71.0` (always one decimal, matching the 0.1 lb recording granularity) is the obvious choice, but
-it changes every existing bodyweight row, so **Ray confirms it, not the panel.** The bodyweight golden
-fixture is therefore _generated_, not copied verbatim — the one fixture that isn't a byte-copy.
+## Scope: 13a = strength-log end-to-end · 13b = the rest
 
-### C2 — `~`/range loads live in `prescribed`, not `load`
+My draft split pure-vs-plumbing. The panel priced 13a at **~750–800 lines with its golden vectors —
+already 2× the budget**, and the seam left the whole feature blocked behind the `prescribed` decision.
 
-`~75-85`, `BW +5`, `35-45/hand` — the exact strings Ray authored in the V1-10 program seed — **never
-appear in the `load` column**. They belong in `prescribed`. So:
+Better seam, **one file at a time**:
 
-- `load` ← what was **performed** (from `entry_sets`)
-- `prescribed` ← the **plan**, built from `prescription.sets` / `target_reps` /
-  `prescription_target.load`, formatted `SETSxREPS [@ load]`
+- **13a — `strength-log` end to end.** The only hard file: aggregation, all 12 `load` shapes, the
+  `movement`/`session_type` mappings, the unit tripwire, ordering, `prescribed`. Ships a working
+  export for the file that carries every difficulty.
+- **13b — `bodyweight` + `checkins`, plus zip delivery.** Trivial formatters; the work is the route,
+  ownership, and packaging.
 
-This is the single most likely column mix-up, and it means the export **joins to the programming tables**
-(V1-10), not just to entries. **Open Q:** what does `prescribed` contain for a logged movement with no
-matching prescription — empty, or omitted? (Most logged rows today have no program row at all.)
+## Delivery
 
-## Design decisions
+A **Route Handler** returning a zip of the `data/…` tree (reads/batch → Route Handler, never a Server
+Action). Profile-scoped and ownership-checked, with the AGENTS.md boundary tests.
 
-**D1 — A Route Handler, not a Server Action.** AGENTS.md: reads/external/batch → Route Handlers.
-`GET /api/export/csv?kind=…&athlete=…&month=…`. `runtime = 'nodejs'` (pg). Returns `text/csv`.
+**Dependency, priced.** `fflate` (~8KB, sync) vs a hand-rolled **STORED-only zip** (~60 lines, no
+compression, small CRC table). SECURITY.md says minimise dependencies and this is the MVP's last PR,
+so the hand-rolled path is the default unless the panel's estimate proves optimistic. If `fflate`
+lands, pin it exactly and keep it server-only so it never enters a client bundle.
 
-**D2 — The formatter is PURE and lives in `packages/shared`.** `(rows) => string`, no DB, no IO — so the
-golden-file tests are fast unit tests, not integration tests, and a later Python port has a reference.
-The DAL supplies rows; the formatter owns every byte.
+## Home: a subpath export, not the barrel
 
-**D3 — Write raw; never use a CSV library.** The contract is explicit and the reason is concrete: a real
-row carries bare `"` inch marks (`Liam at 30" box`) and another an unescaped comma. RFC-4180 writers
-re-escape both. Join with `,`, `\n` line endings, trailing newline, UTF-8 no BOM, em dash preserved.
-**A lint/test must assert no CSV library is imported by the formatter** — this is the rule most likely to
-be "helpfully" undone later.
+`packages/shared/src/csv/`, exported as **`@mat-plan/shared/csv`** — _not_ added to the
+`export *` barrel, which 8 `'use client'` components import. CSV formatting has no business in a
+client bundle. Reuse `hasCommaOrLineBreak`/`hasLineBreak` from `text.ts` (their docblocks are already
+written against this contract) rather than re-deriving the predicates.
 
-**D4 — Aggregate per-set rows → one row per movement.** `sets` = count; `reps`/`load` are a scalar when
-uniform, else a slash-list of exactly `sets` elements. **Uniform lists collapse** (`5/5/5` → `5`). Pure,
-heavily unit-tested — this is where the subtle bugs live.
+## Acceptance
 
-**D5 — Golden fixtures are committed verbatim** at `packages/shared/src/csv/__fixtures__/`, byte-for-byte
-from the contract. The test diffs the formatter's output against them. Any change to a fixture is a
-deliberate contract change and must be reviewed as such.
+- Golden vectors for all **12** shapes, transcribed from the contract's own real rows — including
+  `sub-failure`, a partial skip, a two-a-day, `30" box` (the RFC-4180 tripwire), and the `→` row.
+- `sets` == slash-list element count, asserted independently of the golden bytes.
+- Uniform lists collapse to a scalar; a 1-set movement is scalar, never a 1-element list.
+- `movement` is kebab-case — vector `bulgarian_split_squat` → `bulgarian-split-squat` **and** the
+  already-hyphenated `bent-over_rows` → `bent-over-rows`.
+- A non-lb/in/sec quantity **fails the export and names the rows**; vectors for kg and cm.
+- **Re-exporting the same month twice is byte-identical.**
+- LF endings, trailing newline, no BOM, trailing empty fields written, `notes` byte-for-byte.
+- `prescribed` is never rewritten to match actuals; ambiguous match → empty.
+- Ownership-checked; unauth → reject, wrong-owner → forbid.
 
-**D6 — Plus the arity assertion the golden diff cannot make.** Ray's point: all eight real files would
-pass a byte-diff while carrying a slash-list whose element count disagrees with `sets`. So the test
-asserts `sets === splitList(reps).length` (and `load`) independently of the diff.
+## Risks
 
-**D7 — Value mappings, all in the export layer (never the DB):**
+| Risk                                                                                                                                                                                                                              | Mitigation                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The exporter is provable only against fixtures we wrote** — no importer exists and prod held zero rows as of #139, so the "byte-faithful diff against the legacy corpus" the row and contract lean on **cannot be run at all**. | Vectors are transcribed from the contract's own examples, which are real rows. The independent check is **V1-14b** — log a day through the UI, export, diff — which is exactly why 14b exists downstream. Stop claiming the legacy diff.              |
+| A CSV library sneaks in later and re-quotes the inch marks.                                                                                                                                                                       | A comment at the joiner plus the `30" box` vector — it fails loudly the moment someone "fixes" it.                                                                                                                                                    |
+| `prescribed` reconstruction reads today's program, not the program as it was.                                                                                                                                                     | Safe while prescriptions are seed-immutable; **V1-22 breaks it** (an edited load retroactively rewrites history). Recorded on the V1-22 row as a blocker it must solve.                                                                               |
+| Two `load` shapes (`BW (unassisted)`, `30 (2x 15 DB)`) are unrepresentable; two more (`BW+8 (vest)`, `123 (50ft)`) need GAP-3 PR 4b.                                                                                              | The 4b pair describes data the app **cannot currently create either**, so vectors cover them and 4b turns them on with no export change. The other two are qualitative prose bound for `entries.notes` via V1-9a — an input gap, not an exporter bug. |
+| `bodyweight.context` is `morning` on 100% of real rows and the app **can never write it** (`logBodyweightSchema` has no such field).                                                                                              | Exports empty forever. Stated explicitly so it reads as a known regression of a populated column, not an export defect.                                                                                                                               |
 
-- `session_type`: `strength_a` → `strength-a` (column names use `_`, values use `-`)
-- `movement`: `movementSlug(name).replace(/_/g, '-')` — our slugs are `front_squat`, the CSV wants
-  `front-squat`. **Open Q:** verify against every seeded movement; `trap-bar_deadlift` →
-  `trap-bar-deadlift` looks right but `pull-up` must not become `pull--up`.
-- `SKIPPED` (uppercase) into `load` with `sets=0,reps=0` when `entries.status='skipped'`. The
-  `0,0,SKIPPED` triple is a **status-driven RENDER** — never read from storage. A skipped movement
-  stores ZERO `entry_sets` (GAP-1 P1-1a), and `reps` is `.positive()` so a stored `reps=0` cannot
-  exist. `sets = COUNT(entry_sets)` therefore yields 0 with no special case.
-- `sub-failure` into `reps` when a set carries `entry_sets.status='sub_failure'` (GAP-1 P1-1b). The
-  status is **per-SET**, so this is a COLLAPSE, not a lookup — and it rides the uniform-collapse rule
-  D4 already requires rather than needing a branch of its own:
+## Out of scope
 
-  ```
-  reps ← collapse(sets.map(s => s.status === 'sub_failure' ? 'sub-failure' : String(s.reps)))
-  ```
+An importer · GAP-1 P1-2 (`entries.prescription_id`) · V1-9a notes · V1-14b's round-trip ·
+`calisthenics-log` (see open question 3).
 
-  All-sub-failure collapses to the scalar `sub-failure`, reproducing the observed row
-  (`pull-ups,2,sub-failure,…`) via the rule that has to exist anyway. A **MIXED** movement emits e.g.
-  `5/5/sub-failure` — a slash-list with exactly `sets` elements, so it satisfies D6's arity assertion.
-  That shape is unobserved in the legacy files but is not illegal, and it is the honest rendering:
-  emitting the achieved `3` for a failed set would silently reclassify it as completed, destroying the
-  entire signal being recorded. **Note the DB is the richer record here** — a sub-failure set keeps its
-  real `reps`, and the export drops the number deliberately, not accidentally.
+## Review-response log
 
-- A `skipped` SET row is never written, so `sets = COUNT(entry_sets)` needs no `WHERE status <>
-'skipped'`. That is enforced at the write boundary (`SET_STATUSES`), not here — if it ever changes,
-  this is the line that breaks.
+Two panels before implementation: engineering (correctness · scope · architecture · reuse) and a
+dedicated **contract-fidelity** lens that read the real sample bytes. Both went to the files rather
+than the plan's prose, which is why nine findings were blocking.
 
-**D8 — Scope: one athlete, one month, one kind per request.** Matches the file layout
-(`data/<type>/<athlete>/<YYYY-MM>.csv`). No zip, no all-kinds endpoint — the skills read one file at a
-time. `calisthenics` is the app's to define (nothing exists on disk), so it ships as specified.
+### Blocking — all accepted
 
-**D9 — Tests.** Unit: the formatter against the golden fixtures (all four kinds), the aggregation
-transform (uniform collapse, arity, skipped, sub-failure, timed), the value mappings. Boundary: unknown
-`kind`/`athlete`/`month` → typed rejection, not a 500; a month with no rows → **header-only file with a
-trailing newline** (the real checkins files are exactly this). Rate limiting is out of scope (reads;
-see V1-14a's tech-debt entry).
+| Finding                                                                                                                                             | Response                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **`movement` must be kebab-case** (contract lens). App emits `front_squat`; legacy is `front-squat`. Every movement silently forks into two series. | Accepted. `movements.slug` with `_`→`-`, a new read (EntryDTO has no slug), two golden vectors.                           |
+| **A kg load exports as a bare number meaning lb** (contract lens) — a 2.2× error in the load column.                                                | Accepted. Exporter **refuses** rather than converts; incidence is ~0 today, so it is a tripwire.                          |
+| **`SKIPPED` comes from `entries.status`, not `entry_sets.status`** (engineering). `shared/enums.ts` already documents why.                          | Accepted; the aggregator branches on the entry before counting.                                                           |
+| **`sub-failure` — the 12th shape — was missing entirely** (engineering).                                                                            | Accepted; emitted via the existing `ENTRY_STATUS_LABELS`.                                                                 |
+| **`prescribed` corrupts the row: 38% of seeded prescriptions contain a comma** (engineering + contract lens).                                       | Accepted; quote `prescribed` too, guarded by the existing `text.ts` predicate.                                            |
+| **`20s` cannot come from `${value}${unit}`** — the unit code is `sec` (engineering).                                                                | Accepted; an exhaustive `Record<Unit, string>` CSV-suffix map so a new unit is a compile error.                           |
+| **Trailing-zero trimming is a `load` problem, not just bodyweight** (engineering) — numeric returns a string, so every mass is `70.000`.            | Accepted; one shared decimal-aware `formatNumeric`.                                                                       |
+| **Row order is unspecified and there is no ordinal** (contract lens).                                                                               | Accepted; the V1-17 clause, plus the insertion-order limitation stated out loud and a byte-identical-re-export criterion. |
+| **`<athlete>` directory has no defined source** (contract lens).                                                                                    | Accepted as an **open question for Ray** — derive-and-fail-loudly recommended over a migration.                           |
 
-## Out of scope (→ later)
+### Major — accepted
 
-The V1-14b full-day E2E (its own PR, needs this); writing files to disk (this returns a response body —
-how it reaches the repo is Ray's workflow); the 5 no-legacy-CSV activities (wake, wrestling_practice,
-rice_bucket, splits, brain_rep) which stay app-only until the v3 API; auth on the endpoint (v1.5/Clerk).
+`prescribed` missed `prescription_targets.reps` and should reuse `program-day.ts` · `session_type`
+reads `day_role`, not `session_type`, and both are nullable · aggregation grain is `(session,
+movement)` · partial-skip rule stated · `context` can never be written · the DISTINCT-vs-all-four
+contradiction · `calisthenics-log` needs its own decision · the scope reseam to one-file-at-a-time ·
+`@mat-plan/shared/csv` as a subpath, not the barrel · `→ U+2192` in the non-ASCII rule.
 
-## Open questions for the panel
+### Corrected — my errors
 
-1. **C1 is fully resolved** — prefer the float, exactly one decimal (`toFixed(1)`), no snapping. Nothing
-   left for the panel here beyond confirming the input/export granularity assertion is worth having.
-2. **C2** — `prescribed` for a movement with no matching prescription: empty string, or is the whole
-   column only populated when a program row exists?
-3. Should the endpoint stream (`ReadableStream`) or buffer? A month is ~40 rows — buffering seems
-   obviously right, but confirm nothing in the contract implies otherwise.
-4. `movement` slug → hyphen mapping: is a blanket `_`→`-` safe across the whole seeded catalog?
-5. Does `athlete` in the path come from the profile's **name** (`liam`) or its public id? The contract
-   shows `data/strength-log/<athlete>/` — a human-readable directory. Exposing a name is fine (it is
-   Ray's own repo), but the endpoint parameter should probably still be the public id, mapped at the
-   edge.
+- **The bodyweight `.0` justification was false.** "Nobody will type it" — the corpus has two, 14% of
+  rows, deliberately preserved by the scrub. And the precision is already lost at the form boundary,
+  so no export decision recovers it. Ray was about to decide on a false premise.
+- **My 13a/13b split was at the wrong seam** and put the larger half first, blocked behind an
+  unresolved decision.
+- **I claimed a byte-faithful legacy diff was the gate.** It cannot be run — there is no importer.
