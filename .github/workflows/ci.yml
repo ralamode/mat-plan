@@ -55,8 +55,18 @@ jobs:
           # --no-renames: a rename reports as R100 by default, which could be
           # mis-paired with a genuinely new migration. Forcing D+A trips the D.
           # Renames MUST fail — the journal `tag` maps 1:1 to the filename.
+          # Snapshots are EXCLUDED from the immutability check, deliberately, and it is a
+          # narrower hole than it looks. A `.sql` file is applied to prod and HASHED in
+          # `__drizzle_migrations`, so editing one makes prod and the repo diverge silently —
+          # that stays strictly add-only. A `meta/*_snapshot.json` is drizzle's local diffing
+          # state: never applied, never hashed, never read by prod. Blocking its repair meant a
+          # CORRUPT snapshot could not be fixed at all (see the chain check below, and #147).
+          # Two things still cover it: the drift guard (`generate` must leave a clean tree)
+          # catches a snapshot that disagrees with schema.ts, and the chain check below catches
+          # a broken parent link — which is the failure this exclusion exists to let us repair.
           CHANGED=$(git diff --name-status --no-renames --diff-filter=DMRTC \
-            "$BASE_SHA...HEAD" -- "$MIG" ":(exclude)$JOURNAL")
+            "$BASE_SHA...HEAD" -- "$MIG" ":(exclude)$JOURNAL" \
+            ":(exclude)$MIG/meta/*_snapshot.json")
 
           JOURNAL_BAD=''
           if git cat-file -e "$BASE_SHA:$JOURNAL" 2>/dev/null; then
@@ -67,9 +77,46 @@ jobs:
             fi
           fi
 
-          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ]; then
-            echo "Forward-only guard OK — no applied migration was modified."
+          # ── Snapshot chain integrity ────────────────────────────────────────
+          # Each snapshot's `prevId` must be the PREVIOUS snapshot's `id`. drizzle only walks
+          # this chain when APPENDING, so a broken link is invisible — `generate` reports "No
+          # schema changes" and `db:verify` passes — until the next migration dies with
+          # "are pointing to a parent snapshot ... which is a collision".
+          #
+          # Exactly that shipped in #139 and sat on main undetected: merging two generated
+          # migrations and promoting the second snapshot to the first's filename leaves
+          # `prevId === id`, a self-reference. Checked here so the class cannot recur, and
+          # checked on EVERY PR (not just ones touching migrations) because the break is
+          # introduced by one PR and only surfaces in a later, unrelated one.
+          CHAIN_BAD=''
+          PREV_ID=''
+          for SNAP in $(ls "$MIG"/meta/[0-9]*_snapshot.json 2>/dev/null | sort); do
+            SNAP_ID=$(jq -r '.id' "$SNAP")
+            SNAP_PREV=$(jq -r '.prevId' "$SNAP")
+            if [ -n "$PREV_ID" ] && [ "$SNAP_PREV" != "$PREV_ID" ]; then
+              CHAIN_BAD="$CHAIN_BAD\n  $(basename "$SNAP"): prevId=$SNAP_PREV, expected $PREV_ID"
+            fi
+            if [ "$SNAP_PREV" = "$SNAP_ID" ]; then
+              CHAIN_BAD="$CHAIN_BAD\n  $(basename "$SNAP"): prevId === id (self-referential)"
+            fi
+            PREV_ID="$SNAP_ID"
+          done
+
+          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ] && [ -z "$CHAIN_BAD" ]; then
+            echo "Forward-only guard OK — no applied migration modified, snapshot chain intact."
             exit 0
+          fi
+
+          if [ -n "$CHAIN_BAD" ]; then
+            printf 'Broken snapshot chain:%b\n' "$CHAIN_BAD"
+            cat <<'CHAINMSG'
+
+          Each meta/NNNN_snapshot.json must have prevId == the PREVIOUS snapshot's id.
+          drizzle only walks this chain when appending, so a break is silent until the
+          NEXT migration fails to generate. Fix by setting the offending prevId to the
+          id of the snapshot before it — the snapshot files are NOT applied to prod and
+          are safe to repair.
+          CHAINMSG
           fi
 
           if [ -n "$CHANGED" ]; then
@@ -79,6 +126,7 @@ jobs:
           if [ -n "$JOURNAL_BAD" ]; then
             echo "meta/_journal.json rewrote existing entries (it is append-only)."
           fi
+          if [ -n "$CHANGED" ] || [ -n "$JOURNAL_BAD" ]; then
           cat <<'MSG'
 
           Migrations on main have already been applied to production and their SQL
@@ -90,9 +138,11 @@ jobs:
             3. pnpm --filter @mat-plan/db db:generate   # emits a NEW 00NN_*.sql
 
           Destructive shape changes go expand -> backfill -> contract across
-          separate deploys. Only ADDED (A) files are allowed under this directory.
+          separate deploys. Only ADDED (A) files are allowed under this directory
+          (meta/*_snapshot.json excepted — see the comment on the check).
           MSG
-          echo '::error::Forward-only violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
+          fi
+          echo '::error::Forward-only / snapshot-chain violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
           exit 1
 
       # ── Squawk: lint NEW migrations ────────────────────────────────────────
