@@ -1633,8 +1633,8 @@ const flatArgs = {
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001201',
       sets: [
-        { reps: 5, load: { kind: 'numeric' as const, weight: 135 } },
-        { reps: 5, load: { kind: 'numeric' as const, weight: 155 } },
+        { reps: 5, weight: 135 },
+        { reps: 5, weight: 155 },
       ],
     },
     {
@@ -1642,14 +1642,14 @@ const flatArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001202',
-      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 95 } }],
+      sets: [{ reps: 8, weight: 95 }],
     },
     {
       movementName: 'Barbell Row',
       unit: 'lb',
       movementId: movZ.id,
       clientId: '019826b4-0000-7000-8000-000000001203',
-      sets: [{ reps: 10, load: { kind: 'numeric' as const, weight: 75 } }],
+      sets: [{ reps: 10, weight: 75 }],
     },
   ],
 } as const;
@@ -1765,7 +1765,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001301',
-      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 40 } }],
+      sets: [{ reps: 8, weight: 40 }],
       supersetClientId: '019826b4-0000-7000-8000-000000001310',
       supersetOrder: 1,
     },
@@ -1774,7 +1774,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001302',
-      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 30 } }],
+      sets: [{ reps: 8, weight: 30 }],
       supersetClientId: '019826b4-0000-7000-8000-000000001310',
       supersetOrder: 2,
     },
@@ -1783,7 +1783,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001303',
-      sets: [{ reps: 10, load: { kind: 'numeric' as const, weight: 0 } }],
+      sets: [{ reps: 10, weight: 0 }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 1,
     },
@@ -1792,7 +1792,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001304',
-      sets: [{ reps: 12, load: { kind: 'numeric' as const, weight: 10 } }],
+      sets: [{ reps: 12, weight: 10 }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 2,
     },
@@ -1801,7 +1801,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movZ.id,
       clientId: '019826b4-0000-7000-8000-000000001305',
-      sets: [{ reps: 15, load: { kind: 'numeric' as const, weight: 0 } }],
+      sets: [{ reps: 15, weight: 0 }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 3,
     },
@@ -1869,23 +1869,20 @@ await writeStrengthSession(asPg, {
   movements: [
     {
       movementName: movX.name,
-      unit: 'lb',
+      // GAP-3 PR 4a: the unit is a property of the MOVEMENT, and its dimension follows from it. This
+      // one is a HOLD, so it is logged in seconds — which is what makes the third set's `30` a
+      // duration rather than a weight, with no per-set unit anywhere.
+      unit: 'sec',
       movementId: movX.id,
       clientId: LABELED_MOVEMENT_CLIENT_ID,
       // The three shapes that matter: a bodyweight MODE, a second one, and a DURATION — which used to
       // need `entry_sets.seconds` and now rides the same mechanism as every other magnitude.
       sets: [
-        { reps: 5, load: { kind: 'bodyweight' as const } },
-        { reps: 3, load: { kind: 'bodyweight' as const } }, // the vest itself is a slot the NEXT PR's form writes
+        { reps: 5, isBodyweight: true },
+        { reps: 3, isBodyweight: true }, // the vest itself is a slot the NEXT PR's form writes
         {
           reps: 1,
-          load: {
-            kind: 'quantity' as const,
-            slot: QUANTITY_SLOT.primary,
-            dimension: UNIT_DIMENSION.time,
-            unit: 'sec' as const,
-            value: 30,
-          },
+          weight: 30, // a HOLD: the movement's unit is `sec`, so this is 30 seconds
         },
       ],
     },
@@ -1946,7 +1943,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: LABELED_SS_A,
-      sets: [{ reps: 5, load: { kind: 'bodyweight' as const } }],
+      sets: [{ reps: 5, isBodyweight: true }],
       supersetClientId: LABELED_SS_GROUP,
       supersetOrder: 1,
     },
@@ -1955,7 +1952,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movY.id,
       clientId: LABELED_SS_B,
-      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }], // the numeric path must be unaffected alongside a labeled one
+      sets: [{ reps: 5, weight: 60 }], // the numeric path must be unaffected alongside a labeled one
       supersetClientId: LABELED_SS_GROUP,
       supersetOrder: 2,
     },
@@ -1982,6 +1979,56 @@ assert.equal(ssNumeric?.is_bodyweight, false, 'GAP-3: the numeric sibling is una
 assert.equal(ssNumeric?.value_num, '60.000', 'GAP-3: …and still stores its number');
 assert.equal(ssNumeric?.unit, 'lb', 'GAP-3: …with the unit that came off the ENTRY');
 console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superset member');
+
+// ── GAP-3 PR 4a: a MODE and a MAGNITUDE on the same set, through the real writer ───────────────────
+// The pairing the old string wire made structurally impossible — the chip OVERWROTE the weight field,
+// so `BW` and a number could never coexist. #139 proved the TABLE could hold it; this proves the
+// WRITER does, which is the half PR 4a adds. (The worn-load SLOT itself is 4b; here the magnitude
+// still lands in `primary`.)
+{
+  const MODE_PLUS_MAGNITUDE = newId();
+  await writeStrengthSession(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    day: '2026-02-12',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: newId(),
+    activityTypeId: scLiftActivityId,
+    movements: [
+      {
+        movementName: movY.name,
+        unit: 'lb',
+        movementId: movY.id,
+        clientId: MODE_PLUS_MAGNITUDE,
+        sets: [{ reps: 8, weight: 8, isBodyweight: true }],
+      },
+    ],
+  });
+  const [row] = (
+    await db.execute(sql`
+      select es.is_bodyweight, q.slot, q.dimension, q.unit, q.value_num
+      from entry_sets es
+      join entries e on e.id = es.entry_id
+      left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
+      where e.client_id = ${MODE_PLUS_MAGNITUDE}`)
+  ).rows as unknown as {
+    is_bodyweight: boolean;
+    slot: string | null;
+    dimension: string | null;
+    unit: string | null;
+    value_num: string | null;
+  }[];
+  assert.equal(row.is_bodyweight, true, 'PR 4a: the MODE persisted');
+  assert.equal(row.value_num, '8.000', 'PR 4a: …and the MAGNITUDE persisted alongside it');
+  assert.equal(row.slot, QUANTITY_SLOT.primary, 'PR 4a: the magnitude is the primary quantity');
+  assert.equal(
+    row.dimension,
+    UNIT_DIMENSION.mass,
+    'PR 4a: dimension derived from the movement unit',
+  );
+  console.log(
+    '✓ GAP-3 PR 4a: a mode and a magnitude coexist on one set (was structurally impossible)',
+  );
+}
 
 // ── GAP-3: the composite-FK unit guard, and the shapes fixed columns could not hold ────────────────
 // This is the block that justifies the design. `lb` in a box-jump height is rejected BY THE DATABASE,
@@ -2175,7 +2222,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: newId(),
-      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }],
+      sets: [{ reps: 5, weight: 60 }],
     },
   ],
 });
@@ -2206,7 +2253,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: newId(),
-      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }],
+      sets: [{ reps: 5, weight: 60 }],
     },
   ],
 });
@@ -2261,8 +2308,8 @@ await writeStrengthSession(asPg, {
       clientId: DONE_MOVEMENT_CLIENT_ID,
       // status omitted → the writer omits the column → the DB default. The `done` path is untouched.
       sets: [
-        { reps: 5, load: { kind: 'numeric' as const, weight: 60 } },
-        { reps: 5, load: { kind: 'numeric' as const, weight: 65 } },
+        { reps: 5, weight: 60 },
+        { reps: 5, weight: 65 },
       ],
     },
   ],
@@ -2373,10 +2420,10 @@ await writeStrengthSession(asPg, {
       movementId: movX.id,
       clientId: SF_MOVEMENT_CLIENT_ID,
       sets: [
-        { reps: 5, load: { kind: 'numeric' as const, weight: 60 } }, // status omitted → DB default
+        { reps: 5, weight: 60 }, // status omitted → DB default
         {
           reps: 3,
-          load: { kind: 'numeric' as const, weight: 60 },
+          weight: 60,
           status: ENTRY_STATUS.sub_failure,
         },
       ],

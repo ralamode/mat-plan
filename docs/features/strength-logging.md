@@ -5,7 +5,7 @@ owns:
   - apps/web/app/p/[profileId]/strength-form-scaffold.ts
   - apps/web/app/p/[profileId]/strength-form-supersets.ts
   - apps/web/app/p/[profileId]/set-fields.tsx
-  - apps/web/app/p/[profileId]/load-chips.tsx
+  - apps/web/app/p/[profileId]/set-mode-toggles.tsx
   - apps/web/app/p/[profileId]/editable-set.tsx
   - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
@@ -34,13 +34,13 @@ flowchart TD
   subgraph client["client — 'use client'"]
     FORM["strength-form.tsx<br/>movements[] + SetVals[]"]
     FIELDS["set-fields.tsx<br/>reps × weight inputs"]
-    CHIPS["load-chips.tsx<br/>BW · band"]
+    CHIPS["set-mode-toggles.tsx<br/>BW · band → booleans"]
     SCAFFOLD["strength-form-scaffold.ts<br/>V1-19 'Start today's program'"]
     SUPERSETS["strength-form-supersets.ts<br/>grouping + dissolve"]
   end
 
   subgraph boundary["boundary — packages/shared"]
-    SETSCHEMA["strength.ts<br/>parseLoad → strengthSetSchema"]
+    SETSCHEMA["strength.ts<br/>strengthSetSchema<br/>(structured — no parseLoad)"]
     SESSIONSCHEMA["strength-session.ts<br/>logStrengthSessionSchema"]
   end
 
@@ -91,9 +91,14 @@ regresses.
    `ScaffoldRow` with no `load` field at all, so "the authored load never crosses into client state"
    is enforced by the **type**, not by care. Do not add one.
 
-2. **A set must carry a load, and blank is unrepresentable.** `parseLoad`'s blank check is the FIRST
-   branch, deliberately: a set with reps and no load renders `5 × ?` and `isEditableSet` then refuses
-   to fix it — permanently unrecoverable, because **there is no delete action in this app.**
+2. **A set must carry a load, and blank is unrepresentable.** Enforced by `strengthSetSchema`'s
+   superRefine — `weight !== null || isBodyweight || isBand`. A set with reps and no load renders
+   `5 × ?` and `isEditableSet` then refuses to fix it: permanently unrecoverable, because **there is
+   no delete action in this app.** This was `parseLoad`'s first branch until PR 4a split the load
+   across three fields, which removed the single-field invariant and made the rule explicit.
+
+   **Corollary: `required` on the weight input must be FALSE whenever a mode is toggled.** A
+   `required` field that must be empty blocks the native submit with an invisible error — see Traps.
 
 3. **`isEditableSet` and `updateStrengthSetById`'s WHERE must stay identical.** The client half is
    advisory; the SQL half is the boundary. They are two expressions of one predicate in two languages,
@@ -101,7 +106,15 @@ regresses.
 
 4. **Every magnitude lives in `entry_set_quantities`, never on the set.** Since GAP-3 (#139) there is
    no `weight_num`, no `weight_label`, no `seconds`. The two MODES (`is_bodyweight`, `is_band`) are
-   booleans on the set because neither is a quantity.
+   booleans on the set because neither is a quantity — and since PR 4a they can coexist with a
+   magnitude, which is what makes `BW+8 (vest)` expressible.
+
+4b. **The unit belongs to the MOVEMENT; its dimension is DERIVED from it.** There is no per-set unit
+and no stored dimension on the movement — `UNIT_DIMENSION_BY_CODE[unit]` is the single source, so
+the pair can never disagree with `units(code, dimension)`. The form asks "Measuring?" first and
+then offers only `unitsOfDimension(d)`, which is what makes a squat-logged-in-seconds unreachable
+rather than merely unlikely. `LOGGABLE_UNITS` is derived from the `primary` slot's declared
+dimensions, so every offerable unit is one the composite FK accepts.
 
 5. **A quantity's unit is guarded by TWO composite FKs sharing its `dimension` column.** `lb` in a
    box-jump height is rejected by the database. The writer must therefore derive `dimension` from the
@@ -127,10 +140,11 @@ Real ones, each with the file to look at.
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
   legitimately empty is this bug.
 
-- **"Untouched" is computed from `reps` and `weight` only.** `strength-form-supersets.ts` and
-  `strength-form-scaffold.ts` both drop a card whose sets are all blank — silently, with no error. Add
-  a new set-level field and a set that carries ONLY that field is deleted at submit. Both predicates
-  must learn about it.
+- **"Untouched" is computed per set-level field, in THREE places.** `strength-form-supersets.ts` and
+  `strength-form-scaffold.ts` both drop a card whose sets are all blank — silently, with no error —
+  and `strength-form.tsx`'s collapsed-card progress counter uses a third copy. Add a set-level field
+  without teaching all three and a set carrying ONLY that field is deleted at submit, or the counter
+  reads 0/3 for a fully-logged bodyweight movement. PR 4a had to extend all three for the mode flags.
 
 - **The row already wraps at 360px.** Usable width is ~294px (`main px-4` + `fieldset px-4`); line 1
   is ~260px. The card splits into two **explicit** lines rather than trusting flex-wrap, and the
@@ -138,9 +152,14 @@ Real ones, each with the file to look at.
   adding a control — `text-base` is load-bearing (smaller triggers iOS zoom-on-focus), so there is no
   free shrink.
 
-- **The a11y CI gate is narrower than it looks.** It runs at **390px, not 360**; it measures tap-target
-  **height only**, not width; it **skips invisible controls**, so anything behind a disclosure passes
-  vacuously; and nothing asserts horizontal overflow. A new collapsed UI can be fully broken and green.
+- **The a11y CI gate is narrower than it looks.** It measures tap-target **height only**, not width,
+  and it **skips invisible controls**, so anything behind a disclosure passes vacuously. PR 4a closed
+  two of the four gaps: there is now a **360px** case and a **horizontal-overflow** assertion (both
+  proven to fail on a real regression before shipping). Width and the disclosure gap remain.
+
+- **A visually-hidden (`sr-only`) checkbox cannot be driven by Playwright's `.check()`.** Its box is
+  1px, so the actionability check fails. Click the **label** — which is what a person taps anyway, and
+  what `targetOf` measures for the tap-target bar.
 
 - **`packages/**` is typechecked by nothing.** `pnpm typecheck` is `--filter web`. A stale reference in
   `writers/` or `verify.ts` surfaces only as a runtime crash in `db:verify`. Run `pnpm verify`.

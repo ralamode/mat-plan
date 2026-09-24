@@ -165,7 +165,8 @@ async function writeSessionStrengthEntry(
     activityTypeId: number;
     day: string;
     clientId: string;
-    sets: readonly StrengthSetInput[];
+    // `weight` is optional here though the schema always emits it — direct callers omit it.
+    sets: readonly (Omit<StrengthSetInput, 'weight'> & { weight?: number | null })[];
     status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
@@ -221,8 +222,8 @@ async function writeSessionStrengthEntry(
           reps: s.reps,
           // `bodyweight`/`band` are MODES, not quantities (GAP-3 §7.2b) — booleans, and omitted when
           // false so Postgres applies its own default and the row stays byte-minimal.
-          ...(s.load.kind === 'bodyweight' ? { isBodyweight: true } : {}),
-          ...(s.load.kind === 'band' ? { isBand: true } : {}),
+          ...(s.isBodyweight ? { isBodyweight: true } : {}),
+          ...(s.isBand ? { isBand: true } : {}),
           // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
           // omits the column entirely, so every pre-existing caller writes a byte-identical row.
           ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
@@ -230,33 +231,32 @@ async function writeSessionStrengthEntry(
       )
       .returning({ id: schema.entrySets.id });
 
-    // One quantity row per set that carries a magnitude. A bare number is the movement's PRIMARY mass
-    // and takes its unit from the ENTRY (census §4.6: "weight units are never written" — `185` means
-    // 185 of whatever the household logs in). A value that wrote its own unit (`30in`, `20s`) already
-    // knows its slot, dimension and unit, so it is passed through unchanged.
+    // One PRIMARY quantity per set that carries a magnitude.
+    //
+    // The unit comes from the MOVEMENT, and the dimension is derived from that unit rather than
+    // assumed: since PR 4a the movement may be logged in `in` (a box jump) or `sec` (a hold), not only
+    // `lb`/`kg`. Deriving keeps the pair consistent with `units(code, dimension)`, which the composite
+    // FK checks — a hard-coded `'mass'` here would be an FK violation surfacing as a 500 on a gym
+    // floor. Census §4.6 is why the unit is not on the value: "weight units are never written", so a
+    // bare `185` means 185 of whatever this movement is logged in.
+    //
+    // A set with no magnitude (pure bodyweight, or a band) writes NO quantity row — a mode is not a
+    // measurement, and a row with a NULL value would be the EAV smell the child table avoids.
     const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
     args.sets.forEach((s, i) => {
-      const load = s.load;
-      if (load.kind === 'numeric') {
-        quantityRows.push({
-          clientId: newId(),
-          entrySetId: setRows[i].id,
-          slot: QUANTITY_SLOT.primary,
-          dimension: UNIT_DIMENSION_BY_CODE[args.unit],
-          unit: args.unit,
-          valueNum: String(load.weight), // numeric column takes a string (precision-safe)
-        });
-      } else if (load.kind === 'quantity') {
-        quantityRows.push({
-          clientId: newId(),
-          entrySetId: setRows[i].id,
-          slot: load.slot,
-          dimension: load.dimension,
-          unit: load.unit,
-          valueNum: String(load.value),
-        });
-      }
-      // bodyweight / band — recorded as booleans on the set, no quantity row to write
+      // `=== null` is not enough: the SCHEMA always emits `weight: null`, but a direct caller
+      // (db:verify's fixtures, a future importer) legitimately omits the key entirely. packages/db is
+      // typechecked by nothing (`pnpm typecheck` is --filter web), so that difference surfaces as
+      // `numeric: "undefined"` at runtime rather than as a compile error. Handle both.
+      if (s.weight === null || s.weight === undefined) return;
+      quantityRows.push({
+        clientId: newId(),
+        entrySetId: setRows[i].id,
+        slot: QUANTITY_SLOT.primary,
+        dimension: UNIT_DIMENSION_BY_CODE[args.unit],
+        unit: args.unit,
+        valueNum: String(s.weight), // numeric column takes a string (precision-safe)
+      });
     });
 
     if (quantityRows.length > 0) {

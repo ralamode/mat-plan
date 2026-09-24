@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { keyBySelf } from './enums';
+import { QUANTITY_SLOT, QUANTITY_SLOT_DIMENSIONS_BY_CODE } from './quantity-slots';
 
 /**
  * What KIND of quantity a unit measures — GAP-3 / [ADR 0004 §6](../../../docs/decisions/0004-typed-measurements.md).
@@ -106,3 +107,30 @@ export const UNITS = UNIT_CODES.map((code) => ({
 export function unitsOfDimension(dimension: UnitDimension): Unit[] {
   return UNIT_CODES.filter((c) => UNIT_DIMENSION_BY_CODE[c] === dimension);
 }
+
+/**
+ * The dimensions a MOVEMENT may be logged in, and the units that follow from them.
+ *
+ * DERIVED, never hand-listed (AGENTS.md constants rule). The authority is the `primary` slot's own
+ * declared dimension set in `quantity-slots.ts` — so "every loggable unit is legal in the primary
+ * slot" is true by construction rather than by a reviewer noticing. A fourth dimension added there
+ * shows up here, in the form's picker and in the composite FK, with no second edit.
+ *
+ * Excludes `count`, `bool` and `timing` because no slot accepts them: a rep count is not a load, a
+ * checkbox is not a measurement, and a clock reading is not a duration.
+ */
+export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] =
+  QUANTITY_SLOT_DIMENSIONS_BY_CODE[QUANTITY_SLOT.primary];
+
+export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
+
+/**
+ * What a movement's primary quantity is called, in words a parent or a ten-year-old reads without
+ * translating. `mass` → "Weight", not "Mass"; `length` covers a box-jump HEIGHT and a broad-jump
+ * DISTANCE, so it cannot be called either one alone.
+ */
+export const LOGGABLE_DIMENSION_LABELS: Record<string, string> = {
+  mass: 'Weight',
+  length: 'Height / distance',
+  time: 'Time',
+};
