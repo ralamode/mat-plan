@@ -118,9 +118,13 @@ async function seedStatusBadges(dbUrl: string): Promise<void> {
           movementId: movementRows[0].id,
           clientId: newId(),
           sets: [
-            { reps: 5, weight: 60 },
-            { reps: 5, weight: 60 },
-            { reps: 2, weight: 60, status: ENTRY_STATUS.sub_failure },
+            { reps: 5, load: { kind: 'numeric' as const, weight: 60 } },
+            { reps: 5, load: { kind: 'numeric' as const, weight: 60 } },
+            {
+              reps: 2,
+              load: { kind: 'numeric' as const, weight: 60 },
+              status: ENTRY_STATUS.sub_failure,
+            },
           ],
         },
         {
@@ -451,8 +455,8 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
           movementId: movementRows[0].id,
           clientId: newId(),
           sets: [
-            { reps: 5, weight: 135 },
-            { reps: 5, weight: 155 },
+            { reps: 5, load: { kind: 'numeric' as const, weight: 135 } },
+            { reps: 5, load: { kind: 'numeric' as const, weight: 155 } },
           ],
         },
         {
@@ -460,7 +464,7 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
           unit: 'lb',
           movementId: movementRows[1].id,
           clientId: newId(),
-          sets: [{ reps: 8, weight: 95 }],
+          sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 95 } }],
           supersetClientId,
           supersetOrder: 1,
         },
@@ -469,7 +473,7 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
           unit: 'lb',
           movementId: movementRows[2].id,
           clientId: newId(),
-          sets: [{ reps: 10, weight: 30 }],
+          sets: [{ reps: 10, load: { kind: 'numeric' as const, weight: 30 } }],
           supersetClientId,
           supersetOrder: 2,
         },

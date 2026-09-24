@@ -6,6 +6,8 @@ import {
   LOAD_MAX_LENGTH,
   numericSetSchema,
   parseLoad,
+  QUANTITY_SLOT,
+  UNIT_DIMENSION,
   SET_STATUSES,
   strengthSetSchema,
 } from '@mat-plan/shared';
@@ -66,30 +68,90 @@ describe('parseLoad — numeric-LOOKING typos are rejected, never labelled', () 
   });
 });
 
-describe('parseLoad — the label branch', () => {
-  it.each(['BW', 'band', '30in', '36in', '30s', '20s', 'BW+8 (vest)', 'BW (unassisted)', '15/DB'])(
-    'accepts %j verbatim',
+// GAP-3 replaced the label branch. Every shape that used to be stored VERBATIM AS A STRING now either
+// resolves to a typed destination or is rejected — "no free-text load is representable" is the backlog
+// acceptance criterion, and `weight_label` no longer exists for text to fall through into.
+describe('parseLoad — the two MODES become booleans on the set', () => {
+  it('maps BW to the is_bodyweight flag', () => {
+    expect(parseLoad('BW')).toEqual({ kind: 'bodyweight' });
+  });
+
+  it('maps band to the is_band flag', () => {
+    expect(parseLoad('band')).toEqual({ kind: 'band' });
+  });
+
+  it('normalises case — with no free-text column left, `bw` can only have meant the chip', () => {
+    expect(parseLoad('bw')).toEqual({ kind: 'bodyweight' });
+    expect(parseLoad('BAND')).toEqual({ kind: 'band' });
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(parseLoad('  BW  ')).toEqual({ kind: 'bodyweight' });
+  });
+});
+
+describe('parseLoad — a magnitude that writes its own unit becomes a TYPED quantity', () => {
+  it('parses a box-jump height (census L6)', () => {
+    expect(parseLoad('30in')).toEqual({
+      kind: 'quantity',
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.length,
+      unit: 'in',
+      value: 30,
+    });
+    expect(parseLoad('36in')).toMatchObject({ dimension: UNIT_DIMENSION.length, value: 36 });
+  });
+
+  it('parses a hold duration, accepting the `s` a coach actually writes (census L5)', () => {
+    expect(parseLoad('20s')).toEqual({
+      kind: 'quantity',
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.time,
+      unit: 'sec',
+      value: 20,
+    });
+    expect(parseLoad('30s')).toMatchObject({ dimension: UNIT_DIMENSION.time, value: 30 });
+  });
+
+  it('accepts a double-quote as inches — inch marks are in active use', () => {
+    expect(parseLoad('30"')).toMatchObject({ dimension: UNIT_DIMENSION.length, unit: 'in' });
+  });
+
+  it('accepts an explicit mass unit and keeps it PRIMARY', () => {
+    expect(parseLoad('185lb')).toMatchObject({
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.mass,
+      unit: 'lb',
+      value: 185,
+    });
+  });
+
+  it('tolerates a space before the unit', () => {
+    expect(parseLoad('50 ft')).toMatchObject({ dimension: UNIT_DIMENSION.length, unit: 'ft' });
+  });
+
+  it('rejects a unit it does not know rather than storing the string', () => {
+    expect(parseLoad('30furlongs').kind).toBe('invalid');
+  });
+});
+
+describe('parseLoad — free text is no longer representable (the GAP-3 acceptance criterion)', () => {
+  // Each of these was previously stored verbatim in `weight_label`. They are multi-value or
+  // qualitative shapes that need the multi-slot form (`BW+8 (vest)`) or a note (`BW (unassisted)`),
+  // and the column that used to absorb them is gone — so they are rejected, not laundered.
+  it.each(['BW+8 (vest)', 'BW (unassisted)', 'BW (modified)', '15/DB', '30 (2x 15 DB)'])(
+    'rejects %j',
     (raw) => {
-      expect(parseLoad(raw)).toEqual({ kind: 'label', weightLabel: raw });
+      expect(parseLoad(raw).kind).toBe('invalid');
     },
   );
-
-  it('preserves INNER whitespace and casing — the CSV depends on the exact form', () => {
-    // `30 (2x 15 DB)` would be corrupted by a whitespace collapse; `BW`/`band` by case folding.
-    expect(parseLoad('30 (2x 15 DB)')).toEqual({ kind: 'label', weightLabel: '30 (2x 15 DB)' });
-    expect(parseLoad('  BW (modified)  ')).toEqual({ kind: 'label', weightLabel: 'BW (modified)' });
-  });
-
-  it('allows a double-quote — inch marks are in active use', () => {
-    expect(parseLoad('30"')).toEqual({ kind: 'label', weightLabel: '30"' });
-  });
 
   it('rejects a comma or newline — the CSV joins fields raw, so either would split a row', () => {
     expect(parseLoad('60, ish').kind).toBe('invalid');
     expect(parseLoad('60\nish').kind).toBe('invalid');
   });
 
-  it(`rejects a label longer than ${LOAD_MAX_LENGTH}`, () => {
+  it(`rejects a value longer than ${LOAD_MAX_LENGTH}`, () => {
     expect(parseLoad('x'.repeat(LOAD_MAX_LENGTH + 1)).kind).toBe('invalid');
   });
 });
@@ -113,19 +175,22 @@ describe('parseLoad — a PRESCRIBED value can never become a PERFORMED one', ()
 
 describe('strengthSetSchema — the wire keeps ONE weight key', () => {
   it('produces a numeric set', () => {
-    expect(strengthSetSchema.parse({ reps: '5', weight: '60' })).toEqual({ reps: 5, weight: 60 });
-  });
-
-  it('produces a labeled set', () => {
-    expect(strengthSetSchema.parse({ reps: '5', weight: 'BW' })).toEqual({
+    expect(strengthSetSchema.parse({ reps: '5', weight: '60' })).toEqual({
       reps: 5,
-      weightLabel: 'BW',
+      load: { kind: 'numeric', weight: 60 },
     });
   });
 
-  it('ignores an injected weightLabel key — a crafted body cannot set both', () => {
-    const out = strengthSetSchema.parse({ reps: '5', weight: '60', weightLabel: 'BW' });
-    expect(out).toEqual({ reps: 5, weight: 60 });
+  it('produces a bodyweight set', () => {
+    expect(strengthSetSchema.parse({ reps: '5', weight: 'BW' })).toEqual({
+      reps: 5,
+      load: { kind: 'bodyweight' },
+    });
+  });
+
+  it('ignores an injected load key — a crafted body cannot set both', () => {
+    const out = strengthSetSchema.parse({ reps: '5', weight: '60', load: { kind: 'bodyweight' } });
+    expect(out).toEqual({ reps: 5, load: { kind: 'numeric', weight: 60 } });
   });
 
   it('keeps the AUTHORED per-field message (a union would collapse it to "Invalid input")', () => {
@@ -172,9 +237,12 @@ describe('the V1-9 edit contract is untouched', () => {
 });
 
 describe('CANONICAL_LOAD_LABELS', () => {
-  it('are themselves valid labels (a chip can never write something the schema rejects)', () => {
+  // GAP-3: the chips survive (the ergonomic argument for a one-tap affordance is untouched — iOS's
+  // numeric pad has no letters), but each one must now resolve to a TYPED destination rather than to
+  // itself. This is the contract test that keeps the chip vocabulary and parseLoad from drifting.
+  it('each chip resolves to a typed mode a set can actually store', () => {
     for (const label of CANONICAL_LOAD_LABELS) {
-      expect(parseLoad(label)).toEqual({ kind: 'label', weightLabel: label });
+      expect(['bodyweight', 'band']).toContain(parseLoad(label).kind);
     }
   });
 });
@@ -185,18 +253,22 @@ describe('strengthSetSchema — per-set status (GAP-1 P1-1b)', () => {
     const out = strengthSetSchema.parse({ reps: '3', weight: '60', status: 'sub_failure' });
     // reps stays required + positive: the CSV loses the number into `notes`, but that is a limitation
     // of the FILE, not an instruction to lose it in the DB. The export re-derives `sub-failure`.
-    expect(out).toEqual({ reps: 3, weight: 60, status: 'sub_failure' });
+    expect(out).toEqual({
+      reps: 3,
+      load: { kind: 'numeric', weight: 60 },
+      status: 'sub_failure',
+    });
   });
 
   it('omits `status` entirely when not supplied — so the writer omits the column', () => {
     const out = strengthSetSchema.parse({ reps: '5', weight: '60' });
-    expect(out).toEqual({ reps: 5, weight: 60 });
+    expect(out).toEqual({ reps: 5, load: { kind: 'numeric', weight: 60 } });
     expect('status' in out).toBe(false); // NOT `status: undefined` — the DB default depends on absence
   });
 
   it('carries status alongside a TEXT load too', () => {
     const out = strengthSetSchema.parse({ reps: '4', weight: 'BW', status: 'sub_failure' });
-    expect(out).toEqual({ reps: 4, weightLabel: 'BW', status: 'sub_failure' });
+    expect(out).toEqual({ reps: 4, load: { kind: 'bodyweight' }, status: 'sub_failure' });
   });
 
   it('REJECTS skipped as a set status — a skipped movement carries zero sets, not a placeholder', () => {

@@ -9,6 +9,26 @@ half of GAP-1 P0-2
 > appears thirty times. This ADR records the **decision and its rationale** so the reasoning survives;
 > the file-by-file plan (with the engineering and UX panels AGENTS.md requires) follows the samples.
 
+> ## ⚠️ Superseded in part — implemented 2026-09-23 (migration `0011`)
+>
+> The core decisions hold: a performed value is a typed measurement (§1), prescribed and performed
+> diverge (§2), units are safe by construction with the resolved unit stored ON THE ROW (§6), and
+> `band` is a boolean (§7). **Three things were overturned by the shape census and its adversarial
+> panel** — see [the census](../plans/gap3-typed-measurements.md) and
+> [the PR plan](../plans/gap3-pr3-entry-set-quantities.md):
+>
+> 1. **§4's "`is_bodyweight` varies per set? No" is WRONG.** The movement field is free text, so a kid
+>    typing "Pushups" creates a movement with `isBodyweight: false` and no escape chip; and four YDP
+>    movements are bodyweight-**or**-vested in the same session. It is a boolean on `entry_sets`.
+> 2. **§5's "distance/height: prescription is the home, set-level is a nullable override" is DEAD.**
+>    Fixed per-dimension columns had already overflowed on the second real program (three worn loads on
+>    one movement). Every value+unit quantity is a row in `entry_set_quantities`, keyed by a controlled
+>    ROLE vocabulary — and the set, not the prescription, is where the fact lives, because ad-hoc
+>    logging has no prescription at all.
+> 3. **The four dimensions in §6 were incomplete** (`bool` and `timing` fit none of them), and
+>    `UNIT_CODES` had no length dimension whatsoever — which is most of why a box-jump height ended up
+>    inside a string.
+
 ## Context
 
 GAP-1 P0-2 made text loads writable — `entry_sets.weight_label`, a `type="text"` input, and

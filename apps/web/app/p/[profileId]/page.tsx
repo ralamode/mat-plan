@@ -363,7 +363,6 @@ function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string
                 key={s.publicId}
                 set={s}
                 profileId={profileId}
-                unit={entry.unit}
                 ariaLabel={`${label} set ${s.idx}`}
               />
             ) : (
@@ -374,7 +373,7 @@ function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string
               // NOTE only this read-only branch can carry a badge: `isEditableSet` requires
               // status === 'done', so <EditableSet> never receives a non-done set.
               <li key={s.publicId} className="flex flex-wrap items-baseline gap-2">
-                <span>{formatSetLine(s, entry.unit)}</span>
+                <span>{formatSetLine(s)}</span>
                 {s.status !== ENTRY_STATUS.done ? (
                   <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
                     {ENTRY_STATUS_LABELS[s.status]}

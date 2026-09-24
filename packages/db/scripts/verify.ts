@@ -38,8 +38,12 @@ import {
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
+  QUANTITY_SLOT,
+  QUANTITY_SLOT_ROWS,
   UNIT_CODES,
+  UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
+  UNITS,
   UNIT_DIMENSIONS,
   WEEK_LENGTH_DAYS,
 } from '@mat-plan/shared';
@@ -93,6 +97,28 @@ async function expectRejectedBy(constraintName: string, fn: () => Promise<unknow
  * The column set of a table, keyed by name → data_type — the `information_schema.columns` cast shape lives
  * ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
  */
+/**
+ * A reference table must equal its shared-const source EXACTLY, in BOTH directions — a row the const
+ * doesn't know about is drift just as much as a const member with no row.
+ *
+ * Extracted at GAP-3 (reuse panel): `units` open-coded this as two loops, and `quantity_slots` was
+ * about to open-code it a second time. Both now call this, so the parity RULE lives once even though
+ * the two tables' columns differ.
+ */
+function assertRefTableMatches(
+  table: string,
+  dbRows: readonly Record<string, unknown>[],
+  constRows: readonly Record<string, unknown>[],
+): void {
+  const norm = (rows: readonly Record<string, unknown>[]) =>
+    rows.map((r) => JSON.stringify(Object.entries(r).sort())).sort();
+  assert.deepEqual(
+    norm(dbRows),
+    norm(constRows),
+    `${table} rows equal their shared const EXACTLY (both directions)`,
+  );
+}
+
 async function columnsOf(tableName: string): Promise<Map<string, string>> {
   const res = await db.execute(
     sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
@@ -118,21 +144,11 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
 // dimension matches the shared map. That is what actually catches drift — a renamed code, or a unit
 // seeded with the wrong dimension, which the count can never see.
 {
-  const byCode = new Map(units.map((u) => [u.code, u.dimension]));
-  for (const code of UNIT_CODES) {
-    assert.equal(
-      byCode.get(code),
-      UNIT_DIMENSION_BY_CODE[code],
-      `unit '${code}' seeded with dimension '${UNIT_DIMENSION_BY_CODE[code]}'`,
-    );
-  }
-  // The other direction: no row the const does not know about.
-  for (const u of units) {
-    assert.ok(
-      (UNIT_CODES as readonly string[]).includes(u.code),
-      `units row '${u.code}' exists in UNIT_CODES`,
-    );
-  }
+  assertRefTableMatches(
+    'units',
+    units.map((u) => ({ code: u.code, dimension: u.dimension })),
+    UNITS.map((u) => ({ code: u.code, dimension: u.dimension })),
+  );
   // GAP-3's whole point: a length dimension now EXISTS. Before this there was none at all, which is why
   // a box-jump height had nowhere to live but the free-text load string.
   assert.ok(
@@ -764,6 +780,47 @@ async function assertCheckCoversConst(conname: string, values: readonly string[]
 }
 // GAP-3 — the DB CHECK and the shared UNIT_DIMENSIONS const must agree EXACTLY, in both directions.
 // Without this the column is a convention with a CHECK beside it rather than a single source of truth.
+// ── GAP-3: quantity_slots + entry_set_quantities ──────────────────────────────────────────────────
+// The typed replacement for the free-text `weight_label`. These proofs are the REASON this design was
+// chosen over fixed columns, so they run the guard rather than asserting it in prose.
+{
+  const slots = await db.select().from(schema.quantitySlots);
+  assertRefTableMatches(
+    'quantity_slots',
+    slots.map((r) => ({ code: r.code, dimension: r.dimension })),
+    QUANTITY_SLOT_ROWS.map((r) => ({ code: r.code, dimension: r.dimension })),
+  );
+  // Seeded TWICE by the harness above — the PK is the (code, dimension) pair, so a second run must
+  // conflict-do-nothing rather than double the table.
+  assert.equal(
+    slots.length,
+    QUANTITY_SLOT_ROWS.length,
+    'quantity_slots is idempotent across two seed runs',
+  );
+  // `primary` at three dimensions is the whole point of the composite PK: a back squat's mass, a broad
+  // jump's length and a hold's duration are all "the thing this movement measures".
+  assert.equal(
+    slots.filter((r) => r.code === QUANTITY_SLOT.primary).length,
+    3,
+    'primary is legal at mass, length AND time (the panel finding that killed a mass-pinned primary)',
+  );
+  console.log('✓ GAP-3: quantity_slots seeded from the shared const, idempotent');
+}
+
+await assertCheckCoversConst('quantity_slots_dimension_check', UNIT_DIMENSIONS);
+
+// The free-text columns are GONE. Asserted explicitly: the whole arc's acceptance criterion is that no
+// free-text load is REPRESENTABLE, and a surviving column would silently make that false.
+{
+  const cols = await columnsOf('entry_sets');
+  for (const dropped of ['weight_num', 'weight_label', 'seconds']) {
+    assert.ok(!cols.has(dropped), `entry_sets.${dropped} was dropped (GAP-3 contract)`);
+  }
+  assert.equal(cols.get('is_bodyweight'), 'boolean', 'entry_sets.is_bodyweight exists');
+  assert.equal(cols.get('is_band'), 'boolean', 'entry_sets.is_band exists');
+  console.log('✓ GAP-3: the free-text load columns no longer exist');
+}
+
 await assertCheckCoversConst('units_dimension_check', UNIT_DIMENSIONS);
 await assertCheckCoversConst('activity_types_input_shape_check', ACTIVITY_INPUT_SHAPES);
 await assertCheckCoversConst('movements_pattern_check', MOVEMENT_PATTERNS);
@@ -1258,7 +1315,7 @@ async function insertSessionEntry(
     },
     cid,
   );
-  await db
+  const [setRow] = await db
     .insert(schema.entrySets)
     .values({
       publicId: `019826b4-0000-7000-8000-000000000b${tag}`,
@@ -1266,13 +1323,24 @@ async function insertSessionEntry(
       entryId,
       idx: 1,
       reps: 5,
-      weightNum: '135',
       status: ENTRY_STATUS.done,
     })
     .onConflictDoNothing({
       target: schema.entrySets.clientId,
       where: isNull(schema.entrySets.deletedAt),
+    })
+    .returning({ id: schema.entrySets.id });
+  // GAP-3: the 135 lb lives in the child table now.
+  if (setRow) {
+    await db.insert(schema.entrySetQuantities).values({
+      clientId: `019826b4-0000-7000-8000-000000000d${tag}`,
+      entrySetId: setRow.id,
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.mass,
+      unit: 'lb',
+      valueNum: '135',
     });
+  }
   return entryId;
 }
 
@@ -1565,8 +1633,8 @@ const flatArgs = {
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001201',
       sets: [
-        { reps: 5, weight: 135 },
-        { reps: 5, weight: 155 },
+        { reps: 5, load: { kind: 'numeric' as const, weight: 135 } },
+        { reps: 5, load: { kind: 'numeric' as const, weight: 155 } },
       ],
     },
     {
@@ -1574,14 +1642,14 @@ const flatArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001202',
-      sets: [{ reps: 8, weight: 95 }],
+      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 95 } }],
     },
     {
       movementName: 'Barbell Row',
       unit: 'lb',
       movementId: movZ.id,
       clientId: '019826b4-0000-7000-8000-000000001203',
-      sets: [{ reps: 10, weight: 75 }],
+      sets: [{ reps: 10, load: { kind: 'numeric' as const, weight: 75 } }],
     },
   ],
 } as const;
@@ -1697,7 +1765,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001301',
-      sets: [{ reps: 8, weight: 40 }],
+      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 40 } }],
       supersetClientId: '019826b4-0000-7000-8000-000000001310',
       supersetOrder: 1,
     },
@@ -1706,7 +1774,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001302',
-      sets: [{ reps: 8, weight: 30 }],
+      sets: [{ reps: 8, load: { kind: 'numeric' as const, weight: 30 } }],
       supersetClientId: '019826b4-0000-7000-8000-000000001310',
       supersetOrder: 2,
     },
@@ -1715,7 +1783,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movX.id,
       clientId: '019826b4-0000-7000-8000-000000001303',
-      sets: [{ reps: 10, weight: 0 }],
+      sets: [{ reps: 10, load: { kind: 'numeric' as const, weight: 0 } }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 1,
     },
@@ -1724,7 +1792,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movY.id,
       clientId: '019826b4-0000-7000-8000-000000001304',
-      sets: [{ reps: 12, weight: 10 }],
+      sets: [{ reps: 12, load: { kind: 'numeric' as const, weight: 10 } }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 2,
     },
@@ -1733,7 +1801,7 @@ const ssArgs = {
       unit: 'lb',
       movementId: movZ.id,
       clientId: '019826b4-0000-7000-8000-000000001305',
-      sets: [{ reps: 15, weight: 0 }],
+      sets: [{ reps: 15, load: { kind: 'numeric' as const, weight: 0 } }],
       supersetClientId: '019826b4-0000-7000-8000-000000001320',
       supersetOrder: 3,
     },
@@ -1785,9 +1853,11 @@ console.log(
   '✓ V1-8-3c: superset write branch (2- and 3-movement) via the real writer; ordered; idempotent replay',
 );
 
-// ── GAP-1 P0-2: TEXT loads (`BW`, `band`, `30s`) via the shipped writer ────────────────────────────
-// Before this, `strengthSetSchema` accepted only a number, so every bodyweight movement in Ray's
-// program logged as `weight: 0` — the record said zero where the kid did bodyweight work.
+// ── GAP-3 (was GAP-1 P0-2): NON-NUMERIC loads via the shipped writer ───────────────────────────────
+// GAP-1 P0-2 made `BW`/`30s` loggable by storing them as TEXT. GAP-3 keeps the capability and changes
+// the destination — deliberately, and the backlog says so ("Partially reverses GAP-1 P0-2 on
+// purpose"). `BW` is now a BOOLEAN on the set and `30s` a typed ('primary','time') quantity, so the
+// same three shapes still round-trip and none of them is a string any more.
 const LABELED_SESSION_CLIENT_ID = newId();
 const LABELED_MOVEMENT_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
@@ -1802,46 +1872,61 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: LABELED_MOVEMENT_CLIENT_ID,
-      // The three shapes that matter: a canonical label, a free-text label, and a DURATION (the CSV
-      // puts `30s` in the load column, which is why `entry_sets.seconds` is deliberately deferred).
+      // The three shapes that matter: a bodyweight MODE, a second one, and a DURATION — which used to
+      // need `entry_sets.seconds` and now rides the same mechanism as every other magnitude.
       sets: [
-        { reps: 5, weightLabel: 'BW' },
-        { reps: 3, weightLabel: 'BW+8 (vest)' },
-        { reps: 1, weightLabel: '30s' },
+        { reps: 5, load: { kind: 'bodyweight' as const } },
+        { reps: 3, load: { kind: 'bodyweight' as const } }, // the vest itself is a slot the NEXT PR's form writes
+        {
+          reps: 1,
+          load: {
+            kind: 'quantity' as const,
+            slot: QUANTITY_SLOT.primary,
+            dimension: UNIT_DIMENSION.time,
+            unit: 'sec' as const,
+            value: 30,
+          },
+        },
       ],
     },
   ],
 });
 const labeledSets = (
   await db.execute(sql`
-    select es.idx, es.reps, es.weight_num, es.weight_label
+    select es.idx, es.reps, es.is_bodyweight, es.is_band,
+           q.slot, q.dimension, q.unit, q.value_num
     from entry_sets es
     join entries e on e.id = es.entry_id
+    left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
     where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID}
     order by es.idx`)
 ).rows as unknown as {
   idx: number;
   reps: number;
-  weight_num: string | null;
-  weight_label: string | null;
+  is_bodyweight: boolean;
+  is_band: boolean;
+  slot: string | null;
+  dimension: string | null;
+  unit: string | null;
+  value_num: string | null;
 }[];
-assert.equal(labeledSets.length, 3, 'GAP-1: all three labeled sets persisted');
+assert.equal(labeledSets.length, 3, 'GAP-3: all three non-numeric sets persisted');
 assert.deepEqual(
-  labeledSets.map((r) => r.weight_label),
-  ['BW', 'BW+8 (vest)', '30s'],
-  'GAP-1: text loads round-trip VERBATIM (inner spaces + casing preserved)',
+  labeledSets.map((r) => r.is_bodyweight),
+  [true, true, false],
+  'GAP-3: BW is a BOOLEAN on the set, not a string',
 );
+// The duration: what used to be the string `30s` is now a typed quantity carrying its own unit.
+const durationSet = labeledSets[2];
+assert.equal(durationSet.slot, QUANTITY_SLOT.primary, "GAP-3: a hold's duration is its PRIMARY");
+assert.equal(durationSet.dimension, UNIT_DIMENSION.time, 'GAP-3: …at dimension time');
+assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW (ADR 0004 §6)');
+assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
+// The two bodyweight sets carry no quantity at all — a MODE is not a magnitude.
 assert.ok(
-  labeledSets.every((r) => r.weight_num === null),
-  'GAP-1: a labeled set stores NO weight_num (it would be masked at the read seam anyway)',
+  labeledSets.slice(0, 2).every((r) => r.value_num === null),
+  'GAP-3: a pure bodyweight set stores NO quantity row',
 );
-// THE guard: an empty label is unrecoverable — it wins over the weight at the read seam and both the
-// V1-9 edit affordance and updateStrengthSetById's isNull(weightLabel) refuse to fix it.
-const emptyLabels = (
-  (await db.execute(sql`select count(*)::int as count from entry_sets where weight_label = ''`))
-    .rows as unknown as { count: number }[]
-)[0].count;
-assert.equal(emptyLabels, 0, 'GAP-1: NO set carries an empty-string weight_label');
 
 // A labeled set on a SUPERSET member — that path had no other coverage.
 const LABELED_SS_SESSION = newId();
@@ -1861,7 +1946,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: LABELED_SS_A,
-      sets: [{ reps: 5, weightLabel: 'BW' }],
+      sets: [{ reps: 5, load: { kind: 'bodyweight' as const } }],
       supersetClientId: LABELED_SS_GROUP,
       supersetOrder: 1,
     },
@@ -1870,7 +1955,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movY.id,
       clientId: LABELED_SS_B,
-      sets: [{ reps: 5, weight: 60 }], // the numeric path must be unaffected alongside a labeled one
+      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }], // the numeric path must be unaffected alongside a labeled one
       supersetClientId: LABELED_SS_GROUP,
       supersetOrder: 2,
     },
@@ -1878,20 +1963,197 @@ await writeStrengthSession(asPg, {
 });
 const ssSets = (
   await db.execute(sql`
-    select e.client_id, es.weight_num, es.weight_label
-    from entry_sets es join entries e on e.id = es.entry_id
+    select e.client_id, es.is_bodyweight, q.value_num, q.unit
+    from entry_sets es
+    join entries e on e.id = es.entry_id
+    left join entry_set_quantities q on q.entry_set_id = es.id and q.deleted_at is null
     where e.client_id in (${LABELED_SS_A}, ${LABELED_SS_B})`)
 ).rows as unknown as {
   client_id: string;
-  weight_num: string | null;
-  weight_label: string | null;
+  is_bodyweight: boolean;
+  value_num: string | null;
+  unit: string | null;
 }[];
 const ssLabeled = ssSets.find((r) => r.client_id === LABELED_SS_A);
 const ssNumeric = ssSets.find((r) => r.client_id === LABELED_SS_B);
-assert.equal(ssLabeled?.weight_label, 'BW', 'GAP-1: a superset MEMBER can carry a text load');
-assert.equal(ssNumeric?.weight_label, null, 'GAP-1: the numeric sibling is unaffected');
-assert.equal(ssNumeric?.weight_num, '60.000', 'GAP-1: …and still stores its number');
-console.log('✓ GAP-1: text loads (BW / BW+8 (vest) / 30s) round-trip, incl. on a superset member');
+assert.equal(ssLabeled?.is_bodyweight, true, 'GAP-3: a superset MEMBER can be bodyweight');
+assert.equal(ssLabeled?.value_num, null, 'GAP-3: …and carries no quantity');
+assert.equal(ssNumeric?.is_bodyweight, false, 'GAP-3: the numeric sibling is unaffected');
+assert.equal(ssNumeric?.value_num, '60.000', 'GAP-3: …and still stores its number');
+assert.equal(ssNumeric?.unit, 'lb', 'GAP-3: …with the unit that came off the ENTRY');
+console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superset member');
+
+// ── GAP-3: the composite-FK unit guard, and the shapes fixed columns could not hold ────────────────
+// This is the block that justifies the design. `lb` in a box-jump height is rejected BY THE DATABASE,
+// not by review — there is no third spelling that gets a mass unit into a length quantity, because
+// `dimension` is the shared column of two composite FKs against two PRIMARY KEYS.
+{
+  const qtySetId = (
+    (
+      await db.execute(sql`
+        select es.id from entry_sets es join entries e on e.id = es.entry_id
+        where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} order by es.idx limit 1`)
+    ).rows as unknown as { id: number }[]
+  )[0].id;
+
+  const insertQty = (slot: string, dimension: string, unit: string, value = '10') =>
+    db.insert(schema.entrySetQuantities).values({
+      clientId: newId(),
+      entrySetId: qtySetId,
+      slot,
+      dimension,
+      unit,
+      valueNum: value,
+    });
+
+  // A mass unit in a LENGTH quantity: the slot/dimension pair is legal, the unit/dimension pair is not.
+  await expectRejectedBy('entry_set_quantities_unit_dimension_fkey', () =>
+    insertQty('distance', UNIT_DIMENSION.length, 'lb'),
+  );
+  // Lying about the dimension to match the unit just fails the OTHER FK — `distance` is length-only.
+  await expectRejectedBy('entry_set_quantities_slot_dimension_fkey', () =>
+    insertQty('distance', UNIT_DIMENSION.mass, 'lb'),
+  );
+  // A slot outside the seeded vocabulary — slots are a CLOSED list, never free text.
+  await expectRejectedBy('entry_set_quantities_slot_dimension_fkey', () =>
+    insertQty('torso', UNIT_DIMENSION.mass, 'lb'),
+  );
+  // `primary` is legal at mass/length/time but NOT at count — a slot is bounded by its declared set.
+  await expectRejectedBy('entry_set_quantities_slot_dimension_fkey', () =>
+    insertQty(QUANTITY_SLOT.primary, UNIT_DIMENSION.count, 'count'),
+  );
+  // `weight_num` never had a non-negative CHECK (parseLoad enforced it); the typed column does.
+  await expectRejectedBy('entry_set_quantities_value_num_check', () =>
+    insertQty(QUANTITY_SLOT.vest, UNIT_DIMENSION.mass, 'lb', '-1'),
+  );
+  console.log('✓ GAP-3: a mass unit in a length quantity is UNREPRESENTABLE (two composite FKs)');
+
+  // The shapes a fixed-column design could not hold. THREE worn loads on ONE set — the YDP movement
+  // that overflowed ADR 0004 and is the reason the child table exists at all.
+  const wornSetId = (
+    (
+      await db.execute(sql`
+        select es.id from entry_sets es join entries e on e.id = es.entry_id
+        where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} order by es.idx offset 1 limit 1`)
+    ).rows as unknown as { id: number }[]
+  )[0].id;
+  await db.insert(schema.entrySetQuantities).values(
+    ([QUANTITY_SLOT.vest, QUANTITY_SLOT.ankle, QUANTITY_SLOT.wrist] as const).map((slot, i) => ({
+      clientId: newId(),
+      entrySetId: wornSetId,
+      slot,
+      dimension: UNIT_DIMENSION.mass,
+      unit: 'lb' as const,
+      valueNum: String(i + 1),
+    })),
+  );
+  const worn = await db
+    .select({ slot: schema.entrySetQuantities.slot })
+    .from(schema.entrySetQuantities)
+    .where(
+      and(
+        eq(schema.entrySetQuantities.entrySetId, wornSetId),
+        isNull(schema.entrySetQuantities.deletedAt),
+      ),
+    );
+  assert.equal(worn.length, 3, 'GAP-3: vest + ankle + wrist coexist on ONE set');
+
+  // The arity rule: a SECOND vest on the SAME set is rejected — nothing can write fourteen vest rows.
+  await expectRejectedBy('uq_entry_set_quantities_set_slot', () =>
+    db.insert(schema.entrySetQuantities).values({
+      clientId: newId(),
+      entrySetId: wornSetId, // the set that already HAS a vest
+      slot: QUANTITY_SLOT.vest,
+      dimension: UNIT_DIMENSION.mass,
+      unit: 'lb',
+      valueNum: '99',
+    }),
+  );
+
+  // Two DIMENSIONS on one set — the sled push, `123 (50ft)`. A fixed weight column could never say
+  // this: the mass and the length are BOTH the record, and neither is the other's unit.
+  await db.insert(schema.entrySetQuantities).values([
+    {
+      clientId: newId(),
+      entrySetId: qtySetId,
+      slot: QUANTITY_SLOT.primary,
+      dimension: UNIT_DIMENSION.mass,
+      unit: 'lb',
+      valueNum: '123',
+    },
+    {
+      clientId: newId(),
+      entrySetId: qtySetId,
+      slot: QUANTITY_SLOT.distance,
+      dimension: UNIT_DIMENSION.length,
+      unit: 'ft',
+      valueNum: '50',
+    },
+  ]);
+  const sled = await db
+    .select({ dimension: schema.entrySetQuantities.dimension })
+    .from(schema.entrySetQuantities)
+    .where(
+      and(
+        eq(schema.entrySetQuantities.entrySetId, qtySetId),
+        isNull(schema.entrySetQuantities.deletedAt),
+      ),
+    );
+  assert.ok(
+    new Set(sled.map((r) => r.dimension)).size >= 2,
+    'GAP-3: one set carries TWO dimensions at once (the `123 (50ft)` sled row)',
+  );
+
+  // Soft-delete a quantity, then write a replacement for the same slot — the PARTIAL unique index is
+  // what makes the edit path possible, and `targetWhere` is what makes the upsert legal against it.
+  await db
+    .update(schema.entrySetQuantities)
+    .set({ deletedAt: sql`now()` })
+    .where(
+      and(
+        eq(schema.entrySetQuantities.entrySetId, wornSetId),
+        eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.vest),
+      ),
+    );
+  await db.insert(schema.entrySetQuantities).values({
+    clientId: newId(),
+    entrySetId: wornSetId,
+    slot: QUANTITY_SLOT.vest,
+    dimension: UNIT_DIMENSION.mass,
+    unit: 'lb',
+    valueNum: '12',
+  });
+  console.log('✓ GAP-3: multi-slot + multi-dimension sets, arity guard, soft-delete-then-replace');
+
+  // ⚠️ ON DELETE CASCADE is HARD-delete only. The app SOFT-deletes, so a soft-deleted set leaves its
+  // quantities live — every reader must join through a live parent, which the DAL now does. Proven
+  // here so the trap is visible rather than discovered in a wrong total later.
+  await db
+    .update(schema.entrySets)
+    .set({ deletedAt: sql`now()` })
+    .where(eq(schema.entrySets.id, wornSetId));
+  const orphans = await db
+    .select({ id: schema.entrySetQuantities.id })
+    .from(schema.entrySetQuantities)
+    .where(
+      and(
+        eq(schema.entrySetQuantities.entrySetId, wornSetId),
+        isNull(schema.entrySetQuantities.deletedAt),
+      ),
+    );
+  assert.ok(
+    orphans.length > 0,
+    'GAP-3: a SOFT-deleted set leaves live quantities — readers MUST join a live parent',
+  );
+  // And a HARD delete really does cascade.
+  await db.delete(schema.entrySets).where(eq(schema.entrySets.id, wornSetId));
+  const cascaded = await db
+    .select({ id: schema.entrySetQuantities.id })
+    .from(schema.entrySetQuantities)
+    .where(eq(schema.entrySetQuantities.entrySetId, wornSetId));
+  assert.equal(cascaded.length, 0, 'GAP-3: a HARD delete cascades to the quantities');
+  console.log('✓ GAP-3: soft-delete leaves live children (documented trap); hard delete cascades');
+}
 
 // ── GAP-1 P0-1: `sessions.day_role` — WHICH programmed day a session was ───────────────────────────
 // The CHECK's frozen literals can't silently drift from the shared const (the prescriptions precedent).
@@ -1913,7 +2175,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: newId(),
-      sets: [{ reps: 5, weight: 60 }],
+      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }],
     },
   ],
 });
@@ -1944,7 +2206,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: newId(),
-      sets: [{ reps: 5, weight: 60 }],
+      sets: [{ reps: 5, load: { kind: 'numeric' as const, weight: 60 } }],
     },
   ],
 });
@@ -1999,8 +2261,8 @@ await writeStrengthSession(asPg, {
       clientId: DONE_MOVEMENT_CLIENT_ID,
       // status omitted → the writer omits the column → the DB default. The `done` path is untouched.
       sets: [
-        { reps: 5, weight: 60 },
-        { reps: 5, weight: 65 },
+        { reps: 5, load: { kind: 'numeric' as const, weight: 60 } },
+        { reps: 5, load: { kind: 'numeric' as const, weight: 65 } },
       ],
     },
   ],
@@ -2111,8 +2373,12 @@ await writeStrengthSession(asPg, {
       movementId: movX.id,
       clientId: SF_MOVEMENT_CLIENT_ID,
       sets: [
-        { reps: 5, weight: 60 }, // status omitted → DB default
-        { reps: 3, weight: 60, status: ENTRY_STATUS.sub_failure },
+        { reps: 5, load: { kind: 'numeric' as const, weight: 60 } }, // status omitted → DB default
+        {
+          reps: 3,
+          load: { kind: 'numeric' as const, weight: 60 },
+          status: ENTRY_STATUS.sub_failure,
+        },
       ],
     },
   ],
@@ -2212,16 +2478,22 @@ assert.ok(edited, 'V1-9: an owner edit returns the set public id');
 const [afterEdit] = await db
   .select({
     reps: schema.entrySets.reps,
-    weightNum: schema.entrySets.weightNum,
     updatedAt: schema.entrySets.updatedAt,
+    valueNum: schema.entrySetQuantities.valueNum,
   })
   .from(schema.entrySets)
+  .innerJoin(
+    schema.entrySetQuantities,
+    eq(schema.entrySetQuantities.entrySetId, schema.entrySets.id),
+  )
   .where(eq(schema.entrySets.publicId, editTarget.publicId));
 assert.equal(afterEdit.reps, 7, 'V1-9: reps updated');
+// GAP-3: reps and weight are now two statements in ONE transaction. This asserts they moved TOGETHER
+// — the whole reason updateStrengthSetById stopped being a single atomic UPDATE.
 assert.equal(
-  Number(afterEdit.weightNum),
+  Number(afterEdit.valueNum),
   142.5,
-  'V1-9: weight_num updated (precision-safe string)',
+  'V1-9/GAP-3: the PRIMARY quantity updated in the same tx (precision-safe string)',
 );
 assert.ok(
   afterEdit.updatedAt >= editTarget.updatedAt,
@@ -2242,11 +2514,12 @@ const [afterForeign] = await db
   .where(eq(schema.entrySets.publicId, editTarget.publicId));
 assert.equal(afterForeign.reps, 7, 'V1-9: the cross-profile edit left the set unchanged');
 
-// (c) numeric-set-only guard — a labeled set (weight_label set) is not editable, even by its owner, so a
-// crafted edit can't leave weight_num coexisting with a label. Matches the client's isEditableSet.
+// (c) numeric-set-only guard — GAP-3 restated it. It used to key on `weight_label IS NULL`; it now
+// keys on the set being a plain single MASS quantity with no mode flag. Without this restatement the
+// column drop would have made every previously-labeled set silently editable.
 await db
   .update(schema.entrySets)
-  .set({ weightLabel: 'BW' })
+  .set({ isBodyweight: true })
   .where(eq(schema.entrySets.publicId, editTarget.publicId));
 const labeledEdit = await updateStrengthSetById(asPg, {
   profilePublicId: ssArgs.profilePublicId,
@@ -2254,15 +2527,19 @@ const labeledEdit = await updateStrengthSetById(asPg, {
   reps: 4,
   weight: 4,
 });
-assert.equal(labeledEdit, null, 'V1-9: a labeled set is not editable (numeric-set-only guard)');
+assert.equal(
+  labeledEdit,
+  null,
+  'V1-9/GAP-3: a bodyweight set is not editable (numeric-only guard)',
+);
 const [afterLabeled] = await db
   .select({ reps: schema.entrySets.reps })
   .from(schema.entrySets)
   .where(eq(schema.entrySets.publicId, editTarget.publicId));
-assert.equal(afterLabeled.reps, 7, 'V1-9: the rejected labeled edit left the set unchanged');
+assert.equal(afterLabeled.reps, 7, 'V1-9: the rejected edit left the set unchanged');
 await db
   .update(schema.entrySets)
-  .set({ weightLabel: null })
+  .set({ isBodyweight: false })
   .where(eq(schema.entrySets.publicId, editTarget.publicId)); // restore for the soft-delete case
 
 // (d) soft-deleted set — an edit never writes it (guards V1-9b, when deleted sets exist).
