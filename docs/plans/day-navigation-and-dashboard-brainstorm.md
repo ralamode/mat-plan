@@ -74,6 +74,34 @@ activity_date >= :monthStart AND < :nextMonth AND deleted_at IS NULL` (index-cov
   never surfaced as "lift this next"** (that would be prescription — the LLM-never-authors-loads rule; a
   deterministic rear-view stat of logged data is fine).
 
+## New evidence since this brainstorm (2026-09-24)
+
+Two things happened that change the case for V1-15, both worth recording before it gets planned.
+
+**1. A dated route has a SECOND consumer, and it is the test suite.** The scaffolded-state a11y check
+used to `test.skip()` whenever the seeded program had no movements for today — Mon/Wed/Fri only, so it
+was silently dead 4 days in 7, and GAP-3 PR 4a shipped without it running once. The fix (#141) works,
+but it works by **shifting the Playwright context's timezone** to drag the server-rendered local date
+onto an adjacent programmed day, leaning on the accident that every unprogrammed day is adjacent to a
+programmed one and that a timezone can move a date by exactly ±1.
+
+That is a correct fix and an ugly one. **With V1-15's dated route the test becomes
+`goto('/p/<id>?d=<a Monday>')`** — no timezone gymnastics, no adjacency argument, no ±1 ceiling. Any
+future test that needs a specific day (a logged-history fixture, a seeded ramp week, V1-13's export)
+gets the same. So V1-15 is not purely user-facing: it pays down test infrastructure that is otherwise
+going to keep growing workarounds.
+
+**Sequencing consequence:** when V1-15 lands, revisit `apps/web/e2e/a11y.spec.ts` and delete
+`PROGRAMMED_TZ` in favour of the dated route. Noted here so the workaround does not outlive its cause.
+
+**2. The read path this row promised to "reuse unchanged" has changed underneath it.** GAP-3 (#139,
+#141) removed `entry_sets.weight_num`/`weight_label`/`seconds` and moved every magnitude into
+`entry_set_quantities`. `listEntriesForDay` still works and is still the right reuse — but it now runs
+a **second query** for the quantities and returns a wider `SetDTO`, so V1-15's "no new queries" claim
+should be **re-verified, not inherited**. The per-navigation cost is two indexed seeks, not one.
+
+Neither changes the recommended staging. Both belong in the V1-15 plan when it is written.
+
 ## Explicitly deferred
 
 - **Forward navigation into unprogrammed days** — nothing to show until V1-10 prefill / a seeded ramp
