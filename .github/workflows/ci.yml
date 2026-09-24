@@ -136,6 +136,31 @@ jobs:
           # unrelated PR red.
           printf '%s\n' "$LIST" | xargs npx --yes squawk-cli@2.66.0 -c .squawk.toml
 
+      # ── Feature guides must move with the code they document ──────────────
+      # Each guide in docs/features/ declares the files it OWNS. Touching an owned
+      # file without touching its guide fails here — so a guide cannot drift from
+      # the feature it describes, and the NEXT change to that feature costs one
+      # read instead of an afternoon of tracing.
+      #
+      # WHY A GATE: AGENTS.md claimed five required CI checks for months that did
+      # not exist (docs/tech-debt.md, audited 2026-09-23). A doc nobody is forced
+      # to update is a doc that lies — and a lying guide is worse than none,
+      # because it gets trusted instead of verified.
+      #
+      # In `quality`, not its own job — same reasoning as the two guards above: a
+      # new job is not a REQUIRED check until branch protection is edited, so it
+      # would look wired while blocking nothing.
+      #
+      # Needs no pnpm/node install: plain node + git, and it runs BEFORE the setup
+      # steps so a docs-only miss fails in seconds rather than after a full build.
+      - name: Feature guides (docs/features)
+        if: >-
+          github.event_name == 'pull_request' &&
+          !contains(github.event.pull_request.labels.*.name, 'docs-skip-feature-map')
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
