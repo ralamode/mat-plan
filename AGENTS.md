@@ -201,6 +201,12 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only** — fast, blocks the
   commit. Never put whole-project checks here.
 - **pre-push:** `tsc --noEmit` (whole project) + affected tests.
+- **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job does,
+  plus the production audit: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
+  `audit --prod`. **~25s** on a warm cache, so there is no excuse to skip it. `db:verify` runs on
+  **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
+  **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (needs a DB —
+  see below), gitleaks, and the forward-only guard (inherently a diff-against-base check).
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
   ⚠️ **`pnpm audit`, CodeQL, Squawk and Neon-branch-apply are NOT wired** — this list claimed them for
