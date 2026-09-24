@@ -1,0 +1,123 @@
+---
+feature: The write path (DAL, actions, idempotency)
+owns:
+  - apps/web/lib/dal/
+  - apps/web/app/p/[profileId]/actions.ts
+  - apps/web/app/p/[profileId]/action-state.ts
+  - packages/db/src/writers/
+  - packages/db/src/client.ts
+---
+
+# The write path
+
+**Read this before adding a Server Action, a DAL function, or anything that writes.**
+
+## What this is
+
+Every mutation in the app goes through the same three-layer seam: a thin Server Action validates, a
+`server-only` DAL function authorizes and shapes, and a writer in `packages/db` performs the actual
+SQL in one transaction. Reads that are batch or external go through Route Handlers instead.
+
+The layering is not ceremony — it is what makes ownership checks testable and what keeps a crafted
+POST from reaching the database.
+
+## The map
+
+```mermaid
+flowchart LR
+  CLIENT["client component<br/>useActionState"] -->|"FormData"| ACTION
+
+  subgraph action["'use server' — a PUBLIC endpoint"]
+    ACTION["actions.ts<br/>1. zod-validate ALL input<br/>2. call the DAL<br/>3. revalidatePath"]
+  end
+
+  subgraph dal["lib/dal/* — import 'server-only'"]
+    DALFN["1. getCurrentUser()<br/>2. authorize OWNERSHIP<br/>3. return a minimal DTO"]
+  end
+
+  subgraph writer["packages/db/src/writers"]
+    TX["ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
+  end
+
+  ACTION --> DALFN --> TX --> DB[(postgres)]
+  ACTION -->|"typed envelope<br/>{ok:false, error, fieldErrors?}"| CLIENT
+  TX -.->|"throws"| ERRBOUND["error.tsx + Sentry"]
+```
+
+## Files
+
+| File / dir                     | What it is for                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Six actions today.            |
+| `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.             |
+| `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.   |
+| `packages/db/src/writers/`     | The transactional write cores — shared so the DAL **and** `db:verify` prove the same guard.       |
+| `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. |
+
+## Invariants
+
+1. **Every Server Action is a PUBLIC endpoint.** Page middleware does not protect it — it is a POST
+   anyone can craft. Re-authenticate, re-authorize ownership, and zod-validate **inside** each one.
+
+2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
+   `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
+   `profilePublicId`, not `profileId`.
+
+3. **The writer is shared with `db:verify`.** A guard that exists only in the DAL is a guard no proof
+   covers. When a writer's WHERE encodes a rule, `packages/db/scripts/verify.ts` exercises the **same
+   function** — cross-profile, wrong-shape, soft-deleted — against PGlite.
+
+4. **Expected errors return a typed envelope; unexpected ones throw.** `{ok:false, error, fieldErrors?}`
+   for anything a user can cause, surfaced through `useActionState`. Throwing for those would drop the
+   athlete into `error.tsx` and lose the form. Conversely, never leak internals into the envelope.
+
+5. **Idempotency is a client UUIDv7 + a DB UNIQUE + `ON CONFLICT`** — never an app-level "does it
+   exist?" check, which races. Per-row at every level of a graph, with no parent short-circuit.
+
+6. **A partial unique index needs its predicate repeated in `ON CONFLICT`.** Every `client_id` unique
+   in this schema is `WHERE deleted_at IS NULL`, so the arbiter must say so too or Postgres rejects the
+   statement outright. drizzle: `onConflictDoUpdate({ target, targetWhere })`.
+
+7. **`ON DELETE CASCADE` is hard-delete only, and this app soft-deletes.** A soft-deleted parent leaves
+   live children. Every read must filter through a live parent, or it counts rows whose owner is gone.
+
+8. **Nothing outside `lib/dal/*` imports `db` or reads `process.env`.** Enforced by review and by the
+   `server-only` import; breaking it is how a secret reaches a client bundle.
+
+## Traps
+
+- **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
+  gym-floor session that is the worst possible failure — the athlete loses everything they logged.
+  Validate at the boundary so the constraint is a backstop, not the error message.
+
+- **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
+  users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
+  write failed, which prompts a duplicate submit.
+
+- **Server Actions are not HTTP routes and cannot be tested as such.** Test them as plain async
+  functions with Clerk's `auth()` and Drizzle mocked. Async Server Components need Playwright, not
+  Vitest. This is why logic belongs in the (synchronous, testable) DAL.
+
+- **`packages/**` is typechecked by nothing** — `pnpm typecheck` is `--filter web`. A stale column in a
+  writer surfaces as a runtime crash in `db:verify`, not a compile error.
+
+- **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
+  `withServerActionInstrumentation` or the failure is invisible.
+
+## Changing it
+
+| If you are…                  | Start here                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| adding a mutation            | a writer in `packages/db/src/writers/` first, so `db:verify` can prove it       |
+| adding a read                | `lib/dal/` — and decide DTO shape before the query, not after                   |
+| changing a request/response  | the shared zod schema in `packages/shared` in the SAME PR (types via `z.infer`) |
+| adding a batch/external read | a Route Handler, not a Server Action — actions dispatch sequentially            |
+
+Mandatory boundary tests in the same PR: **unauth → reject · wrong-owner → forbid · bad body →
+zod-reject**, plus replay → one effect. Then `pnpm verify` and `pnpm e2e:local`.
+
+## Background
+
+- [AGENTS.md](../../AGENTS.md) → "Server conventions" and "Backend / API PR rules"
+- [.github/SECURITY.md](../../.github/SECURITY.md) — BOLA-first
+- [spec.md](../spec.md) §4 — the data model

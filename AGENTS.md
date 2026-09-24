@@ -6,7 +6,13 @@ are enforced by CI and pre-commit hooks, **not** by a reviewer's memory. `CLAUDE
 
 See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
 (PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md),
-[docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes).
+[docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes),
+[docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**).
+
+**About to change a large feature? Read its guide in [docs/features/](./docs/features/) FIRST** — the
+file map, the cross-file invariants and the known traps, so the change costs one read instead of an
+afternoon of tracing. **The guide is updated in the SAME PR as the code**, enforced by CI (see
+"Feature guides" below).
 
 **Debugging a CI / test / build failure? Check [docs/lessons.md](./docs/lessons.md) first** — a terse,
 grep-able log of past failures (symptom → cause → fix) so a known trap costs one attempt, not three.
@@ -195,6 +201,24 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   screenshots: the first goes in the description, later revisions as PR comments.
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
+
+## Feature guides (docs/features/)
+
+A **large, atomic** feature — one where you cannot change a part without understanding the others —
+gets a guide at `docs/features/<slug>.md`. The test: if a competent change needs four or more files
+across two or more packages, it earns one. Today: strength logging, the write path, programming.
+
+- **Read it before you start.** That is the entire point — the file map, the invariants that live
+  BETWEEN files, and the traps that have actually bitten someone, with line references.
+- **Update it in the same PR as the code.** Not a follow-up, not a TODO. `docs/features/README.md`
+  has the format; frontmatter declares which files the guide owns.
+- **CI enforces it** in the `quality` job: touching an owned file without touching its guide fails the
+  build, as does a guide claiming to own a file that no longer exists (so a rename cannot silently
+  drop coverage). Run it yourself with `pnpm guides:check`.
+- **Escape hatch:** the `docs-skip-feature-map` PR label, mirroring `ci-skip-e2e`, for a change that
+  genuinely does not affect the guide. Visible on the PR by design; use it sparingly.
+- **A guide is not a changelog or an API dump.** It holds what you would want to have been told.
+  Link to the plan/ADR for reasoning rather than restating it — duplicated prose goes stale first.
 
 ## Local hooks vs CI merge-gates
 
