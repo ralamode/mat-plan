@@ -105,6 +105,36 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `SENTRY_PROJECT` — worth doing the first time a real incident is hard to read, not before.
 - **Severity:** low (a legibility cost on a 3-user app).
 
+### AGENTS.md documents five CI gates that do not exist (found 2026-09-23, GAP-3 panel)
+
+- **What & why:** the DB-safety reviewer on GAP-3's panel checked the plan's claim that _"Squawk hard-fails
+  a `DROP COLUMN` alongside app code"_ and found **no Squawk in CI at all**. Auditing the rest of
+  [AGENTS.md](../AGENTS.md)'s required-checks list against `.github/workflows/` :
+
+  | Gate AGENTS.md claims is required                               | Reality                                                                                                             |
+  | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+  | format · lint · typecheck · test · build · gitleaks · e2e       | ✅ present (`format:check` and `pnpm build` are the prettier/next-build steps — easy to miss by name)               |
+  | DB **drift guard** + `db:verify`                                | ✅ present (`ci.yml:47-52`)                                                                                         |
+  | **Squawk** migration lint                                       | ❌ **absent**                                                                                                       |
+  | **Neon-branch apply** on PRs                                    | ❌ **absent** — `migrate.yml` runs only on merge to `main`, and warns-and-skips if `DATABASE_URL_UNPOOLED` is unset |
+  | **Forward-only guard** (blocks `M` on `packages/db/migrations`) | ❌ **absent** — nothing greps `--diff-filter`                                                                       |
+  | **CodeQL**                                                      | ❌ absent                                                                                                           |
+  | **`pnpm audit`** (fail high/critical)                           | ❌ absent                                                                                                           |
+
+- **Impact:** **the three DB gates matter most, and they matter now.** GAP-3 is the largest migration this
+  project will run — expand, backfill, then a `DROP COLUMN` contract — and every safety argument in its
+  plan cited gates that would not have fired. An edited-in-place migration would also merge unnoticed,
+  which is the one thing "forward-only" exists to prevent. Low impact to date only because every migration
+  so far has been additive and single-author.
+- **Why it went unnoticed:** the rules were written as the intended end state and never re-verified.
+  `db:verify` and the drift guard _are_ real and are genuinely good, which makes the DB section read as
+  covered at a glance.
+- **Proposed fix:** add the forward-only guard (cheapest — one `git diff --diff-filter=M` step) and Squawk
+  **before GAP-3's migration lands**; treat Neon-branch apply, CodeQL and `pnpm audit` as separate
+  follow-ons. Until then, **correct AGENTS.md to describe what CI actually does** — a rule that claims a
+  gate it does not have is worse than no rule, because it stops people looking.
+- **Severity:** medium now, **high the moment GAP-3's migration is written.**
+
 ### The weekday → `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
 
 - **What & why (V1-10 slice 2):** which `day_role` a weekday programs lives in
