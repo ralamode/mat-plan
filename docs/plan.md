@@ -385,6 +385,24 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
+- **SCHED-2 — practice + privates as a logged shape, not free text.** _(Ray, 2026-09-24.)_ The athletes'
+  real week, which nothing in the app currently represents: a **private 3:00–4:30PM M–F**, **wrestling
+  practice 5:00–6:30PM**, and an **extra private Tue + Thu 7:00–8:00AM**.
+
+  **Ray's call for now: they do not need to be logged — put them in `notes`.** This row is the later
+  version: a shape and a slot so mat time is structured data rather than prose.
+
+  Why it matters beyond tidiness: the [YDP spec](./samples/youth-daily-program/README.md) §8 says _"mat
+  time is real training load — if practice is logged, the composer should be able to drop the rotating
+  movement and keep only the core plus every-day block."_ A structured practice entry is what would let
+  the session composer respond to load; a note cannot. `wrestling_practice` already exists as a one-tap
+  life activity (V1-7) recording `practice_minutes`, so the real gap is the **private** — a distinct kind,
+  with a coach and a time window — and the link from either to the day's programming.
+
+  **Consequence worth recording now, because it affects shipped code:** logging happens **after 6:30PM**,
+  with a pre-7AM window on Tue/Thu. That is the window V1-6c's local-day boundary has to be right for, and
+  it is the constraint any streak cutoff has to respect.
+
 - **YDP — run the youth daily program (the second real program).** _(Ray, 2026-09-23.)_ Everything the
   app needs before [Ray's daily A/B program](./samples/youth-daily-program/README.md) — the one his kids
   actually run, every day, on paper — can be logged in mat-plan. Grouped because they share one goal and
@@ -394,12 +412,18 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   block on top of the daily program in the off-season. So every item below is **additive**: an existing
   weekday program keeps working byte-identically.
 
-  - **YDP-1 — session-indexed rotation** _(also SCHED-1's third schedule shape)_. The program runs daily,
-    alternating `A → B → A`, with the letter from **completed-session count, never the calendar** — the
-    spec gives the failure mode (`date % 2` doubles up box jumps after a missed day) and a sample session
-    proves it. Needs `schedule_kind` on SCHED-1's assignment row and the **recorded daily verdicts**
-    SCHED-1 already requires, since "completed sessions" is a question about history. **Blocked on
-    SCHED-1.**
+  - **YDP-1 — session-indexed rotation. ⏸️ DEFERRED by Ray (2026-09-24); calendar alternation ships
+    first.** _(Also SCHED-1's third schedule shape.)_ The spec is emphatic that the letter must come from
+    **completed-session count, never the calendar**, and gives the failure mode: `date % 2` doubles up box
+    jumps after a missed day. **Ray has accepted that failure mode deliberately** — _"I don't mind if they
+    miss a day and end up doing the same thing twice, that's on them. The way this works is by streak and
+    consistency, stacking days. For now we can just align A with a day, B, next day etc."_
+    So v1 alternates on the **calendar**, which the existing `DAY_ROLE_BY_WEEKDAY` shape already supports
+    and which needs no new schema. Recorded rather than silently inherited, because the consequence is
+    invisible when it happens — a doubled-up box-jump day looks like a normal day.
+    True session-indexing still needs `schedule_kind` on SCHED-1's assignment row and the **recorded daily
+    verdicts** SCHED-1 requires, since "completed sessions" is a question about history. **Blocked on
+    SCHED-1** whenever it is picked up.
   - **YDP-2 — multi-slot loads + duration. ✅ RESOLVED into GAP-3 (2026-09-24).** Two reversals worth
     keeping visible. It was first filed as needing new columns; GAP-3 §7.2 then claimed it needed **no
     migration** because the metric model already fit; that claim was **retracted by GAP-3's panel** —
@@ -447,9 +471,11 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
   - **YDP-4 — the extras: box height, ladder rounds, fixed-set checkboxes.** Box height is a **length**
     dimension, which `UNIT_CODES` does not have at all (GAP-3/ADR 0004 §6). Ladder rounds fits the
-    existing `ladder` metric's `value_num`. Hip thrusts are `3 × 10 per side` tracked as three completion
-    checkboxes rather than a rep field — loggable as three sets today, but the affordance and `per_side`
-    are not modelled.
+    existing `ladder` metric's `value_num`. **Hip thrusts and leg raises are ordinary REP MOVEMENTS**
+    (Ray, 2026-09-24) — the paper sheet's three completion checkboxes are a paper affordance, not a data
+    shape. That collapses two of this row's three open questions: both are `movement + entry_sets`, the
+    model the app already has, and neither needs a bespoke column or a boolean triple. `per_side` remains
+    unmodelled (it lives in prescribed text today).
   - **YDP-5 — youth guardrails as engine limits.** _No forced eccentrics · no max-effort grip work · no
     loaded jumping_, with an anatomical rationale (an unfused apophysis is not a mature tendon
     attachment). The repo's **first domain-specific safety constraints**. They belong to `packages/engine`
