@@ -110,17 +110,30 @@ shipping.)
   arrows. **Off-today uses a new `formatDayShort`** ("Tue, Sep 22", ~90px) with the same UTC-anchored
   discipline; today keeps the long form. `[Today]` moves to its own line if it does not fit.
 
-### Copy: the page currently says "today" three times
+### Where the nav goes: it REPLACES the header's date line
 
-None of these were in my first draft's file list, and on an empty past day they are what makes the
-screen read as broken — a header claiming it is today above an empty state saying nothing was logged
-today.
+`page.tsx:109` already renders `<p>Today · {formatDayLong(day)}</p>` directly under the `<h1>`.
+**`<DayNav>` replaces that `<p>` entirely** — it is not added beside it. Stated because my draft left
+it ambiguous, and the ambiguous reading renders the date **twice** (once reworded in the `<p>`, once
+inside the nav), which is how a "small" header change becomes a visual bug.
 
-| `page.tsx` | Now                            | Off-today                        |
-| ---------- | ------------------------------ | -------------------------------- |
-| `:109`     | `Today · {formatDayLong(day)}` | `Yesterday · …` / just the date  |
-| `:203`     | `Calisthenics today`           | `Calisthenics`                   |
-| `:230`     | `No entries logged today.`     | `Nothing logged on Tue, Sep 22.` |
+Resulting header, top to bottom: `← All profiles` · `<h1>{profile.name}</h1>` · `<DayNav>` (arrows +
+date + `Today`) · the week strip. The date has exactly one home, and `formatDayLong`/`formatDayShort`
+are chosen inside `DayNav` by `isToday`.
+
+⚠️ **`← All profiles` sits immediately above**, so three chevrons land in a ~100px band — one meaning
+"leave this kid", two meaning "change day". The day arrows get visible chrome (bordered 44px buttons)
+so they do not read as siblings of the back link.
+
+### Copy: the page says "today" twice more
+
+Beyond the header, and neither was in my first draft's file list. On an empty past day these are what
+makes the screen read as broken — an empty state insisting nothing was logged _today_, three weeks ago.
+
+| `page.tsx` | Now                        | Off-today                        |
+| ---------- | -------------------------- | -------------------------------- |
+| `:203`     | `Calisthenics today`       | `Calisthenics`                   |
+| `:230`     | `No entries logged today.` | `Nothing logged on Tue, Sep 22.` |
 
 `weekly-adherence.tsx:18`'s `This week` → `Week of Sep 21` off-today.
 
@@ -187,20 +200,20 @@ Both must be fixed **in this PR** or the a11y claims above are unenforced:
 
 ## File-by-file
 
-| Path                                                  | Change | What & why                                                                                                                                          |
-| ----------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/app/p/[profileId]/page.tsx`                 | EDIT   | `await searchParams`; `day` from the resolver; `isToday` + `isWritable`; off-today copy at `:109/:203/:230`; thread `editable` into `MovementLine`. |
-| `apps/web/lib/entries/declared-day.ts`                | EDIT   | `resolveViewedDay` beside `resolveDeclaredDay`; export the ±1 bound as a named const both use.                                                      |
-| `apps/web/lib/entries/declared-day.test.ts`           | EDIT   | Clamp future / floor / malformed / absent; the shared-bound contract.                                                                               |
-| `apps/web/lib/date.ts`                                | EDIT   | `addDays` + `formatDayShort`; **refactor `localWeekStartIso` onto `addDays`** so the `…T00:00:00Z` idiom lives once.                                |
-| `apps/web/lib/date.test.ts`                           | EDIT   | `addDays` month/year rollover; keep the existing DST pin and note it already covers the UTC-epoch case.                                             |
-| `apps/web/app/p/[profileId]/day-nav.tsx`              | NEW    | Arrows + week strip. Server component; `gap-0.5` per the width math.                                                                                |
-| `apps/web/app/p/[profileId]/weekly-adherence.tsx`     | EDIT   | Heading copy off-today.                                                                                                                             |
-| `apps/web/app/p/[profileId]/layout.tsx` or `page.tsx` | EDIT   | `generateMetadata` for the route announcer.                                                                                                         |
-| `apps/web/e2e/day-navigation.spec.ts`                 | NEW    | Page back; yesterday writable; −2 shows the closed message; a past set is still editable; `›` inert on today.                                       |
-| `apps/web/e2e/a11y.spec.ts`                           | EDIT   | Opt the nav links into `INTERACTIVE`; add `?d=` to `ROUTES`; 360px overflow case. **No `PROGRAMMED_TZ` change.**                                    |
-| `docs/features/strength-logging.md`                   | EDIT   | Gate requires it; record the writable-window rule.                                                                                                  |
-| `docs/plan.md`, `docs/status.md`                      | EDIT   | Status rides with the work.                                                                                                                         |
+| Path                                                  | Change | What & why                                                                                                                                                                                        |
+| ----------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/p/[profileId]/page.tsx`                 | EDIT   | `await searchParams`; `day` from the resolver; `isToday` + `isWritable`; **replace the `:109` date `<p>` with `<DayNav>`**; off-today copy at `:203/:230`; thread `editable` into `MovementLine`. |
+| `apps/web/lib/entries/declared-day.ts`                | EDIT   | `resolveViewedDay` beside `resolveDeclaredDay`; export the ±1 bound as a named const both use.                                                                                                    |
+| `apps/web/lib/entries/declared-day.test.ts`           | EDIT   | Clamp future / floor / malformed / absent; the shared-bound contract.                                                                                                                             |
+| `apps/web/lib/date.ts`                                | EDIT   | `addDays` + `formatDayShort`; **refactor `localWeekStartIso` onto `addDays`** so the `…T00:00:00Z` idiom lives once.                                                                              |
+| `apps/web/lib/date.test.ts`                           | EDIT   | `addDays` month/year rollover; keep the existing DST pin and note it already covers the UTC-epoch case.                                                                                           |
+| `apps/web/app/p/[profileId]/day-nav.tsx`              | NEW    | Arrows + week strip. Server component; `gap-0.5` per the width math.                                                                                                                              |
+| `apps/web/app/p/[profileId]/weekly-adherence.tsx`     | EDIT   | Heading copy off-today.                                                                                                                                                                           |
+| `apps/web/app/p/[profileId]/layout.tsx` or `page.tsx` | EDIT   | `generateMetadata` for the route announcer.                                                                                                                                                       |
+| `apps/web/e2e/day-navigation.spec.ts`                 | NEW    | Page back; yesterday writable; −2 shows the closed message; a past set is still editable; `›` inert on today.                                                                                     |
+| `apps/web/e2e/a11y.spec.ts`                           | EDIT   | Opt the nav links into `INTERACTIVE`; add `?d=` to `ROUTES`; 360px overflow case. **No `PROGRAMMED_TZ` change.**                                                                                  |
+| `docs/features/strength-logging.md`                   | EDIT   | Gate requires it; record the writable-window rule.                                                                                                                                                |
+| `docs/plan.md`, `docs/status.md`                      | EDIT   | Status rides with the work.                                                                                                                                                                       |
 
 ## Review-response log
 
@@ -228,6 +241,8 @@ plan's prose, which is why three of my claims did not survive.
 - **No pending feedback on tap** (UX M7) — and a searchParams-only nav may not re-trigger the root boundary. A real `?d=` cost.
 - **Icon-only chevrons pass axe and fail voice control** (UX M8); disabled `<button>` over `<span>`; muted token over opacity.
 - **`isToday` threads into `MovementLine`** (Eng 11).
+- **The header/nav collision was unspecified** (Eng 8) — `<DayNav>` now explicitly REPLACES the `:109`
+  date `<p>`. The ambiguous reading rendered the date twice.
 - **The week strip comes forward into v1** (UX M5) — zero queries, 9 taps → 2, and it is the discoverability answer.
 
 ### Rejected, with reason
