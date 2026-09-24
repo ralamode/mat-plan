@@ -38,6 +38,8 @@ import {
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
+  PROFILE_KIND,
+  profileSlug,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
   UNIT_CODES,
@@ -156,6 +158,61 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
     'at least one length unit is seeded (GAP-3)',
   );
 }
+// ── V1-13: profiles.slug — the athlete's stable identity and CSV export path segment ──────────────
+{
+  const cols = await columnsOf('profiles');
+  assert.equal(cols.get('slug'), 'text', 'V1-13: profiles.slug exists');
+  const slugs = await db
+    .select({ name: schema.profiles.name, slug: schema.profiles.slug })
+    .from(schema.profiles);
+  for (const p of slugs) {
+    assert.ok(p.slug, `V1-13: profile '${p.name}' has a slug (NOT NULL enforced)`);
+    // KEBAB, matching the legacy `data/<type>/<athlete>/` directories — never movementSlug's
+    // underscores, and never a leading/trailing hyphen (which reads as a hidden file).
+    assert.match(p.slug!, /^[a-z0-9]+(-[a-z0-9]+)*$/, `V1-13: '${p.slug}' is a safe path segment`);
+    assert.equal(
+      p.slug,
+      profileSlug(p.name),
+      `V1-13: seeded slug matches profileSlug('${p.name}')`,
+    );
+  }
+  // The identity property: renaming the DISPLAY name must not move the exported directory. This is
+  // the whole reason the slug is a stored column rather than derived at export time.
+  const [liam] = await db
+    .select({
+      id: schema.profiles.id,
+      slug: schema.profiles.slug,
+      householdId: schema.profiles.householdId,
+    })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+  await db.update(schema.profiles).set({ name: 'Liam B' }).where(eq(schema.profiles.id, liam.id));
+  const [afterRename] = await db
+    .select({ slug: schema.profiles.slug })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.id, liam.id));
+  assert.equal(
+    afterRename.slug,
+    liam.slug,
+    'V1-13: renaming the display name does NOT move the export directory',
+  );
+  await db.update(schema.profiles).set({ name: 'Liam' }).where(eq(schema.profiles.id, liam.id));
+
+  // Per-household uniqueness, partial on the soft-delete.
+  await expectRejectedBy('uq_profiles_household_slug', () =>
+    db.insert(schema.profiles).values({
+      publicId: newId(),
+      name: 'Liam Again',
+      slug: liam.slug!,
+      kind: PROFILE_KIND.kid,
+      householdId: liam.householdId,
+    }),
+  );
+  console.log(
+    '✓ V1-13: profiles.slug — kebab path segment, survives a rename, unique per household',
+  );
+}
+
 // V1-3: two kid profiles (Liam + Scarlett), stable by public_id across re-seeds.
 assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
 const seededProfileIds = profiles.map((p) => p.publicId).sort();
@@ -865,6 +922,7 @@ const [rampTestProfile] = await db
   .values({
     publicId: '019826b4-0000-7000-8000-0000000000f0',
     name: 'Ramp Test Kid',
+    slug: profileSlug('Ramp Test Kid'),
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
@@ -1106,6 +1164,7 @@ const [otherRampProfile] = await db
   .values({
     publicId: '019826b4-0000-7000-8000-0000000000e0',
     name: 'Other Ramp Kid',
+    slug: profileSlug('Other Ramp Kid'),
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
@@ -1250,6 +1309,7 @@ const [sessionProfileA] = await db
   .values({
     publicId: '019826b4-0000-7000-8000-0000000009a0',
     name: 'Session Kid A',
+    slug: profileSlug('Session Kid A'),
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
@@ -1259,6 +1319,7 @@ const [sessionProfileB] = await db
   .values({
     publicId: '019826b4-0000-7000-8000-0000000009b0',
     name: 'Session Kid B',
+    slug: profileSlug('Session Kid B'),
     kind: PROFILE_KIND.kid,
     householdId: households[0].id,
   })
@@ -2775,6 +2836,7 @@ const [verifyHh] = await db
 await db.insert(schema.profiles).values({
   publicId: VERIFY_PROFILE_PUBLIC_ID,
   name: 'Verify Kid',
+  slug: profileSlug('Verify Kid'),
   kind: 'kid',
   householdId: verifyHh.id,
 });
@@ -2943,6 +3005,7 @@ const VERIFY_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e2';
 await db.insert(schema.profiles).values({
   publicId: VERIFY_PROFILE_2_PUBLIC_ID,
   name: 'Verify Kid 2',
+  slug: profileSlug('Verify Kid 2'),
   kind: 'kid',
   householdId: verifyHh.id,
 });
@@ -3057,6 +3120,7 @@ const VERIFY_SD_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e4';
 await db.insert(schema.profiles).values({
   publicId: VERIFY_SD_PROFILE_PUBLIC_ID,
   name: 'Verify Soft-Delete Kid',
+  slug: profileSlug('Verify Soft-Delete Kid'),
   kind: 'kid',
   householdId: verifyHh.id,
 });

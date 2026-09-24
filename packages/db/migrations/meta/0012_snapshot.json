@@ -1,6 +1,6 @@
 {
-  "id": "297023b6-914d-4a86-bfcc-97c6a27c804a",
-  "prevId": "68746249-755d-4f11-bb9e-810d18b6ef4e",
+  "id": "bf028f45-1fad-4b0e-b461-3edadf908b58",
+  "prevId": "297023b6-914d-4a86-bfcc-97c6a27c804a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1969,6 +1969,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "kind": {
           "name": "kind",
           "type": "text",
@@ -2038,6 +2044,28 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_profiles_household_slug": {
+          "name": "uq_profiles_household_slug",
+          "columns": [
+            {
+              "expression": "household_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"profiles\".\"deleted_at\" is null",
           "concurrently": false,
           "method": "btree",
           "with": {}

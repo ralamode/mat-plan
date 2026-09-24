@@ -129,7 +129,21 @@ export const profiles = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
-    name: text('name').notNull(),
+    name: text('name').notNull(), // the DISPLAY name — mutable, never an identity
+    /**
+     * V1-13 — the athlete's stable identity, and the `<athlete>` **path segment** of the CSV export
+     * (`data/<type>/<athlete>/<YYYY-MM>.csv`). Kebab-case; seeded from `profileSlug(name)`.
+     *
+     * The third instance of a precedent this schema already states for `program_blocks.slug`: "`slug`
+     * (not raw `name`) is the identity". Here the stakes are higher, because it is a PATH — deriving
+     * it from the mutable display name means a rename relocates the entire exported tree and the
+     * downstream workflow sees a new athlete with no history.
+     *
+     * NOT NULL here, but the MIGRATION reaches it in three steps — add nullable → backfill →
+     * `SET NOT NULL` — because drizzle emits `ADD COLUMN … NOT NULL` in one statement, which fails on
+     * a populated table. The `units.dimension` idiom (0010); see docs/lessons.md.
+     */
+    slug: text('slug').notNull(),
     kind: text('kind').notNull(), // mirrors PROFILE_KINDS in @mat-plan/shared
     // V1-1a additive: household_id is the authz root (spec.md §4). Kept NULLABLE at the
     // column level; the migration enforces NOT NULL via a CHECK (NOT VALID → backfill →
@@ -148,6 +162,11 @@ export const profiles = pgTable(
   (t) => [
     check('profiles_kind_check', sql`${t.kind} in ('kid', 'adult')`),
     index('idx_profiles_household').on(t.householdId), // covering index for the household FK
+    // Unique PER HOUSEHOLD, not globally: two households may each have a "liam", and the export path
+    // is already scoped by household. Partial on the soft-delete, the ramp_targets/day_readiness idiom.
+    uniqueIndex('uq_profiles_household_slug')
+      .on(t.householdId, t.slug)
+      .where(sql`${t.deletedAt} is null`),
   ],
 );
 

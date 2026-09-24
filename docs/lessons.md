@@ -27,8 +27,12 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   _rename_, and the prompt needs a TTY an agent/CI shell doesn't have. → **Generate in two passes** —
   first the additive schema (no prompt), then the removals (no prompt) — then concatenate the two `.sql`
   files into one, delete the second file + its snapshot, drop its `_journal.json` entry, and promote the
-  SECOND snapshot to the first's filename (it is the true final state). `generate` must then report
-  `No schema changes` — that is the check that the surgery was correct. (migration 0011)
+  SECOND snapshot to the first's filename (it is the true final state). ⚠️ **Then FIX ITS `prevId`** —
+  promoting the snapshot keeps the second's `prevId`, and overwriting its `id` with the first's makes
+  `prevId === id`, a self-referential link. `generate` reports `No schema changes` even so, because it
+  only walks the chain when appending, so the break stays latent until the NEXT migration fails with
+  `are pointing to a parent snapshot … which is a collision`. Set `prevId` to the id of the snapshot
+  BEFORE it. (migration 0011 shipped this bug in #139; found and fixed while generating 0012.)
 
 - **`pnpm typecheck` is green while `packages/**` is broken.** → It is `pnpm --filter web exec tsc
 --noEmit`, so it only covers `apps/web`. `packages/db/scripts/verify.ts` and the seed are typechecked

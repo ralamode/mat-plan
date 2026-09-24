@@ -7,6 +7,7 @@ import {
   MOVEMENT_SEED_ROWS,
   newId,
   PROFILE_KIND,
+  profileSlug,
   PROGRAM_SEED,
   QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
@@ -114,12 +115,16 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
       {
         publicId: SEED_PROFILE_PUBLIC_ID,
         name: 'Liam',
+        // V1-13: seeded from the display name ONCE. Authoritative thereafter as a stored column —
+        // renaming the profile must NOT move the exported `data/<type>/<athlete>/` directory.
+        slug: profileSlug('Liam'),
         kind: 'kid',
         householdId: household.id,
       },
       {
         publicId: SEED_PROFILE_2_PUBLIC_ID,
         name: 'Scarlett',
+        slug: profileSlug('Scarlett'),
         kind: 'kid',
         householdId: household.id,
         routineConfig: SEED_SCARLETT_ROUTINE,
