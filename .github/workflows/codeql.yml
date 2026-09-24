@@ -1,0 +1,84 @@
+name: CodeQL
+
+# Static analysis (SARIF -> the repo's Security > Code scanning tab).
+#
+# DELIBERATELY NOT A PULL-REQUEST CHECK. A CodeQL run is minutes, and this project
+# is built at ~4h/wk with a <400-line PR target — taxing every PR for a scan whose
+# value is mostly periodic is the wrong trade. AGENTS.md ("Local hooks vs CI
+# merge-gates") lists the checks that DO block a merge; this is not one of them, and
+# nothing here should be cited as a per-PR safety gate.
+#
+# Triggers instead:
+#   push to main    — every merged PR is squashed into one commit on main, so this
+#                     still sees 100% of merged code, just after the merge.
+#   schedule        — weekly. The codebase moves a few hundred lines a week and the
+#                     push trigger already covers those, so the schedule exists to
+#                     re-run UPDATED QUERY PACKS against unchanged code (GitHub ships
+#                     CodeQL bundle releases roughly fortnightly). Weekly is already
+#                     more frequent than that cadence; daily would buy nothing.
+#   workflow_dispatch — run it by hand after a dependency bump or a security scare.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Mondays 06:17 UTC (~02:17 America/New_York) — results are waiting at the start
+    # of the week. Off the hour on purpose: GitHub's cron queue is congested at :00
+    # and a scheduled run can be delayed or dropped there.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+# Minimum required set, stated explicitly rather than inherited from the repo default.
+#   security-events: write — upload the SARIF results (the whole point).
+#   contents: read         — checkout.
+#   actions: read          — the analyze step reads workflow-run metadata.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # WORKSPACE COVERAGE: no `paths:` filter on purpose. CodeQL's source root is
+      # the whole checkout, so `apps/web` AND every `packages/*` are extracted — a
+      # `paths:` allowlist would scan the same files today but silently miss the next
+      # top-level workspace someone adds. There is no `paths-ignore` either: every
+      # directory worth excluding (node_modules, .next, dist, coverage) is gitignored
+      # and therefore absent from a fresh checkout, so the exclusions would be dead
+      # config. Verify coverage from the run log — the extraction line reports the
+      # file count, which should span all four workspaces.
+      #
+      # NO BUILD STEP, AND NO `pnpm install`. javascript-typescript is an interpreted
+      # language: `build-mode: none` is the only supported mode, the extractor reads
+      # source (and tsconfig) directly, and dependencies are not needed to build the
+      # database. Installing would add ~a minute plus a second way for the weekly scan
+      # to go red (lockfile drift) in exchange for resolving cross-package
+      # `@mat-plan/*` imports — dataflow reach we do not need on a 3-user app.
+      #
+      # Single language => no matrix. Add one when AGENTS.md's v3 Python/FastAPI
+      # service lands; `build-mode` is per-job, so a second language needs the matrix.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          # Default query suite (`code-scanning`) only. `security-extended` /
+          # `security-and-quality` raise the finding count faster than 4h/wk can
+          # triage them, and an ignored scan is a disabled scan.
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: '/language:javascript-typescript'
