@@ -15,6 +15,58 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Test-time path overrides are ad-hoc, so gates quietly go vacuous (audit, 2026-09-24)
+
+- **What & why:** there is **no consistent way to force a code path for a test**, so each one invents
+  its own — and when a path cannot be reached, the test tends to **skip or pass vacuously rather than
+  fail**. Three live instances, all found the same week:
+  - **The scaffold a11y check self-skipped 4 days in 7.** It ran only when the seeded program had
+    movements _today_ (Mon/Wed/Fri), so GAP-3 PR 4a shipped without it ever running. Worse, the skip
+    conflated "not a programmed day" with "the button regressed" — a real regression on a Monday would
+    have gone green. Fixed in #141 by **shifting the Playwright context timezone** to reach an adjacent
+    programmed day, which works only because every unprogrammed day happens to be adjacent to a
+    programmed one and a tz can move a date by exactly ±1. It is a workaround, and it is the _good_
+    case, because at least it is deterministic.
+  - **`expectTapTargets` skips invisible controls** (`a11y.spec.ts`), so anything behind a disclosure
+    passes without being measured. A collapsed UI can be entirely broken and green.
+  - **`INTERACTIVE` excludes `<a>`**, so any control built from `<Link>` is measured by nothing —
+    which is exactly what V1-15's day arrows and week strip are.
+- **Impact:** high, and **silent** — the failure mode is a green check that proves nothing, which is
+  strictly worse than no check, because it is trusted. This is the same class as the five CI gates
+  AGENTS.md claimed for months that did not exist.
+- **The audit:** walk every gate and ask **"can this go vacuous, and would anyone notice?"** Then give
+  the app **one deliberate seam for test-time path selection** instead of per-test cleverness — a
+  seeded fixture that covers every weekday, an explicit day override (V1-15's `?d=` is the first real
+  one), and a rule that a gate **fails rather than skips** when its precondition is unmet.
+- **Payoff trigger:** V1-15, which lands `?d=` — the first honest override and the natural moment to
+  do the sweep. Any new `test.skip()` on a precondition should be treated as a finding until then.
+
+### Several files have outgrown their shape; shared values are re-derived per call site (audit, 2026-09-24)
+
+- **What & why:** growth has concentrated rather than spread, and the big files are where reuse gets
+  missed. `packages/db/scripts/verify.ts` is **~3,000 lines** of sequential proofs with assertion
+  helpers (`expectRejectedBy`, `columnsOf`, `assertCheckCoversConst`) that had to be _rediscovered_
+  mid-edit; `apps/web/app/p/[profileId]/page.tsx` is ~390 lines doing profile resolve, day derivation,
+  five reads and the whole render; `strength-form.tsx` is ~660. Concrete symptoms already paid for:
+  - **A bidirectional reference-table parity loop was open-coded twice** before `assertRefTableMatches`
+    was extracted (GAP-3 PR 3).
+  - **`unitsOfDimension` and `UNIT_LABELS` sat unused** while a plan proposed hand-writing both
+    (caught by a panel, GAP-3 PR 4a).
+  - **`resolveDeclaredDay` was about to be duplicated** as a second near-identical day resolver in a
+    different directory (caught by a panel, V1-15).
+  - **"Untouched card" is computed in THREE places** from the same fields; PR 4a had to extend all
+    three, and missing one silently deletes an athlete's logged set.
+- **Impact:** medium, compounding. Nothing is broken; the cost is paid per change, as research time
+  and as near-miss duplication that only a panel catches. The **feature guides** (#140) treat the
+  symptom — they tell you the map — but the map is large because the files are.
+- **The audit:** for each file over ~300 lines, ask what would split cleanly along a seam that already
+  exists (the day-view vs the forms; the proof groups in `verify.ts`), and sweep `packages/shared` for
+  exports with **zero callers** — each is either a missing reuse or a deletion.
+- **Explicitly NOT a rewrite.** Split only where a change is already coming, so the move rides a PR
+  that has to touch the file anyway. A refactor-for-its-own-sake PR at ~4h/wk is the wrong trade, and
+  a big mechanical diff is the hardest kind to review.
+- **Payoff trigger:** the next PR that touches one of the named files. V1-15 touches `page.tsx`.
+
 ### `apps/web`'s drizzle peers are incidental, so a dep bump can split `drizzle-orm` in two
 
 - **What & why:** `apps/web` declares `drizzle-orm` but **none of its optional peers** — `pg`,
