@@ -15,7 +15,7 @@ import {
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
@@ -64,7 +64,17 @@ export {
 } from '@mat-plan/shared';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
-  await db.insert(schema.units).values(UNITS).onConflictDoNothing({ target: schema.units.code });
+  // GAP-3: onConflictDoUPDATE, not DoNothing. The 7 pre-GAP-3 rows already exist in every deployed DB,
+  // so DoNothing would leave them with whatever `dimension` the migration backfilled and never reconcile
+  // them with the shared const again — a reference table that silently stops being a mirror of its source.
+  // The migration backfills once; this keeps the seed authoritative on every subsequent run.
+  await db
+    .insert(schema.units)
+    .values(UNITS)
+    .onConflictDoUpdate({
+      target: schema.units.code,
+      set: { label: sql`excluded.label`, dimension: sql`excluded.dimension` },
+    });
 
   await db
     .insert(schema.activityTypeCategories)
