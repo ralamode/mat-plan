@@ -8,6 +8,7 @@ import { formatPrescription, toProgramDay } from './program-day';
 const row = {
   idx: 0,
   movementName: 'Front Squat',
+  movementSlug: 'front_squat',
   sets: 5,
   targetReps: '5',
   load: '60',

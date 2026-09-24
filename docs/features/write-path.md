@@ -110,6 +110,13 @@ flowchart LR
   was correct while movements were lb/kg-only and became an FK violation — surfacing as a 500 — the
   moment a movement could be logged in `sec`. Derive it (`UNIT_DIMENSION_BY_CODE[unit]`).
 
+- **⚠️ The access-gate matcher EXCLUDES `/api`.** `proxy.ts` matches
+  `'/((?!api|_next/static|_next/image|favicon.ico).*)'`, so **any Route Handler under `/api` is
+  completely ungated.** V1-13b's export therefore lives at `/p/[profileId]/export`, inside the
+  matcher — and still re-checks the gate itself, because middleware is not an authorization boundary
+  (a matcher edit or a rewrite silently exposes it). **This is a live hazard for the `/api/sync`
+  AGENTS.md plans.**
+
 - **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
   `withServerActionInstrumentation` or the failure is invisible.
 

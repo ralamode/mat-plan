@@ -107,6 +107,16 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">{profile.name}</h1>
         <p className="text-muted-foreground">Today · {formatDayLong(day)}</p>
+        {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
+            not a <Link>: this is a file download, and Next's client router would try to navigate to
+            a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
+        <a
+          href={`/p/${profileId}/export`}
+          download
+          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
+        >
+          ↓ Export CSV
+        </a>
       </header>
 
       {/* V1-18: the logging surfaces render in this kid's OWN routine order (`profile.routine`, resolved by

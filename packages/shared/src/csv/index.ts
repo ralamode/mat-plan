@@ -8,8 +8,11 @@
  * Contract: docs/csv-export-contract.md (authoritative). Plan: docs/plans/v1-13-csv-export.md.
  */
 export * from './aggregate';
+export * from './bodyweight';
+export * from './checkins';
 export * from './columns';
 export * from './load';
 export * from './row';
 export * from './strength-log';
 export * from './value';
+export * from './zip';

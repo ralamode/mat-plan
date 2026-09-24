@@ -15,6 +15,26 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The access-gate matcher excludes `/api`, so any Route Handler there is ungated (found 2026-09-24)
+
+- **What & why:** `apps/web/proxy.ts` matches `'/((?!api|_next/static|_next/image|favicon.ico).*)'`.
+  The `api` exclusion is a copied Next default and has never been exercised, because **the repo has
+  no `/api` routes**. The moment one exists it is **completely ungated** — no access-gate cookie
+  required, nothing between the internet and the handler.
+- **Impact:** high, and **latent by construction** — it cannot be noticed until the first `/api`
+  route ships, at which point it is already live. AGENTS.md plans **`/api/sync`** explicitly ("reads
+  / external / batch → Route Handlers. `/api/sync` is a Route Handler"), which would be a
+  write endpoint for the entire offline replay graph.
+- **Found how:** V1-13b's CSV export was about to be `/api/export`. It ships at
+  `/p/[profileId]/export` instead — inside the matcher — and re-checks the gate in the handler anyway,
+  because middleware is not an authorization boundary. The e2e asserts a cookie-less request never
+  gets a 200.
+- **The fix, when `/api` is needed:** either drop `api` from the exclusion and let the gate cover it,
+  or require every handler to call the gate check itself and **prove it with a test per route**. The
+  first is one character and covers the class; the second is the AGENTS.md rule ("every Route Handler
+  is a PUBLIC endpoint") and does not depend on a matcher staying correct. Do both.
+- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5.
+
 ### Test-time path overrides are ad-hoc, so gates quietly go vacuous (audit, 2026-09-24)
 
 - **What & why:** there is **no consistent way to force a code path for a test**, so each one invents
