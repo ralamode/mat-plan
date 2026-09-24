@@ -130,7 +130,7 @@ Enums:  unit + activity_type.category → reference tables (FK); status → text
 Index:  FKs + hot path (profile_id, date) equality-first/range-last; partial for skew; ~5–10/table max.
 JSONB:  values stay in fixed typed columns (no EAV). JSONB only for opaque sync/device metadata.
 Migrate: drizzle-kit generate+migrate ONLY (never push in prod); forward-only; never edit applied
-        files (⚠️ NOT CI-enforced — the 'M' guard was never wired; it is a human rule today); expand–contract; SET lock_timeout before DDL; NOT NULL via NOT VALID→VALIDATE;
+        files (CI-enforced since GAP-3 PR 1a — the guard also proves _journal.json is append-only); expand–contract; SET lock_timeout before DDL; NOT NULL via NOT VALID→VALIDATE;
         seed reference data ON CONFLICT DO NOTHING. Run against DATABASE_URL_UNPOOLED.
 ```
 
@@ -209,9 +209,10 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   see below), gitleaks, and the forward-only guard (inherently a diff-against-base check).
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
-  ⚠️ **`pnpm audit`, CodeQL, Squawk and Neon-branch-apply are NOT wired** — this list claimed them for
-  months and `.github/workflows/` never had them ([tech-debt](./docs/tech-debt.md), audited 2026-09-23).
-  Do not cite an unwired gate as a safety argument; the DB three are queued ahead of GAP-3's migration.
+  Plus **forward-only** + **Squawk** on new migrations, and `audit --prod` via `pnpm verify`.
+  ⚠️ **CodeQL and the Neon-branch apply are still NOT wired** — this list claimed them for months and
+  `.github/workflows/` never had them ([tech-debt](./docs/tech-debt.md), audited 2026-09-23). Do not cite
+  an unwired gate as a safety argument.
 - **`e2e` (Playwright smoke):** runs on every PR but is **not yet a required check** — it **soaks as
   non-blocking until PR 28**, then becomes required (a repo-admin branch-protection change). The job
   always runs but **auto-skips the smoke (still reporting success) when every changed file is provably
@@ -323,18 +324,23 @@ Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (
 ```
 Workflow: edit schema → drizzle-kit generate → COMMIT the generated .sql (the reviewed artifact) → PR.
   NEVER drizzle-kit push to prod. Prod only runs `migrate`. Forward-only: never modify a migration
-  already on main (⚠️ the 'M'-blocking CI guard was NEVER WIRED — human rule today). One migration/PR.
+  already on main (CI-enforced since PR 1a). One migration/PR — EXCEPT `NOT VALID` + `VALIDATE`,
+  which Squawk requires be SPLIT across PRs (in one file they share a transaction and the NOT VALID
+  buys nothing — 0009's own comment reaches the same conclusion).
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
 CI gates (ACTUAL, 2026-09-23): drizzle-kit check + `generate` leaves a clean tree (drift guard) + `db:verify`
         on PGlite. NOT WIRED despite being claimed below: Squawk lint;
   migration applies on (a) empty Docker PG AND (b) a Neon branch cut from main (prod-shaped); seeds
   run twice → idempotent.
-Safety (these are the SQUAWK RULES — Squawk is not wired, so they are REVIEW-enforced): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
+Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
   app code — use expand→backfill→contract across separate deploys. Indexes CONCURRENTLY. New NOT NULL
   via CHECK ... NOT VALID → backfill → VALIDATE. New FK/UNIQUE as NOT VALID → VALIDATE; every new ref
   column gets a covering index. Every migration SETs lock_timeout + statement_timeout. Backfills in
   bounded batches; avoid volatile defaults. IF [NOT] EXISTS guards for re-run safety.
+Squawk escape hatch: a JUSTIFIED exception uses an inline `-- squawk-ignore <rule>` above the statement,
+  with the reasoning in a comment beside it. Verified working. This is deliberately better than a config
+  exclusion: the justification lands next to the SQL it excuses, and the gate forces it to be written.
 Rollback: fix-forward by default (expand-contract is reversible-by-omission); cut a Neon RESTORE
   branch pre-migration before any destructive/backfill step.
 GOTCHA: CREATE INDEX CONCURRENTLY cannot run in a transaction, but drizzle-kit migrate wraps each file

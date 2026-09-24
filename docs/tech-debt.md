@@ -121,6 +121,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   check gets skipped. The e2e gap is the real one: **a bug in the smoke still surfaces only in CI.**
 - **Severity:** low.
 
+### 20 pre-existing Squawk findings on `main` are never linted (accepted 2026-09-24)
+
+- **What & why:** Squawk (GAP-3 PR 1b) lints **added migrations only**. All-files is not viable — 20
+  findings remain across 6 migrations already on `main`, and Squawk has **no baseline or suppression
+  feature**, so an all-files gate would be red on arrival and get disabled rather than fixed.
+- **Are they bugs? Mostly no.** `0009`'s own comment names the Squawk objection and justifies it: the
+  column is created in the same statement, so every existing row is NULL, `NULL in (...)` is NULL, and a
+  CHECK passes on anything but FALSE — the validating scan reads rows that cannot fail, on a few dozen
+  rows. `0008`'s is on still-empty V1-10 tables. These were reasoned, not missed.
+- **Impact:** low, but the gate **silently implies `main` is clean**, which it is not. Recorded so that
+  implication is not mistaken for a fact.
+- **Also still unenforced:** `require-concurrent-index-creation` is excluded, because `CONCURRENTLY`
+  cannot run inside drizzle's per-file transaction and the transaction-stripping runner AGENTS.md
+  describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
+- **Severity:** low.
+
 ### AGENTS.md documents five CI gates that do not exist (found 2026-09-23, GAP-3 panel)
 
 - **What & why:** the DB-safety reviewer on GAP-3's panel checked the plan's claim that _"Squawk hard-fails

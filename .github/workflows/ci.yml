@@ -95,6 +95,47 @@ jobs:
           echo '::error::Forward-only violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
           exit 1
 
+      # ── Squawk: lint NEW migrations ────────────────────────────────────────
+      # AGENTS.md has listed Squawk as required for months; it was never wired
+      # (audited 2026-09-23). It blocks the shapes that rule names — DROP COLUMN /
+      # TABLE, TRUNCATE CASCADE, RENAME — which is exactly how GAP-3's contract
+      # step gets caught rather than merged.
+      #
+      # ADDED FILES ONLY (--diff-filter=A). All-files is not viable: 20 findings
+      # remain across 6 migrations already on main, and Squawk has no baseline or
+      # suppression feature. Scoping to added files composes with the forward-only
+      # guard above — that makes migrations add-only, so "added" IS "new".
+      #
+      # The 20 pre-existing findings are therefore never linted. They are known and
+      # reasoned, not a backlog: 0009's own comment names the Squawk objection and
+      # justifies it (the column is created in the same statement, so every row is
+      # NULL and the validating scan reads rows that cannot fail). Recorded in
+      # docs/tech-debt.md so the gate does not silently imply main is clean.
+      #
+      # In `quality`, not its own job — a new job is not a REQUIRED check until
+      # branch protection is edited, so it would look wired while blocking nothing.
+      # Same reasoning as the forward-only guard above.
+      - name: Squawk (new migrations)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # Piped to xargs rather than joined into a space-separated string: a
+          # `tr '\n' ' '` leaves a TRAILING SPACE, which bash word-splits away but
+          # zsh passes through as part of the filename. That makes the step pass in
+          # CI and fail for anyone reproducing locally — caught by simulating this
+          # against a real commit before shipping. xargs behaves identically in both.
+          LIST=$(git diff --name-only --diff-filter=A "$BASE_SHA...HEAD" \
+                   -- 'packages/db/migrations/*.sql')
+          if [ -z "$LIST" ]; then
+            echo "No new migrations — Squawk skipped."
+            exit 0
+          fi
+          echo "::notice::Squawk linting:"; echo "$LIST"
+          # Pinned, never @latest: a new rule in a patch release must not turn an
+          # unrelated PR red.
+          printf '%s\n' "$LIST" | xargs npx --yes squawk-cli@2.66.0 -c .squawk.toml
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
