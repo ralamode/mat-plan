@@ -19,6 +19,81 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # base.sha must be diffable; the default shallow checkout has no base,
+          # and a `git diff` with nothing to compare against would make the guard
+          # below silently ALWAYS PASS — worse than no guard. `gitleaks` already
+          # uses fetch-depth: 0 on an 8.7MB repo, so this is precedent, not cost.
+          fetch-depth: 0
+
+      # ── Forward-only migrations (AGENTS.md → DB rules) ──────────────────────
+      # A migration already on main has run against prod and its SQL is hashed in
+      # __drizzle_migrations, so editing/renaming/deleting one makes the repo and
+      # prod diverge SILENTLY. Only ADDED files are allowed here.
+      #
+      # AGENTS.md has claimed this gate for months; it was never wired (audited
+      # 2026-09-23, docs/tech-debt.md). GAP-3 is the first migration arc ending in
+      # a destructive step, so it lands before that arc starts.
+      #
+      # `meta/_journal.json` is the ONE exception — every new migration appends an
+      # entry, so it is `M` on 100% of DB PRs and a naive `migrations/**` rule
+      # would fail every one of them. It is excluded from the path check and
+      # verified APPEND-ONLY instead, or the exclusion becomes a hole through
+      # which an applied migration's `tag` could be rewritten.
+      #
+      # Lives in `quality` (not its own job) so it blocks merges immediately with
+      # no branch-protection change, and sits before pnpm/Node so it fails in
+      # seconds rather than after install + test.
+      - name: Forward-only migration guard
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          MIG=packages/db/migrations
+          JOURNAL="$MIG/meta/_journal.json"
+
+          # --no-renames: a rename reports as R100 by default, which could be
+          # mis-paired with a genuinely new migration. Forcing D+A trips the D.
+          # Renames MUST fail — the journal `tag` maps 1:1 to the filename.
+          CHANGED=$(git diff --name-status --no-renames --diff-filter=DMRTC \
+            "$BASE_SHA...HEAD" -- "$MIG" ":(exclude)$JOURNAL")
+
+          JOURNAL_BAD=''
+          if git cat-file -e "$BASE_SHA:$JOURNAL" 2>/dev/null; then
+            OLD=$(git show "$BASE_SHA:$JOURNAL" | jq -c '.entries')
+            NEW=$(git show "HEAD:$JOURNAL" | jq -c '.entries')
+            if [ "$(jq -n --argjson o "$OLD" --argjson n "$NEW" '$n[:($o|length)] == $o')" != 'true' ]; then
+              JOURNAL_BAD=1
+            fi
+          fi
+
+          if [ -z "$CHANGED" ] && [ -z "$JOURNAL_BAD" ]; then
+            echo "Forward-only guard OK — no applied migration was modified."
+            exit 0
+          fi
+
+          if [ -n "$CHANGED" ]; then
+            echo "Modified/deleted/renamed migration artifacts:"
+            echo "$CHANGED"
+          fi
+          if [ -n "$JOURNAL_BAD" ]; then
+            echo "meta/_journal.json rewrote existing entries (it is append-only)."
+          fi
+          cat <<'MSG'
+
+          Migrations on main have already been applied to production and their SQL
+          is hashed in __drizzle_migrations — editing, renaming or deleting one
+          makes prod and the repo diverge silently. Fix forward instead:
+
+            1. git checkout origin/main -- packages/db/migrations
+            2. edit packages/db/src/schema.ts
+            3. pnpm --filter @mat-plan/db db:generate   # emits a NEW 00NN_*.sql
+
+          Destructive shape changes go expand -> backfill -> contract across
+          separate deploys. Only ADDED (A) files are allowed under this directory.
+          MSG
+          echo '::error::Forward-only violation in packages/db/migrations (see log; AGENTS.md — DB rules).'
+          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
