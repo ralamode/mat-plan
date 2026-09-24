@@ -91,10 +91,12 @@ export-layer or column choice could have recovered it anyway.
 ### 3. `calisthenics-log` is cut from V1-13 → fast follow
 
 **Ray took the recommendation and asked for a fast-follow row.** It is the one file _the app defines_
-rather than matches, and defining it is its own decision with three unanswered questions: the daily
-program prescribes **`leg_raises`**, which has no column; it tracks `reps_per_set` across up to 10 sets
-against a **single daily scalar**; and `vsit_skill_step` (1–5) has **no representation in the data model
-at all**. Backlog: **V1-13a-fu**.
+rather than matches, and defining it is its own decision. **One of its three questions is already
+closed:** Ray confirmed (2026-09-24) that **leg raises — and hip thrusts — are ordinary REP MOVEMENTS**,
+so they belong in `strength-log` beside the other per-set movements rather than needing a column in this
+file's daily-scalar shape. Two remain: the program tracks `reps_per_set` across up to 10 sets against a
+**single daily scalar** (sum? max? undefined), and `vsit_skill_step` (1–5) has **no representation in the
+data model at all**. Backlog: **V1-13a-fu**.
 
 ## Scope: 13a = strength-log end-to-end · 13b = the rest
 
