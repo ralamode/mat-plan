@@ -410,7 +410,11 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   the exported directory does not need to be human-readable.
 
   **Sequenced AFTER the exporter, deliberately** (Ray): the exporter fixes the format, and the importer
-  is then written against it. Two things fall out. First, **the old named directories become the
+  is then written against it.
+
+  **The concrete job** (Ray, 2026-09-24): take the old **named** directories — `liam/`, `scarlett/` —
+  and import their rows against the matching **`public_id`**. That is the one place a human name ever
+  meets the data model, and it happens once, under review, rather than on every export. Two things fall out. First, **the old named directories become the
   importer's test fixture** — real authored rows, every shape the census found, already scrubbed and
   committed at [docs/samples/legacy-csv](./samples/legacy-csv/README.md). Second, it is what makes the
   `public_id` export directory legible in hindsight: the importer maps `liam/` onto the right profile,
@@ -420,6 +424,26 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   `123 (50ft)` need GAP-3 PR 4b's worn-load slots, and `BW (unassisted)` / `30 (2x 15 DB)` are
   qualitative prose with no destination until V1-9a's notes. An importer that silently drops them would
   be worse than none; it must refuse or park them.
+
+- **IMP-2 — re-export the imported corpus and diff it byte-for-byte.** _(Ray, 2026-09-24 — "the
+  exporter, after the importer".)_ This is the proof V1-13 **cannot** give on its own, and the reason is
+  worth stating precisely: its plan admits the byte-faithful round-trip _"cannot be run at all"_ today,
+  because there is no importer and the app holds none of the legacy data. There is nothing to re-export.
+
+  **IMP-1 changes that.** Once the eight real files are in the database, running the exporter over them
+  and diffing against the originals is a true end-to-end check of the format — against rows a human
+  authored, not fixtures we wrote from our own reading of the contract. That closes the gap V1-13's own
+  risk table names: _"the exporter is provable only against fixtures we wrote… both the fixtures and the
+  formatter encode the same understanding, so a misreading passes both."_
+
+  **The diff will not be clean on the first run, and that is the point.** Known non-matches to expect,
+  each already documented: four `load` shapes are not importable yet (`BW+8 (vest)` and `123 (50ft)`
+  need GAP-3 PR 4b; `BW (unassisted)` and `30 (2x 15 DB)` need V1-9a notes), `bodyweight.context` can
+  never be written by the app, and a typed `92.0` trims to `92`. Each mismatch is either a known gap or
+  a real exporter bug — and telling those two apart is the whole exercise.
+
+  Stronger than V1-14b, which round-trips a day the app itself authored: this round-trips **history the
+  app did not write**, which is the only way to catch a shared misreading.
 
 - **PROF-1 — profile create / edit.** _(Ray, 2026-09-24 — after the MVP.)_ There is **no
   profile-editing surface at all** today: profiles exist only because the seed writes them, names cannot
