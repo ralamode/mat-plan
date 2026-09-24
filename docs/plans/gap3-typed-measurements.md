@@ -248,20 +248,42 @@ recommended, on the evidence that all four sample sessions use at most one slot 
 3. **The data-loss window is open now.** Anything logged before the structure exists cannot be
    back-filled. The kids have not started logging yet, so the cheap moment is this one.
 
-### 7.2b The sub-fork this opens — and it is NOT decided
+### 7.2b DECIDED — the child table holds ALL loads (Ray, 2026-09-24)
 
-**Does `entry_set_loads` hold every load, or only the named auxiliary ones?**
+**(A), not (B).** A plain back squat's weight becomes a row in `entry_set_loads` like any other load;
+`entry_sets.weight_num` / `weight_unit` are eventually dropped. One mechanism, no bifurcation — and since
+this migration already rewrites every weight row, the marginal cost of doing it properly is smaller now
+than it will ever be again.
 
-- **(A) All loads.** A plain back squat's weight becomes a row with slot `primary`. One mechanism, no
-  bifurcation — what a data modeller would prefer. Costs migrating **every existing weight** into the
-  child table, and `weight_num` eventually drops.
-- **(B) Auxiliary only.** `weight_num` stays the primary load; the child table holds named extra slots.
-  Additive and far safer. Costs **two mechanisms for one concept**, which is the thing an expert would
-  actually frown at — not the child table itself.
+**The split this forces, and it is a clean one:**
 
-**(A) is more defensible and this migration is already touching every weight row**, so the marginal cost
-is smaller here than it will ever be again. **(B) is the lower-risk path.** Flagged for the panel; §7.3's
-column list below assumes **(B)** only because it is the reversible one.
+| Kind                                                                  | Home                     | Why                                                                                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quantities** — primary weight, vest, ankle, wrist, distance, height | `entry_set_loads` rows   | each has a value **and** a unit, so each needs the dimension guard                                                                                                  |
+| **Qualitative flags** — `is_bodyweight`, `is_band`                    | booleans on `entry_sets` | neither is a quantity. A band has no number; bodyweight is a _mode_, not a load. Modelling them as rows with NULL values would be the EAV smell this design avoids. |
+
+So `BW+8 (vest)` is `is_bodyweight = true` **plus** one `vest` load row — which is exactly the shape ADR
+0004's mapping table calls "not representable today", now falling out rather than being special-cased.
+
+**What (A) costs that (B) did not:**
+
+1. **The join becomes universal, not exceptional.** Under (B) a normal strength set reads with no join.
+   Under (A) every set read joins. Still free at this scale — club-sized is tens of thousands of rows on
+   an indexed FK — but the honest cost is **code surface**: every query that filters or aggregates on
+   weight now goes through the join. Relative strength, progression, CSV export.
+2. **The backfill is over every set, not just stance sets.** That re-sizes §7.6a's split; step 4 is no
+   longer a small script.
+3. **⚠️ The contract deploy now drops `weight_num` — a column with live data in every logged set.** That
+   is the most destructive step in this plan, and per the [CI audit](../tech-debt.md) **Squawk is not
+   wired to catch it**, nor is the forward-only guard. **Choosing (A) makes that CI work a prerequisite
+   rather than a nice-to-have.**
+4. **V1-9's edit-a-set path changes shape.** It addresses a set by `public_id` and updates reps+weight
+   together; weight now lives in a child row, so the writer's single-statement ownership guard has to
+   span two tables.
+
+**Open, and it is the vocabulary's anchor: what is the slot called for a plain barbell weight?**
+`primary`? `external`? `bar`? It is the value ~every historical row backfills into, so the name is
+load-bearing for the CSV contract and for every future reader.
 
 ### 7.2c The open UX question Ray raised — how does the editor express a slot set?
 
@@ -377,8 +399,8 @@ so it carries over to the new controls rather than being deleted.
 ### 7.6 Open questions — after the panel
 
 1. ~~**Q1: fixed columns or a typed child table?**~~ **DECIDED 2026-09-24 — the child table** (§7.2a).
-   **New sub-fork (§7.2b): does it hold ALL loads or only auxiliary ones?** (A) is cleaner and this
-   migration already touches every weight row; (B) is reversible. Undecided.
+   ~~**Sub-fork (§7.2b): ALL loads or only auxiliary?**~~ **DECIDED — (A), all loads.** Remaining:
+   **what the plain-barbell slot is called**, since ~every historical row backfills into it.
    **And §7.2c: how a coach declares a movement's slot set** — V1-22's problem, and it widens that plan.
 2. **Stance in Motion: movement or metric?** §7.2. As a _movement_ its duration uses the `seconds` column
    this plan already activates and it becomes prescribable; as a _metric_ it is unprescribable and the
@@ -390,23 +412,27 @@ so it carries over to the new controls rather than being deleted.
 5. Where do `BW (unassisted)`, `BW (modified)` and `30 (2x 15 DB)` land? (`entries.notes`, via V1-9a?)
 6. Does the new logging surface need its own UX panel, or does it ride V1-5's check-in form?
 
-### 7.6a Scope — this is five PRs
+### 7.6a Scope — six PRs, resized after decision (A)
 
-A migration + a units seed + a backfill + a form rewrite + a later contract deploy, against a <400-line
-one-concern target at ~4h/wk. Split:
+(A) makes the backfill cover **every logged set**, not just stance sets, so step 4 is no longer small.
 
-1. `units.dimension` + the length codes, **shared-const first**, no behaviour change.
-2. The `entry_sets` expand migration.
-3. The form/parse rewrite — **needs its own UX panel**; the numeric keypad returns and `LoadChips` is
-   replaced.
-4. The backfill (a script, not a migration file).
-5. The contract drop — a separate deploy, with the `formatSetLine`/`isEditableSet` work in the same one.
+|     | PR                                                                             | Risk seam                                                                                                                                                                                               |
+| --- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Wire the missing CI gates** — forward-only guard + Squawk                    | **Now a prerequisite, not a follow-on.** (A) ends in a `DROP COLUMN` on a column with live data in every set, and nothing in CI would stop it landing beside app code ([audit](../tech-debt.md), #132). |
+| 2   | `units.dimension` + the length codes, **shared-const first**                   | No behaviour change.                                                                                                                                                                                    |
+| 3   | `entry_set_loads` + `load_slots` + the `entry_sets` booleans — **expand only** | Nothing reads it yet.                                                                                                                                                                                   |
+| 4   | Backfill every set into the child table                                        | A script, not a migration file — DML inside a migration runs in migrate's transaction, so "bounded batches" is fiction otherwise.                                                                       |
+| 5   | The form/parse/read rewrite                                                    | **Needs its own UX panel** — the numeric keypad returns, `LoadChips` is replaced, and the set row changes shape.                                                                                        |
+| 6   | Contract: drop `weight_num`/`weight_unit`/`weight_label`                       | Separate deploy, gated on a zero-unmigrated-rows check, shipping the `formatSetLine` and `isEditableSet` fixes in the same one.                                                                         |
 
 ### 7.7 File-by-file
 
-_Still deliberately empty — but for a sharper reason than before: **§7.6 Q1 (fixed columns vs a child
-table) changes what the files are.** A file list written now would encode the fixed-column answer by
-default, which is the decision the panel says is least settled._
+**Now unblocked** — §7.6 Q1 (child table) and §7.2b (all loads) are decided, which is what the file list
+was waiting on. The one naming question left (§7.2b: what the plain-barbell slot is called) does not
+change _which_ files move, only a seed value.
+
+_To be written next, per the six-PR split above — PR 1 first, since it gates the destructive end of the
+arc rather than following it._
 
 ## 8. Review-response log (adversarial panel)
 
