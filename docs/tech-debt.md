@@ -146,35 +146,52 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
 - **Severity:** low.
 
-### AGENTS.md documents five CI gates that do not exist (found 2026-09-23, GAP-3 panel)
+### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)
 
 - **What & why:** the DB-safety reviewer on GAP-3's panel checked the plan's claim that _"Squawk hard-fails
   a `DROP COLUMN` alongside app code"_ and found **no Squawk in CI at all**. Auditing the rest of
-  [AGENTS.md](../AGENTS.md)'s required-checks list against `.github/workflows/` :
+  [AGENTS.md](../AGENTS.md)'s required-checks list against `.github/workflows/` turned up **five** gates the
+  rules claimed and the workflows never had. Four have since been wired; **one is left**:
 
-  | Gate AGENTS.md claims is required                               | Reality                                                                                                             |
-  | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-  | format · lint · typecheck · test · build · gitleaks · e2e       | ✅ present (`format:check` and `pnpm build` are the prettier/next-build steps — easy to miss by name)               |
-  | DB **drift guard** + `db:verify`                                | ✅ present (`ci.yml:47-52`)                                                                                         |
-  | **Squawk** migration lint                                       | ❌ **absent**                                                                                                       |
-  | **Neon-branch apply** on PRs                                    | ❌ **absent** — `migrate.yml` runs only on merge to `main`, and warns-and-skips if `DATABASE_URL_UNPOOLED` is unset |
-  | **Forward-only guard** (blocks `M` on `packages/db/migrations`) | ❌ **absent** — nothing greps `--diff-filter`                                                                       |
-  | **CodeQL**                                                      | ❌ absent                                                                                                           |
-  | **`pnpm audit`** (fail high/critical)                           | ❌ absent                                                                                                           |
+  | Gate AGENTS.md claims                                           | Reality                                                                                                                   |
+  | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+  | format · lint · typecheck · test · build · gitleaks · e2e       | ✅ present (`format:check` and `pnpm build` are the prettier/next-build steps — easy to miss by name)                     |
+  | DB **drift guard** + `db:verify`                                | ✅ present                                                                                                                |
+  | **Forward-only guard** (blocks `M` on `packages/db/migrations`) | ✅ wired — `ci.yml` `quality`, PRs only (#134)                                                                            |
+  | **Squawk** migration lint                                       | ✅ wired — `ci.yml` `quality`, added migrations only (#135)                                                               |
+  | **`pnpm audit`** (fail high/critical)                           | ✅ wired — `audit --prod --audit-level high`, inside `pnpm verify`                                                        |
+  | **CodeQL**                                                      | ✅ wired — `codeql.yml`, but **not a PR check** (see below)                                                               |
+  | **Neon-branch apply** on PRs                                    | ❌ **still absent** — `migrate.yml` runs only on merge to `main`, and warns-and-skips if `DATABASE_URL_UNPOOLED` is unset |
 
-- **Impact:** **the three DB gates matter most, and they matter now.** GAP-3 is the largest migration this
-  project will run — expand, backfill, then a `DROP COLUMN` contract — and every safety argument in its
-  plan cited gates that would not have fired. An edited-in-place migration would also merge unnoticed,
-  which is the one thing "forward-only" exists to prevent. Low impact to date only because every migration
-  so far has been additive and single-author.
+- **What CodeQL being "wired" does and does not mean.** `codeql.yml` runs `javascript-typescript` over the
+  whole workspace on **push to `main`, weekly (Mon 06:17 UTC), and `workflow_dispatch`** — deliberately
+  **not** on pull requests, because a minutes-long scan on every <400-line PR is the wrong trade at ~4h/wk.
+  So a green PR proves nothing about CodeQL, and findings only ever appear in **Security → Code scanning**.
+  Two live caveats:
+  - **Unverified precondition: this is a PRIVATE repo on a personal account.** Code scanning needs GitHub
+    Code Security (Advanced Security) there; `GET /code-scanning/default-setup` currently returns
+    `403 Code scanning is not enabled`, which is the same response for "not licensed" and for "not
+    configured yet". If the plan does not include it, the `analyze` step will fail on the **first push to
+    `main` after merge** with "Advanced Security must be enabled" — loudly, and blocking nothing. That
+    first run is the real test; until it is green, treat CodeQL as claimed-not-proven.
+  - **No `pnpm install` before extraction**, so cross-package `@mat-plan/*` imports are not resolved and
+    dataflow does not reach across workspace boundaries. Deliberate: it keeps a minute and a lockfile-drift
+    failure mode out of a weekly job, for reach a 3-user app does not need. Revisit if a finding is ever
+    obviously truncated at a package seam.
+- **Impact of the remaining gap:** a migration's first real execution is still **on production**. The
+  drift guard, `db:verify` (PGlite), forward-only and Squawk all run pre-merge, so the shapes that were
+  genuinely dangerous are now caught; what is missing is the prod-shaped rehearsal — a migration that is
+  valid SQL, passes Squawk, and still fails against real data/row counts would not surface until merge.
 - **Why it went unnoticed:** the rules were written as the intended end state and never re-verified.
-  `db:verify` and the drift guard _are_ real and are genuinely good, which makes the DB section read as
-  covered at a glance.
-- **Proposed fix:** add the forward-only guard (cheapest — one `git diff --diff-filter=M` step) and Squawk
-  **before GAP-3's migration lands**; treat Neon-branch apply, CodeQL and `pnpm audit` as separate
-  follow-ons. Until then, **correct AGENTS.md to describe what CI actually does** — a rule that claims a
-  gate it does not have is worse than no rule, because it stops people looking.
-- **Severity:** medium now, **high the moment GAP-3's migration is written.**
+  `db:verify` and the drift guard _are_ real and genuinely good, which makes the DB section read as
+  covered at a glance. The lesson generalizes: **do not cite a gate without opening `.github/workflows/`.**
+- **Proposed fix:** a PR job that cuts a Neon branch from `main` and applies the migration against it
+  (AGENTS.md's "(b) a Neon branch cut from main"). Needs a Neon API token in repo secrets and a
+  create/delete branch step — the reason it has been deferred is credentials plus per-PR cost, not
+  difficulty. Trigger: the first migration whose risk is **data-shaped** (a backfill over real row counts)
+  rather than shape-shaped — GAP-3's backfill step is the candidate.
+- **Severity:** medium — the highest-value DB gates now exist; this is the remaining one, and it is the one
+  that costs money and a token rather than a workflow step.
 
 ### The weekday → `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
 
