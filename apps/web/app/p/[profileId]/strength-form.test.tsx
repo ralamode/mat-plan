@@ -55,7 +55,7 @@ describe('StrengthForm — skipped movement payload (GAP-1 P1-1c)', () => {
     renderForm();
     fireEvent.change(nameInput(), { target: { value: 'Back squat' } });
     fireEvent.change(screen.getByLabelText(/movement 1 set 1 reps/i), { target: { value: '5' } });
-    fireEvent.change(screen.getByLabelText(/movement 1 set 1 weight or load/i), {
+    fireEvent.change(screen.getByLabelText(/movement 1 set 1 weight in/i), {
       target: { value: '135' },
     });
     expect(payload()[0]!.sets).toEqual([{ reps: '5', weight: '135' }]);
@@ -82,12 +82,12 @@ describe('StrengthForm — sub-failure set payload (GAP-1 P1-1c)', () => {
     renderForm();
     fireEvent.change(nameInput(), { target: { value: 'Pull-up' } });
     fireEvent.change(screen.getByLabelText(/movement 1 set 1 reps/i), { target: { value: '4' } });
-    fireEvent.change(screen.getByLabelText(/movement 1 set 1 weight or load/i), {
+    fireEvent.change(screen.getByLabelText(/movement 1 set 1 weight in/i), {
       target: { value: 'BW' },
     });
     fireEvent.click(screen.getByRole('button', { name: /add set/i }));
     fireEvent.change(screen.getByLabelText(/movement 1 set 2 reps/i), { target: { value: '2' } });
-    fireEvent.change(screen.getByLabelText(/movement 1 set 2 weight or load/i), {
+    fireEvent.change(screen.getByLabelText(/movement 1 set 2 weight in/i), {
       target: { value: 'BW' },
     });
 

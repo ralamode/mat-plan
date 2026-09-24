@@ -99,7 +99,16 @@ flowchart LR
   Vitest. This is why logic belongs in the (synchronous, testable) DAL.
 
 - **`packages/**` is typechecked by nothing** — `pnpm typecheck` is `--filter web`. A stale column in a
-  writer surfaces as a runtime crash in `db:verify`, not a compile error.
+  writer surfaces as a runtime crash in `db:verify`, not a compile error. This bites in a specific
+  way: a writer's `sets` parameter type can say a field is REQUIRED while `db:verify`'s fixtures omit
+  it, and nothing objects until Postgres reports `invalid input syntax for type numeric: "undefined"`.
+  A writer taking values from both zod output and hand-written fixtures should check
+  `=== null || === undefined`, not just one.
+
+- **A derived column must be derived from the value actually being written.** `entry_set_quantities`
+  stores `dimension` alongside `unit` and a composite FK checks the pair. Hard-coding `'mass'` there
+  was correct while movements were lb/kg-only and became an FK violation — surfacing as a 500 — the
+  moment a movement could be logged in `sec`. Derive it (`UNIT_DIMENSION_BY_CODE[unit]`).
 
 - **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
   `withServerActionInstrumentation` or the failure is invisible.

@@ -1,7 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { MIN_TAP_TARGET_PX } from '../lib/constants';
+import { DEFAULT_TIME_ZONE, MIN_TAP_TARGET_PX } from '../lib/constants';
+import { localDayIso } from '../lib/date';
+import { resolveDayRole } from '../lib/programming/day-role-schedule';
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -24,6 +26,17 @@ import { SEED_PROFILE_ROUTE } from './steps';
 
 /** ~iPhone 14 — the primary device. Matches the mobile viewport the screenshot script captures at. */
 const MOBILE = { width: 390, height: 844 };
+
+/**
+ * The NARROWEST width AGENTS.md commits to ("every screen must work from ~360px up"). 390 is the
+ * device; 360 is the contract, and the two are not the same test — the strength set row's own
+ * comments budget against ~294px of usable width, which only exists at 360.
+ *
+ * Added at GAP-3 PR 4a, because the panel found this spec asserted neither 360 nor overflow: the
+ * acceptance criterion "works at 360px with no horizontal scroll" was being claimed by a file that
+ * never measured either.
+ */
+const NARROW = { width: 360, height: 780 };
 
 /** The routes the household actually uses. `/gate` is deliberately excluded — the project's
  *  `storageState` lands every test past it, and scanning it needs a storage-state-free context
@@ -167,38 +180,121 @@ test('the strength form meets the tap-target bar in its EXPANDED state', async (
   await expectNoAxeViolations(page, 'strength form (expanded)');
 });
 
-test('the strength form meets the bar in its SCAFFOLDED state (V1-19)', async ({ page }) => {
-  // The scaffold renders controls the two scans above never see: a collapsed-card disclosure per
-  // movement, an Undo, and — once a card is opened — a full card nested among six siblings. Seven
-  // cards' worth of chips and toggles is also precisely where horizontal overflow would first appear
-  // at 390px, which the single-card expanded scan cannot surface.
+/**
+ * Horizontal overflow, at the narrowest committed width.
+ *
+ * `expectTapTargets` measures control HEIGHT only, so a row that runs off the side of the phone
+ * passes every other scan in this file. That is the exact failure mode a new control in the set row
+ * introduces, and PR 4a adds two (the Measuring select, and the unit echo after the weight field).
+ */
+async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    const d = document.documentElement;
+    return { scrollWidth: d.scrollWidth, clientWidth: d.clientWidth };
+  });
+  expect(
+    overflow.scrollWidth,
+    `${label}: the page scrolls horizontally at ${NARROW.width}px ` +
+      `(scrollWidth ${overflow.scrollWidth} > clientWidth ${overflow.clientWidth})`,
+  ).toBeLessThanOrEqual(overflow.clientWidth);
+}
+
+test('the strength form does not overflow horizontally at 360px', async ({ page }) => {
+  await page.setViewportSize(NARROW);
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
   const strength = page.getByRole('region', { name: 'Log strength' });
-  const fill = strength.getByRole('button', { name: /Fill in today.s movements/i });
+  await strength.getByRole('button', { name: 'Add movement' }).click();
+  await strength.getByRole('button', { name: 'Add set' }).first().click();
 
-  // The seed only programs strength on certain weekdays, so the button is legitimately absent on
-  // others. Skip rather than fail — a red check here would mean "it is Tuesday", not "a11y broke".
-  if ((await fill.count()) === 0) {
-    test.skip(true, 'no programmed movements today — nothing to scaffold');
-    return;
+  // Drive the set row into its WIDEST state — both mode toggles on — so the measurement covers the
+  // row as it actually renders when a bodyweight movement is logged, not the emptiest case.
+  //
+  // Clicked by LABEL, not `.check()` on the input: the checkbox is `sr-only` (visually hidden but
+  // focusable and operable), so its own box is 1px and Playwright's actionability check fails on it.
+  // The label IS the chip a thumb aims at, so this drives it exactly as a person does.
+  await strength.getByText('BW', { exact: true }).first().click();
+  await strength.getByText('band', { exact: true }).first().click();
+  await expect(strength.getByRole('checkbox', { name: /^BW — Bodyweight/ }).first()).toBeChecked();
+
+  await expectNoHorizontalOverflow(page, 'strength form (360px, modes on)');
+  await expectTapTargets(page, 'strength form (360px)');
+});
+
+/**
+ * A timezone in which the seeded program actually has movements today.
+ *
+ * WHY THIS EXISTS: this test used to `test.skip()` when the scaffold button was absent, on the
+ * reasoning that "a red check would mean it is Tuesday, not that a11y broke". True — but it made the
+ * check **silently dead 4 days in 7** (the seed programs Mon/Wed/Fri only), and it conflated two very
+ * different states: "not a programmed day" and "the button regressed and is gone". A real scaffold
+ * regression on a Monday would have SKIPPED, green. GAP-3 PR 4a shipped without this test ever
+ * running once.
+ *
+ * The fix rests on an arithmetic accident that is worth stating, because it is what makes this
+ * deterministic rather than lucky: every UNprogrammed day is adjacent to a programmed one
+ * (Sun→Mon, Tue→Mon/Wed, Thu→Wed/Fri, Sat→Fri). A timezone can move the local calendar date by at
+ * most ±1 day — and ±1 is exactly enough, on every day of the week.
+ *
+ * Computed at module load (so `test.use` can take it) against the SAME `resolveDayRole` the app uses,
+ * so the test and the page can never disagree about which day is programmed.
+ */
+const PROGRAMMED_TZ = ((): string => {
+  // UTC+14 and UTC-11 are the real extremes of the tz database — the widest shift available.
+  const candidates = [DEFAULT_TIME_ZONE, 'Pacific/Kiritimati', 'Pacific/Niue'];
+  const found = candidates.find((tz) => resolveDayRole(localDayIso(tz)) !== null);
+  if (!found) {
+    // Unreachable given the adjacency above; throwing beats skipping, because a schedule change that
+    // broke the assumption should be loud rather than quietly disabling the test again.
+    throw new Error(
+      `No timezone puts a programmed day in reach (tried ${candidates.join(', ')}). ` +
+        'DAY_ROLE_BY_WEEKDAY probably changed — pick a tz that lands on a programmed weekday.',
+    );
   }
+  return found;
+})();
 
-  await fill.click();
-  // Prove the scaffolded DOM really is present, so this cannot pass by measuring the default form.
-  await expect(strength.getByRole('button', { name: 'Undo' })).toBeVisible();
-  await expect(strength.getByRole('status')).toContainText(/Loaded \d+ movements/);
+test.describe('scaffolded state', () => {
+  // Playwright's context timezone, NOT a cookie: `TimeZoneSync` rewrites the `tz` cookie from
+  // `Intl.DateTimeFormat().resolvedOptions().timeZone` on every mount, so a cookie set from the test
+  // is clobbered on first paint. Setting the context's zone makes the browser detect what we want,
+  // which makes the cookie it writes — and the day the server renders — agree.
+  test.use({ timezoneId: PROGRAMMED_TZ });
 
-  await expectTapTargets(page, 'strength form (scaffolded, collapsed)');
-  await expectNoAxeViolations(page, 'strength form (scaffolded, collapsed)');
+  test('the strength form meets the bar in its SCAFFOLDED state (V1-19)', async ({ page }) => {
+    // The scaffold renders controls the two scans above never see: a collapsed-card disclosure per
+    // movement, an Undo, and — once a card is opened — a full card nested among six siblings. Seven
+    // cards' worth of chips and toggles is also precisely where horizontal overflow would first appear
+    // at 390px, which the single-card expanded scan cannot surface.
+    await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  // Then with a card open — the collapsed summary and a full card coexist only in this state.
-  const summary = strength.getByRole('button', { name: /^\d+\. / }).first();
-  if ((await summary.count()) > 0) {
-    await summary.click();
-    await expectTapTargets(page, 'strength form (scaffolded, one card open)');
-    await expectNoAxeViolations(page, 'strength form (scaffolded, one card open)');
-  }
+    const strength = page.getByRole('region', { name: 'Log strength' });
+    const fill = strength.getByRole('button', { name: /Fill in today.s movements/i });
+
+    // NO skip. `PROGRAMMED_TZ` guarantees today programs strength, so an absent button is a real
+    // regression and must be red.
+    await expect(
+      fill,
+      `expected the scaffold button on a programmed day (tz ${PROGRAMMED_TZ}, ` +
+        `day ${localDayIso(PROGRAMMED_TZ)}, role ${resolveDayRole(localDayIso(PROGRAMMED_TZ))})`,
+    ).toBeVisible();
+
+    await fill.click();
+    // Prove the scaffolded DOM really is present, so this cannot pass by measuring the default form.
+    await expect(strength.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await expect(strength.getByRole('status')).toContainText(/Loaded \d+ movements/);
+
+    await expectTapTargets(page, 'strength form (scaffolded, collapsed)');
+    await expectNoAxeViolations(page, 'strength form (scaffolded, collapsed)');
+
+    // Then with a card open — the collapsed summary and a full card coexist only in this state.
+    const summary = strength.getByRole('button', { name: /^\d+\. / }).first();
+    if ((await summary.count()) > 0) {
+      await summary.click();
+      await expectTapTargets(page, 'strength form (scaffolded, one card open)');
+      await expectNoAxeViolations(page, 'strength form (scaffolded, one card open)');
+    }
+  });
 });
 
 test('profile tiles are large touch targets (the link-card exception to the inline-link rule)', async ({

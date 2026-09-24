@@ -60,7 +60,13 @@ export function dissolveSmallSupersets<T extends SupersetTaggable>(movements: re
 export type MovementDraft = {
   movementName: string;
   status?: string;
-  sets: readonly { reps: string; weight: string; status?: string }[];
+  sets: readonly {
+    reps: string;
+    weight: string;
+    status?: string;
+    isBodyweight?: boolean;
+    isBand?: boolean;
+  }[];
 };
 
 /** True when a status is absent or explicitly the default — i.e. the athlete has expressed nothing.
@@ -88,7 +94,14 @@ export function isUntouchedMovement(m: MovementDraft): boolean {
   return (
     m.movementName.trim() === '' &&
     isDefaultStatus(m.status) &&
-    m.sets.every((s) => s.reps.trim() === '' && s.weight.trim() === '' && isDefaultStatus(s.status))
+    m.sets.every(
+      (s) =>
+        s.reps.trim() === '' &&
+        s.weight.trim() === '' &&
+        !s.isBodyweight &&
+        !s.isBand &&
+        isDefaultStatus(s.status),
+    )
   );
 }
 

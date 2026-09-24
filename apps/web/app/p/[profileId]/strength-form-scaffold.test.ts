@@ -120,6 +120,27 @@ describe('isUntouchedScaffold', () => {
     );
   });
 
+  // GAP-3 PR 4a. THE regression this guards: tapping BW is the ONLY input a bodyweight set needs
+  // before reps, and if the predicate cannot see it, a scaffolded "Push-ups" card the kid tapped BW
+  // on three times is silently DROPPED at submit — no error, the movement just is not in the log.
+  // Caught by the UX panel, which found the predicate keyed on reps/weight alone.
+  it('is false once a MODE is tapped, even with no reps or weight typed', () => {
+    const m = scaffolded();
+    expect(
+      isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBodyweight: true }, m.sets[1]!] }),
+    ).toBe(false);
+    expect(isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBand: true }, m.sets[1]!] })).toBe(
+      false,
+    );
+  });
+
+  it('stays droppable when a mode is tapped and then untapped', () => {
+    const m = scaffolded();
+    expect(
+      isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBodyweight: false }, m.sets[1]!] }),
+    ).toBe(true);
+  });
+
   it('is false once a status is set, and true again when it is cleared', () => {
     const m = scaffolded();
     expect(isUntouchedScaffold({ ...m, status: 'skipped' })).toBe(false);
