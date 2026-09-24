@@ -105,6 +105,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `SENTRY_PROJECT` — worth doing the first time a real incident is hard to read, not before.
 - **Severity:** low (a legibility cost on a 3-user app).
 
+### Local/CI parity gaps (measured 2026-09-24)
+
+- **What & why:** following the [CI gate audit](#) below, every check was actually run locally and timed.
+  **`pnpm verify` now covers the fast set in ~25s** (`format:check` · `lint` · `typecheck` · `test` ·
+  `db:verify` · `audit --prod`). Three gaps remain:
+
+  | Gap                                            | Cost to close                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | ---------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **The Playwright smoke cannot be run locally** | Small — the infrastructure already exists | `playwright.config.ts`'s `webServer` builds and starts the app but provisions **no database**; it inherits `DATABASE_URL`. Meanwhile `apps/web/scripts/embedded-pg.ts` already gives a **Dockerless** Postgres, used by `dev-local` and `screenshot:ephemeral`. An `e2e:local` wrapper around it would close this. **Note this supersedes the long-standing "e2e needs real Postgres, can't run locally" assumption** — that was true before the embedded-pg work (#43/#46) and has not been re-checked since. |
+  | **`next build` is not in `verify`**            | Zero                                      | Deliberate: it is the slowest step and CI runs it. Run `pnpm build` manually when touching anything build-shaped.                                                                                                                                                                                                                                                                                                                                                                                              |
+  | **gitleaks / forward-only guard**              | n/a                                       | gitleaks is installable locally (and is, here); the forward-only guard is inherently a diff-against-base check and has no meaningful local form.                                                                                                                                                                                                                                                                                                                                                               |
+
+- **Impact:** low now that `verify` exists — the friction was "six commands to remember", which is how a
+  check gets skipped. The e2e gap is the real one: **a bug in the smoke still surfaces only in CI.**
+- **Severity:** low.
+
 ### AGENTS.md documents five CI gates that do not exist (found 2026-09-23, GAP-3 panel)
 
 - **What & why:** the DB-safety reviewer on GAP-3's panel checked the plan's claim that _"Squawk hard-fails
