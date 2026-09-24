@@ -210,8 +210,12 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
   Plus **forward-only** + **Squawk** on new migrations, and `audit --prod` via `pnpm verify`.
-  ⚠️ **CodeQL and the Neon-branch apply are still NOT wired** — this list claimed them for months and
-  `.github/workflows/` never had them ([tech-debt](./docs/tech-debt.md), audited 2026-09-23). Do not cite
+  **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on
+  demand** (`.github/workflows/codeql.yml`) — a minutes-long scan on every PR is the wrong trade at ~4h/wk,
+  and every merged PR is one squashed commit on `main`, so the push trigger still sees all of it. Findings
+  land in **Security → Code scanning**, never on the PR, so a green PR says nothing about CodeQL.
+  ⚠️ **The Neon-branch apply is still NOT wired** — this list claimed it for months and
+  `.github/workflows/` never had it ([tech-debt](./docs/tech-debt.md), audited 2026-09-23). Do not cite
   an unwired gate as a safety argument.
 - **`e2e` (Playwright smoke):** runs on every PR but is **not yet a required check** — it **soaks as
   non-blocking until PR 28**, then becomes required (a repo-admin branch-protection change). The job
