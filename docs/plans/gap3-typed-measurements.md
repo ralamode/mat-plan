@@ -211,19 +211,71 @@ like a win precisely because it removes work.
 
 **Decision deferred to §7.6 Q5**, because it is the plan's largest remaining fork.
 
-### 7.2a The alternative the panel raised, and why it now leads
+### 7.2a DECIDED — the typed child table (Ray, 2026-09-24)
 
 **Fixed columns per dimension have already overflowed on the second real program.** ADR 0004 sized them
-against one program; YDP needs three simultaneous worn loads on one activity, and a fixed-column design
-answers that with three more columns that the _next_ program will overflow again.
+against one program; YDP needs three worn-load slots on one activity, and a fixed-column design answers
+that with three more columns the _next_ program overflows again.
 
-A **typed child table** — `entry_set_loads(entry_set_id, slot, value_num, unit)` — handles vest + ankle +
-wrist, sled weight + distance, and box height with **one shape**, keeps the `units` dimension guard on
-every row, and is **not EAV**: values stay in typed columns with real FKs, which is the property
-`verify.ts` pins ("no json/jsonb, no per-activity column"). It costs a join and an arity rule.
+**Taken: `entry_set_loads`** — a typed child table of `entry_sets`:
 
-This plan does **not** decide it. But §7.3's fixed columns must now answer the question the panel asked:
-**why does a fixed-column design survive the next program, when it did not survive this one?**
+| Column         |                                     |                                                                               |
+| -------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
+| `entry_set_id` | FK → `entry_sets`                   | the load belongs to the SET, which is what varies                             |
+| `slot`         | FK → a `load_slots` reference table | `vest` · `ankle` · `wrist` · … — a **controlled vocabulary**, never free text |
+| `value_num`    | `numeric`                           | typed, never a string                                                         |
+| `unit`         | FK → `units.code`                   | keeps the dimension guard on every row                                        |
+|                | `UNIQUE (entry_set_id, slot)`       | the arity rule — nothing can write fourteen vest rows                         |
+
+**This is not EAV, and it is not novel here.** EAV is a `key`/`value` table whose value is untyped text
+with no constraint on valid keys. This has a typed value, an FK'd unit, and a reference-table vocabulary
+— and the repo already uses the same pattern twice: `entry_sets` is a child of `entries`, and
+`prescription_targets` is a child of `prescriptions`. This is the third instance of an established shape.
+
+**Performance is a non-argument at this scale** and should not be cited as one: two to a few dozen
+athletes, one stance entry per session — a year is hundreds of rows, joined on an indexed FK. The child
+table's real cost is **read-path scope**: every reader of a set decides whether to join, the DTO widens,
+`formatSetLine` changes, and the form renders a variable field set.
+
+**Why it was taken over the cheaper `weight_num` + `load_slot` single column** _(which this plan
+recommended, on the evidence that all four sample sessions use at most one slot at a time)_:
+
+1. **The population is a club, not two kids.** This is intended for the athletes at Mat Assassins. A
+   four-session sample from one family does not describe that population, and the sample was the whole
+   basis of the one-slot-at-a-time argument.
+2. **Slots vary within a session** — "they take the weighted vest off after the first set." The parent is
+   `entry_sets` precisely because the load is a property of the set, not the movement or the day.
+3. **The data-loss window is open now.** Anything logged before the structure exists cannot be
+   back-filled. The kids have not started logging yet, so the cheap moment is this one.
+
+### 7.2b The sub-fork this opens — and it is NOT decided
+
+**Does `entry_set_loads` hold every load, or only the named auxiliary ones?**
+
+- **(A) All loads.** A plain back squat's weight becomes a row with slot `primary`. One mechanism, no
+  bifurcation — what a data modeller would prefer. Costs migrating **every existing weight** into the
+  child table, and `weight_num` eventually drops.
+- **(B) Auxiliary only.** `weight_num` stays the primary load; the child table holds named extra slots.
+  Additive and far safer. Costs **two mechanisms for one concept**, which is the thing an expert would
+  actually frown at — not the child table itself.
+
+**(A) is more defensible and this migration is already touching every weight row**, so the marginal cost
+is smaller here than it will ever be again. **(B) is the lower-risk path.** Flagged for the panel; §7.3's
+column list below assumes **(B)** only because it is the reversible one.
+
+### 7.2c The open UX question Ray raised — how does the editor express a slot set?
+
+_"Not sure how we would specify this type of field combination or express it in the workout editor UX."_
+Correct to flag it; it is the hard part, and it belongs to **V1-22**.
+
+The design move that makes it tractable: **slots are declared by the MOVEMENT, never added per-set by the
+athlete.** Stance in Motion declares `[vest, ankle, wrist]`; a back squat declares nothing and renders
+today's single weight field. The log form then draws exactly the fields that movement declares — so the
+child table is **invisible** to the kid, who sees three labeled number fields rather than a "slot"
+concept, and there is no add/remove-slot UI on a 360px row.
+
+That pushes the authoring question into the movement/program editor, where a coach picking from a
+controlled list is a normal interaction. **V1-22's panel must see this** — it changes that editor's scope.
 
 ### 7.3 Columns — corrected after the panel
 
@@ -324,9 +376,10 @@ so it carries over to the new controls rather than being deleted.
 
 ### 7.6 Open questions — after the panel
 
-1. **Q5 (new, and the largest): fixed columns or a typed child table?** §7.2a. Fixed columns overflowed on
-   the second real program; the child table absorbs vest+ankle+wrist, sled weight+distance and box height
-   in one shape at the cost of a join. **This is the fork to settle before any file-by-file.**
+1. ~~**Q1: fixed columns or a typed child table?**~~ **DECIDED 2026-09-24 — the child table** (§7.2a).
+   **New sub-fork (§7.2b): does it hold ALL loads or only auxiliary ones?** (A) is cleaner and this
+   migration already touches every weight row; (B) is reversible. Undecided.
+   **And §7.2c: how a coach declares a movement's slot set** — V1-22's problem, and it widens that plan.
 2. **Stance in Motion: movement or metric?** §7.2. As a _movement_ its duration uses the `seconds` column
    this plan already activates and it becomes prescribable; as a _metric_ it is unprescribable and the
    YDP progression rule cannot be expressed. If the metric route is kept, **YDP-2 moves back out of GAP-3**
