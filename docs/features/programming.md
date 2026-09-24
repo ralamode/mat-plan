@@ -58,15 +58,15 @@ flowchart TD
 
 ## Files
 
-| File                         | What it is for                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------------- |
-| `shared/programming.ts`      | `PROGRAM_SEED` — the authored program as data, and its types. The only author of prescriptions. |
-| `shared/routine.ts`          | `RoutineConfig` + `resolveRoutine`. Every read zod-parses — the JSONB value is untrusted.       |
-| `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query.                    |
-| `lib/programming/`           | App-side contract + day tests.                                                                  |
-| `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                  |
-| `program-reference.tsx`      | Today's "here's your day" card.                                                                 |
-| `app/p/[profileId]/routine/` | The V1-18 routine editor.                                                                       |
+| File                         | What it is for                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `shared/programming.ts`      | `PROGRAM_SEED` — the authored program as data, and its types. The only author of prescriptions.                      |
+| `shared/routine.ts`          | `RoutineConfig` + `resolveRoutine`. Every read zod-parses — the JSONB value is untrusted.                            |
+| `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query. Also feeds V1-13's `prescribed` column. |
+| `lib/programming/`           | App-side contract + day tests.                                                                                       |
+| `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                       |
+| `program-reference.tsx`      | Today's "here's your day" card.                                                                                      |
+| `app/p/[profileId]/routine/` | The V1-18 routine editor.                                                                                            |
 
 ## Invariants
 
@@ -105,6 +105,17 @@ flowchart TD
 
 - **`.$type<RoutineConfig>()` is a compile-time cast only.** The stored JSONB is untrusted input; every
   read must `resolveRoutine` (which zod-parses). Treating the cast as validation is a hole.
+
+- **`programDayRows` selects BOTH `movements.name` and `movements.slug`.** The Today card renders the
+  name; the CSV export keys `prescribed` back to a logged movement by the **slug** (V1-13b), because
+  `name` is a display string — `"Front Squat"` — and would never match. Both come from one query so
+  neither side converts.
+
+- **V1-13's `prescribed` reads TODAY's program, not the program as it was.** There is no
+  `entries.prescription_id` (GAP-1 P1-2 unbuilt), so the export matches back by `(day_role, movement)`
+  — a key `schema.ts` documents as **non-unique** ("a movement may legitimately appear twice in a day
+  — warm-up + working"). An ambiguous match emits **empty**, never an arbitrary pick. ⚠️ **V1-22
+  breaks this**: an edited load would retroactively rewrite exported history.
 
 - **V1-22 widened by GAP-3.** A movement's **load-slot set** (`vest`/`ankle`/`wrist`) is something a
   coach declares, and that authoring surface lands here — it is what keeps the child table invisible on

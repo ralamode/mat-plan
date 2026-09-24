@@ -53,6 +53,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
+import { loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { programDayRows } from '../src/queries/program-day';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
@@ -2028,6 +2029,82 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   console.log(
     '✓ GAP-3 PR 4a: a mode and a magnitude coexist on one set (was structurally impossible)',
   );
+}
+
+// ── V1-13b: the month-scoped export reads, against rows the REAL writer authored ────────────────────
+// The formatters have golden vectors; these prove the READS — ordering, the soft-delete filters, the
+// skipped-movement LEFT JOIN, and that a month boundary is half-open. Run through the shipped
+// `strengthMonthRows`, so the DAL and this proof cannot diverge.
+{
+  const EXPORT_SESSION = newId();
+  await writeStrengthSession(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    day: '2026-03-11',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: EXPORT_SESSION,
+    activityTypeId: scLiftActivityId,
+    movements: [
+      {
+        movementName: movX.name,
+        unit: 'lb',
+        movementId: movX.id,
+        clientId: newId(),
+        sets: [
+          { reps: 5, weight: 70 },
+          { reps: 5, weight: 75 },
+          { reps: 5, weight: 75 },
+        ],
+      },
+      {
+        movementName: movY.name,
+        unit: 'lb',
+        movementId: movY.id,
+        clientId: newId(),
+        status: ENTRY_STATUS.skipped,
+        sets: [],
+      },
+    ],
+  });
+
+  const rows = await strengthMonthRows(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    month: '2026-03',
+  });
+
+  // A SKIPPED movement carries ZERO set rows, and the LEFT JOIN must still surface it — an inner
+  // join would drop the row that has to export as `0,0,SKIPPED`.
+  const skipped = rows.filter((r) => r.entryStatus === ENTRY_STATUS.skipped);
+  assert.equal(skipped.length, 1, 'V1-13b: the skipped movement survives the LEFT JOIN');
+  assert.equal(skipped[0].setId, null, 'V1-13b: ...carrying no set row');
+
+  // The typed quantity round-trips with its unit — this is what `load` is rebuilt from.
+  const loaded = rows.filter((r) => r.valueNum !== null);
+  assert.ok(loaded.length >= 3, 'V1-13b: quantities come back alongside the sets');
+  assert.equal(loaded[0].unit, 'lb', 'V1-13b: ...carrying the unit stored on the row');
+
+  // A month is HALF-OPEN: the filename's month must always match its rows.
+  const adjacent = await strengthMonthRows(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    month: '2026-04',
+  });
+  assert.equal(adjacent.length, 0, 'V1-13b: an adjacent month sees none of these rows');
+
+  // BOLA: the same month for a different profile must be empty.
+  const otherProfile = await strengthMonthRows(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009b0',
+    month: '2026-03',
+  });
+  assert.equal(otherProfile.length, 0, 'V1-13b: the export read is profile-scoped');
+
+  const months = await loggedMonths(asPg, {
+    profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  });
+  assert.ok(
+    months.some((m) => m.month === '2026-03'),
+    'V1-13b: loggedMonths finds the month just written',
+  );
+
+  console.log('✓ V1-13b: export reads — skipped LEFT JOIN, quantities, half-open month, BOLA');
 }
 
 // ── GAP-3: the composite-FK unit guard, and the shapes fixed columns could not hold ────────────────

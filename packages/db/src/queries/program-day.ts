@@ -73,6 +73,10 @@ export function programDayRows(
       .select({
         idx: schema.prescriptions.idx,
         movementName: schema.movements.name,
+        // V1-13b: the CSV export keys `prescribed` back to a logged movement, and its grouping key is
+        // the SLUG (`movements.name` is a display string — "Front Squat" — and would never match).
+        // Selected here rather than converted at the call site so both sides read one column.
+        movementSlug: schema.movements.slug,
         sets: schema.prescriptions.sets,
         targetReps: schema.prescriptions.targetReps,
         load: schema.prescriptionTargets.load,
