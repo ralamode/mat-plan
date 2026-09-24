@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:local": "tsx scripts/e2e-local.ts",
     "e2e:install": "playwright install --with-deps chromium",
     "screenshot": "tsx scripts/screenshot.ts",
     "screenshot:ephemeral": "tsx scripts/screenshot-ephemeral.ts",
