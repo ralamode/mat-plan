@@ -1,5 +1,6 @@
 'use client';
 
+import { QUANTITY_SLOT } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -23,18 +24,19 @@ import { SetRepsWeightFields } from './set-fields';
 export function EditableSet({
   set,
   profileId,
-  unit,
   ariaLabel,
 }: {
   set: SetDTO;
   profileId: string;
-  unit: string;
   ariaLabel: string;
 }) {
   const [state, formAction, pending] = useActionState(editStrengthSetAction, INITIAL_ACTION_STATE);
   const [editing, setEditing] = useState(false);
   const [reps, setReps] = useState(String(set.reps ?? ''));
-  const [weight, setWeight] = useState(String(set.weight ?? ''));
+  // GAP-3: the editable weight is the set's PRIMARY quantity (a mass — `isEditableSet` guarantees it).
+  const editableWeight =
+    set.quantities.find((q) => q.slot === QUANTITY_SLOT.primary)?.value ?? null;
+  const [weight, setWeight] = useState(String(editableWeight ?? ''));
 
   const [seen, setSeen] = useState(state);
   if (state !== seen) {
@@ -45,7 +47,7 @@ export function EditableSet({
   if (!editing) {
     return (
       <li className="flex items-center justify-between gap-2">
-        <span>{formatSetLine(set, unit)}</span>
+        <span>{formatSetLine(set)}</span>
         <Button
           type="button"
           variant="ghost"
@@ -53,7 +55,7 @@ export function EditableSet({
           onClick={() => {
             // Re-seed from the current (possibly just-revalidated) value each time edit opens.
             setReps(String(set.reps ?? ''));
-            setWeight(String(set.weight ?? ''));
+            setWeight(String(editableWeight ?? ''));
             setEditing(true);
           }}
           aria-label={`Edit ${ariaLabel}`}

@@ -1,4 +1,13 @@
-import { ENTRY_STATUS, newId, type MovementStatus, type StrengthSetInput } from '@mat-plan/shared';
+import {
+  ENTRY_STATUS,
+  newId,
+  type MovementStatus,
+  QUANTITY_SLOT,
+  type StrengthSetInput,
+  type Unit,
+  UNIT_DIMENSION,
+  UNIT_DIMENSION_BY_CODE,
+} from '@mat-plan/shared';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
@@ -58,7 +67,9 @@ async function reselectLiveByClientId(
  */
 export type ResolvedSessionMovement = {
   movementName: string;
-  unit: string;
+  // GAP-3: narrowed from `string`. The unit is now written onto every PRIMARY quantity row and must
+  // resolve to a dimension, so an unknown code has to fail at compile time, not at the FK.
+  unit: Unit;
   movementId: number;
   clientId: string; // per-movement entry idempotency key
   sets: readonly StrengthSetInput[];
@@ -150,7 +161,7 @@ async function writeSessionStrengthEntry(
     sessionId: number;
     movementId: number;
     movementName: string;
-    unit: string;
+    unit: Unit; // GAP-3: narrowed from `string` — it now indexes UNIT_DIMENSION_BY_CODE
     activityTypeId: number;
     day: string;
     clientId: string;
@@ -197,24 +208,60 @@ async function writeSessionStrengthEntry(
   }
 
   if (args.sets.length > 0) {
-    await exec.insert(schema.entrySets).values(
-      args.sets.map((s, i) => ({
-        publicId: newId(),
-        clientId: newId(),
-        entryId: entry.id,
-        idx: i + 1, // 1-based
-        reps: s.reps,
-        // GAP-1 P0-2: a set carries EITHER a number or a text load, never both and never neither —
-        // the shared `parseLoad` guarantees it, and a blank is rejected before it reaches here (an
-        // empty `weight_label` would render as a hidden load and be uneditable forever).
-        // The two columns are deliberately NOT mutually exclusive at the schema level: a later slice
-        // may store `123 (50ft)` as weight_num 123 PLUS the label so volume charts aren't blind to it.
-        ...('weightLabel' in s ? { weightLabel: s.weightLabel } : { weightNum: String(s.weight) }), // numeric column takes a string (precision-safe)
-        // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
-        // omits the column entirely, so every pre-existing caller writes a byte-identical row.
-        ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
-      })),
-    );
+    // GAP-3: the SET row now carries only reps, status and the two qualitative booleans; every
+    // measured quantity is a child row written below. `weight_num`/`weight_label` are gone.
+    const setRows = await exec
+      .insert(schema.entrySets)
+      .values(
+        args.sets.map((s, i) => ({
+          publicId: newId(),
+          clientId: newId(),
+          entryId: entry.id,
+          idx: i + 1, // 1-based
+          reps: s.reps,
+          // `bodyweight`/`band` are MODES, not quantities (GAP-3 §7.2b) — booleans, and omitted when
+          // false so Postgres applies its own default and the row stays byte-minimal.
+          ...(s.load.kind === 'bodyweight' ? { isBodyweight: true } : {}),
+          ...(s.load.kind === 'band' ? { isBand: true } : {}),
+          // GAP-1 P1-1b — same omitted-takes-the-DB-default idiom as the entry's status. A `done` set
+          // omits the column entirely, so every pre-existing caller writes a byte-identical row.
+          ...('status' in s && s.status !== undefined ? { status: s.status } : {}),
+        })),
+      )
+      .returning({ id: schema.entrySets.id });
+
+    // One quantity row per set that carries a magnitude. A bare number is the movement's PRIMARY mass
+    // and takes its unit from the ENTRY (census §4.6: "weight units are never written" — `185` means
+    // 185 of whatever the household logs in). A value that wrote its own unit (`30in`, `20s`) already
+    // knows its slot, dimension and unit, so it is passed through unchanged.
+    const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
+    args.sets.forEach((s, i) => {
+      const load = s.load;
+      if (load.kind === 'numeric') {
+        quantityRows.push({
+          clientId: newId(),
+          entrySetId: setRows[i].id,
+          slot: QUANTITY_SLOT.primary,
+          dimension: UNIT_DIMENSION_BY_CODE[args.unit],
+          unit: args.unit,
+          valueNum: String(load.weight), // numeric column takes a string (precision-safe)
+        });
+      } else if (load.kind === 'quantity') {
+        quantityRows.push({
+          clientId: newId(),
+          entrySetId: setRows[i].id,
+          slot: load.slot,
+          dimension: load.dimension,
+          unit: load.unit,
+          valueNum: String(load.value),
+        });
+      }
+      // bodyweight / band — recorded as booleans on the set, no quantity row to write
+    });
+
+    if (quantityRows.length > 0) {
+      await exec.insert(schema.entrySetQuantities).values(quantityRows);
+    }
   }
 
   return { ...entry, created: true };
@@ -323,17 +370,22 @@ export async function writeStrengthSession(
  * change; `idx` (the `uq_entry_sets_entry_idx` slot) is untouched, so no unique/CHECK is disturbed.
  *
  * The WHERE also enforces, server-side, the SAME "numeric AND done set only" invariant the client's
- * `isEditableSet` uses (`weight_label IS NULL AND reps/weight_num NOT NULL AND status = 'done'`) — never
- * trusting the client. Without the numeric half a crafted POST could set `weight_num` on a labeled
- * ('BW'/'50ft') or timing (seconds-only) set, leaving `weight_num` coexisting with
- * `weight_label`/`seconds` — a masked or bogus read line. Without the **status** half (GAP-1 P1-1b) it
- * could edit a `sub_failure` set's reps and leave the status behind, so the row would export as
- * `sub-failure` while claiming reps it never achieved. Such a set matches no row → `null` → typed error,
- * exactly like a wrong-owner id. **Keep these guards identical to `isEditableSet`'s** — that is the whole
- * contract; the client half is advisory, this one is the boundary.
+ * `isEditableSet` uses — never trusting the client. Without the numeric half a crafted POST could set a
+ * weight on a bodyweight/band or duration set, producing a bogus read line. Without the **status** half
+ * (GAP-1 P1-1b) it could edit a `sub_failure` set's reps and leave the status behind, so the row would
+ * export as `sub-failure` while claiming reps it never achieved. Such a set matches no row → `null` →
+ * typed error, exactly like a wrong-owner id. **Keep these guards identical to `isEditableSet`'s** —
+ * that is the whole contract; the client half is advisory, this one is the boundary.
  *
- * A single atomic UPDATE — NO `db.transaction` (that wraps only the multi-row session graph). Returns the
- * edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, a
+ * ⚠️ **GAP-3 made this a TRANSACTION, and that is a real change to this function's contract.** It was
+ * "a single atomic UPDATE — NO `db.transaction`", which was true while the weight lived in a column on
+ * the row being guarded. The weight is now a CHILD row, so reps and weight are two statements and only
+ * a transaction keeps them atomic — without one, a crash between them leaves a set whose reps were
+ * corrected and whose weight was not. The ownership proof also grew a level
+ * (`profiles → entries → entry_sets → entry_set_quantities`), which is why the child UPDATE is keyed on
+ * the id RETURNED by the guarded parent UPDATE rather than re-deriving ownership itself.
+ *
+ * Returns the edited set's `public_id`, or `null` when the guarded WHERE matched no row (wrong owner, a
  * stale/deleted set id, or a non-numeric set) — an EXPECTED outcome the caller maps to a typed error.
  *
  * LWW: `updated_at` advances to the DB `now()` (the transaction clock). The offline path's
@@ -357,33 +409,67 @@ export async function updateStrengthSetById(
       ),
     );
 
-  const rows = await exec
-    .update(schema.entrySets)
-    .set({
-      reps: args.reps,
-      weightNum: String(args.weight), // numeric column takes a precision-safe string (never a JS number)
-      updatedAt: sql`now()`,
-    })
+  // GAP-3: the editable shape is "carries exactly one live PRIMARY MASS quantity". This replaces the
+  // old `weight_num IS NOT NULL` guard — a set whose primary quantity is a LENGTH (a box jump) or a
+  // TIME (a hold) is not numerically editable by this endpoint, exactly as a labeled set wasn't.
+  const numericallyLoadedSetIds = exec
+    .select({ id: schema.entrySetQuantities.entrySetId })
+    .from(schema.entrySetQuantities)
     .where(
       and(
-        eq(schema.entrySets.publicId, args.setId),
-        isNull(schema.entrySets.deletedAt),
-        // Server-side "numeric set only" guard — mirrors the client's isEditableSet, so a labeled or
-        // timing set can't be edited into an inconsistent shape by a crafted POST.
-        isNull(schema.entrySets.weightLabel),
-        isNotNull(schema.entrySets.reps),
-        isNotNull(schema.entrySets.weightNum),
-        // GAP-1 P1-1b (BUG-2a) — and "done only". A `sub_failure` set is NUMERIC, so every guard above
-        // passes it: editing its reps 3 → 5 would silently leave `status = 'sub_failure'` behind, and
-        // the row would still export as `sub-failure` while claiming reps it no longer had. Correcting
-        // a sub-failure set means changing its STATUS, which this endpoint cannot do — so it refuses
-        // the row rather than half-editing it. Mirrors `isEditableSet`; the client guard is advisory
-        // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
-        eq(schema.entrySets.status, ENTRY_STATUS.done),
-        inArray(schema.entrySets.entryId, ownedEntryIds),
+        eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+        eq(schema.entrySetQuantities.dimension, UNIT_DIMENSION.mass),
+        isNull(schema.entrySetQuantities.deletedAt),
       ),
-    )
-    .returning({ publicId: schema.entrySets.publicId });
+    );
 
-  return rows[0] ?? null; // zero rows = the ownership/live guard tripped → caller returns a typed error
+  return exec.transaction(async (tx) => {
+    const rows = await tx
+      .update(schema.entrySets)
+      .set({
+        reps: args.reps,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(schema.entrySets.publicId, args.setId),
+          isNull(schema.entrySets.deletedAt),
+          // Server-side "numeric set only" guard — mirrors the client's isEditableSet, so a
+          // bodyweight/band or non-mass set can't be edited into an inconsistent shape by a crafted POST.
+          eq(schema.entrySets.isBodyweight, false),
+          eq(schema.entrySets.isBand, false),
+          isNotNull(schema.entrySets.reps),
+          inArray(schema.entrySets.id, numericallyLoadedSetIds),
+          // GAP-1 P1-1b (BUG-2a) — and "done only". A `sub_failure` set is NUMERIC, so every guard above
+          // passes it: editing its reps 3 → 5 would silently leave `status = 'sub_failure'` behind, and
+          // the row would still export as `sub-failure` while claiming reps it no longer had. Correcting
+          // a sub-failure set means changing its STATUS, which this endpoint cannot do — so it refuses
+          // the row rather than half-editing it. Mirrors `isEditableSet`; the client guard is advisory
+          // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
+          eq(schema.entrySets.status, ENTRY_STATUS.done),
+          inArray(schema.entrySets.entryId, ownedEntryIds),
+        ),
+      )
+      .returning({ id: schema.entrySets.id, publicId: schema.entrySets.publicId });
+
+    const row = rows[0];
+    // zero rows = the ownership/live/shape guard tripped → caller returns a typed error. Returning
+    // BEFORE the child write is what makes the guard cover the weight too: the quantity UPDATE below
+    // is reachable only through a parent row that already passed every ownership and shape check.
+    if (!row) return null;
+
+    await tx
+      .update(schema.entrySetQuantities)
+      .set({ valueNum: String(args.weight), updatedAt: sql`now()` }) // precision-safe string
+      .where(
+        and(
+          eq(schema.entrySetQuantities.entrySetId, row.id),
+          eq(schema.entrySetQuantities.slot, QUANTITY_SLOT.primary),
+          eq(schema.entrySetQuantities.dimension, UNIT_DIMENSION.mass),
+          isNull(schema.entrySetQuantities.deletedAt),
+        ),
+      );
+
+    return { publicId: row.publicId };
+  });
 }

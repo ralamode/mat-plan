@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
+import { QUANTITY_SLOT, type QuantitySlot, slotAcceptsDimension } from './quantity-slots';
 import { hasCommaOrLineBreak } from './text';
+import { type Unit, UNIT_DIMENSION_BY_CODE, type UnitDimension } from './units';
 
 /**
  * A NUMERIC set — reps × a number. This is the original `strengthSetSchema`, preserved **unchanged**
@@ -63,10 +65,48 @@ const NUMERIC_WORD = /^[+-]?(Infinity|NaN)$/i;
  */
 const PRESCRIPTION_SHAPE = /~|\d\s*-\s*\d/;
 
-/** The result of interpreting the single `weight` field the form submits. */
+/**
+ * Unit suffixes a load may carry, mapped to canonical `UNIT_CODES`. The census (§2) authors `30in`,
+ * `50ft`, `20s`, `30s`; `strength.ts` has always noted `30"` is in active use too.
+ *
+ * This is what replaces the free-text label: `30in` is no longer a STRING, it is a typed
+ * ('primary','length') quantity of 30 `in`. The aliases exist because a coach writes `s`, not `sec`.
+ */
+const LOAD_UNIT_ALIASES: Record<string, Unit> = {
+  s: 'sec',
+  sec: 'sec',
+  secs: 'sec',
+  min: 'min',
+  mins: 'min',
+  '"': 'in',
+  in: 'in',
+  cm: 'cm',
+  ft: 'ft',
+  m: 'm',
+  yd: 'yd',
+  lb: 'lb',
+  lbs: 'lb',
+  kg: 'kg',
+};
+
+/** `30in`, `50 ft`, `20s`, `30"` — a magnitude with the unit written on it. */
+const MAGNITUDE_WITH_UNIT = /^(\d+(?:\.\d{1,3})?)\s*([a-z]+|")$/i;
+
+/**
+ * The result of interpreting the single `weight` field the form submits.
+ *
+ * GAP-3: there is no `label` arm any more — `weight_label` is dropped, so free text has nowhere to
+ * land. Every arm below is a TYPED destination:
+ *   - `numeric`   → one ('primary','mass') quantity; the UNIT comes from the entry (lb/kg), because a
+ *                   bare `185` never writes its unit down (census §4.6: "weight units are never written").
+ *   - `quantity`  → the value carried its own unit, so the slot/dimension/unit are all known here.
+ *   - `bodyweight`/`band` → the two BOOLEANS on `entry_sets`. Neither is a quantity (GAP-3 §7.2b).
+ */
 export type ParsedLoad =
   | { kind: 'numeric'; weight: number }
-  | { kind: 'label'; weightLabel: string }
+  | { kind: 'quantity'; slot: QuantitySlot; dimension: UnitDimension; unit: Unit; value: number }
+  | { kind: 'bodyweight' }
+  | { kind: 'band' }
   | { kind: 'invalid'; message: string };
 
 /**
@@ -88,6 +128,12 @@ export function parseLoad(raw: unknown): ParsedLoad {
   const value = String(raw).trim(); // ENDS ONLY — `30 (2x 15 DB)`/`BW (unassisted)` need inner spaces
 
   if (value === '') return { kind: 'invalid', message: 'Enter a weight, or pick BW / band.' };
+
+  // GAP-3: the two chips are MODES, not quantities, and become booleans on the set. Matched before
+  // everything else and case-insensitively — a coach typing `bw` meant the chip, and now that there is
+  // no free-text column to absorb the difference, normalising is the only non-lossy option.
+  if (value.toLowerCase() === 'bw') return { kind: 'bodyweight' };
+  if (value.toLowerCase() === 'band') return { kind: 'band' };
 
   if (PLAIN_DECIMAL.test(value)) {
     const weight = Number(value);
@@ -135,7 +181,37 @@ export function parseLoad(raw: unknown): ParsedLoad {
     return { kind: 'invalid', message: `Keep the load under ${LOAD_MAX_LENGTH} characters.` };
   }
 
-  return { kind: 'label', weightLabel: value };
+  // GAP-3, and the reason the free-text column could go: a magnitude that WRITES ITS OWN UNIT is not
+  // free text, it is a typed quantity that was being stored as a string. `30in` is a box-jump height,
+  // `50ft` a sled distance, `20s` a hold — three different physical quantities the old `weight_label`
+  // flattened into one column (census §2, shapes L5/L6/L8).
+  const withUnit = MAGNITUDE_WITH_UNIT.exec(value);
+  if (withUnit) {
+    const unit = LOAD_UNIT_ALIASES[withUnit[2].toLowerCase()];
+    if (unit === undefined) {
+      return {
+        kind: 'invalid',
+        message: `“${withUnit[2]}” isn’t a unit we know. Try in, ft, s or lb.`,
+      };
+    }
+    const magnitude = Number(withUnit[1]);
+    const dimension = UNIT_DIMENSION_BY_CODE[unit];
+    // A mass written out (`185lb`) is still the primary load, just with its unit stated; every other
+    // dimension is the movement's primary quantity too. `distance` is NOT reachable from this field —
+    // a sled's `123 (50ft)` needs two values, which is the multi-slot form, not one text box.
+    if (!slotAcceptsDimension(QUANTITY_SLOT.primary, dimension)) {
+      return { kind: 'invalid', message: `A load can’t be measured in ${unit}.` };
+    }
+    return { kind: 'quantity', slot: QUANTITY_SLOT.primary, dimension, unit, value: magnitude };
+  }
+
+  // Nothing typed matched. Under GAP-1 P0-2 this fell through to `weight_label` and the string was
+  // kept verbatim; GAP-3 deliberately REVERSES that (docs/plan.md, GAP-3 row) — the whole point is
+  // that no free-text load is representable, so an uninterpretable load is now a rejection.
+  return {
+    kind: 'invalid',
+    message: 'Enter a number, a value with its unit like 30in, or pick BW / band.',
+  };
 }
 
 /**
@@ -182,10 +258,12 @@ export const strengthSetSchema = z
     // writer's `!== undefined` check omit the column and take the DB default.
     const status = val.status !== undefined ? { status: val.status } : {};
     // Unreachable after superRefine, but the transform must be total for the types to work out.
-    if (parsed.kind === 'invalid') return { reps: val.reps, weight: 0, ...status };
-    return parsed.kind === 'numeric'
-      ? { reps: val.reps, weight: parsed.weight, ...status }
-      : { reps: val.reps, weightLabel: parsed.weightLabel, ...status };
+    if (parsed.kind === 'invalid')
+      return { reps: val.reps, load: { kind: 'numeric' as const, weight: 0 }, ...status };
+    // GAP-3: the parsed load is carried WHOLE rather than being splayed into sibling keys. The writer
+    // needs the slot/dimension/unit together to build a quantity row, and the old two-key shape
+    // (`weight` | `weightLabel`) had no room for them.
+    return { reps: val.reps, load: parsed, ...status };
   });
 
 /** A validated set: either a numeric weight or a text label, never both, never neither. */

@@ -96,8 +96,19 @@ CHECK. All rows household-scoped for DAL authz.
   client_id. CHECK: **at-most-one-of** {movement_id, metric_key} — a movement entry, a metric entry,
   or **neither** (a boolean habit check-in names only its activity_type; V1-5 is the first writer of
   that shape). Implemented in `0002` as `movement_id IS NULL OR metric_key IS NULL`.
-- `entry_set` — entry_id, idx, reps?, seconds?, weight_num?, weight_label?("BW"/"50ft"), value_num?,
-  status, done. _(Derived/queryable layer; `raw_*` on entry is the export source of truth.)_
+- `entry_set` — entry_id, idx, reps?, **is_bodyweight, is_band**, status, client_id. _(Derived/queryable
+  layer; `raw_*` on entry is the export source of truth.)_ **GAP-3 (migration `0011`) removed
+  `weight_num`, `weight_label` and `seconds`**: one free-text column was encoding three different
+  physical quantities. Magnitudes now live in `entry_set_quantity`; the two MODES stay booleans here,
+  because a band has no number and bodyweight is a mode rather than a load.
+- `entry_set_quantity` — entry_set_id, slot, dimension, unit, value_num, client_id. One row per
+  measured quantity of a set, so a vest + ankle + wrist set is three rows and a sled's `123 (50ft)` is
+  two. `UNIQUE (entry_set_id, slot)` is the arity rule. **The unit guard:** `dimension` is the shared
+  column of two composite FKs — `(slot, dimension)` → `quantity_slot` and `(unit, dimension)` →
+  `unit` — so `lb` in a box-jump height is rejected by the database, not by review.
+- `quantity_slot` — code, dimension (composite PK). The controlled vocabulary of measurement ROLES:
+  `primary` (whatever the movement measures — a mass, a length or a duration), `vest`, `ankle`,
+  `wrist`, `distance`.
   - **Added-load axis (calisthenics):** a calisthenics bout may carry an optional added load
     (weighted vest/belt) — **reusing this `entry_set` reps+weight shape rather than a new structure**;
     max-strength metrics (`pullup_max`, weighted maxes) sit on top of that same data (plan.md `V1-8a`).
@@ -141,6 +152,9 @@ erDiagram
   session ||--o{ entry : contains
   superset ||--o{ entry : groups
   entry ||--o{ entry_set : "expands to"
+  entry_set ||--o{ entry_set_quantity : "measured quantities (GAP-3)"
+  quantity_slot ||--o{ entry_set_quantity : "role + dimension"
+  unit ||--o{ entry_set_quantity : "unit + dimension"
 ```
 
 | Activity                         | Rows                                                                                               | Export                                                             |

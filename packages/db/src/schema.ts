@@ -6,9 +6,11 @@ import {
   date,
   index,
   integer,
+  foreignKey,
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -66,6 +68,37 @@ export const units = pgTable(
     // pair is validated as a pair rather than each half independently. Added now because the column
     // it serves arrives in GAP-3 PR 3, and adding it here keeps PR 3 free of units-table DDL.
     uniqueIndex('uq_units_code_dimension').on(t.code, t.dimension),
+  ],
+);
+
+/**
+ * GAP-3 — the vocabulary of measured-quantity ROLES, seeded from @mat-plan/shared
+ * QUANTITY_SLOT_ROWS. FK target for `entry_set_quantities(slot, dimension)`.
+ *
+ * The PK is the **pair**, not the code: `primary` is legal at `mass` (back squat), `length` (broad
+ * jump) and `time` (hollow-body hold), so a movement's primary quantity always has a home. Making
+ * the pair the PK is also what lets `entry_set_quantities` FK against it — drizzle inlines a PK into
+ * `CREATE TABLE`, whereas a `uniqueIndex` target is emitted AFTER the FK that references it and the
+ * migration aborts (see docs/lessons.md).
+ *
+ * No `label` column: labels are a rendering concern and live in @mat-plan/shared. No `sort_order`:
+ * field order comes from the MOVEMENT's declared slot set (GAP-3 §7.2c / V1-22), not a global one.
+ */
+export const quantitySlots = pgTable(
+  'quantity_slots',
+  {
+    code: text('code').notNull(),
+    dimension: text('dimension').notNull(),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    primaryKey({ columns: [t.code, t.dimension] }),
+    // Mirrors shared UNIT_DIMENSIONS; pinned by db:verify's assertCheckCoversConst. Kept even though
+    // the seed is the only writer — it is what makes a hand-written INSERT in psql fail too.
+    check(
+      'quantity_slots_dimension_check',
+      sql`${t.dimension} in ('mass', 'length', 'time', 'instant', 'count', 'boolean')`,
+    ),
   ],
 );
 
@@ -212,9 +245,17 @@ export const entrySets = pgTable(
       .references(() => entries.id, { onDelete: 'cascade' }),
     idx: integer('idx').notNull(), // 1-based set order within the entry
     reps: integer('reps'),
-    seconds: integer('seconds'),
-    weightNum: numeric('weight_num', { precision: 7, scale: 3 }),
-    weightLabel: text('weight_label'), // 'BW', '50ft', etc.
+    // GAP-3: every measured quantity (weight, vest, distance, duration...) moved to the typed child
+    // `entry_set_quantities`. `weight_num`/`weight_label`/`seconds` were DROPPED in migration 0011 —
+    // `weight_label` is the free-text load the whole of GAP-3 exists to kill, and `seconds` never had
+    // a reader or a writer, so it is superseded by a ('primary','time') quantity.
+    //
+    // These two stay BOOLEANS on the set, deliberately (GAP-3 §7.2b): neither is a quantity. A band
+    // has no number, and bodyweight is a MODE, not a load. Modelling them as rows with NULL values
+    // would be the EAV smell the child table avoids. `BW+8 (vest)` is is_bodyweight=true PLUS one
+    // ('vest','mass') row — the shape ADR 0004 called "not representable today".
+    isBodyweight: boolean('is_bodyweight').notNull().default(false),
+    isBand: boolean('is_band').notNull().default(false),
     status: text('status').notNull().default('done'),
     ...timestamps,
   },
@@ -227,6 +268,76 @@ export const entrySets = pgTable(
       .on(t.clientId)
       .where(sql`${t.deletedAt} is null`),
     check('entry_sets_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
+  ],
+);
+
+/**
+ * GAP-3 — every measured quantity of a logged SET, typed and unit-guarded.
+ *
+ * Replaces the free-text `entry_sets.weight_label` the census found encoding three different physical
+ * quantities. One row per (set, role): a back squat writes one `('primary','mass')`; a sled push
+ * writes `('primary','mass')` + `('distance','length')`; a vested push-up writes `('vest','mass')`
+ * alongside `entry_sets.is_bodyweight`.
+ *
+ * **NOT EAV.** EAV is a key/value table whose value is untyped text with no constraint on valid keys.
+ * Here the value is `numeric`, the unit is FK'd, and the key comes from a reference table.
+ *
+ * **The unit guard — the reason this design was chosen over fixed columns.** `dimension` is stored on
+ * the row and is the SHARED column of two composite FKs: the slot pins which dimensions it accepts,
+ * and the unit must agree with the one stored. So `('primary','mass','in')` fails the units FK and
+ * `('distance','mass','lb')` fails the slot FK — there is no third spelling that gets a mass unit
+ * into a length quantity. A CHECK cannot read another table; this is what replaces the convention.
+ *
+ * **`client_id`, no `public_id`** (AGENTS.md; the `entry_sets` idiom, NOT the config-table one): a
+ * quantity is client-written log data in the offline replay graph, and the partial UNIQUE below does
+ * NOT dedupe a replay that straddles a soft-delete. Nothing addresses a quantity directly — a set's
+ * `public_id` plus its slot is the address — so there is no `public_id`.
+ *
+ * ⚠️ `ON DELETE CASCADE` is hard-delete only, and the app only ever SOFT-deletes. Every reader must
+ * join through a live `entry_sets` (`deleted_at IS NULL`) or it will count quantities whose set is
+ * gone.
+ */
+export const entrySetQuantities = pgTable(
+  'entry_set_quantities',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    clientId: uuid('client_id').notNull(), // offline idempotency; UNIQUE via partial index below
+    entrySetId: bigint('entry_set_id', { mode: 'number' })
+      .notNull()
+      .references(() => entrySets.id, { onDelete: 'cascade' }),
+    slot: text('slot').notNull(), // mirrors QUANTITY_SLOT_CODES; FK'd as a PAIR with dimension
+    dimension: text('dimension').notNull(), // denormalized on purpose — see the composite FKs below
+    unit: text('unit').notNull(),
+    valueNum: numeric('value_num', { precision: 8, scale: 3 }).notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    // The pair guard. Both parents' target columns are PKs and all three child columns are NOT NULL,
+    // so MATCH SIMPLE never short-circuits and neither FK can be satisfied vacuously.
+    foreignKey({
+      name: 'entry_set_quantities_slot_dimension_fkey',
+      columns: [t.slot, t.dimension],
+      foreignColumns: [quantitySlots.code, quantitySlots.dimension],
+    }),
+    foreignKey({
+      name: 'entry_set_quantities_unit_dimension_fkey',
+      columns: [t.unit, t.dimension],
+      foreignColumns: [units.code, units.dimension],
+    }),
+    index('idx_entry_set_quantities_set').on(t.entrySetId), // covering index for the parent FK
+    index('idx_entry_set_quantities_slot').on(t.slot, t.dimension), // covers the composite FK
+    index('idx_entry_set_quantities_unit').on(t.unit, t.dimension), // covers the composite FK
+    // The arity rule: nothing can write fourteen vest rows. PARTIAL, so an edit can soft-delete a
+    // quantity and write a replacement — which means an upsert arbiter MUST repeat this predicate
+    // (`onConflictDoUpdate({ targetWhere: isNull(deletedAt) })`) or Postgres rejects it outright.
+    uniqueIndex('uq_entry_set_quantities_set_slot')
+      .on(t.entrySetId, t.slot)
+      .where(sql`${t.deletedAt} is null`),
+    uniqueIndex('uq_entry_set_quantities_client_id')
+      .on(t.clientId)
+      .where(sql`${t.deletedAt} is null`),
+    // `weight_num` never had this (enforced only in parseLoad); the typed column gets it in the DB.
+    check('entry_set_quantities_value_num_check', sql`${t.valueNum} >= 0`),
   ],
 );
 

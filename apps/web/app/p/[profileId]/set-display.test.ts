@@ -1,59 +1,147 @@
-import { ENTRY_STATUS, ENTRY_STATUS_LABELS, ENTRY_STATUSES } from '@mat-plan/shared';
+import {
+  ENTRY_STATUS,
+  ENTRY_STATUS_LABELS,
+  ENTRY_STATUSES,
+  QUANTITY_SLOT,
+  UNIT_DIMENSION,
+} from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { SetDTO } from '@/lib/dal/entries';
+import type { SetDTO, SetQuantityDTO } from '@/lib/dal/entries';
 
 import { formatSetLine, isEditableSet } from './set-display';
 
-// Defaults to a `done` set — the overwhelmingly common shape — so every pre-existing case reads the
-// same as before and only the GAP-1 P1-1b cases opt into a status.
+/** A quantity, built from the shared consts rather than re-typed literals (AGENTS.md). */
+const qty = (o: Partial<SetQuantityDTO>): SetQuantityDTO => ({
+  slot: QUANTITY_SLOT.primary,
+  dimension: UNIT_DIMENSION.mass,
+  unit: 'lb',
+  value: 135,
+  ...o,
+});
+
+// Defaults to a `done` set carrying one primary mass — the overwhelmingly common shape — so every
+// pre-existing case reads the same as before and only the special cases opt in.
 const set = (o: Partial<SetDTO>): SetDTO => ({
   publicId: 'set-1',
   idx: 1,
   reps: 5,
-  weight: 135,
-  weightLabel: null,
+  isBodyweight: false,
+  isBand: false,
+  quantities: [qty({})],
   status: ENTRY_STATUS.done,
   ...o,
 });
 
 describe('formatSetLine', () => {
-  it('renders a numeric set as reps × weight + unit', () => {
-    expect(formatSetLine(set({ reps: 5, weight: 135 }), 'lb')).toBe('5 × 135 lb');
+  it('renders a numeric set as reps × value + the unit STORED ON THE ROW', () => {
+    // GAP-3: the unit is no longer passed in from the entry — it travels on the quantity, which is
+    // what stops a household preference change from silently reinterpreting history (ADR 0004 §6).
+    expect(formatSetLine(set({ reps: 5, quantities: [qty({ value: 135, unit: 'lb' })] }))).toBe(
+      '5 × 135 lb',
+    );
+    expect(formatSetLine(set({ reps: 5, quantities: [qty({ value: 60, unit: 'kg' })] }))).toBe(
+      '5 × 60 kg',
+    );
   });
 
-  it('prefers weightLabel over the numeric weight (the historic read seam)', () => {
-    expect(formatSetLine(set({ reps: 8, weight: null, weightLabel: 'BW' }), 'lb')).toBe('8 × BW');
+  it('renders a bodyweight set as BW, with no quantity at all', () => {
+    expect(formatSetLine(set({ reps: 8, isBodyweight: true, quantities: [] }))).toBe('8 × BW');
+  });
+
+  it('renders a band set as band', () => {
+    expect(formatSetLine(set({ reps: 12, isBand: true, quantities: [] }))).toBe('12 × band');
+  });
+
+  it('renders BW+8 (vest) — the shape ADR 0004 called "not representable today"', () => {
+    expect(
+      formatSetLine(
+        set({
+          reps: 8,
+          isBodyweight: true,
+          quantities: [qty({ slot: QUANTITY_SLOT.vest, value: 8, unit: 'lb' })],
+        }),
+      ),
+    ).toBe('8 × BW +8 lb vest');
+  });
+
+  it('renders a box-jump height — a LENGTH as the primary quantity', () => {
+    expect(
+      formatSetLine(
+        set({
+          reps: 3,
+          quantities: [qty({ dimension: UNIT_DIMENSION.length, value: 30, unit: 'in' })],
+        }),
+      ),
+    ).toBe('3 × 30 in');
+  });
+
+  it('renders a sled push — two dimensions on one set (`123 (50ft)`)', () => {
+    expect(
+      formatSetLine(
+        set({
+          reps: 1,
+          quantities: [
+            qty({ value: 123, unit: 'lb' }),
+            qty({
+              slot: QUANTITY_SLOT.distance,
+              dimension: UNIT_DIMENSION.length,
+              value: 50,
+              unit: 'ft',
+            }),
+          ],
+        }),
+      ),
+    ).toBe('1 × 123 lb +50 ft distance');
   });
 
   it('degrades nulls to ? rather than rendering "null"', () => {
-    expect(formatSetLine(set({ reps: null, weight: null, weightLabel: null }), 'kg')).toBe(
-      '? × ? kg',
-    );
+    expect(formatSetLine(set({ reps: null, quantities: [] }))).toBe('? × ?');
   });
 });
 
-describe('isEditableSet — only numeric reps+weight sets are editable (correctness B1)', () => {
-  it('a numeric reps+weight set (no label) is editable', () => {
-    expect(isEditableSet(set({ reps: 5, weight: 135, weightLabel: null }))).toBe(true);
-    expect(isEditableSet(set({ reps: 8, weight: 0, weightLabel: null }))).toBe(true); // 0 is a real weight
+describe('isEditableSet — only plain numeric reps+weight sets are editable (correctness B1)', () => {
+  it('a single primary MASS set is editable', () => {
+    expect(isEditableSet(set({ reps: 5 }))).toBe(true);
+    expect(isEditableSet(set({ reps: 8, quantities: [qty({ value: 0 })] }))).toBe(true); // 0 is a real weight
   });
 
-  it('a labeled set is NOT editable (edited weight_num would be masked by the label)', () => {
-    expect(isEditableSet(set({ reps: 8, weight: null, weightLabel: 'BW' }))).toBe(false);
-    expect(isEditableSet(set({ reps: 5, weight: 135, weightLabel: '50ft' }))).toBe(false);
+  it('a bodyweight or band set is NOT editable (the edit form submits a bare number)', () => {
+    expect(isEditableSet(set({ isBodyweight: true, quantities: [] }))).toBe(false);
+    expect(isEditableSet(set({ isBand: true, quantities: [] }))).toBe(false);
   });
 
-  it('a null-reps or null-weight set is NOT editable (can’t round-trip the required schema)', () => {
-    expect(isEditableSet(set({ reps: null, weight: 135 }))).toBe(false);
-    expect(isEditableSet(set({ reps: 5, weight: null }))).toBe(false);
+  // GAP-3: these were excluded before because they were SPELLED as a text label. They are excluded
+  // now because of what they ARE — a length and a duration. Dropping weight_label without this would
+  // have made every previously-labeled set silently editable, which is a data-integrity regression.
+  it('a LENGTH or TIME primary is NOT editable (a numeric edit would misrepresent it)', () => {
+    expect(
+      isEditableSet(set({ quantities: [qty({ dimension: UNIT_DIMENSION.length, unit: 'in' })] })),
+    ).toBe(false);
+    expect(
+      isEditableSet(set({ quantities: [qty({ dimension: UNIT_DIMENSION.time, unit: 'sec' })] })),
+    ).toBe(false);
+  });
+
+  it('a MULTI-quantity set is NOT editable (one number can’t round-trip two slots)', () => {
+    expect(
+      isEditableSet(
+        set({
+          quantities: [qty({}), qty({ slot: QUANTITY_SLOT.vest, value: 8 })],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('a null-reps or quantity-less set is NOT editable (can’t round-trip the required schema)', () => {
+    expect(isEditableSet(set({ reps: null }))).toBe(false);
+    expect(isEditableSet(set({ reps: 5, quantities: [] }))).toBe(false);
   });
 });
 
 // GAP-1 P1-1b (BUG-2a). A sub-failure set is NUMERIC, so every other `isEditableSet` guard passes it.
 // Without the status clause the V1-9 inline edit would change its reps and leave `status` behind — the
-// row would still export as `sub-failure` while claiming reps it never achieved. These pin both the
-// refusal and the fact that the read LINE is deliberately unaffected (the badge is PR 1c's job).
+// row would still export as `sub-failure` while claiming reps it never achieved.
 describe('isEditableSet — status guard (GAP-1 P1-1b / BUG-2a)', () => {
   it('refuses a sub_failure set even though it is numeric', () => {
     expect(isEditableSet(set({ status: ENTRY_STATUS.sub_failure }))).toBe(false);
@@ -67,8 +155,10 @@ describe('isEditableSet — status guard (GAP-1 P1-1b / BUG-2a)', () => {
     expect(isEditableSet(set({ status: ENTRY_STATUS.skipped }))).toBe(false);
   });
 
-  it('leaves the labeled-set refusal intact (the guards compose, not replace)', () => {
-    expect(isEditableSet(set({ weightLabel: 'BW', status: ENTRY_STATUS.done }))).toBe(false);
+  it('leaves the bodyweight refusal intact (the guards compose, not replace)', () => {
+    expect(
+      isEditableSet(set({ isBodyweight: true, quantities: [], status: ENTRY_STATUS.done })),
+    ).toBe(false);
   });
 });
 
@@ -77,8 +167,8 @@ describe('formatSetLine — status is NOT rendered here (GAP-1 P1-1b, S8)', () =
     // Status is a distinct visual affordance, not part of the load string: appending "(sub-failure)"
     // here would produce an un-styleable blob that leaks into EditableSet's read line and any future
     // aria-label. PR 1c renders it as a badge, mirroring the entry-level status badge on page.tsx.
-    const done = formatSetLine(set({ status: ENTRY_STATUS.done }), 'lb');
-    const sub = formatSetLine(set({ status: ENTRY_STATUS.sub_failure }), 'lb');
+    const done = formatSetLine(set({ status: ENTRY_STATUS.done }));
+    const sub = formatSetLine(set({ status: ENTRY_STATUS.sub_failure }));
     expect(sub).toBe(done);
     expect(sub).toBe('5 × 135 lb');
   });

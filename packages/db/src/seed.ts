@@ -8,6 +8,7 @@ import {
   newId,
   PROFILE_KIND,
   PROGRAM_SEED,
+  QUANTITY_SLOT_ROWS,
   type ProgramBlockSeedRow,
   type RoutineConfig,
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -75,6 +76,17 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
       target: schema.units.code,
       set: { label: sql`excluded.label`, dimension: sql`excluded.dimension` },
     });
+
+  // GAP-3: onConflictDoNOTHING here, deliberately NOT the DoUpdate above. `quantity_slots` is the
+  // parent of a composite FK with no ON UPDATE CASCADE, so once any `entry_set_quantities` row exists,
+  // an UPDATE of a slot's dimension is REJECTED by the FK — and `db:seed` runs on every push to main
+  // (.github/workflows/migrate.yml), so a DoUpdate would turn the PROD migrate job red, not just a PR.
+  // The PK is the (code, dimension) pair, so adding a slot or a new dimension for one still inserts
+  // cleanly; only REMOVING a pair needs an expand→contract, which is the correct amount of friction.
+  await db
+    .insert(schema.quantitySlots)
+    .values(QUANTITY_SLOT_ROWS)
+    .onConflictDoNothing({ target: [schema.quantitySlots.code, schema.quantitySlots.dimension] });
 
   await db
     .insert(schema.activityTypeCategories)

@@ -11,9 +11,11 @@ import {
   type DayRole,
   type EntryKind,
   type EntryStatus,
+  type QuantitySlot,
   type SessionMovementInput,
   type SessionType,
   type Unit,
+  type UnitDimension,
 } from '@mat-plan/shared';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
@@ -32,12 +34,23 @@ import { db } from './db';
  * day. Returns DTOs — never raw rows. Ownership/household scoping plugs in here
  * once Clerk lands (V1-1/v1.5).
  */
+/** One measured quantity of a set — the typed replacement for the free-text load (GAP-3). */
+export type SetQuantityDTO = {
+  slot: QuantitySlot;
+  dimension: UnitDimension;
+  unit: Unit;
+  value: number;
+};
+
 export type SetDTO = {
   publicId: string; // entry_sets.public_id (UUIDv7) — the stable, non-enumerable id the V1-9 edit addresses
   idx: number;
   reps: number | null;
-  weight: number | null;
-  weightLabel: string | null;
+  // GAP-3: `weight`/`weightLabel` are gone. Every magnitude is a quantity row; the two MODES are
+  // booleans. A set with no quantities and no flag is a partially-logged set, which reads as `?`.
+  isBodyweight: boolean;
+  isBand: boolean;
+  quantities: SetQuantityDTO[];
   // GAP-1 P1-1b. Carried so the read seam can tell a `sub_failure` set from a `done` one — WITHOUT it
   // per-set status is unrenderable and `isEditableSet` can't refuse to edit one. Typed as the full
   // `EntryStatus` (not the narrower SetStatus) because this is a READ of whatever the column holds,
@@ -171,9 +184,10 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
           publicId: schema.entrySets.publicId,
           idx: schema.entrySets.idx,
           reps: schema.entrySets.reps,
-          weightNum: schema.entrySets.weightNum,
-          weightLabel: schema.entrySets.weightLabel,
+          isBodyweight: schema.entrySets.isBodyweight,
+          isBand: schema.entrySets.isBand,
           status: schema.entrySets.status,
+          id: schema.entrySets.id,
         })
         .from(schema.entrySets)
         .where(
@@ -182,6 +196,41 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
         .orderBy(asc(schema.entrySets.idx))
     : [];
 
+  // GAP-3: the quantities, in a second query keyed on the set ids we just proved live. ⚠️ The parent
+  // filter is LOAD-BEARING — `ON DELETE CASCADE` on entry_set_quantities is HARD-delete only, and this
+  // app only ever SOFT-deletes, so quantities whose set is soft-deleted are still `deleted_at IS NULL`.
+  // Selecting by these ids (rather than scanning the child table) is what keeps them out.
+  const setIds = setRows.map((s) => s.id);
+  const quantityRows = setIds.length
+    ? await db
+        .select({
+          entrySetId: schema.entrySetQuantities.entrySetId,
+          slot: schema.entrySetQuantities.slot,
+          dimension: schema.entrySetQuantities.dimension,
+          unit: schema.entrySetQuantities.unit,
+          valueNum: schema.entrySetQuantities.valueNum,
+        })
+        .from(schema.entrySetQuantities)
+        .where(
+          and(
+            inArray(schema.entrySetQuantities.entrySetId, setIds),
+            isNull(schema.entrySetQuantities.deletedAt),
+          ),
+        )
+    : [];
+
+  const quantitiesBySet = new Map<number, SetQuantityDTO[]>();
+  for (const q of quantityRows) {
+    const list = quantitiesBySet.get(q.entrySetId) ?? [];
+    list.push({
+      slot: q.slot as QuantitySlot,
+      dimension: q.dimension as UnitDimension,
+      unit: q.unit as Unit,
+      value: Number(q.valueNum),
+    });
+    quantitiesBySet.set(q.entrySetId, list);
+  }
+
   const setsByEntry = new Map<number, SetDTO[]>();
   for (const s of setRows) {
     const list = setsByEntry.get(s.entryId) ?? [];
@@ -189,8 +238,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
       publicId: s.publicId,
       idx: s.idx,
       reps: s.reps,
-      weight: s.weightNum === null ? null : Number(s.weightNum),
-      weightLabel: s.weightLabel,
+      isBodyweight: s.isBodyweight,
+      isBand: s.isBand,
+      quantities: quantitiesBySet.get(s.id) ?? [],
       status: s.status as EntryStatus,
     });
     setsByEntry.set(s.entryId, list);

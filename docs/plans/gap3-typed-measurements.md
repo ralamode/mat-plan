@@ -281,9 +281,20 @@ So `BW+8 (vest)` is `is_bodyweight = true` **plus** one `vest` load row — whic
    together; weight now lives in a child row, so the writer's single-statement ownership guard has to
    span two tables.
 
-**Open, and it is the vocabulary's anchor: what is the slot called for a plain barbell weight?**
-`primary`? `external`? `bar`? It is the value ~every historical row backfills into, so the name is
-load-bearing for the CSV contract and for every future reader.
+**RESOLVED 2026-09-23 (Ray): the slot is `primary`** — it names the ROLE (the load the movement is
+_about_), which is the only axis that separates it from `vest`/`ankle`/`wrist`. Rejected: `external`
+and `implement` (a vest is both), `bar` (false for dumbbells, sled and machine).
+
+**And the table is `entry_set_quantities`, not `entry_set_loads`** (Ray, same session): it holds a box
+jump's height and a broad jump's distance, which are not loads — and `measure`/`measurement` was
+rejected in turn because this repo already means two other things by those words (`metric_definitions`
+and the `'measurement'` activity category). See
+[the PR plan](./gap3-pr3-entry-set-quantities.md).
+
+⚠️ **The adversarial panel then broke the slot's DIMENSION model**, which this section had implied was
+one-per-slot: `broad_jump` and `hollow-body_hold` are already in the seeded catalog and their primary
+quantity is a length and a duration. `quantity_slots` is therefore keyed on the **pair**
+`(code, dimension)`, and `primary` is legal at mass, length and time.
 
 ### 7.2c The open UX question Ray raised — how does the editor express a slot set?
 
@@ -300,6 +311,12 @@ That pushes the authoring question into the movement/program editor, where a coa
 controlled list is a normal interaction. **V1-22's panel must see this** — it changes that editor's scope.
 
 ### 7.3 Columns — corrected after the panel
+
+> ⚠️ **SUPERSEDED IN PART (2026-09-23).** The `entry_sets` height/distance COLUMNS below are dead —
+> §7.2b's later decision puts every value+unit quantity in the child table, and Ray confirmed it. The
+> `units.dimension` and `movements.dimension` rows still stand (the former shipped in #137). The
+> invariant this section said was "not achievable as written" IS achieved: two composite FKs sharing a
+> stored `dimension`, against two primary keys. See [the PR plan](./gap3-pr3-entry-set-quantities.md).
 
 **The set is the primary home; the prescription is the plan.** An earlier draft had height/distance on
 `prescriptions` with a nullable `entry_sets` "override" — but ADR 0004 §5 rejects prescription-only
@@ -425,14 +442,23 @@ so it carries over to the new controls rather than being deleted.
 | 5   | The form/parse/read rewrite                                                    | **Needs its own UX panel** — the numeric keypad returns, `LoadChips` is replaced, and the set row changes shape.                                                                                        |
 | 6   | Contract: drop `weight_num`/`weight_unit`/`weight_label`                       | Separate deploy, gated on a zero-unmigrated-rows check, shipping the `formatSetLine` and `isEditableSet` fixes in the same one.                                                                         |
 
-### 7.7 File-by-file
+### 7.7 File-by-file — see the per-PR plans
 
-**Now unblocked** — §7.6 Q1 (child table) and §7.2b (all loads) are decided, which is what the file list
-was waiting on. The one naming question left (§7.2b: what the plain-barbell slot is called) does not
-change _which_ files move, only a seed value.
+This arc doc holds the census and the design; the file-by-file lives with each PR, per
+[plans/README.md](./README.md).
 
-_To be written next, per the six-PR split above — PR 1 first, since it gates the destructive end of the
-arc rather than following it._
+| PR                            | Plan                                                                   | State                   |
+| ----------------------------- | ---------------------------------------------------------------------- | ----------------------- |
+| 1a/1b CI gates                | [gap3-pr1-ci-gates.md](./gap3-pr1-ci-gates.md)                         | ✅ merged (#133, #135)  |
+| 2 `units.dimension`           | —                                                                      | ✅ merged (#137)        |
+| 3 the typed model + the drops | [gap3-pr3-entry-set-quantities.md](./gap3-pr3-entry-set-quantities.md) | in review               |
+| 4 the form/UX rewrite         | _to be written_                                                        | needs the full UX panel |
+
+**⚠️ §7.6a's six PRs became four.** PRs 4 (backfill) and 6 (contract) are **deleted**: their whole
+justification was `weight_num` holding live data, and prod's `entry_sets` is **empty** (verified
+2026-09-23 — sets 0, labeled 0, numeric_loads 0). Expand→contract protects data across a deploy
+window; there is no data and no intervening deploy, so PR 3 creates the tables and drops the
+free-text columns in one migration.
 
 ## 8. Review-response log (adversarial panel)
 
