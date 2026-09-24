@@ -39,6 +39,8 @@ import {
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
   UNIT_CODES,
+  UNIT_DIMENSION_BY_CODE,
+  UNIT_DIMENSIONS,
   WEEK_LENGTH_DAYS,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
@@ -111,6 +113,33 @@ const profiles = await db.select().from(schema.profiles);
 const households = await db.select().from(schema.households);
 const categories = await db.select().from(schema.activityTypeCategories);
 assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
+// GAP-3 — the row COUNT above is nearly tautological (the seed inserts from UNIT_CODES, so it compares
+// the const to itself). These assert the CONTENT: that every code is present and that each one's stored
+// dimension matches the shared map. That is what actually catches drift — a renamed code, or a unit
+// seeded with the wrong dimension, which the count can never see.
+{
+  const byCode = new Map(units.map((u) => [u.code, u.dimension]));
+  for (const code of UNIT_CODES) {
+    assert.equal(
+      byCode.get(code),
+      UNIT_DIMENSION_BY_CODE[code],
+      `unit '${code}' seeded with dimension '${UNIT_DIMENSION_BY_CODE[code]}'`,
+    );
+  }
+  // The other direction: no row the const does not know about.
+  for (const u of units) {
+    assert.ok(
+      (UNIT_CODES as readonly string[]).includes(u.code),
+      `units row '${u.code}' exists in UNIT_CODES`,
+    );
+  }
+  // GAP-3's whole point: a length dimension now EXISTS. Before this there was none at all, which is why
+  // a box-jump height had nowhere to live but the free-text load string.
+  assert.ok(
+    units.some((u) => u.dimension === 'length'),
+    'at least one length unit is seeded (GAP-3)',
+  );
+}
 // V1-3: two kid profiles (Liam + Scarlett), stable by public_id across re-seeds.
 assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
 const seededProfileIds = profiles.map((p) => p.publicId).sort();
@@ -733,6 +762,9 @@ async function assertCheckCoversConst(conname: string, values: readonly string[]
     `${conname} accepts EXACTLY its shared const (no extra/misspelled literal)`,
   );
 }
+// GAP-3 — the DB CHECK and the shared UNIT_DIMENSIONS const must agree EXACTLY, in both directions.
+// Without this the column is a convention with a CHECK beside it rather than a single source of truth.
+await assertCheckCoversConst('units_dimension_check', UNIT_DIMENSIONS);
 await assertCheckCoversConst('activity_types_input_shape_check', ACTIVITY_INPUT_SHAPES);
 await assertCheckCoversConst('movements_pattern_check', MOVEMENT_PATTERNS);
 await assertCheckCoversConst('metric_definitions_value_type_check', METRIC_VALUE_TYPES);

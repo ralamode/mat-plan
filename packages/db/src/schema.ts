@@ -38,11 +38,36 @@ const timestamps = {
 };
 
 /** Reference table for the `unit` enum — seeded from @mat-plan/shared UNITS. */
-export const units = pgTable('units', {
-  code: text('code').primaryKey(),
-  label: text('label').notNull(),
-  createdAt: timestamps.createdAt,
-});
+export const units = pgTable(
+  'units',
+  {
+    code: text('code').primaryKey(),
+    label: text('label').notNull(),
+    /**
+     * GAP-3 — what KIND of quantity this unit measures (`mass` / `length` / `time` / `instant` /
+     * `count` / `boolean`; mirrors shared `UNIT_DIMENSIONS`, pinned by `db:verify`).
+     *
+     * This is what makes `lb` in a box-jump height **unrepresentable** rather than discouraged: a
+     * measurement column FKs to `units(code)` and constrains the dimension alongside it, so the DB
+     * rejects a mass unit in a length field. NOT NULL deliberately — a nullable dimension re-opens
+     * exactly the hole the column exists to close.
+     */
+    dimension: text('dimension').notNull(),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    // text+CHECK, never a native pgEnum (AGENTS.md "don't" list). Kept in lockstep with the shared
+    // UNIT_DIMENSIONS const by `db:verify`'s assertCheckCoversConst, in BOTH directions.
+    check(
+      'units_dimension_check',
+      sql`${t.dimension} in ('mass', 'length', 'time', 'instant', 'count', 'boolean')`,
+    ),
+    // A measurement column that stores (unit, dimension) together needs this to FK against, so the
+    // pair is validated as a pair rather than each half independently. Added now because the column
+    // it serves arrives in GAP-3 PR 3, and adding it here keeps PR 3 free of units-table DDL.
+    uniqueIndex('uq_units_code_dimension').on(t.code, t.dimension),
+  ],
+);
 
 /**
  * Reference table for `activity_type.category` — seeded from @mat-plan/shared

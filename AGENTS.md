@@ -338,8 +338,8 @@ Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no
   via CHECK ... NOT VALID → backfill → VALIDATE. New FK/UNIQUE as NOT VALID → VALIDATE; every new ref
   column gets a covering index. Every migration SETs lock_timeout + statement_timeout. Backfills in
   bounded batches; avoid volatile defaults. IF [NOT] EXISTS guards for re-run safety.
-Squawk escape hatch: a JUSTIFIED exception uses an inline `-- squawk-ignore <rule>` above the statement,
-  with the reasoning in a comment beside it. Verified working. This is deliberately better than a config
+Squawk escape hatch: a JUSTIFIED exception uses `-- squawk-ignore <rule>` on the line DIRECTLY above the
+  statement — any comment in between silently voids it (docs/lessons.md) — with the reasoning above that. Verified working. This is deliberately better than a config
   exclusion: the justification lands next to the SQL it excuses, and the gate forces it to be written.
 Rollback: fix-forward by default (expand-contract is reversible-by-omission); cut a Neon RESTORE
   branch pre-migration before any destructive/backfill step.

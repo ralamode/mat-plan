@@ -5,6 +5,27 @@ person (or agent) fixes them in one. Read this **before** debugging a CI / test 
 grep for the symptom. Keep entries to 1–3 lines: **Symptom → Cause → Fix**. Newest on top within a
 section. This is a debugging index, not prose — link out to a plan/ADR for depth.
 
+## Database / migrations
+
+- **A `-- squawk-ignore <rule>` comment has NO effect and Squawk still fails the build.** → The ignore
+  must be the line **immediately above** the statement. Any other comment between them silently voids it
+  — there is no warning, the rule just still fires, and the natural instinct (write the justification
+  first, then the ignore) is exactly the broken order. Verified: ignore + one comment + statement = rule
+  fires; comment + ignore + statement = suppressed. → **Put the reasoning above, the `squawk-ignore`
+  last, touching the statement.** (migration 0010)
+
+- **`drizzle-kit generate` emits `ADD COLUMN … NOT NULL` with no default, which FAILS on a populated
+  table.** → Drizzle writes the column as the schema declares it and does not know the table has rows.
+  Postgres rejects it: an existing row would have no value. → This repo **hand-edits generated SQL**
+  (all 10 prior migrations do), so split it: `ADD COLUMN` nullable → `UPDATE` backfill → `SET NOT NULL`.
+  Check every generated migration for this before committing — the generator is a starting point, not an
+  artifact. (migration 0010)
+
+- **`cannot insert multiple commands into a prepared statement` when a migration runs.** → Two
+  statements share one chunk because only the last carries `--> statement-breakpoint`. Easy to hit with
+  the `SET lock_timeout` / `SET statement_timeout` pair. → **Every** statement needs its own
+  `--> statement-breakpoint`, including each `SET`. (migration 0010)
+
 ## GitHub / PRs
 
 - **A Mermaid diagram in a PR description fails with `Lexical error on line 2. Unrecognized text`,
