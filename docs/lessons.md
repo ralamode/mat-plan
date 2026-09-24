@@ -7,6 +7,34 @@ section. This is a debugging index, not prose — link out to a plan/ADR for dep
 
 ## Database / migrations
 
+- **A migration adding a table with a COMPOSITE foreign key aborts with `there is no unique constraint
+matching given keys for referenced table "<parent>"`, even though the parent obviously has one.** →
+  `drizzle-kit generate` emits statements in a fixed order — `CREATE TABLE` → `ADD CONSTRAINT … FOREIGN
+KEY` → `CREATE INDEX` — so a parent whose composite key is declared as `uniqueIndex()` gets that index
+  created **after** the child FK that references it, and the whole file is one transaction. →
+  **Declare the parent's composite key as a `primaryKey()` (or `unique()`) constraint, not a
+  `uniqueIndex()`** — drizzle inlines a constraint into `CREATE TABLE`, so the target exists before any
+  FK. Reordering the SQL by hand also works but re-breaks on the next `generate`. (migration 0011)
+
+- **`ON CONFLICT (a, b) DO UPDATE` fails with `there is no unique or exclusion constraint matching the
+ON CONFLICT specification`, against an index that plainly exists.** → The index is **partial**
+  (`WHERE deleted_at IS NULL`, this repo's soft-delete idiom). A partial index only arbitrates when the
+  statement repeats its predicate. → Add the predicate: `ON CONFLICT (a, b) WHERE deleted_at IS NULL`,
+  or drizzle's `onConflictDoUpdate({ target: [...], targetWhere: isNull(t.deletedAt) })`.
+
+- **`drizzle-kit generate` hangs or dies with `Interactive prompts require a TTY terminal` when a
+  migration both ADDS and DROPS columns on one table.** → Drizzle asks whether the drop+add is a
+  _rename_, and the prompt needs a TTY an agent/CI shell doesn't have. → **Generate in two passes** —
+  first the additive schema (no prompt), then the removals (no prompt) — then concatenate the two `.sql`
+  files into one, delete the second file + its snapshot, drop its `_journal.json` entry, and promote the
+  SECOND snapshot to the first's filename (it is the true final state). `generate` must then report
+  `No schema changes` — that is the check that the surgery was correct. (migration 0011)
+
+- **`pnpm typecheck` is green while `packages/**` is broken.** → It is `pnpm --filter web exec tsc
+--noEmit`, so it only covers `apps/web`. `packages/db/scripts/verify.ts` and the seed are typechecked
+  by **nothing**; a stale column reference there surfaces only as a runtime crash in `db:verify`. →
+  Run `pnpm verify` (which runs `db:verify`) before believing a package-level refactor is done.
+
 - **A `-- squawk-ignore <rule>` comment has NO effect and Squawk still fails the build.** → The ignore
   must be the line **immediately above** the statement. Any other comment between them silently voids it
   — there is no warning, the rule just still fires, and the natural instinct (write the justification

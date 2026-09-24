@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-23
 
 ## Where we are right now
 
@@ -13,8 +13,8 @@ strength sessions with supersets, edit-a-set, skipped/sub-failure, and the Today
 MVP finish line is **CSV export**. It was **blocked** on the legacy CSV sample files for six weeks;
 **#121 landed them** and **#126 turned them into a shape census**
 ([gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)) — so the chain that gated GAP-3,
-V1-13, AI-1 and the open-source release is **clear**, and GAP-3's column design is the next thing to
-write.
+V1-13, AI-1 and the open-source release is **clear**. GAP-3's column design is **written, panelled and
+built**: migration `0011` lands the typed measurement model and **deletes the free-text load**.
 
 ⚠️ **Two things this tracker did not say for six weeks, now recorded.** (1) **No athlete has used the
 app yet.** v1's own verification — _"hand the URL to the kids; observe a real day logged"_ — is unrun,
@@ -206,6 +206,29 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 | V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-23** — **GAP-3: typed measurements ship; the free-text load is gone** (migration `0011`,
+  [plan](./plans/gap3-pr3-entry-set-quantities.md)). `quantity_slots` + `entry_set_quantities` replace
+  `entry_sets.weight_num` / `weight_label` / `seconds`, all three **dropped in the same migration**.
+  - **The unit guard is now a constraint, not a convention.** `dimension` is the shared column of two
+    composite FKs — `(slot, dimension)` → `quantity_slots` and `(unit, dimension)` → `units`, both
+    targeting primary keys — so `lb` in a box-jump height is rejected **by the database**. The panel
+    tried to find a defeating spelling and could not.
+  - **`primary` is a ROLE, legal at mass, length AND time.** The panel killed a mass-pinned `primary`
+    on two movements already in the seeded catalog (`broad_jump` measures a length, `hollow-body_hold`
+    a duration). Making the slot PK the `(code, dimension)` pair fixed that **and** a migration-abort
+    bug in one move, since drizzle inlines a PK into `CREATE TABLE` but emits a `uniqueIndex` after the
+    FK referencing it.
+  - **Five PRs became two.** §7.6a's expand→backfill→contract arc existed to protect `weight_num`'s
+    live data; prod's `entry_sets` is **empty** (verified: sets 0, labeled 0, numeric_loads 0), so the
+    backfill script and the zero-unmigrated-rows gate were deleted outright.
+  - Shapes that now round-trip typed: `BW` and `band` → booleans; `30in`/`20s` → a `primary` quantity
+    carrying its own unit; `BW+8 (vest)` → a flag **plus** a `vest` row; `123 (50ft)` → **two rows on
+    one set**. `isEditableSet` was restated on what a set IS (a single mass) rather than how it was
+    spelled — without that, dropping `weight_label` would have made every previously-labeled set
+    silently editable.
+  - **No markup change**: the form still renders the same fields and chips; only where their values
+    land changed. The keypad/multi-slot rewrite is the next PR, with its UX panel.
 
 - **2026-09-22** — **GAP-3 evidence: the shape census** (#126,
   [gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)). Every distinct `load` and

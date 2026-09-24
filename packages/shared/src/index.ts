@@ -2,6 +2,7 @@
 // The canonical home for domain enums/constants (AGENTS.md constants convention):
 // define a value once here, import it in the app, engine, and DB seed.
 export * from './units';
+export * from './quantity-slots';
 export * from './enums';
 export * from './activity-categories';
 export * from './activity-shapes';

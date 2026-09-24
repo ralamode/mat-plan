@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { keyBySelf } from './enums';
+
 /**
  * What KIND of quantity a unit measures — GAP-3 / [ADR 0004 §6](../../../docs/decisions/0004-typed-measurements.md).
  *
@@ -20,6 +22,9 @@ export const UNIT_DIMENSIONS = ['mass', 'length', 'time', 'instant', 'count', 'b
 export type UnitDimension = (typeof UNIT_DIMENSIONS)[number];
 
 export const unitDimensionSchema = z.enum(UNIT_DIMENSIONS);
+
+/** Branch on a NAMED member (`UNIT_DIMENSION.mass`), never a bare string (constants convention). */
+export const UNIT_DIMENSION = keyBySelf(UNIT_DIMENSIONS);
 
 /**
  * Canonical unit codes — the single source of truth (AGENTS.md constants
