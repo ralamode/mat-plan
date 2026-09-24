@@ -1,0 +1,28 @@
+# Squawk — migration linter (GAP-3 PR 1b).
+#
+# AGENTS.md has listed Squawk as a required check for months; it was never wired
+# (audited 2026-09-23, docs/tech-debt.md). GAP-3's arc ends in a DROP COLUMN on a
+# column with live data, so the gate lands before that arc rather than after.
+
+pg_version = "17.0"
+
+# LOAD-BEARING. `packages/db/scripts/migrate.ts` uses drizzle's stock migrator,
+# which wraps EACH migration file in a transaction. Without this, Squawk assumes
+# no transaction and `prefer-robust-stmts` fires 99 times spuriously — 188 issues
+# rather than 33. If the transaction-stripping runner AGENTS.md describes (for
+# CREATE INDEX CONCURRENTLY) is ever built, this flag becomes a lie for those
+# files and those 99 findings come back.
+assume_in_transaction = true
+
+excluded_rules = [
+  # Domain integers — idx, reps, seconds, superset_order — are deliberately int4.
+  # These are ordinals and small counts, not identity columns.
+  "prefer-bigint-over-int",
+
+  # Correct-but-unsatisfiable HERE: CONCURRENTLY cannot run inside a transaction,
+  # and drizzle wraps every file in one. AGENTS.md describes an "isolated file +
+  # transaction-stripping runner" to work around this — it DOES NOT EXIST. So this
+  # gate does NOT enforce the CONCURRENTLY rule; that gap survives this PR and is
+  # recorded in docs/tech-debt.md. Re-enable if that runner is ever built.
+  "require-concurrent-index-creation",
+]
