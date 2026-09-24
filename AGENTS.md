@@ -205,8 +205,16 @@ git fetch origin && git pull --ff-only origin main` — so the new work sits on 
   plus the production audit: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
   `audit --prod`. **~25s** on a warm cache, so there is no excuse to skip it. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
-  **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (needs a DB —
-  see below), gitleaks, and the forward-only guard (inherently a diff-against-base check).
+  **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (its own command —
+  see the next bullet), gitleaks, and the forward-only guard (inherently a diff-against-base check).
+- **`pnpm e2e:local` — the Playwright smoke, locally, on a throwaway DB.** Deliberately NOT inside
+  `verify` (minutes, not seconds — it builds the prod app), but run it before a PR that touches a
+  flow the smoke covers. It boots an **ephemeral `embedded-postgres`** (no Docker, no creds),
+  migrates + seeds it via the `packages/db` scripts exactly as CI does, injects that DB plus a local
+  gate code and a free port into `playwright test`, and **deletes the cluster on exit** — so it never
+  touches Neon and never pollutes the `pnpm dev` sandbox. Extra args pass through
+  (`pnpm e2e:local --project=chromium`, or a single spec). Bare `pnpm --filter web e2e` provisions no
+  database and inherits `.env.local` — use `e2e:local`.
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
   Plus **forward-only** + **Squawk** on new migrations, and `audit --prod` via `pnpm verify`.

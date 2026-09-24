@@ -105,20 +105,29 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `SENTRY_PROJECT` — worth doing the first time a real incident is hard to read, not before.
 - **Severity:** low (a legibility cost on a 3-user app).
 
-### Local/CI parity gaps (measured 2026-09-24)
+### Local/CI parity gaps (measured 2026-09-24; e2e gap closed 2026-09-23)
 
 - **What & why:** following the [CI gate audit](#) below, every check was actually run locally and timed.
   **`pnpm verify` now covers the fast set in ~25s** (`format:check` · `lint` · `typecheck` · `test` ·
-  `db:verify` · `audit --prod`). Three gaps remain:
+  `db:verify` · `audit --prod`), and **`pnpm e2e:local` now runs the Playwright smoke** (the gap that
+  actually mattered — see below). Two gaps remain, both by choice:
 
-  | Gap                                            | Cost to close                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | ---------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | **The Playwright smoke cannot be run locally** | Small — the infrastructure already exists | `playwright.config.ts`'s `webServer` builds and starts the app but provisions **no database**; it inherits `DATABASE_URL`. Meanwhile `apps/web/scripts/embedded-pg.ts` already gives a **Dockerless** Postgres, used by `dev-local` and `screenshot:ephemeral`. An `e2e:local` wrapper around it would close this. **Note this supersedes the long-standing "e2e needs real Postgres, can't run locally" assumption** — that was true before the embedded-pg work (#43/#46) and has not been re-checked since. |
-  | **`next build` is not in `verify`**            | Zero                                      | Deliberate: it is the slowest step and CI runs it. Run `pnpm build` manually when touching anything build-shaped.                                                                                                                                                                                                                                                                                                                                                                                              |
-  | **gitleaks / forward-only guard**              | n/a                                       | gitleaks is installable locally (and is, here); the forward-only guard is inherently a diff-against-base check and has no meaningful local form.                                                                                                                                                                                                                                                                                                                                                               |
+  | Gap                                 | Cost to close | Notes                                                                                                                                                                                       |
+  | ----------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | **`next build` is not in `verify`** | Zero          | Deliberate: it is the slowest step and CI runs it. Run `pnpm build` manually when touching anything build-shaped. (`e2e:local` builds it as a side effect, so a smoke run covers this too.) |
+  | **gitleaks / forward-only guard**   | n/a           | gitleaks is installable locally (and is, here); the forward-only guard is inherently a diff-against-base check and has no meaningful local form.                                            |
 
-- **Impact:** low now that `verify` exists — the friction was "six commands to remember", which is how a
-  check gets skipped. The e2e gap is the real one: **a bug in the smoke still surfaces only in CI.**
+- **CLOSED — the Playwright smoke now runs locally (`pnpm e2e:local`).** `playwright.config.ts`'s
+  `webServer` builds and starts the app but provisions **no database**; it inherits `DATABASE_URL`
+  (→ `.env.local` → live Neon), which is why the smoke was CI-only. `apps/web/scripts/e2e-local.ts`
+  supplies the missing piece the same way CI does — boot a **Dockerless** `embedded-postgres` (the
+  existing `scripts/embedded-pg.ts` helper, already behind `dev-local` and `screenshot:ephemeral`),
+  migrate + seed it with the `packages/db` scripts, then run `playwright test` with that DB, a local
+  gate code and a free port injected — and deletes the cluster on exit. **This supersedes the
+  long-standing "e2e needs real Postgres, can't run locally" assumption** (true before the embedded-pg
+  work, #43/#46). Residual, accepted: it is a **throwaway** Postgres 18 cluster, not CI's `postgres:17`
+  service container, and the run costs minutes (it builds the prod app), so it stays out of `verify`.
+- **Impact:** low — the remaining two gaps are a deliberate speed trade and a check with no local form.
 - **Severity:** low.
 
 ### 20 pre-existing Squawk findings on `main` are never linted (accepted 2026-09-24)

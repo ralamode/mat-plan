@@ -151,7 +151,11 @@ access token`, which reads like a permissions problem with the repo. The cause w
   binary on an ephemeral TCP port, no Docker/creds), migrates+seeds it via the `packages/db` scripts,
   and runs `next start` against it — so a data-dependent capture never touches live Neon. The same
   approach is the future path for local e2e. See [docs/plans/v0-11-ci-postgres-playwright.md] and the
-  `no-docker-local-e2e` memory.
+  `no-docker-local-e2e` memory. **RESOLVED — `pnpm e2e:local`** (`apps/web/scripts/e2e-local.ts`)
+  applies exactly that approach to the smoke: ephemeral `embedded-postgres` → migrate + seed via the
+  `packages/db` scripts → `playwright test` with `DATABASE_URL`/`ACCESS_GATE_PASSWORD`/`E2E_PORT`
+  injected → cluster deleted on exit. ~35s cold on this machine. Plain `pnpm --filter web e2e`
+  provisions no DB and still inherits `.env.local`, so it is the CI-only form.
 - **Screenshot capture wrote real rows into the live kids' log.** → The old `screenshot` script boots
   a prod server that reads `apps/web/.env.local` → live Neon, so capturing an "already-logged"
   check-in **mutated prod**. → Default the flow to a throwaway embedded Postgres
