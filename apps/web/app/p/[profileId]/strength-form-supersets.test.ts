@@ -71,7 +71,10 @@ describe('strength-form superset transforms (V1-8-3d)', () => {
 });
 
 describe('dropUntouchedMovements / isUntouchedMovement (V1-9 log ergonomics)', () => {
-  const draft = (movementName: string, sets: { reps: string; weight: string }[]) => ({
+  const draft = (
+    movementName: string,
+    sets: { reps: string; weight: string; isBodyweight?: boolean; isBand?: boolean }[],
+  ) => ({
     clientId: 'c',
     movementName,
     unit: 'lb',
@@ -89,6 +92,16 @@ describe('dropUntouchedMovements / isUntouchedMovement (V1-9 log ergonomics)', (
     expect(isUntouchedMovement(draft('Back squat', [{ reps: '', weight: '' }]))).toBe(false); // name only
     expect(isUntouchedMovement(draft('', [{ reps: '10', weight: '' }]))).toBe(false); // a rep only
     expect(isUntouchedMovement(draft('', [{ reps: '', weight: '75' }]))).toBe(false); // a weight only
+  });
+
+  // GAP-3 PR 4a — the same regression as the scaffold predicate's. A mode flag is real input, and a
+  // card carrying only one must survive to the payload. Pinned here so the flags cannot be dropped
+  // from this predicate while the sibling keeps them.
+  it('does NOT treat a card whose only input is a MODE as untouched', () => {
+    expect(isUntouchedMovement(draft('', [{ reps: '', weight: '', isBodyweight: true }]))).toBe(
+      false,
+    );
+    expect(isUntouchedMovement(draft('', [{ reps: '', weight: '', isBand: true }]))).toBe(false);
   });
 
   it('drops only the untouched cards, keeps filled + partial', () => {
