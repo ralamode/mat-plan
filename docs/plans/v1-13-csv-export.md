@@ -48,35 +48,37 @@ worst defect available in this feature.
 
 ## Resolved by Ray (2026-09-24)
 
-### 1. The athlete directory is backed by `profiles.slug` — a real column, not a derived string
+### 1. The athlete directory is `profiles.public_id` — no slug, no migration
 
-Ray asked the right question: _"why do we need an athlete directory? Should this not be something in
-the database?"_ Both halves have an answer.
+**Superseded 2026-09-24, same day, by Ray.** My first answer was a derived slug; the panel and Ray
+pushed it to a stored `profiles.slug` column; Ray then removed the constraint that made a _readable_
+directory necessary at all:
 
-**Why a directory:** it is not our choice. The legacy layout is `data/<type>/<athlete>/<YYYY-MM>.csv`,
-and the contract's _"no `athlete` column — the kid is the directory"_ (L21) **describes those files**.
-Emit a different shape and the workflow does not recognise it.
+> _"The past data does not matter that much at this point — and if it did, we can work on an importer
+> that we can import once the exporter is finished."_
 
-**Why a column:** because the identity behind that path must be stable. **My "avoid a migration in the
-MVP's last PR" reasoning was backwards** — deriving the slug from `profiles.name` makes a filesystem
-path a function of a _mutable display string_. Rename "Liam" → "Liam B" and the entire tree relocates;
-the workflow sees a new athlete with no history. That is permanent damage to the thing this feature
-exists to protect, traded for a scheduling convenience.
+That is the load-bearing change. The **only** reason the directory had to be human-readable was to
+keep app exports contiguous with the existing paper-era tree (`bakers-wrestling-context/data/<name>/`),
+which the app cannot reproduce because there is no importer. With that requirement retired,
+**`public_id` is strictly better** on every axis the slug was chosen for:
 
-**And it is not a novel design — it is the third instance of a documented precedent.** `movements.slug`
-(`schema.ts:388`, `.notNull().unique()`) and `program_blocks.slug` already exist, and the schema states
-the rule outright (`schema.ts:591-593`): _"`slug` (not raw `name`) is the identity so a re-seed can't
-duplicate a block on whitespace/casing."_ A profile is the same case with higher stakes, because its
-slug is a **path segment**.
+|                                       | slug                                         | `public_id`                   |
+| ------------------------------------- | -------------------------------------------- | ----------------------------- |
+| Stable across a rename                | ✅ (as a stored column)                      | ✅ **by construction**        |
+| Unique                                | per-household, with collision rules to write | ✅ globally, already enforced |
+| Migration required                    | yes                                          | **none**                      |
+| Collision / unsafe-character handling | needed                                       | none                          |
+| Readable when you `cd` into it        | ✅                                           | ❌                            |
 
-**Shape:** `profiles.slug text`, unique per household (the `(household_id, slug)` partial-unique idiom
-the schema already uses for `ramp_targets`/`day_readiness`). NOT NULL, arrived at via the house
-sequence — add nullable → backfill the two seeded rows → `SET NOT NULL` — because
-`drizzle-kit generate` emits `ADD COLUMN … NOT NULL` with no default, which fails on a populated table
-([lessons.md](../lessons.md), migration 0010).
+`data/strength-log/019826b4-0000-7000-8000-000000000001/2026-09.csv`
 
-**Sequencing: a small precursor PR** (`db(v1-13): profiles.slug`) rather than folding a migration into
-13a. One concern, its own Squawk/forward-only pass, and it unblocks the path shape 13a needs.
+The one thing it costs — legibility — is what the **importer** buys back later, by mapping the old
+named directories onto the right profile. Ray's framing: the old named data becomes the importer's
+**test fixture**. Backlog: **IMP-1**.
+
+**`profiles.slug` is cancelled** (#145 closed). Its branch carried one thing worth keeping — a repair
+to migration 0011's self-referential snapshot link, a latent bug on `main` since #139 — which shipped
+separately as **#147**.
 
 ### 2. Bodyweight: trim trailing zeros, accept the loss
 
@@ -144,13 +146,13 @@ written against this contract) rather than re-deriving the predicates.
 
 ## Risks
 
-| Risk                                                                                                                                                                                                                              | Mitigation                                                                                                                                                                                                                                            |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The exporter is provable only against fixtures we wrote** — no importer exists and prod held zero rows as of #139, so the "byte-faithful diff against the legacy corpus" the row and contract lean on **cannot be run at all**. | Vectors are transcribed from the contract's own examples, which are real rows. The independent check is **V1-14b** — log a day through the UI, export, diff — which is exactly why 14b exists downstream. Stop claiming the legacy diff.              |
-| A CSV library sneaks in later and re-quotes the inch marks.                                                                                                                                                                       | A comment at the joiner plus the `30" box` vector — it fails loudly the moment someone "fixes" it.                                                                                                                                                    |
-| `prescribed` reconstruction reads today's program, not the program as it was.                                                                                                                                                     | Safe while prescriptions are seed-immutable; **V1-22 breaks it** (an edited load retroactively rewrites history). Recorded on the V1-22 row as a blocker it must solve.                                                                               |
-| Two `load` shapes (`BW (unassisted)`, `30 (2x 15 DB)`) are unrepresentable; two more (`BW+8 (vest)`, `123 (50ft)`) need GAP-3 PR 4b.                                                                                              | The 4b pair describes data the app **cannot currently create either**, so vectors cover them and 4b turns them on with no export change. The other two are qualitative prose bound for `entries.notes` via V1-9a — an input gap, not an exporter bug. |
-| `bodyweight.context` is `morning` on 100% of real rows and the app **can never write it** (`logBodyweightSchema` has no such field).                                                                                              | Exports empty forever. Stated explicitly so it reads as a known regression of a populated column, not an export defect.                                                                                                                               |
+| Risk                                                                                                                                                                                                                                                                                                                                              | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The exporter is provable only against fixtures we wrote** — no importer exists and prod held zero rows as of #139, so the "byte-faithful diff against the legacy corpus" the row and contract lean on **cannot be run at all today**. Both the fixtures and the formatter encode the same reading of the contract, so a misreading passes both. | Vectors are transcribed from the contract's own examples, which are real rows. Two independent checks follow, in increasing strength: **V1-14b** logs a day through the UI and round-trips it, and **IMP-2** re-exports the _imported legacy corpus_ and diffs it byte-for-byte — history the app did not write, which is the only thing that catches a shared misreading. The legacy diff is **not abandoned; it is deferred until there is data to run it on.** |
+| A CSV library sneaks in later and re-quotes the inch marks.                                                                                                                                                                                                                                                                                       | A comment at the joiner plus the `30" box` vector — it fails loudly the moment someone "fixes" it.                                                                                                                                                                                                                                                                                                                                                                |
+| `prescribed` reconstruction reads today's program, not the program as it was.                                                                                                                                                                                                                                                                     | Safe while prescriptions are seed-immutable; **V1-22 breaks it** (an edited load retroactively rewrites history). Recorded on the V1-22 row as a blocker it must solve.                                                                                                                                                                                                                                                                                           |
+| Two `load` shapes (`BW (unassisted)`, `30 (2x 15 DB)`) are unrepresentable; two more (`BW+8 (vest)`, `123 (50ft)`) need GAP-3 PR 4b.                                                                                                                                                                                                              | The 4b pair describes data the app **cannot currently create either**, so vectors cover them and 4b turns them on with no export change. The other two are qualitative prose bound for `entries.notes` via V1-9a — an input gap, not an exporter bug.                                                                                                                                                                                                             |
+| `bodyweight.context` is `morning` on 100% of real rows and the app **can never write it** (`logBodyweightSchema` has no such field).                                                                                                                                                                                                              | Exports empty forever. Stated explicitly so it reads as a known regression of a populated column, not an export defect.                                                                                                                                                                                                                                                                                                                                           |
 
 ## Out of scope
 
