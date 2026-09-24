@@ -71,6 +71,13 @@
       "when": 1786472445604,
       "tag": "0009_illegal_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790211138338,
+      "tag": "0010_chemical_miss_america",
+      "breakpoints": true
     }
   ]
 }
