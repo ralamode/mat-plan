@@ -112,9 +112,34 @@ describe('seed-row schemas', () => {
 });
 
 describe('PROGRAM_SEED — Ray’s real block, authoring-consistent', () => {
-  it('is populated (the Kids S&C Foundation block)', () => {
+  it('is populated (the Youth Daily Program block)', () => {
     expect(PROGRAM_SEED.length).toBeGreaterThanOrEqual(1);
-    expect(PROGRAM_SEED.some((b) => b.slug === 'kids_s&c_foundation')).toBe(true);
+    // 2026-09-24: replaced `kids_s&c_foundation`, archived verbatim at
+    // docs/programs/kids-sc-foundation-archived.md. Both cannot be active — programDayRows picks
+    // the newest block per day-role, so seeding two would silently hijack one card with the other.
+    expect(PROGRAM_SEED.some((b) => b.slug === 'youth_daily_program')).toBe(true);
+    expect(PROGRAM_SEED.some((b) => b.slug === 'kids_s&c_foundation')).toBe(false);
+  });
+
+  it('programs BOTH day letters, so every calendar day has a card', () => {
+    const roles = new Set(PROGRAM_SEED.flatMap((b) => b.prescriptions.map((p) => p.dayRole)));
+    expect([...roles].sort()).toEqual(['strength_a', 'strength_b']);
+  });
+
+  it('prescribes no reps or loads except the one fixed movement', () => {
+    // The paper sheet deliberately shows no goal numbers — "the absence of a target reduced the
+    // 'I failed today' effect". Hip thrusts are the single exception (3 x 10 per side).
+    const prescribed = PROGRAM_SEED.flatMap((b) => b.prescriptions).filter(
+      (p) => p.sets !== null || p.targetReps !== null,
+    );
+    expect(prescribed.map((p) => p.movementSlug)).toEqual([
+      'single-leg_hip_thrusts',
+      'single-leg_hip_thrusts',
+    ]);
+    // And no authored loads anywhere — the LLM-never-authors-loads rule, and the sheet's own design.
+    for (const p of PROGRAM_SEED.flatMap((b) => b.prescriptions)) {
+      for (const t of p.targets) expect(t.load).toBeNull();
+    }
   });
 
   it('validates against the seed-row schemas (every block, prescription, target)', () => {

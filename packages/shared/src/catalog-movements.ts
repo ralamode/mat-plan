@@ -274,6 +274,62 @@ export const MOVEMENT_SEED_ROWS = [
     unitDefault: null,
     isBodyweight: true,
   },
+
+  // ── Youth daily A/B program (2026-09-24) ────────────────────────────────────────
+  // The program the kids actually run, every calendar day. Source:
+  // docs/samples/youth-daily-program/README.md. All bodyweight with an OPTIONAL worn load, except
+  // KB swings where the bell weight is required — which is why `isBodyweight` differs on that one.
+  {
+    publicId: seedPublicId('070'),
+    slug: 'push-ups',
+    name: 'Push-Ups',
+    pattern: 'horizontal_push',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    publicId: seedPublicId('071'),
+    slug: 'leg_raises',
+    name: 'Leg Raises',
+    pattern: 'core',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    publicId: seedPublicId('072'),
+    slug: 'v-sit_crunches',
+    name: 'V-Sit Crunches',
+    pattern: 'core',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    publicId: seedPublicId('073'),
+    slug: 'inverted_rows',
+    name: 'Inverted Rows',
+    pattern: 'horizontal_pull',
+    unitDefault: null,
+    isBodyweight: true,
+  },
+  {
+    // The ONE Day-B movement with a required load — the spec marks bell weight required, not optional.
+    publicId: seedPublicId('074'),
+    slug: 'kb_swings',
+    name: 'KB Swings',
+    pattern: 'hinge',
+    unitDefault: 'lb',
+    isBodyweight: false,
+  },
+  {
+    // Ray (2026-09-24): hip thrusts are a REP MOVEMENT. The paper sheet's three completion
+    // checkboxes are a paper affordance, not a data shape.
+    publicId: seedPublicId('075'),
+    slug: 'single-leg_hip_thrusts',
+    name: 'Single-Leg Hip Thrusts',
+    pattern: 'hinge',
+    unitDefault: null,
+    isBodyweight: true,
+  },
 ] as const satisfies readonly MovementSeedRow[];
 
 /** Runtime guard the coverage test also pins: seed slug must equal `movementSlug(name)`. */

@@ -150,196 +150,76 @@ function perKid(
   ];
 }
 
+/** No prescribed sets, reps or load — the sheet shows only what was done (spec §7). */
+function open(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
+  return { sets: null, targetReps: null, targets: both(null) };
+}
+
+/** The one fixed prescription in the program: 3 x 10 per side. */
+function fixed(): Pick<PrescriptionSeedRow, 'sets' | 'targetReps' | 'targets'> {
+  return { sets: 3, targetReps: '10 per side', targets: both(null) };
+}
+
 /**
- * The program seed — Ray's **Kids S&C Foundation** block, WEEK 1 strength days (source:
- * docs/plans/v1-10-two-week-program-source.md). One block, three strength day-roles; loads/reps transcribed verbatim as the greyed
- * *starting suggestion* (Week 2 is a coach bump, not a second prescription — "confirm against the last logged
- * working set"). Conditioning days + the daily brush-the-teeth routine are out of scope (routine/check-ins +
- * a future conditioning model). `target_reps` is the base prescribed reps; a per-kid `reps` overrides it where
- * a kid deviates. Lossless `target_reps` text carries `/side`, `/leg`, distances, times, and the trap-bar
- * back-off note (no separate scheme/notes column — slice 1 cut them; a cue field is backlogged for slice 2).
+ * The program seed — **Ray's youth daily A/B program**, the one the kids actually run
+ * ([spec](../../../docs/samples/youth-daily-program/README.md)).
+ *
+ * ## It runs EVERY calendar day, alternating A → B → A
+ *
+ * There is no rest day; load is managed by rotating which movements appear. Day A carries box jumps
+ * and inverted rows, Day B carries KB swings, and the four core movements plus the hip thrusts run
+ * every session — so the athlete does a jump *or* a swing daily while each individual movement lands
+ * every other session.
+ *
+ * ⚠️ **The letter is derived from the CALENDAR, not from completed sessions** — `resolveDayRole`.
+ * The spec is emphatic that it should come from a completed-session count and names the failure mode
+ * (`date % 2` doubles up box jumps after a missed day). **Ray accepted that deliberately**
+ * (2026-09-24): *"I don't mind if they miss a day and end up doing the same thing twice, that's on
+ * them. The way this works is by streak and consistency, stacking days."* True session-indexing is
+ * backlog row YDP-1, blocked on SCHED-1. Do not "fix" this without asking.
+ *
+ * ## No prescribed reps and no prescribed loads — by design
+ *
+ * `sets` and `targetReps` are NULL on every rotating and core movement. The paper sheet deliberately
+ * shows no goal numbers, only what was done, *"which reduced the 'I failed today' effect"*. Ten set
+ * columns exist as headroom, not a target, and the set count is genuinely variable day to day. The
+ * one exception is the hip thrusts, whose prescription really is fixed.
+ *
+ * ## `strength_a` / `strength_b` are reused as Day A / Day B
+ *
+ * Deliberate, and temporary. Proper `ydp_a`/`ydp_b` roles need a migration altering two CHECKs; Ray
+ * chose (2026-09-24) to have the kids logging tonight instead. The consequence is stated rather than
+ * hidden: **this block REPLACES the Kids S&C Foundation block**, which is archived verbatim at
+ * [docs/programs/kids-sc-foundation-archived.md](../../../docs/programs/kids-sc-foundation-archived.md)
+ * and can be re-seeded when it returns. Both cannot be active at once, because `programDayRows` picks
+ * the newest block per day-role.
  */
 export const PROGRAM_SEED: readonly ProgramBlockSeedRow[] = [
   {
     householdPublicId: SEED_HOUSEHOLD_PUBLIC_ID,
-    slug: 'kids_s&c_foundation', // === movementSlug('Kids S&C Foundation')
-    name: 'Kids S&C Foundation',
+    slug: 'youth_daily_program', // === movementSlug('Youth Daily Program')
+    name: 'Youth Daily Program',
     notes:
-      'Green / no-practice baseline. Loads are a Week-1 starting point — confirm against each kid’s last logged working set (a load that runs clean for all sets is too light).',
+      'Runs every day, alternating A and B. No prescribed reps or loads — log what you actually did. Add sets before adding reps; progress box height rather than jump reps, and bell weight once 3x15 is crisp.',
     prescriptions: [
-      // ── Strength A (Mon) — Squat + Vertical Power ──
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'box_jump',
-        idx: 0,
-        sets: 4,
-        targetReps: '3',
-        targets: perKid({ load: 'BW ~30"' }, { load: 'BW ~36"' }),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'front_squat',
-        idx: 1,
-        sets: 5,
-        targetReps: '5',
-        targets: perKid({ load: '60' }, { load: '65' }),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'back_squat',
-        idx: 2,
-        sets: 3,
-        targetReps: '5',
-        targets: both('~75-85'),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'pull-up',
-        idx: 3,
-        sets: 4,
-        targetReps: '4-5',
-        targets: perKid({ load: 'BW', reps: '4' }, { load: 'BW +5', reps: '5, last AMRAP' }),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'bb_bench',
-        idx: 4,
-        sets: 4,
-        targetReps: '6',
-        targets: both('~60'),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'nordic_ham_curl',
-        idx: 5,
-        sets: 4,
-        targetReps: '5, last set to failure',
-        targets: both('BW'),
-      },
-      {
-        dayRole: 'strength_a',
-        movementSlug: 'pallof_press',
-        idx: 6,
-        sets: 3,
-        targetReps: '12/side',
-        targets: both('band'),
-      },
+      // ── Day A ── core four, then the A-only rotating pair, then the every-day hip thrusts ──
+      { dayRole: 'strength_a', movementSlug: 'push-ups', idx: 0, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'pull-up', idx: 1, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'leg_raises', idx: 2, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'v-sit_crunches', idx: 3, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'box_jump', idx: 4, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'inverted_rows', idx: 5, ...open() },
+      { dayRole: 'strength_a', movementSlug: 'single-leg_hip_thrusts', idx: 6, ...fixed() },
 
-      // ── Strength B (Wed) — Hinge + Explosive ──
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'med-ball_slam',
-        idx: 0,
-        sets: 4,
-        targetReps: '5',
-        targets: both('15-20 lb ball'),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'trap-bar_deadlift',
-        idx: 1,
-        sets: 4,
-        targetReps: '3 (top triple, then 2 back-offs)',
-        targets: both('~145-150'),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'overhead_shoulder_press',
-        idx: 2,
-        sets: 4,
-        targetReps: '6',
-        targets: perKid({ load: '15/DB' }, { load: '20/DB' }),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: '1-arm_db_row',
-        idx: 3,
-        sets: 4,
-        targetReps: '8/side',
-        targets: perKid({ load: '25' }, { load: '30' }),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'pull-up',
-        idx: 4,
-        sets: 3,
-        targetReps: '5',
-        targets: perKid({ load: 'BW', reps: '5, last AMRAP' }, { load: 'BW +5-10' }),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'bulgarian_split_squat',
-        idx: 5,
-        sets: 3,
-        targetReps: '8/leg',
-        targets: both('15-20'),
-      },
-      {
-        dayRole: 'strength_b',
-        movementSlug: 'ab_rollout',
-        idx: 6,
-        sets: 3,
-        targetReps: '8-10, last set to failure',
-        targets: both('BW'),
-      },
-
-      // ── Strength C (Fri) — Posterior Chain + Carries ──
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'broad_jump',
-        idx: 0,
-        sets: 4,
-        targetReps: '3',
-        targets: both('BW'),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'barbell_hip_thrust',
-        idx: 1,
-        sets: 4,
-        targetReps: '6',
-        targets: both('~135'),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'romanian_deadlift',
-        idx: 2,
-        sets: 4,
-        targetReps: '8',
-        targets: both('~95 BB / ~45 DB'),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'dips',
-        idx: 3,
-        sets: 3,
-        targetReps: '6-8, last set to failure',
-        targets: both('BW → +vest/belt'),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'pull-up',
-        idx: 4,
-        sets: 4,
-        targetReps: '4-5',
-        targets: perKid({ load: 'BW', reps: '4, last AMRAP' }, { load: 'BW +5-10', reps: '5' }),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'farmer_carry',
-        idx: 5,
-        sets: 4,
-        targetReps: '40 yd, to grip failure',
-        targets: both('35-45/hand'),
-      },
-      {
-        dayRole: 'strength_c',
-        movementSlug: 'hollow-body_hold',
-        idx: 6,
-        sets: 3,
-        targetReps: '30-40 s',
-        targets: both('BW'),
-      },
+      // ── Day B ── the same core four, KB swings instead of the A pair ──
+      // Deliberately lighter on pulling: that is what gives the medial elbow and finger flexors a
+      // recovery window between Day A row sessions.
+      { dayRole: 'strength_b', movementSlug: 'push-ups', idx: 0, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'pull-up', idx: 1, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'leg_raises', idx: 2, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'v-sit_crunches', idx: 3, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'kb_swings', idx: 4, ...open() },
+      { dayRole: 'strength_b', movementSlug: 'single-leg_hip_thrusts', idx: 5, ...fixed() },
     ],
   },
 ];

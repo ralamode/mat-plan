@@ -1,35 +1,43 @@
 import { type DayRole } from '@mat-plan/shared';
 
-import { localWeekday } from '@/lib/date';
+/**
+ * Which `day_role` a calendar day programs — **the youth daily A/B rotation** (2026-09-24).
+ *
+ * The program runs **every calendar day** with no rest day, alternating `A → B → A`. So this is a
+ * parity over the DATE itself, not a weekday map: a weekday map cannot alternate correctly across a
+ * week boundary (seven is odd, so Saturday and Sunday would land on the same letter).
+ *
+ * ⚠️ **CALENDAR-indexed, and the spec says it should not be.** The source is emphatic that the letter
+ * must come from the count of COMPLETED SESSIONS, and names the exact failure mode: *"a
+ * calendar-derived letter will silently double up box jumps after any missed day."*
+ *
+ * **Ray accepted that deliberately** (2026-09-24): _"I don't mind if they miss a day and end up doing
+ * the same thing twice, that's on them. The way this works is by streak and consistency, stacking
+ * days. For now we can just align A with a day, B, next day etc."_
+ *
+ * So this is a DECISION, not an oversight — **do not "fix" it without asking.** True session-indexing
+ * needs SCHED-1's recorded daily verdicts, since "completed sessions" is a question about history;
+ * it is backlog row YDP-1.
+ *
+ * Replaces the Mon/Wed/Fri S&C map, whose block is archived at
+ * `docs/programs/kids-sc-foundation-archived.md`.
+ */
+
+/** Days since the Unix epoch for a bare `YYYY-MM-DD`, via the UTC-anchored parse (the V1-6c idiom). */
+function epochDay(day: string): number {
+  return Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+}
 
 /**
- * Which `day_role` a weekday programs (V1-10 slice 2) — Ray's split: **Mon → Strength A, Wed → Strength B,
- * Fri → Strength C**; every other day programs no strength (→ the Today page shows no program card).
+ * The `day_role` for the LOCAL calendar date `day` (`YYYY-MM-DD`).
  *
- * DELIBERATE STOPGAP — app policy, not shared contract. This lives in `apps/web` (not `packages/shared`)
- * and as a const (not a DB `block_schedule` table) because the app serves exactly ONE household today, and
- * a table would buy per-block schedules nobody can author yet. **Promotion trigger:** Clerk /
- * multi-household (v1.5) — at which point this becomes a per-block schedule row and the map is deleted.
- * Tracked in docs/tech-debt.md, same as the access-gate stopgap.
+ * EVEN epoch-day → **B**, odd → **A**. The phase is anchored so that 2026-09-24 — the day the kids
+ * moved off paper — is a **B day**, matching the sheet they had just filled in.
  *
- * Keyed by the `0=Sun … 6=Sat` weekday that `localWeekday` returns. Typed `DayRole | null` against the
- * shared enum so a typo can't invent a role the DB CHECK would reject.
+ * ⚠️ `strength_a`/`strength_b` are REUSED as Day A / Day B. Proper `ydp_a`/`ydp_b` roles need a
+ * migration altering two CHECKs; this was the path that let the athletes log the same evening. See
+ * `PROGRAM_SEED`'s note.
  */
-export const DAY_ROLE_BY_WEEKDAY: Record<number, DayRole | null> = {
-  0: null, // Sun — rest
-  1: 'strength_a', // Mon
-  2: null, // Tue — conditioning (no prescription model yet)
-  3: 'strength_b', // Wed
-  4: null, // Thu — conditioning (no prescription model yet)
-  5: 'strength_c', // Fri
-  6: null, // Sat — rest
-};
-
-/**
- * The `day_role` programmed for the LOCAL calendar date `day` (`YYYY-MM-DD`), or null on a non-strength
- * day. Pure + unit-tested; the RSC feeds it the active-tz `localDayIso` day so the card and the page
- * header can never disagree about which weekday it is.
- */
-export function resolveDayRole(day: string): DayRole | null {
-  return DAY_ROLE_BY_WEEKDAY[localWeekday(day)] ?? null;
+export function resolveDayRole(day: string): DayRole {
+  return epochDay(day) % 2 === 0 ? 'strength_b' : 'strength_a';
 }
