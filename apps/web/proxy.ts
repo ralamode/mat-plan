@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { GATE_COOKIE_NAME, GATE_PATH, isValidGateCookie } from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, GATE_PATH, isPublicPath, isValidGateCookie } from '@/lib/access-gate';
 import { env } from '@/lib/env';
 
 /**
@@ -54,6 +54,15 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   const csp = buildCsp(nonce, isDev);
 
   const { pathname } = request.nextUrl;
+
+  // The duals day sheets are public (DUALS-1 / D4): they are for wrestling
+  // families on a gym floor, who will not type an access code. They render only
+  // static tournament JSON — no DB, no Clerk, no household data — so opening
+  // them exposes nothing about the logger. Every other route stays gated.
+  if (isPublicPath(pathname)) {
+    return withDualsHeaders(forward(request, nonce, csp), csp);
+  }
+
   const authed = await isValidGateCookie(
     request.cookies.get(GATE_COOKIE_NAME)?.value,
     env.ACCESS_GATE_PASSWORD,
@@ -76,13 +85,28 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return withSecurityHeaders(NextResponse.redirect(url), csp);
   }
 
-  // Forward the nonce to the renderer via request headers; Next reads it from
-  // the CSP header and stamps its own script/style tags automatically.
+  return withSecurityHeaders(forward(request, nonce, csp), csp);
+}
+
+/**
+ * Forward the nonce to the renderer via request headers; Next reads it from the
+ * CSP header and stamps its own script/style tags automatically.
+ */
+function forward(request: NextRequest, nonce: string, csp: string): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', csp);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
 
-  return withSecurityHeaders(NextResponse.next({ request: { headers: requestHeaders } }), csp);
+/**
+ * The day sheets are public but not something we want indexed: the data is a
+ * third party's and goes stale the day after the tournament.
+ */
+function withDualsHeaders(response: NextResponse, csp: string): NextResponse {
+  withSecurityHeaders(response, csp);
+  response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  return response;
 }
 
 export const config = {
