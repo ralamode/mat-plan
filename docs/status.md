@@ -12,7 +12,10 @@ tournament day sheet — pool, round order, mat, and the weight-by-weight matchu
 2026 Tyrant Columbus Day Duals, in time for the Assassins squads wrestling that weekend. Static
 JSON, no DB and no migration. The day-sheet routes are **public** — no access code — because they
 render only static tournament data, never household data ([plan](./plans/duals-1-public-day-sheet.md)
-D1/D3/D4); the logger itself stays gated. Notable because it is the **first
+D1/D3/D4); the logger itself stays gated. **Corrected 2026-09-25:** the first capture mis-paired an
+8-slot bracket and turned two of Wrestling Chix's duals into byes — the schema now asserts the
+round-robin invariant (`duals == poolTeamCount - 1`) so a lost dual fails the build instead of
+rendering as a plausible bye. Notable because it is the **first
 thing in this repo aimed at someone other than the three of us**, and the first test of whether the
 day sheet is the artifact parents actually forward.
 

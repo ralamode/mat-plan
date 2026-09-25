@@ -56,6 +56,12 @@ export const dualsEntrySchema = z.object({
   teamId: z.string().min(1),
   division: z.string().min(1),
   pool: z.string().min(1),
+  /**
+   * How many teams are in the pool, taken from the source's own pool listing —
+   * NOT counted from `rounds`. That independence is the point: it lets the
+   * round-robin invariant below catch a capture that silently lost a dual.
+   */
+  poolTeamCount: z.number().int().positive(),
   rounds: z.array(dualRoundSchema),
 });
 
@@ -94,6 +100,31 @@ function refineEventIntegrity(
   }
 
   for (const entry of event.entries) {
+    /**
+     * Round-robin arithmetic: in an N-team pool every team wrestles N-1 duals.
+     *
+     * This exists because a capture once turned two real duals into byes. The
+     * source renders a 6-team pool in an 8-slot bracket, so two slots per round
+     * hold literal "Bye" tokens — and a team that has already advanced gets an
+     * "ABC Bye" LABEL in its own cell, which looks identical in extracted text
+     * but is not a slot. Counting those labels as slots shifted the pairing and
+     * Wrestling Chix inherited a neighbour's bye twice.
+     *
+     * The contradiction was sitting in the data the whole time: pool of 6,
+     * three duals. One subtraction would have caught it, so now it does.
+     */
+    const live = entry.rounds.filter((r) => r.opponentId !== null).length;
+    const expected = entry.poolTeamCount - 1;
+    if (live !== expected) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          `${entry.teamId} (${entry.division} ${entry.pool}): pool of ${entry.poolTeamCount} ` +
+          `implies ${expected} duals, but the schedule has ${live}. A dual was probably ` +
+          `mis-parsed into a bye.`,
+      });
+    }
+
     if (!ids.has(entry.teamId)) {
       ctx.addIssue({ code: 'custom', message: `entry references unknown teamId: ${entry.teamId}` });
     }
