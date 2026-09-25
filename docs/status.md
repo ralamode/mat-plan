@@ -3,9 +3,17 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-23
+**Last updated:** 2026-09-25
 
 ## Where we are right now
+
+🆕 **DUALS-1 — the first parent-facing surface** (2026-09-25). `/duals/[event]/[team]` renders a
+tournament day sheet — pool, round order, mat, and the weight-by-weight matchup per round — for the
+2026 Tyrant Columbus Day Duals, in time for the Assassins squads wrestling that weekend. Static
+JSON, no DB and no migration; **behind the existing access gate**, so it is a club share rather than
+a publication ([plan](./plans/duals-1-public-day-sheet.md) D4). Notable because it is the **first
+thing in this repo aimed at someone other than the three of us**, and the first test of whether the
+day sheet is the artifact parents actually forward.
 
 📍 **v1 (the MVP) — feature-complete except its finish line.** Every logging surface is built and
 merged: per-kid routines, weigh-ins, check-ins, calisthenics + weekly adherence, life activities,
