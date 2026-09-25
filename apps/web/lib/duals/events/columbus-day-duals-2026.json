@@ -8,15 +8,13 @@
     "url": "https://www.usabracketing.com/events/b58dca3b-eca3-440a-ba53-e707d679d96d"
   },
   "capturedAt": "2026-09-25",
-  "notes": [
-    "Dual order only \u2014 the event schedule has no published start times.",
-    "Wrestling Chix round 6: the bracket rendered no pairing; shown as a bye."
-  ],
+  "notes": ["Dual order only \u2014 the event schedule has no published start times."],
   "entries": [
     {
       "teamId": "e20df4dc-3ae0-4ba2-b042-19cc54ad179a",
       "division": "Elementary 4th",
       "pool": "Pool D",
+      "poolTeamCount": 6,
       "rounds": [
         {
           "round": 1,
@@ -49,6 +47,7 @@
       "teamId": "5dfc7523-c237-47a3-b532-6c09bbb5a63e",
       "division": "Elementary 6th",
       "pool": "National Pool A",
+      "poolTeamCount": 8,
       "rounds": [
         {
           "round": 1,
@@ -91,6 +90,7 @@
       "teamId": "246a4299-5190-4636-88d1-1dbad52b4aff",
       "division": "Elementary 6th",
       "pool": "National Pool B",
+      "poolTeamCount": 8,
       "rounds": [
         {
           "round": 1,
@@ -133,6 +133,7 @@
       "teamId": "56bae0a9-209c-47c9-b3f4-f8b5e36ba3bb",
       "division": "Elementary 6th",
       "pool": "National Pool D",
+      "poolTeamCount": 8,
       "rounds": [
         {
           "round": 1,
@@ -175,6 +176,7 @@
       "teamId": "53e5ffdb-774f-4f33-8838-fa2b3a3fc956",
       "division": "Girls K-12",
       "pool": "Pool B",
+      "poolTeamCount": 6,
       "rounds": [
         {
           "round": 1,
@@ -193,8 +195,8 @@
         },
         {
           "round": 4,
-          "opponentId": null,
-          "mat": null
+          "opponentId": "3c7ebc51-091e-4ec6-af62-76ff664cc209",
+          "mat": "40"
         },
         {
           "round": 5,
@@ -203,8 +205,8 @@
         },
         {
           "round": 6,
-          "opponentId": null,
-          "mat": null
+          "opponentId": "77fa84a9-194c-41e3-8fca-150a24706e4e",
+          "mat": "39"
         },
         {
           "round": 7,
@@ -217,6 +219,7 @@
       "teamId": "f008c9e6-c4f7-4420-ba74-5ef95cf59026",
       "division": "Girls K-12",
       "pool": "Pool C",
+      "poolTeamCount": 7,
       "rounds": [
         {
           "round": 1,
@@ -259,6 +262,7 @@
       "teamId": "de2bfd13-2d37-4ae2-8884-8fc45090cb49",
       "division": "High School",
       "pool": "National Pool E",
+      "poolTeamCount": 6,
       "rounds": [
         {
           "round": 1,
@@ -291,6 +295,7 @@
       "teamId": "9dbda9de-4182-4069-8473-46cbe962fff3",
       "division": "Middle School",
       "pool": "National Pool B",
+      "poolTeamCount": 4,
       "rounds": [
         {
           "round": 1,
@@ -313,6 +318,7 @@
       "teamId": "469f25b3-225e-4839-9982-f041fc83de17",
       "division": "Middle School",
       "pool": "National Pool D",
+      "poolTeamCount": 4,
       "rounds": [
         {
           "round": 1,
@@ -1177,6 +1183,121 @@
           "first": "Eli",
           "last": "Grove",
           "weight": "110",
+          "actualWeight": null
+        }
+      ]
+    },
+    {
+      "id": "77fa84a9-194c-41e3-8fca-150a24706e4e",
+      "slug": "central-pennies-power-gk12",
+      "name": "Central Pennies Power GK12",
+      "roster": [
+        {
+          "first": "Elliott",
+          "last": "Rager",
+          "weight": "50",
+          "actualWeight": null
+        },
+        {
+          "first": "Ivanka",
+          "last": "Hill",
+          "weight": "57",
+          "actualWeight": 54.5
+        },
+        {
+          "first": "Jolene",
+          "last": "Hardy",
+          "weight": "64",
+          "actualWeight": null
+        },
+        {
+          "first": "Willow",
+          "last": "Kerr",
+          "weight": "70",
+          "actualWeight": 70.6
+        },
+        {
+          "first": "Meagan",
+          "last": "Hill",
+          "weight": "78",
+          "actualWeight": 78.6
+        },
+        {
+          "first": "Paige",
+          "last": "Wright",
+          "weight": "84",
+          "actualWeight": 82.5
+        },
+        {
+          "first": "Bryn",
+          "last": "Mcdaniel",
+          "weight": "90",
+          "actualWeight": 90.2
+        },
+        {
+          "first": "Abigail",
+          "last": "Neidig",
+          "weight": "95",
+          "actualWeight": 95.1
+        },
+        {
+          "first": "Melania",
+          "last": "Comfort",
+          "weight": "102",
+          "actualWeight": null
+        },
+        {
+          "first": "Evelyn",
+          "last": "Pittman",
+          "weight": "110",
+          "actualWeight": null
+        },
+        {
+          "first": "Xandria",
+          "last": "Yocum",
+          "weight": "118",
+          "actualWeight": null
+        },
+        {
+          "first": "Zoey",
+          "last": "Worthy",
+          "weight": "125",
+          "actualWeight": null
+        },
+        {
+          "first": "Kaylee",
+          "last": "Dayhoff",
+          "weight": "130",
+          "actualWeight": null
+        },
+        {
+          "first": "Reese",
+          "last": "Montgomery",
+          "weight": "135",
+          "actualWeight": null
+        },
+        {
+          "first": "Riley",
+          "last": "Lockhart",
+          "weight": "145",
+          "actualWeight": null
+        },
+        {
+          "first": "Emma",
+          "last": "Akacha",
+          "weight": "152",
+          "actualWeight": null
+        },
+        {
+          "first": "Mirra",
+          "last": "Harbaugh",
+          "weight": "185",
+          "actualWeight": null
+        },
+        {
+          "first": "Leah",
+          "last": "Brinser",
+          "weight": "235",
           "actualWeight": null
         }
       ]
@@ -4282,6 +4403,145 @@
           "first": "Aiden",
           "last": "Rafferty",
           "weight": "160",
+          "actualWeight": null
+        }
+      ]
+    },
+    {
+      "id": "3c7ebc51-091e-4ec6-af62-76ff664cc209",
+      "slug": "razor-gwc-gk12",
+      "name": "RaZor GWC GK12",
+      "roster": [
+        {
+          "first": "LeenaRay",
+          "last": "Delacruz",
+          "weight": "50",
+          "actualWeight": 47.6
+        },
+        {
+          "first": "Abigail",
+          "last": "Garcia",
+          "weight": "57",
+          "actualWeight": null
+        },
+        {
+          "first": "Victoria",
+          "last": "Carchidi",
+          "weight": "64",
+          "actualWeight": 63.1
+        },
+        {
+          "first": "Camilla",
+          "last": "Acosta",
+          "weight": "70",
+          "actualWeight": null
+        },
+        {
+          "first": "Aubrey",
+          "last": "Krantz",
+          "weight": "78",
+          "actualWeight": 76.0
+        },
+        {
+          "first": "Allison",
+          "last": "Krantz",
+          "weight": "84",
+          "actualWeight": 85.0
+        },
+        {
+          "first": "Franki",
+          "last": "Pugh",
+          "weight": "90",
+          "actualWeight": 90.2
+        },
+        {
+          "first": "Anna",
+          "last": "Massa",
+          "weight": "95",
+          "actualWeight": null
+        },
+        {
+          "first": "Coral",
+          "last": "Moors",
+          "weight": "95",
+          "actualWeight": null
+        },
+        {
+          "first": "Zoey",
+          "last": "Hernandez",
+          "weight": "102",
+          "actualWeight": 101.1
+        },
+        {
+          "first": "Raylynn",
+          "last": "Robinson",
+          "weight": "102",
+          "actualWeight": 101.7
+        },
+        {
+          "first": "Katie",
+          "last": "Porcelli",
+          "weight": "110",
+          "actualWeight": null
+        },
+        {
+          "first": "Gianna",
+          "last": "Cruz",
+          "weight": "118",
+          "actualWeight": null
+        },
+        {
+          "first": "Gracie",
+          "last": "Payea",
+          "weight": "125",
+          "actualWeight": 126.0
+        },
+        {
+          "first": "Juliana",
+          "last": "Bush",
+          "weight": "130",
+          "actualWeight": null
+        },
+        {
+          "first": "Sophia",
+          "last": "Vogia",
+          "weight": "130",
+          "actualWeight": null
+        },
+        {
+          "first": "Julianna",
+          "last": "Hernandez",
+          "weight": "135",
+          "actualWeight": 136.0
+        },
+        {
+          "first": "Arianna",
+          "last": "Balsamo",
+          "weight": "145",
+          "actualWeight": 144.8
+        },
+        {
+          "first": "Averi",
+          "last": "Baisley",
+          "weight": "152",
+          "actualWeight": 151.6
+        },
+        {
+          "first": "Kendall",
+          "last": "Renshaw",
+          "weight": "165",
+          "actualWeight": null
+        },
+        {
+          "first": "Samantha",
+          "last": "Sottilare",
+          "weight": "185",
+          "actualWeight": null
+        },
+        {
+          "first": "Elissa",
+          "last": "Bly",
+          "weight": "235",
           "actualWeight": null
         }
       ]
