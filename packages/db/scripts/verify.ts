@@ -2790,7 +2790,7 @@ const realBlock = (
     join program_blocks pb on pb.id = pr.block_id
     join movements m on m.id = pr.movement_id
     join profiles p on p.id = pt.profile_id
-    where pb.slug = 'kids_s&c_foundation'`)
+    where pb.slug = 'youth_daily_program'`)
 ).rows as unknown as {
   day_role: string;
   idx: number;
@@ -2800,43 +2800,51 @@ const realBlock = (
   load: string | null;
   reps: string | null;
 }[];
-// 3 days × 7 movements × 2 kids = 42 target rows; 21 distinct prescriptions.
+// 2026-09-24: the seeded block is now the YOUTH DAILY PROGRAM, not the Kids S&C Foundation block
+// (archived at docs/programs/kids-sc-foundation-archived.md). Ray's call — the kids run the daily
+// program, so that is what the app should scaffold. Both cannot be seeded: `programDayRows` picks the
+// newest block per day-role, so two would silently hijack one card with the other.
+//
+// 7 Day-A + 6 Day-B prescriptions × 2 kids = 26 target rows, 13 distinct slots.
 assert.equal(
   realBlock.length,
-  42,
-  'V1-10: the seeded block has 42 per-kid targets (21 prescriptions × 2 kids)',
+  26,
+  'YDP: the seeded block has 26 per-kid targets (13 prescriptions × 2 kids)',
 );
 assert.equal(
   new Set(realBlock.map((r) => `${r.day_role}#${r.idx}`)).size,
-  21,
-  'V1-10: 21 distinct (day_role, idx) prescription slots',
+  13,
+  'YDP: 13 distinct (day_role, idx) prescription slots',
 );
-const find = (dayRole: string, slug: string, profile: string) =>
-  realBlock.find(
-    (r) => r.day_role === dayRole && r.movement_slug === slug && r.profile_public_id === profile,
-  );
-// Spot-check the transcription: shared load, per-kid load, and a per-kid reps override.
-assert.equal(
-  find('strength_a', 'front_squat', SEED_PROFILE_PUBLIC_ID)?.load,
-  '60',
-  'V1-10: Liam front squat 60',
+
+// BOTH letters are programmed — the rotation runs every calendar day, so a card must exist daily.
+assert.deepEqual(
+  [...new Set(realBlock.map((r) => r.day_role))].sort(),
+  ['strength_a', 'strength_b'],
+  'YDP: both day letters are programmed',
 );
-assert.equal(
-  find('strength_a', 'front_squat', SEED_PROFILE_2_PUBLIC_ID)?.load,
-  '65',
-  'V1-10: Scarlett front squat 65',
+
+// The core four run on BOTH days; the rotating pair is A-only and the swing is B-only. That is the
+// design — the athlete does a jump OR a swing daily while each movement lands every other session.
+const slugsOn = (role: string) =>
+  new Set(realBlock.filter((r) => r.day_role === role).map((r) => r.movement_slug));
+const dayA = slugsOn('strength_a');
+const dayB = slugsOn('strength_b');
+for (const core of ['push-ups', 'pull-up', 'leg_raises', 'v-sit_crunches']) {
+  assert.ok(dayA.has(core) && dayB.has(core), `YDP: '${core}' runs every session`);
+}
+assert.ok(dayA.has('box_jump') && !dayB.has('box_jump'), 'YDP: box jumps are Day A only');
+assert.ok(dayA.has('inverted_rows') && !dayB.has('inverted_rows'), 'YDP: inverted rows are A only');
+assert.ok(dayB.has('kb_swings') && !dayA.has('kb_swings'), 'YDP: KB swings are Day B only');
+
+// ⚠️ NO AUTHORED LOADS ANYWHERE. Two independent reasons, and both matter: the product rule that the
+// LLM never authors loads, and the sheet's own design — it deliberately shows no goal numbers,
+// because "the absence of a target reduced the 'I failed today' effect".
+assert.ok(
+  realBlock.every((r) => r.load === null),
+  'YDP: no prescribed loads — the athlete logs what they actually did',
 );
-assert.equal(
-  find('strength_a', 'pull-up', SEED_PROFILE_2_PUBLIC_ID)?.reps,
-  '5, last AMRAP',
-  'V1-10: Scarlett’s per-kid pull-up reps override round-trips',
-);
-assert.equal(
-  find('strength_a', 'pull-up', SEED_PROFILE_PUBLIC_ID)?.reps,
-  '4',
-  'V1-10: Liam’s per-kid pull-up reps override round-trips',
-);
-console.log('✓ V1-10: Ray’s real block seeded — 21 prescriptions, per-kid loads + reps intact');
+console.log('✓ YDP: daily A/B block seeded — both letters, core four daily, no authored loads');
 
 // Drive a TEST-ONLY fixture through the REAL seedProgram (its own household/profile/block slug so a future
 // real data-PR block can never collide). Proves resolve-by-slug + resolve-by-public_id + the arbiter.
@@ -2938,49 +2946,56 @@ console.log(
 // `getProgramDay` and THIS proof both call `programDayRows`, so the shipped join shape — including its
 // BOLA scoping and the per-kid LEFT JOIN — is what gets exercised (the `weeklyAdherenceRows` precedent).
 
-// (a) Ray's real block: Liam's Strength A is all 7 movements, in the coach's authored `idx` order.
+// (a) The YOUTH DAILY PROGRAM: Day A is 7 movements, in the coach's authored `idx` order.
 const liamA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-assert.equal(liamA.length, 7, 'V1-10: programDayRows returns Strength A’s 7 movements');
+assert.equal(liamA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
 assert.deepEqual(
   liamA.map((r) => r.movementName),
   [
-    'Box Jump',
-    'Front Squat',
-    'Back Squat',
+    'Push-Ups',
     'Pull-Up',
-    'BB Bench',
-    'Nordic Ham Curl',
-    'Pallof Press',
+    'Leg Raises',
+    'V-Sit Crunches',
+    'Box Jump',
+    'Inverted Rows',
+    'Single-Leg Hip Thrusts',
   ],
-  'V1-10: programDayRows orders by the prescription idx (the coach’s authored order)',
+  'YDP: programDayRows orders by the prescription idx (the coach’s authored order)',
 );
 
-// (b) Per-kid isolation — the SAME prescription yields each kid their OWN load/reps, never the sibling's.
-// (This is what the scoped LEFT JOIN buys; a WHERE-scoped join would cross-contaminate or drop rows.)
+// Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
+// every day while each individual movement lands every other session.
+const liamB = await programDayRows(asPg, {
+  profilePublicId: SEED_PROFILE_PUBLIC_ID,
+  dayRole: 'strength_b',
+});
+assert.equal(liamB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
+assert.ok(
+  liamB.some((r) => r.movementName === 'KB Swings'),
+  'YDP: Day B carries the swing',
+);
+assert.ok(!liamB.some((r) => r.movementName === 'Box Jump'), 'YDP: Day B does NOT carry the jump');
+
+// (b) Per-kid isolation — the SAME prescription yields each kid their own row. The YDP prescribes no
+// loads at all, so what this proves is that BOTH kids get a row per movement (a WHERE-scoped join
+// would drop one), not that the loads differ.
 const scarlettA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_2_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-const liamSquat = liamA.find((r) => r.movementName === 'Front Squat');
-const scarlettSquat = scarlettA.find((r) => r.movementName === 'Front Squat');
-assert.equal(liamSquat?.load, '60', 'V1-10: programDayRows gives Liam his own load');
-assert.equal(scarlettSquat?.load, '65', 'V1-10: programDayRows gives Scarlett her own load');
-// The per-kid reps override + the shared prescription reps both come back (the DAL picks reps ?? targetReps).
-const liamPull = liamA.find((r) => r.movementName === 'Pull-Up');
-assert.equal(liamPull?.reps, '4', 'V1-10: per-kid reps override is returned');
-assert.equal(
-  liamPull?.targetReps,
-  '4-5',
-  'V1-10: the shared prescription reps is returned alongside',
+assert.equal(scarlettA.length, 7, 'YDP: the sibling gets her own 7 Day-A rows');
+assert.ok(
+  liamA.every((r) => r.load === null) && scarlettA.every((r) => r.load === null),
+  'YDP: no authored loads reach the card — the athlete logs what they did',
 );
-assert.equal(
-  liamSquat?.reps,
-  null,
-  'V1-10: no override → null reps (the DAL falls back to targetReps)',
-);
+
+// The one fixed prescription in the program survives the read.
+const hipThrust = liamA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
+assert.equal(hipThrust?.sets, 3, 'YDP: hip thrusts keep their fixed 3 sets');
+assert.equal(hipThrust?.targetReps, '10 per side', 'YDP: ...and their per-side prescription');
 
 // (c) A day with no prescriptions → zero rows (the page renders no card). Strength B exists; 'skill' doesn't.
 assert.equal(
