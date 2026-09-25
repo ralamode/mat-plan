@@ -35,10 +35,25 @@ describe('getTeamDaySheet', () => {
   });
 
   it('keeps byes in sequence so round numbers stay aligned', () => {
+    // Pool B is 6 teams in an 8-slot bracket: 5 duals + 2 byes across 7 rounds.
     const sheet = getTeamDaySheet(EVENT_SLUG, 'wrestling-chix-gk12');
     const byes = sheet!.rounds.filter((r) => r.opponent === null).map((r) => r.round);
-    expect(byes).toEqual([1, 2, 4, 6]);
+    expect(byes).toEqual([1, 2]);
     expect(sheet!.rounds.map((r) => r.round)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('has every team wrestling pool size minus one — the check that caught the bug', () => {
+    // A capture once mis-paired an 8-slot round and turned two of Wrestling
+    // Chix's duals into byes. Pool of 6, three duals: the contradiction was in
+    // the data already. Assert it for every team, not just that one.
+    for (const event of listEvents()) {
+      for (const entry of event.entries) {
+        const live = entry.rounds.filter((r) => r.opponentId !== null).length;
+        expect(live, `${entry.division} ${entry.pool} (${entry.teamId})`).toBe(
+          entry.poolTeamCount - 1,
+        );
+      }
+    }
   });
 
   it('resolves the truncated-name opponent by id, not by display name', () => {
