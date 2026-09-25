@@ -10,8 +10,9 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 🆕 **DUALS-1 — the first parent-facing surface** (2026-09-25). `/duals/[event]/[team]` renders a
 tournament day sheet — pool, round order, mat, and the weight-by-weight matchup per round — for the
 2026 Tyrant Columbus Day Duals, in time for the Assassins squads wrestling that weekend. Static
-JSON, no DB and no migration; **behind the existing access gate**, so it is a club share rather than
-a publication ([plan](./plans/duals-1-public-day-sheet.md) D4). Notable because it is the **first
+JSON, no DB and no migration. The day-sheet routes are **public** — no access code — because they
+render only static tournament data, never household data ([plan](./plans/duals-1-public-day-sheet.md)
+D1/D3/D4); the logger itself stays gated. Notable because it is the **first
 thing in this repo aimed at someone other than the three of us**, and the first test of whether the
 day sheet is the artifact parents actually forward.
 

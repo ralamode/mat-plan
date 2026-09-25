@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { GATE_COOKIE_NAME, gateTokenFor, isValidGateCookie, safeInternalPath } from './access-gate';
+import {
+  GATE_COOKIE_NAME,
+  gateTokenFor,
+  isPublicPath,
+  isValidGateCookie,
+  safeInternalPath,
+} from './access-gate';
 
 // First tests on the harness (pulled forward ahead of V0-8). The access-gate
 // helpers are pure and security-relevant, so they make a good first target:
@@ -71,5 +77,26 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
     ['undefined', undefined],
   ])('clamps %s to the root', (_label, value) => {
     expect(safeInternalPath(value)).toBe('/');
+  });
+});
+
+describe('public duals routes (DUALS-1 / D4)', () => {
+  it('opens /duals and its descendants only', () => {
+    expect(isPublicPath('/duals')).toBe(true);
+    expect(isPublicPath('/duals/columbus-day-duals-2026')).toBe(true);
+    expect(isPublicPath('/duals/a/b/c')).toBe(true);
+  });
+
+  it('does not open a path that merely starts with the same characters', () => {
+    // The whole point of segment matching: /dualsecret must stay gated.
+    expect(isPublicPath('/dualsecret')).toBe(false);
+    expect(isPublicPath('/dualszzz/x')).toBe(false);
+  });
+
+  it('leaves the rest of the app gated', () => {
+    expect(isPublicPath('/')).toBe(false);
+    expect(isPublicPath('/gate')).toBe(false);
+    expect(isPublicPath('/p/abc')).toBe(false);
+    expect(isPublicPath('//duals')).toBe(false);
   });
 });
