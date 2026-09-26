@@ -258,6 +258,20 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-26** — **V1-23 PR 1: a null prescription scaffolds 3 set rows, not 1**
+  ([plan](./plans/v1-23-today-focused.md)). `clampSetCount(null)` returned `1`, and `PROGRAM_SEED` —
+  the only seeded block — is `open()` on **11 of its 13** prescriptions. So every open movement
+  scaffolded ONE set row: a 5-movement Day B cost **~10 "Add set" taps, ~20% of the session**, while
+  the `filled/total` counter read `0/1 → 1/1` with two sets still to come, lying on the form's only
+  "where am I" signal. `DEFAULT_SCAFFOLD_SETS = 3` is now the default for an unauthored count; an
+  explicit `sets` is honoured unchanged and an explicit `< 1` still **floors to 1** (the BUG-2(b)
+  zero-row guard is a floor, not a default — two branches, deliberately two numbers).
+  - **Structure, not a prescription.** Three blank rows is the same category as the movement name
+    V1-19 already places: `ScaffoldRow` still carries no `load`, and the V1-19 blankness test now
+    asserts every `reps`/`weight` is empty **across the null-`sets` shape too**, so the wider
+    structure cannot become a place to smuggle a value in.
+  - Found by the V1-23 panels, which were reviewing four _other_ changes — none of them touched this,
+    and together they made the session longer (~53 → ~55 taps). Ray moved it ahead of all four.
 - **2026-09-26** — **V1-23 PR 2: the header says which day it is, and the routine editor is reachable**
   ([plan](./plans/v1-23-today-focused.md) → "PR 2 — orient the header"). Two small edits to Today, from
   Ray's first real session on the app. (1) The date line reads **`Today · Fri, Sep 26 · Strength B`** —
