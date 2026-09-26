@@ -66,7 +66,7 @@ flowchart TD
 | `lib/programming/`           | App-side contract + day tests.                                                                                       |
 | `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                       |
 | `program-reference.tsx`      | Today's "here's your day" card.                                                                                      |
-| `app/p/[profileId]/routine/` | The V1-18 routine editor.                                                                                            |
+| `app/p/[profileId]/routine/` | The V1-18 routine editor. **Linked from Today since V1-23** (below the logged entries) — it was URL-only before.     |
 
 ## Invariants
 
@@ -100,6 +100,21 @@ indexing is YDP-1, blocked on SCHED-1. The tests pin the decision, so a "fix" tu
 3c. **`strength_a`/`strength_b` are REUSED as Day A / Day B** — temporary. Proper `ydp_a`/`ydp_b`
 roles need a migration altering two `day_role` CHECKs; reusing them is what let the athletes log
 the same evening instead of on paper.
+
+3d. **The day letter appears TWICE on Today, and the two are different things.** Since V1-23 the date
+line reads `Today · Fri, Sep 26 · Strength B` — that badge is **derived** page metadata, straight off
+`resolveDayRole`, and nobody asserts it. The `dayRole` **select** in `strength-form.tsx` is the
+athlete's **assertion**, the one that gets stored on the session (GAP-1 P0-1), and it stays where it
+is: after every movement card, immediately before submit. **Do not "deduplicate" them by moving the
+select into the header** — three V1-23 panels rejected exactly that. What makes the assertion real is
+the select's **position** (unavoidable on the way to "Log strength"), not its visibility; pre-filled
+in the header it is functionally the hidden input the P0-1 note forbids. `DAY_ROLE_LABELS` is the
+single label source for both, so the badge also inherits 3c's "Strength B" wording for Day B.
+
+3e. **`resolveDayRole` is TOTAL** — `(day: string) => DayRole`, never null, because the YDP has no rest
+day. Guards of the form `dayRole ? … : []` are dead code left over from the Mon/Wed/Fri map; V1-23
+removed the one in Today's `Promise.all`. Do not add new ones, and do not read a `null` branch as
+evidence that an unprogrammed day exists.
 
 4. **Every read is scoped by profile `public_id` and filters soft-deleted rows at every level** —
    block, prescription, target, movement. `db:verify` proves each one independently.
