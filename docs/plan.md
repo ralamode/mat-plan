@@ -397,6 +397,60 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
+- **V1-24 — the form IS the day's state: edit what you already logged.** _(Ray, 2026-09-28, from
+  logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
+  — and then **could not fix it**, for either of two independent reasons. First data-correctness bug
+  found by real use, and the data is still wrong on the day it happened.
+
+  ### P0 — a bodyweight set is STRUCTURALLY uneditable
+
+  `isEditableSet` (`apps/web/app/p/[profileId]/set-display.ts`) opens with `!set.isBodyweight`, and
+  `updateStrengthSetById`'s WHERE mirrors it. **No path through the UI or the API can correct a BW
+  set**, and there is **no delete action anywhere in the app** — so a mis-tapped BW is permanent.
+
+  GAP-3 PR 4a's plan flagged exactly this class — _"a set with reps and no load renders `5 × ?` and
+  `isEditableSet` then refuses to fix it — permanently unrecoverable, because there is no delete
+  action in this app"_ — and the guard was restated rather than relaxed, on the reasoning that nothing
+  could write the shape. **The YDP seed can, and did.**
+
+  ### P0 — the form ignores the movement's own declaration
+
+  `KB Swings` is seeded `isBodyweight: false, unitDefault: 'lb'` — the YDP spec marks bell weight
+  **required**, not optional. `strength-form.tsx` reads **neither field** (zero references to either),
+  so BW was offered on a movement that cannot be done at bodyweight. The catalog already knew; the form
+  never asked.
+
+  ### Ray's shape: keep the values in the form, drop the read-only list
+
+  > _"Why not just keep them in the form if they exist so they can edit? Same thing for rice bucket and
+  > bodyweight, keep the values populated there for that day, no need to render the results below."_
+
+  A reframe, not a tweak. Today the form is **write-only** and the log below is **read-only**, so the
+  day's state is rendered twice in two vocabularies — and the _editable_ copy is the one that does not
+  show what happened. Ray's version has one surface: **the form holds today's values, and correcting
+  them is editing in place.**
+
+  It also answers a scrolling problem V1-23 has been chipping at: one logged session renders **29
+  read-only lines** (`25 × BW` five times, `5 × BW` five times, …) between the athlete and the rest of
+  the page.
+
+  **What it costs, and none of it is optional:**
+
+  1. **"Submit again to correct" fights the idempotency guarantee.** `writeStrengthSession` is per-row
+     `ON CONFLICT DO NOTHING` on `client_id` — a replay is deliberately a NO-OP, which is what makes
+     v1.5's offline sync safe. The resolution is almost certainly **edit as a distinct intent**, not
+     re-submit-as-upsert.
+  2. **Deletion becomes reachable, and the app has no delete.** Correcting 5 sets → 3 means removing
+     two. Soft-delete exists in the schema; nothing uses it.
+  3. **The check-in "inert once logged" rule is deliberate** — `checkin-form.tsx` renders a logged
+     habit checked + inert on purpose. Rice bucket becoming re-tickable is a decision about what a
+     check-in MEANS, not a rendering change.
+  4. **V1-13's CSV export reads the other model.** "The form is the state" makes the DTO the form's
+     shape; the exporter reads the logged-entry shape.
+
+  ⚠️ **UI change of this size ⇒ UX panel BEFORE implementation** (AGENTS.md). **Split it**: the two P0
+  bugs are fixable independently of the reframe, and there is wrong data on the board now.
+
 - **SCHED-2 — practice + privates as a logged shape, not free text.** _(Ray, 2026-09-24.)_ The athletes'
   real week, which nothing in the app currently represents: a **private 3:00–4:30PM M–F**, **wrestling
   practice 5:00–6:30PM**, and an **extra private Tue + Thu 7:00–8:00AM**.
