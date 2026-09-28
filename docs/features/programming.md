@@ -65,7 +65,7 @@ flowchart TD
 | `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query. Also feeds V1-13's `prescribed` column. |
 | `lib/programming/`           | App-side contract + day tests.                                                                                       |
 | `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                       |
-| `program-reference.tsx`      | Today's "here's your day" card.                                                                                      |
+| `program-reference.tsx`      | Today's "here's your day" card — a collapsible native `<details open>` (V1-23 PR 3).                                 |
 | `app/p/[profileId]/routine/` | The V1-18 routine editor. **Linked from Today since V1-23** (below the logged entries) — it was URL-only before.     |
 
 ## Invariants
@@ -74,6 +74,21 @@ flowchart TD
    not cross into the log as a logged number. V1-19's scaffold carries movement names and blank set
    rows **only** — `ScaffoldRow` has no `load` field, so the type enforces it. This is the product's
    one inviolable rule wearing a data-model hat.
+
+1b. **Today's card collapses natively, and its `<h3 id=…>` MUST stay inside the `<summary>`.** V1-23
+PR 3 made the card a `<details open>`. The wrapping `<section>` is labelled by that heading's id, so a
+heading moved into the collapsible body is **gone from the accessibility tree when the card is closed** —
+`aria-labelledby` dangles, axe raises `aria-valid-attr-value`, and `apps/web/e2e/a11y.spec.ts` (which now
+scans the card in **both** states) **fails the build**. Two more things not to re-litigate:
+
+- **Native, not React state, deliberately.** The rejected alternative was passing the card as `children`
+  into `StrengthForm`; that form remounts on `key={gen}` after every logged session, so a state-based
+  collapse would **re-expand on every log** — the exact complaint V1-23 exists to fix. `<details>` keeps
+  the card a Server Component, ships zero client JS, and the athlete's collapse survives a log.
+- ⚠️ **The "NOT a native `<details>`" note on the form's collapsed MOVEMENT cards does not generalise.**
+  Its reason is `required`-INPUT-specific (a hidden-but-present `required` input deadlocks the native
+  submit with an invisible error). This card has **no form controls at all**, and sits outside the
+  `<form>` — so a `<summary>` cannot submit either (a `<button>` trigger would need `type="button"`).
 
 2. **`prescriptions.target_reps` and `prescription_targets.load` are verbatim TEXT, deliberately.**
    They hold `AMRAP`, `~145-150`, `3 (top triple, then 2 back-offs)`. GAP-3 typed the **log**, not the
