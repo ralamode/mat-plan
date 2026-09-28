@@ -159,6 +159,8 @@ const STATES = {
   // V1-19 — the scaffolded form. Interaction-only; needs a PROGRAMMED day, so pair it with
   // `--tz` on a non-strength weekday (e.g. `--tz Pacific/Kiritimati` renders tomorrow).
   'form-scaffolded': null,
+  // V1-23 PR 3 — "Today's program" shut. Interaction-only (see INTERACTIONS below).
+  'program-collapsed': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -181,6 +183,18 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       );
     }
     await fill.click();
+  },
+  // V1-23 PR 3 — the card ships OPEN, so the default capture already shows the expanded state; what a
+  // reviewer cannot see there is the thing the PR is for: the form at the top of the screen once the
+  // athlete has shut the card. The disclosure is a native `<summary>`, so a click is the whole state.
+  'program-collapsed': async (page) => {
+    const summary = page.getByRole('region', { name: /Today.s program/ }).locator('summary');
+    if ((await summary.count()) === 0) {
+      throw new Error(
+        'no "Today\'s program" card — this state needs a day the seeded program prescribes movements for',
+      );
+    }
+    await summary.click();
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();

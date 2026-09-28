@@ -290,6 +290,15 @@ not merge order.
   link exposes and that Ray deferred: a kid can `Remove` **`strength` itself** and make the session
   unloggable with nothing on screen explaining why, and `Remove` has no confirm while re-adding
   **appends**, so the authored order is recoverable only via ▲▼.
+- **2026-09-26** — **V1-23 PR 3: "Today's program" collapses**
+  ([plan](./plans/v1-23-today-focused.md)). On a phone the reference card was a screenful above the
+  first input; it is now a native `<details open>`, so the athlete shuts it once they have read it and
+  the form is on screen. Native, not React state: `StrengthForm` remounts on `key={gen}` after every
+  logged session, so a state-based collapse would have re-expanded on every log — the complaint itself.
+  The `<h3 id=…>` lives in the `<summary>` because the wrapping `<section>`'s `aria-labelledby` points
+  at it: collapse the heading away and axe's `aria-valid-attr-value` fails the build. `a11y.spec.ts` now
+  scans the card in **both** states at 360px and asserts the summary clears 44px.
+
 - **2026-09-25** — **DUALS-1 ships, and the kids get their real program.**
   - **#152 · #153 · #155 — the day sheet.** `/duals/[event]` + `/duals/[event]/[team]`: a team's pool,
     its round-by-round opponent order and mat, each round expanding to the weight-by-weight pairing.

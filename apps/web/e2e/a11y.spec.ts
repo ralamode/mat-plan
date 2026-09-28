@@ -222,6 +222,73 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
 });
 
 /**
+ * V1-23 PR 3 — "Today's program" collapses, and the COLLAPSED state is the one nothing else scans.
+ *
+ * The card is `<section aria-labelledby="program-…-heading">` with the `<h3 id=…>` in the `<summary>`.
+ * Put that heading in the collapsible body instead and a closed card points `aria-labelledby` at an id
+ * that is no longer in the accessibility tree — axe `aria-valid-attr-value`, which would fail the build,
+ * but ONLY in a state a test has to click into. Every other scan in this file sees the card `open`.
+ *
+ * Runs at 360px (the narrowest committed width) so the summary's own row — heading + day label + the
+ * chevron — is measured where it is tightest, in both states. The tap target is measured explicitly
+ * because `INTERACTIVE` cannot see it: `<summary>`'s button role is IMPLICIT, and that selector matches
+ * the `[role="button"]` ATTRIBUTE.
+ */
+test("Today's program card is accessible in BOTH its expanded and collapsed states", async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW);
+  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  // Resolving the card BY ITS ACCESSIBLE NAME is the assertion, not just a locator: the name comes from
+  // `aria-labelledby`, so a `getByRole('region', { name })` that still matches proves the id resolves.
+  const card = strength.getByRole('region', { name: /Today.s program/ });
+  await expect(card, 'the program card should render on a programmed day').toBeVisible();
+
+  const body = card.getByText('Reference only', { exact: false });
+  await expect(
+    body,
+    'the card ships OPEN — reading the day is the point of the screen',
+  ).toBeVisible();
+  await expectNoHorizontalOverflow(page, "Today's program (expanded, 360px)");
+  await expectNoAxeViolations(page, "Today's program (expanded)");
+
+  const summary = card.locator('summary');
+  await expect(summary).toHaveCount(1);
+  const box = await summary.boundingBox();
+  expect(
+    Math.round(box?.height ?? 0),
+    'the summary is the collapse control — it must clear the tap-target bar',
+  ).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+
+  await summary.click();
+  await expect(body, 'clicking the summary should close the card').toBeHidden();
+
+  // THE case this test exists for.
+  await expect(
+    card,
+    'the heading id must still resolve with the body collapsed (aria-valid-attr-value)',
+  ).toBeVisible();
+  await expectNoAxeViolations(page, "Today's program (collapsed)");
+  await expectNoHorizontalOverflow(page, "Today's program (collapsed, 360px)");
+
+  // The collapse must not submit. A `<summary>` is not a form submitter at all, unlike the `<button>` a
+  // naive trigger would be (no `type` → `type="submit"`): nothing was logged and nothing was rejected,
+  // which is what the form's own status/alert regions would say.
+  // The form's live region is always in the DOM but EMPTY until something happens, so "empty" is the
+  // assertion, not "absent" — a submit would fill it, or raise an `alert` on rejection.
+  await expect(strength.getByRole('status')).toBeEmpty();
+  await expect(strength.getByRole('alert')).toHaveCount(0);
+  // And the card sits OUTSIDE the `<form>`, so the trap has no reach here. Pinned, because a future
+  // change that moves it inside would silently re-arm it for any non-`<summary>` trigger.
+  expect(
+    await card.evaluate((el) => el.closest('form') !== null),
+    'the program card sits outside the strength <form>',
+  ).toBe(false);
+});
+
+/**
  * A timezone in which the seeded program actually has movements today.
  *
  * WHY THIS EXISTS: this test used to `test.skip()` when the scaffold button was absent, on the
