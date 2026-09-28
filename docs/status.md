@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-26
 
 ## Where we are right now
 
@@ -19,19 +19,36 @@ rendering as a plausible bye. Notable because it is the **first
 thing in this repo aimed at someone other than the three of us**, and the first test of whether the
 day sheet is the artifact parents actually forward.
 
-📍 **v1 (the MVP) — feature-complete except its finish line.** Every logging surface is built and
-merged: per-kid routines, weigh-ins, check-ins, calisthenics + weekly adherence, life activities,
-strength sessions with supersets, edit-a-set, skipped/sub-failure, and the Today's-program card. The
-MVP finish line is **CSV export**. It was **blocked** on the legacy CSV sample files for six weeks;
-**#121 landed them** and **#126 turned them into a shape census**
-([gap3-typed-measurements.md](./plans/gap3-typed-measurements.md)) — so the chain that gated GAP-3,
-V1-13, AI-1 and the open-source release is **clear**. GAP-3's column design is **written, panelled and
-built**: migration `0011` lands the typed measurement model and **deletes the free-text load**.
+🏁 **The MVP finish line was crossed on 2026-09-24.** **CSV export ships** — **#149** (the pure
+strength-log formatter, proven against golden vectors transcribed from the contract's own real bytes)
+and **#150** (delivery: reads, a hand-rolled STORED zip, and a download an e2e actually performs). The
+export route is **`/p/[profileId]/export`, deliberately NOT under `/api`** — the access-gate matcher
+excludes `/api`, so a handler there would have left every athlete's whole training history
+downloadable by anyone with the URL. That exclusion is now recorded in
+[tech-debt](./tech-debt.md) as a live hazard for the `/api/sync` design.
 
-⚠️ **Two things this tracker did not say for six weeks, now recorded.** (1) **No athlete has used the
-app yet.** v1's own verification — _"hand the URL to the kids; observe a real day logged"_ — is unrun,
-so the build is unvalidated against the only user who matters. (2) **The last feature merge was #107
-on 2026-08-12**; everything since has been docs and dependabot. See
+📍 **v1 — every backlog row is merged except V1-14b.** Logging surfaces: per-kid routines, weigh-ins,
+check-ins, calisthenics + weekly adherence, life activities, strength sessions with supersets,
+edit-a-set, skipped/sub-failure, the Today's-program card, and **one-tap scaffolding of the day's
+program into the form** (V1-19, #125 — structure only; every reps and weight field arrives blank, and
+a unit test fails CI if that changes). **GAP-3 is complete**: migration `0011` landed the typed
+measurement model and dropped `weight_num`/`weight_label`/`seconds` (#139), then **#141 deleted
+`parseLoad` outright** — ~90 lines of pattern matching and ~300 lines of test whose only job was
+reverse-engineering structure the form had thrown away. The six-week chain that gated GAP-3, V1-13,
+AI-1 and the open-source release (#121 samples → #126 census → #128 design) is **fully discharged**.
+
+⚠️ **The one thing still unverified: has an athlete used it?** v1's own exit criterion —
+_"hand the URL to the kids; observe a real day logged"_ — is the last open question, and it is the one
+thing this tracker cannot observe for itself. **#151 seeded the youth daily A/B program specifically so
+they could log that evening**, which removes the last excuse (today resolves to a real Day A/Day B and
+"Fill in today's movements" scaffolds the real sheet). Whether it happened is Ray's to record here.
+
+✅ **Corrected 2026-09-26 — the claim that stood here was false.** This paragraph asserted for ten days
+that _"the last feature merge was #107 on 2026-08-12; everything since has been docs and dependabot."_
+By the time it was written that was already wrong, and it stayed wrong through **#125, #133–#141,
+#149–#155** — V1-19, five CI gates, the whole GAP-3 arc, CSV export, the YDP seed and DUALS-1. Root
+cause: the tables and changelog below were updated per-PR while this section was hand-written from
+memory. See
 [product-spec.md §11](./product-spec.md) for what "working" would actually have to mean.
 
 **Merged & live** — the generalized data model (V1-1a/b/c), full seed catalog (V1-2), per-kid Today
@@ -153,22 +170,30 @@ field IS the human confirmation) and is now pinned by a structural unit test. Sc
 
 ## Progress toward MVP (v1)
 
-- **Feature PRs merged:** the full V1-8 strength/superset arc is in (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 ·
-  V1-6a · V1-6b-1 · V1-6c · V1-6b-2 · V1-7 · V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d). Data foundation + strength
-  logging complete; the back third is editing (V1-9), and — critically — **CSV export (V1-13)** + hardening (V1-14).
-- **Phase:** v0 ✅ complete → v1 🔵 in progress. Merged: **V1-10** (program card, #68), **V1-12** (a11y enforced, #69/#70). In flight: **V1-14a** (hardening). **V1-11 deferred past the MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)). **V1-13 (CSV export) is BLOCKED** on the four legacy CSV samples — and V1-14b depends on it.
+- **Feature PRs merged:** the data foundation (V1-1a/b/c · V1-2 · V1-3 · V1-4 · V1-5 · V1-6a/6b-1/6c/6b-2 ·
+  V1-7), the full strength/superset arc (V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d), editing (V1-9), programming
+  (V1-10 · V1-17 · V1-18 · V1-19 · YDP seed), a11y-in-CI (V1-12), hardening (V1-14a), the **GAP-1** write-path
+  fidelity arc, **GAP-3** typed measurements, and **V1-13 CSV export — the MVP's defining feature**.
+- **What is left in v1: one row.** **V1-14b** (full-day E2E + CSV diff) — blocked on V1-13 until
+  2026-09-24, now unblocked and the only unmerged item on the v1 backlog. **V1-11 is deferred past the
+  MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)); **V1-13a-fu** (the
+  `calisthenics-log` CSV) was cut from V1-13 by Ray as a deliberate fast-follow, and **V1-15** and
+  **V1-22** are planned-and-panelled but unbuilt.
+- **The exit criterion is not a PR.** _"Kids log a real full day online; CSV keeps the Claude `/retro`
+  workflow alive."_ The CSV half is done and downloadable. The first half needs an athlete, not a commit.
 
 ## Phases
 
-| Phase     | Goal                                                                     | Status                                                                                 |
-| --------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                |
-| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🔵 in review                                                                           |
-| AI-1      | NL logging via structured outputs + eval                                 | 📋 plan decision-complete; **blocked behind GAP-3** ([S5](./plans/ai-1-nl-logging.md)) |
-| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                         |
-| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                         |
-| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                         |
+| Phase     | Goal                                                                     | Status                                                                                      |
+| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                     |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                     |
+| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🟡 all rows merged but **V1-14b**; exit needs a real logged day                             |
+| DUALS     | Parent-facing tournament day sheets                                      | 🔵 DUALS-1 live (#152–#155); DUALS-2 next                                                   |
+| AI-1      | NL logging via structured outputs + eval                                 | 📋 plan decision-complete; **UNBLOCKED** — GAP-3 shipped ([S5](./plans/ai-1-nl-logging.md)) |
+| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                              |
+| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                              |
+| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                              |
 
 Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 in progress · ✅ done
 
@@ -190,34 +215,182 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 | V0-11 | CI Postgres + Playwright smoke                              | ✅ done |
 | V0-12 | unit + integration test + DoD                               | ✅ done |
 
-## v1 backlog (14 PRs) — completes the MVP
+## v1 backlog — completes the MVP
 
-| PR      | Scope                                                                                                                         | Status |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------- | ------ |
-| V1-1    | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)                                                       | ✅     |
-| V1-2    | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                                         | ✅     |
-| V1-3    | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                                                         | ✅     |
-| V1-4    | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                                               | ✅     |
-| V1-5    | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                                          | ✅     |
-| V1-6a   | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                                             | ✅     |
-| V1-6b-1 | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md))                        | ✅     |
-| V1-6c   | timezone / local-calendar-date correctness ([plan](./plans/v1-6c-timezone-local-date.md))                                     | ✅     |
-| V1-6b-2 | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                                                | ✅     |
-| V1-7    | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                                                     | ✅     |
-| V1-8-1  | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                                               | ✅     |
-| V1-8-2  | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                                               | ✅     |
-| V1-8-3a | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                                              | ✅     |
-| V1-8-3b | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                                         | ✅     |
-| V1-8-3c | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                                               | ✅     |
-| V1-8-3d | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                                        | ✅     |
-| V1-9    | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                                                     | ✅     |
-| V1-10   | programming — data model (#66) · real block seeded (#67) · Today's program card ([plan](./plans/v1-10-2-strength-prefill.md)) | 🔵     |
-| V1-11   | copy-set-to-other-kid                                                                                                         | ⚪     |
-| V1-12   | a11y + tap-target pass, ENFORCED in CI ([plan](./plans/v1-12-a11y-pass.md))                                                   | 🔵     |
-| V1-13   | CSV export endpoint (golden-file)                                                                                             | ⚪     |
-| V1-14   | full-day E2E + rate-limit/Sentry/Dependabot                                                                                   | ⚪     |
+Every row below is merged except **V1-14b**. Rows added after the original 14 are listed in id order,
+not merge order.
+
+| PR        | Scope                                                                                                                           | Status |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| V1-1      | generalize schema + forward-migrate (a/b/c/d; a/b/c merged, d deferred)                                                         | ✅     |
+| V1-2      | seed catalogs + coverage test ([plan](./plans/v1-2-seed-catalogs.md))                                                           | ✅     |
+| V1-3      | profile tiles ([plan](./plans/v1-3-profile-tiles.md))                                                                           | ✅     |
+| V1-4      | bodyweight/measurement on generalized model ([plan](./plans/v1-4-weigh-ins.md))                                                 | ✅     |
+| V1-5      | checkins/habits dynamic form ([plan](./plans/v1-5-checkins-form.md))                                                            | ✅     |
+| V1-6a     | calisthenics inputs + daily totals ([plan](./plans/v1-6a-calisthenics-totals.md))                                               | ✅     |
+| V1-6b-1   | ramp_targets table + migration + seed + `db:verify` proof ([plan](./plans/v1-6b-calisthenics-ramp.md))                          | ✅     |
+| V1-6c     | timezone / local-calendar-date correctness ([plan](./plans/v1-6c-timezone-local-date.md))                                       | ✅     |
+| V1-6b-2   | read DAL + `<progress>` adherence UI ([plan](./plans/v1-6b-2-adherence-ui.md))                                                  | ✅     |
+| V1-7      | life activities (wake/practice) ([plan](./plans/v1-7-life-activities.md))                                                       | ✅     |
+| V1-8-1    | supersets table + `db:verify` proof ([plan](./plans/v1-8-strength-sessions.md))                                                 | ✅     |
+| V1-8-2    | flat strength session write path ([plan](./plans/v1-8-2-session-write-path.md))                                                 | ✅     |
+| V1-8-3a   | session read grouping ([plan](./plans/v1-8-3-session-grouping-and-supersets.md))                                                | ✅     |
+| V1-8-3b   | session feel ([plan](./plans/v1-8-3-remainder-feel-and-supersets.md))                                                           | ✅     |
+| V1-8-3c   | superset write core ([plan](./plans/v1-8-3c-superset-write.md))                                                                 | ✅     |
+| V1-8-3d   | superset UI + read bracketing ([plan](./plans/v1-8-3d-superset-ui.md))                                                          | ✅     |
+| V1-9      | fix-a-set / edit (LWW) ([plan](./plans/v1-9-edit-set.md))                                                                       | ✅     |
+| V1-10     | programming — data model (#66) · real block seeded (#67) · Today's program card ([plan](./plans/v1-10-2-strength-prefill.md))   | ✅     |
+| V1-11     | copy-set-to-other-kid — **deferred past the MVP** by its panel                                                                  | ⏸️     |
+| V1-12     | a11y + tap-target pass, ENFORCED in CI ([plan](./plans/v1-12-a11y-pass.md))                                                     | ✅     |
+| V1-13a    | the strength-log CSV **formatter** — pure, DB-free, golden vectors (#149)                                                       | ✅     |
+| V1-13b    | CSV export **delivery** — reads, zip, working download at `/p/[id]/export` (#150)                                               | ✅     |
+| V1-13a-fu | `calisthenics-log` CSV — **the one schema the app DEFINES**; cut from V1-13 as a fast-follow, 2 open decisions                  | ⚪     |
+| V1-14a    | hardening — gate rate limit + Sentry w/ PII scrubber + Dependabot cooldown (#71) ([plan](./plans/v1-14a-hardening.md))          | ✅     |
+| V1-14b    | **full-day E2E + CSV diff** — _the only unmerged v1 row_; unblocked by V1-13 on 2026-09-24                                      | ⚪     |
+| V1-15     | day navigation — [plan](./plans/v1-15-day-navigation.md) merged (#142/#143), **unbuilt**                                        | 📋     |
+| V1-17     | logged entries in performed order ([plan](./plans/v1-17-performed-order.md))                                                    | ✅     |
+| V1-18     | per-kid routine builder ([eng plan](./plans/v1-18-eng-plan.md))                                                                 | ✅     |
+| V1-19     | "start today's program" scaffolds the form — **structure only** (#125) ([plan](./plans/v1-19-start-todays-program.md))          | ✅     |
+| V1-22     | program editor — [plan](./plans/v1-22-program-editor.md) merged (#127/#129), **unbuilt**                                        | 📋     |
+| GAP-1     | close the CSV recording gaps (P0-1/P0-2 · P1-1a/b/c)                                                                            | ✅     |
+| GAP-3     | **typed measurements** — CI gates (#133/#135/#138) · `units.dimension` (#137) · migration `0011` (#139) · the typed form (#141) | ✅     |
+| YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-25** — **DUALS-1 ships, and the kids get their real program.**
+  - **#152 · #153 · #155 — the day sheet.** `/duals/[event]` + `/duals/[event]/[team]`: a team's pool,
+    its round-by-round opponent order and mat, each round expanding to the weight-by-weight pairing.
+    Reusable by construction — a tournament is a JSON dropped into `lib/duals/events/`, nothing about an
+    event is hardcoded in a route. **#153 was a merge accident worth recording:** #152 was merged
+    mid-review and squashed only the first two commits, so `main` got the pages but not the `proxy.ts`
+    change exempting them — as shipped, `/duals` bounced every visitor to `/gate`, the exact opposite of
+    the point. The fix is `isPublicPath()`, **segment-exact** so `/duals/...` opens while `/dualsecret`
+    does not, with tests pinning both directions. **#155** added PA West Black GK12; the event is now 63
+    teams / 986 wrestlers across 10 day sheets.
+  - **#154 — a parse failure that looked like data.** Wrestling Chix showed 3 duals in a 6-team pool:
+    the source renders a 6-team pool in an **8-slot bracket**, and a team that has already advanced also
+    carries an `"ABC Bye"` LABEL inside its own cell — same text, different thing. Counting those labels
+    as slots shifted the positional pairing and handed Wrestling Chix a neighbour's bye **twice**, losing
+    two real duals and two opponents from the event entirely. Pool C (7 teams, one bye per round) parsed
+    correctly with the same code, which is why it went unnoticed. Re-read keyed on the team id in each
+    cell; the schema now **asserts the round-robin invariant** (`duals == poolTeamCount - 1`) so the next
+    bad capture fails the build instead of rendering as a plausible bye.
+  - **#151 — the youth daily A/B program is seeded**, replacing Kids S&C Foundation, so "Fill in today's
+    movements" scaffolds the real sheet instead of six typed names. **Seed-only, no migration:**
+    `strength_a`/`strength_b` are REUSED as Day A / Day B, because proper `ydp_a`/`ydp_b` roles need a
+    migration altering two `day_role` CHECKs — Ray chose having them log that evening over having the
+    right enum, and the reuse is stated in three places because it reads as a mistake later. The old
+    program is archived verbatim (generated from `PROGRAM_SEED`, not retyped) at
+    `docs/programs/kids-sc-foundation-archived.md`; both cannot be seeded at once, since `programDayRows`
+    picks the newest block per day-role and the second would silently hijack the first's card.
+
+- **2026-09-24** — **CSV export — the MVP finish line** ([contract](./csv-export-contract.md) ·
+  [plan](./plans/v1-13-csv-export.md)), plus the last GAP-3 PR.
+  - **#149 — the formatter.** Pure and DB-free, proven against golden vectors transcribed from the
+    contract's **own example rows** (real bytes out of the real files, not cases we invented). Exported as
+    the `@mat-plan/shared/csv` **subpath**, deliberately not added to the root barrel — `index.ts` is an
+    `export *` that eight `'use client'` components import, and CSV formatting has no business in a client
+    bundle. Two panel findings would each have silently corrupted the workflow this feature exists to
+    serve: **`load` is RE-SYNTHESISED from typed quantities, not copied** (the contract's eleven verbatim
+    shapes predate GAP-3, which deleted the column they were copied from), and **`movement` must be
+    KEBAB, from the slug** — `movementSlug()` emits underscores and the workflow groups on this exact
+    string, so shipping `front_squat` would fork every movement into a legacy series and a new one while
+    every file still looked well-formed.
+  - **#150 — delivery.** Reads, a hand-rolled **STORED** zip (~60 lines, no compression, no new
+    production dependency; validated against the system `unzip`), and an e2e that actually downloads it —
+    because the golden vectors and the `db:verify` proofs each cover half the chain and neither covers the
+    seam. **The route is not under `/api`, deliberately:** the access-gate matcher is
+    `'/((?!api|_next/static|_next/image|favicon.ico).*)'`, so `/api/export` would have been **completely
+    ungated** — every athlete's whole training history downloadable by anyone with the URL. It lives at
+    `/p/[profileId]/export`, inside the matcher, and **re-checks the gate itself anyway** because
+    middleware is not an authorization boundary; an e2e asserts a cookie-less request never gets a 200.
+    The `/api` exclusion is now recorded in [tech-debt](./tech-debt.md) as a live hazard for `/api/sync`.
+  - **#141 — GAP-3 PR 4a: the typed log form** ([plan](./plans/gap3-pr4-typed-log-form.md)). Numeric
+    keypad, mode toggles, dimension-first units. #139 built the typed model but the form was still sending
+    one text string for `parseLoad` to reverse-engineer — **`parseLoad` is now DELETED**, ~90 lines of
+    pattern matching and ~300 lines of test whose only job was recovering structure the client had thrown
+    away. Hardened by **three panels** (two UX lenses + engineering, per the UI-PR rule); three blocking
+    findings, all accepted: `required` + BW made the form silently dead, a BW-only set was silently deleted
+    by the untouched-card predicates, and the widened unit select was unrecoverable.
+  - **#147 — a latent break on `main` since #139.** `0011_snapshot.json` had `prevId === id`, from merging
+    two generated migrations and promoting the second snapshot to the first's filename without repairing
+    its parent pointer. drizzle only walks the chain when appending, so `generate` kept reporting "No
+    schema changes" and it stayed invisible — it would have surfaced on the **next** migration as a parent
+    collision. The `lessons.md` recipe that produced it listed four steps and omitted the fifth; corrected.
+  - **#148 — the export directory is `public_id`.** Ray retired the constraint that forced a
+    human-readable `<athlete>` segment: _"the past data does not matter that much at this point — and if it
+    did, we can work on an importer."_ That was the load-bearing requirement; with it gone `public_id` wins
+    on every remaining axis and `profiles.slug` is cancelled. Adds **IMP-1** (the importer, sequenced AFTER
+    the exporter so the exporter fixes the format) and **PROF-1** (profile create/edit — there is still no
+    way to add a profile without a seed).
+  - **#140 — feature guides, enforced by CI.** A guide per large atomic feature (strength logging, the
+    write path, programming): the file map, the cross-file invariants, the traps that actually bit someone.
+    The guard fails a PR that touches an owned file without touching its guide, **and** a guide claiming a
+    file that no longer exists, so a rename cannot silently drop coverage. Enforced rather than
+    conventional for the reason #132 documents — _a doc nobody is forced to update is a doc that lies._
+  - **Plans merged, unbuilt:** **#142/#143 V1-15 day navigation** — the panels killed three of the draft's
+    claims, the sharpest being that blanket read-only history was **stricter than the server**
+    (`declared-day.ts` already accepts `|diff| <= 1` and `editStrengthSetAction` has no day bound), and
+    recorded that a dated route has a **second consumer — the test suite** (the scaffold a11y check
+    self-skipped 4 days in 7). **#144 V1-13** (nine blocking findings) and **#146** — Ray's three YDP
+    decisions, including **YDP-1 deferred**: calendar alternation ships despite the spec's session-indexed
+    rule, accepted knowingly (_"if they miss a day and end up doing the same thing twice, that's on them"_).
+
+- **2026-09-23** — **Five CI gates that did not exist, and GAP-3's model.**
+  - **#132 — the audit.** GAP-3's DB-safety reviewer checked the plan's claim that Squawk hard-fails a
+    `DROP COLUMN` and **found no Squawk in CI at all**. Auditing the rest of AGENTS.md's required-checks
+    list turned up **five gates claimed for months and never wired**: Squawk, the Neon-branch apply, the
+    forward-only guard, CodeQL and `pnpm audit`. Every safety argument in GAP-3's plan cited gates that
+    would not have fired. Low impact so far only because every migration to date was additive and
+    single-author. Root cause: the rules were written as the intended end state and never re-verified.
+  - **#133 forward-only · #135 Squawk · #138 CodeQL** — three of the five, wired before the arc that needed
+    them. Two traps decided #133: `meta/_journal.json` is modified on **100%** of DB PRs, so a naive
+    `migrations/**` rule fails every DB PR while looking like the guard working (it is excluded and
+    verified **append-only** instead — base `.entries` must be an exact prefix of head's, because the
+    journal tag maps 1:1 to a filename); and `checkout` has no `fetch-depth` here, so a diff against the
+    base would have had nothing to compare and **always silently passed**. #135 found the expected tension
+    absent — all 10 migrations already hand-add both timeouts — but needed `assume_in_transaction`, without
+    which `prefer-robust-stmts` fires 99 spurious times. **#138 makes CodeQL deliberately NOT a PR check:**
+    minutes-long on a ~4h/wk project, and every merged PR is one squashed commit on `main`, so the push
+    trigger still sees 100% of merged code. All three live in the **`quality` job, not their own** — a new
+    job is not a required check until branch protection is edited, so it would look wired while blocking
+    nothing.
+  - **#134 `pnpm verify` · #136 `pnpm e2e:local`** — local/CI parity. `verify` runs `format:check` → `lint`
+    → `typecheck` → `test` → `db:verify` → `audit --prod` in **~25s** warm (each measured, not assumed;
+    `db:verify` runs on PGlite, which is why the DB proofs need no Docker). `--prod` is scoped on purpose:
+    the unscoped audit is 5 high + 1 moderate, all in dev/build tooling, and **a gate that is red on
+    arrival gets disabled rather than fixed**. #136 closed the last gap — `playwright.config.ts` built the
+    app but provisioned no DB, inheriting `.env.local`, i.e. **live Neon** — by migrating + seeding a
+    disposable `embedded-postgres` and injecting the connection string, a local gate code and a free port,
+    with `assertLocalDbUrl` guarding the target.
+  - **#137 GAP-3 PR 2 — `units.dimension` + the five length codes.** `UNIT_CODES` had **no length dimension
+    at all**, which is much of why `30in` and `50ft` had nowhere to live but the free-text string the
+    census found them in. ADR 0004's four dimensions were incomplete for codes already in use (`bool` and
+    `timing` fit none), and they get real dimensions rather than a nullable column — a nullable dimension
+    re-opens the hole the column exists to close. `instant` is kept separate from `time`: a clock reading
+    and an elapsed duration cannot be added.
+  - **#128 — the column design, written after the census.** Three of ADR 0004's assumptions needed
+    correcting, each on census evidence: the unit **cannot** be parsed from the string (no row carries
+    `lb`) so it is resolved from the movement's dimension and stored on the row; the design must **not**
+    key off which column a value appeared in (box-jump height moved between them); and the typed columns
+    must stay nullable and **never encode a status** (absence is always `SKIPPED`, never blank). One piece
+    of scope vanished: **YDP-2 needs no new columns** — Stance in Motion is a timed activity with measured
+    attributes, the `brush_teeth` shape, not a strength movement with sets.
+  - **#125 — V1-19: one tap scaffolds the day's program into the form.** A movement card per prescription
+    in the coach's order, with the prescribed number of set rows; Ray's real Strength B day was ~60
+    interactions and the names and add-set taps are now zero. **STRUCTURE ONLY** — every reps and weight
+    field arrives blank, which is the V1-10 panel's holding, not a simplification: a blank `required` field
+    **is** the human confirmation, so a prefilled value logs a PRESCRIBED number as a PERFORMED one with no
+    affirmative entry. That is a mechanism, not a load-specific rule, so it binds reps too, and **a unit
+    test asserts blankness across the whole produced structure** so reintroducing either prefill fails CI
+    rather than passing review. Cards render **collapsed** (at 360px, 7 movements × 4 sets is ~6,600px of
+    blank inputs, inverting the form's one useful signal — its length grows with work DONE), and collapsed
+    rows are **unmounted, not hidden**, since a hidden-but-present `required` input blocks the native
+    submit with an invisible error.
+  - **#127/#129 — the V1-22 program editor plan.** `PROGRAM_SEED` → `seed.ts` is the **only** writer of
+    `prescriptions`; there is no write path in `apps/web` at all, so changing one load means editing
+    TypeScript and deploying. (#129 recovered three commits dropped from #127's squash.)
 
 - **2026-09-23** — **GAP-3: typed measurements ship; the free-text load is gone** (migration `0011`,
   [plan](./plans/gap3-pr3-entry-set-quantities.md)). `quantity_slots` + `entry_set_quantities` replace
@@ -255,6 +428,20 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
   `~`/ranges are prescribed-only (0 rows in `load`), neither column is ever blank (`SKIPPED` is the
   sentinel), weight units are never written while `s`/`in`/`ft` always are, and **30 of 44 `load` rows
   are not a number**. Inventory only — the plan sections are deliberately empty.
+
+- **2026-09-18 → 09-22** — **Planning that unblocked everything above.** **#121** landed the legacy CSV
+  samples, clearing the six-week GAP-3/V1-13 blocker (the shapes are verbatim; names, dates and bodyweight
+  values scrubbed **before** they reached `main`, so no `git-filter-repo` rewrite was ever needed).
+  **#119** measured the real logging cost (~30 interactions for a 3×3 session, 60+ for Ray's 7-movement
+  Strength B day) and found that **reps are free text exactly like loads**, so only 2 of 7 rep
+  prescriptions on that day are clean integers — `AMRAP`, `to failure` and `8-10` are numbers you DISCOVER
+  by doing the set, and prefilling them records a fiction about the one set that mattered. **#122 (SCHED-1)**
+  made scheduling data rather than a hardcoded weekday→`day_role` const — three unrelated-looking problems
+  turned out to be the same missing primitive, which is the best evidence an abstraction is real rather than
+  invented. **#123** settled it: **one streak, period of a day**, with the coach choosing which programs feed
+  it — deleting streak periods, weekly units and competing counters, and making the arithmetic trivial.
+  **#124** planned V1-19; **#114** ran ONB-0's first-run UX panel before implementation. Plus dependabot
+  (#120, #130, #131 — including vitest 5).
 
 - **2026-09-16** — **Docs catch-up + two planning PRs.** **#117** completed the **AI-1 NL-logging plan**
   (S1–S5): the load-provenance invariant, why the confirm chip is UX and not the safety mechanism, what
