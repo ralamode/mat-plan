@@ -56,17 +56,18 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
   const timeZone = await getActiveTimeZone();
   const day = localDayIso(timeZone);
   const weekStart = localWeekStartIso(day);
-  // V1-10: which day the PROGRAM says this is (Mon/Wed/Fri → Strength A/B/C), from the same active-tz
-  // `day` the header renders — so the card can't claim Monday while the header says Sunday. null on a
-  // non-strength day → no program read, no card.
+  // V1-10: which day the PROGRAM says this is, from the same active-tz `day` the header renders — so
+  // the card can't claim Monday while the header says Sunday. TOTAL since the youth daily A/B rotation
+  // landed (`resolveDayRole(day): DayRole`, no rest days), so there is no "not a programmed day" branch
+  // to guard: every calendar day resolves to a role and reads its program.
   const dayRole = resolveDayRole(day);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
   // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today;
-  // `programDay` is [] on a rest day or when the kid's household has no block.
+  // `programDay` is [] when the kid's household has no block for today's role.
   const [entries, adherence, programDay] = await Promise.all([
     listEntriesForDay(profile.id, day),
     getWeeklyAdherence(profile.id, weekStart),
-    dayRole ? getProgramDay(profile.id, dayRole) : [],
+    getProgramDay(profile.id, dayRole),
   ]);
 
   // Which check-in fields are already logged today — derived from the entries we just
@@ -106,7 +107,18 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           ← All profiles
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">{profile.name}</h1>
-        <p className="text-muted-foreground">Today · {formatDayLong(day)}</p>
+        {/* V1-23 D1: the day ROLE rides the date line, so "which day is it?" is answered in the band
+            that already answers "what day is it?" — before V1-23 the letter was only visible inside
+            the program card, a screenful down. This is DERIVED page metadata (what the calendar says
+            via `resolveDayRole`), NOT the human's assertion: the athlete's assertion stays the
+            `dayRole` select in `StrengthForm`, positioned after every movement card and immediately
+            before submit, which is what makes the GAP-1 P0-1 provenance contract real (position, not
+            visibility). Label via the SHARED `DAY_ROLE_LABELS` — no second map. It reads "Strength B"
+            while the program is colloquially Day B because `strength_a`/`strength_b` are a documented
+            temporary reuse of the roles (see `resolveDayRole`); not fixed here. */}
+        <p className="text-muted-foreground">
+          Today · {formatDayLong(day)} · {DAY_ROLE_LABELS[dayRole]}
+        </p>
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
@@ -327,6 +339,22 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           </ul>
         )}
       </section>
+
+      {/* V1-23 D3 — the routine editor's only entry point (V1-20's discoverability half). The editor
+          at /p/[profileId]/routine already does the whole job (Remove per item, one catalog entry per
+          individual check-in row); only the link was missing.
+          BELOW the logged entries on purpose: parents scroll to here, kids do not scroll past their own
+          work, and the header is already dense. Named for its audience ("Edit Nora's routine") rather
+          than a gear icon — a gear would be the only icon on a page whose idiom is text arrows, and it
+          reads as "settings for this screen".
+          ⚠️ `min-h-11` is load-bearing and UNGUARDED by CI: `e2e/a11y.spec.ts` excludes <a> from its
+          tap-target scan (the SC 2.5.8 inline-text exception), so a short link here fails no check. */}
+      <Link
+        href={`/p/${profileId}/routine`}
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
+      >
+        → Edit {profile.name}&rsquo;s routine
+      </Link>
     </main>
   );
 }

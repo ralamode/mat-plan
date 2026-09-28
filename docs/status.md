@@ -258,6 +258,24 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-26** — **V1-23 PR 2: the header says which day it is, and the routine editor is reachable**
+  ([plan](./plans/v1-23-today-focused.md) → "PR 2 — orient the header"). Two small edits to Today, from
+  Ray's first real session on the app. (1) The date line reads **`Today · Fri, Sep 26 · Strength B`** —
+  the day ROLE was previously visible only inside the program card, a screenful down. It is **derived
+  page metadata** (`resolveDayRole`), labelled through the shared `DAY_ROLE_LABELS`; the athlete's
+  **assertion** stays the `dayRole` select in `StrengthForm`, deliberately left where it is — three
+  panels killed the plan's own proposal to move it, because what makes the GAP-1 P0-1 provenance
+  contract real is the select's **position** (after every movement card, immediately before submit),
+  not its visibility. (2) An **`→ Edit {name}'s routine`** link below the logged-entries list — V1-20's
+  discoverability half; the editor already removed individual check-in rows, only the link was missing.
+  Placed below the log, not in the header: parents scroll to there, kids do not scroll past their own
+  work. Also removed the two now-dead `dayRole &&` guards' premise: `resolveDayRole` is **total** since
+  the youth daily A/B rotation (no rest days), so there is no unprogrammed day to guard. The
+  [tech-debt entry](./tech-debt.md) for the editor was **corrected, not duplicated** — it claimed the
+  editor was "reachable by URL only", which this PR makes false — and now records two sharp edges the
+  link exposes and that Ray deferred: a kid can `Remove` **`strength` itself** and make the session
+  unloggable with nothing on screen explaining why, and `Remove` has no confirm while re-adding
+  **appends**, so the authored order is recoverable only via ▲▼.
 - **2026-09-25** — **DUALS-1 ships, and the kids get their real program.**
   - **#152 · #153 · #155 — the day sheet.** `/duals/[event]` + `/duals/[event]/[team]`: a team's pool,
     its round-by-round opponent order and mat, each round expanding to the weight-by-weight pairing.

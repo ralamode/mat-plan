@@ -304,8 +304,14 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **What & why (V1-18 PR 2):** the routine editor (`/p/[profileId]/routine` + `editRoutineAction`) ships
   behind the access-gate stopgap with **existence-only** ownership (re-resolve by `public_id`), like every
   other writer — profile tiles are "a UX switch, not a security boundary" (AGENTS.md). So ANY gate-holder can
-  edit ANY kid's routine. It's reachable by URL only (no kid-facing edit affordance on Today), which limits
-  discoverability but is **not** a security control. Two write semantics are also accepted, not bugs:
+  edit ANY kid's routine. **Updated V1-23 (2026-09-26): it is no longer URL-only** — Today now renders an
+  `→ Edit {name}'s routine` link below the logged-entries list, so anyone past the access gate reaches the
+  editor in one tap. The obscurity was never a security control, so nothing regressed; but the sentence this
+  entry used to carry ("reachable by URL only … limits discoverability") is now false, and the mitigation it
+  implied is gone. **The gap was knowingly accepted when the link shipped**: there is no Clerk until v1.5,
+  the household is three people behind one shared access gate, and the alternative — leaving the coach
+  affordance undiscoverable to make a BOLA hole feel smaller — is security theatre that costs the feature.
+  Two write semantics are also accepted, not bugs:
   - **Default-freeze (panel C4):** a kid whose `routine_config` is `NULL` renders the live default; saving
     from the editor **materializes** that default into the column, so the kid stops auto-tracking future
     catalog additions (a new check-in won't appear in their now-frozen order). Authoring a routine is an
@@ -313,8 +319,22 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   - **Last-write-wins clobber (panel C6):** the write is an unconditional `SET routine_config = …` with no
     client-`updated_at` LWW guard, so a stale second tab clobbers the first. No race with the kid logging on
     Today — that writes the `entries` table, a different column.
+- **Two sharp edges the V1-23 link now EXPOSES to whoever finds it — deliberately not fixed there:**
+  - **A kid can remove `strength` itself and make the session unloggable, with nothing on screen saying
+    why.** `strength` is the first entry in `ROUTINE_CATALOG` and gets a `Remove` button like any other
+    row; Today's strength block is routine-DRIVEN, so dropping the key removes the program card **and**
+    the whole strength form. The kid then sees a Today with no way to log their session and no
+    explanation — the failure is silent and looks like a bug, not a setting they changed.
+  - **`Remove` fires with no confirm, and re-adding APPENDS — so the authored order is unrecoverable.**
+    `toggle()` (`apps/web/lib/routine/editor.ts:19-23`) filters on remove and `[...order, item]` on
+    re-add, so a mis-tapped `Remove` + `+ Add` puts the row at the BOTTOM; the only way back is the
+    ▲▼ buttons, one step at a time. There is no undo and no "restore default routine".
+  - **Fix when it bites:** a confirm (or undo) on `Remove`, a "Restore default routine" button, and
+    either pinning `strength` or an empty-state on Today explaining that strength is off this routine.
+    Ray deferred all three when the link shipped (V1-23 PR 2); use the app for a week first.
 - **Impact:** low today (single trusted household, pre-Clerk, occasional edits). The BOLA gap is the real
-  item; the two semantics are edge cases a single coach won't hit.
+  item; the two semantics are edge cases a single coach won't hit. The two sharp edges above are newly
+  **reachable** as of V1-23 — still low (one coach, three kids), but no longer hidden behind a URL.
 - **Proposed fix:** **Clerk v1.5** closes the authz gap — scope the DAL read + write by `household_id` (the
   ownership seam every writer already re-resolves through). The LWW clobber is paid down with the offline/sync
   LWW work (same `incoming >= stored` guard as the set-edit debt above). Default-freeze resolves naturally if
