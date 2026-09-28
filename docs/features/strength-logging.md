@@ -91,6 +91,13 @@ regresses.
    `ScaffoldRow` with no `load` field at all, so "the authored load never crosses into client state"
    is enforced by the **type**, not by care. Do not add one.
 
+   **Row COUNT is not an authored value.** `DEFAULT_SCAFFOLD_SETS` (V1-23 PR 1) makes a prescription
+   with no `sets` scaffold three blank rows instead of one. That is form structure, the same category
+   as the movement name the scaffold already places — every `reps`/`weight` in those rows is still
+   empty, which is what the confirm-gate actually rests on. `strength-form-scaffold.test.ts` asserts
+   blankness across the wider structure, including the null-`sets` shape, so widening it again cannot
+   quietly smuggle a value in.
+
 2. **A set must carry a load, and blank is unrepresentable.** Enforced by `strengthSetSchema`'s
    superRefine — `weight !== null || isBodyweight || isBand`. A set with reps and no load renders
    `5 × ?` and `isEditableSet` then refuses to fix it: permanently unrecoverable, because **there is
@@ -145,6 +152,15 @@ Real ones, each with the file to look at.
   and `strength-form.tsx`'s collapsed-card progress counter uses a third copy. Add a set-level field
   without teaching all three and a set carrying ONLY that field is deleted at submit, or the counter
   reads 0/3 for a fully-logged bodyweight movement. PR 4a had to extend all three for the mode flags.
+
+- **The set-row count has a DEFAULT and a FLOOR, and they are deliberately different numbers.**
+  `clampSetCount` in `strength-form-scaffold.ts`: `sets == null` → `DEFAULT_SCAFFOLD_SETS` (3);
+  `sets < 1` → **1**. The floor is the BUG-2(b) guard — a zero-row card is the vacuous-truth shape
+  (`[].every(...)` is true) and fails the schema anyway — so collapsing the two branches back into one
+  `?? 1` or `?? 3` breaks a different thing each way. Why 3 is the default: `PROGRAM_SEED` is `open()`
+  on **11 of its 13** prescriptions, so one row per open movement cost ~10 "Add set" taps a session
+  (~20% of the total) while the `filled/total` counter read `0/1 → 1/1` with two sets still to come —
+  lying on the form's only "where am I" signal. See [V1-23's plan](../plans/v1-23-today-focused.md).
 
 - **The row already wraps at 360px.** Usable width is ~294px (`main px-4` + `fieldset px-4`); line 1
   is ~260px. The card splits into two **explicit** lines rather than trusting flex-wrap, and the

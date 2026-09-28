@@ -6,7 +6,12 @@ import {
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import { isUntouchedScaffold, type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
+import {
+  DEFAULT_SCAFFOLD_SETS,
+  isUntouchedScaffold,
+  type ScaffoldRow,
+  scaffoldMovements,
+} from './strength-form-scaffold';
 
 const row = (over: Partial<ScaffoldRow> = {}): ScaffoldRow => ({
   idx: 0,
@@ -36,9 +41,16 @@ describe('scaffoldMovements', () => {
    */
   it('leaves every reps AND weight field empty', () => {
     const out = scaffoldMovements(
-      [row({ sets: 4 }), row({ idx: 1, movementName: 'Pull-Up', sets: 3 })],
+      [
+        row({ sets: 4 }),
+        row({ idx: 1, movementName: 'Pull-Up', sets: 3 }),
+        // The V1-23 default-count shape too: the wider structure is the one the live YDP produces
+        // for 11 of its 13 prescriptions, so it is the one that must be provably blank.
+        row({ idx: 2, movementName: 'Push-Up', sets: null }),
+      ],
       'lb',
     );
+    expect(out.flatMap((m) => m.sets)).toHaveLength(4 + 3 + DEFAULT_SCAFFOLD_SETS);
     for (const m of out) {
       for (const s of m.sets) {
         expect(s.reps).toBe('');
@@ -65,11 +77,28 @@ describe('scaffoldMovements', () => {
       expect(scaffoldMovements([row({ sets: 4 })], 'lb')[0]!.sets).toHaveLength(4);
     });
 
+    // V1-23 PR 1. The YDP authors no set count on 11 of its 13 prescriptions, so this branch — not
+    // the explicit one above — is what the kids actually get, and one row cost ~10 "Add set" taps a
+    // session while the filled/total counter read 1/1 with two sets left.
+    it('scaffolds the default structure for a movement-only prescription', () => {
+      expect(scaffoldMovements([row({ sets: null })], 'lb')[0]!.sets).toHaveLength(
+        DEFAULT_SCAFFOLD_SETS,
+      );
+    });
+
+    // The contract assertion: the one place the literal is allowed, so a change to the default is a
+    // deliberate edit here rather than a silent drift. Also pins it below the schema cap.
+    it('defaults to three rows, within the schema cap', () => {
+      expect(DEFAULT_SCAFFOLD_SETS).toBe(3);
+      expect(DEFAULT_SCAFFOLD_SETS).toBeLessThanOrEqual(MAX_SETS_PER_MOVEMENT);
+    });
+
     // Not zero: `[].every(...)` is vacuously true — the BUG-2(b) shape — and a non-skipped movement
-    // with no sets fails the schema anyway.
-    it('falls back to one row for a movement-only prescription', () => {
-      expect(scaffoldMovements([row({ sets: null })], 'lb')[0]!.sets).toHaveLength(1);
+    // with no sets fails the schema anyway. An explicit nonsense count floors to 1, NOT to the
+    // default: a count the coach authored is not replaced by three rows they never asked for.
+    it('floors an explicit count below one to a single row', () => {
       expect(scaffoldMovements([row({ sets: 0 })], 'lb')[0]!.sets).toHaveLength(1);
+      expect(scaffoldMovements([row({ sets: -3 })], 'lb')[0]!.sets).toHaveLength(1);
     });
 
     it('clamps to what the session schema accepts', () => {

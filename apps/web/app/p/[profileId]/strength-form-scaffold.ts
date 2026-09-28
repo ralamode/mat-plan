@@ -58,7 +58,7 @@ export function scaffoldMovements(
     clientId: newId(),
     movementName: row.movementName,
     unit: defaultUnit,
-    // `?? 1`, never 0: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
+    // Never 0 rows: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
     // (`[].every(...)` is true), and a non-skipped movement with no sets fails the schema anyway.
     sets: Array.from({ length: clampSetCount(row.sets) }, () => ({
       key: newId(),
@@ -73,9 +73,32 @@ export function scaffoldMovements(
   }));
 }
 
+/**
+ * How many blank set rows a prescription that authors NO set count (`sets: null`) scaffolds.
+ *
+ * This is set STRUCTURE, not a prescription — the same category as the movement name V1-19 already
+ * places, and every `reps`/`weight` field in these rows still arrives empty (see the module docblock).
+ * `ScaffoldRow` still carries no `load`.
+ *
+ * Why it is not 1 (V1-23 PR 1): `PROGRAM_SEED` — the only seeded block — is `open()` on 11 of its 13
+ * prescriptions, so the old `?? 1` gave every open movement ONE row. A 5-movement Day B therefore cost
+ * ~10 "Add set" taps, ~20% of the session's total, and the `filled/total` counter read `0/1 → 1/1`
+ * while two sets were still to come — lying on the form's only "where am I" signal. 1 was chosen as a
+ * FLOOR for a nonsense value, never as a default for a program that prescribes no sets at all.
+ *
+ * Why not "remember last session": better, and a real follow-up, but it needs a query and a rule for
+ * which session counts. Three is one constant and it matches every set-based movement in the YDP.
+ */
+export const DEFAULT_SCAFFOLD_SETS = 3;
+
 /** Prescribed sets → set-row count, clamped to what the session schema will accept. */
 function clampSetCount(sets: number | null): number {
-  if (sets == null || sets < 1) return 1;
+  // No authored count → the default structure above.
+  if (sets == null) return DEFAULT_SCAFFOLD_SETS;
+  // An explicit count below 1 still FLOORS to 1 — the BUG-2(b) guard, deliberately not the default:
+  // a coach who authored a set count is honoured, a nonsense one is only rescued from the zero-row
+  // vacuous-truth shape, not silently replaced with three rows they never asked for.
+  if (sets < 1) return 1;
   return Math.min(sets, MAX_SETS_PER_MOVEMENT);
 }
 
