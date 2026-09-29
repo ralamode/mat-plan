@@ -142,6 +142,17 @@ dimensions, so every offerable unit is one the composite FK accepts.
 
 Real ones, each with the file to look at.
 
+- **⚠️ A BODYWEIGHT set cannot be corrected, by anyone, ever.** `isEditableSet` opens with
+  `!set.isBodyweight` and `updateStrengthSetById`'s WHERE mirrors it — and there is **no delete action
+  in the app**. So a mis-tapped BW is permanent data. Found by real use on 2026-09-28 (V1-24): Ray
+  logged `20 × BW` KB swings that were `10 × 20 lb` and had no way back. The guard is correct in
+  intent — a numeric edit would misrepresent a genuinely bodyweight set — but "refuse the edit" plus
+  "no delete" adds up to "unrecoverable", which is not what either half intended.
+
+- **The form does not read the movement's `isBodyweight` / `unitDefault`.** `strength-form.tsx` has
+  zero references to either, so BW is offered on movements the catalog declares as loaded (KB Swings
+  is seeded `isBodyweight: false, unitDefault: 'lb'`). The catalog knows; the form never asks.
+
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
