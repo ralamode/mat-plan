@@ -456,15 +456,91 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   Stronger than V1-14b, which round-trips a day the app itself authored: this round-trips **history the
   app did not write**, which is the only way to catch a shared misreading.
 
+<a id="hh-1"></a>
+
+- **HH-1 — the household is a PATH SEGMENT, and it comes before the athletes.** _(Ray, 2026-09-28.)_
+  Today every route is `/p/<profileId>` with **no household segment at all**, even though the data
+  model has been multi-tenant since V1-1a (`households` + `profiles.household_id`). Ray's shape:
+
+  ```
+  mat-plan.dev/                       → sign up / log in          (not a raw picker)
+  mat-plan.dev/<household-id>         → who's logging today?
+  mat-plan.dev/<household-id>/edit-athletes
+  mat-plan.dev/<household-id>/p/<profileId>
+  ```
+
+  **Decided: the household id lives in the PATH, not only in the session.** Clerk still authenticates
+  and authorizes — but the household is _addressable_, so a URL identifies whose data it is rather than
+  depending on who happens to be logged in. That is what makes a link shareable between two parents,
+  and what stops "log in as the wrong account, see the wrong kids" from being a silent failure.
+
+  ### ⚠️ "A household may even be a club for all we know"
+
+  Ray's aside, and it is the most consequential thing on this row. If the tenant can be **Mat
+  Assassins** rather than _the Baker family_, then several things already shipped are sized for the
+  wrong population:
+
+  - **`households` is misnamed** for that case. Renaming a table is expand→contract, and it gets more
+    expensive with every row that references it — cheapest to decide _now_, before an authoring UI
+    writes to it.
+  - **A club has coaches as well as athletes.** `profiles.kind` is `kid | adult` — a membership _role_
+    (coach / parent / athlete) is a different axis, and PROF-1 is about to author into it.
+  - **GAP-3 already assumed this.** The typed-measurement design was chosen over cheaper fixed columns
+    explicitly because _"the population is a club, not two kids"_. The data model made the club bet;
+    the URLs and the vocabulary have not.
+
+  **This row does not have to settle the club question** — it has to avoid foreclosing it.
+
+  ### What it touches, which is the real cost
+
+  Not "add a segment". Every one of these has bitten this repo already:
+
+  1. **Every route, link and `revalidatePath`.** `actions.ts` revalidates `'/p/' + id`; a household
+     segment changes every one, and a missed one shows the athlete stale data after a write.
+  2. **The gate matcher.** `proxy.ts` matches on path shape, and this repo has had **two** incidents of
+     route reachability drifting from the matcher — `/duals` bouncing every visitor to `/gate` (#153),
+     and the `/api` exclusion that would have shipped the CSV export completely ungated
+     ([tech-debt](./tech-debt.md)). A third path shape is a third chance. **Assert the public/gated set
+     directly**, rather than per-route.
+  3. **Ownership.** Today `getProfileByPublicId` is the BOLA seam. With a household in the path there
+     are **two** ids, and the new hole is a valid profile under the _wrong_ household — which looks
+     authorized if only the profile id is checked. Boundary test: wrong-household → 404.
+  4. **ONB-0's empty state** currently lives at `/`, which becomes the sign-in page. First-run moves
+     to `/<household-id>` and the two rows have to agree about what a brand-new household sees.
+  5. **NOT the CSV export directory.** That is `public_id` on a _data_ path, not a URL, and is
+     unaffected — stated because it looks adjacent.
+
+  **Sequencing: HH-1 → PROF-1 → MOT-1's picker badge.** The path shape is the thing everything else
+  authors into. HH-1 can land the routing _before_ Clerk — the household id in the path is useful with
+  the access gate alone, and it decouples the URL decision from v1.5's auth work.
+
 - **PROF-1 — profile create / edit.** _(Ray, 2026-09-24 — after the MVP.)_ There is **no
   profile-editing surface at all** today: profiles exist only because the seed writes them, names cannot
   be changed, and a new athlete cannot be added without a deploy. That is the same shape as V1-22's
   finding for programs — config that requires editing TypeScript.
 
   Scope: create an athlete, rename one, set `kind`. **The first profile-mutating endpoints**, so it
-  needs both panels and the full boundary-test set. Explicitly **not** on the MVP path — recorded now
-  because the question surfaced while deciding the export directory, and because "add the second kid"
-  is a thing a club-sized population needs long before v1.5's Clerk work.
+  needs both panels and the full boundary-test set.
+
+  **The affordance — Ray, 2026-09-28, from using it:** an **"Add athlete" tile at the BOTTOM of the
+  picker**, styled like the athlete tiles but with a **dashed border and a `+`**. Two things that
+  buys, neither of which a header button does:
+
+  - **It is where you are already looking.** The picker is a vertical list and the answer to "how do I
+    add myself?" is the next item in it, not a control above the question.
+  - **Dashed-vs-solid is the whole affordance.** It reads as _a slot that could hold an athlete_
+    rather than a button that does something, which is what makes it self-explanatory to a parent who
+    has never seen the app — an ONB-0 concern reaching the picker.
+
+  `kind` is `kid | adult`, so **Ray adding himself is this row**, not a separate one.
+
+  ⚠️ **Sequenced AFTER [HH-1](#hh-1)**, and that is not a preference. Ray's own framing is
+  `mat-plan.dev/<household-id>/edit-athletes` — a path that does not exist yet. Building the editor
+  first means building it at `/edit-athletes` and moving every route, link and `revalidatePath` when
+  the household segment lands. Decide the URL shape, then author into it.
+
+  **Pulled forward** from "after the MVP" (2026-09-28): Ray is using the app and cannot add himself,
+  which makes this the first real onboarding gap rather than a nicety.
 
 - **YDP — run the youth daily program (the second real program).** _(Ray, 2026-09-23.)_ Everything the
   app needs before [Ray's daily A/B program](./samples/youth-daily-program/README.md) — the one his kids
@@ -553,7 +629,18 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   "did this athlete log today" query, a per-profile schedule, a rotation-with-memory) and because
   scattered singles don't get built. See [product-spec.md §12](./product-spec.md).
 
-  - **MOT-1 — streaks.** Consecutive days logged, per athlete, surfaced on their Today screen.
+  - **MOT-1 — streaks.** Consecutive days logged, per athlete, surfaced as a **badge in BOTH places**
+    (Ray, 2026-09-28): beside the name on the **picker tile**, and on the athlete's **Today** screen.
+
+    That is two different jobs, not one feature rendered twice. On the picker the streak is a
+    **pre-commitment cue** — you see it _before_ choosing, and the kid with 12 days is looking at what
+    they stand to keep. On Today it is a **reward**, after the work. The same number, read at opposite
+    ends of the decision, which is why "surfaced on their Today screen" (the original wording) was the
+    smaller half.
+
+    Picker placement has a cost the Today placement does not: the picker currently runs ONE query
+    (`listProfiles`), and a per-athlete streak must not turn that into N. Fold it into the same read —
+    the streak is a fold over `entries.activity_date`, which `idx_entries_profile_date` already covers.
     **Two design constraints that are not optional**, both arising from what this app is:
     1. **A streak must not break on a programmed rest day.** The schedule already knows a rest day is a
        rest day (V1-10 `day_role`); a streak that punishes a kid for correctly resting is worse than no
