@@ -69,21 +69,11 @@ export async function isValidGateCookie(
 // ---------------------------------------------------------------------------
 
 /**
- * Routes that render without the household access code.
+ * ⚠️ **There is no public path.** The `/duals` exemption was removed with DUALS-1 (2026-09-30) —
+ * the tournament day sheets carried 986 named minors' rosters, which cannot ship in a repo that is
+ * going public. Every route is gated again.
  *
- * Only the tournament day sheets. They read static event JSON — no DB, no
- * Clerk, no household data (see docs/plans/duals-1-public-day-sheet.md D1/D3) —
- * so opening them exposes nothing about the logger, which stays gated.
+ * If a public route is ever needed, the removed helper's lesson is the part worth keeping: match the
+ * SEGMENT exactly (`p === '/x' || p.startsWith('/x/')`), never `startsWith('/x')`, which would also
+ * open `/xsecret`. And pin both the positive and negative cases.
  */
-export const PUBLIC_PATH_PREFIX = '/duals';
-
-/**
- * Exact segment-prefix match: `/duals` and `/duals/…` only.
- *
- * NOT `startsWith('/duals')` — that would also open `/dualsecret`. This is the
- * entire public surface of the app, so both the positive and the negative cases
- * are pinned by tests.
- */
-export function isPublicPath(pathname: string): boolean {
-  return pathname === PUBLIC_PATH_PREFIX || pathname.startsWith(`${PUBLIC_PATH_PREFIX}/`);
-}

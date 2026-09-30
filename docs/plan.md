@@ -117,6 +117,35 @@ pgvector where they earn it. Each AI capability is its own PR; pgvector stays ga
 
 ## OSS-1 — open-source readiness (gate before the repo is made public)
 
+> ### ⛔ BLOCKER, 2026-09-30 — the audit below is STALE and one finding is disqualifying
+>
+> **The audit was performed 2026-08-11, ~45 merges ago.** It predates DUALS-1, the legacy CSV
+> samples, the YDP seed, and the kids' first real logged sessions. Do not treat it as current.
+>
+> **What it missed, because it did not exist yet:** `apps/web/lib/duals/events/` carried a roster of
+> **986 named minors who are not Ray's** — first **and** last name, weight and actual weight, across
+> Elementary 4th, Elementary 6th, Girls K-12, Middle School and High School — captured from a
+> bracketing site with no consent chain. Categorically different from this audit's findings, which
+> concern Ray's own family.
+>
+> **The files are removed** (2026-09-30), and every route is gated again — the `/duals` public-path
+> exemption went with them.
+>
+> ⚠️ **DELETION FROM `HEAD` IS NOT ENOUGH.** The roster remains in **7 commits** of history, and
+> publishing the repo publishes its history. Going public therefore requires **rewriting history**
+> (`git filter-repo` / BFG) to purge the blob, then a force-push and a re-clone by anyone who has a
+> copy. That is the gate, not the deletion.
+>
+> **Before flipping visibility, also:**
+>
+> 1. **Re-run the full audit** — it has not seen ~45 merges of new commits.
+> 2. **Sweep `gitleaks` over the ENTIRE history**, not just PR diffs. It gates changes; it has never
+>    swept the past.
+> 3. **Confirm `.env.local` was never committed** — it is gitignored now; that is not the same claim.
+> 4. **Decide about the kids' own data deliberately.** First names, a real bodyweight time series, a
+>    birthdate column, and now real logged sessions. Ray's call, but it is a minor's health data and
+>    publishing is irreversible.
+
 The repo is going public as a portfolio artifact. This section records a **full audit of committed
 personal data performed 2026-08-11** and the (small) work that audit actually justifies.
 
