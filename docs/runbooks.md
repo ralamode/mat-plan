@@ -107,6 +107,14 @@ Vercel env + the GH secret together; note what re-deploys are needed._
 5. **If a review was ever "withheld"** (a secret pattern matched), treat the token as leaked: revoke it
    (claude.ai → settings) and rotate. Don't re-run a claude-review job with debug logging on: its
    tool output lands in a public log.
+6. **A `claude-code-action` bump** (Dependabot opens it alone; it is excluded from the actions group):
+   the action's SHA also fixes the CLI version (`src/entrypoints/run.ts`), the read-block semantics,
+   `restore-config.ts`, the step skipped by `classify_inline_comments`, and `git-config.ts`. Re-read
+   those at the new SHA against the DX-1 plan's threat model, then re-run the injection smoke (plan,
+   test 4) before merging. A green CI says nothing about any of this.
+7. **"failed or ran out of budget" right after a `.claude/settings.json` change** is the settings pin,
+   not the budget: the prefetch refuses until `SETTINGS_SHA256` in `review-prefetch.sh` is updated.
+   Re-read the threat model, then update the hash (the script's comment has the command).
 
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 

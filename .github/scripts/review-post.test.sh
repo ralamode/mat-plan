@@ -25,7 +25,7 @@ expect() {
   rm -f "$tmp/posts" "$tmp/body" "$tmp/review.md"
   content="$(cat)"
   [ "$content" = "-" ] || printf '%s\n' "$content" >"$tmp/review.md"
-  (PATH="$tmp/bin:$PATH" GH_TOKEN="$GH_SECRET" T="$T_SECRET" PR=7 SHA=abc123 RUN=https://run MAX_COMMENT_BYTES="${CAP:-60000}" \
+  (PATH="$tmp/bin:$PATH" GH_TOKEN="$GH_SECRET" T="$T_SECRET" PR=7 SHA=abc123 RUN=https://run MAX_COMMENT_BYTES="${CAP:-60000}" REVIEW_RESULT="${RR:-}" \
     bash "$here/review-post.sh" "$tmp/review.md" >/dev/null 2>&1)
   code=$?
   posts="$(wc -l <"$tmp/posts" 2>/dev/null | tr -d ' ')"
@@ -34,6 +34,10 @@ expect() {
 }
 
 expect "a clean review is posted, stamped with the SHA" 0 'Reviewed at `abc123`' <<<'## Review — x (#7)'
+if ! grep -q 'Incomplete' "$tmp/body"; then echo "✓ a successful job gets no Incomplete banner"; else echo "✗ Incomplete banner on a successful job"; fails=$((fails + 1)); fi
+RR=failure expect "a job that failed after writing findings → posted WITH an Incomplete banner" 0 'Incomplete: the review job ended `failure`' <<<'**Verdict:** READY · P0 0'
+RR=cancelled expect "a timed-out (cancelled) job → Incomplete banner" 0 'ended `cancelled`' <<<'**Verdict:** IN PROGRESS'
+RR='x$(id)' expect "a malformed result value is not echoed" 0 'ended `unknown`' <<<'findings'
 expect "no review file → one failure notice, never silence" 0 'failed or ran out of budget' <<<'-'
 expect "the untouched skeleton → failure notice" 0 'failed or ran out of budget' <<'EOF'
 # Review in progress for abc123
@@ -55,9 +59,27 @@ expect "base64 of the OAuth token → withheld" 1 'withheld' <<<"leak: $(printf 
 expect "a token-shaped string that isn't ours → withheld" 1 'withheld' <<<'leak: ghp_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
 expect "@mentions are broken (injected text can't ping people)" 0 "@$(printf '\342\200\213')some-user" <<<'please cc @some-user and @org/team'
 if ! grep -qE '(^|[^[:alnum:]])@some-user' "$tmp/body"; then echo "✓ no live @mention survives"; else echo "✗ a live @mention survived"; fails=$((fails + 1)); fi
-expect "an email address is left alone" 0 'ray@example.com' <<<'contact ray@example.com'
+expect "an email address survives, readable (the @ gets a ZWSP like every other)" 0 "ray@$(printf '\342\200\213')example.com" <<<'contact ray@example.com'
+expect "mention spellings that dodged a context-sensitive filter are broken too" 0 'victim' <<'EOF'
+x`@victim1
+see /@victim2
+&#64;victim3 &#X40;victim4 &CommAt;victim5 &#0064;victim6
+EOF
+if ! grep -qE '@[[:alnum:]]|&#0*64;|&#[xX]0*40;|&[cC][oO][mM][mM][aA][tT];' "$tmp/body"; then echo "✓ no @ is followed by a name, and no entity spelling survives"; else echo "✗ a mention form survived: $(grep -E '@[[:alnum:]]|&#|&[cC]omm' "$tmp/body")"; fails=$((fails + 1)); fi
 long="$(for i in $(seq 1 400); do echo "line $i of a long review"; done)"
 CAP=2000 expect "an over-cap review is cut on a line boundary with a note" 0 'truncated' <<<"$long"
 if tail -3 "$tmp/body" | head -1 | grep -qE '^line [0-9]+ of a long review$|^$'; then echo "✓ the cut leaves no partial line"; else echo "✗ partial line after the cut"; fails=$((fails + 1)); fi
+# ~100KB, the DEFAULT cap: a big real review must never read as the untouched skeleton (a `grep -q`
+# pipe under pipefail SIGPIPEs its writer above ~20KB and did exactly that).
+big="$(for i in $(seq 1 6000); do echo "- finding $i: some text"; done)"
+for i in 1 2 3; do
+  expect "a ~100KB review is posted and truncated, not called a failure (run $i)" 0 'truncated' <<<"$big"
+done
+fence="$(printf 'intro\n```ts\n'; for i in $(seq 1 200); do echo "const x$i = $i"; done; printf '```\n')"
+CAP=500 expect "a cut inside a code fence closes the fence before the note" 0 'truncated' <<<"$fence"
+if [ $(($(grep -c '^```' "$tmp/body") % 2)) -eq 0 ]; then echo "✓ fences balanced after the cut"; else echo "✗ an open fence swallows the note"; fails=$((fails + 1)); fi
+oneline="$(for i in $(seq 1 300); do printf 'é'; done)"
+CAP=101 expect "a cap cut with no newline → a hard cut, not an empty body" 0 'éé' <<<"$oneline"
+if iconv -f UTF-8 -t UTF-8 "$tmp/body" >/dev/null 2>&1; then echo "✓ the hard cut splits no UTF-8 character"; else echo "✗ invalid UTF-8 after the hard cut"; fails=$((fails + 1)); fi
 
 [ "$fails" -eq 0 ] && echo "all review-post self-tests passed" || exit 1

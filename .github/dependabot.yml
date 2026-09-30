@@ -71,6 +71,9 @@ updates:
       # of them as five separate PRs costs more attention than it saves at ~4h/wk.
       actions:
         update-types: ['minor', 'patch', 'major']
+        # …except claude-code-action, which always gets its own PR: its SHA also pins the CLI version and
+        # the sandbox behaviour the claude-review threat model rests on (docs/runbooks.md → CLAUDE_CODE_OAUTH_TOKEN, step 6).
+        exclude-patterns: ['anthropics/claude-code-action']
     commit-message:
       prefix: chore
       include: scope

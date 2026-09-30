@@ -27,7 +27,12 @@ SETTINGS_SHA256='aeef8c5b0f2edaa15daed3c8b6307a1d25bbdc9e4476a10405f2be1b2045386
 PINNED_HOOKS=(.claude/hooks/guard-main-checkout.mjs .claude/hooks/session-context.mjs)
 
 SKELETON_MARK='<!-- claude-review:skeleton -->' # also in review-post.sh; review-prefetch.test.sh pins both
-die() { echo "::error::$*" >&2; exit 1; }
+# ::error:: for the log; the step summary too, so the cause is on the run page, not only in a log.
+die() {
+  echo "::error::$*" >&2
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "**review-prefetch refused:** $*" >>"$GITHUB_STEP_SUMMARY"
+  exit 1
+}
 
 # ── 8. Settings guard (fail closed) — first, so nothing is fetched for a job that must not run ──
 # Checked against what is COMMITTED (HEAD): CI's checkout holds only tracked files, and locally an
@@ -64,15 +69,18 @@ if [ "$(git -C "$REPO" rev-parse FETCH_HEAD)" != "$SHA" ]; then
 fi
 
 # ── 3. Materialise as data: no symlinks, no hooks, no LFS smudge ──
+# No system/global git config for the checkout, the one step where smudge filters run: a runner-level
+# filter.lfs must not meet the PR's .gitattributes / .lfsconfig.
 HEAD_DIR="$(cd "$OUT" && pwd)/head"
 git -C "$REPO" worktree remove --force "$HEAD_DIR" 2>/dev/null || rm -rf "$HEAD_DIR" # a re-run
 git -C "$REPO" worktree prune
-GIT_LFS_SKIP_SMUDGE=1 git -C "$REPO" -c core.symlinks=false -c core.hooksPath=/dev/null \
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_LFS_SKIP_SMUDGE=1 \
+  git -C "$REPO" -c core.symlinks=false -c core.hooksPath=/dev/null \
   worktree add --quiet --detach "$HEAD_DIR" "$SHA"
 
 # ── 7 (runs here, before the rename). The quality-bar guard: the BASE's trusted script against the
 #    head as committed (git/awk only). After step 4 the renamed config would read as deleted. ──
-# No system/global git config here: a runner-level filter.lfs must not meet the PR's .gitattributes.
+# Likewise no system/global git config while the base's scripts run git in the head.
 export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
 (cd "$OUT/head" && bash "$REPO/.claude/skills/hold-the-bar/check.sh" "origin/$BASE") >"$OUT/hold-the-bar.txt" 2>&1 || true
 # The feature-guide gate, likewise the BASE's script against the head: never `pnpm guides:check` in the
@@ -93,10 +101,17 @@ find "$OUT/head" -type l -delete # belt: core.symlinks=false already made them p
 # ── 5. The diff, from the pinned SHA (not a second API call that could race) ──
 git -C "$REPO" diff "$(git -C "$REPO" merge-base "origin/$BASE" "$SHA")" "$SHA" >"$OUT/pr.diff"
 
-# ── 6. CI state; exit 8 is "pending", an empty file is "unknown" (the skill says both) ──
+# ── 6. CI state. `gh pr checks` reports the PR's CURRENT head, so say which SHA was reviewed and
+#    whether the head has moved since. exit=8 is "pending"; exit=1 with no check rows is "unknown"
+#    (a gh error or no checks yet), not red. The skill reads all three. ──
 set +e
-gh pr checks "$PR" >"$OUT/checks.txt" 2>&1
-echo "exit=$?" >>"$OUT/checks.txt"
+{
+  echo "reviewed-sha=$SHA"
+  gh pr checks "$PR" 2>&1
+  echo "exit=$?"
+  now="$(gh pr view "$PR" --json headRefOid 2>/dev/null | jq -r .headRefOid 2>/dev/null)"
+  [ "$now" = "$SHA" ] || echo "head-moved-to=${now:-unknown} (these checks are for that head, not reviewed-sha)"
+} >"$OUT/checks.txt"
 set -e
 
 # ── 9. The only file the model may edit ──

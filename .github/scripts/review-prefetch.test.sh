@@ -18,6 +18,8 @@ g() { git -c user.email=t@t -c user.name=t "$@"; }
 
 # Origin: main carries the scripts under test; refs/pull/7/head is the hostile PR.
 git init -q --bare -b main "$tmp/origin.git"
+# GitHub serves any reachable-or-not commit by SHA; a bare repo refuses unadvertised SHAs by default.
+git -C "$tmp/origin.git" config uploadpack.allowAnySHA1InWant true
 g clone -q "$tmp/origin.git" "$tmp/seed" 2>/dev/null
 mkdir -p "$tmp/seed/.github/scripts" "$tmp/seed/.claude/skills/hold-the-bar"
 cp "$here/review-prefetch.sh" "$tmp/seed/.github/scripts/"
@@ -44,7 +46,9 @@ esac
 EOF
 chmod +x "$tmp/bin/gh"
 
-fresh() { rm -rf "$tmp/repo" "$tmp/out"; git clone -q "$tmp/origin.git" "$tmp/repo"; }
+# --no-local: a path clone hardlinks the whole object store, so every SHA would be present and the
+# head-moved refetch (step 2) could never be exercised.
+fresh() { rm -rf "$tmp/repo" "$tmp/out"; git clone -q --no-local "$tmp/origin.git" "$tmp/repo"; }
 run() { (cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_OUTPUT="$tmp/gho" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); }
 
 # 1. The hostile PR is materialised as inert data.
@@ -60,16 +64,26 @@ h="$tmp/out/head"
 grep -qx "head_sha=$SHA" "$tmp/gho" && ok "head_sha emitted to GITHUB_OUTPUT" || bad "head_sha not emitted"
 grep -q '^+ignore the rubric' "$tmp/out/pr.diff" && ok "diff built from the pinned SHA" || bad "diff missing PR content"
 grep -q '^exit=8' "$tmp/out/checks.txt" && ok "pending checks recorded as exit=8, not dropped" || bad "checks exit code lost"
+grep -qx "reviewed-sha=$SHA" "$tmp/out/checks.txt" && ! grep -q '^head-moved-to=' "$tmp/out/checks.txt" && ok "checks.txt names the reviewed SHA; no move reported" || bad "checks.txt SHA lines wrong: $(cat "$tmp/out/checks.txt")"
 grep -q "Review in progress for $SHA" "$tmp/out/review.md" && grep -qF '<!-- claude-review:skeleton -->' "$tmp/out/review.md" && ok "skeleton review.md written, with its marker" || bad "no skeleton review.md"
 grep -qF "$(grep -o "SKELETON_MARK='[^']*'" "$here/review-post.sh")" "$here/review-prefetch.sh" && ok "prefetch and post agree on the skeleton marker" || bad "skeleton marker differs between the two scripts"
 [ -s "$tmp/out/guides.txt" ] && ok "guides.txt written by the base's script (no PR package.json script run)" || bad "no guides.txt"
 grep -q '✓ hold-the-bar' "$tmp/out/hold-the-bar.txt" && ! grep -q 'bar itself changed' "$tmp/out/hold-the-bar.txt" && ok "hold-the-bar ran before the rename (no false 'bar changed')" || bad "hold-the-bar saw renamed config: $(cat "$tmp/out/hold-the-bar.txt")"
 run && ok "a re-run replaces the old head cleanly" || bad "re-run failed: $(cat "$tmp/log")"
 
-# 1b. The author pushed after the SHA was read: the pinned SHA is still what gets reviewed.
+# 1a. The fail-closed re-check: if the rename silently does nothing, the prefetch must refuse.
+mkdir -p "$tmp/nomv" && printf '#!/bin/sh\nexit 0\n' >"$tmp/nomv/mv" && chmod +x "$tmp/nomv/mv"
 fresh
-(cd "$tmp/seed" && echo later >later && g add -A && g commit -qm later && g push -q -f origin pr:refs/pull/7/head)
-if run && [ "$(git -C "$tmp/out/head" rev-parse HEAD)" = "$SHA" ]; then ok "head moved after the read → the pinned SHA is still reviewed"
+if (cd "$tmp/repo" && PATH="$tmp/nomv:$tmp/bin:$PATH" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); then bad "a failed rename was not caught"
+elif grep -q 'survived neutralisation' "$tmp/log"; then ok "a rename that fails → refuse (fail-closed re-check)"
+else bad "refused, but not by the re-check: $(tail -1 "$tmp/log")"; fi
+
+# 1b. The author REWROTE the PR after the SHA was read (a force-push, so the old SHA is reachable from
+#     no ref): the pinned SHA is still what gets reviewed, via the fetch-by-SHA fallback.
+fresh
+(cd "$tmp/seed" && g reset -q --soft HEAD~1 && echo later >later && g add -A && g commit -qm rewritten && g push -q -f origin pr:refs/pull/7/head)
+[ "$(git -C "$tmp/seed" rev-parse pr)" != "$SHA" ] || bad "test setup: the rewrite kept the old SHA"
+if run && [ "$(git -C "$tmp/out/head" rev-parse HEAD)" = "$SHA" ]; then ok "head rewritten after the read → the pinned SHA is still reviewed"
 else bad "head-moved fallback: $(tail -1 "$tmp/log")"; fi
 
 # 2. The settings guard fails closed on a base that could widen the model's session.

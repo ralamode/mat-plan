@@ -45,7 +45,13 @@ machine token.
   base branch carries `.claude/settings.local.json`, `.mcp.json`, or a `.claude/settings.json` with
   anything but the **hash-pinned** copy whose hooks no-op under CI, because the model job would load
   them. The action re-fetches that config from `main` mid-run, so the job also withholds the review if
-  what the CLI loaded differs from what was guarded.
+  what the CLI loaded differs from what was guarded, including a config file that is new on `main`.
+- **Accepted residual:** the pinned action installs the Claude CLI with `curl … | bash` inside the
+  step that holds the token, verified only against a checksum from the same host. The action SHA does
+  not pin that download. It is the vendor that issued the token, so it is accepted, not mitigated. The
+  mitigation, if ever needed, is a secret-free prior step that fetches the binary against a committed
+  sha256 and passes `path_to_claude_code_executable`. A `claude-code-action` bump is its own PR and
+  is re-verified by hand ([runbooks.md](../docs/runbooks.md) → `CLAUDE_CODE_OAUTH_TOKEN`, step 6).
 - Threat model and both panel rounds: [DX-1 plan](../docs/plans/dx-1-claude-review.md).
 
 ## API shape
@@ -79,6 +85,7 @@ machine token.
 
 - Commit the lockfile; CI uses `--frozen-lockfile`; Dependabot with a cooldown / min-age
   (post-Shai-Hulud); `pnpm audit` gate; minimize dependencies.
-- **Committed Claude Code settings** (`.claude/settings.json`) may contain only hooks that no-op under
-  CI (`CI`/`GITHUB_ACTIONS` set); no permission, MCP or env keys. A CI model job that loads project
-  settings would inherit anything else ([DX-1 plan](../docs/plans/dx-1-claude-review.md), design point 5).
+- **Committed Claude Code settings** (`.claude/settings.json`): stricter than "only hooks that no-op
+  under CI". The file is **hash-pinned**, so ANY change, even a CI-no-op hook, fails the review
+  workflow until the pin is re-read and updated. See "CI / Actions secrets" above; it is the one
+  statement of the rule.

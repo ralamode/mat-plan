@@ -10,7 +10,9 @@
 #     text and posts it.
 #   - The PR head is fetched as DATA by review-prefetch.sh: SHA-pinned, symlinks off, PR-authored
 #     agent config renamed *.pr-data, never installed, built or executed.
-# Every action here is pinned to a full SHA because a secret is in scope; Dependabot bumps them.
+# Every action here is pinned to a full SHA because a secret is in scope. Dependabot bumps them, but
+# claude-code-action alone (never grouped): its SHA also fixes the CLI version and the sandbox
+# behaviour this threat model relies on (docs/runbooks.md → CLAUDE_CODE_OAUTH_TOKEN, step 6).
 name: claude-review
 
 on:
@@ -77,18 +79,6 @@ jobs:
             --allowedTools "Read(./**),Grep,Glob,Edit(./${{ env.REVIEW_OUT }})"
             --disallowedTools "Write,Bash,WebFetch,WebSearch,Task,Agent,Skill,NotebookEdit,mcp__*,Read(./.git/**),Read(//proc/**),Read(//home/runner/work/_temp/**),Read(~/.claude/**),Read(~/.config/**),Read(~/.ssh/**),Read(~/.gitconfig),Read(~/.npmrc),Edit(//home/runner/work/_temp/**),Edit(//home/runner/work/_actions/**),Edit(~/.local/**),Edit(//proc/**),Edit(./.git/**)"
 
-      # The action re-fetches main's agent config after the prefetch guarded it (restore-config.ts). If
-      # what the CLI loaded differs from what was guarded, withhold the review: the post job then posts
-      # the failure notice.
-      - name: Loaded config matches the guarded config
-        if: always()
-        run: |
-          if ! git diff --quiet "$GITHUB_SHA" -- .claude .mcp.json CLAUDE.md CLAUDE.local.md .claude.json; then
-            echo "::error::agent config changed on main mid-run; review withheld"
-            rm -f "$REVIEW_OUT"
-            exit 1
-          fi
-
       # Scrub the env-injection vectors before ANY later step. The action does this only when
       # allowed_non_write_users is set, and never for NODE_OPTIONS (action.yml:394-417). PATH can't be
       # reset this way ($GITHUB_PATH only prepends); the Edit-only scope is the control for that.
@@ -103,6 +93,21 @@ jobs:
           HTTPS_PROXY: ''
           NODE_EXTRA_CA_CERTS: ''
         run: printf '%s=\n' BASH_ENV NODE_OPTIONS LD_PRELOAD LD_LIBRARY_PATH HTTP_PROXY HTTPS_PROXY NODE_EXTRA_CA_CERTS >> "$GITHUB_ENV"
+
+      # The action re-fetches main's agent config after the prefetch guarded it (restore-config.ts). If
+      # what the CLI loaded differs from what was guarded, withhold the review: the post job then posts
+      # the failure notice. `git diff` alone misses a file NEW on main (restore-config leaves it
+      # untracked) and anything gitignored, e.g. .claude/settings.local.json, hence the status check.
+      - name: Loaded config matches the guarded config
+        if: always()
+        run: |
+          paths=(.claude .mcp.json CLAUDE.md CLAUDE.local.md .claude.json)
+          if ! git diff --quiet "$GITHUB_SHA" -- "${paths[@]}" ||
+            [ -n "$(git status --porcelain --untracked-files=all --ignored -- "${paths[@]}")" ]; then
+            echo "::error::agent config changed on main mid-run; review withheld"
+            rm -f "$REVIEW_OUT"
+            exit 1
+          fi
 
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -142,5 +147,6 @@ jobs:
           T: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           PR: ${{ github.event.issue.number }}
           SHA: ${{ needs.review.outputs.head_sha }}
+          REVIEW_RESULT: ${{ needs.review.result }} # not success → an "Incomplete" banner on the review
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: .github/scripts/review-post.sh review/review.md
