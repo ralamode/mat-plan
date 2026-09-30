@@ -70,6 +70,14 @@ guard "ls-remote, cherry, range-diff" "$repo" "git ls-remote origin && git cherr
 guard "tag listing flags without -l" "$repo" "git tag --points-at HEAD && git tag --contains HEAD --sort=-v:refname && git tag -n" allow
 guard "config <key> (a get)" "$repo" "git config user.name && git config --global core.editor" allow
 guard "git -c with a harmless key" "$repo" "git -c color.ui=never log -1" allow
+guard "-c color.ui=always, -c pager.log=false, -c core.quotepath=off" "$repo" "git -c color.ui=always -c pager.log=false -c core.quotepath=off log -1" allow
+guard "GIT_DIR-free env like LC_ALL is fine" "$repo" "LC_ALL=C git status" allow
+guard "fetch a PR head for review-pr" "$repo" "git fetch origin pull/12/head:pr-12" allow
+guard "worktree add -b / --detach" "$repo" "git worktree add -b feat/q .claude/worktrees/q origin/main && git worktree add --detach .claude/worktrees/r origin/main" allow
+guard "config -f <file> <key>, --file <file> <key>, get <key>" "$repo" "git config -f .gitmodules submodule.x.path && git config --file .gitmodules submodule.x.url && git config get user.name" allow
+guard "symbolic-ref --short HEAD, -q HEAD" "$repo" "git symbolic-ref --short HEAD && git symbolic-ref -q HEAD" allow
+guard "tag -n [pattern] (list mode)" "$repo" "git tag -n && git tag -n5 'v*'" allow
+guard "log --oneline is not --output" "$repo" "git log --oneline -3 -- src/main.ts" allow
 guard "a heredoc to a non-shell command is data" "$repo" $'gh pr create --title t --body-file - <<EOF\ngit checkout -b x\nEOF' allow
 guard "cat <<EOF is data" "$repo" $'cat <<EOF >notes.txt\ngit reset --hard\nEOF' allow
 guard "a pipe into a non-shell is fine" "$repo" "git log --oneline | head -3" allow
@@ -106,6 +114,31 @@ guard "branch -D main" "$repo" "git branch -D main" deny
 guard "branch -D main among others" "$repo" "git branch -D main other" deny
 guard "branch -D Main (case-insensitive filesystems)" "$repo" "git branch -D Main" deny
 guard "branch -D MAIN" "$repo" "git branch -D MAIN" deny
+guard "fetch . +feat/x:MAIN" "$repo" "git fetch . +feat/x:MAIN" deny
+guard "fetch . +MAIN (the + is stripped)" "$repo" "git fetch . +MAIN" deny
+guard "fetch +refs/heads/feat/x:refs/heads/Main" "$repo" "git fetch origin +refs/heads/feat/x:refs/heads/Main" deny
+guard "worktree add -B MAIN" "$repo" "git worktree add -B MAIN .claude/worktrees/z HEAD" deny
+guard "worktree add <path> MAIN" "$repo" "git worktree add .claude/worktrees/z MAIN" deny
+guard "worktree add -B (resets a branch)" "$repo" "git worktree add -B feat/x .claude/worktrees/z origin/main" deny
+guard "config <key> list (a set, value 'list')" "$repo" "git config core.bare list" deny
+guard "config <key> -- -1 (a set)" "$repo" "git config core.bare -- -1" deny
+guard "grep -O (runs a pager)" "$repo" "git grep -Ovim foo" deny
+guard "grep --open-files (prefix)" "$repo" "git grep --open-files foo" deny
+guard "ls-remote --upload-pack" "$repo" "git ls-remote --upload-pack='touch x' origin" deny
+guard "ls-remote -u" "$repo" "git ls-remote -u 'touch x' origin" deny
+guard "fetch --upload-pack" "$repo" "git fetch --upload-pack='touch x' origin" deny
+guard "log --output=.git/HEAD" "$repo" "git log --output=.git/HEAD" deny
+guard "diff --outp (prefix)" "$repo" "git diff --outp x" deny
+guard "-c protocol.ext.allow=always" "$repo" "git -c protocol.ext.allow=always ls-remote 'ext::sh -c touch% x'" deny
+guard "-c credential.helper" "$repo" "git -c credential.helper='!touch x' fetch origin" deny
+guard "-c diff.<driver>.textconv" "$repo" "git -c diff.x.textconv='touch y' diff" deny
+guard "-c pager.log (a pager command)" "$repo" "git -c pager.log='touch x' log" deny
+guard "GIT_CONFIG_COUNT/KEY/VALUE env" "$repo" "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='touch x' git status" deny
+guard "GIT_PAGER env" "$repo" "GIT_PAGER='touch x' git log" deny
+guard "env GIT_SSH_COMMAND=… git" "$repo" "env GIT_SSH_COMMAND='touch x' git fetch origin" deny
+guard "export GIT_EXTERNAL_DIFF; git diff" "$repo" "export GIT_EXTERNAL_DIFF=/tmp/x; git diff" deny
+guard "symbolic-ref write (two names)" "$repo" "git symbolic-ref HEAD refs/heads/feat/x" deny
+guard "symbolic-ref -d" "$repo" "git symbolic-ref -d HEAD" deny
 guard "abbreviated --update-h (fetch into main)" "$repo" "git fetch --update-h . +feat/x:main" deny
 guard "abbreviated worktree remove --forc" "$repo" "git worktree remove --forc .claude/worktrees/wt" deny
 guard "abbreviated worktree add --fo" "$repo" "git worktree add --fo .claude/worktrees/z feat/x" deny

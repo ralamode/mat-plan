@@ -16,16 +16,20 @@
  *   read-only   status log diff show rev-parse merge-base ls-files ls-tree grep blame describe
  *               shortlog cat-file for-each-ref rev-list show-ref check-ignore name-rev diff-tree help
  *               ls-remote cherry range-diff · fetch (not --update-head-ok) · reflog (no expire/delete)
- *               remote (list/show/get-url) · config --get/--list/<key> · branch (list flags only)
- *               tag (listing flags only) · stash list/show
- *   worktrees   worktree list / add / remove (neither with --force) / prune / repair
- *               branch -d|-D [--force] <names> (never `main`, any case): the post-merge cleanup
+ *               remote (list/show/get-url) · config get/list/--get/--list/<key> · symbolic-ref (read)
+ *               branch (list flags only) · tag (listing flags only, -n included) · stash list/show
+ *   worktrees   worktree list / add (not -B) / remove / prune / repair; never with --force
+ *               branch -d|-D [--force] <names> (never `main`): the post-merge cleanup
  *   syncing     pull --ff-only [--prune] [origin [main]] and merge --ff-only origin/main, only on main
  *               checkout main / switch main (no flags), only when `git status --porcelain` is empty
  *               reset [-q] [HEAD] [-- <paths>] (unstage only)
- * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`,
- * `git -c` with a key that runs a command (alias.*, core.pager/editor/hooksPath/…), and commands it
- * can't read: piped into a bare shell or `xargs sh`, fed by `<(…)`, or named by a variable
+ * On every subcommand, refused: any argument naming `main` in another case (`MAIN`, `+x:Main`: the
+ * same ref on a case-insensitive filesystem), `--output`, `--upload-pack`, `grep -O`; a `-c` key off
+ * the display-only allowlist (color.*, log.*, diff.* but not diff.external / *.command / *.textconv,
+ * core.quotepath, advice.*, column.*, pager.*=false); and GIT_CONFIG_* / GIT_PAGER / GIT_SSH* /
+ * GIT_EDITOR / GIT_EXTERNAL_DIFF / GIT_ASKPASS / GIT_EXEC_PATH in the env.
+ * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`, and
+ * commands it can't read: piped into a bare shell or `xargs sh`, fed by `<(…)`, or named by a variable
  * (`git${IFS}checkout`). An abbreviated long option (`--forc`, which git accepts) is matched as the
  * option it abbreviates where that option is refused, and is otherwise off the allowlist. A linked
  * worktree, an unrelated repository and a non-repo directory are never restricted.
@@ -39,9 +43,13 @@
  * `--git-dir`, `GIT_DIR=`, `find -execdir`) counts as possibly the main checkout. A heredoc fed to
  * any other command is data.
  *
- * Known gaps (out of scope for a best-effort guard): a script file run by name (`bash x.sh`), an
- * alias or `core.*` setting already in ~/.gitconfig or .git/config, git run from another program
- * (`node -e`, `python -c`, `make`), and wrappers not listed above.
+ * KNOWN GAPS. This is best-effort against well-meaning agents, not a sandbox. Uncovered, by design:
+ *   - a script file run by name (`bash x.sh`, `./x.sh`, `make`, a package.json script);
+ *   - config already set in ~/.gitconfig or .git/config (an alias, core.pager, hooks, …);
+ *   - git launched from another program (`node -e`, `python -c`, an editor, a test runner);
+ *   - wrappers and shells not listed above;
+ *   - any git option not yet known to run a command or write a file.
+ * Lookalike names (a Cyrillic U+0430 for the `a` in main) are a different branch to git: no action.
  *
  * "Main checkout" = the primary (not linked) worktree whose git common dir is the same as that of
  * `$CLAUDE_PROJECT_DIR`. Without that variable, any primary worktree counts.
@@ -64,11 +72,27 @@ const MAIN = 'main';
 const ESCAPE = 'MAT_PLAN_ALLOW_MAIN_CHECKOUT=1';
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const GIT_LOCATION_ENV = /^GIT_(DIR|WORK_TREE)=/;
+/** Env that makes git run a command or read config we can't see: the git command is unknown. */
+const GIT_EXEC_ENV =
+  /^GIT_(CONFIG\w*|EXTERNAL_DIFF|PAGER|SSH|SSH_COMMAND|ASKPASS|EDITOR|SEQUENCE_EDITOR|EXEC_PATH)=/;
+/** Env assignment `a` changes where git acts, or what it runs. */
+const noteGitEnv = (a, flags) => {
+  if (GIT_LOCATION_ENV.test(a)) flags.gitEnv = true;
+  if (GIT_EXEC_ENV.test(a)) flags.execEnv = true;
+};
 /** The word a process substitution `<(…)` leaves behind: unresolvable (`$`), and recognisable. */
 const PROCSUB = '$<(…)';
-/** `git -c <key>=…` keys whose value git runs as a command. */
-const EXEC_CONFIG =
-  /^(alias\..*|core\.(pager|fsmonitor|sshcommand|hookspath|editor)|sequence\.editor|diff\.external)$/;
+/**
+ * `git -c <key>[=<value>]` is an ALLOWLIST in the main checkout: display settings only. Any other key
+ * may run a command (alias.*, core.pager, core.fsmonitor, protocol.ext.allow, credential.helper, …).
+ */
+export function safeConfigKey(key, value) {
+  const k = key.toLowerCase();
+  if (/^(color|log|advice|column)\./.test(k) || k === 'core.quotepath') return true;
+  if (k.startsWith('diff.'))
+    return k !== 'diff.external' && !/^diff\..+\.(command|textconv)$/.test(k);
+  return k.startsWith('pager.') && /^(false|no|off|0)$/i.test(value ?? '');
+}
 
 /** `arg` is the long option `long`, or a prefix of it git would accept (`--forc` for `--force`). */
 export function isLongOpt(arg, long, min = 3) {
@@ -292,7 +316,7 @@ const SUDO_WITH_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-U', '-r',
 /** Every git / gh invocation in `command`, with the directory it acts on. */
 export function invocations(command, cwd) {
   const out = [];
-  walk(lex(command), { dir: cwd, unsure: false, gitEnv: false }, out, false);
+  walk(lex(command), { dir: cwd, unsure: false, gitEnv: false, execEnv: false }, out, false);
   return out;
 }
 
@@ -335,13 +359,13 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
 
   let i = 0;
   let escape = inheritedEscape;
-  let gitEnv = state.gitEnv;
+  const env = { gitEnv: state.gitEnv, execEnv: state.execEnv };
   let dirUnsure = state.unsure;
   let viaXargs = false; // the command's arguments arrive on stdin
   // Leading assignments: the only place the escape hatch counts.
   for (; i < words.length && ASSIGNMENT.test(words[i]); i++) {
     if (words[i] === ESCAPE) escape = true;
-    if (GIT_LOCATION_ENV.test(words[i])) gitEnv = true;
+    noteGitEnv(words[i], env);
   }
   // Wrappers that run the rest of the words as a command.
   for (;;) {
@@ -384,9 +408,8 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
         else if (a === '-C' || a === '--chdir') {
           dirUnsure = true;
           i++;
-        } else if (ASSIGNMENT.test(a)) {
-          if (GIT_LOCATION_ENV.test(a)) gitEnv = true;
-        } else if (!a.startsWith('-')) break;
+        } else if (ASSIGNMENT.test(a)) noteGitEnv(a, env);
+        else if (!a.startsWith('-')) break;
       }
     } else if (base === 'command') {
       for (i++; words[i]?.startsWith('-'); i++) if (/^-[a-zA-Z]*[vV]/.test(words[i])) return; // lookup only
@@ -418,9 +441,8 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
       for (i++; i < words.length; i++) {
         const a = words[i];
         if (SUDO_WITH_VALUE.has(a)) i++;
-        else if (ASSIGNMENT.test(a)) {
-          if (GIT_LOCATION_ENV.test(a)) gitEnv = true;
-        } else if (!a.startsWith('-')) break;
+        else if (ASSIGNMENT.test(a)) noteGitEnv(a, env);
+        else if (!a.startsWith('-')) break;
       }
     } else break;
   }
@@ -431,12 +453,12 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
 
   // `git${IFS}checkout`, `$(which git) …`, `"$GIT" …`: the command itself can't be read.
   if (cmd.includes('$')) {
-    out.push({ kind: 'dynamic', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    out.push({ kind: 'dynamic', dir: state.dir, unsure: dirUnsure || env.gitEnv, escape });
     return;
   }
   // `source <(…)` / `. <(…)` run commands we can't read, like a pipe into a shell.
   if ((base === 'source' || base === '.') && rest[0] === PROCSUB) {
-    out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || env.gitEnv, escape });
     return;
   }
 
@@ -455,7 +477,9 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
     return;
   }
   if (['export', 'declare', 'typeset'].includes(base)) {
-    if (rest.some((a) => GIT_LOCATION_ENV.test(a))) state.gitEnv = true;
+    const exported = { gitEnv: state.gitEnv, execEnv: state.execEnv };
+    for (const a of rest) noteGitEnv(a, exported);
+    Object.assign(state, exported);
     return;
   }
   if (base === 'eval') {
@@ -474,14 +498,14 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
     }
     if (viaXargs || script === PROCSUB)
       // `xargs sh -c '{}'` / `bash <(…)`: the commands arrive from somewhere we can't read.
-      out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+      out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || env.gitEnv, escape });
     else if (sawC && script !== undefined) walk(lex(script), { ...state }, out, escape);
     else if (script === undefined) {
       // A bare shell reads its commands from stdin: a heredoc / here-string body is readable; a
       // pipe is not, so it counts as an unknown command.
       for (const h of stdin) walk(lex(h.body), { ...state }, out, escape);
       if (!stdin.length && piped)
-        out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+        out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || env.gitEnv, escape });
     }
     return;
   }
@@ -522,7 +546,7 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
   if (base !== 'git') return;
 
   let dir = state.dir;
-  let execConfig = false; // `-c core.pager=…` and friends run a command of their own
+  let execConfig = env.execEnv; // a -c key off the allowlist, or GIT_CONFIG_*/GIT_PAGER/… in env
   let k = 0;
   for (; k < rest.length && rest[k].startsWith('-'); k++) {
     const a = rest[k];
@@ -533,22 +557,25 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
         dir = resolve(dir, t);
         if (isAbsolute(t)) dirUnsure = false;
       }
-    } else if (a === '-c' || a === '--config-env') {
-      const key = (rest[++k] ?? '').split('=')[0].toLowerCase();
-      if (EXEC_CONFIG.test(key)) execConfig = true;
-    } else if (a.startsWith('--config-env=')) {
-      if (EXEC_CONFIG.test(a.slice('--config-env='.length).split('=')[0].toLowerCase()))
+    } else if (a === '-c') {
+      const kv = rest[++k] ?? '';
+      const eq = kv.indexOf('=');
+      if (!safeConfigKey(eq < 0 ? kv : kv.slice(0, eq), eq < 0 ? 'true' : kv.slice(eq + 1)))
         execConfig = true;
+    } else if (a === '--config-env' || a.startsWith('--config-env=')) {
+      // The value comes from an env var we can't see: judged as if unknown.
+      const kv = a.includes('=') ? a.slice(a.indexOf('=') + 1) : (rest[++k] ?? '');
+      if (!safeConfigKey(kv.split('=')[0], undefined)) execConfig = true;
     } else if (a === '--namespace' || a === '--super-prefix') k++;
     else if (a === '--git-dir' || a === '--work-tree') {
-      gitEnv = true;
+      env.gitEnv = true;
       k++;
-    } else if (a.startsWith('--git-dir=') || a.startsWith('--work-tree=')) gitEnv = true;
+    } else if (a.startsWith('--git-dir=') || a.startsWith('--work-tree=')) env.gitEnv = true;
   }
   out.push({
     kind: 'git',
     dir,
-    unsure: dirUnsure || gitEnv,
+    unsure: dirUnsure || env.gitEnv,
     sub: rest[k],
     args: rest.slice(k + 1),
     execConfig,
@@ -597,15 +624,13 @@ const BRANCH_FLAGS_WITH_VALUE = new Set([
 ]);
 const TAG_LIST_FLAGS =
   /^(-l|--list|-n\d*|-i|--ignore-case|--no-color|--color(=.*)?|--column(=.*)?|--no-column|(--sort|--format|--merged|--no-merged|--contains|--no-contains|--points-at)(=.*)?)$/;
-const CONFIG_READ = new Set([
+const CONFIG_READ_FLAGS = new Set([
   '--get',
   '--get-all',
   '--get-regexp',
   '--get-urlmatch',
   '--list',
   '-l',
-  'get',
-  'list',
 ]);
 const CONFIG_WRITE = new Set([
   'set',
@@ -648,7 +673,7 @@ function branchListOnly(args) {
 
 /** `git tag` with listing flags only; a bare name (a new tag) needs `-l`/`--list` to be a pattern. */
 function tagListOnly(args) {
-  const listing = args.some((a) => a === '-l' || a === '--list');
+  const listing = args.some((a) => a === '-l' || a === '--list' || /^-n\d*$/.test(a)); // -n lists
   for (let k = 0; k < args.length; k++) {
     const a = args[k];
     if (a.startsWith('-')) {
@@ -682,6 +707,29 @@ function branchDeleteOnly(args) {
  * conditional entries can't be verified and are refused.
  */
 export function allowedInMain(sub, args, ctx) {
+  // `main` in another letter case names refs/heads/main on a case-insensitive filesystem
+  // (`fetch . +x:MAIN`, `worktree add p Main`), whatever the subcommand.
+  if (args.some(namesMainInAnotherCase)) return false;
+  // Options that write a file or run a command, on any subcommand.
+  if (args.some((a) => isLongOpt(a, '--output') || isLongOpt(a, '--upload-pack'))) return false;
+  if (
+    sub === 'grep' &&
+    args.some((a) => /^-[a-zA-Z]*O/.test(a) || isLongOpt(a, '--open-files-in-pager'))
+  )
+    return false;
+  if (sub === 'ls-remote' && args.some((a) => /^-[a-zA-Z]*u/.test(a))) return false; // -u = --upload-pack
+  return allowedBySubcommand(sub, args, ctx);
+}
+
+/** An argument naming `main` in another case: `MAIN`, `+feat:Main`, `refs/heads/mAin`. */
+export function namesMainInAnotherCase(arg) {
+  return arg.split(/[:/]/).some((part) => {
+    const p = part.replace(/^\+/, '');
+    return p.toLowerCase() === MAIN && p !== MAIN;
+  });
+}
+
+function allowedBySubcommand(sub, args, ctx) {
   if (sub === undefined || READ_ONLY.has(sub)) return true;
   const flags = args.filter((a) => a.startsWith('-'));
   const pos = args.filter((a) => !a.startsWith('-'));
@@ -696,8 +744,21 @@ export function allowedInMain(sub, args, ctx) {
     }
     case 'config': {
       if (args.some(isConfigWrite)) return false;
-      return args.some((a) => CONFIG_READ.has(a)) || pos.length === 1; // `git config <key>` is a get
+      // Positionals, with `--` counted as one and option values (-f <file>) skipped.
+      const positional = [];
+      for (let k = 0; k < args.length; k++) {
+        if (args[k] === '--' || !args[k].startsWith('-')) positional.push(args[k]);
+        else if (/^(-f|--file|--blob|--type|--default)$/.test(args[k])) k++;
+      }
+      if (positional[0] === 'get' || positional[0] === 'list') return true; // `git config get <key>`
+      if (args.some((a) => CONFIG_READ_FLAGS.has(a))) return true; // `--get <key>`, `--list`
+      return positional.length === 1 && positional[0] !== '--'; // `git config <key>` is a get
     }
+    case 'symbolic-ref':
+      // Read form only: `symbolic-ref [-q] [--short] HEAD`. Two names, -d or -m write.
+      return (
+        pos.length <= 1 && !args.some((a) => /^-[a-zA-Z]*[dm]/.test(a) || isLongOpt(a, '--delete'))
+      );
     case 'branch':
       return branchListOnly(args) || branchDeleteOnly(args);
     case 'tag':
@@ -707,6 +768,8 @@ export function allowedInMain(sub, args, ctx) {
     case 'worktree': {
       const force = flags.some((a) => isLongOpt(a, '--force') || /^-[a-zA-Z]*f/.test(a));
       if (['list', 'prune', 'repair'].includes(args[0])) return true;
+      // add -B resets an existing branch (the workflow only uses -b / --detach).
+      if (args[0] === 'add' && flags.some((a) => /^--?[a-zA-Z]*B/.test(a))) return false;
       return (args[0] === 'add' || args[0] === 'remove') && !force;
     }
     case 'pull':
@@ -788,7 +851,7 @@ function denyReason(inv) {
       'A command fed to a shell from a pipe, xargs or <(…) (unreadable, so treated as unknown)',
     dynamic: 'A command whose name comes from a variable or substitution (unreadable)',
     git: inv.execConfig
-      ? `\`git -c <key>\` with a key that runs a command (alias, pager, editor, hooks…)`
+      ? `\`git ${inv.sub}\` with config it can't vet (a \`-c\` key off the display-only allowlist, or GIT_CONFIG_*/GIT_PAGER/GIT_SSH… in the env)`
       : `\`git ${inv.sub}\``,
   }[inv.kind];
   const where = inv.unsure
