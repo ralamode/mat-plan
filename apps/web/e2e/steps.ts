@@ -9,6 +9,18 @@ import { expect, type Page } from '@playwright/test';
 export const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
 
 /**
+ * An ISO day `n` days before now, in UTC. Shared by the day-navigation specs (V1-15, V1-28) — the
+ * second caller is the trigger to extract it, per AGENTS.md's constants rule.
+ *
+ * UTC is deliberate and safe HERE: `playwright.config.ts` pins the browser to `America/Los_Angeles`,
+ * which is behind UTC, so a UTC date is never AHEAD of the app's local date. The specs use this to
+ * reach a day the app will accept, not to assert the app's own date arithmetic — that is
+ * `declared-day.test.ts`'s job, and V1-14b reads the day off the form rather than recomputing it.
+ */
+export const isoDaysAgo = (n: number) =>
+  new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+
+/**
  * From the profile picker (`/`), tap a profile tile and land on its scoped Today
  * (`/p/[profileId]`). Asserts the scoped Today shows the profile's name as the
  * page heading. Shared by the smoke test and the one-time warmup (DRY).

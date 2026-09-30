@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * Day navigation (V1-15).
@@ -8,8 +8,6 @@ import { SEED_PROFILE_ROUTE } from './steps';
  * Motivated by a real confusion: Ray logged a session from a tab left open overnight and could not
  * tell which date it wrote to. The date is now in the URL, so the question is answerable by looking.
  */
-
-const isoDaysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
 test('yesterday is reachable even on a profile created today', async ({ page }) => {
   // The e2e seeds profiles TODAY. Flooring at `created_at` alone would clamp yesterday away — while

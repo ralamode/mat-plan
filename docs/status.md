@@ -258,6 +258,20 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **V1-28: paging to another day left the last day's form behind.** Reported from
+  real use, on a screenshot of an already-completed day. V1-15 made day navigation a client-side RSC
+  transition, and `StrengthFormBody` was keyed on `gen` — a **submit** counter — so the subtree never
+  remounted on a day change and every uncontrolled field kept its first-mount DOM value.
+  - **It wrote bad data, not just a wrong-looking screen.** Paging from a Strength B day back to a
+    Strength A day left the day-role select reading "Strength B" under a header reading "Strength A".
+    That select's own docblock says the stored value's whole worth is PROVENANCE — _"a non-null
+    day_role must mean a human asserted it"_ — and it is the column V1-13's CSV reads as
+    `session_type`. Submitting asserted a day role the athlete never chose.
+  - Keyed on the day as well. The check-in form was already immune, and says why in a comment:
+    _"Checked state is CONTROLLED. `defaultChecked` is not reconciled after mount."_ The same
+    sentence is the whole bug, one file over.
+  - **The class, not the instance:** V1-15 changed how the page is entered, and nothing re-examined
+    what holds state across that entry. `e2e/day-nav-form-state.spec.ts` now asserts it.
 - **2026-09-30** — **V1-26 PR-A: the form knows what the movement is**
   ([plan](./plans/v1-26-form-knows-the-movement.md)). On 2026-09-28 Liam's KB swings were logged
   `20 × BW` when the session was `10 × 20 lb`. The catalog knew — `KB Swings` is seeded

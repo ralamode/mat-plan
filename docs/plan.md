@@ -571,6 +571,22 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   ⚠️ **Sequenced after V1-15**, and it composes with **MOT-1**: the dots and the streak are the same
   fact rendered two ways, so they should share one read rather than each growing their own.
 
+- **~~V1-28 — paging to another day left the last day's form behind.~~** ✅ **Fixed 2026-09-30**,
+  reported from real use. V1-15 made day navigation a client-side RSC transition, and
+  `StrengthFormBody` was keyed on `gen` — a SUBMIT counter — so the subtree never remounted on a day
+  change and every uncontrolled field kept its first-mount DOM value.
+
+  **The damage was the day-role select.** Paging from a Strength B day back to a Strength A day left
+  it reading "Strength B" under a header reading "Strength A". Its own docblock says the stored
+  value's whole worth is PROVENANCE — _"a non-null day_role must mean a human asserted it"_ — and it
+  is the column V1-13's CSV reads as `session_type`. So the bug did not merely look wrong: it wrote a
+  day role the athlete never chose, into the column the export trusts most.
+
+  Fixed by keying on the day as well (`${day}:${gen}`), which also clears typed-but-unsubmitted
+  movement cards on a day change — the intended trade, since carrying them silently lets Day B's
+  movements be submitted onto Day A. Covered by `e2e/day-nav-form-state.spec.ts`; the check-in form
+  was already safe (its checked state is controlled, with a comment saying exactly why).
+
 - **V1-24 — the form IS the day's state: edit what you already logged.** _(Ray, 2026-09-28, from
   logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
   — and then **could not fix it**, for either of two independent reasons. First data-correctness bug
