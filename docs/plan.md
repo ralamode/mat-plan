@@ -397,6 +397,70 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
 
+- **V1-25 — the logging loop, from four sessions of real use.** _(Ray, 2026-09-29.)_ Four requests
+  that arrived together and are **one theme**: the form should know what the athlete already told it —
+  about the movement, about the day, and about yesterday. Filed as one row because they share a
+  surface and two of them share V1-24's reframe; **split at implementation**, not here.
+
+  ### 1. The scaffold's set count is hardcoded, and belongs to the coach
+
+  `DEFAULT_SCAFFOLD_SETS = 3` (`strength-form-scaffold.ts:92`) — an **app constant**, not a coach
+  decision. Ray wants **5** for his kids, and wants to set it **in the editor**. Two layers, and they
+  are different rows' worth of work:
+
+  - **The value:** the YDP seeds `sets: null` on every rotating and core movement _deliberately_ (the
+    paper sheet shows no targets — "the absence of a target reduced the 'I failed today' effect"), so
+    `clampSetCount` falls through to the app default. A per-athlete or per-program default is a
+    **prescription** concern, not a form one.
+  - **The control:** "set it in the editor" is **V1-22's** surface (program authoring), which does not
+    exist yet. An interim is an input on the scaffold button itself — _how many sets?_ — which is
+    cheap, needs no schema, and is the thing Ray can use this week.
+
+  ⚠️ Do **not** solve this by changing the constant to 5: it is Ray's number for his kids, not a
+  default for a stranger's first session (ONB-0/ONB-2 own that).
+
+  ### 2. Pre-select BW on bodyweight movements, and clear it when a weight is typed
+
+  The catalog already declares it — `movements.isBodyweight` — and the form **reads neither it nor
+  `unitDefault`** (V1-24's second P0, same root cause). So: a movement seeded `isBodyweight: true`
+  starts with BW **pre-selected**, and **typing a weight clears it**.
+
+  The reciprocal matters as much as the default: BW + a weight is **legal and meaningful** — it is
+  `BW+8 (vest)`, the shape GAP-3 exists to represent — so "typing a weight clears BW" must be a
+  **default the athlete can override**, never a lockout. Get that backwards and the vest case becomes
+  unloggable again.
+
+  ### 3. A logged form should look complete, not empty
+
+  > _"Once we've clicked Log Strength maybe we should change the treatment to make it appear complete.
+  > Same for Log Weight or check-ins — keep the value and just make it appear complete."_
+
+  This is **V1-24's reframe reaching every form**, and the two rows should be planned together: V1-24
+  is _the form holds today's values so you can edit them_; this is _and it looks like you're done_.
+  Today the three forms disagree — check-ins render **checked + inert**, bodyweight and strength
+  render **empty**, and the day's truth is in a read-only list underneath.
+
+  **Ray asked for a design pass on this specifically** ("lets do some UX/design revisions on this to
+  get the best UI for it"), so it gets the full UX panel rather than a chosen treatment. The real
+  question is not styling: it is **what "complete" means when the value is still editable** — a
+  checkmark that implies finality on a field you can still change is a lie, and an inert field you
+  cannot correct is V1-24's bug in a nicer costume.
+
+  ### 4. A calendar by the date, with a dot on days that have activity
+
+  Reachable **from the date line** on Today; days with any logged activity carry an indicator, days
+  without carry none — so a month tells you the streak story at a glance.
+
+  Mostly **already specified**: this is the brainstorm's **v2 month calendar**
+  ([day-navigation](./plans/day-navigation-and-dashboard-brainstorm.md)), whose read is one bounded
+  query — `SELECT DISTINCT activity_date … WHERE profile_id = ? AND activity_date >= :monthStart AND
+< :nextMonth`, index-covered by `idx_entries_profile_date`, ≤31 rows. It is **V1-15's v2**, and
+  V1-15 (prev/next paging + the dated route) is planned but unbuilt — the calendar needs somewhere to
+  navigate **to**.
+
+  ⚠️ **Sequenced after V1-15**, and it composes with **MOT-1**: the dots and the streak are the same
+  fact rendered two ways, so they should share one read rather than each growing their own.
+
 - **V1-24 — the form IS the day's state: edit what you already logged.** _(Ray, 2026-09-28, from
   logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
   — and then **could not fix it**, for either of two independent reasons. First data-correctness bug
