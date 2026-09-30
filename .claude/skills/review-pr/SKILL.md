@@ -208,6 +208,24 @@ re-run `pnpm verify`, and reply on the PR with what each commit addressed. P1s o
 a **baseline audit**, P0s become backlog rows or a single `fix/` PR, one concern each (use
 `start-task`).
 
+## 8. Shipit (approving for merge)
+
+When asked to iterate until a PR is ready, post the approval as a PR comment whose **first line is
+`## shipit`** (the `keep-mergeable` sweep finds PRs by that heading). Post it only when **all** of
+these hold:
+
+- every P0 and P1 is fixed (or explicitly declined with the reason), and the P2s are fixed or filed
+- a **fresh** second-pass review confirms it: an agent that didn't write the fixes
+- CI is green on the current head, and the PR is **MERGEABLE** and up to date with `main`, checked with
+  git (`git fetch origin && git merge-base --is-ancestor origin/main origin/<branch>`): with branch
+  protection off, GitHub shows a behind PR as `clean`
+
+The comment lists what changed since the review, and the merge order if other approved PRs overlap.
+
+**Posting it makes you responsible for keeping the PR mergeable until it lands.** When `main` moves
+and the PR goes CONFLICTING or behind `main`, fix it without being asked:
+[keep-mergeable](../keep-mergeable/SKILL.md).
+
 ## Red flags
 
 - Starting the rubric before checking that the diff matches the description.

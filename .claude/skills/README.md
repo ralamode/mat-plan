@@ -30,6 +30,7 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                                                                                                  | #173         |
 | [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                                                                                                  | #173         |
 | [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                                                                                                            | #173         |
+| [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | #181         |
 | [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
 
 ## Guards (mechanisms, not procedures)
@@ -120,6 +121,12 @@ source of truth.
 - **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
   `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
   already existed; the main-checkout rule had failed twice within hours of being written down.
+- **2026-09-30** — `keep-mergeable`: `shipit` now means "I keep this mergeable until it lands". Every
+  merge in the 09-30 batch re-conflicted the other approved PRs at the same changelog line, and each
+  was fixed by hand. The skill merges `main` in from a detached worktree (fast-forward push, never
+  force), auto-resolves only changelog/append-style conflicts and asks on anything else. `review-pr`
+  gains a "Shipit" step (the bar for posting it), and `ship-pr` step 8 ends with the sweep. The root
+  cause, one shared insertion point in `docs/status.md`, is planned separately ([DX-2](../../docs/plans/dx-2-changelog-fragments.md), changelog fragments).
 - **2026-09-30** — DX-1 implemented: `review-pr` gained a CI mode and one shared prefetch
   (`.github/scripts/review-prefetch.sh`) for local and `@claude review` runs. Posting is now always
   the caller's job.

@@ -1,6 +1,7 @@
 import { ENTRY_STATUS, QUANTITY_SLOT, UNIT_DIMENSION } from '@mat-plan/shared';
 
 import type { SetDTO, SetQuantityDTO } from '@/lib/dal/entries';
+import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
 /** The set fields the read line + editability depend on (a narrow slice of `SetDTO`). */
 type SetShape = Pick<SetDTO, 'reps' | 'isBodyweight' | 'isBand' | 'quantities' | 'status'>;
@@ -34,12 +35,12 @@ export function formatSetLine(set: SetShape): string {
   if (primary) {
     // `+` only when it MODIFIES a mode — `BW +8 lb` reads as bodyweight plus eight pounds, whereas a
     // bare `185 lb` is the whole load and a leading plus would be a lie.
-    parts.push(`${parts.length > 0 ? '+' : ''}${primary.value} ${primary.unit}`);
+    parts.push(`${parts.length > 0 ? '+' : ''}${formatValueUnit(primary.value, primary.unit)}`);
   }
 
   for (const q of set.quantities) {
     if (q.slot === QUANTITY_SLOT.primary) continue;
-    parts.push(`+${q.value} ${q.unit} ${q.slot}`);
+    parts.push(`+${formatValueUnit(q.value, q.unit)} ${q.slot}`);
   }
 
   return `${set.reps ?? '?'} × ${parts.length > 0 ? parts.join(' ') : '?'}`;

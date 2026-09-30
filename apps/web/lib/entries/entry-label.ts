@@ -6,6 +6,7 @@ import {
 } from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
+import { formatValueUnit } from './format-value-unit';
 import { minutesToClock } from '@/lib/date';
 
 /**
@@ -52,7 +53,9 @@ export function entryLabel(e: EntryDTO): string {
       case METRIC_VALUE_TYPE.number:
       case METRIC_VALUE_TYPE.count:
       default:
-        return e.value === null ? e.metricLabel! : `${e.metricLabel} — ${e.value} ${e.unit}`;
+        return e.value === null
+          ? e.metricLabel!
+          : `${e.metricLabel} — ${formatValueUnit(e.value, e.unit)}`;
     }
   }
 
@@ -77,7 +80,7 @@ export function entryLabel(e: EntryDTO): string {
 
   // 4. Legacy `kind` fallbacks — unreachable against real rows (see the note above).
   if (e.kind === ENTRY_KIND.bodyweight) {
-    return e.value === null ? 'Bodyweight' : `Bodyweight — ${e.value} ${e.unit}`;
+    return e.value === null ? 'Bodyweight' : `Bodyweight — ${formatValueUnit(e.value, e.unit)}`;
   }
   return STRENGTH_LABEL;
 }
