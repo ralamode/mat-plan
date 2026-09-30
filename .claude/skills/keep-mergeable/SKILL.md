@@ -69,11 +69,11 @@ their own worktree needs a `git pull --no-rebase` first ([ship-pr](../ship-pr/SK
 
 Auto-resolve **only** these shapes:
 
-| Conflict                                                                                                                                                                       | Resolution                                                                                                  |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                                       | Keep both, **this PR's first** (newest on top); no blank line between entries                               |
-| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets **with different ids** | Keep both, **`main`'s first** (merge order). The same id on both sides (two PRs each adding `DX-3`) is real |
-| A table where each side **only added** rows                                                                                                                                    | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real                |
+| Conflict                                                                                                                                                                       | Resolution                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                                       | Keep both, **this PR's first** (newest on top); no blank line between entries                                                     |
+| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets **with different ids** | Keep both, **`main`'s first** (merge order). The same id on both sides (two PRs each adding `DX-3`) is real                       |
+| A table where each side **only added** rows                                                                                                                                    | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited, or the same id added on both sides, is real |
 
 **Anything else is a real conflict: stop and ask**, and name the files and hunks. That includes
 **`package.json`**: when two scripts land on one line, one side often adds an aggregate (`verify`,
@@ -87,7 +87,8 @@ still the old tip, and every diff-based check shows `main`'s work as this PR's:
 
 ```bash
 grep -nE '^(<<<<<<<|=======$|>>>>>>>)' <resolved files>   # must print nothing
-grep -oE '^\s*- \*\*[A-Z][A-Z0-9]*-[0-9]+[a-z]?' docs/plan.md | sort | uniq -d  # must print nothing
+dup_ids() { grep -oE '^(\s*- \*\*|\| *\**)[A-Z][A-Z0-9]*-[0-9]+[a-z]?' | sed -E 's/^[-| *]+//' | sort | uniq -d; }
+comm -13 <(git show origin/main:docs/plan.md | dup_ids) <(dup_ids < docs/plan.md)  # ids the MERGE duplicated: must print nothing
 pnpm exec prettier --write <resolved files>
 git add <resolved files>
 git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
