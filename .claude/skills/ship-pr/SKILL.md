@@ -13,10 +13,14 @@ unless they have already said to ship.
 ## 1. Rebase on the current main
 
 ```bash
-git status --short                       # dirty? commit the work first — rebase refuses a dirty tree
+git status --short                       # dirty? commit the work first
 git fetch origin
-git pull --no-rebase origin <branch>     # someone (keep-mergeable) may have merged main into it
-git rebase origin/main
+if git ls-remote --exit-code --heads origin <branch> >/dev/null; then
+  git pull --no-rebase origin <branch>   # already pushed: someone (keep-mergeable) may have merged main in
+  git merge --no-edit origin/main        # merge, never rebase, once the branch is on the remote
+else
+  git rebase origin/main                 # not pushed yet: rebase freely
+fi
 ```
 
 "Require branches up to date" is on, so it has to happen before merge anyway, and a rebase now

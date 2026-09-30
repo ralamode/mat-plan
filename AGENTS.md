@@ -198,9 +198,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
-  preferred for linear history. **Someone other than the author** updating a PR (the `keep-mergeable`
-  skill) **merges `main` in and never rebases**: a rebase needs a force-push, and the squash merge keeps
-  `main` linear either way.
+  preferred **before the branch is first pushed**. **Once it is on the remote, merge `main` in and never
+  rebase**, whether you're the author or someone keeping it mergeable (the `keep-mergeable` skill): a
+  rebase then needs a force-push, and the squash merge keeps `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
 - **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
@@ -266,7 +266,9 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   database and inherits `.env.local` — use `e2e:local`.
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
-  Plus **forward-only** + **Squawk** on new migrations, and `audit --prod` via `pnpm verify`.
+  Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
+  only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI
+  green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
   **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on
   demand** (`.github/workflows/codeql.yml`) — a minutes-long scan on every PR is the wrong trade at ~4h/wk,
   and every merged PR is one squashed commit on `main`, so the push trigger still sees all of it. Findings
