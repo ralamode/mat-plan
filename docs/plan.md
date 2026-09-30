@@ -613,6 +613,24 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   movements be submitted onto Day A. Covered by `e2e/day-nav-form-state.spec.ts`; the check-in form
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **Found 2026-09-30** by
+  V1-24 PR 1b's correctness lens, **outside the diff**. `bodyweight-form.tsx` has offered the `kg`
+  option since V1-3 (#35), and `packages/db/src/queries/export-month.ts` has **never selected `unit`**
+  — `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`. So a kg
+  weigh-in exports as `84.5` and the Claude workflow reads it as **pounds**: a silent 2.2× error in a
+  trend a coach reads.
+
+  It does not throw, which is what makes it bad — `csv/value.ts` refuses exactly this for strength
+  loads (_"a converted number is one the athlete never logged"_), and the bodyweight path has no
+  equivalent. **Fix:** select `unit` in `bodyweightMonthRows` and call `assertExportableUnit` in
+  `buildBodyweight`, so the export refuses loudly. Then decide whether to convert or to widen the
+  contract — a decision for Ray, since the header is legacy bytes. Check prod for existing kg rows
+  first; if any exist they need a `db:correct` before the export starts throwing.
+
+- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** Its WHERE omits
+  `isNull(profiles.deletedAt)`, alone among the 11 ownership sites in the codebase. Inert today (no
+  profile is soft-deleted), and the `writers/ownership.ts` extraction in V1-24 PR 1b makes it visible.
+
 - **V1-24 — the form IS the day's state: edit what you already logged.**
   **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
   the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
