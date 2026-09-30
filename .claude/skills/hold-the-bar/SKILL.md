@@ -25,14 +25,14 @@ plants each violation in a throwaway repo.
 
 Exit `0` means clean. Exit `1` means one or more finding groups:
 
-| Finding                              | What to do                                                                                                                                                        |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| New suppression                      | Fix the cause. If it is truly justified, write the reason on the line directly above. For `squawk-ignore` it must be _directly_ above the statement (lessons.md). |
-| `.skip` / `.only` / `.todo` / `xit`  | `.only` never ships. `.skip`/`.todo` needs a reason and a backlog row, or it gets removed.                                                                        |
-| Deleted test file                    | Say in the PR where that coverage went (moved? replaced? the code was deleted?).                                                                                  |
-| Fewer `expect()` in a surviving test | Usually a refactor. Confirm the behaviour is still asserted, not just the happy path.                                                                             |
-| Stub or swallowed error              | Implement it, or throw to `error.tsx`. Expected failures use the typed `{ ok:false }` envelope, never `catch {}`.                                                 |
-| The bar itself changed (notice)      | Tightening is fine and needs no comment. Loosening needs a line in the PR saying why.                                                                             |
+| Finding                              | What to do                                                                                                                                                                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New suppression                      | Fix the cause. If it is truly justified, write the reason on the line directly above. For `squawk-ignore` it must be _directly_ above the statement (lessons.md).                                                                                       |
+| `.skip` / `.only` / `.todo` / `xit`  | `.only` never ships. `.skip`/`.todo` needs a reason and a backlog row, or it gets removed.                                                                                                                                                              |
+| Deleted test file                    | Say in the PR where that coverage went (moved? replaced? the code was deleted?).                                                                                                                                                                        |
+| Fewer `expect()` in a surviving test | Usually a refactor. Confirm the behaviour is still asserted, not just the happy path.                                                                                                                                                                   |
+| Stub or swallowed error              | Implement it, or throw to `error.tsx`. Expected failures use the typed `{ ok:false }` envelope. A **deliberate** swallow (a hook that must fail open) states its reason _inside_ the block, `catch { /* why */ }`; a bare `catch {}` is always flagged. |
+| The bar itself changed (notice)      | Tightening is fine and needs no comment. Loosening needs a line in the PR saying why.                                                                                                                                                                   |
 
 **Every finding either gets fixed or gets a one-line justification in the PR description.** The script
 can't tell a good reason from a bad one, but the PR reviewer can.

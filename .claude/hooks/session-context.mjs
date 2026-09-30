@@ -74,7 +74,9 @@ function main() {
   try {
     const headline = statusHeadline(readFileSync(join(root, 'docs/status.md'), 'utf8'));
     if (headline) lines.push(`Where we are (docs/status.md): ${headline}`);
-  } catch {}
+  } catch {
+    /* status.md unreadable: skip the headline */
+  }
 
   const prs = run(
     'gh',
@@ -122,5 +124,7 @@ function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     main();
-  } catch {} // never fail a session start
+  } catch {
+    /* never fail a session start */
+  }
 }

@@ -141,4 +141,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main().catch(() => {}); // fail open
+if (import.meta.url === `file://${process.argv[1]}`)
+  main().catch(() => {
+    /* fail open: a guard that errors must not block every git command */
+  });
