@@ -172,8 +172,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
 ## Git & branch workflow
 
-- **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
-  bootstrap commit). All work goes via PR.
+- **Trunk-based.** `main` is always deployable. All work goes via PR, **by convention**: the "Protect
+  Main" ruleset blocks only branch deletion and force-pushes (verified via the API, 2026-09-30), so a
+  direct push to `main` is technically possible. Don't.
 - One short-lived branch = one PR = one backlog item / one concern. Keep small (target <400 lines).
 - **Every task runs in its own git worktree, cut from a freshly-fetched `main`. This is the default,
   not only for parallel work.**
@@ -278,7 +279,9 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   touches Neon and never pollutes the `pnpm dev` sandbox. Extra args pass through
   (`pnpm e2e:local --project=chromium`, or a single spec). Bare `pnpm --filter web e2e` provisions no
   database and inherits `.env.local` — use `e2e:local`.
-- **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
+- **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
+  `review-pr` shipit bar, "CI green", is what holds the line; verified via the API, 2026-09-30):
+  typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
   Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
   only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI

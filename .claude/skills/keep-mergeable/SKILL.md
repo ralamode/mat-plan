@@ -31,9 +31,14 @@ for n in $(gh pr list --state open --json number --jq '.[].number'); do
     "[.comments[] | select(.author.login == \"$OWNER\") | .body | split(\"\\n\")[0] | sub(\"^[[:space:]]+\"; \"\") | sub(\"[[:space:]]+$\"; \"\")
       | select(startswith(\"## shipit\"))] | last // \"\"")
   [ "$last" = "## shipit" ] || continue
-  info=$(gh pr view "$n" --json headRefName,mergeable --jq '"\(.headRefName) \(.mergeable)"')
-  b=${info% *}; m=${info#* }
-  behind=no; git merge-base --is-ancestor origin/main "origin/$b" 2>/dev/null || behind=yes
+  info=$(gh pr view "$n" --json headRefName,mergeable,isCrossRepository,baseRefName \
+    --jq '"\(.headRefName) \(.mergeable) \(.isCrossRepository) \(.baseRefName)"')
+  read -r b m fork base <<<"$info"
+  # A fork's branch isn't on origin (a same-named origin branch would be the WRONG one), and a
+  # stacked PR's base isn't main: both are out of scope for this sweep.
+  if [ "$fork" = true ] || [ "$base" != main ]; then echo "#$n skip (fork or base $base)"; continue; fi
+  git rev-parse -q --verify "origin/$b" >/dev/null || { echo "#$n $b missing on origin"; continue; }
+  behind=no; git merge-base --is-ancestor origin/main "origin/$b" || behind=yes
   echo "#$n $b mergeable=$m behind_main=$behind"
 done
 ```
@@ -49,7 +54,8 @@ The PR branch is usually checked out in its author's worktree. **Don't touch tha
 never check the branch out a second time:
 
 ```bash
-git worktree add --detach .claude/worktrees/km-<n> origin/<branch>
+b='<branch>'                        # set once, from the finder's output; always quote "$b" below
+git worktree add --detach .claude/worktrees/km-<n> "origin/$b"
 cd .claude/worktrees/km-<n>
 git merge --no-edit origin/main     # a clean merge commits itself; a conflicted one stops here
 ```
@@ -63,11 +69,11 @@ their own worktree needs a `git pull --no-rebase` first ([ship-pr](../ship-pr/SK
 
 Auto-resolve **only** these shapes:
 
-| Conflict                                                                                                                                                | Resolution                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                | Keep both, **this PR's first** (newest on top); no blank line between entries                |
-| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets | Keep both, **`main`'s first** (merge order)                                                  |
-| A table where each side **only added** rows                                                                                                             | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real |
+| Conflict                                                                                                                                                                       | Resolution                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                                       | Keep both, **this PR's first** (newest on top); no blank line between entries                               |
+| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets **with different ids** | Keep both, **`main`'s first** (merge order). The same id on both sides (two PRs each adding `DX-3`) is real |
+| A table where each side **only added** rows                                                                                                                                    | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real                |
 
 **Anything else is a real conflict: stop and ask**, and name the files and hunks. That includes
 **`package.json`**: when two scripts land on one line, one side often adds an aggregate (`verify`,
@@ -81,6 +87,7 @@ still the old tip, and every diff-based check shows `main`'s work as this PR's:
 
 ```bash
 grep -nE '^(<<<<<<<|=======$|>>>>>>>)' <resolved files>   # must print nothing
+grep -oE '^\s*- \*\*[A-Z][A-Z0-9]*-[0-9]+[a-z]?' docs/plan.md | sort | uniq -d  # must print nothing
 pnpm exec prettier --write <resolved files>
 git add <resolved files>
 git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
@@ -93,8 +100,8 @@ pnpm install --frozen-lockfile                # AFTER the merge: main may have c
 pnpm verify && pnpm guides:check && pnpm status:check
 bash .claude/skills/hold-the-bar/check.sh origin/main
 git diff origin/main HEAD --stat              # only this PR's files; nothing of main's reverted
-git fetch origin <branch> && git merge-base --is-ancestor origin/<branch> HEAD \
-  && git push origin HEAD:<branch>            # never --force
+git fetch origin "$b" && git merge-base --is-ancestor "origin/$b" HEAD \
+  && git push origin "HEAD:$b"                # never --force
 ```
 
 If the ancestor check fails, or the push is rejected ("fetch first"), someone pushed meanwhile:

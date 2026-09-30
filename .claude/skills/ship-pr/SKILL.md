@@ -26,8 +26,8 @@ else
 fi
 ```
 
-"Require branches up to date" is on, so this has to happen before merge anyway, and doing it now
-surfaces conflicts while you still have the context. Once the branch is on the remote, a rebase would
+Nothing enforces this before merge (branch protection is off; see AGENTS.md → "Git & branch
+workflow"), so it's on you: doing it now surfaces conflicts while you still have the context. Once the branch is on the remote, a rebase would
 need a force-push, and someone (the `keep-mergeable` skill) may have merged `main` into it already.
 
 **A conflicted merge:** resolve using [keep-mergeable](../keep-mergeable/SKILL.md) step 3's rules

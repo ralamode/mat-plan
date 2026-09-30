@@ -265,7 +265,10 @@ not merge order.
   auto-resolve only changelog/append-style conflicts, and ask on anything else. `review-pr` gains a
   "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep. Found while
   reviewing it: **branch protection is off**, so GitHub never reports a PR as behind `main`, and
-  AGENTS.md's "require branches up to date is ON" was false (corrected). The sweep checks behind-ness
+  AGENTS.md's "require branches up to date is ON" was false (corrected), as were
+  "`main` is protected — no direct pushes" and "CI required checks (block merge)": the ruleset blocks
+  only deletion and force-push, and no check is required (both corrected; the shipit bar is what
+  enforces "CI green"). The sweep checks behind-ness
   with git. The root cause, one shared changelog line, is [DX-2](./plans/dx-2-changelog-fragments.md).
 - **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
   broken twice within hours: another session switched the main checkout to a feature branch, which
