@@ -1,7 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { BODYWEIGHT_BOUNDS, DEFAULT_BODYWEIGHT_UNIT } from '@mat-plan/shared';
+import {
+  BODYWEIGHT_BOUNDS,
+  BODYWEIGHT_UNITS,
+  DEFAULT_BODYWEIGHT_UNIT,
+  IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
+} from '@mat-plan/shared';
 
 import { BODYWEIGHT_COPY, DEFAULT_TIME_ZONE, MIN_TAP_TARGET_PX } from '../lib/constants';
 import { localDayIso } from '../lib/date';
@@ -241,6 +246,9 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
  * Logs the WIDEST legal value, so the 360px check measures the receipt at its longest line. `500 lb`
  * is the plausibility bound's ceiling (`BODYWEIGHT_BOUNDS`), which the form accepts; the recovery
  * line below it is the longest copy and wraps by design.
+ *
+ * Between the two, on the first attempt, it also drives the form's REJECTED state (an implausible
+ * value) and pins that what was typed — value and unit — survives it.
  */
 test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1-24)', async ({
   page,
@@ -262,6 +270,27 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
     await expectNoAxeViolations(page, 'weigh-in (empty form)');
     await expectTapTargets(page, 'weigh-in (empty form)');
     await expectNoHorizontalOverflow(page, 'weigh-in (empty form, 360px)');
+
+    // THE REJECTED SAVE (round 2 on #180). Here, before the valid log, because a rejected save writes
+    // nothing — so it cannot break the disjoint (profile, day) rule. A slipped decimal in the NON-default
+    // unit: React 19 resets uncontrolled fields when a form action settles, even on `{ ok: false }`,
+    // which emptied the input and snapped the unit back — so a kg user retyping `84.5` saved 84.5 lb.
+    const unit = section.getByLabel('Unit', { exact: true });
+    const otherUnit = BODYWEIGHT_UNITS.find((u) => u !== DEFAULT_BODYWEIGHT_UNIT)!;
+    const slipped = '845'; // 84.5 with the decimal point dropped
+    expect(Number(slipped)).toBeGreaterThan(BODYWEIGHT_BOUNDS[otherUnit].max);
+    await unit.selectOption(otherUnit);
+    await input.fill(slipped);
+    await section.getByRole('button', { name: 'Log weight' }).click();
+    await expect(section.getByRole('alert')).toHaveText(IMPLAUSIBLE_BODYWEIGHT_MESSAGE);
+    await expect(input, 'the rejected value must survive, so the kid can fix it').toHaveValue(
+      slipped,
+    );
+    await expect(unit, 'the unit must not snap back to the default').toHaveValue(otherUnit);
+    await expectNoAxeViolations(page, 'weigh-in (rejected value)');
+
+    // Back to the default unit for the valid log below (`logBodyweight` logs in it).
+    await unit.selectOption(DEFAULT_BODYWEIGHT_UNIT);
   }
 
   const widest = String(BODYWEIGHT_BOUNDS[DEFAULT_BODYWEIGHT_UNIT].max);

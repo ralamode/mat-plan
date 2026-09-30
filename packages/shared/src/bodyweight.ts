@@ -25,9 +25,12 @@ export const BODYWEIGHT_BOUNDS = {
   kg: { min: 10, max: 230 },
 } as const satisfies Record<BodyweightUnit, { min: number; max: number }>;
 
-/** The one message for an out-of-range weight — it names the likely cause, not the rule. */
+/**
+ * The one message for an out-of-range weight — it names the likely cause, not the rule. The curly
+ * apostrophe matches the page's `&rsquo;` typography (the app's copy constants use it too).
+ */
 export const IMPLAUSIBLE_BODYWEIGHT_MESSAGE =
-  "That doesn't look like a bodyweight — check the decimal point.";
+  'That doesn’t look like a bodyweight — check the decimal point.';
 
 /**
  * Input contract for logging a bodyweight — the single source shared by the

@@ -73,6 +73,27 @@ describe('BodyweightSection — its states', () => {
     expect(screen.getByText(BODYWEIGHT_COPY.several(rows.map(shown)))).toBeTruthy();
   });
 
+  /**
+   * Round 2 on #180: the commonest duplicate is ONE value twice (a double submit), where "One
+   * weigh-in per day." contradicts the headline and "Wrong number?" asks about a right number. So a
+   * duplicates receipt carries one line — what the parent has to do — on open AND closed days.
+   */
+  it('duplicates → one "ask a parent to remove" line instead of the one-per-day and recovery lines', () => {
+    for (const writable of [true, false]) {
+      for (const rows of [
+        [weight(84.5, 'a'), weight(84.5, 'b')], // the double submit
+        [weight(84.5, 'a'), weight(84.5, 'b'), weight(845, 'c')],
+      ]) {
+        render(section({ logged: rows, writable }));
+        expect(screen.getByText(BODYWEIGHT_COPY.several(rows.map(shown)))).toBeTruthy();
+        expect(screen.getByText(BODYWEIGHT_COPY.duplicates(rows.length))).toBeTruthy();
+        expect(screen.queryByText(BODYWEIGHT_COPY.onePerDay)).toBeNull();
+        expect(screen.queryByText(BODYWEIGHT_COPY.recovery)).toBeNull();
+        cleanup();
+      }
+    }
+  });
+
   it('a closed day with a weight → the recovery line, not a repeat of the page banner', () => {
     const w = weight(84.5);
     render(section({ logged: [w], writable: false }));
@@ -86,6 +107,17 @@ describe('BodyweightSection — its states', () => {
     render(section({ writable: false }));
     expect(screen.getByText(BODYWEIGHT_COPY.noneOnClosedDay)).toBeTruthy();
     expect(screen.queryByLabelText('Weight')).toBeNull();
+  });
+});
+
+// The one place the duplicates copy is typed out: a CONTRACT test pinning the const's branches (the
+// AGENTS.md exception), because "twice" vs "N times" and "extra" vs "extras" is logic, not a literal.
+describe('BODYWEIGHT_COPY.duplicates — its wording per count', () => {
+  it('says "twice" and "the extra" for two, "N times" and "the extras" for more', () => {
+    expect(BODYWEIGHT_COPY.duplicates(2)).toBe('Logged twice — ask a parent to remove the extra.');
+    expect(BODYWEIGHT_COPY.duplicates(3)).toBe(
+      'Logged 3 times — ask a parent to remove the extras.',
+    );
   });
 });
 

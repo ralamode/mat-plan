@@ -25,7 +25,9 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  * - **One value:** `Saved: 84.5 lb`, then `One weigh-in per day.` (on a writable day, where it is the
  *   reason there is no form) and the recovery line.
  * - **Several values** (the pre-1c duplicates, or a two-phone race — PR 1d's index does not exist yet):
- *   `2 weights logged: 84.5 lb, 845 lb`. Never silently one of them.
+ *   `2 weights logged: 84.5 lb, 845 lb`, never silently one of them, then ONE line — `Logged twice —
+ *   ask a parent to remove the extra.` — in place of the one-per-day and recovery lines. The commonest
+ *   duplicate is one value twice (a double submit), which those two lines would contradict.
  * - **None, on a closed day:** `No weight logged.` — a bare heading reads as broken. (None on a
  *   WRITABLE day is the form, not this.)
  *
@@ -39,7 +41,9 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  *    history days V1-15 shipped — the screen this row was reported from.
  * 2. **Zero client JS.** The announcement and focus live in the sibling `SavedAnnouncer` island;
  *    this renders the `id` + `tabIndex={-1}` it focuses. PR 1b passes a `'use client'` Change
- *    control into `control` only when the day is writable.
+ *    control into `control` on EVERY day, closed ones included: the amend has no day bound (plan
+ *    Decision 5 — an amend never moves the entry's date, so a bound buys no integrity and would
+ *    render a dead control on exactly the history days a typo is found on).
  */
 export function BodyweightReceipt({
   logged,
@@ -48,7 +52,7 @@ export function BodyweightReceipt({
 }: {
   logged: readonly LoggedBodyweight[];
   writable: boolean;
-  /** The amend affordance, when the day allows one (PR 1b). 1a passes none. */
+  /** The amend affordance (PR 1b, on every day — no day bound). 1a passes none. */
   control?: ReactNode;
 }) {
   if (logged.length === 0) {
@@ -76,10 +80,16 @@ export function BodyweightReceipt({
       </div>
       {/* Their OWN lines, never a suffix: at 360px the card has ~294px, and the value plus 1b's
           control already fills a row. */}
-      {writable ? (
-        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.onePerDay}</p>
-      ) : null}
-      <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.recovery}</p>
+      {values.length > 1 ? (
+        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values.length)}</p>
+      ) : (
+        <>
+          {writable ? (
+            <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.onePerDay}</p>
+          ) : null}
+          <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.recovery}</p>
+        </>
+      )}
     </div>
   );
 }

@@ -92,6 +92,8 @@ export const bodyweightEntryLine = (value: string) =>
  * having logged the same day: that is prevented by construction (the e2e rule under the plan's 1a
  * table — no two specs log bodyweight for the same `(profile, day)`), and if it ever happened this
  * fails, because the receipt would show the other spec's value.
+ * ⚠️ The split holds only within one LA calendar day: a run that crosses LA midnight shifts "today"
+ * mid-run, so a later spec's yesterday can be an earlier spec's today. Rerun; nothing guards this.
  *
  * Assumes the page is already authenticated and on a profile-scoped Today (`/p/[profileId]`).
  * `timeout` is only overridden for the cold warmup; the real coverage uses the default.

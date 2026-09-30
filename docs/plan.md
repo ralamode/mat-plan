@@ -614,6 +614,14 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
   the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
   2 (check-ins), 3a/3b (strength).
+  - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
+    CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
+logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,
+    but **no axe or 360px-overflow e2e**. The e2e seeds its profiles today, so `resolveViewedDay`
+    floors every `?d=` into the writable window; covering them needs a backdated-profile fixture (the
+    screenshot script's `seedClosedDays` is the precedent). Fold into 1b, which adds a control to
+    every one of these states and must audit them anyway.
+
   📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
   as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
   — and then **could not fix it**, for either of two independent reasons. First data-correctness bug

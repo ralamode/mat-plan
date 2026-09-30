@@ -79,16 +79,27 @@ export const BODYWEIGHT_COPY = {
    */
   several: (values: readonly string[]) =>
     `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
+  /**
+   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (round 2 on #180).
+   * The commonest duplicate is the same value twice from a double submit, where "One weigh-in per
+   * day." reads as a contradiction and "Wrong number?" asks about a number that is right — what the
+   * parent actually has to do is remove the extra row(s).
+   */
+  duplicates: (count: number) =>
+    count === 2
+      ? 'Logged twice — ask a parent to remove the extra.'
+      : `Logged ${count} times — ask a parent to remove the extras.`,
   /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
   onePerDay: 'One weigh-in per day.',
   /**
    * The real recovery path for a typo: a parent runs `db:correct` (docs/runbooks.md).
    *
    * ⚠️ PR 1b ships the amend and **deletes this line**; if it still renders after 1b, that is the bug.
-   * It deliberately does NOT say "coming next": a weight logged today stops being writable two days
-   * later, and 1b's amend is for writable days, so that promise would be false for it.
+   * It deliberately does NOT say "coming next": that was a promise 1a cannot keep, since nothing in 1a
+   * can change the value. (1b's amend itself has NO day bound — plan Decision 5 — so once it ships this
+   * line has no job on any day, open or closed.)
    */
-  recovery: "Wrong number? Ask a parent — it can't be changed in the app yet.",
+  recovery: 'Wrong number? Ask a parent — it can’t be changed in the app yet.',
   /** A closed day with nothing logged — otherwise the section is a bare heading. */
   noneOnClosedDay: 'No weight logged.',
   /** What the status region announces on a save — the FACT, with the value (acceptance 6). */

@@ -113,6 +113,19 @@ flowchart LR
   form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
   e2e warm-up used `0.5`).
 
+- **⚠️ React 19 resets UNCONTROLLED fields in a `<form action>` when the action settles — even when
+  it returns `{ ok: false }`.** A rejection that names the typed value ("check the decimal point")
+  then points at an empty input, and a `<select>` snaps back to its `defaultValue`. On the weigh-in
+  that turned a kg user's corrected `84.5` into a saved 84.5 **lb** — in range, so nothing caught
+  it. `bodyweight-form.tsx` therefore holds `value` and `unit` in state (`checkin-form.tsx` is the
+  older precedent); `e2e/a11y.spec.ts` pins that both survive a rejection. Any form whose fields
+  must outlive a rejected submit needs the same. **⚠️ Controlling a `<select>` is not enough:** the
+  reset is a native `form.reset()`, and React keeps a controlled input's `value` attribute in sync
+  but never a select's `defaultSelected`, so the select shows the first option while state holds
+  another. The form re-asserts it in a layout effect. (`strength-form.tsx`'s Measuring/Unit selects
+  are controlled the same bare way inside `<form action>`; their data rides a JSON field built from
+  state, so the payload stays right, but the visible select may not after a rejection — unverified.)
+
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
   write failed, which prompts a duplicate submit.

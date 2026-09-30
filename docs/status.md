@@ -263,22 +263,35 @@ not merge order.
   three empty forms above a read-only list of everything that had been done.
   - **"Complete" is a property of the RECORD, not the field**, so the semantic is _saved_, not _done_
     — a **receipt**, not a checkmark. `Bodyweight` is the heading in every state; the receipt reads
-    `Saved: 84.5 lb` · `One weigh-in per day.` · `Wrong number? Ask a parent — it can't be changed in
+    `Saved: 84.5 lb` · `One weigh-in per day.` · `Wrong number? Ask a parent — it can’t be changed in
 the app yet.` (the plan's copy verbatim, in `lib/constants.ts`). The last line names the real
-    recovery path (`db:correct`) instead of promising an amend: 1b's amend is for writable days, so
-    "coming next" would have been false for a weight two days old. 1b deletes the line.
+    recovery path (`db:correct`) instead of promising "coming next", which 1a cannot keep. 1b's
+    amend has no day bound (plan Decision 5) and deletes the line.
   - **It removes the second-submit path; it does not make a duplicate impossible.** `logBodyweight`
     dedupes only on `client_id`, and the form minted a fresh key on every success, so "did I already
     weigh in?" → tap again → a second row. The form now renders only when the day has none, its key
     is stable, and it remounts per day (`key` on the day — a stale tab across midnight replayed the
     old day's key as a silent no-op). **Concurrent mounts can still duplicate until 1d's index**, so
-    the receipt lists **every** live row (`2 weights logged: 84.5 lb, 845 lb`) rather than the newest.
-  - **A plausibility bound** in `logBodyweightSchema` (20–500 lb, 10–230 kg; `That doesn't look like a
+    the receipt lists **every** live row (`2 weights logged: 84.5 lb, 845 lb`) rather than the newest,
+    with one line under it — `Logged twice — ask a parent to remove the extra.` — instead of the
+    one-per-day and recovery lines, which contradict the commonest duplicate (one value, submitted
+    twice).
+  - **A plausibility bound** in `logBodyweightSchema` (20–500 lb, 10–230 kg; `That doesn’t look like a
 bodyweight — check the decimal point.`). It is what makes a no-amend receipt acceptable: `845` and
-    `8.45` used to save permanently.
+    `8.45` used to save permanently. **The form's fields are now controlled**, because React 19
+    resets uncontrolled fields when a form action settles, **rejected ones included** (probed): the
+    input emptied under the "check the decimal point" message and the unit snapped back to `lb`, so a
+    kg user retyping `84.5` saved 84.5 lb. A controlled `<select>` alone still snapped back (React
+    syncs an input's `value` attribute for the native reset, never a select's `defaultSelected`),
+    so the form re-asserts the unit in a layout effect. `a11y.spec.ts` pins that value and unit
+    survive.
   - **A save is announced and focus lands on the receipt** (`saved-announcer.tsx`): the form, its
     live region and the focused button all unmount on success, so a pre-mounted `role="status"`
     announces `Bodyweight saved: 84.5 lb.` on the none→value transition only (never on first load).
+    ⚠️ Known, left as is: focus on the receipt makes some screen readers read its text while the
+    polite region announces too, so the value may be heard twice. `aria-describedby` would add
+    speech, not remove it; the real fix is choosing one channel, which wants a screen-reader pass,
+    not a guess — revisit with 1b's focus handling.
   - **The receipt renders on the SERVER, outside the `writable` gate**, so history days show their
     weight too, and a closed empty day says `No weight logged.` instead of a bare heading.
   - **The smoke is disjoint by construction**, not tolerant: no two specs log bodyweight for the same
