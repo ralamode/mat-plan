@@ -581,6 +581,24 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
   select); fix only if it reproduces, with an e2e.
 
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **P0, found
+  2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
+  has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
+  `unit`**, and `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`.
+  So a kg weigh-in exports as `84.5`, and the Claude workflow reads that as **pounds**: a silent 2.2×
+  error in a trend a coach reads. It doesn't throw, which is what makes it bad. `csv/value.ts` refuses
+  exactly this for strength loads (_"a converted number is one the athlete never logged"_), and the
+  bodyweight path has no equivalent. **Fix:** (1) check prod for existing kg rows, since any that exist
+  need a `db:correct` before the export starts throwing; (2) select `unit` in `bodyweightMonthRows`
+  and call `assertExportableUnit` in `buildBodyweight`, so the export refuses loudly; (3) convert, or
+  widen the contract. That last one is Ray's decision, because the header is legacy bytes.
+- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
+  alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, alone among the 11 ownership
+  sites in the codebase. It's inert today because no profile is soft-deleted, but it breaks the
+  ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
+  soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
+  place to make it unskippable.
+
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no

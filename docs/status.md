@@ -263,7 +263,9 @@ not merge order.
   probe first), DX-3 (`screenshot:ephemeral` reuses a stale build), DX-4 (the main-checkout guard's
   false positive on variable-named commands) and DX-5 (nothing enforces the merge gates: branch
   protection is off, there are no required checks, and audit, `skills:check` and `guards:test` never
-  run in CI). Until now they lived only in PR comments. Docs only.
+  run in CI), plus two 🔴 P0s from #187's review: CSV-1 (a kg weigh-in exports under `weight_lb`, a
+  silent 2.2× error) and DAL-1 (`listEntriesForDay` misses the soft-deleted-profile filter). Until now
+  they lived only in PR comments. Docs only.
 - **2026-09-30** — **DX: `shipit` means "keep it mergeable"** (#181, [skill](../.claude/skills/keep-mergeable/SKILL.md)).
   Each merge in the 09-30 batch put the other approved PRs in conflict at the top of this changelog,
   and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after
