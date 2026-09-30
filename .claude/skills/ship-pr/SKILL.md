@@ -13,6 +13,7 @@ unless they have already said to ship.
 ## 1. Rebase on the current main
 
 ```bash
+git status --short                       # dirty? commit the work first — rebase refuses a dirty tree
 git fetch origin && git rebase origin/main
 ```
 

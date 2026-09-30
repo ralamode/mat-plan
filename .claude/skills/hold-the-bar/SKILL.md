@@ -20,6 +20,9 @@ bash .claude/skills/hold-the-bar/check.sh             # diff vs origin/main, unc
 bash .claude/skills/hold-the-bar/check.sh <base-ref>  # e.g. HEAD~3
 ```
 
+Changed the script? Run its self-test, `bash .claude/skills/hold-the-bar/check.test.sh`, which
+plants each violation in a throwaway repo.
+
 Exit `0` means clean. Exit `1` means one or more finding groups:
 
 | Finding                              | What to do                                                                                                                                                        |
