@@ -55,7 +55,11 @@ export async function listProfiles(): Promise<ProfileDTO[]> {
  * `routine` is ALWAYS resolved (never null/raw): `resolveRoutine` maps a null/stale `routine_config` to the
  * default routine, so the page renders a real ordered routine unconditionally.
  */
-export type ProfileWithRoutineDTO = ProfileDTO & { routine: RoutineConfig };
+export type ProfileWithRoutineDTO = ProfileDTO & {
+  routine: RoutineConfig;
+  /** The profile's first calendar day — V1-15's backward navigation floor. */
+  firstDay: string;
+};
 
 export async function getProfileByPublicId(
   publicId: string,
@@ -72,6 +76,10 @@ export async function getProfileByPublicId(
       kind: schema.profiles.kind,
       avatar: schema.profiles.avatar,
       routineConfig: schema.profiles.routineConfig, // untrusted JSON — resolved below, never returned raw
+      // V1-15: the floor for day navigation — `‹` stops at the profile's first day rather than
+      // letting a kid walk back into 2019 and conclude the app is broken. ZERO extra queries: this
+      // SELECT already runs.
+      createdAt: schema.profiles.createdAt,
     })
     .from(schema.profiles)
     .where(and(eq(schema.profiles.publicId, publicId), isNull(schema.profiles.deletedAt)))
@@ -84,6 +92,9 @@ export async function getProfileByPublicId(
         kind: row.kind as ProfileKind,
         avatar: row.avatar,
         routine: resolveRoutine(row.routineConfig, ROUTINE_CATALOG),
+        // The calendar DATE the profile was created, in UTC. Exact enough for a navigation floor —
+        // a boundary off by one in a distant zone costs one unreachable empty day, not correctness.
+        firstDay: row.createdAt.toISOString().slice(0, 10),
       }
     : null;
 }

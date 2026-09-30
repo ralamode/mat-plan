@@ -118,11 +118,17 @@ export function isoDayDiff(a: string, b: string): number {
  * `…T00:00:00Z` parse (NEVER `new Date("YYYY-MM-DD")`): `day` is already a bare local calendar date,
  * so no zone is reinterpreted and DST never enters — the Monday is always correct.
  */
+export function addDays(day: string, n: number): string {
+  // The `…T00:00:00Z` anchor is the V1-6c idiom, not a stylistic choice: `new Date("2026-07-30")`
+  // parses as UTC midnight and then reports in the RUNTIME's zone, so west of UTC it is the PREVIOUS
+  // day. A bare calendar date has exactly one identity; anchoring at UTC preserves it.
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function localWeekStartIso(day: string): string {
-  const t = Date.parse(`${day}T00:00:00Z`);
-  const dow = new Date(t).getUTCDay(); // 0=Sun … 6=Sat
-  const backToMonday = (dow + 6) % 7; // Mon→0 … Sun→6 (back to THIS week's Monday)
-  return new Date(t - backToMonday * 86_400_000).toISOString().slice(0, 10);
+  const dow = new Date(Date.parse(`${day}T00:00:00Z`)).getUTCDay(); // 0=Sun … 6=Sat
+  // Mon→0 … Sun→6 (back to THIS week's Monday).
+  return addDays(day, -((dow + 6) % 7));
 }
 
 /**
@@ -147,6 +153,18 @@ export function localWeekday(day: string): number {
  * reintroduce an off-by-one. The active tz belongs in computing the day (`localDayIso`),
  * never in formatting it. Feed this the LOCAL day so the header weekday matches the plan.
  */
+export function formatDayShort(iso: string): string {
+  // `Tue, Sep 22` ≈ 90px against `formatDayLong`'s ≈ 240px. The nav row carries two 44px arrows and a
+  // Today control inside 328px, so the long form does not fit off-today. Same UTC anchoring and the
+  // same no-timeZone-param reasoning as the long form below.
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso}T00:00:00Z`));
+}
+
 export function formatDayLong(iso: string): string {
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
