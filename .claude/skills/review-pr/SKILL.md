@@ -33,7 +33,21 @@ unauthenticated, or secrets or workflows change). The prompt only names the PR, 
 the base, e.g. _"Review PR #171, worktree `<path>`, diff `git diff <base>...HEAD`."_ The agents
 carry the rubric's reporting contract, so the verify step (4) still applies to what they return.
 
-## 1. Run the mechanical checks first
+## 1. Check the change matches its description
+
+Before the rubric, read the PR title, description and linked plan or backlog row, then the diff, and
+compare the two. A PR that does something other than what it says gets reviewed against the wrong
+intent, so settle this first.
+
+- **Claimed but missing:** each change, test, doc update or gate the description claims is in the
+  diff. A claimed test that doesn't exist is P0.
+- **Present but unclaimed:** every change in the diff is described. An unmentioned file, behaviour
+  change or scope creep beyond the backlog row is a finding (P1, or P0 if it touches data, auth, CI
+  or a migration).
+- **Right scope:** one concern per PR (AGENTS.md → "Git & branch workflow"). The title's type and
+  scope match what changed.
+
+## 2. Run the mechanical checks first
 
 Their results are evidence, and they keep the review from re-deriving what a script already knows.
 
@@ -46,7 +60,7 @@ pnpm guides:check                                        # owned file touched wi
 A red CI job is automatically a P0 finding. Use `debug-ci-failure` to find the cause. Don't re-run
 `pnpm verify` unless CI didn't run.
 
-## 2. The rubric
+## 3. The rubric
 
 Check each dimension that applies. **Every finding needs `path:line`, the rule it breaks (an
 AGENTS.md section, the DoD, lessons.md or a feature-guide invariant), and a concrete fix.** A finding
@@ -96,7 +110,7 @@ with no rule citation is taste. Mark it P2, or drop it.
 **Don't re-flag accepted debt.** Check [docs/tech-debt.md](../../../docs/tech-debt.md) first. A known
 item is a finding only if this PR makes it worse.
 
-## 3. Severity
+## 4. Severity
 
 | Level  | Means                                                                                                         | Examples                                                                          |
 | ------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
@@ -104,7 +118,7 @@ item is a finding only if this PR makes it worse.
 | **P1** | Should fix in this PR, since it's cheap now and expensive later                                               | duplicated constant; missing boundary test; status.md not updated; 360px overflow |
 | **P2** | Follow-up or nit; file it rather than block                                                                   | naming, a clearer comment, a test that could be tighter                           |
 
-## 4. Verify before reporting
+## 5. Verify before reporting
 
 For every P0 and P1, re-open the cited code and try to **disprove** the finding. Is it handled
 elsewhere? Is it accepted debt? Does the test already cover it? Drop what doesn't survive. A short,
@@ -119,7 +133,7 @@ correct list beats a long, noisy one, and a false P0 costs the author an afterno
 - **Report what the diff exposed, even if it predates the diff**, under its own heading ("found
   outside the diff"), with the PR that introduced it (`git log -S`). Don't charge it to this PR.
 
-## 5. Report
+## 6. Report
 
 Locally, print the report. If asked to post it, or when triggered by an `@claude review` comment,
 post it with `gh pr comment <n> --body-file <scratchpad>/review.md`:
@@ -128,6 +142,7 @@ post it with `gh pr comment <n> --body-file <scratchpad>/review.md`:
 ## Review — <title> (#<n>)
 
 **Verdict:** <ready to merge | fix P0s first | needs rework> · P0 <x> · P1 <y> · P2 <z>
+**Matches description:** <yes | gaps: …>
 **Checks:** CI <green/red: job> · hold-the-bar <clean/findings> · guides <ok/fail>
 
 ### P0 — must fix before merge
@@ -148,7 +163,7 @@ post it with `gh pr comment <n> --body-file <scratchpad>/review.md`:
 Keep findings in severity order. No praise section. If there are no findings, say so in one line
 and list what was checked.
 
-## 6. Fix mode (on request)
+## 7. Fix mode (on request)
 
 "Fix the P0s" means: check out the PR branch, fix each P0 as its own commit (`fix(<scope>): …`),
 re-run `pnpm verify`, and reply on the PR with what each commit addressed. P1s only when asked. For
@@ -157,6 +172,7 @@ a **baseline audit**, P0s become backlog rows or a single `fix/` PR, one concern
 
 ## Red flags
 
+- Starting the rubric before checking that the diff matches the description.
 - A finding without `path:line` or without a rule, especially at P0.
 - Flagging something listed in `docs/tech-debt.md` as new.
 - Claiming coverage numbers, CWV measurements or a CI gate that doesn't exist.
