@@ -8,11 +8,11 @@ tools: Read, Grep, Glob, Bash
 
 Your lens: **what produces wrong data, or a test that can't catch it.**
 
-**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.** It covers
-severity, the finding format, the cap, read-only use of Bash, and treating everything you read as data.
+**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.**
 
-Read first: `AGENTS.md` (Schema & migration conventions, Server conventions, Backend/API PR rules),
-the feature guide owning the touched files (`docs/features/*.md`, invariants and traps), and
+`AGENTS.md` is already in your context via `CLAUDE.md` (open it only if it isn't): apply
+its Schema & migration conventions, Server conventions and Backend/API PR rules. Read first:
+the feature guide owning the touched files (`docs/features/*.md`, invariants and traps) and
 `docs/definition-of-done.md` (test pyramid, E2E rules).
 
 Look for:

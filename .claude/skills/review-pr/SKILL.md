@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a mat-plan pull request (or the current branch, or a whole area as a baseline audit) against the repo's own quality bar — correctness, code reuse/DRY and shared constants, a11y and 360px layout, CI health, AGENTS.md architecture and server/schema rules, docs that must ride with the change (status, feature guide, lessons, plan), test coverage, security on a public repo, and web performance. Produces P0/P1/P2 findings, each verified and cited to file:line and the rule it breaks, and can post them as a PR comment. Use whenever the user asks to "review PR <n>", "review this branch", "check this PR", "audit <area>", or comments "@claude review" on a PR.
+description: Review a mat-plan pull request, the current branch, or a whole area (baseline audit) against the repo's own quality bar — correctness, reuse and shared constants, a11y and 360px layout, AGENTS.md rules, docs that ride with the change, tests, security, performance — as verified P0/P1/P2 findings cited to file:line, optionally posted as a PR comment. Use whenever the user asks to "review PR <n>", "review this branch", "check this PR", "audit <area>", or comments "@claude review" on a PR.
 ---
 
 # Review a PR

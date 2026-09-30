@@ -90,8 +90,10 @@ source of truth.
 - **Point, don't copy.** AGENTS.md, the DoD, `docs/plans/README.md` and lessons.md stay the source of
   truth. A skill is the _order_ to apply them in, plus the traps. If a skill and a source doc
   disagree, the doc wins; fix the skill in that PR.
-- **The description is the trigger.** Say what it does, then "Use when …" with the phrases people
-  actually type.
+- **The description is the trigger, and it loads in every session.** Say what it does, then "Use
+  when …" with the phrases people actually type. The steps belong in the body, not the description.
+- **`AGENTS.md` is already in context** (via `CLAUDE.md`, for subagents too). Name the sections to
+  apply; don't tell an agent to read the file, since each panel spawn would pay for it again.
 - **Include Red flags and, where useful, Common rationalizations**, seeded from real incidents (cite
   the PR number or the lessons entry). That's what stops an agent rationalising its way past a step.
 - **Scripts beat prose for mechanical checks** (see `hold-the-bar/check.sh`), and a script ships with
@@ -127,3 +129,10 @@ source of truth.
   force), auto-resolves only changelog/append-style conflicts and asks on anything else. `review-pr`
   gains a "Shipit" step (the bar for posting it), and `ship-pr` step 8 ends with the sweep. The root
   cause, one shared insertion point in `docs/status.md`, is planned separately ([DX-2](../../docs/plans/dx-2-changelog-fragments.md), changelog fragments).
+- **2026-09-30** — Token trim, only where nothing that carries weight goes. `ui-screenshot` drops a
+  stale section that called the repo private and prescribed a Chrome-MCP upload; it now points at
+  `screenshots:publish` and names the three widths (1,403 → 986 words). Reviewer agents apply
+  AGENTS.md sections from context instead of re-reading the file on every spawn, and stop summarising
+  the reporting contract they are told to read. Four descriptions (loaded every session) keep their
+  triggers and lose their step lists. Other skills were audited and left alone: at 5–11% savings the
+  churn wasn't worth it.
