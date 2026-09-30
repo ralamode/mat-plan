@@ -14,6 +14,13 @@ file map, the cross-file invariants and the known traps, so the change costs one
 afternoon of tracing. **The guide is updated in the SAME PR as the code**, enforced by CI (see
 "Feature guides" below).
 
+**Wrong data in a live DB that the app cannot fix?** There is no delete action in the app and several
+shapes are deliberately uneditable, so a mis-tap can be unrecoverable through the UI. Use a guarded,
+idempotent, dry-run-by-default **correction**: `pnpm --filter @mat-plan/db db:correct` lists them,
+[runbooks.md](./docs/runbooks.md) has the procedure, and
+[packages/db/scripts/corrections/](./packages/db/scripts/corrections/README.md) has the rules for
+adding one. **A correction treats the data; the bug still needs its own PR.**
+
 **Debugging a CI / test / build failure? Check [docs/lessons.md](./docs/lessons.md) first** — a terse,
 grep-able log of past failures (symptom → cause → fix) so a known trap costs one attempt, not three.
 When a failure takes more than one attempt to diagnose, add an entry there in the same PR as the fix.

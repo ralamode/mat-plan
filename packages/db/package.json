@@ -13,7 +13,8 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:verify": "tsx scripts/verify.ts"
+    "db:verify": "tsx scripts/verify.ts",
+    "db:correct": "tsx scripts/correct.ts"
   },
   "dependencies": {
     "@mat-plan/shared": "workspace:*",

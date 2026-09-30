@@ -120,6 +120,22 @@ flowchart LR
 - **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
   `withServerActionInstrumentation` or the failure is invisible.
 
+## When the app cannot fix the data
+
+Some shapes are **deliberately not editable** (a bodyweight set, a labelled set, a non-`done` set) and
+there is **no delete action anywhere in the app** — so a mis-tap can be unrecoverable through the UI.
+For data already on the board, use a **correction**:
+
+```bash
+pnpm --filter @mat-plan/db db:correct            # list
+pnpm --filter @mat-plan/db db:correct <name>     # dry run (default — writes nothing)
+```
+
+Guarded, idempotent, dry-run-by-default, targeted by `public_id`. Add one in
+`packages/db/scripts/corrections/registry.ts`; rules in its README, runbook in
+[runbooks.md](../runbooks.md). **A correction treats the data — the bug that produced it still needs
+its own PR.**
+
 ## Changing it
 
 | If you are…                  | Start here                                                                      |
