@@ -90,6 +90,42 @@ flowchart LR
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.
 
+- **⚠️ `logBodyweight` dedupes ONLY on `client_id`, so the UI is what prevents a second submit
+  (V1-24 PR 1a).** `entries` has no natural-key uniqueness — the only unique index is
+  `uq_entries_client_id`. The bodyweight form used to reset itself **and mint a fresh `client_id`**
+  on every success, which made a second submit a second ROW, over an input the reset had just
+  emptied. That is how prod ended up with duplicate weigh-ins.
+
+  `BodyweightSection` (`app/p/[profileId]/bodyweight-section.tsx`) now renders the form only when
+  the day has no weigh-in, the form's `client_id` is **stable for the life of the mount**, and the
+  form is keyed on the **day** so a day change remounts it (a mount surviving a client-side day change
+  replays one day's key for another — an `ON CONFLICT DO NOTHING` no-op that reports success). **Do
+  not re-introduce key rotation or drop that key.** This removes the second-submit path; it does
+  **not** make a duplicate impossible — two mounts (two phones, two tabs) hold two keys and can still
+  write two rows until V1-24 PR 1d's index. So the receipt lists every live row, and nothing may
+  assume one weigh-in per day yet. ⚠️ That index must be scoped `WHERE metric_key = 'bodyweight'`:
+  `metric_key` is the discriminant for **every** metric, and the accumulating calisthenics log
+  several rows a day by design.
+
+- **The bodyweight plausibility bound lives in the shared schema, keyed on the unit** —
+  `BODYWEIGHT_BOUNDS` in `packages/shared/src/bodyweight.ts` (20–500 lb, 10–230 kg), checked in a
+  `superRefine` whose issue is filed on `value` so `flatten().fieldErrors.value` carries it to the
+  form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
+  e2e warm-up used `0.5`).
+
+- **⚠️ React 19 resets UNCONTROLLED fields in a `<form action>` when the action settles — even when
+  it returns `{ ok: false }`.** A rejection that names the typed value ("check the decimal point")
+  then points at an empty input, and a `<select>` snaps back to its `defaultValue`. On the weigh-in
+  that turned a kg user's corrected `84.5` into a saved 84.5 **lb** — in range, so nothing caught
+  it. `bodyweight-form.tsx` therefore holds `value` and `unit` in state (`checkin-form.tsx` is the
+  older precedent); `e2e/a11y.spec.ts` pins that both survive a rejection. Any form whose fields
+  must outlive a rejected submit needs the same. **⚠️ Controlling a `<select>` is not enough:** the
+  reset is a native `form.reset()`, and React keeps a controlled input's `value` attribute in sync
+  but never a select's `defaultSelected`, so the select shows the first option while state holds
+  another. The form re-asserts it in a layout effect. (`strength-form.tsx`'s Measuring/Unit selects
+  are controlled the same bare way inside `<form action>`; their data rides a JSON field built from
+  state, so the payload stays right, but the visible select may not after a rejection — unverified.)
+
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
   write failed, which prompts a duplicate submit.

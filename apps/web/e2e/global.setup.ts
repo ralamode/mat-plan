@@ -2,7 +2,7 @@ import { test as setup } from '@playwright/test';
 
 import { STORAGE_STATE } from '../playwright.config';
 import { gateLogin } from './gate-login';
-import { logBodyweight, selectProfile, submitCheckins } from './steps';
+import { logBodyweight, selectProfile, submitCheckins, WARMUP_BODYWEIGHT } from './steps';
 
 // Runs once before the chromium project (its `dependencies: ['setup']`). Two jobs:
 //   1. Authenticate through the gate and persist storageState, so specs start
@@ -24,8 +24,19 @@ setup('authenticate + warm the write path', async ({ page }) => {
   await page.context().storageState({ path: STORAGE_STATE });
 
   await page.goto('/');
-  await selectProfile(page, 'Liam'); // '/' is the picker (V1-3) → tap into a scoped Today
-  await logBodyweight(page, '0.5', { timeout: 30_000 }); // cold: boot cost lands here, not in the test
+  // ⚠️ **Scarlett's today, not Liam's** (V1-24 PR 1a). Once a day has a weight the surface renders a
+  // RECEIPT with no form, so whoever writes first owns that `(profile, day)`. The e2e rule (plan, under
+  // the 1a table): warm-up → Scarlett today; smoke → Liam today; export → Liam yesterday; a11y →
+  // Scarlett yesterday. No two writers share a day. The action is profile-agnostic, so the cold cost
+  // is absorbed either way.
+  await selectProfile(page, 'Scarlett'); // '/' is the picker (V1-3) → tap into a scoped Today
+  // cold: boot cost lands here, not in the test
+  await logBodyweight(page, WARMUP_BODYWEIGHT, { timeout: 30_000 });
+
+  // Back to Liam for the check-ins warm-up — `Splits` is asserted-on by nobody, but the check-in
+  // specs run against Liam, so the warm statement plan has to be primed on his rows.
+  await page.goto('/');
+  await selectProfile(page, 'Liam');
 
   // …and warm the CHECK-INS path too. Warming bodyweight alone was not enough: `logCheckinsAction` is a
   // DIFFERENT, heavier action (it resolves several catalog rows, then does a MULTI-row insert), so it

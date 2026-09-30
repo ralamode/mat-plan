@@ -19,7 +19,7 @@ import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
-import { calisthenicsTotals, todayRows } from '@/lib/entries/activity-totals';
+import { calisthenicsTotals, loggedBodyweight, todayRows } from '@/lib/entries/activity-totals';
 import {
   buildRoutineBlocks,
   checkinFieldsForKeys,
@@ -29,7 +29,7 @@ import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-import { BodyweightForm } from './bodyweight-form';
+import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
 import { formatSetLine, isEditableSet } from './set-display';
@@ -108,6 +108,11 @@ export default async function TodayPage({
       (k): k is string => k !== null && (LIFE_ACTIVITY_KEYS as readonly string[]).includes(k),
     );
 
+  // V1-24 PR 1a: every bodyweight row on the day (usually zero or one) — what makes the weigh-in
+  // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
+  // above (no extra query), the `loggedFieldKeys` idiom.
+  const bodyweight = loggedBodyweight(entries);
+
   // V1-6a: the calisthenics tally — today's per-metric totals, folded from the day's entries.
   const calisTotals = calisthenicsTotals(entries);
   // Display rows for the "Logged entries" list: calisthenics bouts grouped into one row per
@@ -179,12 +184,13 @@ export default async function TodayPage({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
-          <h2 id="log-bw-heading" className="text-lg font-medium">
-            Log bodyweight
-          </h2>
-          {writable ? <BodyweightForm profileId={profile.id} day={day} /> : null}
-        </section>
+        {/* V1-24 PR 1a — the day's state, not an empty form over a record. See the section. */}
+        <BodyweightSection
+          profileId={profile.id}
+          day={day}
+          writable={writable}
+          logged={bodyweight}
+        />
         {buildRoutineBlocks(profile.routine.order).map((block, i) => {
           if (block.kind === 'strength') {
             return (

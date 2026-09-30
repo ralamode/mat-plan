@@ -14,7 +14,7 @@ import {
 } from '@mat-plan/shared/csv';
 import { expect, type Page, test } from '@playwright/test';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { bodyweightEntryLine, isoDaysAgo, logBodyweight, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * **V1-14b — the full-day round trip.** Log a day through the real UI, download the real export,
@@ -63,7 +63,11 @@ const PROBE_MOVEMENT = 'Export Probe Squat';
  */
 const PROBE_CSV_MOVEMENT = 'export-probe-squat';
 
-/** Distinctive enough not to collide with `log-bodyweight.spec.ts`, and a DECIMAL on purpose. */
+/**
+ * A DECIMAL on purpose — `formatNumeric` must keep `84.5` a string end to end. Distinct from every
+ * other spec's weigh-in, though since V1-24 PR 1a it no longer has to be: this spec owns Liam's
+ * YESTERDAY outright (see the test), so the value in the CSV is the one it typed.
+ */
 const PROBE_BODYWEIGHT = '84.5';
 
 /** Non-uniform on purpose: `collapse()` must emit a slash-list here, and a scalar for the load. */
@@ -108,21 +112,25 @@ function parse(files: Map<string, string>, path: string): Csv {
 }
 
 test('a full day logged through the UI round-trips through the CSV export', async ({ page }) => {
-  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  // ⚠️ Liam's YESTERDAY, not today (V1-24 PR 1a). Once a day has a weight the weigh-in form is
+  // replaced by a receipt, so two specs logging the same `(profile, day)` under `fullyParallel` would
+  // race: whichever ran second would find the other's value and never exercise its own write. The
+  // smoke owns Liam's today; this owns his yesterday (inside the ±1 write window).
+  await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
 
   // The day the WRITE will carry, read from the field the forms actually submit — not recomputed
   // here. A test that derives the date itself is asserting its own arithmetic; this asserts the
   // app's. (V1-6c: the page computes the day at render and carries it in every form.)
   const day = await page.locator('input[name="day"]').first().inputValue();
   expect(day, 'the declared-day field should carry an ISO day').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  // The disjointness above only holds if the page really rendered yesterday (not a clamped today).
+  expect(day, 'the page should have rendered the ?d= day').toBe(isoDaysAgo(1));
   const month = day.slice(0, 7);
 
   // ── 1. Bodyweight ─────────────────────────────────────────────────────────────
-  await page.getByLabel('Weight', { exact: true }).fill(PROBE_BODYWEIGHT);
-  await page.getByRole('button', { name: 'Log weight' }).click();
-  await expect(page.getByText(`Bodyweight — ${PROBE_BODYWEIGHT} lb`)).toBeVisible({
-    timeout: 15_000,
-  });
+  // Via the shared helper, not an inline copy: it asserts the receipt, focus, and the entries line.
+  await logBodyweight(page, PROBE_BODYWEIGHT, { timeout: 15_000 });
+  await expect(page.getByText(bodyweightEntryLine(PROBE_BODYWEIGHT))).toBeVisible();
 
   // ── 2. Strength ───────────────────────────────────────────────────────────────
   // The blank movement card, NOT the program scaffold: the scaffold's movements come from
