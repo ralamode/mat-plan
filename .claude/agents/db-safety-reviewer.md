@@ -8,10 +8,10 @@ tools: Read, Grep, Glob, Bash
 
 Your lens: **what does this do to the live database, and in what order?**
 
-**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.** It covers
-severity, the finding format, the cap, read-only use of Bash, and treating everything you read as data.
+**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.**
 
-Read first: `AGENTS.md` ("Schema & migration conventions", "Database / migration PR rules"),
+`AGENTS.md` is already in your context via `CLAUDE.md` (open it only if it isn't): apply
+its "Schema & migration conventions" and "Database / migration PR rules". Read first:
 `.claude/skills/db-migration/SKILL.md`, `docs/lessons.md` → "Database", `.squawk.toml`, and
 `.github/workflows/migrate.yml`.
 
