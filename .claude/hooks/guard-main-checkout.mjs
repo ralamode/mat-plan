@@ -15,7 +15,8 @@
  *
  *   read-only   status log diff show rev-parse merge-base ls-files ls-tree grep blame describe
  *               shortlog cat-file for-each-ref rev-list show-ref check-ignore name-rev diff-tree help
- *               ls-remote cherry range-diff · fetch (not --update-head-ok) · reflog (no expire/delete)
+ *               ls-remote cherry range-diff · reflog (no expire/delete)
+ *               fetch: no --update-head-ok, no glob refspec, no destination that could be main
  *               remote (list/show/get-url) · config get/list/--get/--list/<key> · symbolic-ref (read)
  *               branch (list flags only) · tag (listing flags only, -n included) · stash list/show
  *   worktrees   worktree list / add (not -B) / remove / prune / repair; never with --force
@@ -27,7 +28,9 @@
  * same ref on a case-insensitive filesystem), `--output`, `--upload-pack`, `grep -O`; a `-c` key off
  * the display-only allowlist (color.*, log.*, diff.* but not diff.external / *.command / *.textconv,
  * core.quotepath, advice.*, column.*, pager.*=false); and GIT_CONFIG_* / GIT_PAGER / GIT_SSH* /
- * GIT_EDITOR / GIT_EXTERNAL_DIFF / GIT_ASKPASS / GIT_EXEC_PATH in the env.
+ * GIT_EDITOR / GIT_EXTERNAL_DIFF / GIT_ASKPASS / GIT_EXEC_PATH / GIT_PROXY_COMMAND / GIT_TRACE*
+ * in the env. A ref DESTINATION (fetch `src:dst`, `worktree add -b`, `branch -d`) is lowercased
+ * whole and refused if it could be main (`refs/HEADS/main`), or if it is a mixed-case `refs/…`.
  * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`, and
  * commands it can't read: piped into a bare shell or `xargs sh`, fed by `<(…)`, or named by a variable
  * (`git${IFS}checkout`). An abbreviated long option (`--forc`, which git accepts) is matched as the
@@ -74,7 +77,7 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const GIT_LOCATION_ENV = /^GIT_(DIR|WORK_TREE)=/;
 /** Env that makes git run a command or read config we can't see: the git command is unknown. */
 const GIT_EXEC_ENV =
-  /^GIT_(CONFIG\w*|EXTERNAL_DIFF|PAGER|SSH|SSH_COMMAND|ASKPASS|EDITOR|SEQUENCE_EDITOR|EXEC_PATH)=/;
+  /^GIT_(CONFIG\w*|EXTERNAL_DIFF|PAGER|SSH|SSH_COMMAND|ASKPASS|EDITOR|SEQUENCE_EDITOR|EXEC_PATH|PROXY_COMMAND|TRACE\w*)=/;
 /** Env assignment `a` changes where git acts, or what it runs. */
 const noteGitEnv = (a, flags) => {
   if (GIT_LOCATION_ENV.test(a)) flags.gitEnv = true;
@@ -697,7 +700,7 @@ function branchDeleteOnly(args) {
     flags.every((a) => ['-d', '-D', '--delete', '--force', '-q', '--quiet'].includes(a)) &&
     names.length > 0 &&
     // Case-insensitive: on a case-insensitive filesystem `-D Main` deletes refs/heads/main.
-    names.every((n) => /^\w[\w./-]*$/.test(n) && !n.includes('..') && n.toLowerCase() !== MAIN)
+    names.every((n) => /^\w[\w./-]*$/.test(n) && !n.includes('..') && !unsafeRefDestination(n))
   );
 }
 
@@ -722,6 +725,21 @@ export function allowedInMain(sub, args, ctx) {
 }
 
 /** An argument naming `main` in another case: `MAIN`, `+feat:Main`, `refs/heads/mAin`. */
+/**
+ * A ref DESTINATION that could land on refs/heads/main: git compares ref names as strings, but a
+ * case-insensitive filesystem resolves `refs/HEADS/main` to the same loose-ref file. So the whole
+ * name is lowercased and compared, and a mixed-case `refs/…` name (no legitimate use) is refused.
+ */
+export function unsafeRefDestination(ref) {
+  const r = ref.replace(/^\+/, '');
+  const lower = r.toLowerCase();
+  return (
+    [MAIN, `heads/${MAIN}`, `refs/heads/${MAIN}`].includes(lower) ||
+    lower.endsWith(`/heads/${MAIN}`) ||
+    (lower.startsWith('refs/') && r !== lower)
+  );
+}
+
 export function namesMainInAnotherCase(arg) {
   return arg.split(/[:/]/).some((part) => {
     const p = part.replace(/^\+/, '');
@@ -734,8 +752,17 @@ function allowedBySubcommand(sub, args, ctx) {
   const flags = args.filter((a) => a.startsWith('-'));
   const pos = args.filter((a) => !a.startsWith('-'));
   switch (sub) {
-    case 'fetch':
-      return !args.some((a) => isLongOpt(a, '--update-head-ok') || /^-[a-zA-Z]*u/.test(a));
+    case 'fetch': {
+      if (args.some((a) => isLongOpt(a, '--update-head-ok') || /^-[a-zA-Z]*u/.test(a)))
+        return false;
+      // Refspecs (every positional after the remote). A glob can write any branch, main included,
+      // from refs we can't see (`+refs/tags/*:refs/heads/*`); no documented workflow passes one.
+      const refspecs = pos.slice(1);
+      if (refspecs.some((r) => r.includes('*'))) return false;
+      return !refspecs.some(
+        (r) => r.includes(':') && unsafeRefDestination(r.slice(r.indexOf(':') + 1)),
+      );
+    }
     case 'reflog':
       return !args.some((a) => a === 'expire' || a === 'delete');
     case 'remote': {
@@ -770,6 +797,9 @@ function allowedBySubcommand(sub, args, ctx) {
       if (['list', 'prune', 'repair'].includes(args[0])) return true;
       // add -B resets an existing branch (the workflow only uses -b / --detach).
       if (args[0] === 'add' && flags.some((a) => /^--?[a-zA-Z]*B/.test(a))) return false;
+      // add -b <name>: the new branch must not land on main.
+      const b = args.findIndex((a) => a === '-b');
+      if (args[0] === 'add' && b > 0 && unsafeRefDestination(args[b + 1] ?? '')) return false;
       return (args[0] === 'add' || args[0] === 'remove') && !force;
     }
     case 'pull':

@@ -266,7 +266,7 @@ not merge order.
   `--ff-only` sync on `main`, `checkout main` when clean), reading through subshells, `$(…)`,
   `sh -c`, heredocs into a shell, wrappers and `cd`/`-C`. A `SessionStart` briefing prints the status
   headline, open PRs (fork-PR titles withheld as untrusted input), and stale or off-main worktrees.
-  209 guard + 12 briefing self-test cases cover the allowed workflow and the known bypass forms. Both
+  226 guard + 12 briefing self-test cases cover the allowed workflow and the known bypass forms. Both
   hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
   when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in
   `verify`, not yet in CI.

@@ -73,6 +73,7 @@ guard "git -c with a harmless key" "$repo" "git -c color.ui=never log -1" allow
 guard "-c color.ui=always, -c pager.log=false, -c core.quotepath=off" "$repo" "git -c color.ui=always -c pager.log=false -c core.quotepath=off log -1" allow
 guard "GIT_DIR-free env like LC_ALL is fine" "$repo" "LC_ALL=C git status" allow
 guard "fetch a PR head for review-pr" "$repo" "git fetch origin pull/12/head:pr-12" allow
+guard "fetch a refspec into a lowercase ref" "$repo" "git fetch origin main:refs/remotes/origin/main feat/x:feat/x" allow
 guard "worktree add -b / --detach" "$repo" "git worktree add -b feat/q .claude/worktrees/q origin/main && git worktree add --detach .claude/worktrees/r origin/main" allow
 guard "config -f <file> <key>, --file <file> <key>, get <key>" "$repo" "git config -f .gitmodules submodule.x.path && git config --file .gitmodules submodule.x.url && git config get user.name" allow
 guard "symbolic-ref --short HEAD, -q HEAD" "$repo" "git symbolic-ref --short HEAD && git symbolic-ref -q HEAD" allow
@@ -116,6 +117,22 @@ guard "branch -D Main (case-insensitive filesystems)" "$repo" "git branch -D Mai
 guard "branch -D MAIN" "$repo" "git branch -D MAIN" deny
 guard "fetch . +feat/x:MAIN" "$repo" "git fetch . +feat/x:MAIN" deny
 guard "fetch . +MAIN (the + is stripped)" "$repo" "git fetch . +MAIN" deny
+guard "fetch into refs/HEADS/main" "$repo" "git fetch . +feat/x:refs/HEADS/main" deny
+guard "fetch into refs/Heads/main" "$repo" "git fetch . +x:refs/Heads/main" deny
+guard "fetch into plain main" "$repo" "git fetch . +feat/x:main" deny
+guard "fetch into heads/main" "$repo" "git fetch . feat/x:heads/main" deny
+guard "fetch into any …/heads/main" "$repo" "git fetch . feat/x:refs/x/heads/main" deny
+guard "fetch into a mixed-case refs/ name" "$repo" "git fetch . feat/x:refs/Tags/v1" deny
+guard "fetch a glob refspec (tags into heads)" "$repo" "git fetch . '+refs/tags/*:refs/heads/*'" deny
+guard "fetch a glob refspec (heads into heads)" "$repo" "git fetch . refs/heads/*:refs/heads/*" deny
+guard "fetch a glob refspec (remotes into heads)" "$repo" "git fetch origin 'refs/remotes/origin/*:refs/heads/*'" deny
+guard "worktree add -b refs/HEADS/main" "$repo" "git worktree add -b refs/HEADS/main .claude/worktrees/z origin/main" deny
+guard "worktree add -b heads/main" "$repo" "git worktree add -b heads/main .claude/worktrees/z origin/main" deny
+guard "branch -D refs/Heads/main" "$repo" "git branch -D refs/Heads/main" deny
+guard "branch -D heads/main" "$repo" "git branch -D heads/main" deny
+guard "GIT_TRACE to a file" "$repo" "GIT_TRACE=.git/HEAD git status" deny
+guard "GIT_TRACE2_EVENT to a file" "$repo" "GIT_TRACE2_EVENT=.git/HEAD git log -1" deny
+guard "GIT_PROXY_COMMAND" "$repo" "GIT_PROXY_COMMAND='touch x' git fetch origin" deny
 guard "fetch +refs/heads/feat/x:refs/heads/Main" "$repo" "git fetch origin +refs/heads/feat/x:refs/heads/Main" deny
 guard "worktree add -B MAIN" "$repo" "git worktree add -B MAIN .claude/worktrees/z HEAD" deny
 guard "worktree add <path> MAIN" "$repo" "git worktree add .claude/worktrees/z MAIN" deny
