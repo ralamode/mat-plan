@@ -99,19 +99,25 @@ tested (with boundary cases for endpoints), Test configuration, Screenshots, Dia
 - `gh` returning 403: a `GH_TOKEN` in the environment is shadowing the keyring credential. Retry with
   `env -u GH_TOKEN -u GITHUB_TOKEN gh …`.
 
-Then check that the Actions runs actually started: `gh pr checks <n>`. A PR with **zero** runs means
-something skipped CI; it isn't a queue delay.
+Then check that the Actions runs actually started. Runs take a few seconds to register after a push,
+so `gh pr checks <n> --watch` fired immediately can exit with only the Vercel rows. Wait until
+`gh pr checks <n>` lists `quality`, `e2e` and `gitleaks`, then watch. If they **never** appear, check
+`gh api "repos/<o>/<r>/actions/runs?head_sha=<sha>" --jq .total_count`: zero means something skipped
+CI; it isn't a queue delay.
 
 ## 8. After merge
 
+From the **main checkout** (which is on `main`):
+
 ```bash
-git checkout main && git pull --ff-only origin main
-git show HEAD --stat | head -30        # the squash contains your final commit's files
+git pull --ff-only origin main
+git show HEAD --stat | head -30                     # the squash contains your final commit's files
+git worktree remove .claude/worktrees/<slug> && git branch -D <branch>   # -D: squash-merged, so git can't tell it's merged
 ```
 
 A squash of a stale head silently drops the last pushes (#129 recovered three commits dropped from
-#127). If anything is missing, cherry-pick it forward on a follow-up branch. Remove any worktree used
-for this PR.
+#127). If anything is missing, cherry-pick it forward on a follow-up branch **before** removing the
+worktree.
 
 ## Red flags
 

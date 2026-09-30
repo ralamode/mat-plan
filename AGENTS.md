@@ -175,13 +175,24 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
   bootstrap commit). All work goes via PR.
 - One short-lived branch = one PR = one backlog item / one concern. Keep small (target <400 lines).
-- **Start every task from a freshly-synced `main`.** Before cutting a branch: `git checkout main &&
-git fetch origin && git pull --ff-only origin main` — so the new work sits on top of every merged PR
-  (missing this is how a branch silently omits a just-merged migration/schema and drifts). Then branch
-  off that updated `main` (`git checkout -b <type>/<id>-<slug> origin/main`). For **parallel** work,
-  cut each concern its own **git worktree** off the updated `main` (isolated checkout → no index/branch
-  collisions between concurrent agents), one branch/PR per worktree; remove the worktree when its PR is
-  up. Re-sync `main` again before starting the _next_ task — every merge moves the baseline.
+- **Every task runs in its own git worktree, cut from a freshly-fetched `main`. This is the default,
+  not only for parallel work.**
+  `git fetch origin && git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main`,
+  then `cd` there and `pnpm install` (node_modules aren't shared). Starting from `origin/main` puts the
+  new work on top of every merged PR; missing that is how a branch silently omits a just-merged
+  migration/schema and drifts.
+  - **The main checkout stays on `main`, clean.** It is used only to sync
+    (`git pull --ff-only origin main`) and to read. Never switch it to a feature branch. Several
+    agent sessions run here concurrently, and a checkout or rebase in a shared directory moves another
+    session's files out from under it.
+  - **Location: `.claude/worktrees/<slug>`** (gitignored). Not `/tmp`, which is wiped on reboot and
+    invisible to other sessions, and not a sibling directory. `git worktree list` is the registry of
+    work in flight.
+  - One worktree = one branch = one PR. **Remove it after the PR merges** (`git worktree remove
+.claude/worktrees/<slug> && git branch -d <branch>`), not when the PR opens, because review fixes
+    land there. `apps/web/.env.local` is not copied. Copy it only if the task needs live credentials;
+    `pnpm dev`, `verify` and `e2e:local` don't.
+  - Never remove a worktree you didn't create. It may be another session's live work.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
