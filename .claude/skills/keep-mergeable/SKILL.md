@@ -28,7 +28,7 @@ git fetch origin
 OWNER=$(gh repo view --json owner --jq .owner.login)
 for n in $(gh pr list --state open --json number --jq '.[].number'); do
   last=$(gh pr view "$n" --json comments --jq \
-    "[.comments[] | select(.author.login == \"$OWNER\") | .body | split(\"\\n\")[0] | rtrimstr(\"\\r\") | sub(\" +$\"; \"\")
+    "[.comments[] | select(.author.login == \"$OWNER\") | .body | split(\"\\n\")[0] | sub(\"^[[:space:]]+\"; \"\") | sub(\"[[:space:]]+$\"; \"\")
       | select(startswith(\"## shipit\"))] | last // \"\"")
   [ "$last" = "## shipit" ] || continue
   gh pr view "$n" --json number,headRefName,mergeable,mergeStateStatus \

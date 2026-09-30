@@ -10,21 +10,29 @@ Source of truth: [docs/definition-of-done.md](../../../docs/definition-of-done.m
 satisfy them in. Committing and pushing are **outward-facing**, so confirm with the user before step 6
 unless they have already said to ship.
 
-## 1. Rebase on the current main
+## 1. Bring the branch up to date with main
 
 ```bash
 git status --short                       # dirty? commit the work first
 git fetch origin
-if git ls-remote --exit-code --heads origin <branch> >/dev/null; then
-  git pull --no-rebase origin <branch>   # already pushed: someone (keep-mergeable) may have merged main in
-  git merge --no-edit origin/main        # merge, never rebase, once the branch is on the remote
+b=$(git symbolic-ref --short HEAD) || { echo "detached HEAD: check out the branch first"; exit 1; }
+git ls-remote --exit-code origin "refs/heads/$b" >/dev/null; rc=$?
+if [ $rc -eq 0 ]; then                   # already pushed: merge, never rebase
+  git pull --no-rebase --no-edit origin "$b" && git merge --no-edit origin/main
+elif [ $rc -eq 2 ]; then                 # not on the remote yet: rebase freely
+  git rebase origin/main
 else
-  git rebase origin/main                 # not pushed yet: rebase freely
+  echo "ls-remote failed ($rc): stop and retry; don't guess"
 fi
 ```
 
-"Require branches up to date" is on, so it has to happen before merge anyway, and a rebase now
-surfaces conflicts while you still have the context.
+"Require branches up to date" is on, so this has to happen before merge anyway, and doing it now
+surfaces conflicts while you still have the context. Once the branch is on the remote, a rebase would
+need a force-push, and someone (the `keep-mergeable` skill) may have merged `main` into it already.
+
+**A conflicted merge:** resolve using [keep-mergeable](../keep-mergeable/SKILL.md) step 3's rules
+(changelog-style: keep both; anything else: stop and ask), then `git add <files>` and
+`git commit --no-edit`, not `rebase --continue`.
 
 ## 2. Local gates, cheapest first
 
@@ -82,7 +90,7 @@ silently skip it.
   `feat(v1-26): the form knows the movement`. commitlint rejects sentence case and long headers.
   List details in the body, not the subject.
 - **Never silence `git commit`'s output** (`>/dev/null`), and chain the next step with `&&`. A
-  rejected commit then looks like success until `rebase` complains about a dirty tree.
+  rejected commit then looks like success until the next git step complains about a dirty tree.
 - End the message with the attribution line from the current system instructions.
 - **Never write the literal skip-CI marker in a commit message**, not even when describing it. GitHub
   and Vercel match it anywhere in the head commit and a squash carries it onto `main`
