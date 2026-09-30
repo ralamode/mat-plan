@@ -31,8 +31,8 @@ workflow"), so it's on you: doing it now surfaces conflicts while you still have
 the branch is on the remote, a rebase would need a force-push, and someone (the `keep-mergeable`
 skill) may have merged `main` into it already.
 
-**A conflicted merge:** resolve using [keep-mergeable](../keep-mergeable/SKILL.md) step 3's rules
-(changelog-style: keep both; anything else: stop and ask), then `git add <files>` and
+**A conflicted merge:** resolve using [keep-mergeable](../keep-mergeable/SKILL.md) step 3's
+table (it is the one source for which shapes auto-resolve), then `git add <files>` and
 `git commit --no-edit`, not `rebase --continue`.
 
 ## 2. Local gates, cheapest first

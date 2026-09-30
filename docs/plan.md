@@ -367,8 +367,10 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
 - ✅ **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
-  on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
-  branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
+  on 2026-09-30). One file per change in `docs/changelog/`. ✅ **Implemented in #190:** `status:check` requires a
+  fragment on product branches once `docs/changelog/README.md` is in the branch (so a legacy branch
+  meets the rule when it merges `main`), and fails any branch that adds to the frozen status.md or
+  skills-README history. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
   the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
 - **DX-3 — `screenshot:ephemeral` silently captures a stale build.** It reuses `apps/web/.next`
   whenever a `BUILD_ID` exists; only `--build` forces a rebuild. On #180 that posted a screenshot of
@@ -390,8 +392,14 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
-  needs its own plan and panel. Then update AGENTS.md's gate list, which #181 corrected to say "by
-  convention", in the same PR.
+  needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
+  Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
+  reading the top of the status.md changelog, which DX-2 froze. The hook
+  (`.claude/hooks/session-context.mjs`) prints the "Where we are" pointer and open PRs, not what just
+  merged. **Fix:** add the last ~5 lines of
+  `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
+  Small; no plan needed.
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 

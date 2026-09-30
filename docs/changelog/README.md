@@ -19,6 +19,10 @@ feat/v1-24-1a-bodyweight-receipt  →  docs/changelog/2026-10-02-feat-v1-24-1a-b
 
 Directly in this folder, not nested. The guard checks the name literally.
 
+**The old histories are frozen.** Adding a line to `docs/status.md` → Changelog or to
+`.claude/skills/README.md` → Changelog fails `status:check` on **every** branch type, and
+`STATUS_SKIP` doesn't bypass it: an entry that exists can always move here instead.
+
 **What stays in `docs/status.md`:** the **Where we are** pointer and the backlog rows. Update them in
 the same PR when the change moves them. The guard doesn't check those; review does.
 

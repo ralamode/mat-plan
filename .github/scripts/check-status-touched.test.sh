@@ -124,14 +124,14 @@ check "fragment without a date fails" 1 'not a valid entry'
 
 branch feat/y-7; mkdir -p "$tmp/docs/changelog/sub"; frag sub/2026-10-01-feat-y-7.md
 git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: entry'
-check "nested fragment fails" 1 'adds no changelog fragment'
+check "nested fragment fails (the name check)" 1 'adds no changelog fragment'
 
 branch feat/y-8; echo "$RANDOM" >>"$tmp/docs/changelog/2026-01-01-feat-old.md"
 git -C "$tmp" commit -qam 'docs: edit old entry'
 check "editing an old fragment fails" 1 'adds no changelog fragment'
 
 branch feat/y-9; echo "$RANDOM" >>"$tmp/docs/changelog/README.md" && git -C "$tmp" commit -qam 'docs: readme'
-check "README edit alone fails" 1 'adds no changelog fragment'
+check "README edit alone fails (the name check)" 1 'adds no changelog fragment'
 
 # Delete a file and add a fragment with the SAME content, both inside docs/changelog/ (rename
 # detection only pairs within the pathspec): without --no-renames this is `R`, not an add.
@@ -157,6 +157,15 @@ if [ "$code" -eq 1 ] && grep -qF 'not a valid entry' <<<"$out"; then printf '✓
 else printf '✗ detached + wrong STATUS_BRANCH fails: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); fi
 check "detached without STATUS_BRANCH: generic shape passes" 0 'fragment is added'
 
+# The name check, piece by piece: each case fails if one part of it is dropped.
+branch feat/y-12; frag XXXXXXXXXXXfeat-y-12.md; git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: entry'
+check "an 11-char junk prefix is not a date" 1 'not a valid entry'
+branch fix/x-c 'fix(x): patch'; frag 2026-10-01-feat-fix-x-c.md; git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: entry'
+check "another branch's fragment that ENDS with ours fails" 1 'not a valid entry'
+branch feat/y-13; frag notes.md; git -C "$tmp" add -A && git -C "$tmp" commit -qm 'feat(x): notes'
+git -C "$tmp" checkout -q --detach
+check "detached without STATUS_BRANCH: an undated file fails" 1 'not a valid entry'
+
 # THE round-2 case: a legacy branch mid-merge of main (conflict-free here, uncommitted). The README is
 # now in the working tree, so the new rule applies and its status.md entry no longer passes. Main's own
 # fragments arrive as staged adds and must not count — even detached, with no branch name to match.
@@ -166,5 +175,37 @@ check "legacy branch mid-merge of main fails" 1 'adds no changelog fragment'
 git -C "$tmp" checkout -q --detach
 check "legacy mid-merge, detached, main's fragments don't count" 1 'adds no changelog fragment'
 git -C "$tmp" checkout -q feat/legacy 2>/dev/null; git -C "$tmp" merge --abort 2>/dev/null
+
+# ── Frozen history: post-DX-2, NO branch may add to status.md's or the skills README's changelog ──
+git -C "$tmp" checkout -q main
+mkdir -p "$tmp/.claude/skills"
+printf '# status\n\n## Where we are right now\n\npointer v1\n\n## Changelog (merged PRs)\n\n- old entry\n' >"$tmp/docs/status.md"
+printf '# skills\n\n## Changelog\n\n- old skill entry\n\n## Later\n\ntext\n' >"$tmp/.claude/skills/README.md"
+git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: sections'
+# hist <file> <after-line> <new-line> — insert a line after a matching line, in the working tree.
+hist() { awk -v a="$2" -v n="$3" '{print} $0==a{print n}' "$tmp/$1" >"$tmp/.h" && mv "$tmp/.h" "$tmp/$1"; }
+
+branch docs/z-1 'docs(x): note'; hist docs/status.md '## Changelog (merged PRs)' '- **2026-10-01** — misfiled'
+git -C "$tmp" commit -qam 'docs: entry'
+check "docs branch adding a status.md history entry fails" 1 'adds to a changelog that DX-2 froze'
+out="$(cd "$tmp" && STATUS_SKIP='just docs' node "$guard" main 2>&1)"; code=$?
+if [ "$code" -eq 1 ] && grep -qF 'does not bypass' <<<"$out"; then printf '✓ %s\n' "STATUS_SKIP does not bypass the frozen check"
+else printf '✗ STATUS_SKIP does not bypass the frozen check: exit %s\n%s\n' "$code" "$out"; fails=$((fails + 1)); fi
+
+branch docs/z-2 'docs(x): pointer'; sed 's/pointer v1/pointer v2/' "$tmp/docs/status.md" >"$tmp/.h" && mv "$tmp/.h" "$tmp/docs/status.md"
+git -C "$tmp" commit -qam 'docs: pointer'
+check "docs branch editing only the pointer passes" 0 "don't owe"
+
+branch chore/z-3 'chore(x): skill'; hist .claude/skills/README.md '## Changelog' '- **2026-10-01** — skill misfiled'
+check "an unstaged skills-README history entry fails" 1 '.claude/skills/README.md'
+git -C "$tmp" checkout -q -- .claude/skills/README.md
+
+# Main's own history arriving mid-merge is not this branch's addition.
+branch docs/z-4 'docs(x): other'
+git -C "$tmp" checkout -q main && hist docs/status.md '- old entry' '- main entry, pre-freeze'
+git -C "$tmp" commit -qam 'docs: main history'
+git -C "$tmp" checkout -q docs/z-4 && git -C "$tmp" merge -q --no-commit --no-ff main >/dev/null 2>&1
+check "main's history lines mid-merge don't count" 0 "don't owe"
+git -C "$tmp" merge --abort 2>/dev/null
 
 [ "$fails" -eq 0 ] && echo "all status-guard self-tests passed" || exit 1

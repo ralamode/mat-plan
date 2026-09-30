@@ -13,6 +13,10 @@
  *   `docs/changelog/<YYYY-MM-DD>-<branch with / → ->.md` (committed, staged or untracked). Editing
  *   status.md alone fails. The format lives in docs/changelog/README.md, not here.
  * - LEGACY — no README yet: docs/status.md touched, as before DX-2.
+ * - FROZEN HISTORY (post-DX-2, EVERY branch type, before the owes check, STATUS_SKIP can't bypass it):
+ *   adding a line to status.md's "## Changelog (merged PRs)" or the skills README's "## Changelog"
+ *   fails. A docs/chore branch cut before DX-2 owes nothing, yet can merge its entry cleanly into the
+ *   closed history; this is what catches it.
  *
  * What this no longer proves: that status.md's "Where we are" pointer and backlog rows moved with a
  * merged backlog item. That is back to review (ship-pr's red flag, review-pr dimension 7).
@@ -41,7 +45,7 @@
  * branch's, which gives both false failures and false passes. ship-pr step 1 already does.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const STATUS_FILE = 'docs/status.md';
@@ -50,6 +54,16 @@ const CHANGELOG_README = `${CHANGELOG_DIR}/README.md`;
 const DATE_PREFIX = /^\d{4}-\d{2}-\d{2}-/;
 /** The shape when no branch name is known (detached HEAD without STATUS_BRANCH). */
 const GENERIC_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9._-]*\.md$/;
+/** `feat/v1-2-x` → `feat-v1-2-x`: the branch part of a fragment's filename. */
+const fragmentSlug = (branch) => branch.replaceAll('/', '-');
+/**
+ * Changelog sections frozen by DX-2: history stays, nothing is added. Checked on EVERY branch, since a
+ * docs/chore branch cut before DX-2 owes no entry but can still merge one into the closed history.
+ */
+const FROZEN = [
+  { file: STATUS_FILE, heading: '## Changelog (merged PRs)' },
+  { file: '.claude/skills/README.md', heading: '## Changelog' },
+];
 const OWES_STATUS = ['feat', 'fix', 'db', 'perf', 'refactor', 'revert'];
 const SKIP_ENV = 'STATUS_SKIP';
 
@@ -85,6 +99,47 @@ const commitTypes = lines(git('log', '--format=%s', `${mergeBase}..HEAD`))
   .map((s) => (/^Revert "/.test(s) ? 'revert' : /^([a-z]+)(\([^)]*\))?!?:/.exec(s)?.[1]))
   .filter(Boolean);
 
+const root = git('rev-parse', '--show-toplevel');
+const postDx2 = existsSync(join(root, CHANGELOG_README));
+
+// A frozen section's lines from `rev:path` (or the working tree when rev is null), heading excluded,
+// up to the next `## ` heading. Non-blank lines only; missing file → none.
+const sectionLines = (rev, { file, heading }) => {
+  let text;
+  try {
+    text = rev === null ? readFileSync(join(root, file), 'utf8') : git('show', `${rev}:${file}`);
+  } catch {
+    return [];
+  }
+  const all = text.split('\n');
+  const start = all.findIndex((l) => l.trim() === heading);
+  if (start === -1) return [];
+  const end = all.findIndex((l, i) => i > start && /^## /.test(l));
+  return all.slice(start + 1, end === -1 ? undefined : end).filter((l) => l.trim());
+};
+
+// Post-DX-2, adding to a frozen changelog fails on every branch type, and STATUS_SKIP does NOT bypass
+// it: the skip means "no entry needed", and an entry that exists can always move to a fragment. Read
+// from the WORKING TREE (committed + staged + unstaged). A line counts as added only if neither the
+// merge base nor the base tip has it, so main's own history arriving mid-merge never trips it.
+if (postDx2) {
+  const misfiled = FROZEN.flatMap((section) => {
+    const known = new Set([...sectionLines(mergeBase, section), ...sectionLines(base, section)]);
+    const added = sectionLines(null, section).filter((l) => !known.has(l));
+    return added.length ? [`${section.file} → "${section.heading}": ${added[0].trim()}`] : [];
+  });
+  if (misfiled.length) {
+    console.error(`
+Status guard failed: this branch adds to a changelog that DX-2 froze.
+  ${misfiled.join('\n  ')}
+
+Move the entry into ${CHANGELOG_DIR}/<YYYY-MM-DD>-<branch with / → ->.md (format in ${CHANGELOG_README})
+and take those lines out of the frozen section. STATUS_SKIP does not bypass this check.
+`);
+    process.exit(1);
+  }
+}
+
 const owing = [...new Set([branchType, ...commitTypes])].filter((t) => OWES_STATUS.includes(t));
 if (owing.length === 0) {
   console.log(
@@ -92,9 +147,6 @@ if (owing.length === 0) {
   );
   process.exit(0);
 }
-
-const root = git('rev-parse', '--show-toplevel');
-const postDx2 = existsSync(join(root, CHANGELOG_README));
 
 // Committed changes PLUS the index and untracked files, for the same reason as
 // check-feature-guides.mjs: the useful moment to run this is before the last commit.
@@ -132,22 +184,19 @@ if (postDx2) {
   // so they are never this branch's entry — which matters most when no branch name is known.
   for (const f of lines(git('ls-tree', '-r', '--name-only', base, '--', CHANGELOG_DIR)))
     added.delete(f);
-  const candidates = [...added].filter(
-    (f) =>
-      f.startsWith(`${CHANGELOG_DIR}/`) &&
-      !f.slice(CHANGELOG_DIR.length + 1).includes('/') &&
-      f !== CHANGELOG_README,
-  );
+  // The name check alone rejects a nested path (`sub/…` has no date prefix, and GENERIC_NAME admits
+  // no `/`) and README.md (no date prefix), so no separate filters for those.
   // A literal comparison, never a regex built from the branch name (it may hold `.`, `+`, `(`).
-  const wanted = branch ? `${branch.replaceAll('/', '-')}.md` : null;
+  const wanted = branch ? `${fragmentSlug(branch)}.md` : null;
   const named = (f) => {
     const name = f.slice(CHANGELOG_DIR.length + 1);
     if (!wanted) return GENERIC_NAME.test(name);
-    return DATE_PREFIX.test(name) && name.slice(11) === wanted;
+    return DATE_PREFIX.test(name) && name.replace(DATE_PREFIX, '') === wanted;
   };
-  ok = candidates.some(named);
-  if (!ok && added.size > 0) {
-    problem = `\nFound, but not a valid entry for this branch: ${[...added].join(', ')}`;
+  ok = [...added].some(named);
+  const rejected = [...added].filter((f) => f !== CHANGELOG_README && !named(f));
+  if (!ok && rejected.length > 0) {
+    problem = `\nFound, but not a valid entry for this branch: ${rejected.join(', ')}`;
   }
 } else {
   // `--diff-filter=d` so deleting status.md never counts as updating it.
@@ -171,12 +220,16 @@ if (ok) {
 const skip = process.env[SKIP_ENV]?.trim();
 if (skip) {
   console.log(`Status guard SKIPPED (${SKIP_ENV}): ${skip}
-  Paste this into the PR description: "status.md not updated — ${skip}"`);
+  Paste this into the PR description: "${postDx2 ? 'no changelog fragment' : 'status.md not updated'} — ${skip}"`);
   process.exit(0);
 }
 
-const today = new Date().toISOString().slice(0, 10);
-const expected = `${CHANGELOG_DIR}/${today}-${branch ? branch.replaceAll('/', '-') : '<branch with / → ->'}.md`;
+// The LOCAL date ("the day you wrote it"): toISOString is UTC, a day ahead every US evening.
+const now = new Date();
+const today = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+  .map((n) => String(n).padStart(2, '0'))
+  .join('-');
+const expected = `${CHANGELOG_DIR}/${today}-${branch ? fragmentSlug(branch) : '<branch with / → ->'}.md`;
 console.error(
   postDx2
     ? `

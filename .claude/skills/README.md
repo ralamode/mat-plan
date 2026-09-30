@@ -1,8 +1,8 @@
 # Agent skills: index and roadmap
 
 Project skills for working in mat-plan. Claude Code loads each `*/SKILL.md` automatically: the
-`description` decides when it triggers, and the body is the procedure. **This file is the running list
-of what exists and what's left.** Record a skill change with a [changelog fragment](../../docs/changelog/README.md) in the same PR.
+`description` decides when it triggers, and the body is the procedure. **This file holds the lifecycle,
+the guards and the backlog; the skills are their own index** (below). Record a skill change with a [changelog fragment](../../docs/changelog/README.md) in the same PR.
 
 ## The lifecycle they cover
 
@@ -20,7 +20,7 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 **The skills are their own index.** Each `SKILL.md`'s `description` says what it does and when to use
 it, and Claude Code lists them every session. Print them all with
-`grep -h '^description' .claude/skills/*/SKILL.md`. The hand-maintained table that used to be here
+`grep -H '^description' .claude/skills/*/SKILL.md` (the filename names the skill). The hand-maintained table that used to be here
 conflicted on every skill PR (DX-2). The review lenses are named agents in [`../agents/`](../agents/),
 sharing one [reporting contract](./review-pr/reporting-contract.md).
 
@@ -51,7 +51,7 @@ Candidates came from the repo's recurring operations and from
 | 3   | `source-check`                                                                                           | addy     | verify an API or pattern against the official docs for the pinned version before using it                                                                      | Next 16 / React 19.3 / zod 4 / Drizzle 0.45 are newer than most training data                                            |
 | 4   | `doubt-check`                                                                                            | addy     | a fresh-context adversarial check on one decision mid-implementation (auth, corrections, migrations)                                                           | Panels cover plans; this covers the choices made after them                                                              |
 | 5   | `refine-idea`                                                                                            | addy     | interview-me / idea-refine for brainstorm docs and PRDs; ends in a "Not doing (and why)" section                                                               | For `*-brainstorm.md` / ONB PRDs; scope discipline                                                                       |
-| 6   | session-start hook                                                                                       | addy     | print the `docs/status.md` "Where we are" pointer + open PRs at session start                                                                                  | Cheap context; configure via settings hooks, not a skill                                                                 |
+| 6   | ✅ **done (#179)**: session-start hook                                                                   | addy     | print the `docs/status.md` "Where we are" pointer + open PRs at session start                                                                                  | Cheap context; configure via settings hooks, not a skill                                                                 |
 | 7   | `seed-program`                                                                                           | mat-plan | add or update a program/roster seed with its invariants, and the LLM-never-authors-loads rule                                                                  | Only if it keeps coming up (#151, #152, #154)                                                                            |
 
 ### Seeds for the baseline audit (found while building batch 2)
@@ -93,10 +93,10 @@ source of truth.
   a test of its own failure cases.
 - `.claude/` is on the e2e auto-skip allowlist. A skills-only PR is docs-shaped: no plan, no panel.
 
-## Changelog
-
 > **New entries go in [docs/changelog/](../../docs/changelog/README.md)** (DX-2). The history below
-> stays as it was.
+> is frozen: `status:check` fails a branch that adds to it.
+
+## Changelog
 
 - **2026-09-30** — Shipped `start-task`, `plan-with-panel` (it absorbs the planned standalone
   `ux-panel`), `ship-pr` and `hold-the-bar`. Seeded this backlog from the audit of recurring
