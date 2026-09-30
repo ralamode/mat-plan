@@ -258,6 +258,12 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: `pnpm status:check`.** "Status rides with the work" was prose, and #156 is
+  what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor` branch, read from the branch name or any
+  commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
+  and prints the reason for the PR description. It's local (in `ship-pr`) for now; making it a CI
+  gate needs its own plan.
+
 - **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
   only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
   the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are

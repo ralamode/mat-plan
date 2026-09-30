@@ -25,6 +25,7 @@ surfaces conflicts while you still have the context.
 ```bash
 pnpm verify              # format:check → lint → typecheck → test → db:verify → audit --prod (~25s)
 pnpm guides:check        # feature guide touched with every owned file it covers
+pnpm status:check        # feat/fix/db/perf/refactor branch touched docs/status.md (STATUS_SKIP="<why>" to override)
 bash .claude/skills/hold-the-bar/check.sh   # the diff did not quietly lower the bar
 ```
 
@@ -43,7 +44,8 @@ CodeQL (which never runs on PRs).
 
 ## 3. Status rides with the work (same PR, never a follow-up)
 
-- [docs/status.md](../../../docs/status.md): update the **Where we are** pointer if this moves it,
+- [docs/status.md](../../../docs/status.md) (`pnpm status:check` enforces that it was touched; whether
+  it's _right_ is still on you): update the **Where we are** pointer if this moves it,
   the backlog row, and a **Changelog** entry (`- **YYYY-MM-DD** — **<ID>: <what is now true>**
 ([plan](./plans/<file>.md)). <why it matters>`). Write it from the diff, not from memory; #156
   exists because this section drifted.

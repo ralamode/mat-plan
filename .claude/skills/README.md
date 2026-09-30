@@ -96,3 +96,6 @@ source of truth.
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
   tool) instead of what AGENTS.md claims.
+- **2026-09-30** — `pnpm status:check` (ROI item 5): a feat/fix/db/perf/refactor branch must touch
+  `docs/status.md`, with `STATUS_SKIP="<why>"` as a visible override. It runs in `ship-pr` step 2
+  (local, like `guides:check` was before CI); self-tested by `.github/scripts/check-status-touched.test.sh`.
