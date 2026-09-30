@@ -28,7 +28,7 @@ still needs its own PR. Each correction below names the row that fixes the cause
 5. **Soft-delete aware** — `deleted_at IS NULL` everywhere, so a correction never resurrects a
    deleted row.
 6. **Keep them after they run.** A correction is a record of what was wrong and when. They are cheap
-   to keep and they document the failure; `applied` in the registry marks one as done.
+   to keep and they document the failure; a row in the **Applied** table below marks one as done.
 
 ## Adding one
 
