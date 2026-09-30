@@ -316,6 +316,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Git / commits
 
+- **`Unknown skill: <name>` for a skill that is on `main`.** → Project skills load from the
+  `.claude/` of the directory the session was **launched** in. A session started inside a linked
+  worktree loads that worktree's skills; one launched in the **main checkout** loads whatever branch
+  the main checkout has checked out. Another session had switched the main checkout to a feature branch
+  cut before the skill merged, so for sessions launched there it did not exist. → Keep the main
+  checkout on `main` (guarded, best-effort, by `.claude/hooks/guard-main-checkout.mjs`; the
+  `SessionStart` briefing warns when it isn't). To use a skill meanwhile, read its `SKILL.md` from your
+  up-to-date worktree and follow it. (chore/dx-guards)
 - **Squash merge landed an _intermediate_ commit — the last pushes are missing from `main`.** → A PR
   merged while newer commits were still landing (or merged at the SHA the page was showing) squashes a
   stale head, silently dropping later commits. → After any squash merge, `git pull --ff-only origin

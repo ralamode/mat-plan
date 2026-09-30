@@ -22,10 +22,12 @@
     "db:verify": "pnpm --filter @mat-plan/db db:verify",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:verify && pnpm audit --prod --audit-level high",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:verify && pnpm skills:check && pnpm guards:test && pnpm audit --prod --audit-level high",
     "prepare": "husky",
     "guides:check": "node .github/scripts/check-feature-guides.mjs",
-    "status:check": "node .github/scripts/check-status-touched.mjs"
+    "status:check": "node .github/scripts/check-status-touched.mjs",
+    "skills:check": "node .github/scripts/check-skills.mjs",
+    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",

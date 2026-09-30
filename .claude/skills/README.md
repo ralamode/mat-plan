@@ -33,6 +33,19 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | #181         |
 | [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
 
+## Guards (mechanisms, not procedures)
+
+Where a rule failed as prose, it became a check. Each ships with a self-test, and `pnpm guards:test`
+(in `verify`, not in CI) runs them all.
+
+| Guard                                                                                                                      | Enforces                                                                                     | Self-test                                           |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                                                 | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort)         | `bash .claude/hooks/hooks.test.sh`                  |
+| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                                                       | Every session starts from the real state: status, open PRs, stale/off-main worktrees         | same                                                |
+| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                            | A skill can't cite a path or `pnpm` script that doesn't exist                                | `bash .github/scripts/check-skills.test.sh`         |
+| [`check-status-touched.mjs`](../../.github/scripts/check-status-touched.mjs) (`pnpm status:check`, `ship-pr` step 3; #177) | A feat/fix/db/perf/refactor/revert branch touched `docs/status.md` (`STATUS_SKIP` overrides) | `bash .github/scripts/check-status-touched.test.sh` |
+| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                                                         | The diff didn't lower the quality bar                                                        | `bash .claude/skills/hold-the-bar/check.test.sh`    |
+
 ## Backlog, in priority order
 
 Candidates came from the repo's recurring operations and from
@@ -53,7 +66,7 @@ Candidates came from the repo's recurring operations and from
 Places where AGENTS.md or the docs claim something the code doesn't do. Each needs a verdict: fix the
 code, fix the doc, or record it as accepted debt. **None has been triaged yet.**
 
-- AGENTS.md → "Design" references a root `DESIGN.md`; the file is `docs/design.md`.
+- AGENTS.md → "Design" references a root DESIGN.md, which does not exist; the file is `docs/design.md`.
 - "No coverage drop on changed files" (Backend/API rules): no coverage tool or threshold exists.
 - The CWV budget: nothing measures it (ADR 0001 only plans it).
 - `typecheck` and `lint` run from `apps/web`. Package files the app imports are typechecked through it
@@ -105,6 +118,9 @@ source of truth.
   and UX, plus `fact-sheet`), with one shared reporting contract in `review-pr/`.
   `plan-with-panel` and `review-pr` call them by name. `security-reviewer` carries the
   "cite third-party behaviour from source at the pinned version" rule that caught DX-1's token leak.
+- **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
+  `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
+  already existed; the main-checkout rule had failed twice within hours of being written down.
 - **2026-09-30** — `keep-mergeable`: `shipit` now means "I keep this mergeable until it lands". Every
   merge in the 09-30 batch re-conflicted the other approved PRs at the same changelog line, and each
   was fixed by hand. The skill merges `main` in from a detached worktree (fast-forward push, never

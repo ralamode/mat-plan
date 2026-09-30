@@ -264,6 +264,18 @@ not merge order.
   any merge, merge `main` into each approved PR from a detached worktree, push fast-forward only,
   auto-resolve only changelog/append-style conflicts, and ask on anything else. `review-pr` gains a
   "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep.
+- **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
+  broken twice within hours: another session switched the main checkout to a feature branch, which
+  made a `git pull` try to merge `main` into someone's branch and made project skills vanish
+  ("Unknown skill") for sessions launched there. Now a best-effort Claude Code `PreToolUse` hook keeps
+  the main checkout to an **allowlist** (read-only git, worktree commands, post-merge `branch -D`,
+  `--ff-only` sync on `main`, `checkout main` when clean), reading through subshells, `$(…)`,
+  `sh -c`, heredocs into a shell, wrappers and `cd`/`-C`. A `SessionStart` briefing prints the status
+  headline, open PRs (fork-PR titles withheld as untrusted input), and stale or off-main worktrees.
+  226 guard + 12 briefing self-test cases cover the allowed workflow and the known bypass forms. Both
+  hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
+  when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in
+  `verify`, not yet in CI.
 - **2026-09-30** — **Security: Next.js 16.3.5 → 16.3.7** (#182; critical
   [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j), RCE in `next/og`, patched
   in ≥16.3.6). Found by the `audit --prod` step of `pnpm verify`, which failed on `main` for every
