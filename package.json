@@ -27,7 +27,7 @@
     "guides:check": "node .github/scripts/check-feature-guides.mjs",
     "status:check": "node .github/scripts/check-status-touched.mjs",
     "skills:check": "node .github/scripts/check-skills.mjs",
-    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh"
+    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.2",

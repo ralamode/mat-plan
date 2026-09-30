@@ -362,11 +362,9 @@ above; the skills index holds the smaller items.
 review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
-  #176 resolved). **Note:** `main` now carries `.claude/settings.json` (#179: two hooks, both no-op under CI,
-  no permissions/MCP/env keys). The DX-1 implementation PR must replace prefetch step 8's blanket
-  fail-closed with a narrower check: reject `permissions`, `mcpServers`, `enableAllProjectMcpServers`,
-  `env`, and any hook command not in an explicit allowlist, and require allowlisted hooks to be
-  CI-no-op. Its panel re-reviews that.
+  #176 resolved). **Implemented in #185**; live once `CLAUDE_CODE_OAUTH_TOKEN` is set, then the post-merge
+  injection smoke (plan, test 4) is the acceptance gate. #179's `.claude/settings.json` would have
+  tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
 - **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
   on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
