@@ -65,7 +65,9 @@ CodeQL (which never runs on PRs).
   the backlog row. No changelog entry goes here any more. Nothing checks these, so it's on you.
 - [docs/plan.md](../../../docs/plan.md): tick or annotate the row, and link the plan if one exists.
 - Then confirm: `pnpm status:check` (a feat/fix/db/perf/refactor/revert branch must add a correctly
-  named fragment; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR). It runs
+  named fragment; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR. It also fails
+  ANY branch that adds an entry to the frozen status.md or skills-README history, and that part is
+  not skippable: [the rule](../../../docs/changelog/README.md)). It runs
   here, after the update, not with the step-2 gates: run earlier it fails on every product branch.
 - Feature guide: already enforced by `guides:check`, but reread its traps section. Did this change
   add one?

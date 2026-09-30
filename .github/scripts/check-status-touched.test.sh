@@ -208,4 +208,35 @@ git -C "$tmp" checkout -q docs/z-4 && git -C "$tmp" merge -q --no-commit --no-ff
 check "main's history lines mid-merge don't count" 0 "don't owe"
 git -C "$tmp" merge --abort 2>/dev/null
 
+# Edits are not additions: skills:check can DEMAND an edit (a stale path in an old entry), so a typo
+# or path fix, or a re-wrap that adds continuation lines, must pass — or the two guards deadlock.
+branch docs/z-5 'docs(x): fix'; sed 's/^- old entry$/- old entry, path fixed/' "$tmp/docs/status.md" >"$tmp/.h" && mv "$tmp/.h" "$tmp/docs/status.md"
+hist docs/status.md '- old entry, path fixed' '  re-wrapped continuation'
+git -C "$tmp" commit -qam 'docs: fix old entry'
+check "editing an existing history entry (and re-wrapping it) passes" 0 "don't owe"
+
+# Renaming the heading would switch the check off, so it fails instead.
+branch docs/z-6 'docs(x): rename'; sed 's/^## Changelog (merged PRs)$/## Old changelog/' "$tmp/docs/status.md" >"$tmp/.h" && mv "$tmp/.h" "$tmp/docs/status.md"
+hist docs/status.md '## Old changelog' '- **2026-10-01** — hidden'
+git -C "$tmp" commit -qam 'docs: rename'
+check "renaming a frozen heading fails" 1 'heading was renamed or removed'
+
+# The section ends at the next `## ` heading: text below it is not history.
+branch docs/z-7 'docs(x): later'; hist .claude/skills/README.md '## Later' '- a later bullet'
+git -C "$tmp" commit -qam 'docs: later'
+check "a bullet under the next heading passes" 0 "don't owe"
+
+# Main edited an old entry after this branch was cut; the branch still has the old text, unmerged.
+branch docs/z-8 'docs(x): stale'
+git -C "$tmp" checkout -q main && sed 's/^- old skill entry$/- old skill entry, main fixed it/' "$tmp/.claude/skills/README.md" >"$tmp/.h" && mv "$tmp/.h" "$tmp/.claude/skills/README.md"
+git -C "$tmp" commit -qam 'docs: main edits history'
+git -C "$tmp" checkout -q docs/z-8
+check "an entry main edited after the cut isn't this branch's addition" 0 "don't owe"
+
+# Pre-DX-2 (no README in the working tree), history entries are still how the changelog is written.
+branch docs/z-9 'docs(x): legacy'; git -C "$tmp" rm -q docs/changelog/README.md
+hist docs/status.md '## Changelog (merged PRs)' '- **2026-09-29** — legacy entry'
+git -C "$tmp" commit -qam 'docs: legacy entry'
+check "a pre-DX-2 branch may still add a history entry" 0 "don't owe"
+
 [ "$fails" -eq 0 ] && echo "all status-guard self-tests passed" || exit 1

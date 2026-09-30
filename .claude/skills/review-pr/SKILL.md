@@ -116,8 +116,8 @@ with no rule citation is taste. Mark it P2, or drop it.
    effect). Threaded values are asserted with `toMatchObject` (lessons.md → Vitest). Schema changes
    have a `db:verify` proof. There's **no coverage tool**, so judge by reading: is each new branch
    exercised? Don't claim a percentage.
-7. **Docs that ride with the change.** A `docs/changelog/` fragment (correct links: it's one level
-   deeper than status.md), the `docs/status.md` backlog row and pointer if the change moves them, the feature guide (the gate
+7. **Docs that ride with the change.** A [`docs/changelog/` fragment](../../../docs/changelog/README.md) (correct links:
+   it's one level deeper than status.md; nothing added to the frozen histories), the `docs/status.md` backlog row and pointer if the change moves them, the feature guide (the gate
    only checks that it was touched, not that it's right; read the diff against its invariants),
    `docs/plan.md` row, the plan's review-response log, lessons.md if a failure took several attempts,
    `docs/architecture.md` + a Mermaid diagram for a pivotal flow or model change.

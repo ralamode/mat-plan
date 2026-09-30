@@ -102,31 +102,47 @@ const commitTypes = lines(git('log', '--format=%s', `${mergeBase}..HEAD`))
 const root = git('rev-parse', '--show-toplevel');
 const postDx2 = existsSync(join(root, CHANGELOG_README));
 
-// A frozen section's lines from `rev:path` (or the working tree when rev is null), heading excluded,
-// up to the next `## ` heading. Non-blank lines only; missing file → none.
-const sectionLines = (rev, { file, heading }) => {
+// A frozen section's top-level ENTRIES (`- ` bullet lines) from `rev:path`, or from the working tree
+// when rev is null, up to the next `## ` heading. null when the file or the heading is missing, so a
+// renamed heading is told apart from an empty section.
+const sectionEntries = (rev, { file, heading }) => {
   let text;
   try {
     text = rev === null ? readFileSync(join(root, file), 'utf8') : git('show', `${rev}:${file}`);
   } catch {
-    return [];
+    return null;
   }
   const all = text.split('\n');
   const start = all.findIndex((l) => l.trim() === heading);
-  if (start === -1) return [];
+  if (start === -1) return null;
   const end = all.findIndex((l, i) => i > start && /^## /.test(l));
-  return all.slice(start + 1, end === -1 ? undefined : end).filter((l) => l.trim());
+  return all.slice(start + 1, end === -1 ? undefined : end).filter((l) => /^- /.test(l));
 };
 
-// Post-DX-2, adding to a frozen changelog fails on every branch type, and STATUS_SKIP does NOT bypass
-// it: the skip means "no entry needed", and an entry that exists can always move to a fragment. Read
-// from the WORKING TREE (committed + staged + unstaged). A line counts as added only if neither the
-// merge base nor the base tip has it, so main's own history arriving mid-merge never trips it.
+// Post-DX-2, adding an ENTRY to a frozen changelog fails on every branch type, and STATUS_SKIP does
+// NOT bypass it: the skip means "no entry needed", and an entry that exists can always move to a
+// fragment. Read from the WORKING TREE (committed + staged + unstaged).
+// - Entries, not lines: re-wrapping an old entry adds continuation lines, never a `- ` line.
+// - Net of removals: fixing a typo or a stale path in an old entry (skills:check demands the latter)
+//   changes a `- ` line; one new line against one removed one is an edit, not an addition. "Removed"
+//   counts only entries that the merge base AND main's tip both have, so a line main itself edited
+//   after the branch was cut can't cancel out a genuinely new entry.
+// - Main's own entries arriving mid-merge are on main's tip, so they are never counted as new.
+// - A heading that existed at the merge base but is gone now fails: renaming it would switch this off.
 if (postDx2) {
   const misfiled = FROZEN.flatMap((section) => {
-    const known = new Set([...sectionLines(mergeBase, section), ...sectionLines(base, section)]);
-    const added = sectionLines(null, section).filter((l) => !known.has(l));
-    return added.length ? [`${section.file} → "${section.heading}": ${added[0].trim()}`] : [];
+    const where = `${section.file} → "${section.heading}"`;
+    const atBase = sectionEntries(mergeBase, section);
+    const now = sectionEntries(null, section);
+    if (now === null)
+      return atBase === null ? [] : [`${where}: the heading was renamed or removed`];
+    const atTip = sectionEntries(base, section) ?? [];
+    const known = new Set([...(atBase ?? []), ...atTip]);
+    const tip = new Set(atTip);
+    const nowSet = new Set(now);
+    const added = now.filter((l) => !known.has(l));
+    const removed = (atBase ?? []).filter((l) => tip.has(l) && !nowSet.has(l));
+    return added.length > removed.length ? [`${where}: ${added[0].trim()}`] : [];
   });
   if (misfiled.length) {
     console.error(`
@@ -134,7 +150,8 @@ Status guard failed: this branch adds to a changelog that DX-2 froze.
   ${misfiled.join('\n  ')}
 
 Move the entry into ${CHANGELOG_DIR}/<YYYY-MM-DD>-<branch with / → ->.md (format in ${CHANGELOG_README})
-and take those lines out of the frozen section. STATUS_SKIP does not bypass this check.
+and take it out of the frozen section, or restore the heading. Editing an existing entry is fine.
+STATUS_SKIP does not bypass this check.
 `);
     process.exit(1);
   }
