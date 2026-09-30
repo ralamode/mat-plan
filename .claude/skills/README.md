@@ -60,29 +60,11 @@ Candidates came from the repo's recurring operations and from
 | 6   | session-start hook                                                                   | addy     | print the `docs/status.md` "Where we are" pointer + open PRs at session start                                                                                  | Cheap context; configure via settings hooks, not a skill                                                                 |
 | 7   | `seed-program`                                                                       | mat-plan | add or update a program/roster seed with its invariants, and the LLM-never-authors-loads rule                                                                  | Only if it keeps coming up (#151, #152, #154)                                                                            |
 
-### Seeds for the baseline audit (found while building batch 2)
+### Baseline audit (done 2026-09-30)
 
-Places where AGENTS.md or the docs claim something the code doesn't do. Each needs a verdict: fix the
-code, fix the doc, or record it as accepted debt. **None has been triaged yet.**
-
-- AGENTS.md → "Design" references a root DESIGN.md, which does not exist; the file is `docs/design.md`.
-- "No coverage drop on changed files" (Backend/API rules): no coverage tool or threshold exists.
-- The CWV budget: nothing measures it (ADR 0001 only plans it).
-- `typecheck` and `lint` run from `apps/web`. Package files the app imports are typechecked through it
-  (each package's `main` is `src/index.ts`), but files it never imports (`packages/db/scripts/*`:
-  `verify.ts`, `correct.ts`, the corrections registry) are never typechecked, and nothing in
-  `packages/` is linted.
-- `audit --prod` runs only in local `pnpm verify`, not in CI.
-- "Keyboard-usable, focus-visible": no automated keyboard or focus check.
-- The CONCURRENTLY "transaction-stripping runner" AGENTS.md describes doesn't exist (tech-debt.md).
-- AGENTS.md says "Idempotency-Key → persist first result"; the code uses a `clientId` field + ON CONFLICT.
-- No automated tests for corrections (`registry.ts`).
-
-**Deliberately not adopting** from addyosmani/agent-skills: spec-driven, planning, code-review,
-code-simplification, security-hardening, TDD, perf, ADRs, git-workflow, ci-cd, shipping,
-deprecation-and-migration. mat-plan's own rules are stricter or more specific, or built-ins
-(`/code-review`, `/simplify`, `/security-review`) already cover them. A second copy would be a second
-source of truth.
+The 10 doc-vs-code seeds recorded here were audited: [report](../../docs/audits/2026-09-30-baseline.md)
+→ section (b) has each verdict (fix code / fix doc / accept as debt), and the fix queue is
+**AUDIT-1** in [plan.md](../../docs/plan.md).
 
 ## How to write a skill here
 
@@ -120,3 +102,5 @@ source of truth.
 - **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
   `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
   already existed; the main-checkout rule had failed twice within hours of being written down.
+- **2026-09-30** — Baseline audit run with `review-pr` in audit mode: 2 P0, 5 P1, 7 P2; the seeds got
+  verdicts; the fix queue is AUDIT-1 in `docs/plan.md`.
