@@ -258,6 +258,13 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
+  only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
+  the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are
+  wiped on reboot and invisible to everyone else. Now every task gets
+  `.claude/worktrees/<slug>` (already gitignored) off `origin/main`, the main checkout stays on
+  `main`, and worktrees are removed after merge, never someone else's. `start-task` and `ship-pr`
+  carry the commands. `pnpm install` in a fresh worktree took 8s.
 - **2026-09-30** — **DX: agent skills, batch 2** ([index](../.claude/skills/README.md)). `review-pr`
   is the rubric for an on-demand review (verified P0/P1/P2 findings, each cited to `path:line` and the
   rule it breaks) that runs **only when asked**: locally now, and via an `@claude review` PR comment

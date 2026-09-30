@@ -1,6 +1,6 @@
 ---
 name: start-task
-description: Start any new piece of mat-plan work correctly — sync main, cut a correctly named branch (or a worktree for parallel work), load the feature guide and backlog row, and decide whether the change needs a committed plan and which review panels it owes. Use at the START of every task that will end in a PR, before reading or editing code — "let's do V1-x", "fix this bug", "start on", "pick up the next item".
+description: Start any new piece of mat-plan work correctly — sync main, cut the task its own git worktree under .claude/worktrees/ on a correctly named branch (the main checkout stays on main), load the feature guide and backlog row, and decide whether the change needs a committed plan and which review panels it owes. Use at the START of every task that will end in a PR, before reading or editing code — "let's do V1-x", "fix this bug", "start on", "pick up the next item".
 ---
 
 # Start a task
@@ -8,24 +8,34 @@ description: Start any new piece of mat-plan work correctly — sync main, cut a
 The rules live in [AGENTS.md](../../../AGENTS.md) → "Git & branch workflow", "Feature guides" and
 "Implementation plans". This skill is the order to apply them in. Do not restate them in the PR.
 
-## 1. Sync, then branch (never skip)
+## 1. Sync, then cut a worktree (every task, never skip)
+
+Run these from the **main checkout**, which stays on `main`:
 
 ```bash
-git checkout main && git fetch origin && git pull --ff-only origin main
-git checkout -b <type>/<id>-<slug> origin/main
+git worktree list                                   # what's already in flight; don't collide with it
+git fetch origin && git pull --ff-only origin main   # keep the main checkout current (it stays on main)
+git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main
+cd .claude/worktrees/<slug> && pnpm install          # node_modules are per worktree
 ```
+
+**All work for the task happens in that worktree.** The rule is AGENTS.md → "Git & branch workflow".
 
 - `type` ∈ `feat|fix|chore|docs|refactor|perf|test|db`. `id` is the backlog id, lowercased
   (`v1-26`, `gap-3`, `ydp-2`). No backlog id? Use a scope instead (`chore/dx-…`), and ask whether the
   work should get a row in [docs/plan.md](../../../docs/plan.md) first.
-- **Parallel work** (another agent or session is already on a branch): use a worktree off the updated
-  `main` instead, one per concern: `git worktree add ../mat-plan-<slug> -b <branch> origin/main`.
-  Remove it once its PR is up.
-- `--ff-only` failing means local `main` has commits that aren't on origin. Stop and ask. Do not
-  merge or reset.
+- **Don't switch the main checkout to a feature branch**, not even "just for a small fix". Other
+  sessions read it and expect `main`.
+- `.claude/worktrees/`, not `/tmp`. `/tmp` is wiped on reboot and invisible to other sessions.
+- The main checkout is on a feature branch, or `--ff-only` fails? Something else is using it, or
+  local `main` has commits that aren't on origin. Stop and ask. Do not merge, reset or check out
+  over it.
+- A worktree in `git worktree list` whose branch is merged is stale. Mention it to the user; only
+  remove worktrees you created.
 
 **Why:** a branch cut from a stale `main` silently omits a just-merged migration or schema change,
-and the drift surfaces in CI instead of at your desk.
+and the drift surfaces in CI instead of at your desk. A shared checkout lets one session's
+`checkout` or `rebase` move another session's files out from under it.
 
 ## 2. Load the context before touching code
 
