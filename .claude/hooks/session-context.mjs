@@ -78,7 +78,7 @@ export function parseWorktrees(porcelain) {
 /** Untrusted text made safe to show in one line: no control/bidi characters, at most `max` chars. */
 export function sanitize(text, max = TITLE_MAX) {
   const clean = String(text ?? '')
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
@@ -162,10 +162,11 @@ async function briefing(cwd) {
   const notes = parseWorktrees(porcelain ?? '')
     .filter((w) => resolve(w.path) !== root)
     .map((w) => {
+      // A worktree of a fork PR names its local branch after the fork's branch: untrusted too.
       const flags = [];
       if (w.branch && merged.has(w.branch)) flags.push('STALE: branch merged');
       if (!w.path.includes(WORKTREE_HOME)) flags.push(`outside ${WORKTREE_HOME}`);
-      return `  ${w.path} [${w.branch ?? 'detached'}]${flags.length ? `  ← ${flags.join('; ')}` : ''}`;
+      return `  ${w.path} [${w.branch === null ? 'detached' : sanitize(w.branch)}]${flags.length ? `  ← ${flags.join('; ')}` : ''}`;
     });
   if (notes.length) lines.push(`Worktrees (only remove ones you created):\n${notes.join('\n')}`);
   const stale = notes.filter((n) => n.includes('STALE')).length;

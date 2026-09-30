@@ -140,29 +140,38 @@ export const cleanPath = (t) =>
     .replace(/:L?\d+(-L?\d+)?(,\d+)*$/, '')
     .replace(/[.,;:)]+$/, '');
 
-/** Every `pnpm … <script>` in a span, as { filter, script }; builtins and templates are skipped. */
+/**
+ * Every `pnpm … <script>` in a span, as { filter, dir, script }. Builtins, templates and
+ * `-r`/`--recursive` runs are skipped; `-C <dir>` names the package directory directly.
+ */
 export function pnpmInvocations(span) {
   const words = span.split(/[\s;&|()]+/).filter(Boolean);
   const out = [];
   for (let i = 0; i < words.length; i++) {
     if (words[i] !== 'pnpm') continue;
     let filter = null;
+    let dir = null;
+    let recursive = false;
     let j = i + 1;
     for (; j < words.length && words[j].startsWith('-'); j++) {
       const w = words[j];
       if (w === '--filter' || w === '-F') filter = words[++j] ?? null;
       else if (w.startsWith('--filter=')) filter = w.slice('--filter='.length);
       else if (/^-F./.test(w)) filter = w.slice(2);
-      else if (w === '-C' || w === '--dir') j++;
+      else if (w === '-C' || w === '--dir') dir = words[++j] ?? null;
+      else if (w.startsWith('--dir=')) dir = w.slice('--dir='.length);
+      else if (w === '-r' || w === '--recursive') recursive = true;
     }
+    if (recursive) continue; // runs the script wherever it exists: nothing single to check
     let script = words[j];
     if (script === 'run' || script === 'run-script') {
       for (j++; words[j]?.startsWith('-'); j++);
       script = words[j];
     } else if (PNPM_BUILTINS.has(script)) continue;
     if (!script || !/^[a-z][\w:.-]*$/.test(script)) continue;
-    if (filter !== null && TEMPLATE.test(filter)) continue;
-    out.push({ filter, script });
+    if ((filter !== null && TEMPLATE.test(filter)) || (dir !== null && TEMPLATE.test(dir)))
+      continue;
+    out.push({ filter, dir: dir && dir.replace(/^\.\//, '').replace(/\/+$/, ''), script });
   }
   return out;
 }
@@ -211,13 +220,13 @@ export function checkFile(file) {
             );
         }
       }
-      for (const { filter, script } of pnpmInvocations(tok)) {
-        const pkgDir = filter === null ? '.' : FILTERS.get(filter);
+      for (const { filter, dir, script } of pnpmInvocations(tok)) {
+        const pkgDir = dir !== null ? dir || '.' : filter === null ? '.' : FILTERS.get(filter);
         if (pkgDir === undefined) continue; // unknown filter: not ours to judge
         const scripts = scriptsOf(pkgDir);
         if (scripts && !scripts.has(script))
           problems.push(
-            `${where(i)}: pnpm ${filter === null ? '' : `--filter ${filter} `}${script} is not a script in ${pkgDir}/package.json`,
+            `${where(i)}: pnpm ${dir !== null ? `-C ${dir} ` : filter === null ? '' : `--filter ${filter} `}${script} is not a script in ${pkgDir}/package.json`,
           );
       }
     }

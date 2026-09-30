@@ -13,7 +13,7 @@ git init -q "$tmp"
 mkdir -p "$tmp/.claude/skills/demo" "$tmp/docs" "$tmp/apps/web"
 echo '.local/' >"$tmp/.gitignore"
 echo '{"scripts":{"verify":"x","guides:check":"x"}}' >"$tmp/package.json"
-echo '{"name":"web","scripts":{"screenshot:ephemeral":"x"}}' >"$tmp/apps/web/package.json"
+echo '{"name":"web","scripts":{"screenshot:ephemeral":"x","dev":"x"}}' >"$tmp/apps/web/package.json"
 mkdir -p "$tmp/packages/db/migrations/meta"
 echo '{"name":"@mat-plan/db","scripts":{"db:verify":"x"}}' >"$tmp/packages/db/package.json"
 echo '{}' >"$tmp/packages/db/migrations/meta/_journal.json"
@@ -102,6 +102,16 @@ See `MISSING.md`.
 EOF
 expect "a missing root-shaped dotfile fails" 1 "file .nothere.toml does not exist" <<'EOF'
 See `.nothere.toml`.
+EOF
+
+expect "pnpm -r / --recursive spans are skipped (no false positive)" 0 "" <<'EOF'
+`pnpm -r test` · `pnpm --recursive build`
+EOF
+expect "pnpm -C <dir> uses that directory's scripts (no false positive)" 0 "" <<'EOF'
+`pnpm -C apps/web dev` · `pnpm --dir=./apps/web/ screenshot:ephemeral`
+EOF
+expect "pnpm -C <dir> with a missing script fails" 1 "pnpm -C apps/web gone is not a script in apps/web" <<'EOF'
+`pnpm -C apps/web gone`
 EOF
 
 # Entry point: runs through a symlink and from a path containing a space.

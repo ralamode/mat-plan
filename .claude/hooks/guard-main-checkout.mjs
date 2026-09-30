@@ -14,21 +14,26 @@
  * shell: a determined adversary can get past it (a script file, an alias in ~/.gitconfig, …). Within
  * that scope it is an ALLOWLIST: in THIS project's main checkout, only the git below is allowed.
  *
- *   read-only   status log diff show fetch rev-parse merge-base ls-files ls-tree grep blame describe
+ *   read-only   status log diff show rev-parse merge-base ls-files ls-tree grep blame describe
  *               shortlog cat-file for-each-ref rev-list show-ref check-ignore name-rev diff-tree help
- *               reflog (not expire/delete) · remote (list/show/get-url) · config --get/--list
- *               branch (list flags only) · tag (list only) · stash list/show
- *   worktrees   worktree list / add / prune / remove (without --force)
- *   syncing     pull --ff-only [origin [main]]  and  merge --ff-only origin/main, only while on main
+ *               fetch (not --update-head-ok) · reflog (no expire/delete) · remote (list/show/get-url)
+ *               config --get/--list · branch (list flags only) · tag (list only) · stash list/show
+ *   worktrees   worktree list / add / remove (neither with --force) / prune / repair
+ *               branch -d|-D [--force] <names> (never `main`): the post-merge cleanup
+ *   syncing     pull --ff-only [--prune] [origin [main]] and merge --ff-only origin/main, only on main
  *               checkout main / switch main (no flags), only when `git status --porcelain` is empty
- *               bare `git reset` (unstage; `-q` allowed)
- * Everything else is denied there, including unknown subcommands and aliases, and `gh pr checkout`.
- * A linked worktree, an unrelated repository and a non-repo directory are never restricted.
+ *               reset [-q] [HEAD] [-- <paths>] (unstage only)
+ * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`, and
+ * commands piped into a bare shell (unreadable). A linked worktree, an unrelated repository and a
+ * non-repo directory are never restricted.
  *
- * How the command is read: segmented on newlines, `;`, `&&`, `||`, `|`, `&` and `(`/`)`; recursing
- * into `$(…)`, backticks, `eval` and `sh|bash|zsh -c '…'`; stripping `env`/`command`/`time`/`nohup`/
- * `xargs`/`sudo`/… wrappers; following `cd`/`pushd` and `git -C`. A directory it can't resolve (`~`,
- * `$VAR`, `popd`, `--git-dir`, `GIT_DIR=`) counts as possibly the main checkout.
+ * How the command is read: segmented on newlines, `;`, `&&`, `||`, `|`, `&` and `(`/`)`; quotes and
+ * backslashes dropped from words (`g''it`, `$'git'`); recursing into `$(…)`, backticks, `eval`,
+ * `watch`, `find -exec`, `sh|bash|zsh -c '…'` and a heredoc / here-string fed to a bare shell;
+ * stripping `env`/`command`/`builtin`/`time`/`nohup`/`xargs`/`sudo`/`doas`/`stdbuf`/`caffeinate`/
+ * `pnpm exec`/`coproc`/`function NAME` prefixes; following `cd`/`pushd` and `git -C`. A directory it
+ * can't resolve (`~`, `$VAR`, `popd`, `--git-dir`, `GIT_DIR=`, `find -execdir`) counts as possibly
+ * the main checkout. A heredoc fed to any other command is data.
  *
  * "Main checkout" = the primary (not linked) worktree whose git common dir is the same as that of
  * `$CLAUDE_PROJECT_DIR`. Without that variable, any primary worktree counts.
@@ -108,9 +113,11 @@ function lexList(p, inSub) {
         tokens.push({ op: '|' });
       }
     } else if (c === '<' || c === '>') {
-      const heredoc = lexRedirection(p);
-      if (heredoc) heredocs.push(heredoc);
-      else tokens.push({ redir: true });
+      const r = lexRedirection(p);
+      if (r.heredoc) {
+        heredocs.push(r.heredoc);
+        tokens.push({ stdin: r.heredoc }); // body filled in at the next newline
+      } else tokens.push({ redir: true, herestring: !!r.herestring });
     } else {
       const w = lexWord(p);
       if (w) tokens.push(w);
@@ -120,12 +127,15 @@ function lexList(p, inSub) {
   return tokens;
 }
 
-/** Consume a redirection operator. Returns a heredoc descriptor for `<<`/`<<-`, else null. */
+/**
+ * Consume a redirection operator. Returns { heredoc } for `<<`/`<<-` (its body is read at the next
+ * newline), { herestring: true } for `<<<` (the next word is the body), else {}.
+ */
 function lexRedirection(p) {
   const s = p.s;
   if (s.startsWith('<<<', p.i)) {
     p.i += 3;
-    return null;
+    return { herestring: true };
   }
   if (s.startsWith('<<', p.i)) {
     p.i += 2;
@@ -133,24 +143,30 @@ function lexRedirection(p) {
     if (strip) p.i++;
     while (s[p.i] === ' ' || s[p.i] === '\t') p.i++;
     const w = lexWord(p);
-    return { delim: w ? w.text : '', strip };
+    return { heredoc: { delim: w ? w.text : '', strip, body: '' } };
   }
   p.i++;
   if ('>&|'.includes(s[p.i] ?? '')) p.i++; // >> >& >| <& <>
   if (s[p.i] === '-') p.i++; // >&-
-  return null;
+  return {};
 }
 
-/** Skip a heredoc body (it is data, not commands): lines up to the delimiter line. */
-function skipHeredoc(p, { delim, strip }) {
+/**
+ * Read a heredoc body (lines up to the delimiter line) into `h.body`. The lexer never reads it as
+ * commands; the analysis does, only when it feeds a bare shell.
+ */
+function skipHeredoc(p, h) {
   const s = p.s;
+  const body = [];
   while (p.i < s.length) {
     const eol = s.indexOf('\n', p.i);
     const end = eol < 0 ? s.length : eol;
     const line = s.slice(p.i, end);
     p.i = end + 1;
-    if ((strip ? line.replace(/^\t+/, '') : line) === delim) return;
+    if ((h.strip ? line.replace(/^\t+/, '') : line) === h.delim) break;
+    body.push(line);
   }
+  h.body = body.join('\n');
 }
 
 function lexBacktick(p) {
@@ -186,6 +202,15 @@ function lexWord(p) {
     if (c === '\\') {
       if (s[p.i + 1] !== '\n') text += s[p.i + 1] ?? '';
       p.i += 2;
+      quoted = true;
+    } else if (c === '$' && s[p.i + 1] === "'") {
+      // ANSI-C quoting, $'…': keep the text, drop the quoting (an escape keeps its next character).
+      p.i += 2;
+      while (p.i < s.length && s[p.i] !== "'") {
+        if (s[p.i] === '\\') p.i++;
+        text += s[p.i++] ?? '';
+      }
+      p.i++;
       quoted = true;
     } else if (c === "'") {
       const end = s.indexOf("'", p.i + 1);
@@ -224,7 +249,19 @@ function lexWord(p) {
 // Walks the tokens with a directory state ({ dir, unsure, gitEnv }) and records every git / gh
 // invocation as { kind, dir, unsure, sub, args, escape }.
 
-const KEYWORDS = new Set(['!', '{', '}', 'then', 'do', 'else', 'if', 'elif', 'while', 'until']);
+const KEYWORDS = new Set([
+  '!',
+  '{',
+  '}',
+  'then',
+  'do',
+  'else',
+  'if',
+  'elif',
+  'while',
+  'until',
+  'coproc',
+]);
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
 const XARGS_WITH_VALUE = new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a', '--arg-file']);
 const SUDO_WITH_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-U', '-r', '-t', '-T']);
@@ -239,8 +276,9 @@ export function invocations(command, cwd) {
 function walk(tokens, state, out, inheritedEscape) {
   const saved = [];
   let segment = [];
+  let piped = false; // the segment being collected reads a pipe on stdin
   const flush = () => {
-    if (segment.length) analyzeSegment(segment, state, out, inheritedEscape);
+    if (segment.length) analyzeSegment(segment, state, out, inheritedEscape, piped);
     segment = [];
   };
   for (const t of tokens) {
@@ -249,22 +287,27 @@ function walk(tokens, state, out, inheritedEscape) {
       continue;
     }
     flush();
+    piped = t.op === '|';
     if (t.op === '(') saved.push({ ...state });
     else if (t.op === ')' && saved.length) Object.assign(state, saved.pop());
   }
   flush();
 }
 
-function analyzeSegment(tokens, state, out, inheritedEscape) {
+function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
   // Substitutions run first, in the current shell's directory and without this segment's prefix.
   for (const t of tokens)
     for (const sub of t.subs ?? []) walk(sub, { ...state }, out, inheritedEscape);
 
   const words = [];
+  const stdin = []; // heredoc / here-string bodies: commands only if they feed a bare shell
   for (let k = 0; k < tokens.length; k++) {
-    if (tokens[k].redir)
+    if (tokens[k].stdin) stdin.push(tokens[k].stdin);
+    else if (tokens[k].redir) {
+      if (tokens[k].herestring && tokens[k + 1]?.text !== undefined)
+        stdin.push({ body: tokens[k + 1].text });
       k++; // drop the redirection and its target
-    else words.push(tokens[k].text);
+    } else words.push(tokens[k].text);
   }
 
   let i = 0;
@@ -282,7 +325,29 @@ function analyzeSegment(tokens, state, out, inheritedEscape) {
     if (w === undefined) return;
     const base = w.includes('/') ? basename(w) : w;
     if (KEYWORDS.has(w)) i++;
-    else if (base === 'env') {
+    else if (w === 'function')
+      i += 2; // `function NAME { …; }`: the body follows
+    else if (base === 'builtin') i++;
+    else if (base === 'stdbuf') {
+      for (i++; words[i]?.startsWith('-'); i++) if (/^-[ioe]$/.test(words[i])) i++;
+    } else if (base === 'caffeinate') {
+      for (i++; words[i]?.startsWith('-'); i++) if (/^-[tw]$/.test(words[i])) i++;
+    } else if (base === 'doas') {
+      for (i++; words[i]?.startsWith('-'); i++) if (/^-[uC]$/.test(words[i])) i++;
+    } else if (base === 'pnpm' || base === 'npx') {
+      // `pnpm exec git …` / `npx git …` run git; any other pnpm command is not a wrapper.
+      let j = i + 1;
+      for (; words[j]?.startsWith('-'); j++) {
+        if (/^(-C|--dir)$/.test(words[j])) {
+          dirUnsure = true; // another directory: can't tell which checkout
+          j++;
+        } else if (/^(--filter|-F)$/.test(words[j])) j++;
+        else if (words[j].startsWith('--dir=')) dirUnsure = true;
+      }
+      if (base === 'npx') i = j;
+      else if (words[j] === 'exec') i = j + 1;
+      else break;
+    } else if (base === 'env') {
       for (i++; i < words.length; i++) {
         const a = words[i];
         if (a === '-u' || a === '--unset') i++;
@@ -343,13 +408,45 @@ function analyzeSegment(tokens, state, out, inheritedEscape) {
   }
   if (SHELLS.has(base)) {
     let sawC = false;
+    let script;
     for (const a of rest) {
       if (/^-[a-zA-Z]*c[a-zA-Z]*$/.test(a)) sawC = true;
-      else if (/^[-+]/.test(a)) continue;
-      else {
-        if (sawC) walk(lex(a), { ...state }, out, escape);
+      else if (!/^[-+]/.test(a)) {
+        script = a;
         break;
       }
+    }
+    if (sawC && script !== undefined) walk(lex(script), { ...state }, out, escape);
+    else if (script === undefined) {
+      // A bare shell reads its commands from stdin: a heredoc / here-string body is readable; a
+      // pipe is not, so it counts as an unknown command.
+      for (const h of stdin) walk(lex(h.body), { ...state }, out, escape);
+      if (!stdin.length && piped)
+        out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    }
+    return;
+  }
+  if (base === 'watch') {
+    // watch runs its arguments as one `sh -c` string.
+    let j = 0;
+    for (; rest[j]?.startsWith('-'); j++) if (/^(-n|--interval)$/.test(rest[j])) j++;
+    walk(lex(rest.slice(j).join(' ')), { ...state }, out, escape);
+    return;
+  }
+  if (base === 'find') {
+    for (let j = 0; j < rest.length; j++) {
+      const action = /^-(exec|execdir|ok|okdir)$/.exec(rest[j])?.[1];
+      if (!action) continue;
+      const inner = [];
+      for (j++; j < rest.length && rest[j] !== ';' && rest[j] !== '+'; j++) inner.push(rest[j]);
+      // -execdir runs in each match's directory: can't tell which checkout.
+      const where = { ...state, unsure: state.unsure || action.endsWith('dir') };
+      analyzeSegment(
+        inner.map((text) => ({ text })),
+        where,
+        out,
+        escape,
+      );
     }
     return;
   }
@@ -400,7 +497,6 @@ const READ_ONLY = new Set([
   'log',
   'diff',
   'show',
-  'fetch',
   'rev-parse',
   'merge-base',
   'ls-files',
@@ -472,6 +568,22 @@ function branchListOnly(args) {
 }
 
 /**
+ * `git branch -d|-D|--delete [--force] <name>…`: the post-merge cleanup AGENTS.md and ship-pr run
+ * from the main checkout. Every name must be a plain branch name and none may be `main`; git itself
+ * refuses to delete a branch that any worktree has checked out.
+ */
+function branchDeleteOnly(args) {
+  const flags = args.filter((a) => a.startsWith('-'));
+  const names = args.filter((a) => !a.startsWith('-'));
+  return (
+    flags.some((a) => a === '-d' || a === '-D' || a === '--delete') &&
+    flags.every((a) => ['-d', '-D', '--delete', '--force', '-q', '--quiet'].includes(a)) &&
+    names.length > 0 &&
+    names.every((n) => /^[\w.][\w./-]*$/.test(n) && n !== MAIN)
+  );
+}
+
+/**
  * Whether `git <sub> <args>` is on the main-checkout allowlist. `ctx` gives lazy probes
  * ({ branch(), clean() }); null means the directory is only POSSIBLY the main checkout, so the
  * conditional entries can't be verified and are refused.
@@ -481,8 +593,10 @@ export function allowedInMain(sub, args, ctx) {
   const flags = args.filter((a) => a.startsWith('-'));
   const pos = args.filter((a) => !a.startsWith('-'));
   switch (sub) {
+    case 'fetch':
+      return !args.some((a) => a === '--update-head-ok' || /^-[a-zA-Z]*u/.test(a));
     case 'reflog':
-      return !['expire', 'delete'].includes(args[0]);
+      return !args.some((a) => a === 'expire' || a === 'delete');
     case 'remote': {
       const first = args.find((a) => a !== '-v' && a !== '--verbose');
       return first === undefined || first === 'show' || first === 'get-url';
@@ -490,7 +604,7 @@ export function allowedInMain(sub, args, ctx) {
     case 'config':
       return args.some((a) => CONFIG_READ.has(a)) && !args.some((a) => CONFIG_WRITE.has(a));
     case 'branch':
-      return branchListOnly(args);
+      return branchListOnly(args) || branchDeleteOnly(args);
     case 'tag':
       return (
         args.length === 0 ||
@@ -498,15 +612,17 @@ export function allowedInMain(sub, args, ctx) {
           flags.every((a) => TAG_LIST_FLAGS.test(a)))
       );
     case 'stash':
-      return pos[0] === 'list' || pos[0] === 'show';
-    case 'worktree':
-      if (['list', 'add', 'prune'].includes(args[0])) return true;
-      return args[0] === 'remove' && !flags.some((a) => a === '--force' || /^-[a-z]*f/.test(a));
+      return args[0] === 'list' || args[0] === 'show';
+    case 'worktree': {
+      const force = flags.some((a) => a === '--force' || /^-[a-zA-Z]*f/.test(a));
+      if (['list', 'prune', 'repair'].includes(args[0])) return true;
+      return (args[0] === 'add' || args[0] === 'remove') && !force;
+    }
     case 'pull':
       return (
         !!ctx &&
         flags.includes('--ff-only') &&
-        flags.every((a) => a === '--ff-only' || QUIET_OR_VERBOSE.has(a)) &&
+        flags.every((a) => a === '--ff-only' || a === '--prune' || QUIET_OR_VERBOSE.has(a)) &&
         (pos.length === 0 ||
           (pos[0] === 'origin' && (pos.length === 1 || (pos.length === 2 && pos[1] === MAIN)))) &&
         ctx.branch() === MAIN
@@ -523,10 +639,14 @@ export function allowedInMain(sub, args, ctx) {
     case 'checkout':
     case 'switch':
       return !!ctx && args.length === 1 && args[0] === MAIN && ctx.clean();
-    case 'reset':
-      return (
-        args.length === 0 || (args.length === 1 && (args[0] === '-q' || args[0] === '--quiet'))
+    case 'reset': {
+      // Unstage only: `git reset [-q] [HEAD] [-- <paths>]`. No mode flag, no other commit-ish.
+      const dd = args.indexOf('--');
+      const before = (dd < 0 ? args : args.slice(0, dd)).filter(
+        (a) => a !== '-q' && a !== '--quiet',
       );
+      return before.length === 0 || (before.length === 1 && before[0] === 'HEAD');
+    }
     default:
       return false; // unknown subcommands and aliases included
   }
@@ -571,16 +691,20 @@ export function isProjectMainCheckout(dir, projectDir) {
 }
 
 function denyReason(inv) {
-  const what =
-    inv.kind === 'gh' ? '`gh pr checkout`' : `\`git ${inv.sub ?? ''}\``.replace(' `', '`');
+  const what = {
+    gh: '`gh pr checkout`',
+    shell: 'A command piped into a shell (unreadable, so treated as unknown)',
+    git: `\`git ${inv.sub}\``,
+  }[inv.kind];
   const where = inv.unsure
     ? `possibly in the MAIN checkout (the directory can't be resolved from the command: use an absolute path, no ~ or $VAR, no GIT_DIR/--git-dir)`
     : `in the MAIN checkout (${inv.dir})`;
   return (
     `${what} ${where} is blocked: it stays on \`main\` ` +
     `(AGENTS.md → "Git & branch workflow"). Other sessions read it, and project skills load from it. ` +
-    `Allowed there: read-only git, worktree list/add/remove/prune, \`git pull --ff-only origin main\` and ` +
-    `\`git merge --ff-only origin/main\` on main, \`git checkout main\` with a clean tree. ` +
+    `Allowed there: read-only git, worktree list/add/remove/prune, \`git branch -D <merged-branch>\`, ` +
+    `\`git pull --ff-only origin main\` and \`git merge --ff-only origin/main\` on main, ` +
+    `\`git checkout main\` with a clean tree. ` +
     `Do this in a worktree: git fetch origin && git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main. ` +
     `If a person explicitly asked for it here, prefix the command with ${ESCAPE}.`
   );
@@ -599,7 +723,7 @@ export function check(command, cwd, projectDir) {
         clean: () => (clean ??= git(inv.dir, 'status', '--porcelain') === ''),
       };
     }
-    if (inv.kind === 'gh' || !allowedInMain(inv.sub, inv.args, ctx)) return denyReason(inv);
+    if (inv.kind !== 'git' || !allowedInMain(inv.sub, inv.args, ctx)) return denyReason(inv);
   }
   return null;
 }
@@ -614,7 +738,10 @@ const readStdin = () =>
 async function main() {
   const input = JSON.parse((await readStdin()) || '{}');
   const command = input?.tool_input?.command;
-  if (typeof command !== 'string' || !/git|\bgh\b/.test(command)) return;
+  // Cheap pre-filter, on the text with quotes and backslashes dropped (`g''it` is git); `sh\b`
+  // keeps a pipe into a bare shell in view.
+  if (typeof command !== 'string' || !/git|\bgh\b|sh\b/.test(command.replace(/['"\\]/g, '')))
+    return;
   const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd();
   const reason = check(command, cwd, process.env.CLAUDE_PROJECT_DIR);
   if (!reason) return;

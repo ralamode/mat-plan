@@ -262,14 +262,14 @@ not merge order.
   broken twice within hours: another session switched the main checkout to a feature branch, which
   made a `git pull` try to merge `main` into someone's branch and made project skills vanish
   ("Unknown skill") for sessions launched there. Now a best-effort Claude Code `PreToolUse` hook keeps
-  the main checkout to an **allowlist** (read-only git, worktree commands, `--ff-only` sync on `main`,
-  `checkout main` when clean), reading through subshells, `$(…)`, `sh -c`, wrappers and `cd`/`-C`;
-  96 self-test cases cover the known bypass forms and the allowed workflow. A `SessionStart` briefing
-  prints the status headline, open PRs (fork-PR titles withheld as untrusted input), and stale or
-  off-main worktrees.
-  Both hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
-  when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in `verify`,
-  not yet in CI.
+  the main checkout to an **allowlist** (read-only git, worktree commands, post-merge `branch -D`,
+  `--ff-only` sync on `main`, `checkout main` when clean), reading through subshells, `$(…)`,
+  `sh -c`, heredocs into a shell, wrappers and `cd`/`-C`. A `SessionStart` briefing prints the status
+  headline, open PRs (fork-PR titles withheld as untrusted input), and stale or off-main worktrees.
+  140 guard + 11 briefing self-test cases cover the allowed workflow and the known bypass forms. Both
+  hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
+  when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in
+  `verify`, not yet in CI.
 - **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
   lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
   are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md

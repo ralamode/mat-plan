@@ -198,10 +198,12 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   - **Guarded for Claude sessions** by a `PreToolUse` hook (`.claude/settings.json` →
     `.claude/hooks/guard-main-checkout.mjs`), a **best-effort guard against the common forms**, not a
     security boundary. In the main checkout it allows only read-only git, `worktree`
-    list/add/remove/prune, `pull --ff-only origin main` and `merge --ff-only origin/main` while on `main`,
-    `checkout main` with a clean tree, and a bare `reset`; anything else is denied with the worktree
-    command to run instead. A `SessionStart` hook prints the status headline, open PRs, and worktrees
-    flagged stale or off-main. Both hooks do nothing under CI. The rule held for less than a day as prose.
+    list/add/remove/prune/repair, the post-merge `git branch -D <branch>` (never `main`),
+    `pull --ff-only origin main` and `merge --ff-only origin/main` while on `main`, `checkout main` with
+    a clean tree, and an unstaging `reset [HEAD] [-- <paths>]`; anything else is denied with the
+    worktree command to run instead. A `SessionStart` hook prints the status headline, open PRs, and
+    worktrees flagged stale or off-main. Both hooks do nothing under CI. The rule held for less than a
+    day as prose.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
