@@ -54,6 +54,10 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Impact:** high, and **silent** — the failure mode is a green check that proves nothing, which is
   strictly worse than no check, because it is trusted. This is the same class as the five CI gates
   AGENTS.md claimed for months that did not exist.
+- ✅ **One instance CLOSED 2026-09-29:** `packages/**` was covered by no test runner at all — `pnpm test`
+  is `pnpm --filter web test`, so a test beside shared or db code shipped green **without executing**.
+  `apps/web/vitest.config.ts` now includes `../../packages/*/src/**/*.test.ts`. Two lines, and it was
+  safe precisely because there were zero such tests to break. The other instances below stand.
 - **The audit:** walk every gate and ask **"can this go vacuous, and would anyone notice?"** Then give
   the app **one deliberate seam for test-time path selection** instead of per-test cleverness — a
   seeded fixture that covers every weekday, an explicit day override (V1-15's `?d=` is the first real

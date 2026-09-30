@@ -15,7 +15,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['**/*.test.{ts,tsx}'],
+    include: [
+      '**/*.test.{ts,tsx}',
+      // `packages/**` was covered by NOTHING: `pnpm test` is `pnpm --filter web test`, so a test
+      // written beside shared or db code never ran — it would ship green without executing. Recorded
+      // in docs/tech-debt.md ("gates quietly go vacuous"); closed here because it is two lines and
+      // there were zero such tests to break.
+      '../../packages/*/src/**/*.test.ts',
+    ],
     // Playwright owns e2e/ (its specs are *.spec.ts, already outside `include`);
     // exclude the dir too so a stray *.test.ts there never leaks into Vitest.
     exclude: ['**/e2e/**', '**/node_modules/**', '**/dist/**', '**/.next/**'],
