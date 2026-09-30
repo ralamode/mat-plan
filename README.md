@@ -3,7 +3,7 @@
 A portable, entity-based **activity logger**. Logs everything in a
 training day — weigh-ins, S&C lifts, calisthenics, the brush-the-teeth routine, habits, wrestling
 practice — on a phone/iPad, works **offline**, and coexists with (then upgrades) the existing
-Claude + CSV workflow. Also logs Ray's own PPL+core lifting.
+Claude + CSV workflow.
 
 It doubles as a **learning / portfolio project**: Next.js App Router + TypeScript + Drizzle/Neon
 Postgres + Clerk, deployed on Vercel with GitHub Actions CI and Playwright E2E.
