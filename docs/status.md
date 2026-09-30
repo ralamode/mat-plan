@@ -281,7 +281,34 @@ not merge order.
     next."_ rather than implying finality — PR 1b ships the amend and deletes that string.
   - One display renderer for `84.5 lb` (`formatValueUnit`), replacing two spellings and forestalling
     three more. ⚠️ Deliberately **not** the CSV formatter, whose semantics are different on purpose.
-
+- **2026-09-30** — **Security: Next.js 16.3.5 → 16.3.7** (#182; critical
+  [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j), RCE in `next/og`, patched
+  in ≥16.3.6). Found by the `audit --prod` step of `pnpm verify`, which failed on `main` for every
+  branch. CI stayed green and would not have caught it: no workflow runs the audit. AGENTS.md and
+  tech-debt.md had both claimed it was a CI gate, and are corrected here.
+  16.3.7 rather than the newest 16.3.8: 16.3.8 was an hour old and inside pnpm 11's default
+  release-age window, and `pnpm install` would have written exclusions to `pnpm-workspace.yaml` to
+  bypass that supply-chain delay. `eslint-config-next` moves in lockstep.
+- **2026-09-30** — **Fix: Vercel stops deploying the `screenshots` branch.** Every screenshot upload
+  and prune had been posting a failed preview ("Root Directory 'apps/web' does not exist") and a
+  failure email since August: #100's skip-CI commit marker never worked, because Vercel doesn't honour
+  it. The branch now carries `apps/web/vercel.json` with `git.deploymentEnabled: false`, which
+  `publish-screenshots.ts` seeds on a new branch and adds to an existing one. The lessons entry that
+  called this fixed is corrected.
+- **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
+  lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
+  are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md
+  requires: the four standing lenses (correctness, scope, architecture, reuse), a dedicated DB-safety
+  reviewer, security, and UX (run once per sub-lens on a new screen), plus a `fact-sheet` researcher.
+  One shared reporting contract lives in `review-pr/`, so it isn't copied into each agent. Bash stays
+  read-only **by instruction only**: a subagent's `tools` can't narrow Bash, and it inherits the
+  session's permission mode. Also restores `review-pr` step 1 (check the diff matches its
+  description), which the #173 squash dropped.
+- **2026-09-30** — **DX: `pnpm status:check`** (#177). "Status rides with the work" was prose, and #156 is
+  what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor`/`revert` branch, read from the branch name or any
+  commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
+  and prints the reason for the PR description. It's local (in `ship-pr`) for now; making it a CI
+  gate needs its own plan.
 - **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
   ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
   blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode

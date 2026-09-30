@@ -43,11 +43,15 @@ CodeQL (which never runs on PRs).
 
 ## 3. Status rides with the work (same PR, never a follow-up)
 
-- [docs/status.md](../../../docs/status.md): update the **Where we are** pointer if this moves it,
+- [docs/status.md](../../../docs/status.md) (`pnpm status:check` enforces that it was touched; whether
+  it's _right_ is still on you): update the **Where we are** pointer if this moves it,
   the backlog row, and a **Changelog** entry (`- **YYYY-MM-DD** — **<ID>: <what is now true>**
 ([plan](./plans/<file>.md)). <why it matters>`). Write it from the diff, not from memory; #156
   exists because this section drifted.
 - [docs/plan.md](../../../docs/plan.md): tick or annotate the row, and link the plan if one exists.
+- Then confirm: `pnpm status:check` (a feat/fix/db/perf/refactor/revert branch must have touched
+  `docs/status.md`; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR). It runs
+  here, after the update, not with the step-2 gates: run earlier it fails on every product branch.
 - Feature guide: already enforced by `guides:check`, but reread its traps section. Did this change
   add one?
 - [docs/architecture.md](../../../docs/architecture.md): update the diagram if a pivotal flow or
