@@ -189,9 +189,11 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
     invisible to other sessions, and not a sibling directory. `git worktree list` is the registry of
     work in flight.
   - One worktree = one branch = one PR. **Remove it after the PR merges** (`git worktree remove
-.claude/worktrees/<slug> && git branch -d <branch>`), not when the PR opens, because review fixes
-    land there. `apps/web/.env.local` is not copied. Copy it only if the task needs live credentials;
-    `pnpm dev`, `verify` and `e2e:local` don't.
+.claude/worktrees/<slug> && git branch -D <branch>`; `-D` because a squash merge leaves the branch's
+    commits off `main`, so `-d` refuses), not when the PR opens, because review fixes land there.
+  - `apps/web/.env.local` is not copied into a new worktree. **`pnpm dev` needs it** (it reads
+    `ACCESS_GATE_PASSWORD` from there), so copy it in before running the dev server. `verify`,
+    `e2e:local` and `screenshot:ephemeral` inject their own env and run without it.
   - Never remove a worktree you didn't create. It may be another session's live work.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
