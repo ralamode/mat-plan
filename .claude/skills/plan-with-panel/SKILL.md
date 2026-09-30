@@ -37,43 +37,26 @@ The bar:
 
 Use the `Plan` subagent for the draft if the area is large. Either way, you own the result.
 
-## 2. Run the panel: lenses in parallel, one subagent each
+## 2. Run the panel: lenses in parallel, one named agent each
 
-Send all lens agents **in one message** so they run concurrently. Use read-only agents (`Plan` or
-`Explore`). Each gets the same preamble plus its own lens:
+The lenses are **named agents in [`.claude/agents/`](../../agents/)**. Each carries its own
+checklist and the shared reporting contract (≤8 severity-ranked findings, `path:line`, the rule
+broken, a fix, no praise, no re-flagging of `docs/tech-debt.md`). Send them **in one message** so they
+run concurrently. The prompt only has to name the target: _"Review the plan at
+`docs/plans/<file>` (worktree `<path>`)."_
 
-> You are an adversarial reviewer on the mat-plan repo (`/Users/rbaker/workspace/mat-plan`). Read
-> `AGENTS.md` and the plan at `docs/plans/<file>`. **Your job is to find flaws, not to praise.** Open
-> the code the plan touches before criticising it; a critique about code you haven't read is noise.
-> The app is used by kids and parents **on a phone, on a gym floor**, built at ~4h/wk. Return at most
-> 8 critiques, **severity-ranked** (BLOCKING / SHOULD / NIT), each with: the problem, evidence
-> (`path:line` or the plan section), and a concrete suggested fix. If the plan is sound on your lens,
-> say so in one line. Don't invent problems to fill the list. **Lens:** <lens below>
+| Change                                                          | Agents                                                                                          |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Any significant plan                                            | `correctness-reviewer` · `simplicity-reviewer` (scope + architecture + reuse)                   |
+| Auth, secrets, CI/workflows, anything reachable unauthenticated | + `security-reviewer`                                                                           |
+| A migration                                                     | + `correctness-reviewer` told to apply the [`db-migration`](../db-migration/SKILL.md) checklist |
+| Anything a person sees                                          | + `ux-reviewer` (**required**; its three sub-lenses cover interaction, a11y/360px and trust)    |
+| The plan depends on how existing code really behaves            | run `fact-sheet` **first**, and draft from its answers                                          |
 
-**Engineering lenses** (standing, from `docs/plans/README.md`):
+Add a one-off lens (perf/CWV for a heavy page) with an inline prompt when no agent fits.
 
-1. **Correctness and data integrity.** Edge cases, races, idempotency (client UUIDv7 + ON CONFLICT),
-   ownership/IDOR, timezone/local-date, migration or backfill hazards, what breaks in prod.
-2. **Simplicity and scope.** Over-engineering, YAGNI, a smaller path. Does it fit one concern and
-   <400 lines? What should be cut or split?
-3. **Architecture and consistency.** Does it fight AGENTS.md or `docs/spec.md` (RSC-first, the DAL
-   boundary, Server Actions vs Route Handlers, a pure engine)? Does it paint a later PR into a corner?
-4. **Reuse / DRY.** What does it duplicate that already exists in `packages/shared`, `lib/` or the
-   DAL: a constant, zod schema, helper or query? Apply the constants single-source rule.
-5. **DB safety** (migration plans only). Squawk rules, lock/statement timeouts, CONCURRENTLY
-   isolation, NOT VALID then VALIDATE split across PRs, expand–contract, forward-only, seed idempotency.
-
-**UX lenses** (required for any UI; from AGENTS.md → "UI PR rules"):
-
-6. **Interaction design and first-run / cognitive load.** Fastest path to value, where the flow loses
-   people, and whether this is the right pattern at all. Argue it against at least one alternative.
-7. **A11y and adaptive/responsive.** Semantic elements, keyboard, focus-visible, ≥44px targets,
-   numeric `inputmode`. **Do the width math at 360px**; don't trust flex-wrap.
-8. **Trust and data-entry burden** (whenever the screen asks someone to confirm, approve or enter
-   something consequential). Does it demand expertise the user lacks, is the mitigation real or
-   theatre, and what is the recovery path? Recall that several shapes have no in-app undo.
-
-Add a lens when the change calls for one (security for auth, perf/CWV for a heavy page).
+**Claims about third-party behaviour cite the source at the pinned version**, not its README. On
+DX-1 that rule turned "read-only by default" into "writes the job token into `.git/config`".
 
 ## 3. Reconcile: every material critique gets a verdict
 

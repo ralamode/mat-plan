@@ -25,10 +25,13 @@ For a PR, put it in a worktree so the scripts run against its code:
 `git fetch origin pull/<n>/head:pr-<n> && git worktree add .claude/worktrees/pr-<n> pr-<n>`.
 Remove the worktree when you're done.
 
-**Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit: fan
-the dimensions below out to parallel read-only subagents (`Explore`), one message, 3–5 agents
-grouping related dimensions. Each gets the same instruction: _as a Staff level reviewer who misses
-nothing, find flaws with evidence, don't praise, don't speculate about code you haven't opened_.
+**Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit:
+fan out to the named agents in [`.claude/agents/`](../../agents/) in one message:
+`correctness-reviewer` (dimensions 1, 4, 6), `simplicity-reviewer` (2, 3, 7, 8, 10),
+`ux-reviewer` (5, for any `.tsx`), and `security-reviewer` (9, when anything is reachable
+unauthenticated, or secrets or workflows change). The prompt only names the PR, the worktree and
+the base, e.g. _"Review PR #171, worktree `<path>`, diff `git diff <base>...HEAD`."_ The agents
+carry the rubric's reporting contract, so the verify step (4) still applies to what they return.
 
 ## 1. Run the mechanical checks first
 

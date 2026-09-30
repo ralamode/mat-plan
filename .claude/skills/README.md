@@ -18,18 +18,19 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 ## Shipped
 
-| Skill                                               | Use it when                                                             | Since        |
-| --------------------------------------------------- | ----------------------------------------------------------------------- | ------------ |
-| [`start-task`](./start-task/SKILL.md)               | Starting any task that ends in a PR: sync, branch, context, obligations | #170         |
-| [`plan-with-panel`](./plan-with-panel/SKILL.md)     | A plan is owed, or any UI change (UX panel, including plan-exempt)      | #170         |
-| [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check           | #170         |
-| [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green         | #170         |
-| [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                   | pre-existing |
-| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2        | #173         |
-| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                   | #173         |
-| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                    | #173         |
-| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                    | #173         |
-| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                              | #173         |
+| Skill                                               | Use it when                                                                                                          | Since        |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------ |
+| [`start-task`](./start-task/SKILL.md)               | Starting any task that ends in a PR: sync, branch, context, obligations                                              | #170         |
+| [`plan-with-panel`](./plan-with-panel/SKILL.md)     | A plan is owed, or any UI change (UX panel, including plan-exempt)                                                   | #170         |
+| [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check                                                        | #170         |
+| [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green                                                      | #170         |
+| [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                                                                | pre-existing |
+| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2                                                     | #173         |
+| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                                                                | #173         |
+| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                 | #173         |
+| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                 | #173         |
+| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                           | #173         |
+| [panel agents](../agents/)                          | `correctness-` · `security-` · `simplicity-` · `ux-reviewer` · `fact-sheet`, called by plan-with-panel and review-pr | this PR      |
 
 ## Backlog, in priority order
 
@@ -41,7 +42,6 @@ Candidates came from the repo's recurring operations and from
 | 1   | `@claude review` workflow | mat-plan | a GitHub Action that runs `review-pr` when a writer comments `@claude review`; subscription auth (`CLAUDE_CODE_OAUTH_TOKEN`); on request only, never automatic | Ray's call 2026-09-30. **CI change → plan + panel**; the repo is public, so forks and prompt injection are the core risk |
 | 2   | baseline audit + P0 fixes | mat-plan | run `review-pr` in audit mode over each area; P0s become one `fix/` PR per concern                                                                             | Ray asked for it. Seeds below                                                                                            |
 | 3   | `source-check`            | addy     | verify an API or pattern against the official docs for the pinned version before using it                                                                      | Next 16 / React 19.3 / zod 4 / Drizzle 0.45 are newer than most training data                                            |
-| 4   | panel agents              | addy     | `.claude/agents/*.md` personas for each panel lens (correctness, scope, a11y, trust…)                                                                          | Makes each lens identical run to run; `plan-with-panel` and `review-pr` would call them                                  |
 | 5   | `doubt-check`             | addy     | a fresh-context adversarial check on one decision mid-implementation (auth, corrections, migrations)                                                           | Panels cover plans; this covers the choices made after them                                                              |
 | 6   | `refine-idea`             | addy     | interview-me / idea-refine for brainstorm docs and PRDs; ends in a "Not doing (and why)" section                                                               | For `*-brainstorm.md` / ONB PRDs; scope discipline                                                                       |
 | 7   | session-start hook        | addy     | print the `docs/status.md` "Where we are" pointer + open PRs at session start                                                                                  | Cheap context; configure via settings hooks, not a skill                                                                 |
@@ -96,3 +96,7 @@ source of truth.
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
   tool) instead of what AGENTS.md claims.
+- **2026-09-30** — Panel agents: the five lenses this session kept re-typing as inline prompts are now
+  named agents in `.claude/agents/`, each with its checklist and one shared reporting contract.
+  `plan-with-panel` and `review-pr` call them by name. `security-reviewer` carries the
+  "cite third-party behaviour from source at the pinned version" rule that caught DX-1's token leak.

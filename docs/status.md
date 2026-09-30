@@ -258,6 +258,11 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: panel agents** ([.claude/agents/](../.claude/agents/)). The review lenses
+  used across every plan panel and `review-pr` run (correctness, security, simplicity/architecture,
+  UX, fact-sheet) were re-typed as inline prompts each time. They are now named agents with one
+  shared reporting contract, so each lens runs identically and a panel prompt only names its target.
+
 - **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
   only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
   the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are
