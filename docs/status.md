@@ -263,7 +263,10 @@ not merge order.
   and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after
   any merge, merge `main` into each approved PR from a detached worktree, push fast-forward only,
   auto-resolve only changelog/append-style conflicts, and ask on anything else. `review-pr` gains a
-  "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep.
+  "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep. Found while
+  reviewing it: **branch protection is off**, so GitHub never reports a PR as behind `main`, and
+  AGENTS.md's "require branches up to date is ON" was false (corrected). The sweep checks behind-ness
+  with git. The root cause, one shared changelog line, is [DX-2](./plans/dx-2-changelog-fragments.md).
 - **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
   broken twice within hours: another session switched the main checkout to a feature branch, which
   made a `git pull` try to merge `main` into someone's branch and made project skills vanish

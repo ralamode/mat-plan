@@ -193,7 +193,7 @@ these hold:
 The comment lists what changed since the review, and the merge order if other approved PRs overlap.
 
 **Posting it makes you responsible for keeping the PR mergeable until it lands.** When `main` moves
-and the PR goes CONFLICTING or BEHIND, fix it without being asked:
+and the PR goes CONFLICTING or behind `main`, fix it without being asked:
 [keep-mergeable](../keep-mergeable/SKILL.md).
 
 ## Red flags

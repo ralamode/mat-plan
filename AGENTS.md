@@ -206,7 +206,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
     day as prose.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
-- Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
+- Keep the branch up to date with `main` before merge. ⚠️ **By convention only:** branch protection is
+  off (verified via the API, 2026-09-30), so GitHub neither blocks nor flags a behind PR. The
+  `keep-mergeable` skill checks behind-ness with git for approved PRs. Rebase
   preferred **before the branch is first pushed**. **Once it is on the remote, merge `main` in and never
   rebase**, whether you're the author or someone keeping it mergeable (the `keep-mergeable` skill): a
   rebase then needs a force-push, and the squash merge keeps `main` linear either way.

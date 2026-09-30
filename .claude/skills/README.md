@@ -126,4 +126,4 @@ source of truth.
   was fixed by hand. The skill merges `main` in from a detached worktree (fast-forward push, never
   force), auto-resolves only changelog/append-style conflicts and asks on anything else. `review-pr`
   gains a "Shipit" step (the bar for posting it), and `ship-pr` step 8 ends with the sweep. The root
-  cause, one shared insertion point in `docs/status.md`, is planned separately (changelog fragments).
+  cause, one shared insertion point in `docs/status.md`, is planned separately ([DX-2](../../docs/plans/dx-2-changelog-fragments.md), changelog fragments).

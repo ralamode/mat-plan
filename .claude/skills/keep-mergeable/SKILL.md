@@ -1,6 +1,6 @@
 ---
 name: keep-mergeable
-description: Keep every mat-plan PR that has a `shipit` comment mergeable until it lands — after any merge to main (or on request), find shipit'd PRs that went CONFLICTING or BEHIND, merge main into each in a detached worktree, auto-resolve only changelog/append-style conflicts (keep both sides, newest first), stop and ask on any real conflict, push fast-forward only, re-run the checks and leave a one-line comment. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
+description: Keep every mat-plan PR that has a `shipit` comment mergeable until it lands — after any merge to main (or on request), find shipit'd PRs that went CONFLICTING or behind main, merge main into each in a detached worktree, auto-resolve only changelog/append-style conflicts (keep both sides, newest first), stop and ask on any real conflict, push fast-forward only, re-run the checks and leave a one-line comment. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
 ---
 
 # Keep shipit'd PRs mergeable
@@ -15,7 +15,7 @@ in [review-pr](../review-pr/SKILL.md) → "Shipit".
 
 - **Right after any merge to `main`** you make or see. [ship-pr](../ship-pr/SKILL.md) step 8 ends
   by running this sweep.
-- When a PR you approved shows **CONFLICTING** or **BEHIND**.
+- When a PR you approved is **CONFLICTING** or **behind `main`**.
 - On a timer while a batch of approved PRs is open: `/loop 20m` with this skill.
 
 ## 1. Find the PRs
@@ -31,13 +31,16 @@ for n in $(gh pr list --state open --json number --jq '.[].number'); do
     "[.comments[] | select(.author.login == \"$OWNER\") | .body | split(\"\\n\")[0] | sub(\"^[[:space:]]+\"; \"\") | sub(\"[[:space:]]+$\"; \"\")
       | select(startswith(\"## shipit\"))] | last // \"\"")
   [ "$last" = "## shipit" ] || continue
-  gh pr view "$n" --json number,headRefName,mergeable,mergeStateStatus \
-    --jq '"#\(.number) \(.headRefName) mergeable=\(.mergeable) state=\(.mergeStateStatus)"'
+  info=$(gh pr view "$n" --json headRefName,mergeable --jq '"\(.headRefName) \(.mergeable)"')
+  b=${info% *}; m=${info#* }
+  behind=no; git merge-base --is-ancestor origin/main "origin/$b" 2>/dev/null || behind=yes
+  echo "#$n $b mergeable=$m behind_main=$behind"
 done
 ```
 
-Act when **`mergeable` is `CONFLICTING`** or **`mergeStateStatus` is `BEHIND`** (reported because
-"require branches up to date" is on). `UNKNOWN` means GitHub is still computing: wait and re-read,
+Act when **`mergeable` is `CONFLICTING`** or **`behind_main` is `yes`**. Behind-ness is checked with
+git, not GitHub: branch protection is off on this repo (verified 2026-09-30), so GitHub never reports
+`BEHIND` and shows a behind PR as `clean`. `UNKNOWN` means GitHub is still computing: wait and re-read,
 never guess.
 
 ## 2. Merge `main` in, from a detached worktree
@@ -60,11 +63,11 @@ their own worktree needs a `git pull --no-rebase` first ([ship-pr](../ship-pr/SK
 
 Auto-resolve **only** these shapes:
 
-| Conflict                                                              | Resolution                                                                                   |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Two entries inserted at the top of `docs/status.md` → Changelog       | Keep both, **this PR's first** (newest on top); no blank line between entries                |
-| Two entries appended to a changelog list (`.claude/skills/README.md`) | Keep both, **`main`'s first** (merge order)                                                  |
-| A table where each side **only added** rows                           | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real |
+| Conflict                                                                                                                                                | Resolution                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                | Keep both, **this PR's first** (newest on top); no blank line between entries                |
+| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets | Keep both, **`main`'s first** (merge order)                                                  |
+| A table where each side **only added** rows                                                                                                             | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real |
 
 **Anything else is a real conflict: stop and ask**, and name the files and hunks. That includes
 **`package.json`**: when two scripts land on one line, one side often adds an aggregate (`verify`,
@@ -103,6 +106,8 @@ remove the worktree and start again from step 2.
 - Comment one line: `Merged main (#<m> landed); <what conflicted> resolved by keeping both. CI green.`
 - Still green and MERGEABLE, so the `shipit` stands. If a check went red, the `shipit` no longer
   holds: comment `## shipit withdrawn` with the reason, then fix it or hand it back.
+- **Stopped to ask?** First `git -C .claude/worktrees/km-<n> merge --abort`: a worktree with unresolved
+  conflicts is dirty, so the plain remove below refuses, and `--force` is denied from the main checkout.
 - `git worktree remove .claude/worktrees/km-<n>`, run from the main checkout. No `--force`: the
   worktree is clean after the push, and the main-checkout guard denies a forced remove.
 
@@ -110,6 +115,6 @@ remove the worktree and start again from step 2.
 
 - A force-push to a PR branch, or checking out a branch another worktree holds.
 - "Resolved" by taking one side of a real conflict.
-- A `shipit` left standing on a PR that is CONFLICTING, BEHIND or red.
+- A `shipit` left standing on a PR that is CONFLICTING, behind `main`, or red.
 - A merge that shows files from `main` in `git diff origin/main HEAD --stat`, meaning something of
   main's was reverted.
