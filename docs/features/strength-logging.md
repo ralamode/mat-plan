@@ -171,6 +171,17 @@ Real ones, each with the file to look at.
   prescribed movement. Found by `e2e/scaffold-submit.spec.ts` while writing V1-26 PR-A; that spec
   deliberately fills every row of the open card and asserts nothing about this either way.
 
+- **⚠️ Uncontrolled fields survive a DAY navigation — key on the day (V1-28).** V1-15 made day
+  navigation a client-side RSC transition, so `StrengthFormBody` does not remount when only the day
+  changes. It is keyed `` `${day}:${gen}` `` for exactly that reason; `gen` alone (a **submit**
+  counter) left the day-role select reading the day the athlete had navigated AWAY from, and
+  submitting it wrote a `day_role` nobody asserted — the one thing that column exists to guarantee.
+
+  The general rule: **anything in this form using `defaultValue` / `defaultChecked` is only correct
+  because of that key.** `checkin-form.tsx` solves the same problem the other way and says so —
+  _"Checked state is CONTROLLED. `defaultChecked` is not reconciled after mount"_ — which is worth
+  reading before adding an uncontrolled field here.
+
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be

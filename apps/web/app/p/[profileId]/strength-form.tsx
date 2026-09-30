@@ -124,7 +124,20 @@ export function StrengthForm({
 
   return (
     <StrengthFormBody
-      key={gen}
+      // ⚠️ **The DAY is part of the key, and that is a fix, not a nicety (V1-28).**
+      //
+      // V1-15 made day navigation a client-side RSC transition, so this subtree does NOT remount when
+      // the day changes — and every uncontrolled field in it keeps the DOM value React set on first
+      // mount. The damage is the day-role select: `defaultValue` is applied once, so paging from a
+      // Strength B day back to a Strength A day left the select reading "Strength B" while the header
+      // above it read "Strength A". Submitting that writes a day role the athlete never chose, into
+      // the column whose entire worth is PROVENANCE (see the select's own note) and which V1-13's CSV
+      // reads as `session_type`. Reported from real use, 2026-09-30.
+      //
+      // Remounting also clears typed-but-unsubmitted movement cards on a day change. That is the
+      // intended trade: carrying them silently means Day B's movements can be submitted onto Day A,
+      // under Day A's heading, with Day B's role. A refresh already loses them.
+      key={`${day}:${gen}`}
       profileId={profileId}
       day={day}
       defaultDayRole={defaultDayRole}
@@ -147,8 +160,9 @@ function StrengthFormBody({
 }: {
   profileId: string;
   day: string;
-  /** Pre-selects the day picker only — see the note on that select. The `key={gen}` remount means an
-   *  override resets to this default for the NEXT session on the same day, which is intended. */
+  /** Pre-selects the day picker only — see the note on that select. The `key={`${day}:${gen}`}`
+   *  remount means an override resets to this default for the NEXT session on the same day, which is
+   *  intended — and that a DAY change resets it too, which is V1-28. */
   defaultDayRole: DayRole | null;
   programDay: readonly ScaffoldRow[];
   state: ActionState;
