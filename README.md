@@ -1,6 +1,6 @@
 # mat-plan
 
-A portable, entity-based **activity logger** for Liam, Scarlett, and Ray. Logs everything in a
+A portable, entity-based **activity logger**. Logs everything in a
 training day — weigh-ins, S&C lifts, calisthenics, the brush-the-teeth routine, habits, wrestling
 practice — on a phone/iPad, works **offline**, and coexists with (then upgrades) the existing
 Claude + CSV workflow. Also logs Ray's own PPL+core lifting.
