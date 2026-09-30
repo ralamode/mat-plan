@@ -61,7 +61,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
 - **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that _must_
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
-- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `design.md`,
+- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `design.md`,
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
   (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
@@ -215,8 +215,10 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
   rebase then needs a force-push, and the squash merge keeps `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
-- **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
-  and changelog) **in the same PR** as the change it tracks — no separate status-bump PRs.
+- **Status rides with the work.** In the **same PR** as the change it tracks, add a changelog
+  fragment ([docs/changelog/](./docs/changelog/README.md), one file per change, so PRs never conflict
+  on it) and update `docs/status.md`'s "where we are" pointer and backlog row if the change moves
+  them. No separate status-bump PRs. `pnpm status:check` checks the fragment.
 - **Implementation plans for significant PRs.** A **significant** PR gets a committed file-by-file
   plan at `docs/plans/<id>-<slug>.md`, written and **reviewed before** implementation code is
   committed (the Plan agent drafts it; a human reviews it). "Significant" = the change touches CI, a

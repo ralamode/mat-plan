@@ -1,6 +1,6 @@
 ---
 name: ship-pr
-description: Take a finished mat-plan branch to an open, reviewable PR without dropping a per-PR obligation — the local gates (verify, guides, hold-the-bar, e2e:local when needed), status/plan/lessons in the same PR, Conventional Commit, the template body, the DoD pass — and check main after the squash merge. Use when the work is done and the user says "ship it", "open the PR", "commit and push", "wrap this up", or after a merge to confirm main.
+description: Take a finished mat-plan branch to an open, reviewable PR without dropping a per-PR obligation — the local gates (verify, guides, hold-the-bar, e2e:local when needed), a changelog fragment and status/plan/lessons in the same PR, Conventional Commit, the template body, the DoD pass — and check main after the squash merge. Use when the work is done and the user says "ship it", "open the PR", "commit and push", "wrap this up", or after a merge to confirm main.
 ---
 
 # Ship a PR
@@ -58,14 +58,14 @@ CodeQL (which never runs on PRs).
 
 ## 3. Status rides with the work (same PR, never a follow-up)
 
-- [docs/status.md](../../../docs/status.md) (`pnpm status:check` enforces that it was touched; whether
-  it's _right_ is still on you): update the **Where we are** pointer if this moves it,
-  the backlog row, and a **Changelog** entry (`- **YYYY-MM-DD** — **<ID>: <what is now true>**
-([plan](./plans/<file>.md)). <why it matters>`). Write it from the diff, not from memory; #156
-  exists because this section drifted.
+- **A changelog fragment**: add `docs/changelog/<YYYY-MM-DD>-<branch>.md`. The name, the entry format
+  and the link forms are in [docs/changelog/README.md](../../../docs/changelog/README.md). Write it
+  from the diff, not from memory; #156 exists because the old changelog drifted.
+- [docs/status.md](../../../docs/status.md): update the **Where we are** pointer if this moves it, and
+  the backlog row. No changelog entry goes here any more. Nothing checks these, so it's on you.
 - [docs/plan.md](../../../docs/plan.md): tick or annotate the row, and link the plan if one exists.
-- Then confirm: `pnpm status:check` (a feat/fix/db/perf/refactor/revert branch must have touched
-  `docs/status.md`; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR). It runs
+- Then confirm: `pnpm status:check` (a feat/fix/db/perf/refactor/revert branch must add a correctly
+  named fragment; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR). It runs
   here, after the update, not with the step-2 gates: run earlier it fails on every product branch.
 - Feature guide: already enforced by `guides:check`, but reread its traps section. Did this change
   add one?
@@ -143,7 +143,8 @@ Then **sweep the other approved PRs**: this merge probably just put them in conf
 
 ## Red flags
 
-- `docs/status.md` untouched in a PR that merges a backlog item.
+- A backlog item merged, but its `docs/status.md` row or "Where we are" pointer unchanged. The guard
+  only checks the fragment.
 - The PR claims a CI gate that isn't in `.github/workflows/`. AGENTS.md carries an explicit warning
   about exactly this.
 - A `ci-skip-e2e` or `docs-skip-feature-map` label applied with no one-line reason in the PR.

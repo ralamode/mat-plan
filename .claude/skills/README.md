@@ -2,7 +2,7 @@
 
 Project skills for working in mat-plan. Claude Code loads each `*/SKILL.md` automatically: the
 `description` decides when it triggers, and the body is the procedure. **This file is the running list
-of what exists and what's left.** Update it in the same PR as any skill change.
+of what exists and what's left.** Record a skill change with a [changelog fragment](../../docs/changelog/README.md) in the same PR.
 
 ## The lifecycle they cover
 
@@ -18,35 +18,26 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 ## Shipped
 
-| Skill                                               | Use it when                                                                                                                                                                                           | Since        |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| [`start-task`](./start-task/SKILL.md)               | Starting any task that ends in a PR: sync, branch, context, obligations                                                                                                                               | #170         |
-| [`plan-with-panel`](./plan-with-panel/SKILL.md)     | A plan is owed, or any UI change (UX panel, including plan-exempt)                                                                                                                                    | #170         |
-| [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check                                                                                                                                         | #170         |
-| [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green                                                                                                                                       | #170         |
-| [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                                                                                                                                                 | pre-existing |
-| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2                                                                                                                                      | #173         |
-| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                                                                                                                                                 | #173         |
-| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                                                                                                  | #173         |
-| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                                                                                                  | #173         |
-| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                                                                                                            | #173         |
-| [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | #181         |
-| [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
+**The skills are their own index.** Each `SKILL.md`'s `description` says what it does and when to use
+it, and Claude Code lists them every session. Print them all with
+`grep -h '^description' .claude/skills/*/SKILL.md`. The hand-maintained table that used to be here
+conflicted on every skill PR (DX-2). The review lenses are named agents in [`../agents/`](../agents/),
+sharing one [reporting contract](./review-pr/reporting-contract.md).
 
 ## Guards (mechanisms, not procedures)
 
 Where a rule failed as prose, it became a check. Each ships with a self-test, and `pnpm guards:test`
 (in `verify`, not in CI) runs them all.
 
-| Guard                                                                                                                      | Enforces                                                                                                                                       | Self-test                                           |
-| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                                                 | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort)                                                           | `bash .claude/hooks/hooks.test.sh`                  |
-| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                                                       | Every session starts from the real state: status, open PRs, stale/off-main worktrees                                                           | same                                                |
-| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                            | A skill can't cite a path or `pnpm` script that doesn't exist                                                                                  | `bash .github/scripts/check-skills.test.sh`         |
-| [`check-status-touched.mjs`](../../.github/scripts/check-status-touched.mjs) (`pnpm status:check`, `ship-pr` step 3; #177) | A feat/fix/db/perf/refactor/revert branch touched `docs/status.md` (`STATUS_SKIP` overrides)                                                   | `bash .github/scripts/check-status-touched.test.sh` |
-| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                                                         | The diff didn't lower the quality bar                                                                                                          | `bash .claude/skills/hold-the-bar/check.test.sh`    |
-| [`review-prefetch.sh`](../../.github/scripts/review-prefetch.sh) (`@claude review` + local `review-pr`; DX-1)              | A PR head is reviewed as inert data, and the review job refuses a base whose agent config could widen it (`.claude/settings.json` hash-pinned) | `bash .github/scripts/review-prefetch.test.sh`      |
-| [`review-post.sh`](../../.github/scripts/review-post.sh) (`@claude review` post job; DX-1)                                 | One comment per request, never silence; secrets withheld; `@mentions` broken; partial runs bannered                                            | `bash .github/scripts/review-post.test.sh`          |
+| Guard                                                                                                                      | Enforces                                                                                                                                                      | Self-test                                           |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                                                 | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort)                                                                          | `bash .claude/hooks/hooks.test.sh`                  |
+| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                                                       | Every session starts from the real state: status, open PRs, stale/off-main worktrees                                                                          | same                                                |
+| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                            | A skill can't cite a path or `pnpm` script that doesn't exist                                                                                                 | `bash .github/scripts/check-skills.test.sh`         |
+| [`check-status-touched.mjs`](../../.github/scripts/check-status-touched.mjs) (`pnpm status:check`, `ship-pr` step 3; #177) | A feat/fix/db/perf/refactor/revert branch adds a [changelog fragment](../../docs/changelog/README.md) (`docs/status.md` before DX-2; `STATUS_SKIP` overrides) | `bash .github/scripts/check-status-touched.test.sh` |
+| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                                                         | The diff didn't lower the quality bar                                                                                                                         | `bash .claude/skills/hold-the-bar/check.test.sh`    |
+| [`review-prefetch.sh`](../../.github/scripts/review-prefetch.sh) (`@claude review` + local `review-pr`; DX-1)              | A PR head is reviewed as inert data, and the review job refuses a base whose agent config could widen it (`.claude/settings.json` hash-pinned)                | `bash .github/scripts/review-prefetch.test.sh`      |
+| [`review-post.sh`](../../.github/scripts/review-post.sh) (`@claude review` post job; DX-1)                                 | One comment per request, never silence; secrets withheld; `@mentions` broken; partial runs bannered                                                           | `bash .github/scripts/review-post.test.sh`          |
 
 ## Backlog, in priority order
 
@@ -103,6 +94,9 @@ source of truth.
 - `.claude/` is on the e2e auto-skip allowlist. A skills-only PR is docs-shaped: no plan, no panel.
 
 ## Changelog
+
+> **New entries go in [docs/changelog/](../../docs/changelog/README.md)** (DX-2). The history below
+> stays as it was.
 
 - **2026-09-30** — Shipped `start-task`, `plan-with-panel` (it absorbs the planned standalone
   `ux-panel`), `ship-pr` and `hold-the-bar`. Seeded this backlog from the audit of recurring

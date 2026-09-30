@@ -43,6 +43,7 @@ downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.
 | [docs/deploy.md](./docs/deploy.md)                         | Deployment + one-time setup (Neon, Vercel env, GitHub secret, first migration, local dev)        |
 | [docs/plan.md](./docs/plan.md)                             | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3)                                |
 | [docs/status.md](./docs/status.md)                         | Living progress tracker toward the MVP                                                           |
+| [docs/changelog/](./docs/changelog/README.md)              | One file per merged change (since DX-2)                                                          |
 | [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done                                                                        |
 | [docs/decisions/](./docs/decisions/)                       | Architecture Decision Records (ADRs) — e.g. observability & Core Web Vitals                      |
 | [.github/SECURITY.md](./.github/SECURITY.md)               | Security baseline + threat model                                                                 |

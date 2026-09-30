@@ -256,6 +256,9 @@ not merge order.
 | GAP-3     | **typed measurements** — CI gates (#133/#135/#138) · `units.dimension` (#137) · migration `0011` (#139) · the typed form (#141) | ✅     |
 | YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |
 
+> **New entries go in [docs/changelog/](./changelog/README.md)**, one file per change (DX-2). The
+> history below is kept as it was, and nothing is added to it.
+
 ## Changelog (merged PRs)
 
 - **2026-09-30** — **DX-1 implemented: `@claude review`** ([plan](./plans/dx-1-claude-review.md)).
