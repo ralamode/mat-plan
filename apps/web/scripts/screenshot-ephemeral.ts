@@ -161,6 +161,9 @@ const STATES = {
   'form-scaffolded': null,
   // V1-23 PR 3 — "Today's program" shut. Interaction-only (see INTERACTIONS below).
   'program-collapsed': null,
+  // V1-26 PR-A — the BW-tap warning on a catalog-declared-loaded movement. Interaction-only, and
+  // like `form-scaffolded` it needs a PROGRAMMED day — pair it with `--tz` if today has none.
+  'form-bw-warning': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -195,6 +198,41 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       );
     }
     await summary.click();
+  },
+  /**
+   * V1-26 PR-A — the whole reviewable surface of the PR is a state that exists only after TWO taps:
+   * scaffold the day, then tap BW on a movement the catalog declares loaded. No fixture can seed it,
+   * because it is transient client state and was never written to the database.
+   *
+   * It finds the declared-loaded card by DRIVING THE UI rather than hardcoding a movement name — the
+   * YDP rotates A/B on date parity, so which movements are on today's card depends on the day the
+   * capture runs. It opens each collapsed card, taps BW, and stops at the first one that warns.
+   */
+  'form-bw-warning': async (page) => {
+    const fill = page.getByRole('button', { name: /Fill in today.s movements/i });
+    if ((await fill.count()) === 0) {
+      throw new Error(
+        'no "Fill in today\'s movements" button — this state needs a PROGRAMMED day; pass --tz (e.g. Pacific/Kiritimati)',
+      );
+    }
+    await fill.click();
+
+    const cards = page.getByRole('button', { name: /^\d+\.\s/ });
+    // Card 1 opens by default; the rest are collapsed summaries.
+    for (let i = 1; i <= (await cards.count()) + 1; i++) {
+      if (i > 1) await page.getByRole('button', { name: new RegExp(`^${i}\\.\\s`) }).click();
+      const chip = page.getByRole('checkbox', { name: `BW — Bodyweight — movement ${i} set 1` });
+      if ((await chip.count()) === 0) continue;
+      // `force`: the chip input is `sr-only` (clipped, so the LABEL can be the 44px tap target), and
+      // Playwright's actionability check treats a clipped element as not visible. It is genuinely in
+      // the a11y tree — which is why `getByRole` finds it — so the click is real, not a workaround.
+      await chip.check({ force: true });
+      if ((await page.getByText(/usually logged with a weight/).count()) > 0) return;
+      await chip.uncheck({ force: true });
+    }
+    throw new Error(
+      'no catalog-declared-loaded movement on this day — the warning cannot render; try another --tz',
+    );
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();
