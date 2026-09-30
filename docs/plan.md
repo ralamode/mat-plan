@@ -353,6 +353,16 @@ publishing; publishing before it lands ships the artifact without its headline.
 behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
 going public, not just on V1-13.
 
+## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
+
+Tooling that makes each PR cheaper and safer to produce. It sits outside the product priority order
+above; the skills index holds the smaller items.
+
+- **DX-1 — `@claude review`: the `review-pr` skill, on request, in CI.** A writer comments `@claude
+review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
+  advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel round
+  1: 4 blocking → redesigned as a read-only model job + a model-free post job).
+
 ## i18n — externalize strings (post-MVP, near the bottom)
 
 Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
