@@ -12,7 +12,8 @@ import { notFound } from 'next/navigation';
 import { EmptyState } from '@/components/ui/empty-state';
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
-import { formatDayLong, localDayIso, localWeekStartIso } from '@/lib/date';
+import { formatDayShort, localDayIso, localWeekStartIso } from '@/lib/date';
+import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
@@ -35,6 +36,7 @@ import { formatSetLine, isEditableSet } from './set-display';
 import { LifeForm } from './life-form';
 import { ProgramReference } from './program-reference';
 import { StrengthForm } from './strength-form';
+import { DayNav } from './day-nav';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
 
@@ -42,7 +44,14 @@ import { WeeklyAdherence } from './weekly-adherence';
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
 export const runtime = 'nodejs';
 
-export default async function TodayPage({ params }: { params: Promise<{ profileId: string }> }) {
+export default async function TodayPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ profileId: string }>;
+  // Next 16: a Promise, and `?d=a&d=b` arrives as an array.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { profileId } = await params;
   // Re-validate the URL-supplied public id server-side (the V1-3 ownership seam;
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
@@ -54,7 +63,17 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
   // falling back to DEFAULT_TIME_ZONE on first paint. The header weekday derives from this
   // same `day`, so date & weekday can't disagree.
   const timeZone = await getActiveTimeZone();
-  const day = localDayIso(timeZone);
+  const today = localDayIso(timeZone);
+  // V1-15: the VIEWED day — today, or a validated `?d=`. Clamped forward to today and floored at the
+  // profile's first day; a malformed value renders today rather than 404ing, because every date is a
+  // legal day and a stale URL should land somewhere usable.
+  const { d } = await searchParams;
+  const day = resolveViewedDay(typeof d === 'string' ? d : undefined, today, profile.firstDay);
+  const isToday = day === today;
+  // Two booleans, deliberately: `isToday` drives COPY, `isWritable` drives FORMS. Conflating them is
+  // how yesterday would have lost its forms — the server accepts a write within ±1 day
+  // (`resolveDeclaredDay`), and the UI must not be stricter than the endpoint it fronts.
+  const writable = isWritableDay(day, today);
   const weekStart = localWeekStartIso(day);
   // V1-10: which day the PROGRAM says this is, from the same active-tz `day` the header renders — so
   // the card can't claim Monday while the header says Sunday. TOTAL since the youth daily A/B rotation
@@ -116,9 +135,17 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
             visibility). Label via the SHARED `DAY_ROLE_LABELS` — no second map. It reads "Strength B"
             while the program is colloquially Day B because `strength_a`/`strength_b` are a documented
             temporary reuse of the roles (see `resolveDayRole`); not fixed here. */}
-        <p className="text-muted-foreground">
-          Today · {formatDayLong(day)} · {DAY_ROLE_LABELS[dayRole]}
-        </p>
+        {/* V1-15: DayNav REPLACES this line rather than sitting beside it — the date has exactly one
+            home, and rendering it twice (once reworded, once in the nav) is how a "small" header
+            change becomes a visual bug. The day ROLE stays here, appended, because it is derived page
+            metadata about the day being viewed and travels with it. */}
+        <DayNav
+          profileId={profileId}
+          day={day}
+          today={today}
+          floor={profile.firstDay}
+          dayRoleLabel={DAY_ROLE_LABELS[dayRole]}
+        />
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
@@ -140,12 +167,23 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           per-key interleave inside check-ins is a later concern. Strength is routine-DRIVEN (the default +
           seeds include it); a config that omits `strength` shows no strength block (the routine is the
           selection — PR 2/V1-10 own an "always offer strength" affordance if wanted). */}
+      {/* V1-15: ONE notice, above the blocks, when the viewed day is outside the server's write
+          window. The forms below are gated on the SAME `writable`, so what the athlete can reach and
+          what `resolveDeclaredDay` accepts cannot drift. An unexplained absence reads as a bug —
+          which is the finding that explains the 2026-09-28 incident. */}
+      {!writable ? (
+        <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
+          Logging is closed for this day — it&rsquo;s more than a day ago. You can still see what
+          was logged.
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-6">
         <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
           <h2 id="log-bw-heading" className="text-lg font-medium">
             Log bodyweight
           </h2>
-          <BodyweightForm profileId={profile.id} day={day} />
+          {writable ? <BodyweightForm profileId={profile.id} day={day} /> : null}
         </section>
         {buildRoutineBlocks(profile.routine.order).map((block, i) => {
           if (block.kind === 'strength') {
@@ -162,20 +200,22 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 ) : null}
                 {/* GAP-1 P0-1: the weekday's role PRE-SELECTS the form's day picker; it is never
                     submitted implicitly (see the note on that select). */}
-                <StrengthForm
-                  profileId={profile.id}
-                  day={day}
-                  defaultDayRole={dayRole}
-                  // V1-19 — NARROWED on purpose: `ProgramDayDTO` also carries this kid's prescribed
-                  // `load`, and the one invariant the scaffold exists to protect is that no authored
-                  // load reaches an input. Mapping it away here makes that a property of the type
-                  // rather than something a unit test has to notice.
-                  programDay={programDay.map(({ idx, movementName, sets }) => ({
-                    idx,
-                    movementName,
-                    sets,
-                  }))}
-                />
+                {writable ? (
+                  <StrengthForm
+                    profileId={profile.id}
+                    day={day}
+                    defaultDayRole={dayRole}
+                    // V1-19 — NARROWED on purpose: `ProgramDayDTO` also carries this kid's prescribed
+                    // `load`, and the one invariant the scaffold exists to protect is that no authored
+                    // load reaches an input. Mapping it away here makes that a property of the type
+                    // rather than something a unit test has to notice.
+                    programDay={programDay.map(({ idx, movementName, sets }) => ({
+                      idx,
+                      movementName,
+                      sets,
+                    }))}
+                  />
+                ) : null}
               </section>
             );
           }
@@ -191,12 +231,14 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
                 <h2 id={`checkins-${i}`} className="text-lg font-medium">
                   Check-ins
                 </h2>
-                <CheckinForm
-                  profileId={profile.id}
-                  day={day}
-                  fields={fields}
-                  loggedFieldKeys={loggedFieldKeys}
-                />
+                {writable ? (
+                  <CheckinForm
+                    profileId={profile.id}
+                    day={day}
+                    fields={fields}
+                    loggedFieldKeys={loggedFieldKeys}
+                  />
+                ) : null}
               </section>
             );
           }
@@ -206,12 +248,14 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
               <h2 id={`life-${i}`} className="text-lg font-medium">
                 Life
               </h2>
-              <LifeForm
-                profileId={profile.id}
-                day={day}
-                loggedLifeKeys={loggedLifeKeys}
-                activityKeys={block.keys}
-              />
+              {writable ? (
+                <LifeForm
+                  profileId={profile.id}
+                  day={day}
+                  loggedLifeKeys={loggedLifeKeys}
+                  activityKeys={block.keys}
+                />
+              ) : null}
             </section>
           );
         })}
@@ -223,7 +267,7 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
           className="flex flex-col gap-2 rounded-lg border px-4 py-3"
         >
           <h2 id="calisthenics-total-heading" className="text-lg font-medium">
-            Calisthenics today
+            {isToday ? 'Calisthenics today' : 'Calisthenics'}
           </h2>
           <ul className="flex flex-col gap-1">
             {calisTotals.map((t) => (
@@ -249,7 +293,9 @@ export default async function TodayPage({ params }: { params: Promise<{ profileI
         </h2>
 
         {rows.length === 0 ? (
-          <EmptyState>No entries logged today.</EmptyState>
+          <EmptyState>
+            {isToday ? 'No entries logged today.' : `Nothing logged on ${formatDayShort(day)}.`}
+          </EmptyState>
         ) : (
           <ul className="flex flex-col gap-2">
             {rows.map((row) => {

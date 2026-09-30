@@ -122,6 +122,12 @@ flowchart LR
   `verify-full`, and deliberately leaves a string with **no** `sslmode` untouched — local Postgres has
   no TLS, and forcing it there would break every local run to fix a hosted-only concern.
 
+- **The UI must never be STRICTER than the endpoint it fronts.** `resolveDeclaredDay` accepts a write
+  within ±1 day (`WRITABLE_DAY_RADIUS`), so the page gates its forms on the _same_ exported constant
+  (`isWritableDay`) rather than a re-typed `1`. V1-15 hit this twice: hiding yesterday's forms would
+  have refused what the server allows, and flooring day-navigation at `profiles.created_at` alone
+  would have clamped away a day that was still writable.
+
 - **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
   `withServerActionInstrumentation` or the failure is invisible.
 
