@@ -504,16 +504,41 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   ⚠️ Do **not** solve this by changing the constant to 5: it is Ray's number for his kids, not a
   default for a stranger's first session (ONB-0/ONB-2 own that).
 
-  ### 2. Pre-select BW on bodyweight movements, and clear it when a weight is typed
+  ### 2. ~~Pre-select BW on bodyweight movements, and clear it when a weight is typed~~ ✅ shipped as V1-26 PR-A, DIFFERENTLY
 
-  The catalog already declares it — `movements.isBodyweight` — and the form **reads neither it nor
-  `unitDefault`** (V1-24's second P0, same root cause). So: a movement seeded `isBodyweight: true`
-  starts with BW **pre-selected**, and **typing a weight clears it**.
+  **Both halves of this were dropped on review, and the plan says why**
+  ([v1-26](./plans/v1-26-form-knows-the-movement.md)). The catalog declaration does now reach the form
+  — but on the **Unit select**, not as a pre-tapped chip.
 
-  The reciprocal matters as much as the default: BW + a weight is **legal and meaningful** — it is
-  `BW+8 (vest)`, the shape GAP-3 exists to represent — so "typing a weight clears BW" must be a
-  **default the athlete can override**, never a lockout. Get that backwards and the vest case becomes
-  unloggable again.
+  - **Pre-selection re-opens the V1-19 submit wedge.** `isUntouchedScaffold` requires
+    `!s.isBodyweight`, so a scaffolded set seeded `isBodyweight: true` is permanently "touched" and
+    blocks submit behind a collapsed card whose `required` reps input is unmounted. Doing 5 of 7
+    programmed movements would have been unsubmittable. Found independently by both panels.
+  - **Auto-clear makes `BW+8 (vest)` unmaintainable** — backspacing a typo in the weight destroys the
+    mode — and it is a control changing state off-screen under the keyboard, announcing nothing (the
+    checkbox is `sr-only`). Leaving BW on has no data-loss failure; clearing it silently converts a
+    weighted push-up to `8 × 10 lb`, which is the 2026-09-28 incident mirrored.
+
+  What shipped instead: the declared unit seeds the select (visible, overridable), and tapping BW on a
+  catalog-declared-loaded movement raises a **non-blocking** note.
+
+- **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
+  `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
+  unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
+  per-**set** equivalent. So a kid who does **2 of 3 prescribed sets** cannot submit at all — the
+  browser refuses with "Please fill out this field" on a row they deliberately left blank — until they
+  discover the per-row "Remove" button. That is the most likely way to do a prescribed movement on a
+  gym floor, and the failure is the same "form appears dead" shape the guide already documents twice.
+
+  **Why no test caught it:** the unit tests submit through `payload()`, which never runs native
+  constraint validation, and no e2e had ever submitted a scaffolded form. The V1-26 spec now does, and
+  it fills every row precisely so it does not depend on this bug either way.
+
+  **Likely fix, to be planned:** an untouched scaffolded SET is dropped at submit the way an untouched
+  scaffolded movement already is — which means `required` can no longer carry the "don't submit
+  nothing" job alone, and `strengthSetSchema`'s superRefine has to. Related to V1-25 §1 (the athlete
+  should be able to choose the set count up front) but strictly worse, because that one is friction
+  and this one is a wall.
 
   ### 3. A logged form should look complete, not empty
 

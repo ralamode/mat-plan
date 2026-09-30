@@ -209,11 +209,20 @@ export default async function TodayPage({
                     // `load`, and the one invariant the scaffold exists to protect is that no authored
                     // load reaches an input. Mapping it away here makes that a property of the type
                     // rather than something a unit test has to notice.
-                    programDay={programDay.map(({ idx, movementName, sets }) => ({
-                      idx,
-                      movementName,
-                      sets,
-                    }))}
+                    //
+                    // V1-26 PR-A widens it by exactly two fields, and `load` is still the one left
+                    // out: `isBodyweight`/`unitDefault` are the MOVEMENT's declaration — what kind of
+                    // number this is — where `load` is the coach's prescribed magnitude for this kid.
+                    // Structure crosses; a number does not.
+                    programDay={programDay.map(
+                      ({ idx, movementName, sets, isBodyweight, unitDefault }) => ({
+                        idx,
+                        movementName,
+                        sets,
+                        isBodyweight,
+                        unitDefault,
+                      }),
+                    )}
                   />
                 ) : null}
               </section>

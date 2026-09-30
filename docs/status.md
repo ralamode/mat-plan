@@ -258,6 +258,30 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **V1-26 PR-A: the form knows what the movement is**
+  ([plan](./plans/v1-26-form-knows-the-movement.md)). On 2026-09-28 Liam's KB swings were logged
+  `20 × BW` when the session was `10 × 20 lb`. The catalog knew — `KB Swings` is seeded
+  `isBodyweight: false, unitDefault: 'lb'` — and the form had **zero references to either column**. It
+  said nothing at the moment of the mistake and then could not fix it afterwards (the correction ran
+  out of band, via `db:correct`). PR-A is the first half: say something.
+  - **Carried on the UNIT, not a pre-tapped BW chip**, and that is the whole design. A scaffolded set
+    seeded `isBodyweight: true` fails `isUntouchedScaffold`'s `!s.isBodyweight`, so the card is
+    permanently "touched", survives `dropUntouchedMovements`, and blocks submit behind a **collapsed**
+    card whose `required` reps input is unmounted — the "form appears dead" trap this repo documents
+    twice, at a scale of 25 rows. Doing 5 of 7 programmed movements would have been unsubmittable.
+    Both panels found it independently, against a plan that had proposed exactly that.
+    The unit has none of that problem and is **visible**: the athlete can see what the form assumed.
+  - **A warning, never a lockout.** Tapping BW on a catalog-declared-loaded movement raises an inline
+    `role="status"` note — once per card, not per set, because three copies of one sentence at 360px
+    is noise. The athlete doing bodyweight KB swings is allowed to be right.
+  - **`load` still does not cross.** The widening is two columns of the MOVEMENT's declaration —
+    what kind of number this is. The coach's prescribed magnitude stays out of `ScaffoldRow` by
+    construction, which is how AGENTS.md's one inviolable rule is enforced here.
+  - 🔴 **And it found a live P0 nobody knew about — V1-27.** The new e2e is the first test ever to
+    submit a scaffolded form in a real browser, and it failed: `DEFAULT_SCAFFOLD_SETS` is 3, `reps` is
+    unconditionally `required`, and `isUntouchedScaffold` has no per-SET equivalent — so **doing 2 of
+    3 prescribed sets cannot be submitted at all.** The unit tests could never see it; they submit
+    through `payload()`, which never runs native constraint validation. Filed, not fixed here.
 - **2026-09-30** — **DX: agent skills for the task lifecycle** ([index](../.claude/skills/README.md)).
   The per-PR procedures lived only as prose in AGENTS.md, `docs/plans/README.md`, the DoD and
   lessons.md, so every session re-derived them, and the misses recur: #156 (status drifted from the

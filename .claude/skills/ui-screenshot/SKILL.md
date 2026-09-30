@@ -36,6 +36,33 @@ pnpm --filter web screenshot:ephemeral /p --state already-logged  # Today with a
 
 - `/p` (no id) is shorthand for the **seeded profile's Today page** (`/p/<seed-profile-uuid>`), where
   the check-ins/bodyweight/strength forms live. Any explicit route also works.
+
+### ⚠️ If the state only exists after a TAP, capture it anyway — do not write it off
+
+**There are two kinds of `--state`, and forgetting the second is how a PR ships with screenshots that
+do not show the change.** (Ray, 2026-09-30, on exactly that mistake.)
+
+- **Seeded states** — `STATES` in `screenshot-ephemeral.ts` maps the name to a fixture seeder that
+  writes rows before the capture (`already-logged`, `calisthenics`, `strength-session`,
+  `status-badges`).
+- **Interaction states** — `INTERACTIONS` maps the name to a Playwright function that **drives the
+  running app** after load: click, type, toggle. The fixture entry is `null`. This is how transient
+  CLIENT state gets captured — a scaffolded form, a collapsed card, a warning that only appears after
+  a chip is tapped. None of it is in the database and none of it can be seeded.
+
+**So the rule: if a reviewer cannot see the change in the default capture, add an entry — do not put
+"not capturable" in the PR body.** Adding one is ~15 lines beside the existing examples.
+
+Two things that bite:
+
+- **Drive the UI to FIND the target, don't hardcode.** The YDP rotates A/B on date parity, so which
+  movements are on today's card depends on the day the capture runs. `form-bw-warning` opens each
+  card in turn and stops at the first that warns; a hardcoded "movement 5" would be right one day in
+  two. Throw a message naming the fix (usually `--tz`) when the state is unreachable.
+- **`sr-only` controls need `{ force: true }`.** The load-mode chips clip their input so the _label_
+  can be the 44px tap target. They are genuinely in the a11y tree — `getByRole` finds them — but
+  Playwright's actionability check treats a clipped element as not visible and times out.
+
 - `--state already-logged` seeds fixture rows so the **data-dependent** "already logged today" state
   renders — impossible to capture safely before, because it required writing to the real DB.
 - The PNG lands in `apps/web/.screenshots/<slug>.png` (e.g. `today.png`, `today-already-logged.png`);
