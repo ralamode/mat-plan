@@ -258,6 +258,12 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **Backlog: follow-ups from the 09-30 review batch filed as rows.** These are
+  [V1-31](./plan.md) (the strength form's dropdowns may snap back after a rejected save; suspected,
+  probe first), DX-3 (`screenshot:ephemeral` reuses a stale build), DX-4 (the main-checkout guard's
+  false positive on variable-named commands) and DX-5 (nothing enforces the merge gates: branch
+  protection is off, there are no required checks, and audit, `skills:check` and `guards:test` never
+  run in CI). Until now they lived only in PR comments. Docs only.
 - **2026-09-30** — **DX: `shipit` means "keep it mergeable"** (#181, [skill](../.claude/skills/keep-mergeable/SKILL.md)).
   Each merge in the 09-30 batch put the other approved PRs in conflict at the top of this changelog,
   and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after

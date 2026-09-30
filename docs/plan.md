@@ -372,6 +372,28 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
   branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
   the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
+- **DX-3 — `screenshot:ephemeral` silently captures a stale build.** It reuses `apps/web/.next`
+  whenever a `BUILD_ID` exists; only `--build` forces a rebuild. On #180 that posted a screenshot of
+  copy the PR had already changed, and it was caught only by a reviewer reading the image. **Fix:** record
+  the commit (plus a dirty-tree flag) the build came from, and rebuild when it differs from `HEAD`.
+  Add a `docs/lessons.md` entry. Small; no plan needed.
+- **DX-4 — the main-checkout guard blocks harmless variable-named commands.** #179's `PreToolUse` hook
+  denies any command whose name comes from a variable or `$(…)` in the main checkout. That's right for
+  git, but it also blocked a read-only `gh pr checks` polling loop and a `for w in …; git worktree remove`
+  cleanup loop on 2026-09-30. It fails safe, but each false positive teaches agents the escape hatch.
+  **Fix:** resolve the name when the loop's values are literal, or allow variable-named commands when no
+  git/gh mutation can result. Self-tests for both loops. The guard is ~1,000 lines, so check the file-size
+  rule first.
+- **DX-5 — nothing enforces the merge gates.** Verified via the API (2026-09-30): classic branch
+  protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
+  **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
+  `clean`), and a direct push to `main` is possible. Separately, `audit --prod`, `skills:check` and
+  `guards:test` run only in local `pnpm verify`, never in CI (GHSA-vcvr reached every branch with CI
+  green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
+  (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
+  `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
+  needs its own plan and panel. Then update AGENTS.md's gate list, which #181 corrected to say "by
+  convention", in the same PR.
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
@@ -547,6 +569,17 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit. Not yet
   reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
   review so it isn't carried only by a changelog line.
+
+- **V1-31 — the strength form's dropdowns may snap back after a rejected save.** 🟡 **Suspected, not
+  yet reproduced** (found 2026-09-30 while fixing #180). React 19 resets a `<form action>` after the
+  action returns, **including on an error**, and its native `form.reset()` puts a controlled `<select>`
+  back to its first option: React keeps a controlled input's reset target in step with state but not a
+  select's `defaultSelected`. #180 hit exactly this on the bodyweight Unit (kg silently became lb) and
+  fixed it with a layout-effect resync (`bodyweight-form.tsx`, see `docs/features/write-path.md`).
+  `strength-form.tsx`'s Measuring and Unit selects sit inside a form action the same way. Its saved data
+  comes from state, so a submit is probably right, but after a rejected save the VISIBLE select may show
+  the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
+  select); fix only if it reproduces, with an e2e.
 
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
