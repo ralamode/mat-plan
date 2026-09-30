@@ -258,6 +258,14 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **Security: Next.js 16.3.5 → 16.3.7** (#182; critical
+  [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j), RCE in `next/og`, patched
+  in ≥16.3.6). Found by the `audit --prod` step of `pnpm verify`, which failed on `main` for every
+  branch. CI stayed green and would not have caught it: no workflow runs the audit. AGENTS.md and
+  tech-debt.md had both claimed it was a CI gate, and are corrected here.
+  16.3.7 rather than the newest 16.3.8: 16.3.8 was an hour old and inside pnpm 11's default
+  release-age window, and `pnpm install` would have written exclusions to `pnpm-workspace.yaml` to
+  bypass that supply-chain delay. `eslint-config-next` moves in lockstep.
 - **2026-09-30** — **Fix: Vercel stops deploying the `screenshots` branch.** Every screenshot upload
   and prune had been posting a failed preview ("Root Directory 'apps/web' does not exist") and a
   failure email since August: #100's skip-CI commit marker never worked, because Vercel doesn't honour
