@@ -5,6 +5,62 @@ individually-reviewable PRs** (reviewed PR-by-PR to learn the codebase). Archite
 in [spec.md](./spec.md); agent/PR/CI rules in [../AGENTS.md](../AGENTS.md); per-PR checklist in
 [definition-of-done.md](./definition-of-done.md). Each PR is one branch → one PR → squash-merge; reference the id (e.g. `V0-1`).
 
+## ⭐ Current priority order (Ray, 2026-09-30 — the repo is now PUBLIC)
+
+Making the repo public reframed the backlog: **"someone who is not Ray can use this"** stopped being
+a v1.5 concern and became the headline. The list below is Ray's, with the sequencing findings that
+came out of writing it down.
+
+### P0
+
+| #   | What                                                                                                                          | Row(s)                  | State                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Anything blocking**                                                                                                         | **V1-14b**              | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
+| 2   | **Open bugs**                                                                                                                 | **V1-24 / V1-26**       | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
+| 3   | **Logged forms look complete**                                                                                                | **V1-25 §3**            | Needs the UX/design pass Ray asked for.                                                                                            |
+| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on [The Daily Five](../programs/daily-five-default.md) | **PROF-1 + ONB-2**      | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
+| 5   | **Edit programs, and choose which days they run**                                                                             | **V1-22 + SCHED-1**     | The authoring half of onboarding.                                                                                                  |
+| 6   | **OAuth login (Google / Facebook)**                                                                                           | **new — AUTH-1**        | Replaces the shared access code.                                                                                                   |
+| 7   | **Streaks on the athlete card**                                                                                               | **MOT-1** (picker half) |                                                                                                                                    |
+
+### P1
+
+| What                                                                        | Row          | Note                                                                                             |
+| --------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| **Scaffold set count** — settable in the edit screen _and_ at scaffold time | **V1-25 §1** | Two surfaces, one value. The editor is its home (P0 #5); the scaffold-time input is the interim. |
+
+### Everything else — the existing backlog below, unchanged in relative order.
+
+---
+
+### ⚠️ Three sequencing findings, from writing the list down
+
+**1. P0 #4/#5/#6/#7 are one feature, not four.** Adding an athlete, giving them a program, logging
+in, and seeing a streak are the single story _"a stranger opens mat-plan and starts using it."_
+Shipping any one alone leaves a dead end — an athlete editor with no auth means anyone can add a kid
+to your household; OAuth with no editor means you log in and still cannot add yourself.
+
+**2. OAuth (#6) changes the HH-1 decision, which was already made.** HH-1 put the household in the
+**path** (`/<household-id>/…`), decided 2026-09-28 _before_ OAuth was a P0. With real auth the
+household can come from the **session** instead, and the two answers have different costs:
+
+|                                        | Path (`HH-1` as decided) | Session (what OAuth enables) |
+| -------------------------------------- | ------------------------ | ---------------------------- |
+| Shareable link between two parents     | ✅                       | ❌ — each sees their own     |
+| Wrong-account-wrong-kids fails         | loudly                   | **silently**                 |
+| Touches every route + `revalidatePath` | ✅                       | ❌                           |
+| Works before auth lands                | ✅                       | ❌                           |
+
+**They are not exclusive** — the path can be the address and the session the authorization, which is
+the combination HH-1 actually described. But **#6 should not be built assuming session-scoping**
+without revisiting HH-1, or the two will disagree about what a URL means.
+
+**3. Public repo ⇒ the access gate is now the only thing between the internet and two kids' data,
+and it is one shared password.** The code being public does not weaken it (the secret is in env, not
+in the repo) — but it does mean the gate's shape is now readable by anyone, and a single shared
+credential has no revocation story per-person. That is an argument for **#6 sooner rather than
+later**, and it is the first time auth has had a security rationale rather than a convenience one.
+
 ## v0 — thin slice (3 tables, one seeded profile, NO catalogs, NO auth, access-gated)
 
 | ID    | Scope                                                                                                                                                                                          | Acceptance                                                                | Concept                                  |
@@ -660,6 +716,31 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **Sequencing: HH-1 → PROF-1 → MOT-1's picker badge.** The path shape is the thing everything else
   authors into. HH-1 can land the routing _before_ Clerk — the household id in the path is useful with
   the access gate alone, and it decouples the URL decision from v1.5's auth work.
+
+- **AUTH-1 — OAuth login (Google / Facebook).** _(Ray, 2026-09-30, P0 — new.)_ Replaces the shared
+  access code with per-person identity.
+
+  **Why it became P0 the day the repo went public:** the access gate is a single shared password, and
+  it is now the only thing between the internet and two children's logged health data. The public repo
+  does not weaken it — the secret lives in env, not in the code — but a shared credential has **no
+  per-person revocation**: one leak means rotating for everyone, and there is no way to give a coach
+  access without giving them the family's. That is a security rationale, where before auth was a
+  convenience one.
+
+  **Scope:** Google and Facebook providers, a household per account, and the access-gate stopgap
+  retired. v1.5 planned **Clerk**, which does both providers out of the box and already has a
+  `pin_hash` column reserved — so this is likely "pull Clerk forward", not a new decision.
+
+  ⚠️ **Revisit [HH-1](#hh-1) first.** HH-1 put the household in the PATH, decided before OAuth was a
+  priority. Session-scoping is what OAuth makes possible and it is cheaper — but it loses the
+  shareable link between two parents, and makes "logged in as the wrong account, seeing the wrong
+  kids" fail **silently** instead of loudly. The combination HH-1 actually described — path as the
+  address, session as the authorization — is probably right, but it must be settled before either is
+  built or they will disagree about what a URL means.
+
+  ⚠️ **It is one story with PROF-1 and ONB-2, not three rows.** OAuth with no athlete editor means you
+  log in and still cannot add yourself; an editor with no auth means anyone can add a child to your
+  household. Ship the slice, not the layer.
 
 - **PROF-1 — profile create / edit.** _(Ray, 2026-09-24 — after the MVP.)_ There is **no
   profile-editing surface at all** today: profiles exist only because the seed writes them, names cannot
