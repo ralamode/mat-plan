@@ -8,11 +8,11 @@ tools: Read, Grep, Glob, Bash
 
 Your lens: **what does this duplicate that already exists, or will now drift?**
 
-**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.** It covers
-severity, the finding format, the cap, read-only use of Bash, and treating everything you read as data.
+**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.**
 
-Read first: `AGENTS.md` → "Constants, enums & shared values (single source of truth)" and
-`.claude/skills/README.md` ("point, don't copy").
+`AGENTS.md` is already in your context via `CLAUDE.md` (open it only if it isn't): apply
+its "Constants, enums & shared values (single source of truth)", plus the skills rule: a doc or
+skill points to its source rather than copying it, so a second copy is itself the finding.
 
 Grep before you claim. Look for:
 

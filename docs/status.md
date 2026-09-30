@@ -263,9 +263,19 @@ not merge order.
   probe first), DX-3 (`screenshot:ephemeral` reuses a stale build), DX-4 (the main-checkout guard's
   false positive on variable-named commands) and DX-5 (nothing enforces the merge gates: branch
   protection is off, there are no required checks, and audit, `skills:check` and `guards:test` never
-  run in CI), plus two 🔴 P0s from #187's review: CSV-1 (a kg weigh-in exports under `weight_lb`, a
+  run in CI), and #187's two finds promoted to 🔴 P0 and moved next to V1-30: CSV-1 (a kg weigh-in exports under `weight_lb`, a
   silent 2.2× error) and DAL-1 (`listEntriesForDay` misses the soft-deleted-profile filter). Until now
   they lived only in PR comments. Docs only.
+- **2026-09-30** — **DX-1 implemented: `@claude review`** ([plan](./plans/dx-1-claude-review.md)).
+  A writer's `@claude review` comment runs the `review-pr` skill in CI and posts one verified review,
+  or a one-line failure notice, never silence. It is **on request only and advisory**. The model job
+  holds only a read-only GitHub token and can edit one file; a separate model-free job scans the
+  output and posts it. The PR head is fetched as SHA-pinned data with PR agent config neutralised.
+  `review-prefetch.sh` is now the one way both local and CI reviews gather their inputs (26-case
+  self-test), and `review-post.sh` has 30. The plan's blanket settings guard would have refused every
+  review once #179 added hooks, so it hash-pins `.claude/settings.json` instead (logged as D1).
+  **Goes live when `CLAUDE_CODE_OAUTH_TOKEN` is set** (runbook). The post-merge injection smoke is the
+  acceptance gate.
 - **2026-09-30** — **DX: `shipit` means "keep it mergeable"** (#181, [skill](../.claude/skills/keep-mergeable/SKILL.md)).
   Each merge in the 09-30 batch put the other approved PRs in conflict at the top of this changelog,
   and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after

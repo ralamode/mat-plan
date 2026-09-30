@@ -286,6 +286,8 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
   only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI
   green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
+  **`@claude review` is NOT a gate either:** a writer's comment runs the `review-pr` skill in CI
+  (`.github/workflows/claude-review.yml`, which defines the trigger) and posts one advisory comment.
   **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on
   demand** (`.github/workflows/codeql.yml`) — a minutes-long scan on every PR is the wrong trade at ~4h/wk,
   and every merged PR is one squashed commit on `main`, so the push trigger still sees all of it. Findings
