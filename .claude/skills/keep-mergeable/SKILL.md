@@ -87,8 +87,8 @@ still the old tip, and every diff-based check shows `main`'s work as this PR's:
 
 ```bash
 grep -nE '^(<<<<<<<|=======$|>>>>>>>)' <resolved files>   # must print nothing
-dup_ids() { grep -oE '^(\s*- \*\*|\| *\**)[A-Z][A-Z0-9]*-[0-9]+[a-z]?' | sed -E 's/^[-| *]+//' | sort | uniq -d; }
-comm -13 <(git show origin/main:docs/plan.md | dup_ids) <(dup_ids < docs/plan.md)  # ids the MERGE duplicated: must print nothing
+id_counts() { grep -oE '^(\s*- \*\*|\| *\**)[A-Z][A-Z0-9]*-[0-9]+[a-z]?' | sed -E 's/^[-| *]+//' | sort | uniq -c | sed -E 's/^ *//'; }
+comm -13 <(git show origin/main:docs/plan.md | id_counts) <(id_counts < docs/plan.md) | awk '$1>1'  # ids whose count the MERGE raised above 1: must print nothing
 pnpm exec prettier --write <resolved files>
 git add <resolved files>
 git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
