@@ -258,6 +258,32 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
+  broken twice within hours: another session switched the main checkout to a feature branch, which
+  made a `git pull` try to merge `main` into someone's branch and made project skills vanish
+  ("Unknown skill") for sessions launched there. Now a best-effort Claude Code `PreToolUse` hook keeps
+  the main checkout to an **allowlist** (read-only git, worktree commands, post-merge `branch -D`,
+  `--ff-only` sync on `main`, `checkout main` when clean), reading through subshells, `$(…)`,
+  `sh -c`, heredocs into a shell, wrappers and `cd`/`-C`. A `SessionStart` briefing prints the status
+  headline, open PRs (fork-PR titles withheld as untrusted input), and stale or off-main worktrees.
+  226 guard + 12 briefing self-test cases cover the allowed workflow and the known bypass forms. Both
+  hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
+  when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in
+  `verify`, not yet in CI.
+- **2026-09-30** — **Security: Next.js 16.3.5 → 16.3.7** (#182; critical
+  [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j), RCE in `next/og`, patched
+  in ≥16.3.6). Found by the `audit --prod` step of `pnpm verify`, which failed on `main` for every
+  branch. CI stayed green and would not have caught it: no workflow runs the audit. AGENTS.md and
+  tech-debt.md had both claimed it was a CI gate, and are corrected here.
+  16.3.7 rather than the newest 16.3.8: 16.3.8 was an hour old and inside pnpm 11's default
+  release-age window, and `pnpm install` would have written exclusions to `pnpm-workspace.yaml` to
+  bypass that supply-chain delay. `eslint-config-next` moves in lockstep.
+- **2026-09-30** — **Fix: Vercel stops deploying the `screenshots` branch.** Every screenshot upload
+  and prune had been posting a failed preview ("Root Directory 'apps/web' does not exist") and a
+  failure email since August: #100's skip-CI commit marker never worked, because Vercel doesn't honour
+  it. The branch now carries `apps/web/vercel.json` with `git.deploymentEnabled: false`, which
+  `publish-screenshots.ts` seeds on a new branch and adds to an existing one. The lessons entry that
+  called this fixed is corrected.
 - **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
   lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
   are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md

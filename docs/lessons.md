@@ -77,14 +77,22 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   `screenshots` branch is a true orphan holding only `README.md` + `pr-<n>/*.png`. So every screenshot
   upload and every prune posted a failed preview deployment that means nothing — and looks, at a
   glance, exactly like a real build break on your PR. **Check the deployment's Source branch/commit
-  before debugging: if it says `screenshots`, it is not your PR.** → Every commit to that branch now
-  carries `[skip ci]` (`SKIP_CI` in `apps/web/scripts/publish-screenshots.ts`, mirrored by hand in
-  `.github/workflows/prune-screenshots.yml` — YAML can't import the const). Note a `vercel.json`
-  `git.deploymentEnabled` would NOT work here: Vercel reads it from the Root Directory, which is the
-  very thing missing on that branch. (chore/skip-vercel-on-screenshots-branch)
+  before debugging: if it says `screenshots`, it is not your PR.** → The first fix (#100) appended
+  `[skip ci]` to every commit on that branch, on the belief that Vercel honours it. **It does not** —
+  Vercel skips only via `git.deploymentEnabled` or the Ignored Build Step, and the failures and
+  emails continued for two months behind a lessons entry saying they were fixed. The real fix
+  (fix/dx-skip-vercel-screenshots-branch): `apps/web/vercel.json` with
+  `{"git":{"deploymentEnabled":false}}` **on the `screenshots` branch itself** —
+  `VERCEL_OPT_OUT` in `apps/web/scripts/publish-screenshots.ts`, which seeds it on a new branch and
+  heals a branch missing it before every upload. Vercel reads config from the Root Directory of the
+  _pushed commit_, so an opt-out on `main` never sees these pushes, and the Ignored Build Step can't
+  help either — it runs inside the Root Directory, after the check that fails. `[skip ci]` stays, but
+  only because it keeps GitHub Actions off the branch. **General rule: a "fixed" CI/deploy lesson
+  needs evidence from the NEXT real event (the next push's deployment status), not the fix's own
+  PR.**
 
-- **Writing the skip-CI marker literally in a COMMIT MESSAGE skips that commit's own CI.** → GitHub and
-  Vercel substring-match the **head commit message**, anywhere in it — body included, backticks and
+- **Writing the skip-CI marker literally in a COMMIT MESSAGE skips that commit's own CI.** → GitHub
+  substring-matches the **head commit message**, anywhere in it — body included, backticks and
   all. So a commit message that merely _describes_ adding the marker can suppress its own checks, and a
   **squash-merge** carries that body onto `main`, where it can skip `migrate.yml` — a schema change
   deploying without its migration. → **Spell it out in prose** ("the standard skip-CI marker") in any
@@ -308,6 +316,14 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Git / commits
 
+- **`Unknown skill: <name>` for a skill that is on `main`.** → Project skills load from the
+  `.claude/` of the directory the session was **launched** in. A session started inside a linked
+  worktree loads that worktree's skills; one launched in the **main checkout** loads whatever branch
+  the main checkout has checked out. Another session had switched the main checkout to a feature branch
+  cut before the skill merged, so for sessions launched there it did not exist. → Keep the main
+  checkout on `main` (guarded, best-effort, by `.claude/hooks/guard-main-checkout.mjs`; the
+  `SessionStart` briefing warns when it isn't). To use a skill meanwhile, read its `SKILL.md` from your
+  up-to-date worktree and follow it. (chore/dx-guards)
 - **Squash merge landed an _intermediate_ commit — the last pushes are missing from `main`.** → A PR
   merged while newer commits were still landing (or merged at the SHA the page was showing) squashes a
   stale head, silently dropping later commits. → After any squash merge, `git pull --ff-only origin
