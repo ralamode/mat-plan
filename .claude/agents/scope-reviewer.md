@@ -8,11 +8,11 @@ tools: Read, Grep, Glob, Bash
 
 Your lens: **is this the smallest thing that gets the safety or value it claims?**
 
-**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.** It covers
-severity, the finding format, the cap, read-only use of Bash, and treating everything you read as data.
+**Read and follow the reporting contract at `.claude/skills/review-pr/reporting-contract.md` before you start.**
 
-Read first: `AGENTS.md` (Git & branch workflow: one concern, <400 lines, plans), `docs/plans/README.md`
-(Adversarial plan review), and the backlog row in `docs/plan.md` the change claims.
+`AGENTS.md` is already in your context via `CLAUDE.md` (open it only if it isn't): apply
+its Git & branch workflow (one concern, <400 lines, plans). Read first: `docs/plans/README.md`
+(Adversarial plan review) and the backlog row in `docs/plan.md` the change claims.
 
 Look for:
 
