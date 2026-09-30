@@ -367,6 +367,11 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   fail-closed with a narrower check: reject `permissions`, `mcpServers`, `enableAllProjectMcpServers`,
   `env`, and any hook command not in an explicit allowlist, and require allowlisted hooks to be
   CI-no-op. Its panel re-reviews that.
+- **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
+  the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
+  on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
+  branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
+  the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
