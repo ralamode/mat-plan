@@ -40,3 +40,45 @@ export const MIN_TAP_TARGET_PX = 44;
  */
 export const INPUT_CLASS =
   'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+
+/**
+ * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
+ *
+ * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` renders
+ * `"{label} · logged today"` and `e2e/steps.ts` asserts a **re-typed copy** of that same string —
+ * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. Check-ins spell
+ * it a third way ("Already logged today"). V1-24 adds four more surfaces, so the strings get a home
+ * before they multiply rather than after.
+ *
+ * `lib/constants.ts` and not `packages/shared`: this is app-only copy with no DB or engine consumer,
+ * and this module is deliberately dependency-free so a `'use client'` component can import it.
+ */
+export const SAVED_STATE_COPY = {
+  /** The visible label on the amend control. The ACCESSIBLE name is longer — see `changeLabel`. */
+  change: 'Change',
+  /** Why a receipt carries no Change control on a day outside the ±1 write window (V1-15). */
+  dayClosed: 'Logging is closed for this day.',
+  /**
+   * Why a receipt carries no Change control **yet** (V1-24 PR 1a).
+   *
+   * ⚠️ Deliberately states the limitation instead of implying finality. The whole design rests on
+   * "complete" meaning *saved*, not *done* — so a receipt that silently offered no way back would be
+   * the inert-and-uncorrectable lie this row exists to remove, just on a new surface. PR 1b ships the
+   * amend and **deletes this string**; if it is still here after 1b, that is the bug.
+   */
+  notYetAmendable: 'Saved. Changing a logged weight is coming next.',
+} as const;
+
+/**
+ * The accessible name for an amend control — `Change bodyweight — 84.5 lb`.
+ *
+ * A FUNCTION, not a string, because by V1-24 PR 3 there are several of these on one screen and six
+ * buttons all named "Change" are indistinguishable in a screen-reader forms list. The visible text
+ * (`Change`) is a prefix of the accessible name, satisfying WCAG 2.5.3 Label in Name — the same rule
+ * the Sub-failure and load-mode controls already follow.
+ *
+ * The a11y spec asserts through this function rather than a re-typed literal, so the two cannot drift.
+ */
+export function changeLabel(subject: string, value: string): string {
+  return `${SAVED_STATE_COPY.change} ${subject} — ${value}`;
+}

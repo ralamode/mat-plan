@@ -27,8 +27,11 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await expect(page.getByRole('heading', { name: /Who.s logging today/, level: 1 })).toBeVisible();
   await selectProfile(page, 'Liam');
 
-  await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toBeVisible();
-  await logBodyweight(page, '72.5');
+  // Either heading is legitimate (V1-24 PR 1a): "Log bodyweight" over an empty day, "Bodyweight" over
+  // a day that already has one. The warm-up runs on Scarlett precisely so this usually takes the
+  // CREATE path, but a retry reuses the DB and must not fail on the receipt.
+  await expect(page.getByRole('heading', { name: /^(Log b|B)odyweight$/ })).toBeVisible();
+  await logBodyweight(page, '72.5'); // asserts the rendered value itself
 
   // V1-5: the kind-NULL write path (a bare habit + a rated metric), on the same warm
   // session — no second cold flow, so the slow tier stays cheap.
@@ -102,5 +105,5 @@ test('an unknown profile id renders not-found', async ({ page }) => {
   await page.goto('/p/does-not-exist');
   await expect(page.getByText(/this page could not be found/i)).toBeVisible();
   // never leaks a scoped Today for a bogus id
-  await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: /^(Log b|B)odyweight$/ })).toHaveCount(0);
 });

@@ -6,6 +6,7 @@ import {
   type MetricAggregation,
   type DayRole,
   type SessionType,
+  SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 
 import type { EntryDTO } from '@/lib/dal/entries';
@@ -209,4 +210,49 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
     rows.push({ kind: 'entry', entry: e });
   }
   return rows;
+}
+
+/** The day's bodyweight, as the receipt reads it (V1-24 PR 1a). */
+export type LoggedBodyweight = {
+  /** `entries.public_id` — the id PR 1b's amend will address. Carried now so the receipt and the
+   *  Change control read the same row rather than re-deriving it. */
+  entryId: string;
+  value: number;
+  unit: string;
+};
+
+/**
+ * Today's logged bodyweight, or `null` (V1-24 PR 1a) — what makes the weigh-in surface render a
+ * RECEIPT instead of an empty input.
+ *
+ * ## Why this lives here and not inline in `page.tsx`
+ *
+ * It is the third "what is already logged" derivation on that page, beside `loggedFieldKeys` and
+ * `loggedLifeKeys` — both of which are inline and untested. This one gets a unit test because its
+ * file already has one, and because getting it wrong has a specific cost: returning `null` when a row
+ * exists re-opens the duplicate-write path this PR closes.
+ *
+ * ## Why `metric_key`, not `kind`
+ *
+ * `entries.kind` is the legacy discriminant and is scheduled for deletion (`schema.ts` — "Dropped in
+ * V1-1d"), so keying on it would be born dead. `metricKey` is the generalized one every V1-4+ writer
+ * sets, and the constant comes from `SEED_METRIC_KEYS` rather than a re-typed `'bodyweight'`.
+ *
+ * ## The duplicate case
+ *
+ * Until V1-24 PR 1d's unique index lands, a day can legitimately hold MORE than one bodyweight row —
+ * that is the defect this PR's UI closes, and prod has such rows today. The receipt shows the
+ * **newest**, because the rows arrive oldest-first (`listEntriesForDay` orders ascending, V1-17) and
+ * the most recent reading is the one a person would mean. It does not hide the others: they all
+ * still render in the entries list below, so a duplicate stays visible and correctable rather than
+ * being silently swallowed by the surface that caused it.
+ */
+export function loggedBodyweight(entries: readonly EntryDTO[]): LoggedBodyweight | null {
+  let latest: EntryDTO | null = null;
+  for (const e of entries) {
+    // `value === null` is a partially-written row; it has nothing to show, so it must not suppress
+    // the form — the athlete still needs to be able to log a weight.
+    if (e.metricKey === SEED_METRIC_KEYS.bodyweight && e.value !== null) latest = e;
+  }
+  return latest === null ? null : { entryId: latest.id, value: latest.value!, unit: latest.unit };
 }

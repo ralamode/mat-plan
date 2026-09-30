@@ -258,6 +258,30 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **V1-24 PR 1a: the weigh-in shows what you logged**
+  ([plan](./plans/v1-24-form-is-the-day.md)). Reported from a screenshot of an already-completed day:
+  three empty forms above a read-only list of everything that had been done.
+  - **"Complete" is a property of the RECORD, not the field**, so the semantic is _saved_, not _done_
+    — a **receipt**, not a checkmark. A tick on a value you can still change is a lie; an inert field
+    you cannot correct is the V1-24 data-loss bug in nicer clothes, which is what check-ins ship.
+  - **It closes a live data defect.** `logBodyweight` dedupes only on `client_id`, and the form reset
+    itself and minted a **fresh key** on every success — so "did I already weigh in?" → tap again → a
+    second row, with no edit or delete anywhere to remove it. The form now renders only when the day
+    has none, and the key is stable, so a resubmit into a stale form is a no-op.
+  - **The receipt renders on the SERVER, outside the `writable` gate** — found by the architecture
+    lens. `BodyweightForm` is mounted only inside the ±1 day write window, so a receipt inside it
+    would have been invisible on exactly the history days V1-15 shipped: the screen this was reported
+    from. Read state is not write state.
+  - **It would have broken the smoke, and the panel caught that too.** The warm-up logged bodyweight
+    for Liam and two specs then logged Liam the same day — under a receipt the create form is gone
+    before they reach it. The warm-up moved to Scarlett so the create path is still covered, and
+    `steps.ts:logBodyweight` now returns the value the day actually holds, so callers assert on that
+    rather than on what they passed.
+  - **Honest about what it is not.** The receipt says _"Saved. Changing a logged weight is coming
+    next."_ rather than implying finality — PR 1b ships the amend and deletes that string.
+  - One display renderer for `84.5 lb` (`formatValueUnit`), replacing two spellings and forestalling
+    three more. ⚠️ Deliberately **not** the CSV formatter, whose semantics are different on purpose.
+
 - **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
   ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
   blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode

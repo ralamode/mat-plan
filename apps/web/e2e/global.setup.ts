@@ -24,8 +24,18 @@ setup('authenticate + warm the write path', async ({ page }) => {
   await page.context().storageState({ path: STORAGE_STATE });
 
   await page.goto('/');
-  await selectProfile(page, 'Liam'); // '/' is the picker (V1-3) → tap into a scoped Today
+  // ⚠️ **Scarlett, not Liam** (V1-24 PR 1a). The weigh-in surface now renders a RECEIPT once the day
+  // has a weight, so whoever writes first leaves no create form behind. Warming on Liam would consume
+  // the very day `log-bodyweight.spec.ts` needs, and its create path — the one this smoke exists to
+  // cover — would never run again. Same doctrine as `Splits` below: warm on something no spec
+  // asserts against. The action is profile-agnostic, so the cold cost is absorbed either way.
+  await selectProfile(page, 'Scarlett'); // '/' is the picker (V1-3) → tap into a scoped Today
   await logBodyweight(page, '0.5', { timeout: 30_000 }); // cold: boot cost lands here, not in the test
+
+  // Back to Liam for the check-ins warm-up — `Splits` is asserted-on by nobody, but the check-in
+  // specs run against Liam, so the warm statement plan has to be primed on his rows.
+  await page.goto('/');
+  await selectProfile(page, 'Liam');
 
   // …and warm the CHECK-INS path too. Warming bodyweight alone was not enough: `logCheckinsAction` is a
   // DIFFERENT, heavier action (it resolves several catalog rows, then does a MULTI-row insert), so it

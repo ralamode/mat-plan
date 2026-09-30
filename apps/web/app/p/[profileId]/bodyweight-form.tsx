@@ -1,7 +1,7 @@
 'use client';
 
 import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT, newId } from '@mat-plan/shared';
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { INPUT_CLASS } from '@/lib/constants';
@@ -12,26 +12,25 @@ import { DayField } from './day-field';
 
 export function BodyweightForm({ profileId, day }: { profileId: string; day: string }) {
   const [state, formAction, pending] = useActionState(logBodyweightAction, INITIAL_ACTION_STATE);
-  // Client-stamped idempotency key: generated once, rotated after a successful
-  // write (via the DOM, not state — avoids a cascading re-render).
-  const [initialClientId] = useState(newId);
-  const formRef = useRef<HTMLFormElement>(null);
-  const clientIdRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (state.ok) {
-      formRef.current?.reset();
-      if (clientIdRef.current) clientIdRef.current.value = newId();
-    }
-  }, [state]);
+  /**
+   * Client-stamped idempotency key, generated once and **never rotated** (V1-24 PR 1a).
+   *
+   * ⚠️ It used to reset the form and mint a FRESH key on every success, and that pair was the
+   * duplicate-row mechanism: `logBodyweight` dedupes only on `client_id`, so a new key made a second
+   * submit a second ROW — over an input the reset had just emptied, which is what invited the second
+   * submit. `page.tsx` now renders the receipt instead of this form once a weight exists, so there is
+   * nothing to reset; and a stable key means that if this form is somehow still mounted (a failed
+   * revalidation), a resubmit is an `ON CONFLICT DO NOTHING` no-op rather than a duplicate.
+   */
+  const [clientId] = useState(newId);
 
   const valueErr = state.fieldErrors?.value?.[0];
 
   return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="profileId" value={profileId} readOnly />
       <DayField day={day} />
-      <input ref={clientIdRef} type="hidden" name="clientId" defaultValue={initialClientId} />
+      <input type="hidden" name="clientId" value={clientId} readOnly />
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-1 flex-col gap-1.5">
           <label htmlFor="value" className="text-sm font-medium">

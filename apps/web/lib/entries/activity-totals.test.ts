@@ -1,9 +1,19 @@
-import { ACTIVITY_TYPE_KEYS, DEFAULT_SESSION_TYPE, ENTRY_STATUS } from '@mat-plan/shared';
+import {
+  ACTIVITY_TYPE_KEYS,
+  DEFAULT_SESSION_TYPE,
+  ENTRY_STATUS,
+  SEED_METRIC_KEYS,
+} from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { EntryDTO } from '@/lib/dal/entries';
 
-import { calisthenicsTotals, todayRows, type SessionRow } from './activity-totals';
+import {
+  calisthenicsTotals,
+  loggedBodyweight,
+  todayRows,
+  type SessionRow,
+} from './activity-totals';
 
 // Flatten a session's two-level items (V1-8-3d) back to member entries in display order.
 const members = (s: SessionRow): EntryDTO[] =>
@@ -307,5 +317,66 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
     const s = rows[0] as SessionRow;
     expect(s.items.map((it) => it.kind)).toEqual(['movement', 'movement']); // no 'superset' item
     expect(s.movementCount).toBe(2);
+  });
+});
+
+// V1-24 PR 1a — a weigh-in row, as `listEntriesForDay` returns it.
+const weighIn = (overrides: Partial<EntryDTO> = {}): EntryDTO =>
+  reading({
+    id: 'bw',
+    metricKey: SEED_METRIC_KEYS.bodyweight,
+    metricLabel: 'Bodyweight',
+    valueType: 'number',
+    aggregation: null,
+    activityKey: ACTIVITY_TYPE_KEYS.weigh_in,
+    activityLabel: 'Weigh-in',
+    unit: 'lb',
+    value: 84.5,
+    ...overrides,
+  });
+
+describe('loggedBodyweight (V1-24 PR 1a)', () => {
+  it('returns null when the day has no weigh-in', () => {
+    expect(loggedBodyweight([])).toBeNull();
+    expect(loggedBodyweight([habit(), reading({ value: 20 })])).toBeNull();
+  });
+
+  it('returns the entry id, value and unit — the id is what PR 1b will amend by', () => {
+    expect(loggedBodyweight([weighIn({ id: 'bw-1' })])).toEqual({
+      entryId: 'bw-1',
+      value: 84.5,
+      unit: 'lb',
+    });
+  });
+
+  it('keys on metric_key, not the legacy `kind`', () => {
+    // `entries.kind` is scheduled for deletion, so a row carrying only the legacy discriminant must
+    // NOT be picked up — and, more importantly, a modern row that lacks it must still be found.
+    expect(loggedBodyweight([weighIn({ kind: null })])).not.toBeNull();
+    expect(loggedBodyweight([reading({ kind: 'bodyweight', metricKey: 'pushups' })])).toBeNull();
+  });
+
+  /**
+   * ⚠️ A day can legitimately hold MORE than one weigh-in until PR 1d's unique index lands — that is
+   * the defect this PR's UI closes, and prod has such rows today. Rows arrive OLDEST-FIRST (V1-17),
+   * so the LAST match is the newest reading, which is the one a person means.
+   */
+  it('shows the newest reading when a day has duplicates', () => {
+    const picked = loggedBodyweight([
+      weighIn({ id: 'first', value: 84.5 }),
+      weighIn({ id: 'second', value: 85.2 }),
+    ]);
+    expect(picked).toEqual({ entryId: 'second', value: 85.2, unit: 'lb' });
+  });
+
+  /**
+   * A partially-written row has nothing to show, so it must not suppress the form — otherwise the
+   * athlete is left with neither a value nor a way to enter one.
+   */
+  it('ignores a value-less row rather than rendering an empty receipt', () => {
+    expect(loggedBodyweight([weighIn({ value: null })])).toBeNull();
+    expect(
+      loggedBodyweight([weighIn({ value: null }), weighIn({ id: 'real', value: 70 })]),
+    ).toEqual({ entryId: 'real', value: 70, unit: 'lb' });
   });
 });

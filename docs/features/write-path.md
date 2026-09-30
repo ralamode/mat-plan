@@ -90,6 +90,19 @@ flowchart LR
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.
 
+- **⚠️ `logBodyweight` dedupes ONLY on `client_id`, so the UI is what prevents a duplicate row
+  (V1-24 PR 1a).** `entries` has no natural-key uniqueness — the only unique index is
+  `uq_entries_client_id`. The bodyweight form used to reset itself **and mint a fresh `client_id`**
+  on every success, which made a second submit a second ROW, over an input the reset had just
+  emptied. That is how prod ended up with duplicate weigh-ins.
+
+  The form now renders only when the day has no weigh-in (`page.tsx` → `loggedBodyweight`), and its
+  `client_id` is **stable for the life of the mount**, so even a resubmit into a stale form is an
+  `ON CONFLICT DO NOTHING` no-op. **Do not re-introduce key rotation**, and do not assume the
+  database will catch a duplicate — the structural guard is V1-24 PR 1d and is not built yet.
+  ⚠️ That index must be scoped `WHERE metric_key = 'bodyweight'`: `metric_key` is the discriminant
+  for **every** metric, and the accumulating calisthenics log several rows a day by design.
+
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
   write failed, which prompts a duplicate submit.

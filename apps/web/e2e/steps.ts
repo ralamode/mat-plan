@@ -1,4 +1,4 @@
-import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
+import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import { expect, type Page } from '@playwright/test';
 
 /**
@@ -7,6 +7,13 @@ import { expect, type Page } from '@playwright/test';
  * rather than a re-typed UUID (AGENTS.md constants rule).
  */
 export const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
+
+/**
+ * The SECOND seeded profile's Today (Scarlett). `global.setup.ts` warms the bodyweight write path
+ * here, so this profile's today ALWAYS has a weigh-in by the time any spec runs — which makes it the
+ * one reliable fixture for the "already logged" read state (V1-24 PR 1a).
+ */
+export const SEED_PROFILE_2_ROUTE = `/p/${SEED_PROFILE_2_PUBLIC_ID}`;
 
 /**
  * An ISO day `n` days before now, in UTC. Shared by the day-navigation specs (V1-15, V1-28) — the
@@ -32,23 +39,43 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
 }
 
 /**
- * Log a bodyweight through the Today form and wait for it to render. Assumes the
- * page is already authenticated and on a profile-scoped Today (`/p/[profileId]`).
- * Shared by the smoke test and the one-time warmup in global.setup.ts (DRY — same
- * flow, one definition).
+ * **Ensure the day has a bodyweight, and return the value it actually has.**
  *
- * `timeout` is only overridden for the cold warmup; the real coverage test uses
- * the default (fast, warm server) — we keep the cold-start cost out of the test.
+ * Logs `value` through the Today form when the day is empty; when a weight is ALREADY logged the
+ * surface renders a receipt with no input, so this asserts that end state instead and returns the
+ * existing value. Callers assert on the RETURN, never on the value they passed — that is what makes
+ * them independent of which spec (or which retry) reached this profile's day first.
+ *
+ * Assumes the page is already authenticated and on a profile-scoped Today (`/p/[profileId]`).
+ *
+ * `timeout` is only overridden for the cold warmup; the real coverage test uses the default
+ * (fast, warm server) — we keep the cold-start cost out of the test.
  */
 export async function logBodyweight(
   page: Page,
   value: string,
   opts?: { timeout?: number },
-): Promise<void> {
-  // exact: disambiguate from the "Log bodyweight" section + "Set 1 weight" input.
-  await page.getByLabel('Weight', { exact: true }).fill(value);
+): Promise<string> {
+  const section = page.getByRole('region', { name: /^(Log b|B)odyweight$/ });
+  const input = page.getByLabel('Weight', { exact: true });
+
+  // RETRY-SAFE, and cross-spec safe (V1-24 PR 1a). Since the weigh-in surface renders a RECEIPT once
+  // the day has a weight, the create form is simply absent on a day that already has one — so an
+  // unconditional `fill` times out. Two real callers hit that: a Playwright retry (which reuses the
+  // ephemeral DB) and a sibling spec that logged this profile's day first under `fullyParallel`.
+  //
+  // The same shape `logCheckins` and `logLifeActivity` already use: when the end state is present,
+  // assert it instead of driving an absent control.
+  if ((await input.count()) === 0) {
+    const shown = (await section.getByText(/^[\d.]+ \w+$/).textContent())!.trim();
+    await expect(page.getByText(`Bodyweight — ${shown}`)).toBeVisible(opts);
+    return shown.split(' ')[0];
+  }
+
+  await input.fill(value);
   await page.getByRole('button', { name: 'Log weight' }).click();
   await expect(page.getByText(`Bodyweight — ${value} lb`)).toBeVisible(opts);
+  return value;
 }
 
 /**

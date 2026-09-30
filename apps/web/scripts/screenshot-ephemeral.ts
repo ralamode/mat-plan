@@ -15,11 +15,13 @@ import {
 } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
+  DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
   ENTRY_STATUS,
   METRIC_KEYS,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
+  SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
@@ -314,6 +316,14 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
       .from(schema.metricDefinitions)
       .where(eq(schema.metricDefinitions.key, METRIC_KEYS.stance))
       .limit(1);
+    // V1-24 PR 1a — the weigh-in, so this fixture also renders the bodyweight RECEIPT. Added here
+    // rather than as a second `--state`: "this day has stuff logged" is exactly what this fixture
+    // already means, and the receipt is the same already-logged read state the check-in rows show.
+    const [weighIn] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.weigh_in))
+      .limit(1);
 
     const day = localDayIso(DEFAULT_TIME_ZONE);
     // Mirrors logCheckinEntries' shape exactly: ALWAYS value_num='1', NEVER movement_name,
@@ -343,12 +353,27 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
           metricKey: stance.key,
           status: ENTRY_STATUS.done,
         },
+        {
+          publicId: newId(),
+          clientId: newId(),
+          profileId: profile.id,
+          activityDate: day,
+          unit: DEFAULT_BODYWEIGHT_UNIT,
+          // A DECIMAL on purpose: the receipt must render `84.5 lb`, not `84.50` or `85` — the
+          // value is a JS number at the DTO boundary and must not be re-formatted.
+          valueNum: '84.5',
+          activityTypeId: weighIn.id,
+          metricKey: SEED_METRIC_KEYS.bodyweight,
+          status: ENTRY_STATUS.done,
+        },
       ])
       .onConflictDoNothing({
         target: schema.entries.clientId,
         where: isNull(schema.entries.deletedAt),
       });
-    console.log('✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance)');
+    console.log(
+      '✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance + a weigh-in)',
+    );
   } finally {
     await pool.end();
   }

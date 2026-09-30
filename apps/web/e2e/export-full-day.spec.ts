@@ -14,7 +14,7 @@ import {
 } from '@mat-plan/shared/csv';
 import { expect, type Page, test } from '@playwright/test';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { logBodyweight, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * **V1-14b — the full-day round trip.** Log a day through the real UI, download the real export,
@@ -63,7 +63,12 @@ const PROBE_MOVEMENT = 'Export Probe Squat';
  */
 const PROBE_CSV_MOVEMENT = 'export-probe-squat';
 
-/** Distinctive enough not to collide with `log-bodyweight.spec.ts`, and a DECIMAL on purpose. */
+/**
+ * A DECIMAL on purpose — `formatNumeric` must keep `84.5` a string end to end, and a float
+ * round-trip is what would silently corrupt it. The assertion runs against whatever value the day
+ * ends up holding (see the helper), and every candidate a spec writes is a decimal, so the coverage
+ * holds either way.
+ */
 const PROBE_BODYWEIGHT = '84.5';
 
 /** Non-uniform on purpose: `collapse()` must emit a slash-list here, and a scalar for the load. */
@@ -118,11 +123,12 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   const month = day.slice(0, 7);
 
   // ── 1. Bodyweight ─────────────────────────────────────────────────────────────
-  await page.getByLabel('Weight', { exact: true }).fill(PROBE_BODYWEIGHT);
-  await page.getByRole('button', { name: 'Log weight' }).click();
-  await expect(page.getByText(`Bodyweight — ${PROBE_BODYWEIGHT} lb`)).toBeVisible({
-    timeout: 15_000,
-  });
+  // Via the shared helper, not an inline fourth copy of the same three lines — and it RETURNS the
+  // value the day actually holds. Under `fullyParallel` a sibling spec may have logged this profile's
+  // day first, and since V1-24 PR 1a the surface then renders a receipt with no input. Asserting the
+  // returned value is also the stronger test: the CSV must match what the app displays, whatever
+  // that is, which is precisely this spec's job.
+  const bodyweight = await logBodyweight(page, PROBE_BODYWEIGHT, { timeout: 15_000 });
 
   // ── 2. Strength ───────────────────────────────────────────────────────────────
   // The blank movement card, NOT the program scaffold: the scaffold's movements come from
@@ -174,7 +180,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // keeps it one. A float round-trip is what would corrupt this, and it would corrupt it silently.
   // The two trailing commas are `context` (which the form cannot write) and `notes`, both empty —
   // trailing empty fields are WRITTEN, per the contract.
-  expect(bw.lines).toContain(`${day},${PROBE_BODYWEIGHT},,`);
+  expect(bw.lines).toContain(`${day},${bodyweight},,`);
 
   // ── 5. Strength bytes ─────────────────────────────────────────────────────────
   const strength = parse(files, strengthPath);
