@@ -66,6 +66,10 @@ guard "branch -d --force, several names" "$repo" "git branch -d --force feat/x f
 guard "ship-pr §8 cleanup, exactly" "$repo" "git worktree remove .claude/worktrees/wt && git branch -D feat/x   # -D: squash-merged, so git can't tell it's merged" allow
 guard "worktree repair" "$repo" "git worktree repair" allow
 guard "pull --ff-only --prune origin main" "$repo" "git pull --ff-only --prune origin main" allow
+guard "ls-remote, cherry, range-diff" "$repo" "git ls-remote origin && git cherry origin/main && git range-diff a...b" allow
+guard "tag listing flags without -l" "$repo" "git tag --points-at HEAD && git tag --contains HEAD --sort=-v:refname && git tag -n" allow
+guard "config <key> (a get)" "$repo" "git config user.name && git config --global core.editor" allow
+guard "git -c with a harmless key" "$repo" "git -c color.ui=never log -1" allow
 guard "a heredoc to a non-shell command is data" "$repo" $'gh pr create --title t --body-file - <<EOF\ngit checkout -b x\nEOF' allow
 guard "cat <<EOF is data" "$repo" $'cat <<EOF >notes.txt\ngit reset --hard\nEOF' allow
 guard "a pipe into a non-shell is fine" "$repo" "git log --oneline | head -3" allow
@@ -100,6 +104,20 @@ guard "switch --discard-changes main" "$repo" "git switch --discard-changes main
 guard "branch -f" "$repo" "git branch -f main HEAD~1" deny
 guard "branch -D main" "$repo" "git branch -D main" deny
 guard "branch -D main among others" "$repo" "git branch -D main other" deny
+guard "branch -D Main (case-insensitive filesystems)" "$repo" "git branch -D Main" deny
+guard "branch -D MAIN" "$repo" "git branch -D MAIN" deny
+guard "abbreviated --update-h (fetch into main)" "$repo" "git fetch --update-h . +feat/x:main" deny
+guard "abbreviated worktree remove --forc" "$repo" "git worktree remove --forc .claude/worktrees/wt" deny
+guard "abbreviated worktree add --fo" "$repo" "git worktree add --fo .claude/worktrees/z feat/x" deny
+guard "abbreviated reset --har" "$repo" "git reset --har HEAD" deny
+guard "abbreviated reset --so" "$repo" "git reset --so HEAD" deny
+guard "abbreviated checkout --forc main" "$repo" "git checkout --forc main" deny
+guard "abbreviated switch --discard main" "$repo" "git switch --discard main" deny
+guard "abbreviated pull --reb" "$repo" "git pull --ff-only --reb origin main" deny
+guard "abbreviated branch --del main" "$repo" "git branch --del main" deny
+guard "abbreviated config --unse" "$repo" "git config --unse user.name" deny
+guard "tag creation" "$repo" "git tag v1.0" deny
+guard "config <key> <value> (a set)" "$repo" "git config user.name evil" deny
 guard "branch -d -r (remote-tracking)" "$repo" "git branch -d -r origin/feat/x" deny
 guard "branch -m" "$repo" "git branch -m feat/x feat/renamed" deny
 guard "branch creation" "$repo" "git branch feat/new" deny
@@ -162,6 +180,24 @@ guard "pnpm -C … exec git (dir unresolvable)" "$wt" "pnpm -C $repo exec git ch
 guard "quote-split g''it" "$repo" "g''it checkout -b y" deny
 guard "backslash-split g\\it" "$repo" 'g\it checkout -b y' deny
 guard "ANSI-C quoted \$'git'" "$repo" "\$'git' checkout -b y" deny
+guard "process substitution into bash" "$repo" "bash <(echo 'git checkout -b y')" deny
+guard "source <(…)" "$repo" "source <(echo 'git checkout -b y')" deny
+guard ". <(…)" "$repo" ". <(echo 'git checkout -b y')" deny
+guard "git inside <(…) runs" "$repo" "cat <(git checkout -b y)" deny
+guard "process substitution into bash, from a worktree" "$wt" "bash <(echo 'git checkout -b y')" allow
+guard "env -S string" "$repo" "env -S 'git checkout -b y'" deny
+guard "arch -arm64 git" "$repo" "arch -arm64 git checkout -b y" deny
+guard "script -q /dev/null git" "$repo" "script -q /dev/null git checkout -b y" deny
+guard "script -c '…'" "$repo" "script -q -c 'git checkout -b y' /dev/null" deny
+guard "fish -c" "$repo" "fish -c 'git checkout -b y'" deny
+guard "xargs into sh -c" "$repo" "echo 'git checkout -b y' | xargs -I{} sh -c '{}'" deny
+guard "git\${IFS}checkout" "$repo" 'git${IFS}checkout -b y' deny
+guard "\$(which git) as the command" "$repo" '$(which git) checkout -b y' deny
+guard "git -c alias.* with a read-only subcommand" "$repo" "git -c alias.st='!git checkout -b y' status" deny
+guard "git -c core.pager" "$repo" "git -c core.pager='sh -c \"git checkout -b y\"' log" deny
+guard "git -c core.hooksPath" "$repo" "git -c core.hooksPath=/tmp/h status" deny
+guard "git -c Core.SSHCommand (keys are case-insensitive)" "$repo" "git -c Core.SSHCommand=x fetch" deny
+guard "git --config-env=core.editor=…" "$repo" "git --config-env=core.editor=EVIL status" deny
 guard "env git" "$repo" "env git checkout -b y" deny
 guard "env VAR=x git" "$repo" "env FOO=1 git checkout -b y" deny
 guard "command git" "$repo" "command git checkout -b y" deny
@@ -240,6 +276,12 @@ if grep -q 'bidi \[feat/ evil x\]' <<<"$out" && ! LC_ALL=C grep -qF "$rlo" <<<"$
   ok "worktree branch names are sanitized (U+202E, U+061C)"
 else bad "worktree branch name not sanitized" "$out"; fi
 git -C "$repo" worktree remove "$repo/.claude/worktrees/bidi"
+git -C "$repo" checkout -q -b "feat/${rlo}off${alm}main"
+out="$(session)"
+if grep -q 'is on \\"feat/ off main\\"' <<<"$out" && ! LC_ALL=C grep -qF "$rlo" <<<"$out"; then
+  ok "the off-main warning sanitizes the branch name"
+else bad "off-main warning not sanitized" "$out"; fi
+git -C "$repo" checkout -q main
 PATH_NO_GH="$tmp/nogh"
 mkdir -p "$PATH_NO_GH" && ln -s "$(command -v git)" "$PATH_NO_GH/git"
 out="$(cd "$wt" && env -u CI -u GITHUB_ACTIONS PATH="$PATH_NO_GH" "$(command -v node)" "$here/session-context.mjs" </dev/null)"

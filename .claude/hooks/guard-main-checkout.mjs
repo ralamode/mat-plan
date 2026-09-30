@@ -11,29 +11,37 @@
  *
  * BEST-EFFORT, NOT A SECURITY BOUNDARY. It stops a well-meaning agent from mutating the shared main
  * checkout by accident, in the forms that actually get typed. It is a heuristic shell reader, not a
- * shell: a determined adversary can get past it (a script file, an alias in ~/.gitconfig, …). Within
- * that scope it is an ALLOWLIST: in THIS project's main checkout, only the git below is allowed.
+ * shell. Within that scope it is an ALLOWLIST: in THIS project's main checkout, only this is allowed.
  *
  *   read-only   status log diff show rev-parse merge-base ls-files ls-tree grep blame describe
  *               shortlog cat-file for-each-ref rev-list show-ref check-ignore name-rev diff-tree help
- *               fetch (not --update-head-ok) · reflog (no expire/delete) · remote (list/show/get-url)
- *               config --get/--list · branch (list flags only) · tag (list only) · stash list/show
+ *               ls-remote cherry range-diff · fetch (not --update-head-ok) · reflog (no expire/delete)
+ *               remote (list/show/get-url) · config --get/--list/<key> · branch (list flags only)
+ *               tag (listing flags only) · stash list/show
  *   worktrees   worktree list / add / remove (neither with --force) / prune / repair
- *               branch -d|-D [--force] <names> (never `main`): the post-merge cleanup
+ *               branch -d|-D [--force] <names> (never `main`, any case): the post-merge cleanup
  *   syncing     pull --ff-only [--prune] [origin [main]] and merge --ff-only origin/main, only on main
  *               checkout main / switch main (no flags), only when `git status --porcelain` is empty
  *               reset [-q] [HEAD] [-- <paths>] (unstage only)
- * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`, and
- * commands piped into a bare shell (unreadable). A linked worktree, an unrelated repository and a
- * non-repo directory are never restricted.
+ * Everything else is denied there, including unknown subcommands and aliases, `gh pr checkout`,
+ * `git -c` with a key that runs a command (alias.*, core.pager/editor/hooksPath/…), and commands it
+ * can't read: piped into a bare shell or `xargs sh`, fed by `<(…)`, or named by a variable
+ * (`git${IFS}checkout`). An abbreviated long option (`--forc`, which git accepts) is matched as the
+ * option it abbreviates where that option is refused, and is otherwise off the allowlist. A linked
+ * worktree, an unrelated repository and a non-repo directory are never restricted.
  *
  * How the command is read: segmented on newlines, `;`, `&&`, `||`, `|`, `&` and `(`/`)`; quotes and
- * backslashes dropped from words (`g''it`, `$'git'`); recursing into `$(…)`, backticks, `eval`,
- * `watch`, `find -exec`, `sh|bash|zsh -c '…'` and a heredoc / here-string fed to a bare shell;
- * stripping `env`/`command`/`builtin`/`time`/`nohup`/`xargs`/`sudo`/`doas`/`stdbuf`/`caffeinate`/
- * `pnpm exec`/`coproc`/`function NAME` prefixes; following `cd`/`pushd` and `git -C`. A directory it
- * can't resolve (`~`, `$VAR`, `popd`, `--git-dir`, `GIT_DIR=`, `find -execdir`) counts as possibly
- * the main checkout. A heredoc fed to any other command is data.
+ * backslashes dropped from words (`g''it`, `$'git'`); recursing into `$(…)`, `<(…)`, backticks,
+ * `eval`, `watch`, `find -exec`, `env -S`, `script -c`, `sh|bash|zsh|fish -c '…'` and a heredoc /
+ * here-string fed to a bare shell; stripping `env`/`command`/`builtin`/`time`/`nohup`/`xargs`/
+ * `sudo`/`doas`/`stdbuf`/`caffeinate`/`arch`/`script`/`pnpm exec`/`coproc`/`function NAME` prefixes;
+ * following `cd`/`pushd` and `git -C`. A directory it can't resolve (`~`, `$VAR`, `popd`,
+ * `--git-dir`, `GIT_DIR=`, `find -execdir`) counts as possibly the main checkout. A heredoc fed to
+ * any other command is data.
+ *
+ * Known gaps (out of scope for a best-effort guard): a script file run by name (`bash x.sh`), an
+ * alias or `core.*` setting already in ~/.gitconfig or .git/config, git run from another program
+ * (`node -e`, `python -c`, `make`), and wrappers not listed above.
  *
  * "Main checkout" = the primary (not linked) worktree whose git common dir is the same as that of
  * `$CLAUDE_PROJECT_DIR`. Without that variable, any primary worktree counts.
@@ -56,6 +64,17 @@ const MAIN = 'main';
 const ESCAPE = 'MAT_PLAN_ALLOW_MAIN_CHECKOUT=1';
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const GIT_LOCATION_ENV = /^GIT_(DIR|WORK_TREE)=/;
+/** The word a process substitution `<(…)` leaves behind: unresolvable (`$`), and recognisable. */
+const PROCSUB = '$<(…)';
+/** `git -c <key>=…` keys whose value git runs as a command. */
+const EXEC_CONFIG =
+  /^(alias\..*|core\.(pager|fsmonitor|sshcommand|hookspath|editor)|sequence\.editor|diff\.external)$/;
+
+/** `arg` is the long option `long`, or a prefix of it git would accept (`--forc` for `--force`). */
+export function isLongOpt(arg, long, min = 3) {
+  const name = arg.split('=')[0];
+  return name.startsWith('--') && name.length >= min && long.startsWith(name);
+}
 
 // ─── Lexer ────────────────────────────────────────────────────────────────────────────────────────
 // Tokens: { op } for a separator, { redir: true } for a redirection (the next word is its target),
@@ -112,6 +131,10 @@ function lexList(p, inSub) {
         p.i += s[p.i + 1] === '&' ? 2 : 1;
         tokens.push({ op: '|' });
       }
+    } else if ((c === '<' || c === '>') && s[p.i + 1] === '(') {
+      // Process substitution <(…) / >(…): its commands run; as a word it reads as a file.
+      p.i += 2;
+      tokens.push({ text: PROCSUB, subs: [lexList(p, true)] });
     } else if (c === '<' || c === '>') {
       const r = lexRedirection(p);
       if (r.heredoc) {
@@ -262,7 +285,7 @@ const KEYWORDS = new Set([
   'until',
   'coproc',
 ]);
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
 const XARGS_WITH_VALUE = new Set(['-I', '-n', '-P', '-L', '-d', '-E', '-s', '-a', '--arg-file']);
 const SUDO_WITH_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-U', '-r', '-t', '-T']);
 
@@ -314,6 +337,7 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
   let escape = inheritedEscape;
   let gitEnv = state.gitEnv;
   let dirUnsure = state.unsure;
+  let viaXargs = false; // the command's arguments arrive on stdin
   // Leading assignments: the only place the escape hatch counts.
   for (; i < words.length && ASSIGNMENT.test(words[i]); i++) {
     if (words[i] === ESCAPE) escape = true;
@@ -350,6 +374,12 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
     } else if (base === 'env') {
       for (i++; i < words.length; i++) {
         const a = words[i];
+        if (a === '-S' || a === '--split-string' || a.startsWith('--split-string=')) {
+          // env -S 'git checkout …': the string is split into the command.
+          const str = a.includes('=') ? a.slice(a.indexOf('=') + 1) : words[++i];
+          walk(lex([str, ...words.slice(i + 1)].join(' ')), { ...state }, out, escape);
+          return;
+        }
         if (a === '-u' || a === '--unset') i++;
         else if (a === '-C' || a === '--chdir') {
           dirUnsure = true;
@@ -368,7 +398,22 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
       for (i++; words[i]?.startsWith('-'); i++) if (['-s', '-k'].includes(words[i])) i++;
       i++; // the duration
     } else if (base === 'xargs') {
+      viaXargs = true;
       for (i++; words[i]?.startsWith('-'); i++) if (XARGS_WITH_VALUE.has(words[i])) i++;
+    } else if (base === 'arch') {
+      for (i++; words[i]?.startsWith('-'); i++) if (/^-(arch|e|d)$/.test(words[i])) i++;
+    } else if (base === 'script') {
+      // BSD `script [-q…] [file [command …]]`; util-linux `script -c 'command' [file]`.
+      let command = null;
+      for (i++; words[i]?.startsWith('-'); i++) {
+        if (words[i] === '-c' || words[i] === '--command') command = words[++i] ?? '';
+        else if (/^-[tTFI]$/.test(words[i])) i++;
+      }
+      if (command !== null) {
+        walk(lex(command), { ...state }, out, escape);
+        return;
+      }
+      i++; // the typescript file
     } else if (base === 'sudo') {
       for (i++; i < words.length; i++) {
         const a = words[i];
@@ -383,6 +428,17 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
   const cmd = words[i];
   const base = cmd.includes('/') ? basename(cmd) : cmd;
   const rest = words.slice(i + 1);
+
+  // `git${IFS}checkout`, `$(which git) …`, `"$GIT" …`: the command itself can't be read.
+  if (cmd.includes('$')) {
+    out.push({ kind: 'dynamic', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    return;
+  }
+  // `source <(…)` / `. <(…)` run commands we can't read, like a pipe into a shell.
+  if ((base === 'source' || base === '.') && rest[0] === PROCSUB) {
+    out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    return;
+  }
 
   if (base === 'cd' || base === 'pushd') {
     const target = rest.find((a) => !/^-[LPe@n]*$/.test(a) || a === '-');
@@ -416,7 +472,10 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
         break;
       }
     }
-    if (sawC && script !== undefined) walk(lex(script), { ...state }, out, escape);
+    if (viaXargs || script === PROCSUB)
+      // `xargs sh -c '{}'` / `bash <(…)`: the commands arrive from somewhere we can't read.
+      out.push({ kind: 'shell', dir: state.dir, unsure: dirUnsure || gitEnv, escape });
+    else if (sawC && script !== undefined) walk(lex(script), { ...state }, out, escape);
     else if (script === undefined) {
       // A bare shell reads its commands from stdin: a heredoc / here-string body is readable; a
       // pipe is not, so it counts as an unknown command.
@@ -463,6 +522,7 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
   if (base !== 'git') return;
 
   let dir = state.dir;
+  let execConfig = false; // `-c core.pager=…` and friends run a command of their own
   let k = 0;
   for (; k < rest.length && rest[k].startsWith('-'); k++) {
     const a = rest[k];
@@ -473,8 +533,13 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
         dir = resolve(dir, t);
         if (isAbsolute(t)) dirUnsure = false;
       }
-    } else if (a === '-c' || a === '--namespace' || a === '--super-prefix' || a === '--config-env')
-      k++;
+    } else if (a === '-c' || a === '--config-env') {
+      const key = (rest[++k] ?? '').split('=')[0].toLowerCase();
+      if (EXEC_CONFIG.test(key)) execConfig = true;
+    } else if (a.startsWith('--config-env=')) {
+      if (EXEC_CONFIG.test(a.slice('--config-env='.length).split('=')[0].toLowerCase()))
+        execConfig = true;
+    } else if (a === '--namespace' || a === '--super-prefix') k++;
     else if (a === '--git-dir' || a === '--work-tree') {
       gitEnv = true;
       k++;
@@ -486,6 +551,7 @@ function analyzeSegment(tokens, state, out, inheritedEscape, piped = false) {
     unsure: dirUnsure || gitEnv,
     sub: rest[k],
     args: rest.slice(k + 1),
+    execConfig,
     escape,
   });
 }
@@ -514,6 +580,9 @@ const READ_ONLY = new Set([
   'diff-tree',
   'help',
   'version',
+  'ls-remote',
+  'cherry',
+  'range-diff',
 ]);
 const BRANCH_LIST_FLAGS =
   /^(-[arvl]+|--all|--remotes|--verbose|--list|--show-current|--no-color|--color(=.*)?|--column(=.*)?|--no-column|--ignore-case|--omit-empty|(--sort|--format|--merged|--no-merged|--contains|--no-contains|--points-at)(=.*)?)$/;
@@ -553,6 +622,16 @@ const CONFIG_WRITE = new Set([
   '--edit',
   '-e',
 ]);
+const CONFIG_WRITE_LONG = [
+  '--unset',
+  '--unset-all',
+  '--add',
+  '--replace-all',
+  '--rename-section',
+  '--remove-section',
+  '--edit',
+];
+const isConfigWrite = (a) => CONFIG_WRITE.has(a) || CONFIG_WRITE_LONG.some((l) => isLongOpt(a, l));
 const QUIET_OR_VERBOSE = new Set(['-q', '--quiet', '-v', '--verbose']);
 
 function branchListOnly(args) {
@@ -563,6 +642,19 @@ function branchListOnly(args) {
       if (!BRANCH_LIST_FLAGS.test(a)) return false;
       if (BRANCH_FLAGS_WITH_VALUE.has(a)) k++;
     } else if (!listing) return false; // `git branch foo` creates a branch
+  }
+  return true;
+}
+
+/** `git tag` with listing flags only; a bare name (a new tag) needs `-l`/`--list` to be a pattern. */
+function tagListOnly(args) {
+  const listing = args.some((a) => a === '-l' || a === '--list');
+  for (let k = 0; k < args.length; k++) {
+    const a = args[k];
+    if (a.startsWith('-')) {
+      if (!TAG_LIST_FLAGS.test(a)) return false;
+      if (BRANCH_FLAGS_WITH_VALUE.has(a)) k++; // --sort / --contains / --points-at … <value>
+    } else if (!listing) return false;
   }
   return true;
 }
@@ -579,7 +671,8 @@ function branchDeleteOnly(args) {
     flags.some((a) => a === '-d' || a === '-D' || a === '--delete') &&
     flags.every((a) => ['-d', '-D', '--delete', '--force', '-q', '--quiet'].includes(a)) &&
     names.length > 0 &&
-    names.every((n) => /^[\w.][\w./-]*$/.test(n) && n !== MAIN)
+    // Case-insensitive: on a case-insensitive filesystem `-D Main` deletes refs/heads/main.
+    names.every((n) => /^\w[\w./-]*$/.test(n) && !n.includes('..') && n.toLowerCase() !== MAIN)
   );
 }
 
@@ -594,27 +687,25 @@ export function allowedInMain(sub, args, ctx) {
   const pos = args.filter((a) => !a.startsWith('-'));
   switch (sub) {
     case 'fetch':
-      return !args.some((a) => a === '--update-head-ok' || /^-[a-zA-Z]*u/.test(a));
+      return !args.some((a) => isLongOpt(a, '--update-head-ok') || /^-[a-zA-Z]*u/.test(a));
     case 'reflog':
       return !args.some((a) => a === 'expire' || a === 'delete');
     case 'remote': {
       const first = args.find((a) => a !== '-v' && a !== '--verbose');
       return first === undefined || first === 'show' || first === 'get-url';
     }
-    case 'config':
-      return args.some((a) => CONFIG_READ.has(a)) && !args.some((a) => CONFIG_WRITE.has(a));
+    case 'config': {
+      if (args.some(isConfigWrite)) return false;
+      return args.some((a) => CONFIG_READ.has(a)) || pos.length === 1; // `git config <key>` is a get
+    }
     case 'branch':
       return branchListOnly(args) || branchDeleteOnly(args);
     case 'tag':
-      return (
-        args.length === 0 ||
-        (args.some((a) => a === '-l' || a === '--list') &&
-          flags.every((a) => TAG_LIST_FLAGS.test(a)))
-      );
+      return tagListOnly(args);
     case 'stash':
       return args[0] === 'list' || args[0] === 'show';
     case 'worktree': {
-      const force = flags.some((a) => a === '--force' || /^-[a-zA-Z]*f/.test(a));
+      const force = flags.some((a) => isLongOpt(a, '--force') || /^-[a-zA-Z]*f/.test(a));
       if (['list', 'prune', 'repair'].includes(args[0])) return true;
       return (args[0] === 'add' || args[0] === 'remove') && !force;
     }
@@ -693,8 +784,12 @@ export function isProjectMainCheckout(dir, projectDir) {
 function denyReason(inv) {
   const what = {
     gh: '`gh pr checkout`',
-    shell: 'A command piped into a shell (unreadable, so treated as unknown)',
-    git: `\`git ${inv.sub}\``,
+    shell:
+      'A command fed to a shell from a pipe, xargs or <(…) (unreadable, so treated as unknown)',
+    dynamic: 'A command whose name comes from a variable or substitution (unreadable)',
+    git: inv.execConfig
+      ? `\`git -c <key>\` with a key that runs a command (alias, pager, editor, hooks…)`
+      : `\`git ${inv.sub}\``,
   }[inv.kind];
   const where = inv.unsure
     ? `possibly in the MAIN checkout (the directory can't be resolved from the command: use an absolute path, no ~ or $VAR, no GIT_DIR/--git-dir)`
@@ -702,9 +797,10 @@ function denyReason(inv) {
   return (
     `${what} ${where} is blocked: it stays on \`main\` ` +
     `(AGENTS.md → "Git & branch workflow"). Other sessions read it, and project skills load from it. ` +
-    `Allowed there: read-only git, worktree list/add/remove/prune, \`git branch -D <merged-branch>\`, ` +
-    `\`git pull --ff-only origin main\` and \`git merge --ff-only origin/main\` on main, ` +
-    `\`git checkout main\` with a clean tree. ` +
+    `Allowed there: read-only git; \`git worktree list|add|remove|prune|repair\` (no --force); ` +
+    `\`git branch -d|-D <branch>\` (not main); \`git reset [HEAD] [-- <paths>]\` (unstage only); ` +
+    `\`git pull --ff-only [--prune] origin main\` and \`git merge --ff-only origin/main\` on main; ` +
+    `\`git checkout main\` / \`git switch main\` with a clean tree. ` +
     `Do this in a worktree: git fetch origin && git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main. ` +
     `If a person explicitly asked for it here, prefix the command with ${ESCAPE}.`
   );
@@ -723,7 +819,8 @@ export function check(command, cwd, projectDir) {
         clean: () => (clean ??= git(inv.dir, 'status', '--porcelain') === ''),
       };
     }
-    if (inv.kind !== 'git' || !allowedInMain(inv.sub, inv.args, ctx)) return denyReason(inv);
+    if (inv.kind !== 'git' || inv.execConfig || !allowedInMain(inv.sub, inv.args, ctx))
+      return denyReason(inv);
   }
   return null;
 }

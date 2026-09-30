@@ -138,7 +138,7 @@ async function briefing(cwd) {
 
   if (branch && branch !== MAIN) {
     warnings.push(
-      `The MAIN checkout (${root}) is on "${branch}", not ${MAIN}. Project skills load from it, so they may be missing or stale. Don't switch it back over someone's work; ask whose it is.`,
+      `The MAIN checkout (${root}) is on "${sanitize(branch)}", not ${MAIN}. Project skills load from it, so they may be missing or stale. Don't switch it back over someone's work; ask whose it is.`,
     );
   }
 
