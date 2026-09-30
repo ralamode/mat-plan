@@ -258,6 +258,17 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX-1 implemented: `@claude review`** ([plan](./plans/dx-1-claude-review.md)).
+  A writer's `@claude review` comment runs the `review-pr` skill in CI and posts one verified review,
+  or a one-line failure notice, never silence. It is **on request only and advisory**. The model job
+  holds only a read-only GitHub token and can edit one file; a separate model-free job scans the
+  output and posts it. The PR head is fetched as SHA-pinned data with PR agent config neutralised.
+  `review-prefetch.sh` is now the one way both local and CI reviews gather their inputs (18-case
+  self-test), and `review-post.sh` has 9. The plan's blanket settings guard would have refused every
+  review once #179 added hooks, so it validates the file's shape instead (logged as D1).
+  **Goes live when `CLAUDE_CODE_OAUTH_TOKEN` is set** (runbook). The post-merge injection smoke is the
+  acceptance gate.
+
 - **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
   broken twice within hours: another session switched the main checkout to a feature branch, which
   made a `git pull` try to merge `main` into someone's branch and made project skills vanish

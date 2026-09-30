@@ -91,8 +91,21 @@ skipping` warning.
 
 ## Rotate a secret (Neon password / access-gate code / GitHub Actions secret)
 
-_TODO — document rotating `DATABASE_URL(_UNPOOLED)`, `ACCESS_GATE_PASSWORD`, and the GitHub Actions
-secret; update `.env.local` + Vercel env + the GH secret together; note what re-deploys are needed._
+_TODO — document rotating `DATABASE_URL(_UNPOOLED)` and `ACCESS_GATE_PASSWORD`; update `.env.local` +
+Vercel env + the GH secret together; note what re-deploys are needed._
+
+### `CLAUDE_CODE_OAUTH_TOKEN` (the `@claude review` workflow, DX-1)
+
+1. On a machine logged in to a Claude Pro/Max account: `claude setup-token`, and copy the token.
+2. GitHub → Settings → Secrets and variables → Actions → **New repository secret**
+   `CLAUDE_CODE_OAUTH_TOKEN` (or update it). Nothing else reads it; no redeploy.
+3. Check: comment `@claude review` on any open PR. Within ~20 minutes there is one comment, a
+   review, or a notice with a run URL.
+4. **Expired or revoked token:** the review job fails at the action step and the PR gets
+   "claude-review failed or ran out of budget" with the run URL. Rotate with steps 1–2.
+5. **If a review was ever "withheld"** (a secret pattern matched), treat the token as leaked: revoke it
+   (claude.ai → settings) and rotate. Don't re-run a claude-review job with debug logging on: its
+   tool output lands in a public log.
 
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 

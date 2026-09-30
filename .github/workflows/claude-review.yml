@@ -1,0 +1,131 @@
+# DX-1: `@claude review` — the review-pr skill, ON REQUEST ONLY, never automatic, never a required check.
+# A writer comments `@claude review` on a PR; a few minutes later one comment holds the verified
+# P0/P1/P2 review (or a one-line failure notice with this run's URL, never silence).
+#
+# The shape is the threat model (docs/plans/dx-1-claude-review.md, two panel rounds + a PR review):
+#   - `review` runs the model with READ-ONLY scopes. The action writes its GitHub token into
+#     .git/config and the model's env, so that token must be one whose leak is harmless on a public
+#     repo. The model can read the workspace and Edit exactly one file; no shell, no network tools.
+#   - `post` has the write scopes and runs no model and no PR code: it scans the review as untrusted
+#     text and posts it.
+#   - The PR head is fetched as DATA by review-prefetch.sh: SHA-pinned, symlinks off, PR-authored
+#     agent config renamed *.pr-data, never installed, built or executed.
+# Every action here is pinned to a full SHA because a secret is in scope; Dependabot bumps them.
+name: claude-review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+env:
+  REVIEW_DIR: review-input # the prompt, the Edit rule below and the post job all read these
+  REVIEW_OUT: review-input/review.md
+  MAX_COMMENT_BYTES: '60000' # GitHub caps a comment at 65,536 characters
+
+jobs:
+  review:
+    name: review (model, read-only)
+    # Skipped (no secret loaded) unless: it's a PR, the comment starts with the phrase, and the
+    # commenter is associated with the repo. The action then re-checks write access itself.
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '@claude review') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: claude-review-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions: # READ ONLY: this job's token is the one the model can reach
+      contents: read # checkout + fetch the PR head as data
+      pull-requests: read # gh pr view (metadata, head SHA)
+      checks: read # gh pr checks (CI state for the review)
+      statuses: read # gh pr checks (commit statuses)
+    outputs:
+      head_sha: ${{ steps.prefetch.outputs.head_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — the DEFAULT branch
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: prefetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
+        run: .github/scripts/review-prefetch.sh "$PR" "$REVIEW_DIR"
+
+      - uses: anthropics/claude-code-action@fd1c128679612beff4ca259c78021c506e8aa7a7 # v1.0.237 — the SHA the panel read
+        with:
+          # zizmor: ignore[secrets-outside-env] — issue_comment always runs main's workflow and only writers
+          # can push branches, so an Environment adds deployment noise to every PR for no new boundary.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }} # the READ-only job token; skips the App's contents:write token
+          classify_inline_comments: 'false' # skips the action's own post-run bash step (action.yml:431)
+          prompt: |
+            Follow .claude/skills/review-pr/SKILL.md in CI mode for PR #${{ github.event.issue.number }}
+            at ${{ steps.prefetch.outputs.head_sha }}. Inputs are in ${{ env.REVIEW_DIR }}/.
+            Replace the skeleton in ${{ env.REVIEW_OUT }} early and keep it updated (Edit only); keep it
+            under ${{ env.MAX_COMMENT_BYTES }} bytes.
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read(./**),Grep,Glob,Edit(./review-input/review.md)"
+            --disallowedTools "Write,Bash,WebFetch,WebSearch,Task,Agent,Skill,NotebookEdit,mcp__*,Read(./.git/**),Read(//proc/**),Read(//home/runner/work/_temp/**),Read(~/.claude/**),Read(~/.config/**),Read(~/.ssh/**),Read(~/.gitconfig),Read(~/.npmrc),Edit(//home/runner/work/_temp/**),Edit(//home/runner/work/_actions/**),Edit(~/.local/**),Edit(//proc/**),Edit(./.git/**)"
+
+      # Scrub the env-injection vectors before ANY later step. The action does this only when
+      # allowed_non_write_users is set, and never for NODE_OPTIONS (action.yml:394-417). PATH can't be
+      # reset this way ($GITHUB_PATH only prepends); the Edit-only scope is the control for that.
+      - if: always()
+        shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+        env:
+          BASH_ENV: ''
+          NODE_OPTIONS: ''
+          LD_PRELOAD: ''
+          LD_LIBRARY_PATH: ''
+          HTTP_PROXY: ''
+          HTTPS_PROXY: ''
+          NODE_EXTRA_CA_CERTS: ''
+        run: printf '%s=\n' BASH_ENV NODE_OPTIONS LD_PRELOAD LD_LIBRARY_PATH HTTP_PROXY HTTPS_PROXY NODE_EXTRA_CA_CERTS >> "$GITHUB_ENV"
+
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: review
+          path: ${{ env.REVIEW_OUT }}
+          if-no-files-found: ignore
+          retention-days: 7
+
+  post:
+    name: post (no model)
+    needs: review
+    if: always() && needs.review.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: claude-review-post-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions: # WRITE, but no model and no PR code ever run here
+      pull-requests: write # gh pr comment
+      issues: write # a PR conversation comment is an issue comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 — the DEFAULT branch, for review-post.sh
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1 (≥ v4.1.3: CVE-2024-42471 zip-slip)
+        continue-on-error: true
+        with:
+          name: review
+          path: review
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          # zizmor: ignore[secrets-outside-env] — as above; here only to scan the review for a leak of it.
+          T: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PR: ${{ github.event.issue.number }}
+          SHA: ${{ needs.review.outputs.head_sha }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: .github/scripts/review-post.sh review/review.md

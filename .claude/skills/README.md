@@ -120,3 +120,6 @@ source of truth.
 - **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
   `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
   already existed; the main-checkout rule had failed twice within hours of being written down.
+- **2026-09-30** — DX-1 implemented: `review-pr` gained a CI mode and one shared prefetch
+  (`.github/scripts/review-prefetch.sh`) for local and `@claude review` runs. Posting is now always
+  the caller's job.
