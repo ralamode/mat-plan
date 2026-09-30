@@ -13,6 +13,34 @@ consider promoting it to a script or CI job and replacing the entry with a point
 
 ---
 
+## Correct wrong data in prod (`db:correct`)
+
+**When:** data is wrong in a way **the app cannot fix**. That is not hypothetical — there is no delete
+action anywhere in the app, and several shapes are deliberately not editable (a bodyweight set, a
+labelled set, a non-`done` set), so a mis-tap can be genuinely unrecoverable through the UI.
+
+```bash
+pnpm --filter @mat-plan/db db:correct                      # list what exists
+pnpm --filter @mat-plan/db db:correct <name>               # DRY RUN — prints, writes nothing
+pnpm --filter @mat-plan/db db:correct <name> --apply       # writes
+```
+
+**Dry run is the default and `--apply` is the only thing that writes.** The script prints the target
+host before doing anything, so a prod correction is never run against local by accident.
+
+Set `DATABASE_URL_UNPOOLED` to the target database (the direct string, like migrate — a correction is
+ops work, not app traffic).
+
+**Every correction is guarded and idempotent**: the `WHERE` includes the value being corrected _from_,
+so a second run matches nothing and reports `0`. Re-running after a partial failure is safe.
+
+**A correction treats the data; the bug still needs a PR.** Each one names the backlog row that fixes
+the cause. Adding one is a single entry in
+[`packages/db/scripts/corrections/registry.ts`](../packages/db/scripts/corrections/registry.ts) — see
+the [README](../packages/db/scripts/corrections/README.md) for the rules.
+
+---
+
 ## Rename / correct a seeded profile in prod
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
