@@ -258,6 +258,15 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
+  lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
+  are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md
+  requires: the four standing lenses (correctness, scope, architecture, reuse), a dedicated DB-safety
+  reviewer, security, and UX (run once per sub-lens on a new screen), plus a `fact-sheet` researcher.
+  One shared reporting contract lives in `review-pr/`, so it isn't copied into each agent. Bash stays
+  read-only **by instruction only**: a subagent's `tools` can't narrow Bash, and it inherits the
+  session's permission mode. Also restores `review-pr` step 1 (check the diff matches its
+  description), which the #173 squash dropped.
 - **2026-09-30** — **DX: `pnpm status:check`** (#177). "Status rides with the work" was prose, and #156 is
   what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor`/`revert` branch, read from the branch name or any
   commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
