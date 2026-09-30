@@ -258,12 +258,18 @@ not merge order.
 
 ## Changelog (merged PRs)
 
-- **2026-09-30** — **DX: `shipit` means "keep it mergeable"** ([skill](../.claude/skills/keep-mergeable/SKILL.md)).
+- **2026-09-30** — **DX: `shipit` means "keep it mergeable"** (#181, [skill](../.claude/skills/keep-mergeable/SKILL.md)).
   Each merge in the 09-30 batch put the other approved PRs in conflict at the top of this changelog,
   and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after
   any merge, merge `main` into each approved PR from a detached worktree, push fast-forward only,
   auto-resolve only changelog/append-style conflicts, and ask on anything else. `review-pr` gains a
   "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep.
+- **2026-09-30** — **Fix: Vercel stops deploying the `screenshots` branch.** Every screenshot upload
+  and prune had been posting a failed preview ("Root Directory 'apps/web' does not exist") and a
+  failure email since August: #100's skip-CI commit marker never worked, because Vercel doesn't honour
+  it. The branch now carries `apps/web/vercel.json` with `git.deploymentEnabled: false`, which
+  `publish-screenshots.ts` seeds on a new branch and adds to an existing one. The lessons entry that
+  called this fixed is corrected.
 - **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
   lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
   are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md

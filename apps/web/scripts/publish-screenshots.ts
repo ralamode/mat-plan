@@ -64,20 +64,29 @@ const SCREENSHOT_DIR = '.screenshots';
 const MARKER = '<!-- mat-plan:screenshots -->';
 
 /**
- * Appended to EVERY commit this script makes to `screenshots`.
+ * Appended to EVERY commit this script makes to `screenshots`, so no GitHub Actions workflow runs
+ * against an images-only branch. `prune-screenshots.yml` appends the same marker (kept in sync by the
+ * comment there, since YAML can't import this const).
  *
- * The branch is a true orphan holding only `README.md` + `pr-<n>/*.png` — it has no `apps/web`, which
- * is the Vercel project's Root Directory. Vercel builds every pushed branch by default, so without
- * this marker each screenshot upload and each prune produces a **failed** preview deployment ("The
- * specified Root Directory 'apps/web' does not exist"), spamming the deployments list with red that
- * means nothing. Vercel honours `[skip ci]` in the commit message and skips the build entirely.
- *
- * GitHub Actions honours the same marker, which is also what we want: no workflow has any business
- * running against an images-only branch. `prune-screenshots.yml` is unaffected — it triggers on
- * `pull_request: closed` / `workflow_dispatch`, never on a push to this branch — and it appends the
- * same marker (kept in sync by the comment there, since YAML can't import this const).
+ * It does NOT stop Vercel — PR #100 assumed it did, and every screenshot push kept posting a failed
+ * preview for two months. Vercel ignores `[skip ci]`; `VERCEL_OPT_OUT` below is what stops it.
  */
 const SKIP_CI = '[skip ci]';
+
+/**
+ * Stops Vercel deploying this branch. Vercel builds every pushed branch, and this orphan has no
+ * `apps/web` — the project's Root Directory — so each upload and prune failed with "The specified Root
+ * Directory 'apps/web' does not exist" and emailed a failed-preview alert.
+ *
+ * Vercel reads `vercel.json` from the Root Directory OF THE PUSHED COMMIT, so the opt-out has to live
+ * on this branch at exactly that path; a `vercel.json` on `main` never sees these pushes. Its presence
+ * also makes the Root Directory exist, so even if the opt-out were ignored the failure mode would be a
+ * build, not a missing-directory error.
+ */
+const VERCEL_OPT_OUT = {
+  path: 'apps/web/vercel.json',
+  content: `${JSON.stringify({ git: { deploymentEnabled: false } }, null, 2)}\n`,
+} as const;
 
 /** `gh api` with the keyring token — GH_TOKEN is a fine-grained PAT that cannot read/write everything
  *  this needs, so it is deliberately unset (see docs/runbooks.md). */
@@ -135,11 +144,20 @@ async function createOrphanBranch(): Promise<void> {
       JSON.stringify({ content: Buffer.from(readme).toString('base64'), encoding: 'base64' }),
     ),
   ) as { sha: string };
+  const optOut = JSON.parse(
+    await gh(
+      ['api', '-X', 'POST', `repos/${REPO}/git/blobs`, '--input', '-'],
+      JSON.stringify({ content: VERCEL_OPT_OUT.content, encoding: 'utf-8' }),
+    ),
+  ) as { sha: string };
   const tree = JSON.parse(
     await gh(
       ['api', '-X', 'POST', `repos/${REPO}/git/trees`, '--input', '-'],
       JSON.stringify({
-        tree: [{ path: 'README.md', mode: '100644', type: 'blob', sha: blob.sha }],
+        tree: [
+          { path: 'README.md', mode: '100644', type: 'blob', sha: blob.sha },
+          { path: VERCEL_OPT_OUT.path, mode: '100644', type: 'blob', sha: optOut.sha },
+        ],
       }),
     ),
   ) as { sha: string };
@@ -169,6 +187,21 @@ async function existingSha(path: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** Heal a branch created before the opt-out existed (or one someone rewrote). Runs BEFORE the first
+ *  upload, so the image commits that follow are already covered. One `GET` when it is present. */
+async function ensureVercelOptOut(): Promise<void> {
+  if (await existingSha(VERCEL_OPT_OUT.path)) return;
+  console.log(`▸ adding ${VERCEL_OPT_OUT.path} so Vercel stops deploying '${BRANCH}'…`);
+  await gh(
+    ['api', '-X', 'PUT', `repos/${REPO}/contents/${VERCEL_OPT_OUT.path}`, '--input', '-'],
+    JSON.stringify({
+      message: `chore(screenshots): opt this branch out of Vercel deployments ${SKIP_CI}`,
+      content: Buffer.from(VERCEL_OPT_OUT.content).toString('base64'),
+      branch: BRANCH,
+    }),
+  );
 }
 
 async function upload(localPath: string, remotePath: string): Promise<string> {
@@ -222,6 +255,7 @@ async function main(): Promise<void> {
   }
 
   if (!(await branchExists())) await createOrphanBranch();
+  await ensureVercelOptOut();
 
   const links: { name: string; url: string }[] = [];
   for (const file of files.sort()) {

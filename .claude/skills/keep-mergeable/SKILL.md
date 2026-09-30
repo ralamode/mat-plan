@@ -20,17 +20,25 @@ in [review-pr](../review-pr/SKILL.md) → "Shipit".
 
 ## 1. Find the PRs
 
+A `shipit` counts only when **the maintainer** posted it (this is a public repo, and the sweep runs
+`pnpm install` on the branch it finds) and no later `## shipit withdrawn` cancels it:
+
 ```bash
 git fetch origin
+OWNER=$(gh repo view --json owner --jq .owner.login)
 for n in $(gh pr list --state open --json number --jq '.[].number'); do
-  gh pr view "$n" --json comments --jq '.comments[].body' | grep -q '^## shipit' || continue
+  last=$(gh pr view "$n" --json comments --jq \
+    "[.comments[] | select(.author.login == \"$OWNER\") | .body | split(\"\\n\")[0]
+      | select(startswith(\"## shipit\"))] | last // \"\"")
+  [ "$last" = "## shipit" ] || continue
   gh pr view "$n" --json number,headRefName,mergeable,mergeStateStatus \
-    --jq '"#\(.number) \(.headRefName) \(.mergeable) \(.mergeStateStatus)"'
+    --jq '"#\(.number) \(.headRefName) mergeable=\(.mergeable) state=\(.mergeStateStatus)"'
 done
 ```
 
-Act on `CONFLICTING`, or `BEHIND` (the branch rule requires up to date). `UNKNOWN` means GitHub is
-still computing: wait a few seconds and re-read, never guess.
+Act when **`mergeable` is `CONFLICTING`** or **`mergeStateStatus` is `BEHIND`** (reported because
+"require branches up to date" is on). `UNKNOWN` means GitHub is still computing: wait and re-read,
+never guess.
 
 ## 2. Merge `main` in, from a detached worktree
 
@@ -39,51 +47,64 @@ never check the branch out a second time:
 
 ```bash
 git worktree add --detach .claude/worktrees/km-<n> origin/<branch>
-cd .claude/worktrees/km-<n> && pnpm install --frozen-lockfile
-git merge --no-edit origin/main
+cd .claude/worktrees/km-<n>
+git merge --no-edit origin/main     # a clean merge commits itself; a conflicted one stops here
 ```
 
 **A merge, not a rebase**, so the push is a fast-forward. A rebase would need a force-push, and a
-force-push leaves the author's local branch diverged. The squash merge discards the merge commit
-anyway.
+force-push leaves the author's local branch diverged. The squash merge discards the merge commit, so
+`main` stays linear either way (AGENTS.md → "Git & branch workflow"). The author's next push from
+their own worktree needs a `git pull --no-rebase` first ([ship-pr](../ship-pr/SKILL.md) step 1).
 
 ## 3. Resolve, or stop
 
 Auto-resolve **only** these shapes:
 
-| Conflict                                                              | Resolution                                                                     |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Two entries inserted at the top of `docs/status.md` → Changelog       | Keep both, **this PR's first** (newest on top); no blank line between entries  |
-| Two entries appended to a changelog list (`.claude/skills/README.md`) | Keep both, **`main`'s first** (merge order)                                    |
-| Two rows added to the same table, or both sides renumbered one        | Keep both rows; take `main`'s version of any row this PR didn't mean to change |
-| Two scripts added at the same line of `package.json`                  | Keep both, comma-separated; the JSON must still parse                          |
+| Conflict                                                              | Resolution                                                                                   |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Two entries inserted at the top of `docs/status.md` → Changelog       | Keep both, **this PR's first** (newest on top); no blank line between entries                |
+| Two entries appended to a changelog list (`.claude/skills/README.md`) | Keep both, **`main`'s first** (merge order)                                                  |
+| A table where each side **only added** rows                           | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited is real |
 
-**Anything else is a real conflict: stop and ask**, and name the files and hunks. Code, tests, a
-migration, a rule stated two different ways, a row both sides edited: guessing there is how work
-silently disappears. After resolving, `grep -nE '^(<<<<<<<|=======$|>>>>>>>)'` on every touched file
-must print nothing.
+**Anything else is a real conflict: stop and ask**, and name the files and hunks. That includes
+**`package.json`**: when two scripts land on one line, one side often adds an aggregate (`verify`,
+`guards:test`) that should now also run the other side's addition. On 09-30, the correct #179/#177
+resolution wired #177's self-test into #179's `guards:test`, which "keep both" would have silently
+missed. Code, tests, a migration, a rule stated two ways, a row both sides edited: guessing there is
+how work disappears.
+
+Then finish the merge **before** checking anything, because until the merge commit exists `HEAD` is
+still the old tip, and every diff-based check shows `main`'s work as this PR's:
+
+```bash
+grep -nE '^(<<<<<<<|=======$|>>>>>>>)' <resolved files>   # must print nothing
+pnpm exec prettier --write <resolved files>
+git add <resolved files>
+git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
+```
 
 ## 4. Prove it, then push fast-forward only
 
 ```bash
-pnpm exec prettier --write <resolved files>
-pnpm verify                                   # plus pnpm guides:check and pnpm status:check
+pnpm install --frozen-lockfile                # AFTER the merge: main may have changed the lockfile
+pnpm verify && pnpm guides:check && pnpm status:check
 bash .claude/skills/hold-the-bar/check.sh origin/main
 git diff origin/main HEAD --stat              # only this PR's files; nothing of main's reverted
-git commit --no-edit                          # the merge commit
-git merge-base --is-ancestor origin/<branch> HEAD && git push origin HEAD:<branch>
+git fetch origin <branch> && git merge-base --is-ancestor origin/<branch> HEAD \
+  && git push origin HEAD:<branch>            # never --force
 ```
 
-If the `is-ancestor` check fails, someone pushed meanwhile: fetch and start again from step 2. **Never
-`--force`.**
+If the ancestor check fails, or the push is rejected ("fetch first"), someone pushed meanwhile:
+remove the worktree and start again from step 2.
 
 ## 5. Close the loop
 
 - Wait for CI on the new head: `gh pr checks <n> --watch` (after the runs register).
 - Comment one line: `Merged main (#<m> landed); <what conflicted> resolved by keeping both. CI green.`
 - Still green and MERGEABLE, so the `shipit` stands. If a check went red, the `shipit` no longer
-  holds: say so on the PR and fix it or hand it back.
-- `git worktree remove --force .claude/worktrees/km-<n>`.
+  holds: comment `## shipit withdrawn` with the reason, then fix it or hand it back.
+- `git worktree remove .claude/worktrees/km-<n>`, run from the main checkout. No `--force`: the
+  worktree is clean after the push, and the main-checkout guard denies a forced remove.
 
 ## Red flags
 

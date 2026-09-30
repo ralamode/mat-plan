@@ -30,7 +30,7 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                                                                                                  | #173         |
 | [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                                                                                                  | #173         |
 | [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                                                                                                            | #173         |
-| [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | this PR      |
+| [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | #181         |
 | [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
 
 ## Backlog, in priority order

@@ -14,7 +14,9 @@ unless they have already said to ship.
 
 ```bash
 git status --short                       # dirty? commit the work first — rebase refuses a dirty tree
-git fetch origin && git rebase origin/main
+git fetch origin
+git pull --no-rebase origin <branch>     # someone (keep-mergeable) may have merged main into it
+git rebase origin/main
 ```
 
 "Require branches up to date" is on, so it has to happen before merge anyway, and a rebase now

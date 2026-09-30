@@ -198,7 +198,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
-  preferred for linear history.
+  preferred for linear history. **Someone other than the author** updating a PR (the `keep-mergeable`
+  skill) **merges `main` in and never rebases**: a rebase needs a force-push, and the squash merge keeps
+  `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
 - **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
