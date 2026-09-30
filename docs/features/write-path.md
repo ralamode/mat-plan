@@ -46,13 +46,13 @@ flowchart LR
 
 ## Files
 
-| File / dir                     | What it is for                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Six actions today.            |
-| `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.             |
-| `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.   |
-| `packages/db/src/writers/`     | The transactional write cores — shared so the DAL **and** `db:verify` prove the same guard.       |
-| `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. |
+| File / dir                     | What it is for                                                                                                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Six actions today.                                                                                                                               |
+| `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                |
+| `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                      |
+| `packages/db/src/writers/`     | The transactional write cores — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                          |
+| `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone. |
 
 ## Invariants
 
@@ -116,6 +116,11 @@ flowchart LR
   matcher — and still re-checks the gate itself, because middleware is not an authorization boundary
   (a matcher edit or a rewrite silently exposes it). **This is a live hazard for the `/api/sync`
   AGENTS.md plans.**
+
+- **`sslmode=require` encrypts but does NOT verify the certificate.** Neon's strings ship `require`,
+  which leaves the connection open to an active machine-in-the-middle. `createDbPool` upgrades it to
+  `verify-full`, and deliberately leaves a string with **no** `sslmode` untouched — local Postgres has
+  no TLS, and forcing it there would break every local run to fix a hosted-only concern.
 
 - **Sentry does NOT auto-instrument Server Actions.** They must be wrapped in
   `withServerActionInstrumentation` or the failure is invisible.
