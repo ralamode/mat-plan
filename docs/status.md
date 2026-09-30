@@ -258,6 +258,18 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: `shipit` means "keep it mergeable"** (#181, [skill](../.claude/skills/keep-mergeable/SKILL.md)).
+  Each merge in the 09-30 batch put the other approved PRs in conflict at the top of this changelog,
+  and each was fixed by hand. Now whoever posts `shipit` keeps the PR mergeable until it lands: after
+  any merge, merge `main` into each approved PR from a detached worktree, push fast-forward only,
+  auto-resolve only changelog/append-style conflicts, and ask on anything else. `review-pr` gains a
+  "Shipit" step (the bar for posting it) and `ship-pr` step 8 ends with the sweep. Found while
+  reviewing it: **branch protection is off**, so GitHub never reports a PR as behind `main`, and
+  AGENTS.md's "require branches up to date is ON" was false (corrected), as were
+  "`main` is protected — no direct pushes" and "CI required checks (block merge)": the ruleset blocks
+  only deletion and force-push, and no check is required (both corrected; the shipit bar is what
+  enforces "CI green"). The sweep checks behind-ness
+  with git. The root cause, one shared changelog line, is [DX-2](./plans/dx-2-changelog-fragments.md).
 - **2026-09-30** — **V1-24 PR 1a: the weigh-in shows what you logged**
   ([plan](./plans/v1-24-form-is-the-day.md)). Reported from a screenshot of an already-completed day:
   three empty forms above a read-only list of everything that had been done.

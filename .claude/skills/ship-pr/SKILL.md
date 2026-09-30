@@ -10,15 +10,30 @@ Source of truth: [docs/definition-of-done.md](../../../docs/definition-of-done.m
 satisfy them in. Committing and pushing are **outward-facing**, so confirm with the user before step 6
 unless they have already said to ship.
 
-## 1. Rebase on the current main
+## 1. Bring the branch up to date with main
 
 ```bash
-git status --short                       # dirty? commit the work first — rebase refuses a dirty tree
-git fetch origin && git rebase origin/main
+git status --short                       # dirty? commit the work first
+git fetch origin
+b=$(git symbolic-ref --short HEAD) || { echo "detached HEAD: check out the branch first"; exit 1; }
+git ls-remote --exit-code origin "refs/heads/$b" >/dev/null; rc=$?
+if [ $rc -eq 0 ]; then                   # already pushed: merge, never rebase
+  git pull --no-rebase --no-edit origin "$b" && git merge --no-edit origin/main
+elif [ $rc -eq 2 ]; then                 # not on the remote yet: rebase freely
+  git rebase origin/main
+else
+  echo "ls-remote failed ($rc): stop and retry; don't guess"
+fi
 ```
 
-"Require branches up to date" is on, so it has to happen before merge anyway, and a rebase now
-surfaces conflicts while you still have the context.
+Nothing enforces this before merge (branch protection is off; see AGENTS.md → "Git & branch
+workflow"), so it's on you: doing it now surfaces conflicts while you still have the context. Once
+the branch is on the remote, a rebase would need a force-push, and someone (the `keep-mergeable`
+skill) may have merged `main` into it already.
+
+**A conflicted merge:** resolve using [keep-mergeable](../keep-mergeable/SKILL.md) step 3's rules
+(changelog-style: keep both; anything else: stop and ask), then `git add <files>` and
+`git commit --no-edit`, not `rebase --continue`.
 
 ## 2. Local gates, cheapest first
 
@@ -76,7 +91,7 @@ silently skip it.
   `feat(v1-26): the form knows the movement`. commitlint rejects sentence case and long headers.
   List details in the body, not the subject.
 - **Never silence `git commit`'s output** (`>/dev/null`), and chain the next step with `&&`. A
-  rejected commit then looks like success until `rebase` complains about a dirty tree.
+  rejected commit then looks like success until the next git step complains about a dirty tree.
 - End the message with the attribution line from the current system instructions.
 - **Never write the literal skip-CI marker in a commit message**, not even when describing it. GitHub
   and Vercel match it anywhere in the head commit and a squash carries it onto `main`
@@ -122,6 +137,9 @@ git worktree remove .claude/worktrees/<slug> && git branch -D <branch>   # -D: s
 A squash of a stale head silently drops the last pushes (#129 recovered three commits dropped from
 #127). If anything is missing, cherry-pick it forward on a follow-up branch **before** removing the
 worktree.
+
+Then **sweep the other approved PRs**: this merge probably just put them in conflict. Run
+[keep-mergeable](../keep-mergeable/SKILL.md) for every open PR with a `## shipit` comment.
 
 ## Red flags
 
