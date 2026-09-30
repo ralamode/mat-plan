@@ -26,12 +26,22 @@ For a PR, put it in a worktree so the scripts run against its code:
 Remove the worktree when you're done.
 
 **Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit:
-fan out to the named agents in [`.claude/agents/`](../../agents/) in one message:
-`correctness-reviewer` (dimensions 1, 4, 6), `simplicity-reviewer` (2, 3, 7, 8, 10),
-`ux-reviewer` (5, for any `.tsx`), and `security-reviewer` (9, when anything is reachable
-unauthenticated, or secrets or workflows change). The prompt only names the PR, the worktree and
-the base, e.g. _"Review PR #171, worktree `<path>`, diff `git diff <base>...HEAD`."_ The agents
-carry the rubric's reporting contract, so the verify step (4) still applies to what they return.
+fan out to the named agents in [`.claude/agents/`](../../agents/) in one message, each following the
+[reporting contract](./reporting-contract.md):
+
+| Rubric dimension (§3)                                                               | Agent                                                                                           |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 1 correctness · 6 tests                                                             | `correctness-reviewer`                                                                          |
+| 2 reuse / DRY                                                                       | `reuse-reviewer`                                                                                |
+| 3 architecture                                                                      | `architecture-reviewer` (+ `scope-reviewer` when the PR looks oversized)                        |
+| 4 schema / migration                                                                | `db-safety-reviewer`, when `packages/db` or a migration changed                                 |
+| 5 a11y and responsive                                                               | `ux-reviewer`, for any `.tsx`                                                                   |
+| 9 security                                                                          | `security-reviewer`, when anything is reachable unauthenticated, or secrets or workflows change |
+| 7 docs · 8 process · 10 perf, **and the secrets / personal-data check on every PR** | **you**, the orchestrator; no agent owns these                                                  |
+
+The prompt only names the PR, the worktree and the base, e.g. _"Review PR #171, worktree `<path>`,
+diff `git diff <base>...HEAD`."_ Step 5 (verify before reporting) still applies to everything they
+return: agents propose, you confirm.
 
 ## 1. Check the change matches its description
 

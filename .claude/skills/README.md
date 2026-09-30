@@ -18,19 +18,19 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 ## Shipped
 
-| Skill                                               | Use it when                                                                                                          | Since        |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------ |
-| [`start-task`](./start-task/SKILL.md)               | Starting any task that ends in a PR: sync, branch, context, obligations                                              | #170         |
-| [`plan-with-panel`](./plan-with-panel/SKILL.md)     | A plan is owed, or any UI change (UX panel, including plan-exempt)                                                   | #170         |
-| [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check                                                        | #170         |
-| [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green                                                      | #170         |
-| [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                                                                | pre-existing |
-| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2                                                     | #173         |
-| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                                                                | #173         |
-| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                 | #173         |
-| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                 | #173         |
-| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                           | #173         |
-| [panel agents](../agents/)                          | `correctness-` · `security-` · `simplicity-` · `ux-reviewer` · `fact-sheet`, called by plan-with-panel and review-pr | this PR      |
+| Skill                                               | Use it when                                                                                                                                                                                           | Since        |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| [`start-task`](./start-task/SKILL.md)               | Starting any task that ends in a PR: sync, branch, context, obligations                                                                                                                               | #170         |
+| [`plan-with-panel`](./plan-with-panel/SKILL.md)     | A plan is owed, or any UI change (UX panel, including plan-exempt)                                                                                                                                    | #170         |
+| [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check                                                                                                                                         | #170         |
+| [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green                                                                                                                                       | #170         |
+| [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                                                                                                                                                 | pre-existing |
+| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2                                                                                                                                      | #173         |
+| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                                                                                                                                                 | #173         |
+| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                                                                                                  | #173         |
+| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                                                                                                  | #173         |
+| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                                                                                                            | #173         |
+| [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
 
 ## Backlog, in priority order
 

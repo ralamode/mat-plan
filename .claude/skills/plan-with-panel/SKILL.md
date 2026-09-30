@@ -35,23 +35,26 @@ The bar:
 - **Out-of-scope** is explicit. At ~4h/wk that section is load-bearing.
 - Ground every claim in code you have opened. Cite `path:line`.
 
-Use the `Plan` subagent for the draft if the area is large. Either way, you own the result.
+Use the `Plan` subagent for the draft if the area is large. Either way, you own the result. If the
+plan depends on how existing code really behaves, run the `fact-sheet` agent **before drafting** and
+draft from its answers, including its "claimed but not wired" section.
 
 ## 2. Run the panel: lenses in parallel, one named agent each
 
-The lenses are **named agents in [`.claude/agents/`](../../agents/)**. Each carries its own
-checklist and the shared reporting contract (≤8 severity-ranked findings, `path:line`, the rule
-broken, a fix, no praise, no re-flagging of `docs/tech-debt.md`). Send them **in one message** so they
-run concurrently. The prompt only has to name the target: _"Review the plan at
-`docs/plans/<file>` (worktree `<path>`)."_
+The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each, so the
+≥3 independent reviewers AGENTS.md and `docs/plans/README.md` require stay independent. Each carries
+its own checklist and follows the shared
+[reporting contract](../review-pr/reporting-contract.md). Send them **in one message** so they run
+concurrently. The prompt only has to name the target: _"Review the plan at `docs/plans/<file>`
+(worktree `<path>`)."_
 
-| Change                                                          | Agents                                                                                          |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Any significant plan                                            | `correctness-reviewer` · `simplicity-reviewer` (scope + architecture + reuse)                   |
-| Auth, secrets, CI/workflows, anything reachable unauthenticated | + `security-reviewer`                                                                           |
-| A migration                                                     | + `correctness-reviewer` told to apply the [`db-migration`](../db-migration/SKILL.md) checklist |
-| Anything a person sees                                          | + `ux-reviewer` (**required**; its three sub-lenses cover interaction, a11y/360px and trust)    |
-| The plan depends on how existing code really behaves            | run `fact-sheet` **first**, and draft from its answers                                          |
+| Change                                                          | Agents (each is a separate, parallel invocation)                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Any significant plan (the four standing lenses)                 | `correctness-reviewer` · `scope-reviewer` · `architecture-reviewer` · `reuse-reviewer`                             |
+| A migration, schema, seed or correction                         | + `db-safety-reviewer` (the dedicated DB-safety reviewer)                                                          |
+| Auth, secrets, CI/workflows, anything reachable unauthenticated | + `security-reviewer`                                                                                              |
+| New screen or flow                                              | + `ux-reviewer` **three times**, one per sub-lens (`Lens: 1` interaction · `Lens: 2` a11y/360px · `Lens: 3` trust) |
+| Small visual change (plan-exempt)                               | + `ux-reviewer` once, all three sub-lenses (**required**)                                                          |
 
 Add a one-off lens (perf/CWV for a heavy page) with an inline prompt when no agent fits.
 

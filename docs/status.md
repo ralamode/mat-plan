@@ -258,10 +258,15 @@ not merge order.
 
 ## Changelog (merged PRs)
 
-- **2026-09-30** — **DX: panel agents** ([.claude/agents/](../.claude/agents/)). The review lenses
-  used across every plan panel and `review-pr` run (correctness, security, simplicity/architecture,
-  UX, fact-sheet) were re-typed as inline prompts each time. They are now named agents with one
-  shared reporting contract, so each lens runs identically and a panel prompt only names its target.
+- **2026-09-30** — **DX: panel agents** (#178, [.claude/agents/](../.claude/agents/)). The review
+  lenses used in every plan panel and `review-pr` run were re-typed as inline prompts each time. They
+  are now named agents, **one lens each**, so a panel keeps the ≥3 independent lenses AGENTS.md
+  requires: the four standing lenses (correctness, scope, architecture, reuse), a dedicated DB-safety
+  reviewer, security, and UX (run once per sub-lens on a new screen), plus a `fact-sheet` researcher.
+  One shared reporting contract lives in `review-pr/`, so it isn't copied into each agent. Bash stays
+  read-only **by instruction only**: a subagent's `tools` can't narrow Bash, and it inherits the
+  session's permission mode. Also restores `review-pr` step 1 (check the diff matches its
+  description), which the #173 squash dropped.
 - **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
   ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
   blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode
