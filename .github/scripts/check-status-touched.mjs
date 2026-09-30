@@ -57,7 +57,8 @@ if (branch === 'HEAD') {
   );
 }
 const commitTypes = lines(git('log', '--format=%s', `${mergeBase}..HEAD`))
-  .map((s) => /^([a-z]+)(\([^)]*\))?!?:/.exec(s)?.[1])
+  // `git revert` writes `Revert "feat(x): …"`, which commitlint ignores by default, so match it too.
+  .map((s) => (/^Revert "/.test(s) ? 'revert' : /^([a-z]+)(\([^)]*\))?!?:/.exec(s)?.[1]))
   .filter(Boolean);
 
 const owing = [...new Set([branchType, ...commitTypes])].filter((t) => OWES_STATUS.includes(t));

@@ -36,7 +36,8 @@ case_ "feat branch without status fails"      feat/x-1  'feat(x): add'   n 1 'St
 case_ "feat branch with status passes"         feat/x-2  'feat(x): add'   y 0 'is updated'
 case_ "docs branch passes without status"      docs/x-3  'docs(x): write' n 0 "don't owe"
 case_ "chore branch, fix commit, still owes"   chore/x-4 'fix(x): patch'  n 1 'Status guard failed'
-# `db` is owed by branch name only: commitlint has no `db` type, so the commit is a real `feat(db):`.
+# `db` is owed by branch name only (commitlint has no `db` type): a non-owing commit type, so only
+# the branch name can make this case owe.
 case_ "db branch without status fails"         db/x-5    'chore(db): tidy' n 1 'Status guard failed'
 case_ "override passes and prints the reason"  fix/x-6   'fix(x): patch'  n 0 'copy-only fix' 'copy-only fix'
 case_ "blank override does not pass"           fix/x-7   'fix(x): patch'  n 1 'Status guard failed' '   '
@@ -45,6 +46,7 @@ case_ "breaking feat on a chore branch owes"   chore/x-8 'feat(x)!: drop' n 1 'S
 case_ "refactor branch owes"                   refactor/x-9 'refactor(x): move' n 1 'Status guard failed'
 case_ "perf branch owes"                       perf/x-10 'perf(x): faster' n 1 'Status guard failed'
 case_ "revert owes"                            chore/x-11 'revert: feat(x): add' n 1 'Status guard failed'
+case_ "git's default revert subject owes"      chore/x-14 'Revert "feat(x): add"' n 1 'Status guard failed'
 
 # check <name> <want-exit> <want-text> — runs the guard against the CURRENT state of $tmp.
 check() {

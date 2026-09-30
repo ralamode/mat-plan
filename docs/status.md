@@ -258,8 +258,8 @@ not merge order.
 
 ## Changelog (merged PRs)
 
-- **2026-09-30** — **DX: `pnpm status:check`.** "Status rides with the work" was prose, and #156 is
-  what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor` branch, read from the branch name or any
+- **2026-09-30** — **DX: `pnpm status:check`** (#177). "Status rides with the work" was prose, and #156 is
+  what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor`/`revert` branch, read from the branch name or any
   commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
   and prints the reason for the PR description. It's local (in `ship-pr`) for now; making it a CI
   gate needs its own plan.
