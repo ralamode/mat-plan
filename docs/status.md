@@ -258,6 +258,15 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: agent skills, batch 2** ([index](../.claude/skills/README.md)). `review-pr`
+  is the rubric for an on-demand review (verified P0/P1/P2 findings, each cited to `path:line` and the
+  rule it breaks) that runs **only when asked**: locally now, and via an `@claude review` PR comment
+  once that workflow ships through its own plan. `db-migration`, `add-server-action`,
+  `data-correction` and `debug-ci-failure` each package a high-blast-radius procedure. Writing them
+  from fact sheets of the real code, rather than from AGENTS.md alone, surfaced ten places where the
+  docs claim more than is wired (root `DESIGN.md`, coverage, CWV measurement, `packages/` typecheck,
+  the CONCURRENTLY runner, among others). These are recorded as seeds for the baseline audit, not
+  yet triaged.
 - **2026-09-30** — **V1-28: paging to another day left the last day's form behind.** Reported from
   real use, on a screenshot of an already-completed day. V1-15 made day navigation a client-side RSC
   transition, and `StrengthFormBody` was keyed on `gen` — a **submit** counter — so the subtree never

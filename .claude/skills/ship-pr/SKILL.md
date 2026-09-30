@@ -68,8 +68,11 @@ silently skip it.
 
 ## 6. Commit
 
-- Conventional Commit, **lowercase subject**: `feat(v1-26): the form knows the movement`. commitlint
-  rejects sentence case.
+- Conventional Commit, **lowercase subject**, **header ≤ 100 chars**:
+  `feat(v1-26): the form knows the movement`. commitlint rejects sentence case and long headers.
+  List details in the body, not the subject.
+- **Never silence `git commit`'s output** (`>/dev/null`), and chain the next step with `&&`. A
+  rejected commit then looks like success until `rebase` complains about a dirty tree.
 - End the message with the attribution line from the current system instructions.
 - **Never write the literal skip-CI marker in a commit message**, not even when describing it. GitHub
   and Vercel match it anywhere in the head commit and a squash carries it onto `main`
