@@ -270,6 +270,11 @@ not merge order.
   Both hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
   when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in `verify`,
   not yet in CI.
+- **2026-09-30** — **DX: `pnpm status:check`** (#177). "Status rides with the work" was prose, and #156 is
+  what happened to it. A `feat`/`fix`/`db`/`perf`/`refactor`/`revert` branch, read from the branch name or any
+  commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
+  and prints the reason for the PR description. It's local (in `ship-pr`) for now; making it a CI
+  gate needs its own plan.
 - **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
   ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
   blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode

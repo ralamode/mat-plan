@@ -36,12 +36,13 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 Where a rule failed as prose, it became a check. Each ships with a self-test, and `pnpm guards:test`
 (in `verify`, not in CI) runs them all.
 
-| Guard                                                                                           | Enforces                                                                             | Self-test                                        |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                      | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort) | `bash .claude/hooks/hooks.test.sh`               |
-| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                            | Every session starts from the real state: status, open PRs, stale/off-main worktrees | same                                             |
-| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`) | A skill can't cite a path or `pnpm` script that doesn't exist                        | `bash .github/scripts/check-skills.test.sh`      |
-| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                              | The diff didn't lower the quality bar                                                | `bash .claude/skills/hold-the-bar/check.test.sh` |
+| Guard                                                                                                                      | Enforces                                                                                     | Self-test                                           |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                                                 | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort)         | `bash .claude/hooks/hooks.test.sh`                  |
+| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                                                       | Every session starts from the real state: status, open PRs, stale/off-main worktrees         | same                                                |
+| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`)                            | A skill can't cite a path or `pnpm` script that doesn't exist                                | `bash .github/scripts/check-skills.test.sh`         |
+| [`check-status-touched.mjs`](../../.github/scripts/check-status-touched.mjs) (`pnpm status:check`, `ship-pr` step 3; #177) | A feat/fix/db/perf/refactor/revert branch touched `docs/status.md` (`STATUS_SKIP` overrides) | `bash .github/scripts/check-status-touched.test.sh` |
+| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                                                         | The diff didn't lower the quality bar                                                        | `bash .claude/skills/hold-the-bar/check.test.sh`    |
 
 ## Backlog, in priority order
 
@@ -108,6 +109,9 @@ source of truth.
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
   tool) instead of what AGENTS.md claims.
+- **2026-09-30** — `pnpm status:check` (ROI item 5, #177): a feat/fix/db/perf/refactor/revert branch must touch
+  `docs/status.md`, with `STATUS_SKIP="<why>"` as a visible override. It runs at the end of `ship-pr` step 3
+  (local, like `guides:check` was before CI); self-tested by `.github/scripts/check-status-touched.test.sh`.
 - **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
   `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
   already existed; the main-checkout rule had failed twice within hours of being written down.
