@@ -107,6 +107,15 @@ For every P0 and P1, re-open the cited code and try to **disprove** the finding.
 elsewhere? Is it accepted debt? Does the test already cover it? Drop what doesn't survive. A short,
 correct list beats a long, noisy one, and a false P0 costs the author an afternoon.
 
+- **When reviewers disagree on a fact, run it instead of re-reading.** On #171, two lenses gave
+  different answers to "which units does the server accept". A 10-line throwaway vitest probe
+  against the shared schema settled it in one run, and turned up a P0. Put the probe in the
+  scratchpad and copy it in only to run it; never commit it.
+- **Severity is about the risk today.** A defect that only fires on data that doesn't exist yet
+  (a catalog value nobody has seeded) is P2 with a note saying what would make it live.
+- **Report what the diff exposed, even if it predates the diff**, under its own heading ("found
+  outside the diff"), with the PR that introduced it (`git log -S`). Don't charge it to this PR.
+
 ## 5. Report
 
 Locally, print the report. If asked to post it, or when triggered by an `@claude review` comment,
@@ -127,6 +136,8 @@ post it with `gh pr comment <n> --body-file <scratchpad>/review.md`:
 ### P1 — should fix in this PR
 
 ### P2 — follow-ups
+
+### Found outside the diff (pre-existing; introduced by #<m>)
 
 <details><summary>What was checked</summary>dimensions reviewed · dimensions N/A and why</details>
 ```

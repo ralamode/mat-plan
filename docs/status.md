@@ -263,7 +263,17 @@ not merge order.
   commit subject, now fails the check unless it touches this file. `STATUS_SKIP="<why>"` overrides
   and prints the reason for the PR description. It's local (in `ship-pr`) for now; making it a CI
   gate needs its own plan.
-
+- **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
+  ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
+  blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode
+  writes the job's GitHub token into `.git/config` and the model's environment, so an injected fork
+  PR could have got a live write token posted in a public comment. A bare `Write` could also have
+  hijacked the posting step through `BASH_ENV`. Redesigned as a **read-only model job** plus a
+  **model-free post job**, with path-scoped tools, symlinks off, the head SHA pinned, and a
+  fail-closed neutralisation of PR-authored agent config. `review-pr` also gained three rules from
+  its first real run (on #171): probe instead of re-reading when reviewers disagree, severity by
+  today's risk, and "found outside the diff". That run surfaced a **live P0** (7 of 9 offered units
+  are rejected by the server), filed as **V1-30** in `docs/plan.md`.
 - **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
   only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
   the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are
