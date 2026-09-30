@@ -542,6 +542,8 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
   ### 3. A logged form should look complete, not empty
 
+  📋 [**plan**](./plans/v1-24-form-is-the-day.md) — planned jointly with **V1-24**, per the note below.
+
   > _"Once we've clicked Log Strength maybe we should change the treatment to make it appear complete.
   > Same for Log Weight or check-ins — keep the value and just make it appear complete."_
 
@@ -587,8 +589,9 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   movements be submitted onto Day A. Covered by `e2e/day-nav-form-state.spec.ts`; the check-in form
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
-- **V1-24 — the form IS the day's state: edit what you already logged.** _(Ray, 2026-09-28, from
-  logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
+- **V1-24 — the form IS the day's state: edit what you already logged.**
+  📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
+  as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
   — and then **could not fix it**, for either of two independent reasons. First data-correctness bug
   found by real use, and the data is still wrong on the day it happened.
 
