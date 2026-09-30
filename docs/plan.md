@@ -363,6 +363,11 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
   #176 resolved).
+- **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
+  the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
+  on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
+  branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (engineering panel round 1: 1
+  blocking → merge-base rule).
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
