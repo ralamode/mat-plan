@@ -5,6 +5,9 @@ description: Review a mat-plan pull request (or the current branch, or a whole a
 
 # Review a PR
 
+**Review as a Staff level reviewer who misses nothing.** Read every changed line, follow each change
+into the code it touches, and verify each finding before reporting it.
+
 **The review only runs when someone asks for it.** A person invokes it locally, or comments
 `@claude review` on the PR. Nothing triggers it automatically. The bar it applies is
 [AGENTS.md](../../../AGENTS.md) + [docs/definition-of-done.md](../../../docs/definition-of-done.md).
@@ -24,8 +27,8 @@ Remove the worktree when you're done.
 
 **Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit: fan
 the dimensions below out to parallel read-only subagents (`Explore`), one message, 3–5 agents
-grouping related dimensions. Each gets the same instruction: _find flaws with evidence, don't praise,
-don't speculate about code you haven't opened_.
+grouping related dimensions. Each gets the same instruction: _as a Staff level reviewer who misses
+nothing, find flaws with evidence, don't praise, don't speculate about code you haven't opened_.
 
 ## 1. Run the mechanical checks first
 
