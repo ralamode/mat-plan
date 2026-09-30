@@ -96,7 +96,8 @@ source of truth.
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
   tool) instead of what AGENTS.md claims.
-- **2026-09-30** — Panel agents: the five lenses this session kept re-typing as inline prompts are now
-  named agents in `.claude/agents/`, each with its checklist and one shared reporting contract.
+- **2026-09-30** — Panel agents (#178): the lenses this session kept re-typing as inline prompts are
+  now named agents in `.claude/agents/`, one lens each (the four standing lenses, DB-safety, security
+  and UX, plus `fact-sheet`), with one shared reporting contract in `review-pr/`.
   `plan-with-panel` and `review-pr` call them by name. `security-reviewer` carries the
   "cite third-party behaviour from source at the pinned version" rule that caught DX-1's token leak.

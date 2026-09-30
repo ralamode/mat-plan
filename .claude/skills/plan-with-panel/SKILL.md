@@ -11,12 +11,12 @@ this skill and those files disagree, **the files win**; fix this skill in the sa
 
 ## 0. Pick the mode and depth
 
-| Change                                | Engineering panel                                   | UX panel                 | Log lives in       |
-| ------------------------------------- | --------------------------------------------------- | ------------------------ | ------------------ |
-| Migration / auth / CI / new subsystem | full: 4 standing lenses + DB-safety, then re-review | if UI touched: full      | the plan           |
-| Non-trivial multi-file feature        | 4 standing lenses, single pass                      | if UI touched: full      | the plan           |
-| New screen or flow                    | as above                                            | **full, 3 lenses**       | the plan           |
-| Small visual change (plan-exempt)     | none                                                | **1 reviewer**, required | the PR description |
+| Change                                | Engineering panel                                                                                                   | UX panel                 | Log lives in       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------ | ------------------ |
+| Migration / auth / CI / new subsystem | full: 4 standing lenses + DB-safety (migration) and/or security (auth, CI, unauthenticated surface), then re-review | if UI touched: full      | the plan           |
+| Non-trivial multi-file feature        | 4 standing lenses, single pass                                                                                      | if UI touched: full      | the plan           |
+| New screen or flow                    | as above                                                                                                            | **full, 3 lenses**       | the plan           |
+| Small visual change (plan-exempt)     | none                                                                                                                | **1 reviewer**, required | the PR description |
 
 **Scale the depth of a panel, never whether it runs.**
 

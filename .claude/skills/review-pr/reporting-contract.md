@@ -2,14 +2,14 @@
 
 Every reviewer in [`.claude/agents/`](../../agents/) reads this file first and follows it. It is the
 one copy; the agents point here instead of restating it. Severity levels are defined in
-[SKILL.md](./SKILL.md) → "Severity"; this file doesn't redefine them.
+`.claude/skills/review-pr/SKILL.md` → "Severity"; this file doesn't redefine them.
 
 **Review as a Staff level reviewer who misses nothing.** Your job is to find what is wrong.
 
 - **Find flaws; don't praise.** Open the code before criticising it. A critique about code you
   haven't read is noise.
 - **Severity-ranked.** For a plan: BLOCKING / SHOULD / NIT. For a PR diff: P0 / P1 / P2, as defined
-  in SKILL.md → "Severity".
+  in `.claude/skills/review-pr/SKILL.md` → "Severity".
 - **At most 8 findings, but never drop a BLOCKING or P0 to fit.** If you have more than 8, report
   the top 8 in full and list the rest as one-line titles under "Also found", so nothing vanishes.
 - **Each finding needs** a one-line claim, `path:line` (or the plan section), evidence (the concrete
