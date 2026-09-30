@@ -183,7 +183,9 @@ Real ones, each with the file to look at.
   reading before adding an uncontrolled field here.
 
 - **`formatSetLine`'s value+unit comes from the shared `formatValueUnit` (V1-24 PR 1a)** —
-  `lib/entries/format-value-unit.ts`, also used by `entryLabel` and the bodyweight receipt.
+  `lib/entries/format-value-unit.ts`, also used by `entryLabel`, the bodyweight receipt and the e2e
+  assertions. It takes a `Unit`, not a `string`, so a DTO whose unit is typed loosely fails to compile
+  rather than rendering whatever it holds.
   ⚠️ **It is NOT `@mat-plan/shared/csv`'s `formatQuantity`, and the two must not be merged.** The CSV
   one emits a **bare** number for a mass, `20s` for seconds, and **throws** on `kg`, because those are
   contract bytes a downstream workflow diffs. Using it here would drop the unit off every weight on

@@ -44,41 +44,59 @@ export const INPUT_CLASS =
 /**
  * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
  *
- * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` renders
- * `"{label} · logged today"` and `e2e/steps.ts` asserts a **re-typed copy** of that same string —
- * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. Check-ins spell
- * it a third way ("Already logged today"). V1-24 adds four more surfaces, so the strings get a home
- * before they multiply rather than after.
+ * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` rendered
+ * `"{label} · logged today"` and `e2e/steps.ts` asserted a **re-typed copy** of that same string —
+ * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. V1-24 adds more
+ * saved surfaces, so the strings get a home before they multiply rather than after.
  *
  * `lib/constants.ts` and not `packages/shared`: this is app-only copy with no DB or engine consumer,
  * and this module is deliberately dependency-free so a `'use client'` component can import it.
  */
 export const SAVED_STATE_COPY = {
-  /** The visible label on the amend control. The ACCESSIBLE name is longer — see `changeLabel`. */
-  change: 'Change',
-  /** Why a receipt carries no Change control on a day outside the ±1 write window (V1-15). */
-  dayClosed: 'Logging is closed for this day.',
+  /** A one-tap Life activity once it is logged (`life-form.tsx`, V1-7). */
+  lifeLogged: (label: string) => `${label} · logged today`,
+  /** A log-once check-in field once it is logged (`checkin-form.tsx`). */
+  checkinLogged: 'Already logged today',
+} as const;
+
+/** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
+export const BODYWEIGHT_VALUE_JOINER = ', ';
+
+/**
+ * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
+ *
+ * 1a ships the receipt BEFORE amend exists, and what makes that honest is this copy, so it is
+ * specified rather than improvised. Every string here is asserted by a spec through this object.
+ */
+export const BODYWEIGHT_COPY = {
+  /** The section heading in EVERY state — a noun that is true over a form, a receipt, or nothing. */
+  heading: 'Bodyweight',
+  /** One saved value: `Saved: 84.5 lb`. */
+  saved: (value: string) => `Saved: ${value}`,
   /**
-   * Why a receipt carries no Change control **yet** (V1-24 PR 1a).
-   *
-   * ⚠️ Deliberately states the limitation instead of implying finality. The whole design rests on
-   * "complete" meaning *saved*, not *done* — so a receipt that silently offered no way back would be
-   * the inert-and-uncorrectable lie this row exists to remove, just on a new surface. PR 1b ships the
-   * amend and **deletes this string**; if it is still here after 1b, that is the bug.
+   * More than one live row (the pre-1c duplicates, or a two-phone race): `2 weights logged: 84.5 lb,
+   * 845 lb`. The receipt never silently picks one — a hidden duplicate is uncorrectable twice over.
    */
-  notYetAmendable: 'Saved. Changing a logged weight is coming next.',
+  several: (values: readonly string[]) =>
+    `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
+  /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
+  onePerDay: 'One weigh-in per day.',
+  /**
+   * The real recovery path for a typo: a parent runs `db:correct` (docs/runbooks.md).
+   *
+   * ⚠️ PR 1b ships the amend and **deletes this line**; if it still renders after 1b, that is the bug.
+   * It deliberately does NOT say "coming next": a weight logged today stops being writable two days
+   * later, and 1b's amend is for writable days, so that promise would be false for it.
+   */
+  recovery: "Wrong number? Ask a parent — it can't be changed in the app yet.",
+  /** A closed day with nothing logged — otherwise the section is a bare heading. */
+  noneOnClosedDay: 'No weight logged.',
+  /** What the status region announces on a save — the FACT, with the value (acceptance 6). */
+  announced: (value: string) => `Bodyweight saved: ${value}.`,
 } as const;
 
 /**
- * The accessible name for an amend control — `Change bodyweight — 84.5 lb`.
- *
- * A FUNCTION, not a string, because by V1-24 PR 3 there are several of these on one screen and six
- * buttons all named "Change" are indistinguishable in a screen-reader forms list. The visible text
- * (`Change`) is a prefix of the accessible name, satisfying WCAG 2.5.3 Label in Name — the same rule
- * the Sub-failure and load-mode controls already follow.
- *
- * The a11y spec asserts through this function rather than a re-typed literal, so the two cannot drift.
+ * The receipt's element id — the focus target after a save (`SavedAnnouncer`), and what the e2e
+ * asserts focus landed on. One id: a page renders one weigh-in section.
  */
-export function changeLabel(subject: string, value: string): string {
-  return `${SAVED_STATE_COPY.change} ${subject} — ${value}`;
-}
+export const BODYWEIGHT_RECEIPT_ID = 'bodyweight-receipt';

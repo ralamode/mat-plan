@@ -607,8 +607,8 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
 - **V1-24 — the form IS the day's state: edit what you already logged.**
-  **PR 1a ✅ merged** (the bodyweight receipt, read-only — closes the duplicate-row defect through
-  the UI). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
+  **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
+  the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
   2 (check-ins), 3a/3b (strength).
   📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
   as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**

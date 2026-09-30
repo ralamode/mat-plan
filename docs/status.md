@@ -262,25 +262,33 @@ not merge order.
   ([plan](./plans/v1-24-form-is-the-day.md)). Reported from a screenshot of an already-completed day:
   three empty forms above a read-only list of everything that had been done.
   - **"Complete" is a property of the RECORD, not the field**, so the semantic is _saved_, not _done_
-    — a **receipt**, not a checkmark. A tick on a value you can still change is a lie; an inert field
-    you cannot correct is the V1-24 data-loss bug in nicer clothes, which is what check-ins ship.
-  - **It closes a live data defect.** `logBodyweight` dedupes only on `client_id`, and the form reset
-    itself and minted a **fresh key** on every success — so "did I already weigh in?" → tap again → a
-    second row, with no edit or delete anywhere to remove it. The form now renders only when the day
-    has none, and the key is stable, so a resubmit into a stale form is a no-op.
-  - **The receipt renders on the SERVER, outside the `writable` gate** — found by the architecture
-    lens. `BodyweightForm` is mounted only inside the ±1 day write window, so a receipt inside it
-    would have been invisible on exactly the history days V1-15 shipped: the screen this was reported
-    from. Read state is not write state.
-  - **It would have broken the smoke, and the panel caught that too.** The warm-up logged bodyweight
-    for Liam and two specs then logged Liam the same day — under a receipt the create form is gone
-    before they reach it. The warm-up moved to Scarlett so the create path is still covered, and
-    `steps.ts:logBodyweight` now returns the value the day actually holds, so callers assert on that
-    rather than on what they passed.
-  - **Honest about what it is not.** The receipt says _"Saved. Changing a logged weight is coming
-    next."_ rather than implying finality — PR 1b ships the amend and deletes that string.
-  - One display renderer for `84.5 lb` (`formatValueUnit`), replacing two spellings and forestalling
-    three more. ⚠️ Deliberately **not** the CSV formatter, whose semantics are different on purpose.
+    — a **receipt**, not a checkmark. `Bodyweight` is the heading in every state; the receipt reads
+    `Saved: 84.5 lb` · `One weigh-in per day.` · `Wrong number? Ask a parent — it can't be changed in
+the app yet.` (the plan's copy verbatim, in `lib/constants.ts`). The last line names the real
+    recovery path (`db:correct`) instead of promising an amend: 1b's amend is for writable days, so
+    "coming next" would have been false for a weight two days old. 1b deletes the line.
+  - **It removes the second-submit path; it does not make a duplicate impossible.** `logBodyweight`
+    dedupes only on `client_id`, and the form minted a fresh key on every success, so "did I already
+    weigh in?" → tap again → a second row. The form now renders only when the day has none, its key
+    is stable, and it remounts per day (`key` on the day — a stale tab across midnight replayed the
+    old day's key as a silent no-op). **Concurrent mounts can still duplicate until 1d's index**, so
+    the receipt lists **every** live row (`2 weights logged: 84.5 lb, 845 lb`) rather than the newest.
+  - **A plausibility bound** in `logBodyweightSchema` (20–500 lb, 10–230 kg; `That doesn't look like a
+bodyweight — check the decimal point.`). It is what makes a no-amend receipt acceptable: `845` and
+    `8.45` used to save permanently.
+  - **A save is announced and focus lands on the receipt** (`saved-announcer.tsx`): the form, its
+    live region and the focused button all unmount on success, so a pre-mounted `role="status"`
+    announces `Bodyweight saved: 84.5 lb.` on the none→value transition only (never on first load).
+  - **The receipt renders on the SERVER, outside the `writable` gate**, so history days show their
+    weight too, and a closed empty day says `No weight logged.` instead of a bare heading.
+  - **The smoke is disjoint by construction**, not tolerant: no two specs log bodyweight for the same
+    `(profile, day)` (warm-up → Scarlett today, smoke → Liam today, export → Liam yesterday, a11y →
+    Scarlett yesterday), and `steps.ts:logBodyweight` asserts the value **it** logged.
+    `isoDaysAgo` now uses the app's zone — it was UTC, so from 5 PM PT every `?d=yesterday` spec
+    (including two on `main`) silently resolved to today.
+  - One display renderer for `84.5 lb` (`formatValueUnit`), and the other saved-state strings
+    (`· logged today`, `Already logged today`) moved to `lib/constants.ts` so specs share them.
+    ⚠️ `formatValueUnit` is deliberately **not** the CSV formatter, whose semantics differ on purpose.
 - **2026-09-30** — **Security: Next.js 16.3.5 → 16.3.7** (#182; critical
   [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j), RCE in `next/og`, patched
   in ≥16.3.6). Found by the `audit --prod` step of `pnpm verify`, which failed on `main` for every

@@ -33,6 +33,6 @@ import type { Unit } from '@mat-plan/shared';
  * pg's `numeric` as a STRING and must not round-trip it through a float; that problem does not exist
  * here. Do not add it "for safety" — it would make `92` render as `92.0` on screen.
  */
-export function formatValueUnit(value: number, unit: Unit | string): string {
+export function formatValueUnit(value: number, unit: Unit): string {
   return `${value} ${unit}`;
 }

@@ -20,7 +20,6 @@ import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
 import { calisthenicsTotals, loggedBodyweight, todayRows } from '@/lib/entries/activity-totals';
-import { SAVED_STATE_COPY } from '@/lib/constants';
 import {
   buildRoutineBlocks,
   checkinFieldsForKeys,
@@ -30,8 +29,7 @@ import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-import { BodyweightForm } from './bodyweight-form';
-import { BodyweightReceipt } from './bodyweight-receipt';
+import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
 import { formatSetLine, isEditableSet } from './set-display';
@@ -110,9 +108,9 @@ export default async function TodayPage({
       (k): k is string => k !== null && (LIFE_ACTIVITY_KEYS as readonly string[]).includes(k),
     );
 
-  // V1-24 PR 1a: the day's bodyweight, if there is one — what makes the weigh-in surface render the
-  // RECEIPT instead of an empty input. Derived from the entries already fetched above (no extra
-  // query), the `loggedFieldKeys` idiom.
+  // V1-24 PR 1a: every bodyweight row on the day (usually zero or one) — what makes the weigh-in
+  // surface render the RECEIPT instead of an empty input. Derived from the entries already fetched
+  // above (no extra query), the `loggedFieldKeys` idiom.
   const bodyweight = loggedBodyweight(entries);
 
   // V1-6a: the calisthenics tally — today's per-metric totals, folded from the day's entries.
@@ -186,30 +184,13 @@ export default async function TodayPage({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
-          <h2 id="log-bw-heading" className="text-lg font-medium">
-            {bodyweight ? 'Bodyweight' : 'Log bodyweight'}
-          </h2>
-          {/* V1-24 PR 1a — the day's state, not an empty form over a record.
-
-              ⚠️ The receipt renders OUTSIDE the `writable` gate, deliberately. `BodyweightForm` is
-              mounted only within the ±1 day write window (V1-15), so putting the value inside it
-              would make the day's truth invisible on exactly the history days V1-15 shipped — the
-              screen this was reported from (2026-09-30). A closed day can still be READ.
-
-              And when a weight IS logged the form is not rendered at all: an empty input over an
-              existing record is what invited the duplicate row in the first place (`logBodyweight`
-              dedupes only on `client_id`, and the form rotated that key on every success). PR 1d
-              adds the structural guard; this removes the affordance. */}
-          {bodyweight ? (
-            <BodyweightReceipt
-              logged={bodyweight}
-              note={writable ? SAVED_STATE_COPY.notYetAmendable : SAVED_STATE_COPY.dayClosed}
-            />
-          ) : writable ? (
-            <BodyweightForm profileId={profile.id} day={day} />
-          ) : null}
-        </section>
+        {/* V1-24 PR 1a — the day's state, not an empty form over a record. See the section. */}
+        <BodyweightSection
+          profileId={profile.id}
+          day={day}
+          writable={writable}
+          logged={bodyweight}
+        />
         {buildRoutineBlocks(profile.routine.order).map((block, i) => {
           if (block.kind === 'strength') {
             return (

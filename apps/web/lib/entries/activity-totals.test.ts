@@ -1,7 +1,10 @@
 import {
   ACTIVITY_TYPE_KEYS,
+  DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
+  ENTRY_KIND,
   ENTRY_STATUS,
+  METRIC_VALUE_TYPE,
   SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -326,47 +329,51 @@ const weighIn = (overrides: Partial<EntryDTO> = {}): EntryDTO =>
     id: 'bw',
     metricKey: SEED_METRIC_KEYS.bodyweight,
     metricLabel: 'Bodyweight',
-    valueType: 'number',
+    valueType: METRIC_VALUE_TYPE.number,
     aggregation: null,
     activityKey: ACTIVITY_TYPE_KEYS.weigh_in,
     activityLabel: 'Weigh-in',
-    unit: 'lb',
+    unit: DEFAULT_BODYWEIGHT_UNIT,
     value: 84.5,
     ...overrides,
   });
 
 describe('loggedBodyweight (V1-24 PR 1a)', () => {
-  it('returns null when the day has no weigh-in', () => {
-    expect(loggedBodyweight([])).toBeNull();
-    expect(loggedBodyweight([habit(), reading({ value: 20 })])).toBeNull();
+  it('returns [] when the day has no weigh-in', () => {
+    expect(loggedBodyweight([])).toEqual([]);
+    expect(loggedBodyweight([habit(), reading({ value: 20 })])).toEqual([]);
   });
 
   it('returns the entry id, value and unit — the id is what PR 1b will amend by', () => {
-    expect(loggedBodyweight([weighIn({ id: 'bw-1' })])).toEqual({
-      entryId: 'bw-1',
-      value: 84.5,
-      unit: 'lb',
-    });
+    expect(loggedBodyweight([weighIn({ id: 'bw-1' })])).toEqual([
+      { entryId: 'bw-1', value: 84.5, unit: DEFAULT_BODYWEIGHT_UNIT },
+    ]);
   });
 
   it('keys on metric_key, not the legacy `kind`', () => {
     // `entries.kind` is scheduled for deletion, so a row carrying only the legacy discriminant must
     // NOT be picked up — and, more importantly, a modern row that lacks it must still be found.
-    expect(loggedBodyweight([weighIn({ kind: null })])).not.toBeNull();
-    expect(loggedBodyweight([reading({ kind: 'bodyweight', metricKey: 'pushups' })])).toBeNull();
+    expect(loggedBodyweight([weighIn({ kind: null })])).toHaveLength(1);
+    expect(
+      loggedBodyweight([reading({ kind: ENTRY_KIND.bodyweight, metricKey: 'pushups' })]),
+    ).toEqual([]);
   });
 
   /**
-   * ⚠️ A day can legitimately hold MORE than one weigh-in until PR 1d's unique index lands — that is
-   * the defect this PR's UI closes, and prod has such rows today. Rows arrive OLDEST-FIRST (V1-17),
-   * so the LAST match is the newest reading, which is the one a person means.
+   * ⚠️ A day can hold MORE than one weigh-in until PR 1d's unique index lands — prod has such days,
+   * and a two-phone race can still make one. The receipt must show them ALL: collapsing to one would
+   * render a clean receipt over a day whose export carries two weights.
    */
-  it('shows the newest reading when a day has duplicates', () => {
-    const picked = loggedBodyweight([
+  it('returns EVERY live row on a duplicated day, oldest first, in the DAL order', () => {
+    const rows = loggedBodyweight([
       weighIn({ id: 'first', value: 84.5 }),
-      weighIn({ id: 'second', value: 85.2 }),
+      habit(),
+      weighIn({ id: 'second', value: 845 }),
     ]);
-    expect(picked).toEqual({ entryId: 'second', value: 85.2, unit: 'lb' });
+    expect(rows).toEqual([
+      { entryId: 'first', value: 84.5, unit: DEFAULT_BODYWEIGHT_UNIT },
+      { entryId: 'second', value: 845, unit: DEFAULT_BODYWEIGHT_UNIT },
+    ]);
   });
 
   /**
@@ -374,9 +381,9 @@ describe('loggedBodyweight (V1-24 PR 1a)', () => {
    * athlete is left with neither a value nor a way to enter one.
    */
   it('ignores a value-less row rather than rendering an empty receipt', () => {
-    expect(loggedBodyweight([weighIn({ value: null })])).toBeNull();
+    expect(loggedBodyweight([weighIn({ value: null })])).toEqual([]);
     expect(
       loggedBodyweight([weighIn({ value: null }), weighIn({ id: 'real', value: 70 })]),
-    ).toEqual({ entryId: 'real', value: 70, unit: 'lb' });
+    ).toEqual([{ entryId: 'real', value: 70, unit: DEFAULT_BODYWEIGHT_UNIT }]);
   });
 });

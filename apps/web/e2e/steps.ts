@@ -1,5 +1,19 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
+import {
+  CATALOG_METRIC_DEFINITION_SEED_ROWS,
+  DEFAULT_BODYWEIGHT_UNIT,
+  SEED_METRIC_KEYS,
+} from '@mat-plan/shared';
 import { expect, type Page } from '@playwright/test';
+
+import {
+  BODYWEIGHT_COPY,
+  BODYWEIGHT_RECEIPT_ID,
+  DEFAULT_TIME_ZONE,
+  SAVED_STATE_COPY,
+} from '../lib/constants';
+import { addDays, localDayIso } from '../lib/date';
+import { formatValueUnit } from '../lib/entries/format-value-unit';
 
 /**
  * The seeded profile's Today route. Single-sourced here (V1-12) because three callers need it — the
@@ -9,23 +23,36 @@ import { expect, type Page } from '@playwright/test';
 export const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
 
 /**
- * The SECOND seeded profile's Today (Scarlett). `global.setup.ts` warms the bodyweight write path
- * here, so this profile's today ALWAYS has a weigh-in by the time any spec runs — which makes it the
- * one reliable fixture for the "already logged" read state (V1-24 PR 1a).
+ * The SECOND seeded profile's Today (Scarlett). `global.setup.ts` warms the bodyweight write path on
+ * her TODAY, so that day always holds `WARMUP_BODYWEIGHT` by the time any spec runs — the one
+ * deterministic fixture for the "already logged" read state (V1-24 PR 1a). Her YESTERDAY belongs to
+ * `a11y.spec.ts`.
  */
 export const SEED_PROFILE_2_ROUTE = `/p/${SEED_PROFILE_2_PUBLIC_ID}`;
 
 /**
- * An ISO day `n` days before now, in UTC. Shared by the day-navigation specs (V1-15, V1-28) — the
- * second caller is the trigger to extract it, per AGENTS.md's constants rule.
- *
- * UTC is deliberate and safe HERE: `playwright.config.ts` pins the browser to `America/Los_Angeles`,
- * which is behind UTC, so a UTC date is never AHEAD of the app's local date. The specs use this to
- * reach a day the app will accept, not to assert the app's own date arithmetic — that is
- * `declared-day.test.ts`'s job, and V1-14b reads the day off the form rather than recomputing it.
+ * The warm-up's weigh-in on Scarlett's today. Inside the plausibility bound (it was `0.5`, which the
+ * bound now rejects) and a decimal, so the receipt spec can assert the exact value it renders.
  */
-export const isoDaysAgo = (n: number) =>
-  new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+export const WARMUP_BODYWEIGHT = '61.5';
+
+/**
+ * An ISO day `n` days before today **in the app's zone** (`DEFAULT_TIME_ZONE`). Shared by the
+ * day-navigation specs (V1-15, V1-28) and the V1-24 bodyweight specs.
+ *
+ * ⚠️ It used to be UTC (`toISOString().slice(0, 10)`) with a comment claiming that was safe because
+ * LA is behind UTC. It is the other way round: from 5 PM PT (00:00 UTC) UTC-yesterday IS LA-today, so
+ * every `?d=${isoDaysAgo(1)}` spec resolved to today every evening (P1 on #180). The app computes its
+ * day with `localDayIso` in the browser's zone, which `playwright.config.ts` pins to
+ * `America/Los_Angeles` = `DEFAULT_TIME_ZONE` — so this uses the SAME function and constant, then
+ * steps whole calendar days with `addDays` (no 24h-in-ms arithmetic, which is off by a day across a
+ * 23-hour DST day).
+ *
+ * Probe (not a unit test — `e2e/` is outside Vitest): at `2026-10-01T01:00:00Z`,
+ * `localDayIso('America/Los_Angeles', that)` is `2026-09-30`, so `isoDaysAgo(1)` is `2026-09-29`;
+ * the old helper returned `2026-09-30`, LA-today.
+ */
+export const isoDaysAgo = (n: number) => addDays(localDayIso(DEFAULT_TIME_ZONE), -n);
 
 /**
  * From the profile picker (`/`), tap a profile tile and land on its scoped Today
@@ -38,44 +65,57 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
+/** The weigh-in section, by its heading — `Bodyweight` in every state (V1-24 PR 1a). */
+export const bodyweightSection = (page: Page) =>
+  page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true });
+
+/** How the app displays a weight the specs log in the default unit (`84.5` → `84.5 lb`). */
+export const shownWeight = (value: string) =>
+  formatValueUnit(Number(value), DEFAULT_BODYWEIGHT_UNIT);
+
+/** The "Logged entries" line for a weigh-in (`Bodyweight — 84.5 lb`), built as `entryLabel` does. */
+const BODYWEIGHT_METRIC_LABEL = CATALOG_METRIC_DEFINITION_SEED_ROWS.find(
+  (m) => m.key === SEED_METRIC_KEYS.bodyweight,
+)!.label;
+export const bodyweightEntryLine = (value: string) =>
+  `${BODYWEIGHT_METRIC_LABEL} — ${shownWeight(value)}`;
+
 /**
- * **Ensure the day has a bodyweight, and return the value it actually has.**
+ * **Log `value` as the day's bodyweight, retry-safely**, and assert the day holds exactly that value.
  *
- * Logs `value` through the Today form when the day is empty; when a weight is ALREADY logged the
- * surface renders a receipt with no input, so this asserts that end state instead and returns the
- * existing value. Callers assert on the RETURN, never on the value they passed — that is what makes
- * them independent of which spec (or which retry) reached this profile's day first.
+ * On an empty day: fill + submit, then assert the receipt, the entries line, and that focus landed
+ * on the receipt rather than dropping to `<body>` when the form unmounted (V1-24 PR 1a, acceptance 6).
+ *
+ * On a day that already has a weight the form is gone (the receipt replaced it), so this asserts the
+ * receipt shows **the value this caller logs**. That is what a Playwright retry sees — it reuses the
+ * DB, so the first attempt's write is already there — and it is NOT a tolerance for another spec
+ * having logged the same day: that is prevented by construction (the e2e rule under the plan's 1a
+ * table — no two specs log bodyweight for the same `(profile, day)`), and if it ever happened this
+ * fails, because the receipt would show the other spec's value.
  *
  * Assumes the page is already authenticated and on a profile-scoped Today (`/p/[profileId]`).
- *
- * `timeout` is only overridden for the cold warmup; the real coverage test uses the default
- * (fast, warm server) — we keep the cold-start cost out of the test.
+ * `timeout` is only overridden for the cold warmup; the real coverage uses the default.
  */
 export async function logBodyweight(
   page: Page,
   value: string,
   opts?: { timeout?: number },
-): Promise<string> {
-  const section = page.getByRole('region', { name: /^(Log b|B)odyweight$/ });
-  const input = page.getByLabel('Weight', { exact: true });
+): Promise<void> {
+  const section = bodyweightSection(page);
+  const saved = section.getByText(BODYWEIGHT_COPY.saved(shownWeight(value)), { exact: true });
+  // exact: disambiguate from the strength form's "Movement 1 set 1 weight in …" inputs.
+  const input = section.getByLabel('Weight', { exact: true });
 
-  // RETRY-SAFE, and cross-spec safe (V1-24 PR 1a). Since the weigh-in surface renders a RECEIPT once
-  // the day has a weight, the create form is simply absent on a day that already has one — so an
-  // unconditional `fill` times out. Two real callers hit that: a Playwright retry (which reuses the
-  // ephemeral DB) and a sibling spec that logged this profile's day first under `fullyParallel`.
-  //
-  // The same shape `logCheckins` and `logLifeActivity` already use: when the end state is present,
-  // assert it instead of driving an absent control.
-  if ((await input.count()) === 0) {
-    const shown = (await section.getByText(/^[\d.]+ \w+$/).textContent())!.trim();
-    await expect(page.getByText(`Bodyweight — ${shown}`)).toBeVisible(opts);
-    return shown.split(' ')[0];
+  if ((await input.count()) > 0) {
+    await input.fill(value);
+    await section.getByRole('button', { name: 'Log weight' }).click();
+    await expect(saved).toBeVisible(opts);
+    // The submit button that held focus has unmounted; `SavedAnnouncer` moves focus to the receipt.
+    await expect(section.locator(`#${BODYWEIGHT_RECEIPT_ID}`)).toBeFocused();
   }
 
-  await input.fill(value);
-  await page.getByRole('button', { name: 'Log weight' }).click();
-  await expect(page.getByText(`Bodyweight — ${value} lb`)).toBeVisible(opts);
-  return value;
+  await expect(saved).toBeVisible(opts);
+  await expect(page.getByText(bodyweightEntryLine(value))).toBeVisible(opts);
 }
 
 /**
@@ -167,7 +207,9 @@ export async function logLifeActivity(
   if ((await button.count()) > 0) {
     await button.click();
     // The write + full RSC revalidation flips the button to an inert "· logged today" line.
-    await expect(life.getByText(`${opts.button} · logged today`)).toBeVisible({ timeout: 15_000 });
+    await expect(life.getByText(SAVED_STATE_COPY.lifeLogged(opts.button))).toBeVisible({
+      timeout: 15_000,
+    });
   }
   const logged = page.getByRole('region', { name: 'Logged entries' });
   await expect(logged.getByText(opts.expectInList)).toBeVisible();

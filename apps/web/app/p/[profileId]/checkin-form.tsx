@@ -10,7 +10,7 @@ import {
   valueInputName,
   type CheckinField,
 } from '@/lib/checkins/checkin-fields';
-import { INPUT_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, SAVED_STATE_COPY } from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE } from './action-state';
 import { logCheckinsAction } from './actions';
@@ -202,7 +202,7 @@ export function CheckinForm({
                     {checkbox ? labelEl : control}
                     {isLogged ? (
                       <span id={`${id}-logged`} className="text-muted-foreground text-sm">
-                        Already logged today
+                        {SAVED_STATE_COPY.checkinLogged}
                       </span>
                     ) : null}
                     {/* No client id for a logged log-once field — it doesn't submit (see submitName). */}

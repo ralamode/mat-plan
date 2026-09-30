@@ -16,11 +16,15 @@ export function BodyweightForm({ profileId, day }: { profileId: string; day: str
    * Client-stamped idempotency key, generated once and **never rotated** (V1-24 PR 1a).
    *
    * ⚠️ It used to reset the form and mint a FRESH key on every success, and that pair was the
-   * duplicate-row mechanism: `logBodyweight` dedupes only on `client_id`, so a new key made a second
-   * submit a second ROW — over an input the reset had just emptied, which is what invited the second
-   * submit. `page.tsx` now renders the receipt instead of this form once a weight exists, so there is
-   * nothing to reset; and a stable key means that if this form is somehow still mounted (a failed
-   * revalidation), a resubmit is an `ON CONFLICT DO NOTHING` no-op rather than a duplicate.
+   * second-submit path: `logBodyweight` dedupes only on `client_id`, so a new key made a second
+   * submit a second ROW — over an input the reset had just emptied, which is what invited it.
+   * `BodyweightSection` now renders the receipt instead of this form once a weight exists, so there
+   * is nothing to reset; and a stable key means that if this form is somehow still mounted (a failed
+   * revalidation), a resubmit is an `ON CONFLICT DO NOTHING` no-op rather than a second row.
+   *
+   * That removes the second-submit path; it does not make a duplicate impossible. Two mounts (two
+   * phones, two tabs) hold two keys and can still write two rows until PR 1d's unique index lands.
+   * The key is per MOUNT, and the section mounts one per day (`key={day}`).
    */
   const [clientId] = useState(newId);
 

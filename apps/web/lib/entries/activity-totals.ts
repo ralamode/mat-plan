@@ -212,25 +212,32 @@ export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   return rows;
 }
 
-/** The day's bodyweight, as the receipt reads it (V1-24 PR 1a). */
+/** One logged bodyweight, as the receipt reads it (V1-24 PR 1a). */
 export type LoggedBodyweight = {
   /** `entries.public_id` — the id PR 1b's amend will address. Carried now so the receipt and the
    *  Change control read the same row rather than re-deriving it. */
   entryId: string;
   value: number;
-  unit: string;
+  unit: EntryDTO['unit'];
 };
 
 /**
- * Today's logged bodyweight, or `null` (V1-24 PR 1a) — what makes the weigh-in surface render a
- * RECEIPT instead of an empty input.
+ * **Every** live bodyweight row on the day, oldest first — `[]` when there is none (V1-24 PR 1a).
+ * What makes the weigh-in surface render a RECEIPT instead of an empty input.
+ *
+ * ## Why every row, and not "the" one
+ *
+ * Until V1-24 PR 1d's unique index lands, a day can hold MORE than one bodyweight row (the pre-1c
+ * duplicates in prod, or two phones submitting at once), and 1a's UI does not stop the concurrent
+ * case. Collapsing them to one would show a clean receipt over a day whose export carries two
+ * weights — hiding exactly the rows a parent needs to see to correct. So the receipt lists them all
+ * (`2 weights logged: …`) and never silently picks one.
  *
  * ## Why this lives here and not inline in `page.tsx`
  *
  * It is the third "what is already logged" derivation on that page, beside `loggedFieldKeys` and
- * `loggedLifeKeys` — both of which are inline and untested. This one gets a unit test because its
- * file already has one, and because getting it wrong has a specific cost: returning `null` when a row
- * exists re-opens the duplicate-write path this PR closes.
+ * `loggedLifeKeys`. This one is tested because getting it wrong has a specific cost: returning `[]`
+ * when a row exists re-opens the second-submit path this PR removes.
  *
  * ## Why `metric_key`, not `kind`
  *
@@ -238,21 +245,17 @@ export type LoggedBodyweight = {
  * V1-1d"), so keying on it would be born dead. `metricKey` is the generalized one every V1-4+ writer
  * sets, and the constant comes from `SEED_METRIC_KEYS` rather than a re-typed `'bodyweight'`.
  *
- * ## The duplicate case
- *
- * Until V1-24 PR 1d's unique index lands, a day can legitimately hold MORE than one bodyweight row —
- * that is the defect this PR's UI closes, and prod has such rows today. The receipt shows the
- * **newest**, because the rows arrive oldest-first (`listEntriesForDay` orders ascending, V1-17) and
- * the most recent reading is the one a person would mean. It does not hide the others: they all
- * still render in the entries list below, so a duplicate stays visible and correctable rather than
- * being silently swallowed by the surface that caused it.
+ * `listEntriesForDay` already excludes soft-deleted rows and orders ascending (V1-17), so "live" and
+ * "oldest first" come from the DAL; this only filters. A value-less row is skipped: it has nothing to
+ * show, and must not suppress the form (the bodyweight writer cannot produce one — its schema
+ * requires a value).
  */
-export function loggedBodyweight(entries: readonly EntryDTO[]): LoggedBodyweight | null {
-  let latest: EntryDTO | null = null;
+export function loggedBodyweight(entries: readonly EntryDTO[]): LoggedBodyweight[] {
+  const logged: LoggedBodyweight[] = [];
   for (const e of entries) {
-    // `value === null` is a partially-written row; it has nothing to show, so it must not suppress
-    // the form — the athlete still needs to be able to log a weight.
-    if (e.metricKey === SEED_METRIC_KEYS.bodyweight && e.value !== null) latest = e;
+    if (e.metricKey === SEED_METRIC_KEYS.bodyweight && e.value !== null) {
+      logged.push({ entryId: e.id, value: e.value, unit: e.unit });
+    }
   }
-  return latest === null ? null : { entryId: latest.id, value: latest.value!, unit: latest.unit };
+  return logged;
 }
