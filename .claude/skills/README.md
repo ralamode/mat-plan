@@ -25,11 +25,11 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`ship-pr`](./ship-pr/SKILL.md)                     | Work is done: gates → status → commit → PR → post-merge check           | #170         |
 | [`hold-the-bar`](./hold-the-bar/SKILL.md)           | Before every PR (ship-pr runs it), or whenever red turned green         | #170         |
 | [`ui-screenshot`](./ui-screenshot/SKILL.md)         | Any visible change: three widths, published to the PR                   | pre-existing |
-| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2        | batch 2      |
-| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                   | batch 2      |
-| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                    | batch 2      |
-| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                    | batch 2      |
-| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                              | batch 2      |
+| [`review-pr`](./review-pr/SKILL.md)                 | On request only: review a PR, branch or area → verified P0/P1/P2        | #173         |
+| [`db-migration`](./db-migration/SKILL.md)           | Any schema, migration, reference table or seed change                   | #173         |
+| [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                    | #173         |
+| [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                    | #173         |
+| [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                              | #173         |
 
 ## Backlog, in priority order
 
@@ -89,7 +89,7 @@ source of truth.
   operations and addyosmani/agent-skills. Shipped with `ship-pr` itself (#170). The dry run found two
   gaps, both fixed: step 1 can't rebase a dirty tree, and `check.sh` lacked the self-test this file
   requires.
-- **2026-09-30** — Batch 2: `review-pr` (the rubric the on-demand `@claude review` workflow will
+- **2026-09-30** — Batch 2 (#173): `review-pr` (the rubric the on-demand `@claude review` workflow will
   run), `db-migration`, `add-server-action`, `data-correction` and `debug-ci-failure`. Each was
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
