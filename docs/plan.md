@@ -13,15 +13,15 @@ came out of writing it down.
 
 ### P0
 
-| #   | What                                                                                                                          | Row(s)                  | State                                                                                                                              |
-| --- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Anything blocking**                                                                                                         | **V1-14b**              | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
-| 2   | **Open bugs**                                                                                                                 | **V1-24 / V1-26**       | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
-| 3   | **Logged forms look complete**                                                                                                | **V1-25 §3**            | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
-| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on [The Daily Five](../programs/daily-five-default.md) | **PROF-1 + ONB-2**      | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
-| 5   | **Edit programs, and choose which days they run**                                                                             | **V1-22 + SCHED-1**     | The authoring half of onboarding.                                                                                                  |
-| 6   | **OAuth login (Google / Facebook)**                                                                                           | **new — AUTH-1**        | Replaces the shared access code.                                                                                                   |
-| 7   | **Streaks on the athlete card**                                                                                               | **MOT-1** (picker half) |                                                                                                                                    |
+| #   | What                                                                                                                          | Row(s)                    | State                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Anything blocking**                                                                                                         | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
+| 2   | **Open bugs**                                                                                                                 | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
+| 3   | **Logged forms look complete**                                                                                                | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
+| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on [The Daily Five](../programs/daily-five-default.md) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
+| 5   | **Edit programs, and choose which days they run**                                                                             | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
+| 6   | **OAuth login (Google / Facebook)**                                                                                           | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
+| 7   | **Streaks on the athlete card**                                                                                               | **MOT-1** (picker half)   |                                                                                                                                    |
 
 ### P1
 
@@ -353,6 +353,17 @@ publishing; publishing before it lands ships the artifact without its headline.
 behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
 going public, not just on V1-13.
 
+## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
+
+Tooling that makes each PR cheaper and safer to produce. It sits outside the product priority order
+above; the skills index holds the smaller items.
+
+- **DX-1 — `@claude review`: the `review-pr` skill, on request, in CI.** A writer comments `@claude
+review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
+  advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
+  1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
+  #176 resolved).
+
 ## i18n — externalize strings (post-MVP, near the bottom)
 
 Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
@@ -521,6 +532,12 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
   What shipped instead: the declared unit seeds the select (visible, overridable), and tapping BW on a
   catalog-declared-loaded movement raises a **non-blocking** note.
+
+- **V1-30 — the log form offers units the server rejects.** 🔴 **P0, reported 2026-09-30** by the
+  `review-pr` run on #171: the strength form offers 9 units and the server's schema rejects 7 of them
+  (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit. Not yet
+  reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
+  review so it isn't carried only by a changelog line.
 
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
