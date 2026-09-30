@@ -7,7 +7,9 @@ are enforced by CI and pre-commit hooks, **not** by a reviewer's memory. `CLAUDE
 See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan.md](./docs/plan.md)
 (PR backlog), [.github/SECURITY.md](./.github/SECURITY.md), [docs/definition-of-done.md](./docs/definition-of-done.md),
 [docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes),
-[docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**).
+[docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**),
+[.claude/skills/](./.claude/skills/README.md) (agent skills — the task lifecycle as procedures:
+`start-task` → `plan-with-panel` → `ship-pr`, plus `hold-the-bar` and `ui-screenshot`).
 
 **About to change a large feature? Read its guide in [docs/features/](./docs/features/) FIRST** — the
 file map, the cross-file invariants and the known traps, so the change costs one read instead of an

@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-09-30
 
 ## Where we are right now
 
@@ -257,6 +257,16 @@ not merge order.
 | YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-30** — **DX: agent skills for the task lifecycle** ([index](../.claude/skills/README.md)).
+  The per-PR procedures lived only as prose in AGENTS.md, `docs/plans/README.md`, the DoD and
+  lessons.md, so every session re-derived them, and the misses recur: #156 (status drifted from the
+  merge log) and #129 (commits dropped by a stale squash). Now `start-task` → `plan-with-panel` →
+  `ship-pr` encode the order to apply those rules in, **pointing at the docs rather than copying
+  them**, so there is still one source of truth. `hold-the-bar` adds a diff-scoped guard, adapted
+  from addyosmani/agent-skills, for the cheapest road to green: new suppressions,
+  `.skip`/`.only`, deleted or assertion-thinned tests, stubs and swallowed errors. The index carries
+  a prioritised backlog (`db-migration` is next).
 
 - **2026-09-30** — **V1-14b: the full-day round trip, and the gap it closes**
   (`apps/web/e2e/export-full-day.spec.ts`). Every V1-13 proof — the golden vectors, the `db:verify`
