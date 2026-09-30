@@ -370,6 +370,28 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
   branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
   the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
+- **DX-3 — `screenshot:ephemeral` silently captures a stale build.** It reuses `apps/web/.next`
+  whenever a `BUILD_ID` exists; only `--build` forces a rebuild. On #180 that posted a screenshot of
+  copy the PR had already changed, and it was caught only by a reviewer reading the image. **Fix:** record
+  the commit (plus a dirty-tree flag) the build came from, and rebuild when it differs from `HEAD`.
+  Add a `docs/lessons.md` entry. Small; no plan needed.
+- **DX-4 — the main-checkout guard blocks harmless variable-named commands.** #179's `PreToolUse` hook
+  denies any command whose name comes from a variable or `$(…)` in the main checkout. That's right for
+  git, but it also blocked a read-only `gh pr checks` polling loop and a `for w in …; git worktree remove`
+  cleanup loop on 2026-09-30. It fails safe, but each false positive teaches agents the escape hatch.
+  **Fix:** resolve the name when the loop's values are literal, or allow variable-named commands when no
+  git/gh mutation can result. Self-tests for both loops. The guard is ~1,000 lines, so check the file-size
+  rule first.
+- **DX-5 — nothing enforces the merge gates.** Verified via the API (2026-09-30): classic branch
+  protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
+  **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
+  `clean`), and a direct push to `main` is possible. Separately, `audit --prod`, `skills:check` and
+  `guards:test` run only in local `pnpm verify`, never in CI (GHSA-vcvr reached every branch with CI
+  green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
+  (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
+  `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
+  needs its own plan and panel. Then update AGENTS.md's gate list, which #181 corrected to say "by
+  convention", in the same PR.
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
@@ -546,6 +568,35 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
   review so it isn't carried only by a changelog line.
 
+- **V1-31 — the strength form's dropdowns may snap back after a rejected save.** 🟡 **Suspected, not
+  yet reproduced** (found 2026-09-30 while fixing #180). React 19 resets a `<form action>` after the
+  action returns, **including on an error**, and its native `form.reset()` puts a controlled `<select>`
+  back to its first option: React keeps a controlled input's reset target in step with state but not a
+  select's `defaultSelected`. #180 hit exactly this on the bodyweight Unit (kg silently became lb) and
+  fixed it with a layout-effect resync (`bodyweight-form.tsx`, see `docs/features/write-path.md`).
+  `strength-form.tsx`'s Measuring and Unit selects sit inside a form action the same way. Its saved data
+  comes from state, so a submit is probably right, but after a rejected save the VISIBLE select may show
+  the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
+  select); fix only if it reproduces, with an e2e.
+
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **P0, found
+  2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
+  has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
+  `unit`**, and `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`.
+  So a kg weigh-in exports as `84.5`, and the Claude workflow reads that as **pounds**: a silent 2.2×
+  error in a trend a coach reads. It doesn't throw, which is what makes it bad. `csv/value.ts` refuses
+  exactly this for strength loads (_"a converted number is one the athlete never logged"_), and the
+  bodyweight path has no equivalent. **Fix:** (1) check prod for existing kg rows, since any that exist
+  need a `db:correct` before the export starts throwing; (2) select `unit` in `bodyweightMonthRows`
+  and call `assertExportableUnit` in `buildBodyweight`, so the export refuses loudly; (3) convert, or
+  widen the contract. That last one is Ray's decision, because the header is legacy bytes.
+- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
+  alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, alone among the 11 ownership
+  sites in the codebase. It's inert today because no profile is soft-deleted, but it breaks the
+  ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
+  soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
+  place to make it unskippable.
+
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
@@ -612,24 +663,6 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   movement cards on a day change — the intended trade, since carrying them silently lets Day B's
   movements be submitted onto Day A. Covered by `e2e/day-nav-form-state.spec.ts`; the check-in form
   was already safe (its checked state is controlled, with a comment saying exactly why).
-
-- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **Found 2026-09-30** by
-  V1-24 PR 1b's correctness lens, **outside the diff**. `bodyweight-form.tsx` has offered the `kg`
-  option since V1-3 (#35), and `packages/db/src/queries/export-month.ts` has **never selected `unit`**
-  — `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`. So a kg
-  weigh-in exports as `84.5` and the Claude workflow reads it as **pounds**: a silent 2.2× error in a
-  trend a coach reads.
-
-  It does not throw, which is what makes it bad — `csv/value.ts` refuses exactly this for strength
-  loads (_"a converted number is one the athlete never logged"_), and the bodyweight path has no
-  equivalent. **Fix:** select `unit` in `bodyweightMonthRows` and call `assertExportableUnit` in
-  `buildBodyweight`, so the export refuses loudly. Then decide whether to convert or to widen the
-  contract — a decision for Ray, since the header is legacy bytes. Check prod for existing kg rows
-  first; if any exist they need a `db:correct` before the export starts throwing.
-
-- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** Its WHERE omits
-  `isNull(profiles.deletedAt)`, alone among the 11 ownership sites in the codebase. Inert today (no
-  profile is soft-deleted), and the `writers/ownership.ts` extraction in V1-24 PR 1b makes it visible.
 
 - **V1-24 — the form IS the day's state: edit what you already logged.**
   **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through

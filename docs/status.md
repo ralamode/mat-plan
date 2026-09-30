@@ -261,6 +261,14 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **Backlog: follow-ups from the 09-30 review batch filed as rows.** These are
+  [V1-31](./plan.md) (the strength form's dropdowns may snap back after a rejected save; suspected,
+  probe first), DX-3 (`screenshot:ephemeral` reuses a stale build), DX-4 (the main-checkout guard's
+  false positive on variable-named commands) and DX-5 (nothing enforces the merge gates: branch
+  protection is off, there are no required checks, and audit, `skills:check` and `guards:test` never
+  run in CI), and #187's two finds promoted to 🔴 P0 and moved next to V1-30: CSV-1 (a kg weigh-in exports under `weight_lb`, a
+  silent 2.2× error) and DAL-1 (`listEntriesForDay` misses the soft-deleted-profile filter). Until now
+  they lived only in PR comments. Docs only.
 - **2026-09-30** — **DX-1 implemented: `@claude review`** ([plan](./plans/dx-1-claude-review.md)).
   A writer's `@claude review` comment runs the `review-pr` skill in CI and posts one verified review,
   or a one-line failure notice, never silence. It is **on request only and advisory**. The model job
