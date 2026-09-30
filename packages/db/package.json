@@ -18,13 +18,13 @@
   },
   "dependencies": {
     "@mat-plan/shared": "workspace:*",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.3",
     "pg": "^8.23.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@types/pg": "^8.23.1",
-    "drizzle-kit": "^0.31.10",
-    "tsx": "^4.23.13"
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15"
   }
 }
