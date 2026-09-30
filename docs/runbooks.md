@@ -99,7 +99,8 @@ Vercel env + the GH secret together; note what re-deploys are needed._
 1. On a machine logged in to a Claude Pro/Max account: `claude setup-token`, and copy the token.
 2. GitHub → Settings → Secrets and variables → Actions → **New repository secret**
    `CLAUDE_CODE_OAUTH_TOKEN` (or update it). Nothing else reads it; no redeploy.
-3. Check: comment `@claude review` on any open PR. Within ~20 minutes there is one comment, a
+3. Check: comment `@claude review` on a PR **you** opened. Until the DX-1 injection smoke (plan,
+   test 4) has passed, don't `@claude review` a PR from someone else. Within ~20 minutes there is one comment, a
    review, or a notice with a run URL.
 4. **Expired or revoked token:** the review job fails at the action step and the PR gets
    "claude-review failed or ran out of budget" with the run URL. Rotate with steps 1–2.

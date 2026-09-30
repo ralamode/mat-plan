@@ -4,7 +4,7 @@
 #
 #   .github/scripts/review-prefetch.sh <pr-number> <out-dir>
 #
-# Writes <out>/pr.json, pr.diff, checks.txt, hold-the-bar.txt, a skeleton review.md, and the PR head
+# Writes <out>/pr.json, pr.diff, checks.txt, hold-the-bar.txt, guides.txt, a skeleton review.md, and the PR head
 # at <out>/head (symlinks materialised as plain files, PR-authored agent config renamed *.pr-data).
 # Emits head_sha=<sha> to $GITHUB_OUTPUT when set. Never runs PR code: no install, build or tests.
 # Plan and threat model: docs/plans/dx-1-claude-review.md (design points 4-6).
@@ -19,31 +19,32 @@ case "$PR" in *[!0-9]*) echo "::error::PR must be a number, got '$PR'" >&2; exit
 # AGENTS.md. Inside the PR head they are data to review, never instructions to load.
 SENSITIVE=(.claude .claude.json CLAUDE.md CLAUDE.local.md .mcp.json .gitmodules .ripgreprc .husky AGENTS.md)
 
-# The ONLY hook commands a base-branch .claude/settings.json may contain for the model job to run
-# (design point 5). Deliberately a second copy of settings.json's strings: this list is a pin, so a
-# new hook or a changed command fails here and forces a re-read of the threat model. Both hooks are
-# no-ops under CI (they check CI/GITHUB_ACTIONS).
-ALLOWED_HOOK_COMMANDS='[
-  "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-main-checkout.mjs\"",
-  "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.mjs\""
-]'
+# The canonical (jq -S -c) sha256 of the ONLY .claude/settings.json the model job may load (design
+# point 5, D1). A pin, deliberately: any change to that file (a new hook, a matcher, an allow rule)
+# fails here until someone re-reads the threat model and updates this hash. Recompute with:
+#   git show HEAD:.claude/settings.json | jq -S -c . | shasum -a 256
+SETTINGS_SHA256='aeef8c5b0f2edaa15daed3c8b6307a1d25bbdc9e4476a10405f2be1b2045386e'
+PINNED_HOOKS=(.claude/hooks/guard-main-checkout.mjs .claude/hooks/session-context.mjs)
 
+SKELETON_MARK='<!-- claude-review:skeleton -->' # also in review-post.sh; review-prefetch.test.sh pins both
 die() { echo "::error::$*" >&2; exit 1; }
 
 # ── 8. Settings guard (fail closed) — first, so nothing is fetched for a job that must not run ──
+# Checked against what is COMMITTED (HEAD): CI's checkout holds only tracked files, and locally an
+# untracked settings.local.json is the person's own, not the base branch's.
+tracked() { git -C "$REPO" cat-file -e "HEAD:$1" 2>/dev/null; }
 for f in .claude/settings.local.json .mcp.json; do
-  [ -e "$REPO/$f" ] && die "$f exists on the base branch; the review job must not load it (.github/SECURITY.md → CI / Actions secrets)"
+  tracked "$f" && die "$f is committed on the base branch; the review job must not load it (.github/SECURITY.md → CI / Actions secrets)"
 done
-if [ -e "$REPO/.claude/settings.json" ]; then
-  jq -e --argjson allowed "$ALLOWED_HOOK_COMMANDS" '
-    (keys - ["hooks", "$schema"] | length == 0)
-    and ([.hooks // {} | .[][] | .hooks[] | (.type == "command" and (.command as $c | $allowed | index($c) != null))] | all)
-  ' "$REPO/.claude/settings.json" >/dev/null ||
-    die ".claude/settings.json has keys or hooks beyond the pinned allowlist; revisit the review workflow's threat model before loading it (.github/SECURITY.md → CI / Actions secrets)"
+if tracked .claude/settings.json; then
+  got="$(git -C "$REPO" show HEAD:.claude/settings.json | jq -S -c . | { sha256sum 2>/dev/null || shasum -a 256; } | cut -d' ' -f1)"
+  [ "$got" = "$SETTINGS_SHA256" ] ||
+    die ".claude/settings.json differs from the pinned copy (sha256 $got); re-read the review workflow's threat model, then update SETTINGS_SHA256 (.github/SECURITY.md → CI / Actions secrets)"
   # …and each allowlisted hook must still be a no-op under CI, since the model job runs them.
-  for h in "$REPO"/.claude/hooks/guard-main-checkout.mjs "$REPO"/.claude/hooks/session-context.mjs; do
-    [ ! -e "$h" ] || grep -qF '!process.env.CI && !process.env.GITHUB_ACTIONS' "$h" ||
-      die "${h#"$REPO"/} no longer exits under CI; the review job would run it"
+  for h in "${PINNED_HOOKS[@]}"; do
+    tracked "$h" || continue
+    git -C "$REPO" show "HEAD:$h" | grep -qF '!process.env.CI && !process.env.GITHUB_ACTIONS' ||
+      die "$h no longer exits under CI; the review job would run it"
   done
 fi
 
@@ -69,13 +70,23 @@ git -C "$REPO" worktree prune
 GIT_LFS_SKIP_SMUDGE=1 git -C "$REPO" -c core.symlinks=false -c core.hooksPath=/dev/null \
   worktree add --quiet --detach "$HEAD_DIR" "$SHA"
 
+# ── 7 (runs here, before the rename). The quality-bar guard: the BASE's trusted script against the
+#    head as committed (git/awk only). After step 4 the renamed config would read as deleted. ──
+# No system/global git config here: a runner-level filter.lfs must not meet the PR's .gitattributes.
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+(cd "$OUT/head" && bash "$REPO/.claude/skills/hold-the-bar/check.sh" "origin/$BASE") >"$OUT/hold-the-bar.txt" 2>&1 || true
+# The feature-guide gate, likewise the BASE's script against the head: never `pnpm guides:check` in the
+# head, which would run the PR's own package.json script.
+(cd "$OUT/head" && node "$REPO/.github/scripts/check-feature-guides.mjs" "origin/$BASE") >"$OUT/guides.txt" 2>&1 || true
+unset GIT_CONFIG_NOSYSTEM GIT_CONFIG_GLOBAL
+
 # ── 4. Neutralise PR-authored agent config, then prove it (fail closed) ──
 find_sensitive() {
   local args=() n
   for n in "${SENSITIVE[@]}"; do args+=(-o -name "$n"); done
   find "$OUT/head" -depth \( -false "${args[@]}" \) ! -name '*.pr-data' -print0
 }
-find_sensitive | xargs -0 -I{} mv -- {} {}.pr-data
+find_sensitive | xargs -0 sh -c 'for p; do mv -- "$p" "$p.pr-data"; done' sh
 find "$OUT/head" -type l -delete # belt: core.symlinks=false already made them plain files
 [ -z "$(find_sensitive | tr -d '\0')" ] || die "PR agent config survived neutralisation"
 
@@ -88,10 +99,8 @@ gh pr checks "$PR" >"$OUT/checks.txt" 2>&1
 echo "exit=$?" >>"$OUT/checks.txt"
 set -e
 
-# ── 7. The quality-bar guard: the BASE's trusted script, run against the head's files (git/awk only) ──
-(cd "$OUT/head" && bash "$REPO/.claude/skills/hold-the-bar/check.sh" "origin/$BASE") >"$OUT/hold-the-bar.txt" 2>&1 || true
-
 # ── 9. The only file the model may edit ──
-printf '# Review in progress for %s\n\n_(The review did not finish; see the run log.)_\n' "$SHA" >"$OUT/review.md"
+# The marker line is how review-post.sh tells an untouched skeleton from a real review.
+printf '# Review in progress for %s\n\n%s\n_(The review did not finish; see the run log.)_\n' "$SHA" "$SKELETON_MARK" >"$OUT/review.md"
 
 echo "prefetched PR #$PR at $SHA into $OUT"

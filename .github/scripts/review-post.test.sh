@@ -35,11 +35,27 @@ expect() {
 
 expect "a clean review is posted, stamped with the SHA" 0 'Reviewed at `abc123`' <<<'## Review — x (#7)'
 expect "no review file → one failure notice, never silence" 0 'failed or ran out of budget' <<<'-'
-expect "the untouched skeleton → failure notice" 0 'failed or ran out of budget' <<<'# Review in progress for abc123'
+expect "the untouched skeleton → failure notice" 0 'failed or ran out of budget' <<'EOF'
+# Review in progress for abc123
+
+<!-- claude-review:skeleton -->
+_(The review did not finish; see the run log.)_
+EOF
+expect "heading kept, findings added → posted, not called a failure" 0 'Reviewed at `abc123`' <<'EOF'
+# Review in progress for abc123
+
+**Verdict:** fix P0s first · P0 1
+<!-- claude-review:skeleton -->
+EOF
 expect "the literal OAuth token → withheld, exit 1" 1 'withheld' <<<"leak: $T_SECRET"
-expect "the literal GitHub token → withheld" 1 'withheld' <<<"leak: $GH_SECRET"
-expect "base64 of a token → withheld" 1 'withheld' <<<"leak: $(printf '%s' "$GH_SECRET" | base64)"
+expect "a token-SHAPED GitHub token (the review job's) → withheld" 1 'withheld' <<<"leak: $GH_SECRET"
+T_SECRET='plainsecretvalue123456' expect "an unshaped OAuth value, literally → withheld (the literal scan)" 1 'withheld' <<<"leak: plainsecretvalue123456"
+T_SECRET='plainsecretvalue123456' expect "an unshaped OAuth value, as base64 → withheld" 1 'withheld' <<<"leak: $(printf '%s' plainsecretvalue123456 | base64)"
+expect "base64 of the OAuth token → withheld" 1 'withheld' <<<"leak: $(printf '%s' "$T_SECRET" | base64)"
 expect "a token-shaped string that isn't ours → withheld" 1 'withheld' <<<'leak: ghp_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+expect "@mentions are broken (injected text can't ping people)" 0 "@$(printf '\342\200\213')some-user" <<<'please cc @some-user and @org/team'
+if ! grep -qE '(^|[^[:alnum:]])@some-user' "$tmp/body"; then echo "✓ no live @mention survives"; else echo "✗ a live @mention survived"; fails=$((fails + 1)); fi
+expect "an email address is left alone" 0 'ray@example.com' <<<'contact ray@example.com'
 long="$(for i in $(seq 1 400); do echo "line $i of a long review"; done)"
 CAP=2000 expect "an over-cap review is cut on a line boundary with a note" 0 'truncated' <<<"$long"
 if tail -3 "$tmp/body" | head -1 | grep -qE '^line [0-9]+ of a long review$|^$'; then echo "✓ the cut leaves no partial line"; else echo "✗ partial line after the cut"; fails=$((fails + 1)); fi

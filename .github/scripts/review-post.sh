@@ -12,22 +12,28 @@ set -euo pipefail
 
 FILE="${1:-review/review.md}"
 : "${PR:?}" "${RUN:?}" "${MAX_COMMENT_BYTES:?}" "${GH_TOKEN:?}"
-SKELETON='# Review in progress for'
+SKELETON_MARK='<!-- claude-review:skeleton -->' # also in review-prefetch.sh; the test pins both
 BODY="$(mktemp)"
 trap 'rm -f "$BODY"' EXIT
 
 post() { gh pr comment "$PR" --body-file "$BODY"; }
 notice() { printf '%s\n' "$1" >"$BODY"; post; }
 
-if [ ! -s "$FILE" ] || head -1 "$FILE" | grep -qF "$SKELETON"; then
+# Untouched = nothing left once the skeleton's own lines (heading, marker, placeholder) and blanks go.
+untouched() {
+  ! grep -vE '^[[:space:]]*$|^# Review in progress for |^_\(The review did not finish' "$FILE" | grep -vqF "$SKELETON_MARK"
+}
+if [ ! -s "$FILE" ] || untouched; then
   notice "**claude-review failed or ran out of budget** for \`${SHA:-unknown}\`. Details: $RUN"
   exit 0
 fi
 
-# Literal secrets and their base64 (padding-tolerant: drop the last 4 chars), then token shapes.
-# Every needle is guarded: `grep -F ""` matches everything.
+# The OAuth token, literally and as base64 (padding-tolerant: drop the last 4 chars), then token
+# SHAPES. (The base64 needle catches one of the three byte alignments; this is a backstop, not the
+# control.) The review job's GitHub token is a different token from this job's GH_TOKEN (one is minted
+# per job), so only the `ghs_` shape can catch it. Every needle is guarded: `grep -F ""` matches all.
 leaked=0
-for s in "${T:-}" "$GH_TOKEN"; do
+for s in "${T:-}"; do
   [ -n "$s" ] || continue
   b64="$(printf '%s' "$s" | base64 | tr -d '\n')"
   for needle in "$s" "${b64%????}"; do
@@ -39,6 +45,12 @@ if [ "$leaked" -eq 1 ]; then
   notice "**claude-review withheld** its output: it matched a secret pattern. See $RUN (and rotate the token if it is real)."
   exit 1
 fi
+
+# Model-influenced text posts under the bot's identity: break every @mention (a zero-width space after
+# the @) so injected text can't notify arbitrary users or teams.
+ZWSP="$(printf '\342\200\213')"
+sed -E "s/(^|[^[:alnum:]\`/])@([[:alnum:]_-]+)/\1@${ZWSP}\2/g" "$FILE" >"$FILE.safe"
+FILE="$FILE.safe"
 
 {
   printf 'Reviewed at `%s` · [run](%s)\n\n' "${SHA:-unknown}" "$RUN"

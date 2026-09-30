@@ -64,6 +64,9 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }} # the READ-only job token; skips the App's contents:write token
           classify_inline_comments: 'false' # skips the action's own post-run bash step (action.yml:431)
+          # Read/Grep/Glob outside the working directory are refused by name, whatever the path argument.
+          # Bare Grep/Glob otherwise reach / and /proc (probed on the pinned CLI 2.1.285, 2026-09-30).
+          settings: '{"permissions":{"blockReadsOutsideWorkingDirectories":true}}'
           prompt: |
             Follow .claude/skills/review-pr/SKILL.md in CI mode for PR #${{ github.event.issue.number }}
             at ${{ steps.prefetch.outputs.head_sha }}. Inputs are in ${{ env.REVIEW_DIR }}/.
@@ -71,8 +74,20 @@ jobs:
             under ${{ env.MAX_COMMENT_BYTES }} bytes.
           claude_args: >-
             --max-turns 80
-            --allowedTools "Read(./**),Grep,Glob,Edit(./review-input/review.md)"
+            --allowedTools "Read(./**),Grep,Glob,Edit(./${{ env.REVIEW_OUT }})"
             --disallowedTools "Write,Bash,WebFetch,WebSearch,Task,Agent,Skill,NotebookEdit,mcp__*,Read(./.git/**),Read(//proc/**),Read(//home/runner/work/_temp/**),Read(~/.claude/**),Read(~/.config/**),Read(~/.ssh/**),Read(~/.gitconfig),Read(~/.npmrc),Edit(//home/runner/work/_temp/**),Edit(//home/runner/work/_actions/**),Edit(~/.local/**),Edit(//proc/**),Edit(./.git/**)"
+
+      # The action re-fetches main's agent config after the prefetch guarded it (restore-config.ts). If
+      # what the CLI loaded differs from what was guarded, withhold the review: the post job then posts
+      # the failure notice.
+      - name: Loaded config matches the guarded config
+        if: always()
+        run: |
+          if ! git diff --quiet "$GITHUB_SHA" -- .claude .mcp.json CLAUDE.md CLAUDE.local.md .claude.json; then
+            echo "::error::agent config changed on main mid-run; review withheld"
+            rm -f "$REVIEW_OUT"
+            exit 1
+          fi
 
       # Scrub the env-injection vectors before ANY later step. The action does this only when
       # allowed_non_write_users is set, and never for NODE_OPTIONS (action.yml:394-417). PATH can't be
