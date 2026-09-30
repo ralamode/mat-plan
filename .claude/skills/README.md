@@ -31,6 +31,17 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                    | #173         |
 | [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                              | #173         |
 
+## Guards (mechanisms, not procedures)
+
+Where a rule failed as prose, it became a check. Each ships with a self-test.
+
+| Guard                                                                                           | Enforces                                                                             | Self-test                                        |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                      | The main checkout stays on `main`; history-changing git there is denied              | `bash .claude/hooks/hooks.test.sh`               |
+| [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                            | Every session starts from the real state: status, open PRs, stale/off-main worktrees | same                                             |
+| [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`) | A skill can't cite a path or `pnpm` script that doesn't exist                        | `bash .github/scripts/check-skills.test.sh`      |
+| [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                              | The diff didn't lower the quality bar                                                | `bash .claude/skills/hold-the-bar/check.test.sh` |
+
 ## Backlog, in priority order
 
 Candidates came from the repo's recurring operations and from
@@ -96,3 +107,6 @@ source of truth.
   written from a fact sheet of the actual code rather than from AGENTS.md alone, which surfaced the
   audit seeds above. Skills say what's really wired (no auth, no action rate limits, no coverage
   tool) instead of what AGENTS.md claims.
+- **2026-09-30** — Guards (ROI items 1–3): a `PreToolUse` hook that keeps the main checkout on
+  `main`, a `SessionStart` briefing, and `pnpm skills:check` in `verify`. All three enforce rules that
+  already existed; the main-checkout rule had failed twice within hours of being written down.

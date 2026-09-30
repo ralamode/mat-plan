@@ -258,6 +258,16 @@ not merge order.
 
 ## Changelog (merged PRs)
 
+- **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
+  broken twice within hours: another session switched the main checkout to a feature branch, which
+  made a `git pull` try to merge `main` into someone's branch and made project skills vanish
+  ("Unknown skill"), because skills load from the main checkout's branch. Now a Claude Code
+  `PreToolUse` hook denies history-changing git in the main checkout (17-case self-test). A
+  `SessionStart` briefing prints the status headline, open PRs, and worktrees flagged stale or off-main;
+  on its first real run it caught the off-main checkout and three stale worktrees. `pnpm skills:check`
+  (in `verify`) fails when a skill cites a path or `pnpm` script that doesn't exist, which is the
+  feature-guide gate's reasoning applied to skills.
+
 - **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
   only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
   the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are

@@ -195,6 +195,11 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
     `ACCESS_GATE_PASSWORD` from there), so copy it in before running the dev server. `verify`,
     `e2e:local` and `screenshot:ephemeral` inject their own env and run without it.
   - Never remove a worktree you didn't create. It may be another session's live work.
+  - **Enforced for Claude sessions** by a `PreToolUse` hook (`.claude/settings.json` →
+    `.claude/hooks/guard-main-checkout.mjs`): `checkout`/`switch`/`rebase`/`reset`/`merge`/`pull` (other
+    than `--ff-only` on `main`) in the main checkout are denied with the worktree command to run instead.
+    A `SessionStart` hook prints the status headline, open PRs, and worktrees flagged stale or off-main.
+    The rule held for less than a day as prose.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
@@ -250,7 +255,7 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 - **pre-push:** `tsc --noEmit` (whole project) + affected tests.
 - **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job does,
   plus the production audit: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
-  `audit --prod`. **~25s** on a warm cache, so there is no excuse to skip it. `db:verify` runs on
+  `skills:check` (every path and `pnpm` script a skill cites exists) → `audit --prod`. **~25s** on a warm cache, so there is no excuse to skip it. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (its own command —
   see the next bullet), gitleaks, and the forward-only guard (inherently a diff-against-base check).
