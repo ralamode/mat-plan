@@ -123,6 +123,9 @@ A squash of a stale head silently drops the last pushes (#129 recovered three co
 #127). If anything is missing, cherry-pick it forward on a follow-up branch **before** removing the
 worktree.
 
+Then **sweep the other approved PRs**: this merge probably just put them in conflict. Run
+[keep-mergeable](../keep-mergeable/SKILL.md) for every open PR with a `## shipit` comment.
+
 ## Red flags
 
 - `docs/status.md` untouched in a PR that merges a backlog item.

@@ -30,6 +30,7 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 | [`add-server-action`](./add-server-action/SKILL.md) | Any new or changed mutation, with its boundary tests                                                                                                                                                  | #173         |
 | [`data-correction`](./data-correction/SKILL.md)     | Wrong data in prod the app can't fix                                                                                                                                                                  | #173         |
 | [`debug-ci-failure`](./debug-ci-failure/SKILL.md)   | Anything red: CI, local gate, flake, build                                                                                                                                                            | #173         |
+| [`keep-mergeable`](./keep-mergeable/SKILL.md)       | After any merge: keep every `shipit`'d PR mergeable (changelog conflicts auto; real ones ask)                                                                                                         | this PR      |
 | [panel agents](../agents/)                          | one lens each: `correctness-` · `scope-` · `architecture-` · `reuse-` · `db-safety-` · `security-` · `ux-reviewer`, plus `fact-sheet`; shared [reporting contract](./review-pr/reporting-contract.md) | #178         |
 
 ## Backlog, in priority order
@@ -104,3 +105,9 @@ source of truth.
   and UX, plus `fact-sheet`), with one shared reporting contract in `review-pr/`.
   `plan-with-panel` and `review-pr` call them by name. `security-reviewer` carries the
   "cite third-party behaviour from source at the pinned version" rule that caught DX-1's token leak.
+- **2026-09-30** — `keep-mergeable`: `shipit` now means "I keep this mergeable until it lands". Every
+  merge in the 09-30 batch re-conflicted the other approved PRs at the same changelog line, and each
+  was fixed by hand. The skill merges `main` in from a detached worktree (fast-forward push, never
+  force), auto-resolves only changelog/append-style conflicts and asks on anything else. `review-pr`
+  gains a "Shipit" step (the bar for posting it), and `ship-pr` step 8 ends with the sweep. The root
+  cause, one shared insertion point in `docs/status.md`, is planned separately (changelog fragments).
