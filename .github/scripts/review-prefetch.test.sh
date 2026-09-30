@@ -18,8 +18,6 @@ g() { git -c user.email=t@t -c user.name=t "$@"; }
 
 # Origin: main carries the scripts under test; refs/pull/7/head is the hostile PR.
 git init -q --bare -b main "$tmp/origin.git"
-# GitHub serves any reachable-or-not commit by SHA; a bare repo refuses unadvertised SHAs by default.
-git -C "$tmp/origin.git" config uploadpack.allowAnySHA1InWant true
 g clone -q "$tmp/origin.git" "$tmp/seed" 2>/dev/null
 mkdir -p "$tmp/seed/.github/scripts" "$tmp/seed/.claude/skills/hold-the-bar"
 cp "$here/review-prefetch.sh" "$tmp/seed/.github/scripts/"
@@ -35,10 +33,14 @@ echo base >"$tmp/seed/f" && echo rules >"$tmp/seed/AGENTS.md" # a bar file the P
   g add -A && g commit -qm pr && g push -q origin pr:refs/pull/7/head)
 SHA="$(git -C "$tmp/seed" rev-parse pr)"
 
-# gh stub: `pr view` returns the PR's JSON, `pr checks` a pending line with exit 8.
+# gh stub: `pr view` returns the PR's JSON, `pr checks` a pending line with exit 8. The late
+# `--json headRefOid` re-read reports $tmp/moved when a case writes it (the head moved mid-run).
 mkdir -p "$tmp/bin"
 cat >"$tmp/bin/gh" <<EOF
 #!/usr/bin/env bash
+if [ "\$1 \$2 \$5" = "pr view headRefOid" ] && [ -s "$tmp/moved" ]; then
+  printf '{"headRefOid":"%s"}' "\$(cat "$tmp/moved")"; exit 0
+fi
 case "\$1 \$2" in
   "pr view") printf '{"number":7,"title":"t","body":"","files":[],"labels":[],"headRefName":"pr","baseRefName":"main","headRefOid":"$SHA","author":{"login":"x"}}' ;;
   "pr checks") echo "quality	pending"; exit 8 ;;
@@ -85,6 +87,11 @@ fresh
 [ "$(git -C "$tmp/seed" rev-parse pr)" != "$SHA" ] || bad "test setup: the rewrite kept the old SHA"
 if run && [ "$(git -C "$tmp/out/head" rev-parse HEAD)" = "$SHA" ]; then ok "head rewritten after the read → the pinned SHA is still reviewed"
 else bad "head-moved fallback: $(tail -1 "$tmp/log")"; fi
+git -C "$tmp/seed" rev-parse pr >"$tmp/moved"
+fresh
+run
+grep -qx "head-moved-to=$(cat "$tmp/moved") (these checks are for that head, not reviewed-sha)" "$tmp/out/checks.txt" && ok "head moved mid-run → checks.txt says so" || bad "head-moved-to not recorded: $(cat "$tmp/out/checks.txt")"
+rm -f "$tmp/moved"
 
 # 2. The settings guard fails closed on a base that could widen the model's session.
 guard_case() { # <name> <file> <content> <want-exit> [untracked]: committed on the base unless "untracked"

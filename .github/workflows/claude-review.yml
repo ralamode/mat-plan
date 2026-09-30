@@ -104,7 +104,9 @@ jobs:
           paths=(.claude .mcp.json CLAUDE.md CLAUDE.local.md .claude.json)
           if ! git diff --quiet "$GITHUB_SHA" -- "${paths[@]}" ||
             [ -n "$(git status --porcelain --untracked-files=all --ignored -- "${paths[@]}")" ]; then
-            echo "::error::agent config changed on main mid-run; review withheld"
+            git diff --stat "$GITHUB_SHA" -- "${paths[@]}" || true
+            git status --porcelain --untracked-files=all --ignored -- "${paths[@]}" || true
+            echo "::error::agent config in the workspace differs from what was guarded (listed above); review withheld"
             rm -f "$REVIEW_OUT"
             exit 1
           fi

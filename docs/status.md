@@ -263,8 +263,8 @@ not merge order.
   or a one-line failure notice, never silence. It is **on request only and advisory**. The model job
   holds only a read-only GitHub token and can edit one file; a separate model-free job scans the
   output and posts it. The PR head is fetched as SHA-pinned data with PR agent config neutralised.
-  `review-prefetch.sh` is now the one way both local and CI reviews gather their inputs (25-case
-  self-test), and `review-post.sh` has 28. The plan's blanket settings guard would have refused every
+  `review-prefetch.sh` is now the one way both local and CI reviews gather their inputs (26-case
+  self-test), and `review-post.sh` has 30. The plan's blanket settings guard would have refused every
   review once #179 added hooks, so it hash-pins `.claude/settings.json` instead (logged as D1).
   **Goes live when `CLAUDE_CODE_OAUTH_TOKEN` is set** (runbook). The post-merge injection smoke is the
   acceptance gate.

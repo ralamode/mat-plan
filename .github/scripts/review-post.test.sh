@@ -57,6 +57,8 @@ T_SECRET='plainsecretvalue123456' expect "an unshaped OAuth value, literally →
 T_SECRET='plainsecretvalue123456' expect "an unshaped OAuth value, as base64 → withheld" 1 'withheld' <<<"leak: $(printf '%s' plainsecretvalue123456 | base64)"
 expect "base64 of the OAuth token → withheld" 1 'withheld' <<<"leak: $(printf '%s' "$T_SECRET" | base64)"
 expect "a token-shaped string that isn't ours → withheld" 1 'withheld' <<<'leak: ghp_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+expect "a token shape hidden behind a decimal entity (GitHub renders it) → withheld" 1 'withheld' <<<'leak: &#103;hp_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
+T_SECRET='plainsecretvalue123456' expect "the OAuth value hidden behind hex entities → withheld" 1 'withheld' <<<'leak: &#x70;&#X6c;ainsecretvalue123456'
 expect "@mentions are broken (injected text can't ping people)" 0 "@$(printf '\342\200\213')some-user" <<<'please cc @some-user and @org/team'
 if ! grep -qE '(^|[^[:alnum:]])@some-user' "$tmp/body"; then echo "✓ no live @mention survives"; else echo "✗ a live @mention survived"; fails=$((fails + 1)); fi
 expect "an email address survives, readable (the @ gets a ZWSP like every other)" 0 "ray@$(printf '\342\200\213')example.com" <<<'contact ray@example.com'

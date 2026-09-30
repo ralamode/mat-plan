@@ -38,15 +38,18 @@ fi
 # SHAPES. (The base64 needle catches one of the three byte alignments; this is a backstop, not the
 # control.) The review job's GitHub token is a different token from this job's GH_TOKEN (one is minted
 # per job), so only the `ghs_` shape can catch it. Every needle is guarded: `grep -F ""` matches all.
+# GitHub decodes numeric HTML entities before rendering, so `&#115;k-ant-…` shows as the token: scan the
+# raw text AND a copy with those entities decoded.
+perl -CS -pe 's/&#[xX]([0-9a-fA-F]{1,6});/chr(hex $1)/ge; s/&#([0-9]{1,7});/chr($1)/ge' "$FILE" >"$FILE.decoded" 2>/dev/null || cp "$FILE" "$FILE.decoded"
 leaked=0
 for s in "${T:-}"; do
   [ -n "$s" ] || continue
   b64="$(printf '%s' "$s" | base64 | tr -d '\n')"
   for needle in "$s" "${b64%????}"; do
-    [ "${#needle}" -ge 8 ] && grep -qF -- "$needle" "$FILE" && leaked=1
+    [ "${#needle}" -ge 8 ] && grep -qF -- "$needle" "$FILE" "$FILE.decoded" && leaked=1
   done
 done
-grep -qE 'sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}' "$FILE" && leaked=1
+grep -qE 'sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}' "$FILE" "$FILE.decoded" && leaked=1
 if [ "$leaked" -eq 1 ]; then
   notice "**claude-review withheld** its output: it matched a secret pattern. See $RUN (and rotate the token if it is real)."
   exit 1
