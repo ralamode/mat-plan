@@ -174,8 +174,8 @@ field IS the human confirmation) and is now pinned by a structural unit test. Sc
   V1-7), the full strength/superset arc (V1-8-1 · V1-8-2 · V1-8-3a/3b/3c/3d), editing (V1-9), programming
   (V1-10 · V1-17 · V1-18 · V1-19 · YDP seed), a11y-in-CI (V1-12), hardening (V1-14a), the **GAP-1** write-path
   fidelity arc, **GAP-3** typed measurements, and **V1-13 CSV export — the MVP's defining feature**.
-- **What is left in v1: one row.** **V1-14b** (full-day E2E + CSV diff) — blocked on V1-13 until
-  2026-09-24, now unblocked and the only unmerged item on the v1 backlog. **V1-11 is deferred past the
+- **The v1 backlog is closed.** **V1-14b** (full-day E2E + CSV diff) was the last row, and it is
+  merged — the day the app itself logs now round-trips through the real export and back out again. **V1-11 is deferred past the
   MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)); **V1-13a-fu** (the
   `calisthenics-log` CSV) was cut from V1-13 by Ray as a deliberate fast-follow, and **V1-15** and
   **V1-22** are planned-and-panelled but unbuilt.
@@ -257,6 +257,31 @@ not merge order.
 | YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |
 
 ## Changelog (merged PRs)
+
+- **2026-09-30** — **V1-14b: the full-day round trip, and the gap it closes**
+  (`apps/web/e2e/export-full-day.spec.ts`). Every V1-13 proof — the golden vectors, the `db:verify`
+  reads, the unit tests — starts from a row shape **we typed**. If the form writes something other
+  than what those fixtures assume, all of them stay green and the export is wrong. This is the only
+  test whose input is produced by the application rather than by the test.
+  - **The real `unzip`, not a reader we wrote.** `buildZip` is hand-rolled; a reader built against
+    the same mental model would inherit its mistakes and round-trip a wrong offset cleanly. The
+    system `unzip` is an independent implementation of the actual spec, and `-Z1` reads the **central
+    directory**, so the two headers must agree. It **fails rather than skips** when absent — a
+    self-skipping gate reporting green is the failure mode this repo has now hit four times.
+  - **Not a committed golden file**, which is what the backlog row asked for. A golden is a fixture
+    we wrote — precisely the insufficiency being fixed — and it would pin a date the test cannot
+    control. Expected bytes come from the day the app declares (`input[name="day"]`) and the values
+    typed into the form.
+  - **Proven by mutation, not by passing.** It went green on the first run, so it was broken on
+    purpose twice: dropping `csvMovement`'s normalisation and flattening `collapse`. Each failed it.
+    **Every pre-existing test stayed green through both** — including `export-csv.spec.ts`, which
+    downloads the same zip. That is the measurement of the gap: the movement-fork bug, which forks
+    every movement into two series while both files still look well-formed, would have shipped.
+  - **Assertions are containment, deliberately.** `fullyParallel` shares one database and one seeded
+    profile, so the bodyweight file legitimately carries sibling specs' rows. The probe movement's
+    name is unique to this spec; the path check asserts shape rather than set equality, so a
+    month-boundary write cannot flake it; and the determinism comparison is scoped to the two
+    entries this spec owns.
 
 - **2026-09-26** — **V1-23 PR 1: a null prescription scaffolds 3 set rows, not 1**
   ([plan](./plans/v1-23-today-focused.md)). `clampSetCount(null)` returned `1`, and `PROGRAM_SEED` —
