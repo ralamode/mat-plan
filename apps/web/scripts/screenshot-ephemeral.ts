@@ -249,6 +249,9 @@ const STATES = {
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,
   'bodyweight-closed-empty': seedClosedDays,
+  // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
+  // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
+  'bodyweight-rejected': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -261,6 +264,13 @@ type StateName = keyof typeof STATES;
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
+  'bodyweight-rejected': async (page) => {
+    const section = page.getByRole('region', { name: 'Bodyweight' });
+    await section.getByLabel('Unit').selectOption('kg');
+    await section.getByLabel('Weight', { exact: true }).fill('845');
+    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('alert').waitFor();
+  },
   // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:
   // collapsed cards with a per-movement done/total counter, because scaffolding 7 movements × 4 sets
   // renders ~6,600px of blank inputs at 360px otherwise. A reviewer cannot approve that from the

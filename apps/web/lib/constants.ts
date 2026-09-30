@@ -80,15 +80,23 @@ export const BODYWEIGHT_COPY = {
   several: (values: readonly string[]) =>
     `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
   /**
-   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (round 2 on #180).
-   * The commonest duplicate is the same value twice from a double submit, where "One weigh-in per
-   * day." reads as a contradiction and "Wrong number?" asks about a number that is right — what the
-   * parent actually has to do is remove the extra row(s).
+   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (rounds 2–3 on
+   * #180). Two different situations, so two different asks:
+   * - **All the same value** (a double submit): the extra row(s) are the problem.
+   * - **Different values** (e.g. two phones): someone has to decide which weight is right, and
+   *   "remove the extra" would invite a guess that corrupts the trend.
+   * Both say it **can’t be fixed in the app yet**, so a parent doesn't hunt for a delete control that
+   * doesn't exist; the fix is `db:correct` until 1b/1c.
    */
-  duplicates: (count: number) =>
-    count === 2
-      ? 'Logged twice — ask a parent to remove the extra.'
-      : `Logged ${count} times — ask a parent to remove the extras.`,
+  duplicates: (values: readonly string[]) => {
+    const n = values.length;
+    if (new Set(values).size === 1) {
+      return n === 2
+        ? 'Logged twice — the extra can’t be removed in the app yet; ask a parent.'
+        : `Logged ${n} times — the extras can’t be removed in the app yet; ask a parent.`;
+    }
+    return 'The weights differ — ask a parent which is right; it can’t be fixed in the app yet.';
+  },
   /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
   onePerDay: 'One weigh-in per day.',
   /**

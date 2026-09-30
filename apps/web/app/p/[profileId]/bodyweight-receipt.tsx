@@ -25,9 +25,9 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  * - **One value:** `Saved: 84.5 lb`, then `One weigh-in per day.` (on a writable day, where it is the
  *   reason there is no form) and the recovery line.
  * - **Several values** (the pre-1c duplicates, or a two-phone race — PR 1d's index does not exist yet):
- *   `2 weights logged: 84.5 lb, 845 lb`, never silently one of them, then ONE line — `Logged twice —
- *   ask a parent to remove the extra.` — in place of the one-per-day and recovery lines. The commonest
- *   duplicate is one value twice (a double submit), which those two lines would contradict.
+ *   `2 weights logged: 84.5 lb, 845 lb`, never silently one of them, then ONE line from
+ *   `BODYWEIGHT_COPY.duplicates` in place of the one-per-day and recovery lines: "the extra can’t be
+ *   removed in the app yet" for one value repeated, "ask a parent which is right" when they differ.
  * - **None, on a closed day:** `No weight logged.` — a bare heading reads as broken. (None on a
  *   WRITABLE day is the form, not this.)
  *
@@ -81,7 +81,7 @@ export function BodyweightReceipt({
       {/* Their OWN lines, never a suffix: at 360px the card has ~294px, and the value plus 1b's
           control already fills a row. */}
       {values.length > 1 ? (
-        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values.length)}</p>
+        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values)}</p>
       ) : (
         <>
           {writable ? (

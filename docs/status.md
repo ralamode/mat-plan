@@ -273,9 +273,9 @@ the app yet.` (the plan's copy verbatim, in `lib/constants.ts`). The last line n
     is stable, and it remounts per day (`key` on the day — a stale tab across midnight replayed the
     old day's key as a silent no-op). **Concurrent mounts can still duplicate until 1d's index**, so
     the receipt lists **every** live row (`2 weights logged: 84.5 lb, 845 lb`) rather than the newest,
-    with one line under it — `Logged twice — ask a parent to remove the extra.` — instead of the
-    one-per-day and recovery lines, which contradict the commonest duplicate (one value, submitted
-    twice).
+    with one line under it instead of the one-per-day and recovery lines: for one value submitted
+    twice, `Logged twice — the extra can’t be removed in the app yet; ask a parent.`; for different
+    values, `The weights differ — ask a parent which is right; it can’t be fixed in the app yet.`
   - **A plausibility bound** in `logBodyweightSchema` (20–500 lb, 10–230 kg; `That doesn’t look like a
 bodyweight — check the decimal point.`). It is what makes a no-amend receipt acceptable: `845` and
     `8.45` used to save permanently. **The form's fields are now controlled**, because React 19
