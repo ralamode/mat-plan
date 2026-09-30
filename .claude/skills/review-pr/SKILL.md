@@ -19,7 +19,7 @@ This skill is the rubric and the procedure, not a second copy of the rules.
 | `audit <area>` (baseline) | none: review the files in the area            | its feature guide, [docs/tech-debt.md](../../../docs/tech-debt.md) |
 
 For a PR, put it in a worktree so the scripts run against its code:
-`git fetch origin pull/<n>/head:pr-<n> && git worktree add ../mat-plan-pr-<n> pr-<n>`.
+`git fetch origin pull/<n>/head:pr-<n> && git worktree add .claude/worktrees/pr-<n> pr-<n>`.
 Remove the worktree when you're done.
 
 **Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit: fan

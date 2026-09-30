@@ -52,8 +52,9 @@ usually ends the investigation.
 | e2e                              | `pnpm e2e:local` (args pass through: `pnpm e2e:local <spec>`), never bare `pnpm --filter web e2e` |
 | gitleaks                         | `gitleaks detect --redact` (report the rule and location, **never the value**)                    |
 
-Remember: `typecheck` and `lint` cover **`apps/web` only**. A break in `packages/` shows up in
-`db:verify`, `test` or `build`.
+Remember: `typecheck` runs from `apps/web`, so it catches a type error in any package file the app
+imports. Files the app never imports (`packages/db/scripts/*`) are only checked when they run, in
+`db:verify` or `db:correct`. Nothing in `packages/` is linted.
 
 ## 4. Attribute before fixing
 

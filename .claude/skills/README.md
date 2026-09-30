@@ -55,10 +55,12 @@ code, fix the doc, or record it as accepted debt. **None has been triaged yet.**
 - AGENTS.md → "Design" references a root `DESIGN.md`; the file is `docs/design.md`.
 - "No coverage drop on changed files" (Backend/API rules): no coverage tool or threshold exists.
 - The CWV budget: nothing measures it (ADR 0001 only plans it).
-- `typecheck` and `lint` cover `apps/web` only, so `packages/` is neither typechecked nor linted.
+- `typecheck` and `lint` run from `apps/web`. Package files the app imports are typechecked through it
+  (each package's `main` is `src/index.ts`), but files it never imports (`packages/db/scripts/*`:
+  `verify.ts`, `correct.ts`, the corrections registry) are never typechecked, and nothing in
+  `packages/` is linted.
 - `audit --prod` runs only in local `pnpm verify`, not in CI.
 - "Keyboard-usable, focus-visible": no automated keyboard or focus check.
-- The corrections README mentions an `applied` flag the `Correction` type doesn't have.
 - The CONCURRENTLY "transaction-stripping runner" AGENTS.md describes doesn't exist (tech-debt.md).
 - AGENTS.md says "Idempotency-Key → persist first result"; the code uses a `clientId` field + ON CONFLICT.
 - No automated tests for corrections (`registry.ts`).

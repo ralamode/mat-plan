@@ -72,9 +72,8 @@ DATABASE_URL_UNPOOLED=<prod direct> pnpm --filter @mat-plan/db db:correct <name>
 DATABASE_URL_UNPOOLED=<prod direct> pnpm --filter @mat-plan/db db:correct <name>     # must print 0 changes
 ```
 
-Add a row to the README's **Applied** table (name / what / cause). Note that the README mentions an
-`applied` flag in the registry, but the `Correction` type has none; the table is the record. Ship
-it with `ship-pr` (`feat(db): …` or `fix(db): …`), with the backlog row for the cause linked.
+Add a row to the README's **Applied** table (name / what / cause). That table is the record of
+what ran; the `Correction` type has no applied flag. Ship it with `ship-pr` (`feat(db): …` or `fix(db): …`), with the backlog row for the cause linked.
 
 ## Red flags
 
