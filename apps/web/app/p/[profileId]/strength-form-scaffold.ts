@@ -3,6 +3,8 @@ import {
   MAX_SESSION_MOVEMENTS,
   MAX_SETS_PER_MOVEMENT,
   newId,
+  type Unit,
+  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 
 import type { MovementVals } from './strength-form';
@@ -36,6 +38,15 @@ export type ScaffoldRow = {
   movementName: string;
   /** Prescribed set count; nullable in the schema (a movement-only prescription is legal). */
   sets: number | null;
+  /**
+   * V1-26 PR-A — **this is the deliberate widening the docblock above anticipated.** Both fields are
+   * the MOVEMENT's declaration from the catalog, not the coach's prescription for this athlete:
+   * `unitDefault` says what kind of number this movement is measured in, `isBodyweight` says it is
+   * normally performed against bodyweight. Neither is a magnitude, so the confirm-gate is intact —
+   * `load` is still absent from this type, and still by construction rather than by test.
+   */
+  isBodyweight: boolean;
+  unitDefault: string | null;
 };
 
 /**
@@ -57,7 +68,24 @@ export function scaffoldMovements(
   return rows.slice(0, MAX_SESSION_MOVEMENTS).map((row) => ({
     clientId: newId(),
     movementName: row.movementName,
-    unit: defaultUnit,
+    // V1-26 PR-A — the catalog's declared unit, falling back to the household default.
+    //
+    // ⚠️ This, and NOT a pre-tapped BW chip, is how the form carries the movement's declaration. A
+    // seeded `isBodyweight: true` is the V1-19 submit wedge: `isUntouchedScaffold` requires
+    // `!s.isBodyweight`, so such a card is permanently "touched", survives `dropUntouchedMovements`,
+    // and blocks submit on a COLLAPSED card whose `required` reps input is unmounted — the browser
+    // refuses with an error it cannot render and the form simply appears dead. Doing 5 of 7
+    // programmed movements would be unsubmittable. Both panels found this independently.
+    //
+    // The unit has none of that problem and is strictly better besides: it is VISIBLE in the Unit
+    // select, so the athlete can see it and override it, where a pre-tapped chip is invisible state.
+    unit: declaredUnit(row.unitDefault) ?? defaultUnit,
+    /**
+     * The catalog says this movement is normally LOADED — so a BW tap on it is worth a word.
+     * Presentation-only client state: it is never serialized into the submitted `movements` JSON,
+     * because the server has the catalog and does not need the form to tell it.
+     */
+    declaredLoaded: row.isBodyweight === false && row.unitDefault !== null,
     // Never 0 rows: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
     // (`[].every(...)` is true), and a non-skipped movement with no sets fails the schema anyway.
     sets: Array.from({ length: clampSetCount(row.sets) }, () => ({
@@ -90,6 +118,20 @@ export function scaffoldMovements(
  * which session counts. Three is one constant and it matches every set-based movement in the YDP.
  */
 export const DEFAULT_SCAFFOLD_SETS = 3;
+
+/**
+ * A catalog `unit_default` narrowed to a `Unit` the form can actually render, or `undefined`.
+ *
+ * `movements.unit_default` is `text` with an FK to `units.code`, so the DATABASE guarantees it names a
+ * real unit — but not that this build knows it. A unit added to the reference table ahead of the
+ * shared enum (the expand→contract order this repo requires) would otherwise seed the select to a
+ * value with no option, which renders as blank and submits the wrong thing. Falling back to the
+ * household default is the safe direction: wrong-but-visible beats empty.
+ */
+function declaredUnit(unitDefault: string | null): Unit | undefined {
+  if (unitDefault === null) return undefined;
+  return unitDefault in UNIT_DIMENSION_BY_CODE ? (unitDefault as Unit) : undefined;
+}
 
 /** Prescribed sets → set-row count, clamped to what the session schema will accept. */
 function clampSetCount(sets: number | null): number {

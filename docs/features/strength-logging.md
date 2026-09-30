@@ -149,9 +149,27 @@ Real ones, each with the file to look at.
   intent — a numeric edit would misrepresent a genuinely bodyweight set — but "refuse the edit" plus
   "no delete" adds up to "unrecoverable", which is not what either half intended.
 
-- **The form does not read the movement's `isBodyweight` / `unitDefault`.** `strength-form.tsx` has
-  zero references to either, so BW is offered on movements the catalog declares as loaded (KB Swings
-  is seeded `isBodyweight: false, unitDefault: 'lb'`). The catalog knows; the form never asks.
+- **~~The form does not read the movement's `isBodyweight` / `unitDefault`.~~** ✅ **Fixed, V1-26
+  PR-A.** `programDayRows` now selects both, and they ride `ProgramDayDTO` → `ScaffoldRow` →
+  `scaffoldMovements`. The declaration lands on the **Unit select**, and a BW tap on a
+  catalog-declared-loaded movement raises a non-blocking note.
+
+  **⚠️ It is carried on the UNIT, and NEVER as a pre-tapped BW chip — this is load-bearing.**
+  `isUntouchedScaffold` requires `!s.isBodyweight`, so a scaffolded set seeded `isBodyweight: true` is
+  permanently "touched", survives `dropUntouchedMovements`, and blocks submit behind a collapsed
+  card whose `required` reps input is unmounted (the trap two bullets down, at a scale of 25 rows).
+  Both review panels found this independently. A unit has none of that problem and is strictly better
+  besides: it is **visible** in the select and the athlete can override it, where a pre-tapped chip is
+  invisible state. `strength-form-scaffold.test.ts` pins "no set is ever pre-seeded `isBodyweight`"
+  directly, and `e2e/scaffold-submit.spec.ts` asserts the submit itself in a real browser — jsdom
+  never runs native constraint validation, so only the e2e can see this class of failure.
+
+- **⚠️ Doing SOME of a movement's sets blocks the submit (V1-27, open).** `DEFAULT_SCAFFOLD_SETS` is
+  3 and `reps` is unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement**
+  and has no per-**set** equivalent. So 2 of 3 sets is unsubmittable until the athlete discovers the
+  per-row "Remove" button — on a gym floor, mid-session, which is the single most likely way to do a
+  prescribed movement. Found by `e2e/scaffold-submit.spec.ts` while writing V1-26 PR-A; that spec
+  deliberately fills every row of the open card and asserts nothing about this either way.
 
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the

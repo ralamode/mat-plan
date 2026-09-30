@@ -77,6 +77,16 @@ export function programDayRows(
         // the SLUG (`movements.name` is a display string — "Front Squat" — and would never match).
         // Selected here rather than converted at the call site so both sides read one column.
         movementSlug: schema.movements.slug,
+        // V1-26 PR-A: the movement's own DECLARATION, so the log form can seed the unit the catalog
+        // says this movement is measured in and can notice a bodyweight chip tapped on a loaded lift.
+        // Both live on `movements`, which is already inner-joined — no new join, two more columns.
+        //
+        // ⚠️ These are the movement's TRUTH, never the coach's PRESCRIPTION. `prescription_targets.load`
+        // is deliberately still absent from everything downstream of here (`ScaffoldRow`'s docblock),
+        // because an authored load reaching an input lets a prescribed value be logged as a performed
+        // one. A declared unit is structure — it says what KIND of number this is, not which number.
+        movementIsBodyweight: schema.movements.isBodyweight,
+        movementUnitDefault: schema.movements.unitDefault,
         sets: schema.prescriptions.sets,
         targetReps: schema.prescriptions.targetReps,
         load: schema.prescriptionTargets.load,

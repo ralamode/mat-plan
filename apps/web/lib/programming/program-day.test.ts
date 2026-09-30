@@ -13,6 +13,8 @@ const row = {
   targetReps: '5',
   load: '60',
   reps: null as string | null,
+  movementIsBodyweight: false,
+  movementUnitDefault: null as string | null,
 };
 
 describe('toProgramDay — per-kid reps precedence', () => {
@@ -41,6 +43,22 @@ describe('toProgramDay — per-kid reps precedence', () => {
 
   it('maps an empty result to an empty list (a rest day renders no card)', () => {
     expect(toProgramDay([])).toEqual([]);
+  });
+
+  // V1-26 PR-A — the movement's declaration rides through untouched. It is the movement's truth, so
+  // unlike `targetReps` there is no precedence rule to get wrong; the test exists so a future
+  // "helpful" default (`?? false`, `?? 'lb'`) fails here rather than silently telling the form a
+  // silent catalog declared something.
+  it('passes the movement’s own declaration through verbatim', () => {
+    const declared = toProgramDay([
+      { ...row, movementIsBodyweight: false, movementUnitDefault: 'lb' },
+    ])[0];
+    expect(declared.isBodyweight).toBe(false);
+    expect(declared.unitDefault).toBe('lb');
+
+    const silent = toProgramDay([{ ...row, movementIsBodyweight: true }])[0];
+    expect(silent.isBodyweight).toBe(true);
+    expect(silent.unitDefault).toBeNull();
   });
 });
 

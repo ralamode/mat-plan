@@ -17,6 +17,10 @@ const row = (over: Partial<ScaffoldRow> = {}): ScaffoldRow => ({
   idx: 0,
   movementName: 'Back squat',
   sets: 3,
+  // The catalog's silent case — no declaration either way — so every pre-V1-26 test keeps asserting
+  // the household-default behaviour it was written for, and the declaration tests opt in explicitly.
+  isBodyweight: false,
+  unitDefault: null,
   ...over,
 });
 
@@ -182,5 +186,97 @@ describe('isUntouchedScaffold', () => {
   it('never applies to a card the athlete added by hand', () => {
     const m = scaffolded();
     expect(isUntouchedScaffold({ ...m, scaffolded: undefined })).toBe(false);
+  });
+});
+
+/**
+ * V1-26 PR-A — **all four quadrants**, because the plan's first draft had a two-row table that
+ * covered neither real case.
+ *
+ * The movement carries a DECLARATION (`is_bodyweight`, `unit_default`); the coach carries a
+ * PRESCRIPTION (`load`). Only the declaration crosses into the form, and only as the seeded unit.
+ */
+describe('scaffoldMovements — the movement’s declaration (V1-26 PR-A)', () => {
+  it.each([
+    {
+      name: 'declared bodyweight, no unit (push-ups)',
+      over: { isBodyweight: true, unitDefault: null },
+      unit: 'lb',
+      declaredLoaded: false,
+    },
+    {
+      name: 'declared loaded with a unit (KB swings — the 2026-09-28 movement)',
+      over: { isBodyweight: false, unitDefault: 'lb' },
+      unit: 'lb',
+      declaredLoaded: true,
+    },
+    {
+      name: 'catalog silent (Pallof press)',
+      over: { isBodyweight: false, unitDefault: null },
+      unit: 'lb',
+      declaredLoaded: false,
+    },
+    {
+      name: 'declared bodyweight WITH a unit (a hold measured in seconds)',
+      over: { isBodyweight: true, unitDefault: 'sec' },
+      unit: 'sec',
+      declaredLoaded: false,
+    },
+  ])('$name', ({ over, unit, declaredLoaded }) => {
+    const [card] = scaffoldMovements([row(over)], 'lb');
+    expect(card.unit).toBe(unit);
+    expect(card.declaredLoaded ?? false).toBe(declaredLoaded);
+  });
+
+  it('seeds the DECLARED unit over the household default', () => {
+    // The household logs in `lb`; this movement is measured in seconds. The select must show `sec`,
+    // because it is VISIBLE and overridable — which is the whole reason the declaration rides on the
+    // unit rather than on a pre-tapped chip.
+    const [card] = scaffoldMovements([row({ unitDefault: 'sec', isBodyweight: true })], 'lb');
+    expect(card.unit).toBe('sec');
+  });
+
+  it('falls back to the household default for a unit this build does not know', () => {
+    // `movements.unit_default` is FK-constrained to `units.code`, so the DB guarantees the unit is
+    // real — not that the shared enum has caught up. Expand→contract makes that ordering normal. A
+    // select seeded to a value with no option renders BLANK and submits the wrong thing, so the safe
+    // direction is wrong-but-visible.
+    const [card] = scaffoldMovements([row({ unitDefault: 'furlong' })], 'lb');
+    expect(card.unit).toBe('lb');
+  });
+
+  /**
+   * ⚠️ **THE regression test.** Seeding `isBodyweight: true` on a scaffolded set is the V1-19 submit
+   * wedge: `isUntouchedScaffold` requires `!s.isBodyweight`, so the card is permanently "touched",
+   * survives `dropUntouchedMovements`, and blocks submit behind a COLLAPSED card whose `required` reps
+   * input is unmounted — the browser refuses with an error it cannot render and the form appears dead.
+   * Doing 5 of 7 programmed movements would be unsubmittable.
+   *
+   * Asserted over EVERY quadrant, including the declared-bodyweight ones where pre-selecting would be
+   * most tempting.
+   */
+  it('NEVER pre-selects the bodyweight chip, whatever the catalog declares', () => {
+    const cards = scaffoldMovements(
+      [
+        row({ isBodyweight: true, unitDefault: null }),
+        row({ isBodyweight: true, unitDefault: 'sec' }),
+        row({ isBodyweight: false, unitDefault: 'lb' }),
+      ],
+      'lb',
+    );
+    for (const card of cards) {
+      for (const set of card.sets) {
+        expect(set.isBodyweight).toBeUndefined();
+        expect(set.isBand).toBeUndefined();
+      }
+      // The predicate that actually gates the submit — asserted directly, not inferred from the flags.
+      expect(isUntouchedScaffold(card)).toBe(true);
+    }
+  });
+
+  it('carries no prescribed load, however the declaration is shaped', () => {
+    // The V1-26 widening must not have opened the door `ScaffoldRow` closes by construction.
+    const [card] = scaffoldMovements([row({ isBodyweight: false, unitDefault: 'lb' })], 'lb');
+    expect(card.sets.every((s) => s.reps === '' && s.weight === '')).toBe(true);
   });
 });

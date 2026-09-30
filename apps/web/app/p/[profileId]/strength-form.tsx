@@ -72,6 +72,11 @@ export type MovementVals = {
   // to decide a card is disposable, and a scaffolded card always has one, so without this flag doing
   // 5 of 7 programmed movements would block submit behind the other 2's empty required fields.
   scaffolded?: boolean;
+  // V1-26 PR-A. TRANSIENT, like `scaffolded` — never serialized into the payload. The CATALOG says
+  // this movement is normally loaded (`is_bodyweight: false` AND a declared `unit_default`), so a BW
+  // tap on it earns a word. The server has the catalog itself and does not need the form to tell it.
+  // Cleared on rename: the declaration was derived from a name that is now gone.
+  declaredLoaded?: boolean;
 };
 
 const emptySet = (): SetVals => ({ key: newId(), reps: '', weight: '' });
@@ -331,7 +336,12 @@ function StrengthFormBody({
               selected={selected.has(m.clientId)}
               onToggleSelect={() => toggleSelect(m.clientId)}
               onUngroup={m.supersetClientId ? () => ungroup(m.supersetClientId!) : undefined}
-              onName={(v) => patchMovement(m.clientId, { movementName: v })}
+              // Renaming clears the carried declaration: `declaredLoaded` was derived from the
+              // scaffolded name, and typing over it makes this a different movement the catalog has
+              // said nothing about. A warning that outlived its subject would be worse than none.
+              onName={(v) =>
+                patchMovement(m.clientId, { movementName: v, declaredLoaded: undefined })
+              }
               onUnit={(v) => patchMovement(m.clientId, { unit: v })}
               onRemove={() => removeMovement(m.clientId)}
               onAddSet={() => patchSets(m.clientId, (sets) => [...sets, emptySet()])}
@@ -719,6 +729,23 @@ function MovementCard({
               </div>
             </div>
           ))}
+          {/* V1-26 PR-A — the 2026-09-28 incident, said out loud. Liam's KB swings were logged
+              `20 × BW` when the session was `10 × 20 lb`, and the app said nothing at the moment of
+              the mistake and then could not fix it afterwards.
+
+              A WARNING, never a lockout: the catalog's declaration is a normal case, not a rule, and
+              an athlete doing bodyweight KB swings is allowed to be right. It is also not a per-set
+              note — three copies of one sentence on a three-set card is noise on a 360px screen —
+              so it renders once per movement, for the whole card.
+
+              `role="status"` and not `alert`: this is advisory, and `alert` interrupts. It sits
+              BELOW the set rows deliberately, so appearing cannot reflow the row under the thumb
+              that just tapped the chip. */}
+          {movement.declaredLoaded && movement.sets.some((s) => s.isBodyweight) ? (
+            <p role="status" className="text-muted-foreground text-sm">
+              {movement.movementName} is usually logged with a weight.
+            </p>
+          ) : null}
           <div>
             <Button type="button" variant="outline" size="sm" onClick={onAddSet}>
               Add set

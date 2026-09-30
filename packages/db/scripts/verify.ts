@@ -2992,6 +2992,26 @@ assert.ok(
   'YDP: no authored loads reach the card — the athlete logs what they did',
 );
 
+// (b2) V1-26 PR-A — the MOVEMENT's declaration rides out of the shipped query.
+//
+// This is the column pair that feeds the log form's Unit select and its BW-tap warning, and the seed
+// is the real catalog, so this proves the actual movements the athletes log against — not a fixture.
+// `KB Swings` is the 2026-09-28 movement: declared loaded, in pounds, and logged `20 × BW`.
+const kbSwings = liamB.find((r) => r.movementName === 'KB Swings');
+assert.equal(kbSwings?.movementUnitDefault, 'lb', 'V1-26: KB Swings declares a pound default');
+assert.equal(kbSwings?.movementIsBodyweight, false, 'V1-26: ...and is NOT a bodyweight movement');
+
+const pushUps = liamA.find((r) => r.movementName === 'Push-Ups');
+assert.equal(pushUps?.movementIsBodyweight, true, 'V1-26: Push-Ups declares bodyweight');
+assert.equal(pushUps?.movementUnitDefault, null, 'V1-26: ...and declares no unit');
+
+// ⚠️ The declaration is the MOVEMENT's, never the coach's. `load` stays null on every YDP row (asserted
+// just above), so widening the query did not open a path for an authored magnitude to reach an input.
+assert.ok(
+  liamA.every((r) => r.load === null),
+  'V1-26: widening the select did not let a prescribed load through',
+);
+
 // The one fixed prescription in the program survives the read.
 const hipThrust = liamA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
 assert.equal(hipThrust?.sets, 3, 'YDP: hip thrusts keep their fixed 3 sets');

@@ -112,10 +112,12 @@ describe('StrengthForm — sub-failure set payload (GAP-1 P1-1c)', () => {
 });
 
 // ── V1-19 — the program scaffold ────────────────────────────────────────────────────────────────
+// V1-26 PR-A: `Trap-Bar Deadlift` is the declared-LOADED movement here — the shape of the
+// 2026-09-28 KB-swings incident — so the BW-tap warning has a subject in this fixture.
 const PROGRAM = [
-  { idx: 0, movementName: 'Med-Ball Slam', sets: 2 },
-  { idx: 1, movementName: 'Trap-Bar Deadlift', sets: 2 },
-  { idx: 2, movementName: 'Pull-Up', sets: 1 },
+  { idx: 0, movementName: 'Med-Ball Slam', sets: 2, isBodyweight: false, unitDefault: null },
+  { idx: 1, movementName: 'Trap-Bar Deadlift', sets: 2, isBodyweight: false, unitDefault: 'lb' },
+  { idx: 2, movementName: 'Pull-Up', sets: 1, isBodyweight: true, unitDefault: null },
 ];
 
 const renderWithProgram = () =>
@@ -192,5 +194,81 @@ describe('StrengthForm — program scaffold (V1-19)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(payload().map((m) => m.movementName)).toEqual(['Front squat']);
+  });
+});
+
+/**
+ * V1-26 PR-A — the form carries the MOVEMENT's declaration.
+ *
+ * The 2026-09-28 incident: Liam's KB swings were logged `20 × BW` when the session was `10 × 20 lb`.
+ * The app said nothing at the moment of the mistake, and then could not fix it afterwards. PR-A is
+ * the first half — say something.
+ */
+describe('StrengthForm — the movement’s declaration (V1-26 PR-A)', () => {
+  const bwChip = (n: number) =>
+    screen.getByRole('checkbox', { name: `BW — Bodyweight — movement ${n} set 1` });
+
+  it('seeds the Unit select from the catalog, not the household default', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    // Card 1 is the open one: `Med-Ball Slam`, catalog-silent → the household default.
+    expect(screen.getByLabelText(/Unit for movement 1/)).toHaveProperty('value', 'lb');
+  });
+
+  it('warns — and does NOT block — when BW is tapped on a movement the catalog declares loaded', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    // Open card 2, the declared-loaded Trap-Bar Deadlift.
+    fireEvent.click(screen.getByRole('button', { name: /2\. Trap-Bar Deadlift/ }));
+
+    expect(screen.queryByText(/usually logged with a weight/)).toBeNull();
+    fireEvent.click(bwChip(2));
+
+    const note = screen.getByText('Trap-Bar Deadlift is usually logged with a weight.');
+    expect(note).toBeTruthy();
+    // A WARNING, not a lockout — the athlete may be right, and the chip stays on.
+    expect(bwChip(2)).toHaveProperty('checked', true);
+    // `status`, not `alert`: advisory copy must not interrupt.
+    expect(note.getAttribute('role')).toBe('status');
+  });
+
+  it('says nothing when BW is tapped on a movement the catalog declares bodyweight', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    fireEvent.click(screen.getByRole('button', { name: /3\. Pull-Up/ }));
+    fireEvent.click(bwChip(3));
+    expect(screen.queryByText(/usually logged with a weight/)).toBeNull();
+  });
+
+  it('clears the carried declaration when the card is renamed', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    fireEvent.click(screen.getByRole('button', { name: /2\. Trap-Bar Deadlift/ }));
+    fireEvent.click(bwChip(2));
+    expect(screen.getByText(/usually logged with a weight/)).toBeTruthy();
+
+    // The declaration was derived from a name that is now gone. A warning naming a movement the card
+    // no longer holds is worse than no warning.
+    fireEvent.change(screen.getByDisplayValue('Trap-Bar Deadlift'), {
+      target: { value: 'Kettlebell swing' },
+    });
+    expect(screen.queryByText(/usually logged with a weight/)).toBeNull();
+  });
+
+  /**
+   * ⚠️ THE regression this whole design exists to avoid. A scaffolded card seeded `isBodyweight: true`
+   * is permanently "touched" (`isUntouchedScaffold` requires `!s.isBodyweight`), survives
+   * `dropUntouchedMovements`, and blocks submit behind a COLLAPSED card whose `required` reps input is
+   * unmounted — the form appears dead. This asserts the SUBMIT, not the flags.
+   */
+  it('doing some of the programmed movements still submits (the V1-19 wedge stays closed)', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    fireEvent.change(screen.getAllByPlaceholderText('reps')[0]!, { target: { value: '8' } });
+    fireEvent.change(screen.getAllByPlaceholderText(/weight/)[0]!, { target: { value: '30' } });
+
+    const p = payload();
+    expect(p).toHaveLength(1);
+    expect(p[0].movementName).toBe('Med-Ball Slam');
   });
 });

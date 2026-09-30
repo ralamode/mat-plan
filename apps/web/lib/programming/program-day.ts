@@ -25,6 +25,13 @@ export type ProgramDayDTO = {
   targetReps: string | null;
   /** This kid's suggested load; null when they have no target on this prescription. */
   load: string | null;
+  /**
+   * V1-26 PR-A — the MOVEMENT's declaration, not the coach's. `movements.is_bodyweight` says this
+   * movement is normally performed against bodyweight; `unit_default` says what it is normally
+   * measured in (`lb` for KB swings, `sec` for a hollow-body hold, `null` when the catalog is silent).
+   */
+  isBodyweight: boolean;
+  unitDefault: string | null;
 };
 
 /**
@@ -40,6 +47,8 @@ export function toProgramDay(rows: readonly ProgramDayRow[]): ProgramDayDTO[] {
     sets: r.sets,
     targetReps: r.reps ?? r.targetReps,
     load: r.load,
+    isBodyweight: r.movementIsBodyweight,
+    unitDefault: r.movementUnitDefault,
   }));
 }
 

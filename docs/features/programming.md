@@ -160,6 +160,17 @@ evidence that an unprogrammed day exists.
   `name` is a display string — `"Front Squat"` — and would never match. Both come from one query so
   neither side converts.
 
+- **`programDayRows` also carries the MOVEMENT's declaration — and that is not the coach's
+  prescription (V1-26 PR-A).** `movementIsBodyweight` / `movementUnitDefault` come off the
+  already-joined `movements` row and ride `ProgramDayDTO` → `ScaffoldRow` → the log form's Unit select.
+
+  ⚠️ **The line this query must never cross is `prescription_targets.load`.** The declaration says what
+  KIND of number a movement is measured in; the prescription says WHICH number this athlete should
+  lift. `ScaffoldRow` has no `load` field at all, so "no authored load reaches an input" — AGENTS.md's
+  one inviolable product rule — is enforced by the **type**, not by care. `page.tsx` narrows
+  `ProgramDayDTO` at the boundary for the same reason. Widening either is a product decision, not a
+  plumbing one.
+
 - **V1-13's `prescribed` reads TODAY's program, not the program as it was.** There is no
   `entries.prescription_id` (GAP-1 P1-2 unbuilt), so the export matches back by `(day_role, movement)`
   — a key `schema.ts` documents as **non-unique** ("a movement may legitimately appear twice in a day
