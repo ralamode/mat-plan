@@ -268,8 +268,7 @@ not merge order.
   fail-closed neutralisation of PR-authored agent config. `review-pr` also gained three rules from
   its first real run (on #171): probe instead of re-reading when reviewers disagree, severity by
   today's risk, and "found outside the diff". That run surfaced a **live P0** (7 of 9 offered units
-  are rejected by the server), which will be fixed separately.
-
+  are rejected by the server), filed as **V1-30** in `docs/plan.md`.
 - **2026-09-30** — **Process: every task runs in its own worktree.** AGENTS.md required a worktree
   only for _parallel_ work, so single-task sessions (#170, #173 among them) ran on feature branches in
   the shared main checkout. Other sessions were meanwhile using ad-hoc `/tmp` worktrees, which are
