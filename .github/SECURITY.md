@@ -62,3 +62,6 @@ machine token.
 
 - Commit the lockfile; CI uses `--frozen-lockfile`; Dependabot with a cooldown / min-age
   (post-Shai-Hulud); `pnpm audit` gate; minimize dependencies.
+- **Committed Claude Code settings** (`.claude/settings.json`) may contain only hooks that no-op under
+  CI (`CI`/`GITHUB_ACTIONS` set); no permission, MCP or env keys. A CI model job that loads project
+  settings would inherit anything else ([DX-1 plan](../docs/plans/dx-1-claude-review.md), design point 5).
