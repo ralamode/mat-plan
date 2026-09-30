@@ -261,12 +261,15 @@ not merge order.
 - **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
   broken twice within hours: another session switched the main checkout to a feature branch, which
   made a `git pull` try to merge `main` into someone's branch and made project skills vanish
-  ("Unknown skill"), because skills load from the main checkout's branch. Now a Claude Code
-  `PreToolUse` hook denies history-changing git in the main checkout (17-case self-test). A
-  `SessionStart` briefing prints the status headline, open PRs, and worktrees flagged stale or off-main;
-  on its first real run it caught the off-main checkout and three stale worktrees. `pnpm skills:check`
-  (in `verify`) fails when a skill cites a path or `pnpm` script that doesn't exist, which is the
-  feature-guide gate's reasoning applied to skills.
+  ("Unknown skill") for sessions launched there. Now a best-effort Claude Code `PreToolUse` hook keeps
+  the main checkout to an **allowlist** (read-only git, worktree commands, `--ff-only` sync on `main`,
+  `checkout main` when clean), reading through subshells, `$(…)`, `sh -c`, wrappers and `cd`/`-C`;
+  96 self-test cases cover the known bypass forms and the allowed workflow. A `SessionStart` briefing
+  prints the status headline, open PRs (fork-PR titles withheld as untrusted input), and stale or
+  off-main worktrees.
+  Both hooks no-op under CI, a SECURITY.md invariant the DX-1 job depends on. `pnpm skills:check` fails
+  when a skill cites a path or `pnpm` script that doesn't exist. It and the self-tests run in `verify`,
+  not yet in CI.
 - **2026-09-30** — **DX-1 planned: `@claude review`, reshaped by the panel**
   ([plan](./plans/dx-1-claude-review.md)). On request only, subscription auth. The panel found **four
   blocking flaws in the first draft**. The sharpest, confirmed in the action's source: agent mode

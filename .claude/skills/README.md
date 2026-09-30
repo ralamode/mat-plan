@@ -33,11 +33,12 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 ## Guards (mechanisms, not procedures)
 
-Where a rule failed as prose, it became a check. Each ships with a self-test.
+Where a rule failed as prose, it became a check. Each ships with a self-test, and `pnpm guards:test`
+(in `verify`, not in CI) runs them all.
 
 | Guard                                                                                           | Enforces                                                                             | Self-test                                        |
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                      | The main checkout stays on `main`; history-changing git there is denied              | `bash .claude/hooks/hooks.test.sh`               |
+| [`guard-main-checkout.mjs`](../hooks/guard-main-checkout.mjs) (PreToolUse)                      | The main checkout stays on `main`: an allowlist of read/sync git there (best-effort) | `bash .claude/hooks/hooks.test.sh`               |
 | [`session-context.mjs`](../hooks/session-context.mjs) (SessionStart)                            | Every session starts from the real state: status, open PRs, stale/off-main worktrees | same                                             |
 | [`check-skills.mjs`](../../.github/scripts/check-skills.mjs) (`pnpm skills:check`, in `verify`) | A skill can't cite a path or `pnpm` script that doesn't exist                        | `bash .github/scripts/check-skills.test.sh`      |
 | [`hold-the-bar/check.sh`](./hold-the-bar/check.sh)                                              | The diff didn't lower the quality bar                                                | `bash .claude/skills/hold-the-bar/check.test.sh` |
@@ -63,7 +64,7 @@ Candidates came from the repo's recurring operations and from
 Places where AGENTS.md or the docs claim something the code doesn't do. Each needs a verdict: fix the
 code, fix the doc, or record it as accepted debt. **None has been triaged yet.**
 
-- AGENTS.md → "Design" references a root `DESIGN.md`; the file is `docs/design.md`.
+- AGENTS.md → "Design" references a root DESIGN.md, which does not exist; the file is `docs/design.md`.
 - "No coverage drop on changed files" (Backend/API rules): no coverage tool or threshold exists.
 - The CWV budget: nothing measures it (ADR 0001 only plans it).
 - `typecheck` and `lint` run from `apps/web`. Package files the app imports are typechecked through it

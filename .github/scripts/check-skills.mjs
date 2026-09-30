@@ -8,24 +8,34 @@
  * The first batch of skills shipped with a wrong claim within a day, so this is not hypothetical.
  *
  * Checks every backticked token and markdown link in those files:
- *   - repo paths (`apps/…`, `packages/…`, `docs/…`, `.github/…`, `.claude/…`, root files): must exist
- *   - relative markdown links (`](../../../docs/x.md)`): must resolve from the skill's own directory
- *   - `pnpm <script>` / `pnpm --filter <pkg> <script>`: the script must exist in that package.json
+ *   - repo paths (`apps/…`, `packages/…`, `docs/…`, `.github/…`, `.claude/…`, `.husky/…`): must exist
+ *   - root-shaped file names (`AGENTS.md`, `package.json`, `.squawk.toml`, `ci.yml`): must exist at the
+ *     root, next to the skill, or as the name of some file in the repo
+ *   - relative markdown links (`](../../../docs/x.md)`, `](check.sh)`): must resolve from the skill's
+ *     own directory, or failing that from the repo root
+ *   - every `pnpm [--filter|-F <pkg>] [run] <script>` in a span: the script must exist in that
+ *     package.json; `<pkg>` is resolved from the workspace packages' own `name` fields
+ * Line suffixes (`:12`, `:L12`, `#L3`) and `#anchors` are stripped before the existence check.
  * Templates are skipped: anything with `<`, `*`, `{`, `$`, `NNNN` or `…` is a pattern, not a path.
  * Gitignored paths are skipped too (`.claude/worktrees/`, `apps/web/.env.local`): they are runtime
- * state a skill legitimately names, and a fresh checkout never has them.
+ * state a skill legitimately names, and a fresh checkout never has them. To mention a file that
+ * deliberately does not exist, don't backtick it.
  *
  * Usage:
  *   node .github/scripts/check-skills.mjs [repoRoot]   # default: cwd
  */
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve, relative } from 'node:path';
+import { readdirSync, readFileSync, existsSync, realpathSync } from 'node:fs';
+import { join, dirname, resolve, relative, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(process.argv[2] ?? '.');
 const SOURCES = ['.claude/skills', '.claude/agents'];
+const WORKSPACE_GROUPS = ['apps', 'packages'];
 const PATH_PREFIX = /^(apps|packages|docs|\.github|\.claude|\.husky)\//;
-const ROOT_FILES = new Set(['AGENTS.md', 'CLAUDE.md', 'README.md', 'package.json', '.squawk.toml']);
+/** A slash-less name shaped like a root/config file: `README.md`, `package.json`, `.prettierrc`. */
+const ROOT_SHAPED =
+  /^(?:[A-Z][A-Z0-9_-]*\.md|[\w.-]+\.(?:json|ya?ml|toml)|\.[\w-]+(?:\.(?:mjs|cjs|js)|rc))$/;
 const TEMPLATE = /[<>*{}$…]|NNNN|\.\.\.|\bpr-\d/;
 const PNPM_BUILTINS = new Set([
   'install',
@@ -35,7 +45,6 @@ const PNPM_BUILTINS = new Set([
   'update',
   'exec',
   'dlx',
-  'run',
   'audit',
   'why',
   'list',
@@ -51,11 +60,44 @@ const PNPM_BUILTINS = new Set([
   'config',
   'env',
 ]);
-const FILTERS = {
-  web: 'apps/web',
-  '@mat-plan/db': 'packages/db',
-  '@mat-plan/shared': 'packages/shared',
-};
+
+/** pnpm filter → package dir, from the workspace packages' own `name` fields (and `./dir`). */
+function workspaceFilters() {
+  const map = new Map();
+  for (const group of WORKSPACE_GROUPS) {
+    const dir = join(ROOT, group);
+    if (!existsSync(dir)) continue;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const pkgDir = `${group}/${e.name}`;
+      const file = join(ROOT, pkgDir, 'package.json');
+      if (!e.isDirectory() || !existsSync(file)) continue;
+      const { name } = JSON.parse(readFileSync(file, 'utf8'));
+      if (name) map.set(name, pkgDir);
+      map.set(`./${pkgDir}`, pkgDir);
+      map.set(pkgDir, pkgDir);
+    }
+  }
+  return map;
+}
+const FILTERS = workspaceFilters();
+
+/** Base names of every file in the repo (tracked or not, minus ignored ones). */
+const REPO_NAMES = new Set(
+  (() => {
+    try {
+      return execFileSync(
+        'git',
+        ['-C', ROOT, 'ls-files', '--cached', '--others', '--exclude-standard'],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 },
+      )
+        .split('\n')
+        .filter(Boolean)
+        .map((f) => basename(f));
+    } catch {
+      return []; // not a git repo: root-shaped names must then exist at the root or next to the skill
+    }
+  })(),
+);
 
 function markdownFiles(dir) {
   if (!existsSync(dir)) return [];
@@ -90,22 +132,61 @@ function isIgnored(p) {
   }
 }
 
-/** Strip a `:line`/`:a-b` suffix and trailing punctuation from a cited path. */
-const cleanPath = (t) => t.replace(/:\d+(-\d+)?(,\d+)*$/, '').replace(/[.,;:)]+$/, '');
+/** Strip trailing punctuation, then a `:12` / `:L12` / `#L3` line suffix or `#anchor`, from a path. */
+export const cleanPath = (t) =>
+  t
+    .replace(/[.,;)]+$/, '')
+    .replace(/#.*$/, '')
+    .replace(/:L?\d+(-L?\d+)?(,\d+)*$/, '')
+    .replace(/[.,;:)]+$/, '');
+
+/** Every `pnpm … <script>` in a span, as { filter, script }; builtins and templates are skipped. */
+export function pnpmInvocations(span) {
+  const words = span.split(/[\s;&|()]+/).filter(Boolean);
+  const out = [];
+  for (let i = 0; i < words.length; i++) {
+    if (words[i] !== 'pnpm') continue;
+    let filter = null;
+    let j = i + 1;
+    for (; j < words.length && words[j].startsWith('-'); j++) {
+      const w = words[j];
+      if (w === '--filter' || w === '-F') filter = words[++j] ?? null;
+      else if (w.startsWith('--filter=')) filter = w.slice('--filter='.length);
+      else if (/^-F./.test(w)) filter = w.slice(2);
+      else if (w === '-C' || w === '--dir') j++;
+    }
+    let script = words[j];
+    if (script === 'run' || script === 'run-script') {
+      for (j++; words[j]?.startsWith('-'); j++);
+      script = words[j];
+    } else if (PNPM_BUILTINS.has(script)) continue;
+    if (!script || !/^[a-z][\w:.-]*$/.test(script)) continue;
+    if (filter !== null && TEMPLATE.test(filter)) continue;
+    out.push({ filter, script });
+  }
+  return out;
+}
 
 export function checkFile(file) {
   const problems = [];
   const text = readFileSync(file, 'utf8');
   const lines = text.split('\n');
   const where = (i) => `${relative(ROOT, file)}:${i + 1}`;
+  const here = dirname(file);
   let inFence = false;
   lines.forEach((line, i) => {
     if (/^\s*```/.test(line)) inFence = !inFence;
 
-    // Relative markdown links, resolved from the skill's directory.
-    for (const [, target] of line.matchAll(/\]\((\.{1,2}\/[^)#\s]+)(?:#[^)]*)?\)/g)) {
-      if (TEMPLATE.test(target)) continue;
-      if (!existsSync(resolve(dirname(file), target)))
+    // Relative markdown links: from the skill's directory, else from the repo root.
+    for (const [, raw] of line.matchAll(/\]\(([^)\s]+)\)/g)) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith('#') || raw.startsWith('/')) continue;
+      const target = cleanPath(raw);
+      if (!target || TEMPLATE.test(target)) continue;
+      if (
+        !existsSync(resolve(here, target)) &&
+        !existsSync(join(ROOT, target)) &&
+        !isIgnored(target)
+      )
         problems.push(`${where(i)}: link → ${target} does not exist`);
     }
 
@@ -115,24 +196,28 @@ export function checkFile(file) {
       for (const word of tok.split(/\s+/)) {
         const p = cleanPath(word.replace(/^["'(]|["')]$/g, ''));
         if (!p || TEMPLATE.test(p)) continue;
-        if (
-          (PATH_PREFIX.test(p) || ROOT_FILES.has(p)) &&
-          !existsSync(join(ROOT, p)) &&
-          !isIgnored(p)
-        )
-          problems.push(`${where(i)}: path ${p} does not exist`);
+        if (PATH_PREFIX.test(p)) {
+          if (!existsSync(join(ROOT, p)) && !isIgnored(p))
+            problems.push(`${where(i)}: path ${p} does not exist`);
+        } else if (ROOT_SHAPED.test(p)) {
+          const found =
+            existsSync(join(ROOT, p)) ||
+            existsSync(join(here, p)) ||
+            REPO_NAMES.has(p) ||
+            isIgnored(p);
+          if (!found)
+            problems.push(
+              `${where(i)}: file ${p} does not exist (not at the root, next to the skill, or anywhere in the repo)`,
+            );
+        }
       }
-      const m = /(?:^|\s)pnpm\s+(?:--filter\s+(\S+)\s+)?([a-z][\w:-]*)/.exec(tok);
-      if (m && !TEMPLATE.test(tok)) {
-        const [, filter, script] = m;
-        if (!filter && PNPM_BUILTINS.has(script)) continue;
-        if (filter && (script === 'exec' || PNPM_BUILTINS.has(script))) continue;
-        const pkgDir = filter ? FILTERS[filter] : '.';
+      for (const { filter, script } of pnpmInvocations(tok)) {
+        const pkgDir = filter === null ? '.' : FILTERS.get(filter);
         if (pkgDir === undefined) continue; // unknown filter: not ours to judge
         const scripts = scriptsOf(pkgDir);
         if (scripts && !scripts.has(script))
           problems.push(
-            `${where(i)}: pnpm ${filter ? `--filter ${filter} ` : ''}${script} is not a script in ${pkgDir}/package.json`,
+            `${where(i)}: pnpm ${filter === null ? '' : `--filter ${filter} `}${script} is not a script in ${pkgDir}/package.json`,
           );
       }
     }
@@ -140,8 +225,15 @@ export function checkFile(file) {
   return problems;
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
-if (isMain) {
+function isEntryPoint() {
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false; // imported (tests), or argv[1] unreadable
+  }
+}
+
+if (isEntryPoint()) {
   const files = SOURCES.flatMap((s) => markdownFiles(join(ROOT, s)));
   const problems = files.flatMap(checkFile);
   if (problems.length) {

@@ -362,7 +362,11 @@ above; the skills index holds the smaller items.
 review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
-  #176 resolved).
+  #176 resolved). **Note:** `main` now carries `.claude/settings.json` (#179: two hooks, both no-op under CI,
+  no permissions/MCP/env keys). The DX-1 implementation PR must replace prefetch step 8's blanket
+  fail-closed with a narrower check: reject `permissions`, `mcpServers`, `enableAllProjectMcpServers`,
+  `env`, and any hook command not in an explicit allowlist, and require allowlisted hooks to be
+  CI-no-op. Its panel re-reviews that.
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
