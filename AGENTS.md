@@ -276,7 +276,9 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   database and inherits `.env.local` — use `e2e:local`.
 - **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
-  Plus **forward-only** + **Squawk** on new migrations, and `audit --prod` via `pnpm verify`.
+  Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
+  only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI
+  green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
   **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on
   demand** (`.github/workflows/codeql.yml`) — a minutes-long scan on every PR is the wrong trade at ~4h/wk,
   and every merged PR is one squashed commit on `main`, so the push trigger still sees all of it. Findings
