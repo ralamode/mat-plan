@@ -270,6 +270,50 @@ not merge order.
   only deletion and force-push, and no check is required (both corrected; the shipit bar is what
   enforces "CI green"). The sweep checks behind-ness
   with git. The root cause, one shared changelog line, is [DX-2](./plans/dx-2-changelog-fragments.md).
+- **2026-09-30** — **V1-24 PR 1a: the weigh-in shows what you logged**
+  ([plan](./plans/v1-24-form-is-the-day.md)). Reported from a screenshot of an already-completed day:
+  three empty forms above a read-only list of everything that had been done.
+  - **"Complete" is a property of the RECORD, not the field**, so the semantic is _saved_, not _done_
+    — a **receipt**, not a checkmark. `Bodyweight` is the heading in every state; the receipt reads
+    `Saved: 84.5 lb` · `One weigh-in per day.` · `Wrong number? Ask a parent — it can’t be changed in
+the app yet.` (the plan's copy verbatim, in `lib/constants.ts`). The last line names the real
+    recovery path (`db:correct`) instead of promising "coming next", which 1a cannot keep. 1b's
+    amend has no day bound (plan Decision 5) and deletes the line.
+  - **It removes the second-submit path; it does not make a duplicate impossible.** `logBodyweight`
+    dedupes only on `client_id`, and the form minted a fresh key on every success, so "did I already
+    weigh in?" → tap again → a second row. The form now renders only when the day has none, its key
+    is stable, and it remounts per day (`key` on the day — a stale tab across midnight replayed the
+    old day's key as a silent no-op). **Concurrent mounts can still duplicate until 1d's index**, so
+    the receipt lists **every** live row (`2 weights logged: 84.5 lb, 845 lb`) rather than the newest,
+    with one line under it instead of the one-per-day and recovery lines: for one value submitted
+    twice, `Logged twice — the extra can’t be removed in the app yet; ask a parent.`; for different
+    values, `The weights differ — ask a parent which is right; it can’t be fixed in the app yet.`
+  - **A plausibility bound** in `logBodyweightSchema` (20–500 lb, 10–230 kg; `That doesn’t look like a
+bodyweight — check the decimal point.`). It is what makes a no-amend receipt acceptable: `845` and
+    `8.45` used to save permanently. **The form's fields are now controlled**, because React 19
+    resets uncontrolled fields when a form action settles, **rejected ones included** (probed): the
+    input emptied under the "check the decimal point" message and the unit snapped back to `lb`, so a
+    kg user retyping `84.5` saved 84.5 lb. A controlled `<select>` alone still snapped back (React
+    syncs an input's `value` attribute for the native reset, never a select's `defaultSelected`),
+    so the form re-asserts the unit in a layout effect. `a11y.spec.ts` pins that value and unit
+    survive.
+  - **A save is announced and focus lands on the receipt** (`saved-announcer.tsx`): the form, its
+    live region and the focused button all unmount on success, so a pre-mounted `role="status"`
+    announces `Bodyweight saved: 84.5 lb.` on the none→value transition only (never on first load).
+    ⚠️ Known, left as is: focus on the receipt makes some screen readers read its text while the
+    polite region announces too, so the value may be heard twice. `aria-describedby` would add
+    speech, not remove it; the real fix is choosing one channel, which wants a screen-reader pass,
+    not a guess — revisit with 1b's focus handling.
+  - **The receipt renders on the SERVER, outside the `writable` gate**, so history days show their
+    weight too, and a closed empty day says `No weight logged.` instead of a bare heading.
+  - **The smoke is disjoint by construction**, not tolerant: no two specs log bodyweight for the same
+    `(profile, day)` (warm-up → Scarlett today, smoke → Liam today, export → Liam yesterday, a11y →
+    Scarlett yesterday), and `steps.ts:logBodyweight` asserts the value **it** logged.
+    `isoDaysAgo` now uses the app's zone — it was UTC, so from 5 PM PT every `?d=yesterday` spec
+    (including two on `main`) silently resolved to today.
+  - One display renderer for `84.5 lb` (`formatValueUnit`), and the other saved-state strings
+    (`· logged today`, `Already logged today`) moved to `lib/constants.ts` so specs share them.
+    ⚠️ `formatValueUnit` is deliberately **not** the CSV formatter, whose semantics differ on purpose.
 - **2026-09-30** — **DX: rules that failed as prose become checks.** The worktree rule (#174) was
   broken twice within hours: another session switched the main checkout to a feature branch, which
   made a `git pull` try to merge `main` into someone's branch and made project skills vanish

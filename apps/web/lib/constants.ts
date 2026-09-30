@@ -40,3 +40,82 @@ export const MIN_TAP_TARGET_PX = 44;
  */
 export const INPUT_CLASS =
   'border-input bg-background focus-visible:ring-ring h-11 rounded-lg border px-3 text-base outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive';
+
+/**
+ * The saved-state copy (V1-24 PR 1a) — one definition shared by the components and the specs.
+ *
+ * ⚠️ **This exists because the pattern already drifted.** `life-form.tsx` rendered
+ * `"{label} · logged today"` and `e2e/steps.ts` asserted a **re-typed copy** of that same string —
+ * the exact thing AGENTS.md's "tests use the same constant as the app" rule forbids. V1-24 adds more
+ * saved surfaces, so the strings get a home before they multiply rather than after.
+ *
+ * `lib/constants.ts` and not `packages/shared`: this is app-only copy with no DB or engine consumer,
+ * and this module is deliberately dependency-free so a `'use client'` component can import it.
+ */
+export const SAVED_STATE_COPY = {
+  /** A one-tap Life activity once it is logged (`life-form.tsx`, V1-7). */
+  lifeLogged: (label: string) => `${label} · logged today`,
+  /** A log-once check-in field once it is logged (`checkin-form.tsx`). */
+  checkinLogged: 'Already logged today',
+} as const;
+
+/** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
+export const BODYWEIGHT_VALUE_JOINER = ', ';
+
+/**
+ * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
+ *
+ * 1a ships the receipt BEFORE amend exists, and what makes that honest is this copy, so it is
+ * specified rather than improvised. Every string here is asserted by a spec through this object.
+ */
+export const BODYWEIGHT_COPY = {
+  /** The section heading in EVERY state — a noun that is true over a form, a receipt, or nothing. */
+  heading: 'Bodyweight',
+  /** One saved value: `Saved: 84.5 lb`. */
+  saved: (value: string) => `Saved: ${value}`,
+  /**
+   * More than one live row (the pre-1c duplicates, or a two-phone race): `2 weights logged: 84.5 lb,
+   * 845 lb`. The receipt never silently picks one — a hidden duplicate is uncorrectable twice over.
+   */
+  several: (values: readonly string[]) =>
+    `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
+  /**
+   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (rounds 2–3 on
+   * #180). Two different situations, so two different asks:
+   * - **All the same value** (a double submit): the extra row(s) are the problem.
+   * - **Different values** (e.g. two phones): someone has to decide which weight is right, and
+   *   "remove the extra" would invite a guess that corrupts the trend.
+   * Both say it **can’t be fixed in the app yet**, so a parent doesn't hunt for a delete control that
+   * doesn't exist; the fix is `db:correct` until 1b/1c.
+   */
+  duplicates: (values: readonly string[]) => {
+    const n = values.length;
+    if (new Set(values).size === 1) {
+      return n === 2
+        ? 'Logged twice — the extra can’t be removed in the app yet; ask a parent.'
+        : `Logged ${n} times — the extras can’t be removed in the app yet; ask a parent.`;
+    }
+    return 'The weights differ — ask a parent which is right; it can’t be fixed in the app yet.';
+  },
+  /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
+  onePerDay: 'One weigh-in per day.',
+  /**
+   * The real recovery path for a typo: a parent runs `db:correct` (docs/runbooks.md).
+   *
+   * ⚠️ PR 1b ships the amend and **deletes this line**; if it still renders after 1b, that is the bug.
+   * It deliberately does NOT say "coming next": that was a promise 1a cannot keep, since nothing in 1a
+   * can change the value. (1b's amend itself has NO day bound — plan Decision 5 — so once it ships this
+   * line has no job on any day, open or closed.)
+   */
+  recovery: 'Wrong number? Ask a parent — it can’t be changed in the app yet.',
+  /** A closed day with nothing logged — otherwise the section is a bare heading. */
+  noneOnClosedDay: 'No weight logged.',
+  /** What the status region announces on a save — the FACT, with the value (acceptance 6). */
+  announced: (value: string) => `Bodyweight saved: ${value}.`,
+} as const;
+
+/**
+ * The receipt's element id — the focus target after a save (`SavedAnnouncer`), and what the e2e
+ * asserts focus landed on. One id: a page renders one weigh-in section.
+ */
+export const BODYWEIGHT_RECEIPT_ID = 'bodyweight-receipt';

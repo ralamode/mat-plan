@@ -4,6 +4,7 @@ import { newId } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SAVED_STATE_COPY } from '@/lib/constants';
 import { LIFE_ACTIVITIES } from '@/lib/life/life-activities';
 import { lifeActivitiesForKeys } from '@/lib/routine/catalog';
 
@@ -39,7 +40,7 @@ function LifeButton({
   if (logged) {
     return (
       <p className="text-muted-foreground flex h-11 items-center px-1 text-base">
-        {label} · logged today
+        {SAVED_STATE_COPY.lifeLogged(label)}
       </p>
     );
   }
