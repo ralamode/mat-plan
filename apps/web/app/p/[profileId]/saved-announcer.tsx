@@ -22,7 +22,12 @@ export function SavedAnnouncer({ saved, focusId }: { saved: string | null; focus
   const [message, setMessage] = useState('');
   if (saved !== previous) {
     setPrevious(saved);
-    if (previous === null && saved !== null) setMessage(saved);
+    // ⚠️ `saved !== null`, NOT `previous === null` (V1-24 PR 1b). An amend is value→value, so the
+    // old none→value rule announced NOTHING and never ran the focus effect below — a screen-reader
+    // user tapped Save and heard silence, indistinguishable from failure, which is the exact S1
+    // defect this component exists to fix. First render stays silent for free, because `previous`
+    // is seeded from `saved`.
+    if (saved !== null) setMessage(saved);
   }
 
   useEffect(() => {

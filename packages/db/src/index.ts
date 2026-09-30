@@ -9,6 +9,8 @@ export * from './queries/weekly-adherence';
 export * from './queries/program-day';
 export * from './queries/export-month';
 // The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
+export * from './writers/bodyweight';
+export * from './writers/ownership';
 export * from './writers/strength-session';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so
 // tooling (e.g. the ephemeral screenshot fixture) can target the seeded profile by

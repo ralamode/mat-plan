@@ -99,15 +99,6 @@ export const BODYWEIGHT_COPY = {
   },
   /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
   onePerDay: 'One weigh-in per day.',
-  /**
-   * The real recovery path for a typo: a parent runs `db:correct` (docs/runbooks.md).
-   *
-   * ⚠️ PR 1b ships the amend and **deletes this line**; if it still renders after 1b, that is the bug.
-   * It deliberately does NOT say "coming next": that was a promise 1a cannot keep, since nothing in 1a
-   * can change the value. (1b's amend itself has NO day bound — plan Decision 5 — so once it ships this
-   * line has no job on any day, open or closed.)
-   */
-  recovery: 'Wrong number? Ask a parent — it can’t be changed in the app yet.',
   /** A closed day with nothing logged — otherwise the section is a bare heading. */
   noneOnClosedDay: 'No weight logged.',
   /** What the status region announces on a save — the FACT, with the value (acceptance 6). */
@@ -119,3 +110,45 @@ export const BODYWEIGHT_COPY = {
  * asserts focus landed on. One id: a page renders one weigh-in section.
  */
 export const BODYWEIGHT_RECEIPT_ID = 'bodyweight-receipt';
+
+/**
+ * The accessible name for an amend control — `Change weight — 84.5 lb` (V1-24 PR 1b).
+ *
+ * A FUNCTION, not a string. By PR 3 several of these share a screen, and six buttons all named
+ * "Change" are indistinguishable in a screen-reader forms list. The visible text (`Change`) is a
+ * PREFIX of the accessible name, satisfying WCAG 2.5.3 Label in Name — the rule the load-mode and
+ * Sub-failure controls already follow. The specs assert through this function, never a re-typed
+ * literal, which is the `life-form.tsx` / `e2e/steps.ts` drift it exists to prevent.
+ */
+export function changeLabel(subject: string, value: string): string {
+  return `${AMEND_COPY.change} ${subject} — ${value}`;
+}
+
+/** The amend interaction's copy (V1-24 PR 1b), shared by the island and the specs. */
+export const AMEND_COPY = {
+  /** The visible control. **"Change", not "Edit"** — plainer for an eight-year-old. `editable-set.tsx`
+   *  still says Edit; PR 2 unifies them when the shared primitive is extracted. */
+  change: 'Change',
+  save: 'Save',
+  cancel: 'Cancel',
+} as const;
+
+/**
+ * Typed-error copy shared by every amend path (V1-24 PR 1b).
+ *
+ * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would
+ * have re-worded the same failure. One place, so the two cannot answer it differently.
+ */
+export const AMEND_ERROR_COPY = {
+  /**
+   * The row is gone, was never theirs, or is not amendable. ONE message for all three **on purpose**:
+   * a crafted cross-profile id must learn nothing a stale id wouldn't.
+   */
+  notFound: (subject: string) => `That ${subject} could not be found.`,
+  /**
+   * Someone amended it under this render. It states what the system DID — the page has revalidated,
+   * so the value on screen is already the one that won — because "reload the day" names a control
+   * that does not exist, and a kid mid-session would simply tap Save again.
+   */
+  staleWrite: 'That was changed on another device — the latest is showing now.',
+} as const;

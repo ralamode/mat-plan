@@ -25,6 +25,10 @@ vi.mock('@/lib/dal/entries', () => ({
   logStrengthSession: vi.fn(async () => ({ sessionId: 'session-pub-id' })),
   // Default: the set was found + edited. The not-found test overrides to null.
   editStrengthSet: vi.fn(async () => ({ setId: 'set-pub-id' })),
+  // V1-24 PR 1b. Default: the amend matched. The refusal tests override to null and then drive the
+  // three-way branch through `ownedBodyweightValue`.
+  editBodyweight: vi.fn(async () => ({ entryId: 'bw-pub-id' })),
+  ownedBodyweightValue: vi.fn(async () => null),
   // Default: every item was written. Individual tests override for the conflict case.
   logCheckinEntries: vi.fn(async ({ items }: { items: { clientId: string }[] }) =>
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
@@ -44,10 +48,12 @@ vi.mock('@/lib/dal/profiles', () => ({
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
 import {
+  editBodyweight,
   editStrengthSet,
   logBodyweight,
   logCheckinEntries,
   logStrengthSession,
+  ownedBodyweightValue,
 } from '@/lib/dal/entries';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
@@ -66,8 +72,10 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+import { AMEND_ERROR_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
+  editBodyweightAction,
   editRoutineAction,
   editStrengthSetAction,
   logBodyweightAction,
@@ -1157,5 +1165,101 @@ describe('editRoutineAction — happy path + ownership', () => {
     expect(res.ok).toBe(false);
     expect(updateProfileRoutine).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+// ── V1-24 PR 1b: the bodyweight amend ───────────────────────────────────────────────────────────
+const ENTRY_ID = '019826b4-0000-7000-8000-0000000000aa';
+const amendForm = (over: Record<string, string> = {}): FormData =>
+  editForm({
+    profileId: PROFILE_ID,
+    entryId: ENTRY_ID,
+    value: '85.2',
+    unit: 'lb',
+    seenValue: '84.5',
+    ...over,
+  });
+
+describe('editBodyweightAction — boundary (bad body → zod-reject)', () => {
+  it.each([
+    ['a non-numeric value', { value: 'abc' }, 'value'],
+    ['a non-UUID entryId', { entryId: 'not-a-uuid' }, 'entryId'],
+    ['a non-UUID profileId', { profileId: 'nope' }, 'profileId'],
+    ['an unknown unit', { unit: 'stone' }, 'unit'],
+  ])('rejects %s without touching the DAL', async (_name, over, field) => {
+    const res = await editBodyweightAction(initial, amendForm(over));
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[field]).toBeTruthy();
+    expect(editBodyweight).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ The amend is the one path that writes a CORRECTED weight, so it must run the same
+   * plausibility bound as the create path. The plan's first draft reached for
+   * `logBodyweightSchema.pick()`, which would have dropped the refinement — and, in this zod, throws
+   * at module load. Both schemas now share one refiner.
+   */
+  it('rejects an implausible corrected weight — the bound is not a create-only rule', async () => {
+    const res = await editBodyweightAction(initial, amendForm({ value: '845' }));
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.value).toBeTruthy();
+    expect(editBodyweight).not.toHaveBeenCalled();
+  });
+});
+
+describe('editBodyweightAction — the three-way refusal branch', () => {
+  it('amends via the DAL and revalidates the scoped Today', async () => {
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(true);
+    expect(editBodyweight).toHaveBeenCalledWith({
+      profilePublicId: PROFILE_ID,
+      entryId: ENTRY_ID,
+      value: 85.2,
+      unit: 'lb',
+      seenValue: 84.5,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('rejects an unknown profile before writing (ownership seam)', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(false);
+    expect(editBodyweight).not.toHaveBeenCalled();
+  });
+
+  /**
+   * (a) Wrong owner, stale id and wrong shape all land here, and all get the SAME message on
+   * purpose: a crafted cross-profile id must learn nothing a stale id wouldn't.
+   */
+  it('a refusal with no readable row → one not-found message', async () => {
+    vi.mocked(editBodyweight).mockResolvedValueOnce(null);
+    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce(null);
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe(AMEND_ERROR_COPY.notFound('weight'));
+  });
+
+  /**
+   * ⚠️ (b) THE REPLAY CASE (AGENTS.md: replay → one effect, identical response). Save on gym wifi,
+   * the write lands, the response is lost, the POST retries. `seenValue` no longer matches — but the
+   * row already holds exactly what was asked for, so this is success, not a conflict with nobody.
+   */
+  it('a replay of a write that already landed → ok, not a phantom conflict', async () => {
+    vi.mocked(editBodyweight).mockResolvedValueOnce(null);
+    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce({ value: 85.2, unit: 'lb' });
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(true);
+    expect(res.error).toBeNull();
+  });
+
+  /** (c) Someone else got there first — recoverable, and the page revalidates to show what won. */
+  it('a genuinely stale write → the stale message, and a revalidate', async () => {
+    vi.mocked(editBodyweight).mockResolvedValueOnce(null);
+    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce({ value: 70, unit: 'lb' });
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe(AMEND_ERROR_COPY.staleWrite);
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
   });
 });

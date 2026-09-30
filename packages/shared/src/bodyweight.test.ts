@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   BODYWEIGHT_BOUNDS,
   BODYWEIGHT_UNITS,
-  type BodyweightUnit,
   DEFAULT_BODYWEIGHT_UNIT,
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
+  editBodyweightSchema,
   logBodyweightSchema,
+  type BodyweightUnit,
 } from './bodyweight';
 import { newId } from './id';
 
@@ -61,5 +62,59 @@ describe('logBodyweightSchema — the plausibility bound (V1-24 PR 1a)', () => {
   it('still rejects a zero or non-number', () => {
     expect(valueErrors('0', LB)).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
     expect(parse('abc', LB).success).toBe(false);
+  });
+});
+
+describe('editBodyweightSchema (V1-24 PR 1b)', () => {
+  const valid = {
+    profileId: '019826b4-0000-7000-8000-000000000001',
+    entryId: '019826b4-0000-7000-8000-0000000000aa',
+    value: 85.2,
+    unit: 'lb',
+    seenValue: 84.5,
+  };
+
+  it('accepts a plausible correction', () => {
+    expect(editBodyweightSchema.safeParse(valid).success).toBe(true);
+  });
+
+  /**
+   * ⚠️ THE regression test for the restructure. The amend is the one path that writes a *corrected*
+   * weight, so a version of it that skipped the bound would be a brand-new way to write the `845`
+   * the bound exists to stop — and the plan accepted a no-amend 1a precisely because it was there.
+   *
+   * It is a real risk, not a theoretical one: the draft plan reached for `logBodyweightSchema.pick()`,
+   * which would have silently dropped the refinement even if zod had allowed it (it does not — see
+   * the module docblock).
+   */
+  it('rejects an implausible weight, exactly as the log path does', () => {
+    const tooBig = editBodyweightSchema.safeParse({ ...valid, value: 845 });
+    expect(tooBig.success).toBe(false);
+    expect(tooBig.error!.flatten().fieldErrors.value).toEqual([IMPLAUSIBLE_BODYWEIGHT_MESSAGE]);
+
+    expect(editBodyweightSchema.safeParse({ ...valid, value: 8.45 }).success).toBe(false);
+  });
+
+  it('applies the bound of the submitted unit', () => {
+    // 200 is out of range for lb (max 500? no — 200 is IN range for lb) but the kg bound is 230, so
+    // pick values that actually differ: 450 is legal in lb, absurd in kg.
+    expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'lb' }).success).toBe(true);
+    expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'kg' }).success).toBe(
+      false,
+    );
+  });
+
+  it('requires the ids and the seen value', () => {
+    for (const key of ['profileId', 'entryId', 'seenValue'] as const) {
+      const { [key]: _dropped, ...rest } = valid;
+      expect(editBodyweightSchema.safeParse(rest).success).toBe(false);
+    }
+  });
+
+  it('coerces the form’s strings', () => {
+    const parsed = editBodyweightSchema.safeParse({ ...valid, value: '85.2', seenValue: '84.5' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data!.value).toBe(85.2);
+    expect(parsed.data!.seenValue).toBe(84.5);
   });
 });

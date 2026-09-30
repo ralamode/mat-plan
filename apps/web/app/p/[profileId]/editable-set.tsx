@@ -9,6 +9,7 @@ import type { SetDTO } from '@/lib/dal/entries';
 import { INITIAL_ACTION_STATE } from './action-state';
 import { editStrengthSetAction } from './actions';
 import { formatSetLine } from './set-display';
+import { useOnActionSuccess } from './use-on-action-success';
 import { SetRepsWeightFields } from './set-fields';
 
 /**
@@ -38,11 +39,9 @@ export function EditableSet({
     set.quantities.find((q) => q.slot === QUANTITY_SLOT.primary)?.value ?? null;
   const [weight, setWeight] = useState(String(editableWeight ?? ''));
 
-  const [seen, setSeen] = useState(state);
-  if (state !== seen) {
-    setSeen(state);
-    if (state.ok) setEditing(false); // own state — a legal during-render update
-  }
+  // Own state — a legal during-render update. The idiom is single-sourced in `useOnActionSuccess`
+  // (V1-24 PR 1b) after four copies of it accumulated across the forms.
+  useOnActionSuccess(state, () => setEditing(false));
 
   if (!editing) {
     return (

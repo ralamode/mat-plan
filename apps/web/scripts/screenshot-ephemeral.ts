@@ -238,6 +238,9 @@ const STATES = {
   // V1-26 PR-A — the BW-tap warning on a catalog-declared-loaded movement. Interaction-only, and
   // like `form-scaffolded` it needs a PROGRAMMED day — pair it with `--tz` if today has none.
   'form-bw-warning': null,
+  // V1-24 PR 1b — the weigh-in's OPEN editor. Interaction-only on top of the already-logged
+  // fixture: the open state is transient client state no seeder can produce.
+  'bodyweight-editing': seedAlreadyLogged,
   // V1-24 PR 1a — the bodyweight receipt's other states (today's single value is `already-logged`).
   // Two rows on today: the pre-1c prod duplicate (or a two-phone race) — `2 weights logged: …`.
   'bodyweight-duplicates': (dbUrl: string) =>
@@ -330,6 +333,21 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     throw new Error(
       'no catalog-declared-loaded movement on this day — the warning cannot render; try another --tz',
     );
+  },
+  /**
+   * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
+   * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
+   * the LAYOUT is the thing under review — an inline editor would wrap into the gutter at 360px and
+   * pass both CI gates while doing it.
+   */
+  'bodyweight-editing': async (page) => {
+    const change = page.getByRole('button', { name: /^Change weight/ });
+    if ((await change.count()) === 0) {
+      throw new Error(
+        'no Change control — this state needs the already-logged fixture to have run',
+      );
+    }
+    await change.click();
   },
   'form-skipped': async (page) => {
     await page.getByLabel(/movement 1 skipped/i).check();

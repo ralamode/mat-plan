@@ -52,7 +52,7 @@ export function BodyweightReceipt({
 }: {
   logged: readonly LoggedBodyweight[];
   writable: boolean;
-  /** The amend affordance (PR 1b, on every day — no day bound). 1a passes none. */
+  /** The amend affordance (PR 1b, on every day — no day bound), beside the value. */
   control?: ReactNode;
 }) {
   if (logged.length === 0) {
@@ -69,6 +69,15 @@ export function BodyweightReceipt({
       tabIndex={-1}
       className="focus-visible:ring-ring/50 flex flex-col gap-1 rounded-lg border px-4 py-3 outline-none focus-visible:ring-3"
     >
+      {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value
+          rather than beside it — deterministically, not by luck: a 100% basis cannot share a row.
+          That is load-bearing. At 360px the card has ~294px usable, and an INLINE editor (value line
+          + input + unit + Save + Cancel + gaps) is ~424px. It would not overflow, because flex
+          WRAPS — the number being corrected would end up in a ~96px box in the right-hand gutter
+          beside a two-line label — and NEITHER CI gate can see that: `expectNoHorizontalOverflow`
+          reads `scrollWidth`, and `expectTapTargets` measures HEIGHT only, which `min-h-11`
+          satisfies. Keeping the saved value visible above the editor is the bonus: you can see what
+          you are changing FROM while you type. */}
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
         {/* `tabular-nums` so a value changing under an amend doesn't shift the row's width. */}
         <p className="text-base font-medium tabular-nums">
@@ -78,18 +87,13 @@ export function BodyweightReceipt({
         </p>
         {control ?? null}
       </div>
-      {/* Their OWN lines, never a suffix: at 360px the card has ~294px, and the value plus 1b's
-          control already fills a row. */}
+      {/* Their OWN lines, never a suffix: at 360px the card has ~294px, and the value plus the
+          Change control already fills a row. */}
       {values.length > 1 ? (
         <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.duplicates(values)}</p>
-      ) : (
-        <>
-          {writable ? (
-            <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.onePerDay}</p>
-          ) : null}
-          <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.recovery}</p>
-        </>
-      )}
+      ) : writable ? (
+        <p className="text-muted-foreground text-sm">{BODYWEIGHT_COPY.onePerDay}</p>
+      ) : null}
     </div>
   );
 }

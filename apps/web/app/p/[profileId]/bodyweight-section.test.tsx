@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The form imports the Server Action module ('use server'), which cannot be evaluated under jsdom
 // (the strength-form.test.tsx precedent). This file is about what the SECTION renders.
-vi.mock('./actions', () => ({ logBodyweightAction: vi.fn() }));
+vi.mock('./actions', () => ({ logBodyweightAction: vi.fn(), editBodyweightAction: vi.fn() }));
 
-import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID } from '@/lib/constants';
+import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, changeLabel } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 import { formatValueUnit } from '@/lib/entries/format-value-unit';
 
@@ -54,17 +54,19 @@ describe('BodyweightSection — its states', () => {
     expect(document.getElementById(BODYWEIGHT_RECEIPT_ID)).toBeNull();
   });
 
-  it('one weight on a writable day → the receipt, the reason there is no form, the recovery line', () => {
+  it('one weight on a writable day → the receipt, the reason there is no form, a Change control', () => {
     const w = weight(84.5);
     render(section({ logged: [w] }));
     const receipt = document.getElementById(BODYWEIGHT_RECEIPT_ID)!;
     expect(receipt.getAttribute('tabindex')).toBe('-1'); // focusable by script, not in tab order
     expect(screen.getByText(BODYWEIGHT_COPY.saved(shown(w)))).toBeTruthy();
     expect(screen.getByText(BODYWEIGHT_COPY.onePerDay)).toBeTruthy();
-    expect(screen.getByText(BODYWEIGHT_COPY.recovery)).toBeTruthy();
-    // THE half that stops the second submit: no input, no button.
+    // THE half that stops the second submit: no CREATE form. (V1-24 PR 1b replaced the "ask a
+    // parent" recovery line with the amend itself — the line's own docblock said 1b deletes it.)
     expect(screen.queryByLabelText('Weight')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Log weight/ })).toBeNull();
+    // ...and the amend, named with its value so several Changes on one screen stay distinguishable.
+    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
   });
 
   it('several weights → all of them, never silently the newest', () => {
@@ -78,7 +80,7 @@ describe('BodyweightSection — its states', () => {
    * weigh-in per day." contradicts the headline and "Wrong number?" asks about a right number. So a
    * duplicates receipt carries one line — what the parent has to do — on open AND closed days.
    */
-  it('duplicates → one "ask a parent" line instead of the one-per-day and recovery lines', () => {
+  it('duplicates → one "ask a parent" line, and NO Change control', () => {
     for (const writable of [true, false]) {
       for (const rows of [
         [weight(84.5, 'a'), weight(84.5, 'b')], // the double submit
@@ -89,17 +91,26 @@ describe('BodyweightSection — its states', () => {
         expect(screen.getByText(BODYWEIGHT_COPY.several(rows.map(shown)))).toBeTruthy();
         expect(screen.getByText(BODYWEIGHT_COPY.duplicates(rows.map(shown)))).toBeTruthy();
         expect(screen.queryByText(BODYWEIGHT_COPY.onePerDay)).toBeNull();
-        expect(screen.queryByText(BODYWEIGHT_COPY.recovery)).toBeNull();
+        // ⚠️ V1-24 PR 1b: one row's worth of control cannot serve N rows. It would edit an unstated
+        // one of them — most likely the CORRECT one — leaving two wrong values where there was one,
+        // beside copy that says it can't be fixed in the app. An amend cannot remove a row; 1c/1d can.
+        expect(screen.queryByRole('button', { name: /^Change/ })).toBeNull();
         cleanup();
       }
     }
   });
 
-  it('a closed day with a weight → the recovery line, not a repeat of the page banner', () => {
+  /**
+   * ⚠️ THE Decision 5 test. The amend has NO day bound — an amend never moves the entry's date — so
+   * gating the control on `writable` would be that bound wearing a client-side hat, and would hide
+   * it on exactly the history days a typo is found on. The 2026-09-28 entry that opened V1-24 was
+   * corrected two days later.
+   */
+  it('a closed day still offers the amend, and does not repeat the page banner', () => {
     const w = weight(84.5);
     render(section({ logged: [w], writable: false }));
     expect(screen.getByText(BODYWEIGHT_COPY.saved(shown(w)))).toBeTruthy();
-    expect(screen.getByText(BODYWEIGHT_COPY.recovery)).toBeTruthy();
+    expect(screen.getByRole('button', { name: changeLabel('weight', shown(w)) })).toBeTruthy();
     expect(screen.queryByText(BODYWEIGHT_COPY.onePerDay)).toBeNull();
     expect(screen.queryByText(/Logging is closed/)).toBeNull();
   });

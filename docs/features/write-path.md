@@ -90,6 +90,23 @@ flowchart LR
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.
 
+- **⚠️ An AMEND is a different verb from a CREATE, and its guard is the WHERE (V1-24 PR 1b).**
+  `updateBodyweightEntryById` / `updateStrengthSetById` do not re-check ownership in the action — the
+  guarded UPDATE _is_ the check, and it lives in `packages/db/src/writers/` so `db:verify` runs the
+  same code the app does. Every pin in that WHERE refuses a crafted POST, and the metric pin matters
+  most: **without `metric_key = 'bodyweight'` the endpoint rewrites any entry the profile owns** — a
+  push-up bout, a sleep reading — into a bodyweight. It is a **constant, never an argument**, because
+  a parameter can be passed wrong by a future caller.
+
+  Two more rules that WHERE encodes:
+  - **The live-profile predicate is `writers/ownership.ts`, not a copy.** It had 11 copies before
+    this; a security predicate is the last thing that should drift between call sites.
+  - **Zero rows means four different things** — wrong owner, stale id, wrong shape, someone got there
+    first — and the action must tell them apart. `editBodyweightAction` re-selects under the same
+    ownership scope and branches three ways, including the **replay** case: a lost response on gym
+    wifi retries the POST, the row has already moved, and answering _"someone else changed this"_
+    would be a conflict with nobody, over a value that is already correct.
+
 - **⚠️ `logBodyweight` dedupes ONLY on `client_id`, so the UI is what prevents a second submit
   (V1-24 PR 1a).** `entries` has no natural-key uniqueness — the only unique index is
   `uq_entries_client_id`. The bodyweight form used to reset itself **and mint a fresh `client_id`**

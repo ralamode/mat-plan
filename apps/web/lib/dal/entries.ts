@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { schema, updateStrengthSetById, writeStrengthSession } from '@mat-plan/db';
+import {
+  schema,
+  updateBodyweightEntryById,
+  updateStrengthSetById,
+  writeStrengthSession,
+} from '@mat-plan/db';
 import {
   ENTRY_KIND,
   ENTRY_STATUS,
@@ -494,6 +499,53 @@ export async function logStrengthSession(
  * set's public id, or `null` when nothing matched (wrong owner / stale-or-deleted set) — the action
  * maps `null` to a typed error, never a throw.
  */
+/**
+ * Amend ONE logged bodyweight's value (V1-24 PR 1b). Thin, exactly like `editStrengthSet`: the
+ * single-sourced `updateBodyweightEntryById` core owns the guard, so no ownership check leaks out
+ * here and `db:verify` proves the same code the app runs.
+ *
+ * `null` means the guarded WHERE matched nothing — wrong owner, stale/deleted id, wrong shape, or a
+ * `seenValue` that no longer matches. **The action must tell those apart** (a stale value is
+ * recoverable and the parent should see the latest; a wrong owner must stay indistinguishable from
+ * not-found), so it re-selects under the same ownership scope before choosing its message.
+ */
+export async function editBodyweight(args: {
+  profilePublicId: string;
+  entryId: string;
+  value: number;
+  unit: string;
+  seenValue: number;
+}): Promise<{ entryId: string } | null> {
+  const updated = await updateBodyweightEntryById(db, args);
+  return updated ? { entryId: updated.publicId } : null;
+}
+
+/**
+ * Re-read ONE bodyweight entry the profile owns, for the action's three-way branch after a refused
+ * amend (V1-24 PR 1b). Scoped by `public_id` AND the live profile, so a crafted cross-profile id
+ * returns `null` and leaks no existence.
+ */
+export async function ownedBodyweightValue(args: {
+  profilePublicId: string;
+  entryId: string;
+}): Promise<{ value: number; unit: string } | null> {
+  const [row] = await db
+    .select({ value: schema.entries.valueNum, unit: schema.entries.unit })
+    .from(schema.entries)
+    .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
+    .where(
+      and(
+        eq(schema.entries.publicId, args.entryId),
+        isNull(schema.entries.deletedAt),
+        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+        eq(schema.profiles.publicId, args.profilePublicId),
+        isNull(schema.profiles.deletedAt),
+      ),
+    )
+    .limit(1);
+  return row?.value == null ? null : { value: Number(row.value), unit: row.unit };
+}
+
 export async function editStrengthSet(args: {
   profilePublicId: string;
   setId: string;
