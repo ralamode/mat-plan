@@ -14,13 +14,13 @@ start-task ──► plan-with-panel ──► (implement) ──► ship-pr ─
 
 ## Shipped
 
-| Skill                                           | Use it when                                                             | Since                 |
-| ----------------------------------------------- | ----------------------------------------------------------------------- | --------------------- |
-| [`start-task`](./start-task/SKILL.md)           | Starting any task that ends in a PR: sync, branch, context, obligations | chore/dx-agent-skills |
-| [`plan-with-panel`](./plan-with-panel/SKILL.md) | A plan is owed, or any UI change (UX panel, including plan-exempt)      | chore/dx-agent-skills |
-| [`ship-pr`](./ship-pr/SKILL.md)                 | Work is done: gates → status → commit → PR → post-merge check           | chore/dx-agent-skills |
-| [`hold-the-bar`](./hold-the-bar/SKILL.md)       | Before every PR (ship-pr runs it), or whenever red turned green         | chore/dx-agent-skills |
-| [`ui-screenshot`](./ui-screenshot/SKILL.md)     | Any visible change: three widths, published to the PR                   | pre-existing          |
+| Skill                                           | Use it when                                                             | Since        |
+| ----------------------------------------------- | ----------------------------------------------------------------------- | ------------ |
+| [`start-task`](./start-task/SKILL.md)           | Starting any task that ends in a PR: sync, branch, context, obligations | #170         |
+| [`plan-with-panel`](./plan-with-panel/SKILL.md) | A plan is owed, or any UI change (UX panel, including plan-exempt)      | #170         |
+| [`ship-pr`](./ship-pr/SKILL.md)                 | Work is done: gates → status → commit → PR → post-merge check           | #170         |
+| [`hold-the-bar`](./hold-the-bar/SKILL.md)       | Before every PR (ship-pr runs it), or whenever red turned green         | #170         |
+| [`ui-screenshot`](./ui-screenshot/SKILL.md)     | Any visible change: three widths, published to the PR                   | pre-existing |
 
 ## Backlog, in priority order
 
@@ -63,4 +63,6 @@ source of truth.
 
 - **2026-09-30** — Shipped `start-task`, `plan-with-panel` (it absorbs the planned standalone
   `ux-panel`), `ship-pr` and `hold-the-bar`. Seeded this backlog from the audit of recurring
-  operations and addyosmani/agent-skills.
+  operations and addyosmani/agent-skills. Shipped with `ship-pr` itself (#170). The dry run found two
+  gaps, both fixed: step 1 can't rebase a dirty tree, and `check.sh` lacked the self-test this file
+  requires.
