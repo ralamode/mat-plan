@@ -15,6 +15,16 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
+
+- **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch
+  when `docs/changelog/README.md` is absent from the working tree, so branches cut before DX-2 aren't
+  failed for a rule that didn't exist when they were cut. Its self-test keeps the legacy cases.
+- **Impact:** low. It's dead code once no open branch predates DX-2, but it's a second rule to read.
+- **Proposed fix:** once `gh pr list` shows no open PR whose merge base predates #190, delete the
+  legacy branch of the guard and its test cases, and drop the "LEGACY" paragraph from the docblock.
+- **Severity:** low.
+
 ### The access-gate matcher excludes `/api`, so any Route Handler there is ungated (found 2026-09-24)
 
 - **What & why:** `apps/web/proxy.ts` matches `'/((?!api|_next/static|_next/image|favicon.ico).*)'`.

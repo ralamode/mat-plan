@@ -47,7 +47,7 @@ Python service — lands).
 ```
 mat-plan/
   README.md  AGENTS.md  .gitignore    # root: only these + tool-mandated config
-  docs/                     # spec.md, plan.md, status.md, definition-of-done.md, design.md, decisions/
+  docs/                     # spec.md, plan.md, status.md, changelog/, definition-of-done.md, design.md, decisions/
   .github/                  # SECURITY.md, PULL_REQUEST_TEMPLATE.md, workflows/, ISSUE_TEMPLATE/
   apps/web/                 # Next.js App Router (only app through v2) — app/, components/, lib/(dal,env)
   packages/shared/          # zod schemas + TS types + golden test vectors (the contract)
