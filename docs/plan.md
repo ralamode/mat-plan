@@ -362,8 +362,10 @@ above; the skills index holds the smaller items.
 review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
-  #176 resolved). **Implemented in #185**; live once `CLAUDE_CODE_OAUTH_TOKEN` is set, then the post-merge
-  injection smoke (plan, test 4) is the acceptance gate. #179's `.claude/settings.json` would have
+  #176 resolved). **Implemented in #185. Dormant by choice (2026-09-30):** Ray reviews from
+  Claude Code at the desk (the local `review-pr` skill does the same review with no secret), so
+  `CLAUDE_CODE_OAUTH_TOKEN` is deliberately unset. To activate: [runbook](./runbooks.md), then the post-merge
+  injection smoke (plan, tests 3–5) is the acceptance gate. #179's `.claude/settings.json` would have
   tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
 - ✅ **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
