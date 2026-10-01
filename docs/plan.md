@@ -22,7 +22,7 @@ came out of writing it down.
 | 1   | **Anything blocking**                                                                                      | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
 | 2   | **Open bugs**                                                                                              | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
 | 3   | **Logged forms look complete**                                                                             | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
-| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
+| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                         |
 | 5   | **Edit programs, and choose which days they run**                                                          | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
 | 6   | **OAuth login (Google / Facebook)**                                                                        | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
 | 7   | **Streaks on the athlete card**                                                                            | **MOT-1** (picker half)   |                                                                                                                                    |
@@ -413,11 +413,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
+ONB-2 (the default program) is its own row, filed by #198.
 
-- **ONB-2 — new athletes start on The Daily Five.** <a id="onb-2"></a> A daily program (no A/B rotation,
-  no weekday map), so a new household needs no scheduling to start. The draft lives on branch
-  `docs/onb-2-daily-five`, which **also carries pre-rewrite history with the minors' roster** — rescue
-  the draft onto a fresh branch from `main`, then delete that branch. _(Beta 0.)_
 - **OPS-1 — previews hold neither production data nor production credentials.** Today every Vercel
   preview gets the prod `DATABASE_URL` ([deploy.md](./deploy.md)). Previews get a seed-only database
   (never a branch of prod, which would clone every family's data), the Preview scope holds no

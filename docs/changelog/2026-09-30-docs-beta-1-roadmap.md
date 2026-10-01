@@ -6,5 +6,4 @@
   privacy review) and **Beta 1** (3–5 families: program editing, schedules, streaks, invites with
   roles and step-up, in-place correction). Ray's decisions: online-only, parent accounts only, Google
   via Clerk, which pulls Clerk forward from v1.5 (spec, plan and AGENTS.md amended). A scope,
-  architecture and security panel reviewed it first; its log is in the file. New rows: ONB-2, OPS-1–3,
-  TEN-1, TEN-2, PRIV-1.
+  architecture and security panel reviewed it first; its log is in the file. New rows: OPS-1–3, TEN-1, TEN-2, PRIV-1 (ONB-2 is #198).

@@ -86,10 +86,12 @@ flowchart LR
 
 ### 0 · Now, independent
 
-- 🔴 **The public repo must not serve anyone's children's data — every ref, not just `main`.** (See the
-  review log: a stale branch and three PR refs still carry the tournament roster OSS-1 rewrote out of
-  `main`.) Delete the branch after rescuing what's on it, ask GitHub Support to purge the PR refs and
-  cached views, and scan **all** refs (`git ls-remote` + gitleaks), not only `main`.
+- 🔴 **The public repo must not serve anyone's children's data — every ref, not just `main`.** OSS-1
+  rewrote the tournament roster out of `main`, but older refs kept it. **Done 2026-09-30:** the one
+  branch still carrying it (`docs/onb-2-daily-five`) was deleted after its draft was rescued (#198);
+  a scan of all 30 remaining branches is clean. **Still open:** the read-only PR refs **#152–#167**
+  carry it, and only **GitHub Support** can purge PR refs and cached commit views — Ray files that
+  request. Then re-scan every ref (branches + `refs/pull/*`) with gitleaks.
 - **Open P0s:** V1-30, V1-27, CSV-1 (check prod for kg rows first), DAL-1, SEC-3.
 - **SEC-2** (SHA-pin every action, #195) and **the shared redirect helper fix** from #193's review —
   `safeInternalPath` must reject `\`, `%5C`, `//`, absolute and `javascript:` URLs **before** any
@@ -158,8 +160,8 @@ known profile id writes to that profile"). Accepted with one family; a breach wi
 - **ONB-0** — an explained empty state; a new household no longer inherits Ray's routine.
 - **PROF-1 (create)** — add an athlete. The first profile-creating endpoint: both panels, the full
   boundary-test set.
-- **ONB-2** — new athletes start on The Daily Five. (Its row is filed in this PR; the draft lives on a
-  branch that must be rescued before that branch is deleted — see section 0.)
+- **ONB-2** — new athletes start on [The Daily Five](../programs/daily-five-default.md) (rescued to its
+  own PR, #198).
 - **V1-9b** — delete a logged item and clear a day.
 - **PRIV-1 — privacy, done as a review, not a checkbox.** SECURITY.md defers COPPA only while there is
   "no third-party sharing"; multiple families plus Clerk, Google, Sentry, Vercel, Neon and Upstash is
@@ -262,6 +264,6 @@ Scope, architecture and security lenses reviewed the first draft. What changed:
 | "Delete" undefined; a restore resurrects deleted data (security)                                    | **Accepted.** Defined deletion with stated residuals; per-household restore with a deletion ledger.                                                   |
 | COPPA argument assumed parents are the only users (security)                                        | **Accepted.** PRIV-1 is a signed-off review; only parents create households/athletes in beta.                                                         |
 | Open redirect would carry into the sign-in flow (security)                                          | **Accepted.** Fixed in section 0, before AUTH-1.                                                                                                      |
-| **Live, outside the doc:** a stale branch and PR refs still carry the minors' roster (security)     | **Verified 2026-09-30** (`docs/onb-2-daily-five` and PRs #152, #155, #166). Section 0, first item; Ray to act.                                        |
+| **Live, outside the doc:** a stale branch and PR refs still carry the minors' roster (security)     | **Verified 2026-09-30.** Branch deleted (draft rescued, #198); PR refs #152–#167 await a GitHub Support purge. Section 0, first item.                 |
 | Client Sentry is a gate-quality item, not a beta blocker; DX-5(b) and docs-truth too (scope)        | **Accepted.** Moved to Beta 1 / follow-ups.                                                                                                           |
 | ADR 0001 deferred only Speed Insights, not client Sentry; DAL-1 listed twice (architecture)         | **Accepted.** Corrected.                                                                                                                              |
