@@ -479,6 +479,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   **Open questions for Ray:** audience — tuned for **youth wrestlers ~8–14** with a parent present; if
   mat-plan will serve high-school and open wrestlers, onboarding needs an age gate. **One rule stays
   hard at every tier:** never substitute a loaded wrestler's bridge for the neck isometrics.
+  The finisher is stored as the routine's `shot` check-in but reaches **no CSV** until the
+  exporter writes check-in rows (the checkins export is header-only today).
 
 - **OPS-1 — previews hold neither production data nor production credentials.** Today every Vercel
   preview gets the prod `DATABASE_URL` ([deploy.md](./deploy.md)). Previews get a seed-only database

@@ -68,7 +68,11 @@ Each new movement's slug must equal `movementSlug(name)` (pinned by a test in
 `packages/shared`), and timed holds get `unitDefault: 'sec'` so the form
 **defaults** to seconds — the form asks "Measuring?" and the default only
 preselects (`docs/features/strength-logging.md`). Rep movements use `null`, as
-the existing ones do (`reps` is not a unit code).
+the existing ones do (`reps` is not a unit code). Every new row also needs `isBodyweight`
+(the catalog schema requires it): **`true`** for the bodyweight squat and Cossack squat, so they
+export `BW` without V1-26's loaded-movement note; for the timed holds it is a deliberate choice
+— `true` lets a BW tap read `BW+20s`, `false` keeps `load` a pure duration. Decide it in the seed
+PR; the existing `hollow-body_hold` is `true`.
 
 | Name             | Slug               | Unit default | Note                                                                                                                                                                                                                                                                             |
 | ---------------- | ------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -215,9 +219,9 @@ Surface these, do not bury them in a disclaimer:
 
 ## Audience
 
-Tuned for **youth wrestlers, roughly 8–14** — where mat-plan starts. It scales
-up through the ramp rule; an older athlete simply arrives at bigger numbers
-faster. The one place age genuinely matters is the neck, and the isometric
+Tuned for **youth wrestlers, roughly 8–14** — where mat-plan starts. In Beta 0 the doses are fixed;
+once the ramp exists (deferred with the engine, above) an older athlete would simply arrive at
+bigger numbers faster. The one place age genuinely matters is the neck, and the isometric
 constraint above is written to hold regardless of tier.
 
 ## Scheduling — decided: the A/B stopgap _(Ray, 2026-09-30)_
@@ -269,7 +273,8 @@ would have made ONB-2 wait on it.
 The four legacy CSVs and their byte-level contract are authoritative in
 [csv-export-contract.md](../csv-export-contract.md). **Facts today:** the V1-13
 export emits strength-log, bodyweight and checkins only (there is no calisthenics
-export); `session_type` is `csvSessionType(dayRole, sessionType)` — the day role
+export), and **checkins is header-only today** — `buildCheckins([])`, zero rows, per the
+contract; `session_type` is `csvSessionType(dayRole, sessionType)` — the day role
 (falling back to the session type) with `_` → `-`;
 movements are `csvMovement(slug)`; and because prescriptions are movement-based,
 every prescribed set — push-ups and pull-ups included — is a movement entry that
@@ -282,8 +287,9 @@ lands in **strength-log**.
    needs a calisthenics export and a per-program routing rule — Ray's own
    household already writes `pull-up` to strength-log, so it cannot be global.
    **Never both.**
-3. **The finisher** — decided: it is the routine's `shot` check-in, so it lands in `checkins`
-   and nowhere else.
+3. **The finisher** — decided: it is the routine's `shot` check-in, stored as a check-in and
+   nowhere else. **It reaches no CSV today**: the checkins export is header-only. It appears in
+   `checkins` only once the exporter writes check-in rows, which no backlog row schedules yet.
 
 Sample, for a `strength_a` day with push/pull left in strength-log (the
 next day's rows read `strength-b`). Timed holds follow the
@@ -291,28 +297,39 @@ contract: **duration in `load`, `reps` = 1**; per-side lives in `prescribed`.
 The neck block is prescribed as 8 sets of `10s` (2 rounds × 4 directions), so
 `prescribed` is `8x10s`, exactly what the export builds from `sets` and `target_reps`.
 
+`notes` is whatever the athlete typed on the entry, so a fresh user's rows have it empty; the
+how-to cues live in the program, not the export.
+
 ```
 date,session_type,movement,sets,reps,load,prescribed,notes
-2026-09-28,strength-a,neck-isometric,8,1,10s,8x10s,4-way x2: flex/ext/L/R; neutral head throughout
-2026-09-28,strength-a,pull-up,3,2,BW,3x2,15s dead hang after last set
+2026-09-28,strength-a,neck-isometric,8,1,10s,8x10s,
+2026-09-28,strength-a,pull-up,3,2,BW,3x2,
 2026-09-28,strength-a,push-ups,2,8,BW,2x8,
-2026-09-28,strength-a,bodyweight-squat,1,15,BW,1x15,full depth; heels down
-2026-09-28,strength-a,deep-squat-hold,1,1,45s,1x45s,chest tall; elbows inside knees
-2026-09-28,strength-a,cossack-squat,1,5,BW,1x5/side,heel down on the straight leg
-2026-09-28,strength-a,hollow-body-hold,3,1,20s,3x20s,low back flat; tucked variation
-2026-09-28,strength-a,side-plank,2,1,20s,2x20s/side,hips stacked and lifted
+2026-09-28,strength-a,bodyweight-squat,1,15,BW,1x15,
+2026-09-28,strength-a,deep-squat-hold,1,1,45s,1x45s,
+2026-09-28,strength-a,cossack-squat,1,5,BW,1x5/side,
+2026-09-28,strength-a,hollow-body-hold,3,1,20s,3x20s,
+2026-09-28,strength-a,side-plank,2,1,20s,2x20s/side,
 ```
+
+The `load` cells assume the athlete logs a hold's seconds without tapping BW. `hollow-body_hold`
+is `isBodyweight: true` in the catalog, so a BW tap plus 20 s exports as `BW+20s`; the holds'
+`isBodyweight` choice (below) decides which the form nudges toward.
+
+The finisher's row, **as it would read once the exporter writes check-in rows** (not emitted
+today):
 
 ```
 date,stance,ladder,bridge,mobility,pressure,reaction,shot,notes
-2026-09-28,,,,,,,15,daily-five finisher
+2026-09-28,,,,,,,15,
 ```
 
 Empty cell for missing, never `0`.
 
 ## The 4-minute version
 
-If a user has almost no time: **idx 0 → idx 1 → idx 3–5.** Ship it as an
-explicit "short on time?" control. A user who does the short version five days
+If a user has almost no time: **idx 0 → idx 1 → idx 3–5.** **Not in Beta 0** — as
+an explicit "short on time?" control it is new UI, deferred with the feedback loop; until then
+it is guidance in the first-run copy. A user who does the short version five days
 beats a user who does the full version once, and the main way a default program
 fails is people not finishing day one.
