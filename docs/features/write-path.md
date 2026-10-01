@@ -190,6 +190,13 @@ flowchart LR
   (a matcher edit or a rewrite silently exposes it). **This is a live hazard for the `/api/sync`
   AGENTS.md plans.**
 
+- **⚠️ The bodyweight export carries each row's UNIT, and the builder refuses anything but `lb`
+  (CSV-1).** The legacy column is `weight_lb`, so a kg weigh-in written bare reads as pounds
+  downstream. `lib/dal/export.ts` must keep mapping `unit` from `bodyweightMonthRows`, and a
+  refusal throws — which, with no try/catch in the route (EXP-1), fails the whole export rather than
+  writing a wrong number. Do not "fix" the throw by converting: that publishes a number the athlete
+  never logged. Production holds no kg weigh-in (V1-24 1c's read).
+
 - **`sslmode=require` encrypts but does NOT verify the certificate.** Neon's strings ship `require`,
   which leaves the connection open to an active machine-in-the-middle. `createDbPool` upgrades it to
   `verify-full`, and deliberately leaves a string with **no** `sslmode` untouched — local Postgres has

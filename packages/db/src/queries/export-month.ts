@@ -108,6 +108,9 @@ export function bodyweightMonthRows(
     .select({
       date: schema.entries.activityDate,
       value: schema.entries.valueNum,
+      // CSV-1: the unit rides the row so the builder can REFUSE a non-lb weight — `weight_lb` is
+      // the legacy header, and a kg number written there reads as pounds (a silent 2.2× error).
+      unit: schema.entries.unit,
       context: schema.entries.context,
       notes: schema.entries.notes,
     })

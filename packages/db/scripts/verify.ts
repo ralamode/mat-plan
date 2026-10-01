@@ -54,7 +54,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
-import { loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { programDayRows } from '../src/queries/program-day';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import { findAmendableBodyweight, updateBodyweightEntryById } from '../src/writers/bodyweight';
@@ -2828,6 +2828,13 @@ const [bwOwnerRow] = await db
 
 // (a) The happy path — the amend persists and advances updated_at.
 const bwTarget = await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 84.5 });
+
+// CSV-1: the bodyweight export read carries each row's UNIT, so the builder can refuse a non-lb
+// weight under the `weight_lb` header instead of writing it bare.
+const bwExport = await bodyweightMonthRows(asPg, { profilePublicId: bwOwner, month: '2026-09' });
+const bwExportTarget = bwExport.find((r) => r.value === '84.500');
+assert.ok(bwExportTarget, 'CSV-1: the bodyweight export read returns the logged weight');
+assert.equal(bwExportTarget.unit, 'lb', 'CSV-1: ...carrying the unit it was logged in');
 const amended = await updateBodyweightEntryById(asPg, {
   profilePublicId: bwOwner,
   entryId: bwTarget.publicId,

@@ -771,7 +771,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
     that relative strength uses.
   - **After** V1-24 1d/1e and the AUDIT-1 P0s.
 
-- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **P0, found
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** ✅ **Fixed** — the export read carries the unit and `buildBodyweight` refuses a non-`lb` weigh-in (no conversion; widening the contract stays Ray's call). 🔴 **P0, found
   2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
   has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
   `unit`**, and `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`.

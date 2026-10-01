@@ -149,6 +149,11 @@ date,weight_lb,context,notes
 > in one column. A round-trip through a float normalises `71` → `71.0` and blows the golden diff. This
 > is a **data-model consequence**, not just a formatting one — see Open questions.
 
+> ⚠️ **`weight_lb` holds pounds only (CSV-1).** The app also lets a weigh-in be logged in `kg`, and a
+> kg number written bare here would read as pounds. The exporter **refuses** a non-`lb` weigh-in rather
+> than converting it or suffixing it (`84.5kg` would break the column) — widening this contract is a
+> decision for Ray, because the header is legacy bytes.
+
 `context` observed: `morning` only; README also allows `pre-practice` / `post-practice` / `random`.
 Gaps are normal — **not every day has a row; do not backfill.**
 
