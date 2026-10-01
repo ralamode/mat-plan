@@ -106,8 +106,7 @@ flowchart LR
 
   Two more rules that WHERE encodes:
   - **The live-profile predicate is `writers/ownership.ts` — for the two WRITERS.** It had 11 hand-typed
-    copies; the two amend writers use the helper, and **nine full copies remain** in queries and the app
-    DAL (DAL-2 in `docs/plan.md`). Two more sites — `listEntriesForDay` and `weeklyAdherenceRows` —
+    copies; the two amend writers use the helper, and **nine full copies remain** in the writers, queries and the app DAL (DAL-2 in `docs/plan.md`). Two more sites — `listEntriesForDay` and `weeklyAdherenceRows` —
     were missing the soft-delete half entirely, and use the helper since DAL-1. A security predicate is the last thing
     that should drift between call sites, so a new write uses the helper, never a twelfth copy.
   - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
