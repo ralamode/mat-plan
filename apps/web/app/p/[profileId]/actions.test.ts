@@ -30,6 +30,8 @@ vi.mock('@/lib/dal/entries', () => ({
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
   ),
 }));
+// The access gate (SEC-1). Passes by default; the unauth suite flips it per action.
+vi.mock('@/lib/dal/gate', () => ({ hasGateAccess: vi.fn(async () => true) }));
 vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
     id: PROFILE_ID,
@@ -49,6 +51,7 @@ import {
   logCheckinEntries,
   logStrengthSession,
 } from '@/lib/dal/entries';
+import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { DEFAULT_TIME_ZONE } from '@/lib/constants';
@@ -93,6 +96,32 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+// MANDATORY unauth → reject (AGENTS.md → Backend / API PR rules; SEC-1). A Server Action is a public
+// POST and the proxy is not the auth boundary: until SEC-1 its matcher let prefetch-flagged requests
+// skip the gate. Each action must refuse an un-gated caller BEFORE anything else runs, with the same
+// copy as not-found (so the refusal says nothing about the gate or the profile).
+describe('every Server Action — unauth → reject before any DAL call (SEC-1)', () => {
+  const cases: [string, (s: ActionState, f: FormData) => Promise<ActionState>, string][] = [
+    ['logBodyweightAction', logBodyweightAction, 'No profile found to log against.'],
+    ['logCheckinsAction', logCheckinsAction, 'No profile found to log against.'],
+    ['logStrengthSessionAction', logStrengthSessionAction, 'No profile found to log against.'],
+    ['logLifeActivitiesAction', logLifeActivitiesAction, 'No profile found to log against.'],
+    ['editStrengthSetAction', editStrengthSetAction, 'No profile found to log against.'],
+    ['editRoutineAction', editRoutineAction, 'No profile found to save against.'],
+  ];
+  it.each(cases)('%s refuses an un-gated caller', async (_name, action, notFound) => {
+    vi.mocked(hasGateAccess).mockResolvedValueOnce(false);
+    const res = await action(initial, form({ profileId: PROFILE_ID }));
+    expect(res).toEqual({ ok: false, error: notFound });
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    for (const write of [logBodyweight, logCheckinEntries, logStrengthSession, editStrengthSet]) {
+      expect(write).not.toHaveBeenCalled();
+    }
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
 
 describe('logBodyweightAction — boundary (bad body → zod-reject)', () => {
   it('rejects a non-numeric weight without touching the DAL', async () => {

@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/ui/empty-state';
 import { ProfileTile } from '@/components/profiles/profile-tile';
+import { requireGatedPage } from '@/lib/dal/gate';
 import { listProfiles } from '@/lib/dal/profiles';
 
 // Route-segment config must be a static inline literal (Next can't follow an
@@ -12,6 +13,7 @@ export const runtime = 'nodejs';
  * UX switch, not a security boundary — the destination re-validates the id.
  */
 export default async function ProfilePickerPage() {
+  await requireGatedPage(); // SEC-1: the proxy is not the boundary
   const profiles = await listProfiles();
 
   return (

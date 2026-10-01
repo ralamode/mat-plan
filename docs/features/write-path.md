@@ -58,6 +58,10 @@ flowchart LR
 
 1. **Every Server Action is a PUBLIC endpoint.** Page middleware does not protect it — it is a POST
    anyone can craft. Re-authenticate, re-authorize ownership, and zod-validate **inside** each one.
+   Re-authenticating means `hasGateAccess()` (`lib/dal/gate.ts`) as the action's **first** line,
+   returning the action's not-found copy. Until SEC-1 no action did, and requests carrying a prefetch
+   header skipped the proxy, so every action was reachable without the gate cookie. A new action
+   without it fails the unauth suite in `actions.test.ts` only if you add it to that suite: do.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
