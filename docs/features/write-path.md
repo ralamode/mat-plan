@@ -83,6 +83,12 @@ flowchart LR
 6. **A partial unique index needs its predicate repeated in `ON CONFLICT`.** Every `client_id` unique
    in this schema is `WHERE deleted_at IS NULL`, so the arbiter must say so too or Postgres rejects the
    statement outright. drizzle: `onConflictDoUpdate({ target, targetWhere })`.
+   ⚠️ **Bodyweight has a second unique since V1-24 PR 1d**: `uq_entries_profile_day_bodyweight`, one
+   live weigh-in per `(profile, day, coalesce(context, 'morning'))`. Until **1e** moves
+   `logBodyweight`'s arbiter onto it, a same-day duplicate (two phones) is a bare `23505` that throws
+   past the action — no longer a silent duplicate row, but not yet a typed answer either. Its key is an
+   EXPRESSION, which drizzle's `onConflict` `target` (columns only) cannot name, so 1e needs
+   `onConflictDoNothing()` with no target (DO NOTHING matches any unique) or a hand-written clause.
 
 7. **`ON DELETE CASCADE` is hard-delete only, and this app soft-deletes.** A soft-deleted parent leaves
    live children. Every read must filter through a live parent, or it counts rows whose owner is gone.

@@ -54,7 +54,7 @@ the [README](../packages/db/scripts/corrections/README.md) for the rules.
    arbiter;
 4. date the correction's **Applied** cell in
    [the corrections README](../packages/db/scripts/corrections/README.md) (`pending` → the date);
-5. merge 1d.
+5. merge 1d. ✅ Steps 0–4 done 2026-10-01 (#206); **re-run step 3 just before merging 1d**.
 
 **Rollback** needs no restore branch — this is a soft delete. Before 1d lands, undo is
 `UPDATE entries SET deleted_at = NULL, updated_at = now() WHERE public_id IN (<the two losers>) AND
@@ -62,7 +62,9 @@ deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `
 correction refuses those rows as drifted — expected: their `updated_at` is now `now()`, so re-reading
 is the next step. After 1d lands, un-deleting a row would violate its index.
 
-**If 1d merges first**, `migrate.yml` — which runs on **every** push to `main`, with no path filter and
+**If 1d's migration refuses** (it merged before the data was clean, or a new duplicate appeared before
+1e moved the arbiter — the error names this section: _"V1-24 1d: N (profile, day, slot) group(s) hold
+more than one live weigh-in"_), `migrate.yml` — which runs on **every** push to `main`, with no path filter and
 no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
 and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
 then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. Bodyweight

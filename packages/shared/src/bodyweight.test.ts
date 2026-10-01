@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BODYWEIGHT_BOUNDS,
+  BODYWEIGHT_CONTEXTS,
   BODYWEIGHT_UNITS,
+  DEFAULT_BODYWEIGHT_CONTEXT,
   DEFAULT_BODYWEIGHT_UNIT,
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
   editBodyweightSchema,
@@ -115,5 +117,15 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
     expect(parsed.success).toBe(true);
     expect(parsed.data!.value).toBe(85.2);
     expect(parsed.data!.seenValue).toBe(84.5);
+  });
+});
+
+// Contract pin: `uq_entries_profile_day_bodyweight` (migration 0012) keys on
+// `coalesce(context, 'morning')` with the value as a SQL literal. If the default slot ever changes,
+// NULL and the default stop being the same slot — change the index in the same PR.
+describe('the default weigh-in slot (V1-24 PR 1d)', () => {
+  it("is 'morning', the literal the unique index coalesces NULL to", () => {
+    expect(DEFAULT_BODYWEIGHT_CONTEXT).toBe('morning');
+    expect(BODYWEIGHT_CONTEXTS).toContain(DEFAULT_BODYWEIGHT_CONTEXT);
   });
 });
