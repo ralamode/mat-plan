@@ -40,7 +40,10 @@ const PROBE_ORIGIN = 'http://internal.invalid';
  * drop tab/CR/LF, so a path that merely *starts* with one slash can still resolve
  * to another origin. So: reject backslashes and control characters (raw or
  * percent-encoded), then resolve the path against a fixed origin and require the
- * origin to be unchanged.
+ * origin to be unchanged. Return the parser's NORMALIZED form, never the input:
+ * dot segments (`/.//x`) normalize to a `//` pathname that Next's client router
+ * would push as a scheme-relative href, and non-ASCII characters must come back
+ * percent-encoded because the target is written into a response header.
  */
 export function safeInternalPath(path: string | null | undefined): string {
   if (!path || !path.startsWith('/') || path.startsWith('//')) return '/';
@@ -58,7 +61,8 @@ export function safeInternalPath(path: string | null | undefined): string {
   } catch {
     return '/';
   }
-  return url.origin === PROBE_ORIGIN ? path : '/';
+  if (url.origin !== PROBE_ORIGIN || url.pathname.startsWith('//')) return '/';
+  return url.pathname + url.search + url.hash;
 }
 
 async function sha256Hex(input: string): Promise<string> {

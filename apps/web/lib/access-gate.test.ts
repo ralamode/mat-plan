@@ -69,8 +69,10 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
     ['an empty string', ''],
     ['null', null],
     ['undefined', undefined],
-    // SEC-4: a leading single slash is not enough — the URL parser treats `\\` as `/` and
-    // drops tab/CR/LF, so these all resolve to another origin.
+    // SEC-4: a leading single slash is not enough. The URL parser treats `\\` as `/` and drops
+    // tab/CR/LF, so those resolve to another origin; dot segments normalize to a `//` pathname
+    // that Next's client router would push as scheme-relative. The `%2F` cases stay on-origin
+    // in a browser — rejected conservatively, not because they escape.
     ['a backslash after the slash', '/\\evil.com'],
     ['a percent-encoded backslash', '/%5Cevil.com'],
     ['a tab between the slashes', '/\t/evil.com'],
@@ -79,6 +81,8 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
     ['a percent-encoded slash pair', '/%2f/evil.com'],
     ['a javascript: URL', 'javascript:alert(1)'],
     ['a malformed escape', '/%E0%A4%A'],
+    ['a dot segment before a double slash', '/.//evil.com'],
+    ['a parent segment before a double slash', '/..//evil.com'],
   ])('clamps %s to the root', (_label, value) => {
     expect(safeInternalPath(value)).toBe('/');
   });
@@ -88,7 +92,28 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
     ['a profile page', '/p/019826b4-0000-7000-8000-000000000001'],
     ['a dated routine page', '/p/019826b4-0000-7000-8000-000000000001/routine?d=2026-09-30'],
     ['an encoded space', '/p/a%20b'],
+    [
+      'a dated routine page with a fragment',
+      '/p/019826b4-0000-7000-8000-000000000001/routine?d=2026-09-30#x',
+    ],
   ])('keeps %s', (_label, value) => {
     expect(safeInternalPath(value)).toBe(value);
+  });
+
+  // Whatever survives, it never starts with `//` — a mid-path `..//` normalizes to an on-origin
+  // `/p//…`, which is harmless; only a LEADING `//` is scheme-relative.
+  it.each(['/p/a/..//evil.com', '/./p//x', '/p/..//p/x'])(
+    'never returns a leading // for %s',
+    (value) => {
+      expect(safeInternalPath(value).startsWith('//')).toBe(false);
+    },
+  );
+
+  // The target is written into a response header (`x-action-redirect`), which rejects raw
+  // non-ASCII — so it must come back percent-encoded, still on the same path.
+  it('returns non-ASCII characters percent-encoded', () => {
+    const out = safeInternalPath('/\u2215x');
+    expect(out).toBe('/%E2%88%95x');
+    expect(/^[\x20-\x7e]*$/.test(out)).toBe(true);
   });
 });
