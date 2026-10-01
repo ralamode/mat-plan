@@ -786,13 +786,15 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   `assertExportableUnit`: since V1-30 it RETURNS `'kg'` (strength loads spell it `85kg`), so calling it
   here would write `84.5kg` under a `weight_lb` header. CSV-1 needs its own lb-only guard for that
   column. (3) Convert, or widen the contract. That last one is Ray's decision, because the header is legacy bytes.
-- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
-  alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, alone among the 11 ownership
-  sites in the codebase. It's inert today because no profile is soft-deleted, but it breaks the
+- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** ✅ **Fixed** (it now scopes by
+  `isLiveProfile`, pinned by `lib/dal/entries.test.ts`; review found `weeklyAdherenceRows` had copied
+  the same join, so it was fixed too, with a `db:verify` proof). 🔴 **P0, found 2026-09-30**
+  alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, one of two ownership sites
+  that skipped it (the other was `weeklyAdherenceRows`). It's inert today because no profile is soft-deleted, but it breaks the
   ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
   soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
   place to make it unskippable.
-- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites.** V1-24 PR 1b
+- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites** (DAL-1 moved the two sites that lacked the soft-delete half — `listEntriesForDay`, `weeklyAdherenceRows` — onto the helper). V1-24 PR 1b
   extracts it to `packages/db/src/writers/ownership.ts` and converts the strength writer; the rest are
   untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
   what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s
