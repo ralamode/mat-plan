@@ -1,7 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
 
 import { env } from '@/lib/env';
-import { beforeSendScrubbed, beforeSendTransactionScrubbed } from '@/lib/sentry-scrub';
+import {
+  beforeBreadcrumbScrubbed,
+  beforeSendLogScrubbed,
+  beforeSendScrubbed,
+  beforeSendTransactionScrubbed,
+} from '@/lib/sentry-scrub';
 
 /**
  * Sentry — Node runtime (V1-14a; ADR-0001 schedules error monitoring for V1-14).
@@ -23,6 +28,8 @@ Sentry.init({
   sendDefaultPii: false,
   beforeSend: beforeSendScrubbed,
   beforeSendTransaction: beforeSendTransactionScrubbed,
+  beforeBreadcrumb: beforeBreadcrumbScrubbed,
+  beforeSendLog: beforeSendLogScrubbed,
 
   // Errors only for now. Tracing/replay/Web-Vitals are later ADR-0001 phases; sampling them here would
   // add cost and noise before anyone is reading the dashboard.
