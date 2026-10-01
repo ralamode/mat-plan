@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { requireGatedPage } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
 
@@ -22,6 +23,7 @@ export default async function RoutineEditorPage({
 }: {
   params: Promise<{ profileId: string }>;
 }) {
+  await requireGatedPage(); // SEC-1: the proxy is not the boundary
   const { profileId } = await params;
   const profile = await getProfileByPublicId(profileId);
   if (!profile) notFound();

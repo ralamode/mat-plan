@@ -181,6 +181,10 @@ evidence that an unprogrammed day exists.
   coach declares, and that authoring surface lands here — it is what keeps the child table invisible on
   a 360px log row, and what makes "no vest row" mean "no vest" rather than "not logged".
 
+- **Every gated page calls `requireGatedPage()` first** (SEC-1), the routine editor included: the
+  proxy is not the auth boundary, and before SEC-1 a prefetch-flagged request skipped it. A new page
+  under `/p/` needs the same line.
+
 ## Changing it
 
 | If you are…                      | Start here                                                                    |

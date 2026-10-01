@@ -16,6 +16,7 @@ import { formatDayShort, localDayIso, localWeekStartIso } from '@/lib/date';
 import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
+import { requireGatedPage } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
@@ -52,6 +53,7 @@ export default async function TodayPage({
   // Next 16: a Promise, and `?d=a&d=b` arrives as an array.
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireGatedPage(); // SEC-1: the proxy is not the boundary
   const { profileId } = await params;
   // Re-validate the URL-supplied public id server-side (the V1-3 ownership seam;
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
