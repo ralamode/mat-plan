@@ -106,8 +106,8 @@ flowchart LR
 
   Two more rules that WHERE encodes:
   - **The live-profile predicate is `writers/ownership.ts` — for the two WRITERS.** It had 11 hand-typed
-    copies; the two amend writers use the helper, and **nine copies remain** in queries and the app DAL
-    (the live-profile ownership sweep row in `docs/plan.md`). A security predicate is the last thing
+    copies; the two amend writers and `listEntriesForDay` (DAL-1) use the helper, and **eight copies
+    remain** in queries and the app DAL (DAL-2 in `docs/plan.md`). A security predicate is the last thing
     that should drift between call sites, so a new write uses the helper, never a twelfth copy.
   - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
     three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not

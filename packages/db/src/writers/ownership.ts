@@ -22,9 +22,9 @@ import type { Executor } from './executor';
  *
  * ⚠️ Extracted here with **two** consumers, not speculatively: `updateStrengthSetById` converts to a
  * caller in the same PR, so V1-9's existing `db:verify` cross-profile proof covers this helper for
- * free (and `db:verify` proves the profile soft-delete half for both writers). The other nine sites
- * are a separate sweep — see DAL-2 in docs/plan.md. DAL-1 is one of
- * them and is **missing the soft-delete check entirely**.
+ * free (and `db:verify` proves the profile soft-delete half for both writers). `listEntriesForDay`
+ * (the app DAL's day read) joined in DAL-1, the one site that had skipped the soft-delete half. The
+ * other eight sites are a separate sweep — see DAL-2 in docs/plan.md.
  */
 
 /** THE live-profile predicate. One definition, so no call site can scope by a weaker rule. */
