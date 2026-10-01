@@ -95,12 +95,11 @@ export const config = {
   matcher: [
     // Run on documents/actions; skip Next internals + static assets (which must
     // load un-gated so the gate page itself can render).
-    {
-      source: '/((?!api|_next/static|_next/image|favicon.ico).*)',
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
-      ],
-    },
+    //
+    // ⚠️ NO `missing:` prefetch exclusion (SEC-1). A matcher condition decides whether the gate runs
+    // AT ALL, and any client can send a prefetch header, so excluding prefetches let every request
+    // that carried one skip the gate. Gating prefetches costs nothing: a gated user's prefetches
+    // carry the cookie and pass. Pages and actions re-check the gate too (lib/dal/gate.ts).
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 };

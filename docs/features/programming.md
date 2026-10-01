@@ -185,6 +185,9 @@ evidence that an unprogrammed day exists.
   the render where the action turns `ok` (`useOnActionSuccess`, shared with the log forms since V1-24
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
   read as persisted. Don't replace it with an effect or a boolean.
+- **Every gated page calls `requireGatedPage()` first** (SEC-1), the routine editor included: the
+  proxy is not the auth boundary, and before SEC-1 a prefetch-flagged request skipped it. A new page
+  under `/p/` needs the same line.
 
 ## Changing it
 

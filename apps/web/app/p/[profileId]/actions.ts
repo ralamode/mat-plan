@@ -35,6 +35,7 @@ import {
   editBodyweight,
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
+import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
@@ -69,12 +70,18 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
  * UX switch, not a security boundary). Returns a typed envelope for
  * `useActionState` (expected errors don't throw).
  */
+// The not-found copy. An un-gated caller gets exactly this too (SEC-1), so it learns nothing about
+// whether the gate or the profile turned it away.
+const NO_PROFILE_LOG = 'No profile found to log against.';
+const NO_PROFILE_SAVE = 'No profile found to save against.';
+
 export async function logBodyweightAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const parsed = logBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       value: formData.get('value'),
@@ -96,7 +103,7 @@ export async function logBodyweightAction(
     if (!day.ok) return { ok: false, error: day.error };
 
     const profile = await getProfileByPublicId(parsed.data.profileId);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     await logBodyweight({
       profilePublicId: profile.id,
@@ -146,11 +153,10 @@ function valueSchemaFor(f: CheckinField): z.ZodType<number> {
  * inert, and neither `unit` nor `activity_type_id` is ever taken from the body (the DAL
  * resolves both from the seeded catalog).
  *
- * KNOWN GAPS, inherited and recorded rather than papered over: there is no authN here (the
- * access gate is middleware-only, which .github/SECURITY.md explicitly disclaims as the auth
- * boundary), and `getProfileByPublicId` is an EXISTENCE check — it does not scope by
- * household, so any known profile id writes to that profile. Both are pre-existing since
- * V1-3 and close at v1.5 with Clerk. Rate limiting and Sentry wrapping land at V1-14.
+ * KNOWN GAP, inherited and recorded rather than papered over: `getProfileByPublicId` is an
+ * EXISTENCE check (the access gate is re-checked first, SEC-1, but it is a shared code, not a
+ * household) — it does not scope by household, so any known profile id writes to that profile.
+ * Pre-existing since V1-3; closes at v1.5 with Clerk. Rate limiting and Sentry wrapping land at V1-14.
  */
 export async function logCheckinsAction(
   _prev: ActionState,
@@ -158,6 +164,7 @@ export async function logCheckinsAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
     //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
     const items = [];
@@ -204,7 +211,7 @@ export async function logCheckinsAction(
 
     // 3. Re-resolve the profile server-side (never trust the hidden field).
     const profile = await getProfileByPublicId(profileId.data);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     const results = await logCheckinEntries({
       profilePublicId: profile.id,
@@ -260,6 +267,7 @@ export async function logStrengthSessionAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const raw = formData.get('movements');
     let movements: unknown;
     try {
@@ -309,7 +317,7 @@ export async function logStrengthSessionAction(
     if (!day.ok) return { ok: false, error: day.error };
 
     const profile = await getProfileByPublicId(parsed.data.profileId);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     await logStrengthSession({
       profilePublicId: profile.id,
@@ -355,6 +363,7 @@ export async function logLifeActivitiesAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const profileId = uuidSchema.safeParse(formData.get('profileId'));
     const clientId = uuidSchema.safeParse(formData.get('clientId'));
     const activityKey = formData.get('activityKey');
@@ -402,7 +411,7 @@ export async function logLifeActivitiesAction(
     }
 
     const profile = await getProfileByPublicId(profileId.data);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     await logCheckinEntries({ profilePublicId: profile.id, day: entryDay, items: [item] });
     revalidatePath(`/p/${profile.id}`);
@@ -427,6 +436,7 @@ export async function editStrengthSetAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const parsed = editStrengthSetSchema.safeParse({
       profileId: formData.get('profileId'),
       setId: formData.get('setId'),
@@ -442,7 +452,7 @@ export async function editStrengthSetAction(
     }
 
     const profile = await getProfileByPublicId(parsed.data.profileId);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     const updated = await editStrengthSet({
       profilePublicId: profile.id,
@@ -485,6 +495,7 @@ export async function editBodyweightAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editBodyweightAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const parsed = editBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       entryId: formData.get('entryId'),
@@ -501,7 +512,7 @@ export async function editBodyweightAction(
     }
 
     const profile = await getProfileByPublicId(parsed.data.profileId);
-    if (!profile) return { ok: false, error: 'No profile found to log against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     const updated = await editBodyweight({
       profilePublicId: profile.id,
@@ -554,6 +565,7 @@ export async function editRoutineAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_SAVE };
     const raw = formData.get('routine');
     let submitted: unknown;
     try {
@@ -570,13 +582,13 @@ export async function editRoutineAction(
 
     const profileId = formData.get('profileId');
     if (typeof profileId !== 'string') {
-      return { ok: false, error: 'No profile found to save against.' };
+      return { ok: false, error: NO_PROFILE_SAVE };
     }
     const profile = await getProfileByPublicId(profileId);
-    if (!profile) return { ok: false, error: 'No profile found to save against.' };
+    if (!profile) return { ok: false, error: NO_PROFILE_SAVE };
 
     const saved = await updateProfileRoutine(profile.id, config);
-    if (!saved) return { ok: false, error: 'No profile found to save against.' };
+    if (!saved) return { ok: false, error: NO_PROFILE_SAVE };
 
     // Refresh both the kid's Today (renders the new order) and this editor (re-reads the saved routine).
     revalidatePath(`/p/${profile.id}`);

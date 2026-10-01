@@ -329,6 +329,12 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## Next.js 16
 
+- **The access gate was bypassable by any request that carried a prefetch header.** → The proxy
+  matcher's `missing: [prefetch headers]` decides whether the proxy RUNS AT ALL, and the header is
+  client-controlled. A local probe saw a 400 from Next and called it safe; a Vercel preview served the
+  full page. → No `missing:`/`has:` condition on a matcher that guards access, and re-check the gate in
+  every action and page (`lib/dal/gate.ts`). Probe the deployed edge, not just `next start`. (SEC-1)
+
 - **`middleware.ts` silently ignored.** → Next 16 renamed it to **`proxy.ts`** (function `proxy`,
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing
   version-sensitive code (per `apps/web/AGENTS.md`). (V0-4)
