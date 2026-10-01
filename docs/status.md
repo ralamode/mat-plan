@@ -261,36 +261,6 @@ not merge order.
 
 ## Changelog (merged PRs)
 
-- **2026-09-30** — **V1-24 PR 1b: a logged weight can be corrected**
-  ([plan](./plans/v1-24-form-is-the-day.md)). 1a showed the value and could not change it; this is the
-  half that makes the receipt honest, and it deletes the _"ask a parent"_ line 1a shipped with.
-  - **The guard is the WHERE, and it is the security boundary.** `updateBodyweightEntryById` lives in
-    `packages/db/src/writers/` so `db:verify` runs the same code the app does — an app-DAL writer
-    cannot be proved, which is why `editStrengthSet` is a four-line pass-through. The metric pin is a
-    **constant, never an argument**: without it the endpoint rewrites _any_ entry the profile owns —
-    a push-up bout, a sleep reading — into a bodyweight. Six proofs, one per pin.
-  - **The live-profile predicate had eleven copies.** Extracted to `writers/ownership.ts` with the
-    strength writer converted in the same PR, so V1-9's existing cross-profile proof now covers the
-    shared helper. A security predicate is the last thing that should drift between call sites.
-  - **Zero rows means four different things**, and the action tells them apart. Including the
-    **replay**: a lost response on gym wifi retries the POST, the row has already moved, and a naive
-    guard would answer _"someone else changed this"_ — a conflict with nobody, over a value that is
-    already correct.
-  - **No unit picker.** A two-option control beside the number input is one thumb-drag from turning
-    `84.5 lb` into `84.5 kg` — 186 lb on a child — and the plausibility bound is _per unit_, so that
-    value is legal. The unit is still submitted (the bound needs it) and **pinned in the WHERE**, so a
-    crafted mismatch matches no row.
-  - **The editor stacks**, and that is not styling. An inline one is ~424px into ~294px at 360px; it
-    would not overflow because flex **wraps**, so the number being corrected would land in a ~96px box
-    in the gutter — and **neither CI gate can see that** (`scrollWidth` doesn't move; the tap-target
-    check measures height only). The a11y spec now scans the open editor anyway, with a comment saying
-    the gates are the floor and the layout is the guard.
-  - **The amend renders on every day, closed ones included** (Decision 5) — a typo is found on a past
-    day, which is where the incident that opened V1-24 was corrected from.
-  - Fixed on the way: the announcer fired only on none→value, so a correction **announced nothing and
-    dropped focus to `<body>`**; and `add-server-action` still told the next author to rotate the
-    client id after a successful write, which 1a had made the bug.
-
 - **2026-09-30** — **Backlog: follow-ups from the 09-30 review batch filed as rows.** These are
   [V1-31](./plan.md) (the strength form's dropdowns may snap back after a rejected save; suspected,
   probe first), DX-3 (`screenshot:ephemeral` reuses a stale build), DX-4 (the main-checkout guard's

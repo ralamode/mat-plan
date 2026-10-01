@@ -36,10 +36,12 @@ flowchart LR
   end
 
   subgraph writer["packages/db/src/writers"]
-    TX["ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
+    TX["CREATE: ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
+    UPD["AMEND: ONE guarded UPDATE, no tx<br/>shape + ownership + seen-value in the WHERE<br/>null → re-read, branch"]
   end
 
   ACTION --> DALFN --> TX --> DB[(postgres)]
+  DALFN --> UPD --> DB
   ACTION -->|"typed envelope<br/>{ok:false, error, fieldErrors?}"| CLIENT
   TX -.->|"throws"| ERRBOUND["error.tsx + Sentry"]
 ```
@@ -48,10 +50,10 @@ flowchart LR
 
 | File / dir                     | What it is for                                                                                                                                                                                                       |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Six actions today.                                                                                                                               |
+| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Seven actions today.                                                                                                                             |
 | `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                |
 | `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                      |
-| `packages/db/src/writers/`     | The transactional write cores — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                          |
+| `packages/db/src/writers/`     | The write cores — transactional creates, single guarded-UPDATE amends — shared so the DAL **and** `db:verify` prove the same guard.                                                                                  |
 | `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone. |
 
 ## Invariants
@@ -99,8 +101,13 @@ flowchart LR
   a parameter can be passed wrong by a future caller.
 
   Two more rules that WHERE encodes:
-  - **The live-profile predicate is `writers/ownership.ts`, not a copy.** It had 11 copies before
-    this; a security predicate is the last thing that should drift between call sites.
+  - **The live-profile predicate is `writers/ownership.ts` — for the two WRITERS.** It had 11 hand-typed
+    copies; the two amend writers use the helper, and **nine copies remain** in queries and the app DAL
+    (the live-profile ownership sweep row in `docs/plan.md`). A security predicate is the last thing
+    that should drift between call sites, so a new write uses the helper, never a twelfth copy.
+  - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
+    three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not
+    the app DAL, so `db:verify` proves it.
   - **Zero rows means four different things** — wrong owner, stale id, wrong shape, someone got there
     first — and the action must tell them apart. `editBodyweightAction` re-selects under the same
     ownership scope and branches three ways, including the **replay** case: a lost response on gym

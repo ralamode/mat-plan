@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { BODYWEIGHT_COPY, changeLabel } from '../lib/constants';
+import { AMEND_COPY, BODYWEIGHT_COPY, changeLabel } from '../lib/constants';
 import {
   bodyweightEntryLine,
   bodyweightSection,
@@ -17,8 +17,9 @@ import {
  * `client_id`, and the form used to mint a fresh key on every success); concurrent mounts can still
  * duplicate until PR 1d's index, which is why the receipt lists every row.
  *
- * Scarlett's TODAY, read-only: `global.setup.ts` logs `WARMUP_BODYWEIGHT` there before any spec runs,
- * and no spec writes to it (the e2e rule — see `global.setup.ts`), so the exact value is deterministic.
+ * Scarlett's TODAY: `global.setup.ts` logs `WARMUP_BODYWEIGHT` there before any spec runs, and THIS
+ * test is the only one that writes to it, by amending it (PR 1b). A retry reuses the DB, so it reads
+ * which of the two values is showing and corrects to the other one.
  *
  * Covered elsewhere, deliberately: the empty → receipt transition and its focus assertion
  * (`steps.ts:logBodyweight`, driven by the smoke, the export spec and the a11y spec), the receipt on
@@ -35,9 +36,19 @@ test('a logged day shows its weight and the one-per-day reason — and no create
   const section = bodyweightSection(page);
   await expect(section).toBeVisible();
 
+  // Retry-safe: a first attempt may already have amended WARMUP → CORRECTED on this shared DB, so
+  // read which one is saved and correct to the other.
+  const CORRECTED = '66.4';
+  const amendedAlready =
+    (await section
+      .getByText(BODYWEIGHT_COPY.saved(shownWeight(CORRECTED)), { exact: true })
+      .count()) > 0;
+  const before = amendedAlready ? CORRECTED : WARMUP_BODYWEIGHT;
+  const after = amendedAlready ? WARMUP_BODYWEIGHT : CORRECTED;
+
   // The value, where the input used to be — the value IS the completeness signal, not a checkmark.
   await expect(
-    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(WARMUP_BODYWEIGHT)), { exact: true }),
+    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(before)), { exact: true }),
   ).toBeVisible();
   await expect(section.getByText(BODYWEIGHT_COPY.onePerDay, { exact: true })).toBeVisible();
 
@@ -46,57 +57,50 @@ test('a logged day shows its weight and the one-per-day reason — and no create
   await expect(section.getByLabel('Weight', { exact: true })).toHaveCount(0);
   await expect(section.getByRole('button', { name: /Log weight/ })).toHaveCount(0);
   // The ONE button here is the amend (V1-24 PR 1b), named with its value.
-  await expect(
-    section.getByRole('button', {
-      name: changeLabel('weight', shownWeight(WARMUP_BODYWEIGHT)),
-    }),
-  ).toBeVisible();
+  const change = section.getByRole('button', {
+    name: changeLabel('weight', shownWeight(before)),
+  });
+  await expect(change).toBeVisible();
 
-  // Opening a day that already has a weight is not a save: the status region stays silent.
-  await expect(section.getByRole('status')).toBeEmpty();
+  // Opening a day that already has a weight is not a save: every status region stays silent (the
+  // create announcer and the amend's own).
+  for (const region of await section.getByRole('status').all()) await expect(region).toBeEmpty();
 
   // ── V1-24 PR 1b: and now correct it ──────────────────────────────────────────────────────────
   // Folded into THIS test rather than given its own, because all four e2e-reachable profile-days
   // are already claimed (Liam's today by the smoke, his yesterday by the export round-trip,
-  // Scarlett's yesterday by the a11y empty-form fixture) and `logBodyweight` asserts the value it
-  // was ASKED to log — so a fifth claimant on any of them fails by design. This test already owns
-  // Scarlett's today, and "the receipt shows the value, and it can be corrected" is one narrative.
-  const change = section.getByRole('button', {
-    name: changeLabel('weight', shownWeight(WARMUP_BODYWEIGHT)),
-  });
+  // Scarlett's yesterday by the a11y empty-form fixture).
   await change.click();
 
-  const field = section.getByLabel('Weight', { exact: true });
+  const field = section.getByLabel(AMEND_COPY.valueLabel('lb'), { exact: true });
   await expect(field).toBeVisible();
   // Prefilled with what is saved — the athlete corrects a digit, they do not retype the number.
-  expect(await field.inputValue()).toBe(WARMUP_BODYWEIGHT);
+  expect(await field.inputValue()).toBe(before);
 
-  // ⚠️ Cancel must not leave the abandoned value behind. Type, back out, reopen: the field has to
-  // show what is SAVED, not the number that was explicitly discarded — which would otherwise sit
-  // one tap from Save.
+  // ⚠️ Cancel must not leave the abandoned value behind, and must not drop focus to <body>: the
+  // Cancel button unmounts, so focus goes back to the control that opened the editor.
   await field.fill('999');
-  await section.getByRole('button', { name: 'Cancel' }).click();
+  await section.getByRole('button', { name: AMEND_COPY.cancel }).click();
+  await expect(change).toBeFocused();
   await change.click();
-  expect(await field.inputValue()).toBe(WARMUP_BODYWEIGHT);
+  expect(await field.inputValue()).toBe(before);
 
-  const corrected = '66.4';
-  await field.fill(corrected);
-  await section.getByRole('button', { name: 'Save' }).click();
+  await field.fill(after);
+  await section.getByRole('button', { name: AMEND_COPY.save }).click();
 
   // The receipt shows the correction, and the editor is gone.
   await expect(
-    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(corrected)), { exact: true }),
+    section.getByText(BODYWEIGHT_COPY.saved(shownWeight(after)), { exact: true }),
   ).toBeVisible({ timeout: 15_000 });
-  await expect(section.getByLabel('Weight', { exact: true })).toHaveCount(0);
+  await expect(field).toHaveCount(0);
 
-  // ⚠️ Acceptance 6, for an AMEND. The announcer fired only on none→value before 1b, so a
-  // correction announced NOTHING and focus fell to <body> — indistinguishable from failure for a
-  // screen-reader user, which is the exact defect this announcer exists to fix.
-  await expect(section.getByRole('status')).toHaveText(
-    BODYWEIGHT_COPY.announced(shownWeight(corrected)),
-  );
+  // ⚠️ Acceptance 6, for an AMEND: announced from the action's own success, and focus lands on the
+  // receipt rather than <body>.
+  await expect(
+    section.getByRole('status').filter({ hasText: BODYWEIGHT_COPY.announced(shownWeight(after)) }),
+  ).toHaveCount(1);
   expect(await page.evaluate(() => document.activeElement?.tagName.toLowerCase())).not.toBe('body');
 
   // And the day's entries list agrees — the amend reached the ROW, not just the receipt.
-  await expect(page.getByText(bodyweightEntryLine(corrected))).toBeVisible();
+  await expect(page.getByText(bodyweightEntryLine(after))).toBeVisible();
 });

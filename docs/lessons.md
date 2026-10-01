@@ -258,6 +258,25 @@ access token`, which reads like a permissions problem with the repo. The cause w
   **drop its `name`** (`name={isLogged ? undefined : …}`) so it renders but doesn't submit — keeps it
   focusable + announced, unlike real `disabled`. A one-submit e2e won't catch this; test a **re-submit**. (V1-6a)
 
+- **A rotated idempotency key on a form that stays on screen makes a second submit a second ROW.**
+  The bodyweight form rotated its `clientId` after every ok result (the `add-server-action` skill said
+  to), and `logBodyweight` dedupes only on `client_id` — so "did I already weigh in?" → tap again →
+  a duplicate. → Keep the key stable for as long as the form can resubmit the same record (a resubmit is
+  then an `ON CONFLICT DO NOTHING` no-op), and stop rendering a create form over an existing record.
+  Rotate only on append-style forms that genuinely create a new row each time (`checkin-form.tsx`).
+  (V1-24 PR 1a)
+
+- **A value→value change in server props is not evidence that THIS user saved.** The bodyweight
+  announcer fired on any change of the saved value, so a refused amend that revalidated in another
+  device's value was announced as "saved" and pulled focus out of the still-open editor. → Announce
+  and move focus from the action's own `ok` result (`useOnActionSuccess`), not from a diff of props.
+  (V1-24 PR 1b)
+
+- **An unkeyed client island survives a `?d=` day change.** Same-route searchParam navigation keeps
+  client state, so the amend editor kept day A's typed value while its hidden `entryId`/`seenValue`
+  re-rendered to day B's row, and Save amended B. → Key every stateful island on what it edits
+  (`key={`amend-${entryId}`}`), as the create form is keyed on the day. (V1-24 PR 1b)
+
 ## Vitest / RTL (component tests)
 
 - **A whole feature shipped INERT with every gate green — an action parsed a field and then forgot to

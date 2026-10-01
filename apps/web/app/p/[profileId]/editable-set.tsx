@@ -4,6 +4,7 @@ import { QUANTITY_SLOT } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SAVING_LABEL } from '@/lib/constants';
 import type { SetDTO } from '@/lib/dal/entries';
 
 import { INITIAL_ACTION_STATE } from './action-state';
@@ -81,7 +82,7 @@ export function EditableSet({
             nameWeight="weight"
           />
           <Button type="submit" size="sm" disabled={pending}>
-            {pending ? 'Saving…' : 'Save'}
+            {pending ? SAVING_LABEL : 'Save'}
           </Button>
           <Button
             type="button"

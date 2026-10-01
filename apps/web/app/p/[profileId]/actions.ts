@@ -43,16 +43,6 @@ import type { ActionState } from './action-state';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-/**
- * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
- * Action is a PUBLIC POST, so it validates its own input (zod) and re-checks the
- * profile inside — never trusting the form. The tile-supplied `profileId` (a
- * hidden field) is re-validated server-side via `getProfileByPublicId` — the
- * ownership seam v1.5's Clerk household scoping plugs into (profile tiles are a
- * UX switch, not a security boundary). Returns a typed envelope for
- * `useActionState` (expected errors don't throw). Sentry
- * `withServerActionInstrumentation` wrapping lands with observability (V1-14).
- */
 // The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
 // export ONLY async functions — the Server Actions compiler registers every export as an action
 // reference, so even a re-exported TYPE trips a runtime `ReferenceError: ActionState is not defined`.
@@ -65,15 +55,25 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
 // i.e. Promise<Promise<ActionState>> for an async callback.
 //
 // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-// a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
+// a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). The "every export is an async
+// function" rule is enforced by `use-server-exports.test.ts`. Expected failures RETURN a
 // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
 // convention for free rather than needing a filter.
 
+/**
+ * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
+ * Action is a PUBLIC POST, so it validates its own input (zod) and re-checks the
+ * profile inside — never trusting the form. The tile-supplied `profileId` (a
+ * hidden field) is re-validated server-side via `getProfileByPublicId` — the
+ * ownership seam v1.5's Clerk household scoping plugs into (profile tiles are a
+ * UX switch, not a security boundary). Returns a typed envelope for
+ * `useActionState` (expected errors don't throw).
+ */
 export async function logBodyweightAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
     const parsed = logBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
@@ -156,7 +156,7 @@ export async function logCheckinsAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
     //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
@@ -258,7 +258,7 @@ export async function logStrengthSessionAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
     const raw = formData.get('movements');
     let movements: unknown;
@@ -353,7 +353,7 @@ export async function logLifeActivitiesAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
     const profileId = uuidSchema.safeParse(formData.get('profileId'));
     const clientId = uuidSchema.safeParse(formData.get('clientId'));
@@ -425,7 +425,7 @@ export async function editStrengthSetAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
     const parsed = editStrengthSetSchema.safeParse({
       profileId: formData.get('profileId'),
@@ -450,9 +450,10 @@ export async function editStrengthSetAction(
       reps: parsed.data.reps,
       weight: parsed.data.weight,
     });
-    if (!updated) return { ok: false, error: 'That set could not be found.' };
-
+    // Revalidate on refusal too, so the page shows what IS saved (the copy says so).
     revalidatePath(`/p/${profile.id}`);
+    if (!updated) return { ok: false, error: AMEND_ERROR_COPY.notFound('set') };
+
     return { ok: true, error: null };
   });
 }
@@ -482,7 +483,7 @@ export async function editBodyweightAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editBodyweightAction', async () => {
     const parsed = editBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
@@ -520,7 +521,11 @@ export async function editBodyweightAction(
     });
     // (a) The row is gone, was never theirs, or is not an amendable bodyweight — one message, so a
     // crafted cross-profile id learns nothing a stale id wouldn't.
-    if (!current) return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
+    // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
+    if (!current) {
+      revalidatePath(`/p/${profile.id}`);
+      return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
+    }
     // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
     if (current.value === parsed.data.value && current.unit === parsed.data.unit) {
       revalidatePath(`/p/${profile.id}`);
@@ -547,7 +552,7 @@ export async function editRoutineAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry: see the module docblock. `return await` is load-bearing.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
     const raw = formData.get('routine');
     let submitted: unknown;

@@ -51,6 +51,18 @@ describe('SavedAnnouncer', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
+  /**
+   * V1-24 PR 1b review: a value→value change is NOT evidence of this user's save — a refused amend
+   * revalidates in another device's value. Announcing that as "saved" (and pulling focus out of the
+   * open editor) told a screen-reader user a refused save had succeeded.
+   */
+  it('does NOT announce or steal focus on a value → value change', () => {
+    const { rerender } = render(<Harness saved={SAVED} />);
+    rerender(<Harness saved={BODYWEIGHT_COPY.announced('86 lb')} />);
+    expect(screen.getByRole('status').textContent).toBe('');
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('does not re-announce when an already-saved value merely re-renders', () => {
     const { rerender } = render(<Harness saved={SAVED} />);
     rerender(<Harness saved={SAVED} />);

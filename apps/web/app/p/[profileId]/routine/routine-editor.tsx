@@ -4,11 +4,13 @@ import { type RoutineItem, ROUTINE_VERSION } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SAVING_LABEL } from '@/lib/constants';
 import { type RoutineCatalogItem } from '@/lib/routine/catalog';
 import { moveDown, moveUp, toggle } from '@/lib/routine/editor';
 
 import { INITIAL_ACTION_STATE } from '../action-state';
 import { editRoutineAction } from '../actions';
+import { useOnActionSuccess } from '../use-on-action-success';
 
 /**
  * The coach routine builder (V1-18 PR 2) — a checklist + ▲▼ reorder (the "picker is a checklist, not a
@@ -43,15 +45,10 @@ export function RoutineEditor({
   const routineJson = JSON.stringify({ version: ROUTINE_VERSION, order });
 
   // Show "Routine saved." only while the CURRENT order still matches what was last persisted — snapshot the
-  // saved payload during render when the action flips to ok (the strength-form during-render idiom, not an
-  // effect). Any later edit changes `routineJson`, so the stale "saved" message clears and can't mislead the
+  // saved payload during render when the action flips to ok (`useOnActionSuccess`, not an effect). Any later edit changes `routineJson`, so the stale "saved" message clears and can't mislead the
   // coach into thinking un-submitted edits are persisted.
-  const [seenState, setSeenState] = useState(state);
   const [savedJson, setSavedJson] = useState<string | null>(null);
-  if (state !== seenState) {
-    setSeenState(state);
-    if (state.ok) setSavedJson(routineJson);
-  }
+  useOnActionSuccess(state, () => setSavedJson(routineJson));
   const showSaved = savedJson !== null && savedJson === routineJson;
 
   return (
@@ -147,7 +144,7 @@ export function RoutineEditor({
           disabled={pending || order.length === 0}
           className="text-base"
         >
-          {pending ? 'Saving…' : 'Save routine'}
+          {pending ? SAVING_LABEL : 'Save routine'}
         </Button>
       </div>
 

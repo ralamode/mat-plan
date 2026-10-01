@@ -181,6 +181,11 @@ evidence that an unprogrammed day exists.
   coach declares, and that authoring surface lands here — it is what keeps the child table invisible on
   a 360px log row, and what makes "no vest row" mean "no vest" rather than "not logged".
 
+- **The routine editor's "Routine saved." is a snapshot, not a flag.** It records the saved payload on
+  the render where the action turns `ok` (`useOnActionSuccess`, shared with the log forms since V1-24
+  PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
+  read as persisted. Don't replace it with an effect or a boolean.
+
 ## Changing it
 
 | If you are…                      | Start here                                                                    |

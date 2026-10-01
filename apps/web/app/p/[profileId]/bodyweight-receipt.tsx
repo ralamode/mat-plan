@@ -22,17 +22,17 @@ export function formatLoggedWeights(logged: readonly LoggedBodyweight[]): string
  *
  * ## Its states
  *
- * - **One value:** `Saved: 84.5 lb`, then `One weigh-in per day.` (on a writable day, where it is the
- *   reason there is no form) and the recovery line.
+ * - **One value:** `Saved: 84.5 lb`, the Change control beside it (PR 1b), then `One weigh-in per
+ *   day.` on a writable day, where it is the reason there is no form.
  * - **Several values** (the pre-1c duplicates, or a two-phone race — PR 1d's index does not exist yet):
  *   `2 weights logged: 84.5 lb, 845 lb`, never silently one of them, then ONE line from
- *   `BODYWEIGHT_COPY.duplicates` in place of the one-per-day and recovery lines: "the extra can’t be
+ *   `BODYWEIGHT_COPY.duplicates` in place of the one-per-day line, and no Change control: "the extra can’t be
  *   removed in the app yet" for one value repeated, "ask a parent which is right" when they differ.
  * - **None, on a closed day:** `No weight logged.` — a bare heading reads as broken. (None on a
  *   WRITABLE day is the form, not this.)
  *
- * On a closed day the second line is the recovery line, not a repeat of the page's "Logging is
- * closed" banner: the banner already says why there is no form.
+ * On a closed day there is no second line: the page's closed-day notice already says why there is
+ * no form, and that a logged weight can still be corrected.
  *
  * ## ⚠️ A SERVER component, and that is load-bearing
  *
@@ -69,15 +69,9 @@ export function BodyweightReceipt({
       tabIndex={-1}
       className="focus-visible:ring-ring/50 flex flex-col gap-1 rounded-lg border px-4 py-3 outline-none focus-visible:ring-3"
     >
-      {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value
-          rather than beside it — deterministically, not by luck: a 100% basis cannot share a row.
-          That is load-bearing. At 360px the card has ~294px usable, and an INLINE editor (value line
-          + input + unit + Save + Cancel + gaps) is ~424px. It would not overflow, because flex
-          WRAPS — the number being corrected would end up in a ~96px box in the right-hand gutter
-          beside a two-line label — and NEITHER CI gate can see that: `expectNoHorizontalOverflow`
-          reads `scrollWidth`, and `expectTapTargets` measures HEIGHT only, which `min-h-11`
-          satisfies. Keeping the saved value visible above the editor is the bonus: you can see what
-          you are changing FROM while you type. */}
+      {/* ⚠️ The OPEN editor is `w-full`, so `flex-wrap` drops it onto its own line beneath the value,
+          deterministically — load-bearing at 360px (why: `bodyweight-amend.tsx`). Keeping the saved
+          value visible above it shows what you are changing FROM while you type. */}
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
         {/* `tabular-nums` so a value changing under an amend doesn't shift the row's width. */}
         <p className="text-base font-medium tabular-nums">

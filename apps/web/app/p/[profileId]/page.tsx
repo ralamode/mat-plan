@@ -29,6 +29,7 @@ import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
+import { CLOSED_DAY_NOTICE } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
@@ -178,8 +179,7 @@ export default async function TodayPage({
           which is the finding that explains the 2026-09-28 incident. */}
       {!writable ? (
         <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
-          Logging is closed for this day — it&rsquo;s more than a day ago. You can still see what
-          was logged.
+          {CLOSED_DAY_NOTICE}
         </p>
       ) : null}
 

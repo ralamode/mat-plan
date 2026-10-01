@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { CLOSED_DAY_NOTICE } from '../lib/constants';
+
 import { isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -44,7 +46,7 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   // 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
   await expect(page.getByRole('region', { name: 'Log strength' })).toBeVisible();
-  await expect(page.getByText(/Logging is closed for this day/)).toHaveCount(0);
+  await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
 });
 
 // ⚠️ The "logging is closed" state needs a profile OLDER than the write window, and the e2e seeds

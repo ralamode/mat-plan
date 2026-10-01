@@ -11,8 +11,8 @@ import { useEffect, useState } from 'react';
  * this is rendered in BOTH states, before and after the save, and owns the region itself.
  *
  * `saved` is the announcement for the current state (`Bodyweight saved: 84.5 lb.`), or `null` when
- * nothing is saved. Only the **none → value** transition within this page session announces: the
- * first render never does, so opening a day that already has a weight is silent. Mount it with
+ * nothing is saved. Only the **none → value** transition within this page session announces (the
+ * CREATE path; an amend announces itself, from its own action result): the first render never does, so opening a day that already has a weight is silent. Mount it with
  * `key={day}` so paging to a different day is a first render, not a "transition".
  */
 export function SavedAnnouncer({ saved, focusId }: { saved: string | null; focusId: string }) {
@@ -22,12 +22,11 @@ export function SavedAnnouncer({ saved, focusId }: { saved: string | null; focus
   const [message, setMessage] = useState('');
   if (saved !== previous) {
     setPrevious(saved);
-    // ⚠️ `saved !== null`, NOT `previous === null` (V1-24 PR 1b). An amend is value→value, so the
-    // old none→value rule announced NOTHING and never ran the focus effect below — a screen-reader
-    // user tapped Save and heard silence, indistinguishable from failure, which is the exact S1
-    // defect this component exists to fix. First render stays silent for free, because `previous`
-    // is seeded from `saved`.
-    if (saved !== null) setMessage(saved);
+    // ⚠️ none → value ONLY. A value→value change is not evidence of THIS user's save: a refused
+    // amend revalidates in another device's value, and announcing that as "saved" (and pulling focus
+    // out of the still-open editor) is the S1 defect in reverse. The amend announces its own success
+    // from its action result (`bodyweight-amend.tsx`), which also covers saving an unchanged value.
+    if (previous === null && saved !== null) setMessage(saved);
   }
 
   useEffect(() => {

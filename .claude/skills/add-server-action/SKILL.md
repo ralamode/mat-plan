@@ -64,14 +64,15 @@ fieldErrors: parsed.error.flatten().fieldErrors }`. **Validate before any DB cal
 `useActionState(xAction, INITIAL_ACTION_STATE)`. Generate `clientId` with `newId()` from
 `@mat-plan/shared`.
 
-⚠️ **Do NOT rotate it after an ok result** — this said to, and V1-24 PR 1a made that the bug. Rotating
-the key while the form stays on screen turns a second submit into a second **row**, because
+⚠️ **Do NOT rotate it after an ok result** when the form can be resubmitted for the same record (see
+[lessons.md](../../../docs/lessons.md), "rotated idempotency key"). Rotating the key while the form
+stays on screen turns a second submit into a second **row**, because
 `logBodyweight` dedupes only on `client_id` and `entries` has no natural-key uniqueness. Paired with a
 `form.reset()` it is worse: the emptied input is what invites the second submit. A **stable** key makes
 a resubmit an `ON CONFLICT DO NOTHING` no-op, which is the behaviour you want. What removes the
 affordance is not rendering the create form over an existing record at all (`bodyweight-section.tsx`).
 Rotate only where a genuinely NEW record is expected next — an append-style surface that stays mounted
-across writes — and say why in a comment.
+across writes, like `checkin-form.tsx` — and say why in a comment.
 
 A display-only field must drop its `name` (`readOnly`/`aria-disabled` fields still submit, which caused
 duplicate rows; see lessons.md). The UI must never be stricter than the endpoint. UI work owes a UX

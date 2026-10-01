@@ -194,7 +194,8 @@ Real ones, each with the file to look at.
 - **`EditableSet`'s collapse-on-success is the shared `useOnActionSuccess` hook (V1-24 PR 1b).** The
   during-render idiom — adjust state while rendering, so the editor never flashes open over its saved
   value — had **four** copies before this, one of which called itself _"the strength-form during-render
-  idiom"_ in a comment. One definition now; `onSuccess` must still only touch the caller's OWN state.
+  idiom"_ in a comment. All four (and the bodyweight amend) use the hook now; `onSuccess` must still
+  only touch the caller's OWN state.
 
 - **`updateStrengthSetById`'s ownership subselect is `writers/ownership.ts`.** Same predicate as the
   bodyweight amend, extracted when the second caller arrived — which means V1-9's existing

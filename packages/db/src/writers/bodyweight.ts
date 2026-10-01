@@ -41,6 +41,8 @@ import { ownedEntryIds } from './ownership';
  *   changing its status, which this endpoint cannot do, so it refuses rather than half-editing.
  * - **`deleted_at IS NULL` at entry AND profile**, via `ownedEntryIds`.
  *
+ * The shape pins live in `amendableBodyweight`, shared with `findAmendableBodyweight` below.
+ *
  * ## `seenValue` — optimistic concurrency, not LWW
  *
  * The amend applies only if the row **still** holds the value the form was rendered with. Without it:
@@ -82,19 +84,54 @@ export async function updateBodyweightEntryById(
     })
     .where(
       and(
-        eq(schema.entries.publicId, args.entryId),
-        isNull(schema.entries.deletedAt),
-        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+        amendableBodyweight(args.entryId),
+        inArray(schema.entries.id, owned),
         eq(schema.entries.unit, args.unit),
-        eq(schema.entries.status, ENTRY_STATUS.done),
-        isNotNull(schema.entries.valueNum),
-        isNull(schema.entries.valueText),
         // Optimistic concurrency. `numeric` compares exactly against the stringified value.
         eq(schema.entries.valueNum, String(args.seenValue)),
-        inArray(schema.entries.id, owned),
       ),
     )
     .returning({ publicId: schema.entries.publicId });
 
   return rows[0] ?? null;
+}
+
+/**
+ * Re-read ONE amendable bodyweight the profile owns: the action's three-way branch after
+ * `updateBodyweightEntryById` returns `null`. Same shape predicate and same ownership scope as the
+ * UPDATE, minus the two per-request guards (`unit`, `seenValue`), so the read can only ever see a row
+ * the UPDATE could have written. A cross-profile, soft-deleted, non-`done` or text-valued row is
+ * `null`, which the action reports as not-found, exactly like a wrong owner. It lives here, not in the
+ * app DAL, so `db:verify` proves it too.
+ */
+export async function findAmendableBodyweight(
+  exec: Executor,
+  args: { profilePublicId: string; entryId: string },
+): Promise<{ value: number; unit: string } | null> {
+  const [row] = await exec
+    .select({ value: schema.entries.valueNum, unit: schema.entries.unit })
+    .from(schema.entries)
+    .where(
+      and(
+        amendableBodyweight(args.entryId),
+        inArray(schema.entries.id, ownedEntryIds(exec, args.profilePublicId)),
+      ),
+    )
+    .limit(1);
+  return row?.value == null ? null : { value: Number(row.value), unit: row.unit };
+}
+
+/**
+ * The SHAPE an amendable bodyweight has — shared by the UPDATE and the re-read so the two can never
+ * scope by different rules. Ownership (`ownedEntryIds`) and the per-request guards stay with callers.
+ */
+function amendableBodyweight(entryId: string) {
+  return and(
+    eq(schema.entries.publicId, entryId),
+    isNull(schema.entries.deletedAt),
+    eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+    eq(schema.entries.status, ENTRY_STATUS.done),
+    isNotNull(schema.entries.valueNum),
+    isNull(schema.entries.valueText),
+  );
 }

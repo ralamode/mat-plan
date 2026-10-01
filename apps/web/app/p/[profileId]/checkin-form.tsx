@@ -15,6 +15,7 @@ import { INPUT_CLASS, SAVED_STATE_COPY } from '@/lib/constants';
 import { INITIAL_ACTION_STATE } from './action-state';
 import { logCheckinsAction } from './actions';
 import { DayField } from './day-field';
+import { useOnActionSuccess } from './use-on-action-success';
 
 // The shared field styling + this form's fixed number-input width (single-sourced in lib/constants).
 const numberInputClass = `${INPUT_CLASS} w-24`;
@@ -74,18 +75,15 @@ export function CheckinForm({
   // slow submit window and then clobbered. (V1-5's log-once number inputs stay uncontrolled.)
   const [numberValues, setNumberValues] = useState<Record<string, string>>({});
 
-  // Reset on a new action result by ADJUSTING STATE DURING RENDER, not in an effect —
-  // an effect here would cause a cascading re-render (and trips react-hooks lint).
-  // https://react.dev/learn/you-might-not-need-an-effect
-  const [seenState, setSeenState] = useState(state);
-  if (state !== seenState) {
-    setSeenState(state);
-    if (state.ok) {
-      setChecked({});
-      setNumberValues({});
-      setIdSeed((n) => n + 1); // rotate idempotency keys; a stale one = a silent no-op
-    }
-  }
+  // Reset on success during render, not in an effect (`useOnActionSuccess` says why).
+  useOnActionSuccess(state, () => {
+    setChecked({});
+    setNumberValues({});
+    // Rotate idempotency keys: this form CREATES new rows on every submit, so a spent key replayed
+    // would be a silent no-op. (Not the bodyweight rule, where the form is gone after one save —
+    // see add-server-action. V1-24 PR 2 revisits this when check-ins become editable.)
+    setIdSeed((n) => n + 1);
+  });
 
   const groups = fields.reduce<Map<string, CheckinField[]>>((acc, f) => {
     acc.set(f.groupLabel, [...(acc.get(f.groupLabel) ?? []), f]);

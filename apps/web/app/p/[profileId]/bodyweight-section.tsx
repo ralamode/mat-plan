@@ -75,7 +75,15 @@ export function BodyweightSection({
           // row, which an amend cannot do. A per-row control is a receipt-shape change, not a slot.
           control={
             logged.length === 1 ? (
-              <BodyweightAmend profileId={profileId} logged={logged[0]!} />
+              // ⚠️ Keyed on the ENTRY, like the create form is keyed on the day: paging days is a
+              // client-side transition, so an unkeyed island would survive it with day A's typed
+              // value while its hidden entryId/seenValue re-rendered to day B's — and Save would
+              // amend B. A row replaced under the same day remounts it too.
+              <BodyweightAmend
+                key={`amend-${logged[0]!.entryId}`}
+                profileId={profileId}
+                logged={logged[0]!}
+              />
             ) : undefined
           }
         />

@@ -80,7 +80,7 @@ export const BODYWEIGHT_COPY = {
   several: (values: readonly string[]) =>
     `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
   /**
-   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (rounds 2–3 on
+   * The ONE line under a duplicates headline, replacing `onePerDay` (rounds 2–3 on
    * #180). Two different situations, so two different asks:
    * - **All the same value** (a double submit): the extra row(s) are the problem.
    * - **Different values** (e.g. two phones): someone has to decide which weight is right, and
@@ -131,7 +131,21 @@ export const AMEND_COPY = {
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
+  /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
+   *  `<span>` a screen reader would otherwise never pair with the number. */
+  valueLabel: (unit: string) => `Weight (${unit})`,
 } as const;
+
+/**
+ * The notice on a day outside the write window (V1-15). Since V1-24 PR 1b a logged weight CAN be
+ * corrected there, so "you can still see what was logged" alone read as view-only directly above a
+ * working Change button. It now says what is closed (new entries) and what is still allowed.
+ */
+export const CLOSED_DAY_NOTICE =
+  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a logged weight.';
+
+/** The pending label on every Save button (amend islands and the routine editor). */
+export const SAVING_LABEL = 'Saving…';
 
 /**
  * Typed-error copy shared by every amend path (V1-24 PR 1b).
@@ -142,9 +156,11 @@ export const AMEND_COPY = {
 export const AMEND_ERROR_COPY = {
   /**
    * The row is gone, was never theirs, or is not amendable. ONE message for all three **on purpose**:
-   * a crafted cross-profile id must learn nothing a stale id wouldn't.
+   * a crafted cross-profile id must learn nothing a stale id wouldn't. The action revalidates first,
+   * so "what's saved" is true and the kid has a way forward that isn't tapping Save again.
    */
-  notFound: (subject: string) => `That ${subject} could not be found.`,
+  notFound: (subject: string) =>
+    `That ${subject} could not be found — the page now shows what's saved.`,
   /**
    * Someone amended it under this render. It states what the system DID — the page has revalidated,
    * so the value on screen is already the one that won — because "reload the day" names a control

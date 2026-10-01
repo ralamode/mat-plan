@@ -96,8 +96,7 @@ describe('editBodyweightSchema (V1-24 PR 1b)', () => {
   });
 
   it('applies the bound of the submitted unit', () => {
-    // 200 is out of range for lb (max 500? no — 200 is IN range for lb) but the kg bound is 230, so
-    // pick values that actually differ: 450 is legal in lb, absurd in kg.
+    // 450 is inside the lb bound (≤ 500) and outside the kg bound (≤ 230).
     expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'lb' }).success).toBe(true);
     expect(editBodyweightSchema.safeParse({ ...valid, value: 450, unit: 'kg' }).success).toBe(
       false,

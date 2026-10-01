@@ -337,8 +337,7 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   /**
    * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
    * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
-   * the LAYOUT is the thing under review — an inline editor would wrap into the gutter at 360px and
-   * pass both CI gates while doing it.
+   * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
    */
   'bodyweight-editing': async (page) => {
     const change = page.getByRole('button', { name: /^Change weight/ });

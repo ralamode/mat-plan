@@ -1052,7 +1052,7 @@ describe('editStrengthSetAction — happy path + not-found', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
   });
 
-  it('maps a not-found set (wrong owner / stale id) to a typed error, no revalidate', async () => {
+  it('maps a not-found set (wrong owner / stale id) to the shared typed error, and revalidates', async () => {
     // The guarded UPDATE matched no row → the DAL returns null. That is an EXPECTED outcome, so the
     // action returns { ok:false }, never a throw to error.tsx.
     vi.mocked(editStrengthSet).mockResolvedValueOnce(null);
@@ -1061,8 +1061,10 @@ describe('editStrengthSetAction — happy path + not-found', () => {
       editForm({ profileId: PROFILE_ID, setId: newId(), reps: '7', weight: '142.5' }),
     );
     expect(res.ok).toBe(false);
-    expect(res.error).toBeTruthy();
-    expect(revalidatePath).not.toHaveBeenCalled();
+    // The SAME copy the bodyweight amend uses, and a revalidate so "the page now shows what's saved"
+    // is true. A revalidate tells a crafted request nothing a stale one wouldn't.
+    expect(res.error).toBe(AMEND_ERROR_COPY.notFound('set'));
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
   });
 });
 
@@ -1238,6 +1240,8 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     const res = await editBodyweightAction(initial, amendForm());
     expect(res.ok).toBe(false);
     expect(res.error).toBe(AMEND_ERROR_COPY.notFound('weight'));
+    // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
   });
 
   /**
@@ -1251,6 +1255,15 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     const res = await editBodyweightAction(initial, amendForm());
     expect(res.ok).toBe(true);
     expect(res.error).toBeNull();
+  });
+
+  /** Same number, different unit: NOT the write that was asked for, so it is not a replay. */
+  it('a re-read with the same value in another unit → stale, not ok', async () => {
+    vi.mocked(editBodyweight).mockResolvedValueOnce(null);
+    vi.mocked(ownedBodyweightValue).mockResolvedValueOnce({ value: 85.2, unit: 'kg' });
+    const res = await editBodyweightAction(initial, amendForm());
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe(AMEND_ERROR_COPY.staleWrite);
   });
 
   /** (c) Someone else got there first — recoverable, and the page revalidates to show what won. */

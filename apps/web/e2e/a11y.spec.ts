@@ -310,14 +310,10 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   // No test had ever opened an edit form before this. Measured here with `widest` already on screen,
   // because that is the worst case: the longest value the bound allows, plus the editor's controls.
   //
-  // ⚠️ These three gates are NOT what makes the editor safe, and it is worth saying so where someone
-  // will read it. The panel proved an INLINE editor (value line + input + unit + Save + Cancel,
-  // ~424px into ~294px usable) passes all three: `expectNoHorizontalOverflow` reads `scrollWidth`
-  // and flex WRAPS rather than overflows, while `expectTapTargets` measures HEIGHT only, which
-  // `min-h-11` satisfies. What makes it safe is that the editor takes the whole row and stacks —
-  // see `bodyweight-amend.tsx`. This asserts the floor; the design is the guard.
+  // ⚠️ These gates are the FLOOR, not what makes the editor safe — an inline editor passes all three
+  // (flex wraps; the tap-target check measures height only). See `bodyweight-amend.tsx`.
   await section.getByRole('button', { name: /^Change weight/ }).click();
-  await expect(section.getByLabel('Weight', { exact: true })).toBeVisible();
+  await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
   await expectNoAxeViolations(page, 'weigh-in (editing)');
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');

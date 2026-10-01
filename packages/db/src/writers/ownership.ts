@@ -8,7 +8,7 @@ import type { Executor } from './executor';
  *
  * ## Why these are named rather than re-typed
  *
- * `and(eq(profiles.publicId, …), isNull(profiles.deletedAt))` appears **eleven** times across the
+ * `and(eq(profiles.publicId, …), isNull(profiles.deletedAt))` appeared **eleven** times across the
  * writers, the queries and the app DAL. `queries/program-day.ts` already argues the case against
  * itself, one function down:
  *
@@ -22,8 +22,9 @@ import type { Executor } from './executor';
  *
  * ⚠️ Extracted here with **two** consumers, not speculatively: `updateStrengthSetById` converts to a
  * caller in the same PR, so V1-9's existing `db:verify` cross-profile proof covers this helper for
- * free. The other nine sites are a separate sweep — see the DAL-1 backlog row, which is one of them
- * and is **missing the soft-delete check entirely**.
+ * free (and `db:verify` proves the profile soft-delete half for both writers). The other nine sites
+ * are a separate sweep — see the live-profile ownership sweep row in docs/plan.md. DAL-1 is one of
+ * them and is **missing the soft-delete check entirely**.
  */
 
 /** THE live-profile predicate. One definition, so no call site can scope by a weaker rule. */
