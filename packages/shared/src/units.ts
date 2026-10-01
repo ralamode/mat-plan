@@ -125,6 +125,29 @@ export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] =
 export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
 
 /**
+ * The movement unit the write path accepts (V1-30). Exactly `LOGGABLE_UNITS`, so "every unit the
+ * form offers is one the server accepts" holds by construction. Before V1-30 the session schema used
+ * `BODYWEIGHT_UNITS` (lb/kg) and rejected the other 7 units the form offered. zod 4 takes the
+ * widened `readonly Unit[]` and still infers `Unit`. The chain test (`units.test.ts`) also requires
+ * every option to be exportable.
+ */
+export const loggableUnitSchema = z.enum(LOGGABLE_UNITS);
+
+/** The one "may a movement be logged in this?" predicate — a narrowing guard, no casts. */
+export function isLoggableUnit(value: string): value is Unit {
+  return loggableUnitSchema.safeParse(value).success;
+}
+
+/**
+ * The units a movement measured in `dimension` may be logged in: what the form's Unit select offers.
+ * Named so "offerable" is a code fact the chain test can iterate, rather than a re-derivation inside
+ * a component.
+ */
+export function loggableUnitsOf(dimension: UnitDimension): Unit[] {
+  return unitsOfDimension(dimension).filter(isLoggableUnit);
+}
+
+/**
  * What a movement's primary quantity is called, in words a parent or a ten-year-old reads without
  * translating. `mass` → "Weight", not "Mass"; `length` covers a box-jump HEIGHT and a broad-jump
  * DISTANCE, so it cannot be called either one alone.

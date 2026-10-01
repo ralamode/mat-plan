@@ -300,9 +300,16 @@ export async function logStrengthSessionAction(
       // (a multi-card form otherwise shows an unlocatable "reps must be positive").
       const movementMsgs = parsed.error.issues
         .filter((i) => i.path[0] === 'movements')
-        .map((i) =>
-          typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
-        );
+        .map((i) => {
+          if (typeof i.path[1] !== 'number') return i.message;
+          // V1-30: name the SET too when the issue sits on one, so three bad sets read as three
+          // distinct, locatable lines rather than one string repeated (also duplicate React keys).
+          const where =
+            i.path[2] === 'sets' && typeof i.path[3] === 'number'
+              ? `Movement ${i.path[1] + 1}, set ${i.path[3] + 1}`
+              : `Movement ${i.path[1] + 1}`;
+          return `${where}: ${i.message}`;
+        });
       if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
       // Superset-level issues (≥2 members, distinct order) key on `['supersets', i]` — surface them too,
       // or a form bug in the grouping logic shows only the generic banner with no recoverable message.

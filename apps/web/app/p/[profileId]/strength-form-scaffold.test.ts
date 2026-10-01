@@ -222,6 +222,21 @@ describe('scaffoldMovements — the movement’s declaration (V1-26 PR-A)', () =
       unit: 'sec',
       declaredLoaded: false,
     },
+    {
+      // AUDIT-1 P2-2: "loaded" means a MASS. A not-bodyweight movement declared in seconds is timed,
+      // not weighted, so a BW tap on it is not worth a warning.
+      name: 'declared NOT bodyweight but timed (a carry for time) is not "loaded"',
+      over: { isBodyweight: false, unitDefault: 'sec' },
+      unit: 'sec',
+      declaredLoaded: false,
+    },
+    {
+      // AUDIT-1 P2-1: a real unit no form offers must not seed the select.
+      name: 'a non-loggable default (count) falls back to the household unit',
+      over: { isBodyweight: false, unitDefault: 'count' },
+      unit: 'lb',
+      declaredLoaded: false,
+    },
   ])('$name', ({ over, unit, declaredLoaded }) => {
     const [card] = scaffoldMovements([row(over)], 'lb');
     expect(card.unit).toBe(unit);

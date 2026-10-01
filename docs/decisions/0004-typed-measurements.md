@@ -119,6 +119,10 @@ well-worn pattern, and the alternative costs either correctness or ad-hoc loggin
    `movements.unit_default` FKs to it and **nothing reads it**).
 2. **The movement declares the _dimension_.** Box jump → length. Sled → mass + length. Hold → time.
    The user is never asked "is this a weight or a height."
+   _Addendum (2026-10-01, V1-30):_ the catalog's declared dimension is a **default the athlete can
+   change** (the form's Measuring select). The server enforces dimension ↔ unit consistency (the
+   composite FKs), not catalog ↔ dimension: forcing the catalog's dimension would block a legitimate
+   choice, such as a carry logged for time. See strength-logging invariant 4b.
 3. **The household sets the _magnitude_ preference once** — lb/kg, in/cm. Not per set.
 4. **Store the resolved unit ON THE ROW, and never convert on write.**
 

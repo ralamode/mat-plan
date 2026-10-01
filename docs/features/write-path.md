@@ -141,6 +141,13 @@ flowchart LR
   form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
   e2e warm-up used `0.5`).
 
+- **A strength-session zod issue renders as `Movement N, set M: <message>` (V1-30).** `flatten()`
+  loses the index, so `logStrengthSessionAction` rebuilds each message from the issue path: `path[1]`
+  is the movement, and `path[2] === 'sets'` with a numeric `path[3]` adds the set. A refine that wants
+  a message to point at a row must file its issue on that path (the non-mass BW/band check uses
+  `['movements', i, 'sets', j, 'weight']`). Without the set number, three bad sets repeat one string,
+  which is unlocatable and also a duplicate React key in the form's error list.
+
 - **⚠️ React 19 resets UNCONTROLLED fields in a `<form action>` when the action settles — even when
   it returns `{ ok: false }`.** A rejection that names the typed value ("check the decimal point")
   then points at an empty input, and a `<select>` snaps back to its `defaultValue`. On the weigh-in

@@ -530,7 +530,7 @@ verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each ro
 
 | #   | Branch                           | What                                                                                                                                                                                   | Owes                                                      |
 | --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | `fix/v1-30-loggable-units`       | **P0** = **V1-30**: the server accepts every unit the form offers; boundary tests, `db:verify`, guide invariant 4b                                                                     | plan + engineering panel, one UX reviewer                 |
+| 1   | `fix/v1-30-loggable-units`       | ✅ **V1-30a**: every offered unit saves and exports; boundary tests, `db:verify`, guide invariant 4b                                                                                   | plan + engineering panel, one UX reviewer                 |
 | 2   | `fix/v1-27-partial-sets`         | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                                                                                             | its existing plan                                         |
 | 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md)) | expedited; security lens post-implementation              |
 | 4   | `chore/sec-2-pin-actions`        | ✅ **SEC-2:** every action in all 5 workflows SHA-pinned; `check-action-pins.mjs` guards it in `verify` + `quality`                                                                    | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
@@ -710,11 +710,32 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   What shipped instead: the declared unit seeds the select (visible, overridable), and tapping BW on a
   catalog-declared-loaded movement raises a **non-blocking** note.
 
-- **V1-30 — the log form offers units the server rejects.** 📋 [**plan**](./plans/v1-30-loggable-units.md) (V1-30a; V1-30b filed in it). 🔴 **P0, reported 2026-09-30** by the
+- **V1-30 — the log form offers units the server rejects.** ✅ **30a** (every offered unit saves and exports; BW/band refused on a time or distance) · 📋 [**plan**](./plans/v1-30-loggable-units.md). 🔴 **P0, reported 2026-09-30** by the
   `review-pr` run on #171: the strength form offers 9 units and the server's schema rejects 7 of them
   (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit. Not yet
   reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
   review so it isn't carried only by a changelog line.
+
+- **V1-30b — the form stops inviting the shapes V1-30a refuses.** 🟡 Filed 2026-10-01 from the V1-30
+  UX lens ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
+  Hide BW / band on a time or distance movement and clear them when Measuring changes; label the field
+  `time` / `distance` instead of `weight` (placeholder and aria-label); per-dimension blank copy
+  ("Enter the time."); a hint when Measuring differs from the catalog's dimension; `step="0.5"` blocks
+  `6.25 ft`. A UI PR: a UX reviewer plus screenshots.
+
+- **V1-33 — time and distance sets can't be edited.** 🟡 Filed 2026-10-01 (V1-30 UX lens). The edit
+  guard is mass-only (form and SQL, invariant 3), so a `300 sec` typo needs a hand-written correction.
+  Since V1-30 these sets are savable, so the population is real. Sequence after V1-30b.
+
+- **V1-34 — jumps and holds open as Weight / Pounds.** 🟡 Filed 2026-10-01 (V1-30 UX lens). Box Jump,
+  Broad Jump and Hollow-Body Hold have `unitDefault: null` (`catalog-movements.ts`), so the scaffold
+  seeds `lb`, and the quickest path ("tap BW, type 30") saves a mass. Needs a correction or migration,
+  because the seed is `ON CONFLICT DO NOTHING`.
+
+- **EXP-1 — one unexportable unit 500s the whole export.** 🟡 Filed 2026-10-01 (V1-30 architecture
+  lens, pre-existing). `export/route.ts` has no try/catch around the builders, so any tripwire unit
+  (none is offered since V1-30, but a new unit code could be) fails every row. Per-row failure or a
+  typed error page.
 
 - **V1-31 — the strength form's dropdowns may snap back after a rejected save.** 🟡 **Suspected, not
   yet reproduced** (found 2026-09-30 while fixing #180). React 19 resets a `<form action>` after the
@@ -760,8 +781,10 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   2026-09-30 by V1-24 PR 1c's read: there are none.** All 10 live bodyweight rows are `lb`
   (`2026-07-29` → `2026-09-30`), so no correction is owed and this is now a **pure app PR**; (2) select
   `unit` in `bodyweightMonthRows`
-  and call `assertExportableUnit` in `buildBodyweight`, so the export refuses loudly; (3) convert, or
-  widen the contract. That last one is Ray's decision, because the header is legacy bytes.
+  and refuse a non-`lb` weight in `buildBodyweight`, so the export fails loudly. ⚠️ **Not**
+  `assertExportableUnit`: since V1-30 it RETURNS `'kg'` (strength loads spell it `85kg`), so calling it
+  here would write `84.5kg` under a `weight_lb` header. CSV-1 needs its own lb-only guard for that
+  column. (3) Convert, or widen the contract. That last one is Ray's decision, because the header is legacy bytes.
 - **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
   alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, alone among the 11 ownership
   sites in the codebase. It's inert today because no profile is soft-deleted, but it breaks the

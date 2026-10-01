@@ -8,6 +8,7 @@ import {
   FREE_TEXT_NOTE_MAX,
   LOGGABLE_DIMENSION_LABELS,
   LOGGABLE_DIMENSIONS,
+  loggableUnitsOf,
   type MovementStatus,
   newId,
   type SetStatus,
@@ -16,7 +17,6 @@ import {
   UNIT_DIMENSION_BY_CODE,
   UNIT_LABELS,
   type UnitDimension,
-  unitsOfDimension,
 } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
@@ -590,8 +590,10 @@ function MovementCard({
             adjacent on an iOS wheel picker is a trap, and the mistake is UNRECOVERABLE — a squat
             logged in `sec` has dimension `time`, so `isEditableSet` refuses it and there is no delete
             action in this app. Asking the plain-words question first makes a squat-in-seconds
-            unreachable rather than merely unlikely, and `mass` is the default so the common movement
-            costs zero extra taps. */}
+            UNLIKELY (a deliberate change of Measuring, not an adjacent code on a wheel) — not
+            impossible: since V1-30 the server accepts every unit offered here, and the catalog only
+            seeds the dimension (docs/features/strength-logging.md, invariant 4b). `mass` is the default
+            so the common movement costs zero extra taps. */}
         <div className="flex flex-col gap-1.5">
           <label htmlFor={dimensionId} className="text-sm font-medium">
             Measuring
@@ -602,7 +604,7 @@ function MovementCard({
             onChange={(e) => {
               // Switching dimension re-homes the unit to that dimension's first code — the pair can
               // never be left inconsistent, which is what the composite FK would otherwise reject.
-              const next = unitsOfDimension(e.target.value as UnitDimension)[0];
+              const next = loggableUnitsOf(e.target.value as UnitDimension)[0];
               if (next) onUnit(next);
             }}
             className={INPUT_CLASS}
@@ -628,7 +630,7 @@ function MovementCard({
           >
             {/* UNIT_LABELS, not the raw codes: `in` and `m` are unreadable aloud and near-invisible
                 on a wheel picker. The labels already exist in packages/shared and had no consumer. */}
-            {unitsOfDimension(dimension).map((u) => (
+            {loggableUnitsOf(dimension).map((u) => (
               <option key={u} value={u}>
                 {UNIT_LABELS[u]}
               </option>

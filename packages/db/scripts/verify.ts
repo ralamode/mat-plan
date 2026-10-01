@@ -1922,6 +1922,24 @@ assert.equal(durationSet.slot, QUANTITY_SLOT.primary, "GAP-3: a hold's duration 
 assert.equal(durationSet.dimension, UNIT_DIMENSION.time, 'GAP-3: …at dimension time');
 assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW (ADR 0004 §6)');
 assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
+
+// V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
+// (writers/strength-session.ts), and the form's `isEditableSet` agrees (strength-logging invariant 3).
+// This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
+// V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
+// recovering a typo in one means writing a correction (docs/features/strength-logging.md).
+const [durationSetRow] = (
+  await db.execute(sql`
+    select es.public_id from entry_sets es join entries e on e.id = es.entry_id
+    where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} and es.idx = ${durationSet.idx}`)
+).rows as unknown as { public_id: string }[];
+const timedEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA, the set's owner
+  setId: durationSetRow.public_id,
+  reps: 1,
+  weight: 45,
+});
+assert.equal(timedEdit, null, 'V1-30: a time set is not editable (the edit path is mass-only)');
 // The two bodyweight sets carry no quantity at all — a MODE is not a magnitude.
 assert.ok(
   labeledSets.slice(0, 2).every((r) => r.value_num === null),

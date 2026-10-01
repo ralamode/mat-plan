@@ -98,6 +98,20 @@ date,session_type,movement,sets,reps,load,prescribed,notes
 | Duration        | `20s`, `30s`                                    |
 | Skipped         | `SKIPPED` (uppercase, exact)                    |
 
+**App-defined spellings (V1-30, 2026-10-01).** Nothing in the corpus was ever logged in these, so
+the app defines them, following the corpus pattern (value + unit code, no space). The authority is
+`CSV_UNIT_SUFFIX` in `packages/shared/src/csv/value.ts`, pinned by a test:
+
+| Unit  | Written as              | Note                                                                |
+| ----- | ----------------------- | ------------------------------------------------------------------- |
+| `kg`  | `85kg`, `BW+8kg (vest)` | **Never bare**: a bare number in `load` is pounds. Never converted. |
+| `cm`  | `75cm`                  |                                                                     |
+| `m`   | `20m`                   | **Metres**, never minutes.                                          |
+| `yd`  | `40yd`                  | No space (the `40 yd` in `prescribed` is free text).                |
+| `min` | `3min`                  | **Minutes**.                                                        |
+
+A worn mass carries its unit like the primary: `BW+8 (vest)` in pounds, `BW+8kg (vest)` in kilograms.
+
 ### Timed movements — easy to get wrong
 
 **Duration goes in `load`; `reps` is `1`, not the seconds.**
@@ -195,3 +209,13 @@ A few lines of the source arrived truncated. The reading assumed here, to be con
 - "The `~` and ranges live [in `prescribed` —] that's the single most likely column mix-up."
 - "Your app must aggregate per-set [rows b]efore export."
 - One `notes` example ended mid-word (`ran 3 sets v…`) — not needed for the contract.
+
+## Contract changes
+
+Dated, additive changes to what the export can write. Every row that exported before a change keeps
+its bytes. The reader is an external workflow, so each entry names what that workflow must learn.
+
+- **2026-10-01 — V1-30:** `load` can now carry `kg`, `cm`, `m` (metres), `yd` and `min` (minutes),
+  as above, and a `kg` worn mass is suffixed (`BW+8kg (vest)`). Before this, a set in any of those
+  units made the export throw. **Workflow:** the external `strength-log/README.md` `load` bullet lists
+  the new suffixes. A bare number is still pounds.

@@ -62,12 +62,12 @@ export const strengthSetSchema = z
             if (!/^\d+(\.\d{1,3})?$/.test(v)) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Enter a plain number like 62.5, or tap BW.',
+                message: 'Enter a plain number like 62.5.',
               });
               return;
             }
             if (Number(v) > 2000) {
-              ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'That weight looks too high.' });
+              ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'That number looks too high.' });
             }
           }),
       )
@@ -105,7 +105,9 @@ export const strengthSetSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['weight'],
-        message: 'Enter a weight, or tap BW / band.',
+        // Unit-neutral since V1-30: this set may be a time or a distance, where BW / band are refused
+        // (the session refine), so the old "or tap BW / band" sent a kid to the button that fails.
+        message: 'Enter a number.',
       });
     }
   });

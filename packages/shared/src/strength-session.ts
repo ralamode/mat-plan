@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
-import { BODYWEIGHT_UNITS } from './bodyweight';
 import { ENTRY_STATUS, movementStatusSchema } from './enums';
 import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
 import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
+import {
+  LOGGABLE_DIMENSION_LABELS,
+  loggableUnitSchema,
+  UNIT_DIMENSION,
+  UNIT_DIMENSION_BY_CODE,
+} from './units';
 
 /** Max movements per session, and max supersets (each needs ≥2 of the movements → floor(N/2)). Named
  *  so the derivation is expressed in code, not two magic numbers that can drift. */
@@ -19,7 +24,7 @@ export const MAX_SETS_PER_MOVEMENT = 20;
 
 /**
  * One movement within a logged session: a named movement, its unit, its own idempotency
- * `clientId`, and 1..20 sets. Reuses `strengthSetSchema` + `BODYWEIGHT_UNITS` + `uuidSchema` (the
+ * `clientId`, and 1..20 sets. Reuses `strengthSetSchema` + `loggableUnitSchema` + `uuidSchema` (the
  * same set bound `logStrengthSchema` used) — no re-declared shapes. `supersetClientId`/`supersetOrder`
  * (V1-8-3c) tag this movement into a superset: `supersetClientId` references a `supersets[]` entry,
  * `supersetOrder` is its 1-based position within (like `entry_sets.idx`). Both optional (a flat
@@ -42,7 +47,9 @@ export const sessionMovementSchema = z.object({
       (v) => !hasCommaOrLineBreak(v),
       'A movement name can’t contain a comma or a line break.',
     ),
-  unit: z.enum(BODYWEIGHT_UNITS),
+  // V1-30: every unit the form's Measuring picker offers. Was `BODYWEIGHT_UNITS` (lb/kg), which made
+  // a timed hold or a distance fail the whole session since #141.
+  unit: loggableUnitSchema,
   clientId: uuidSchema,
   // GAP-1 P1-1a. `skipped` means a human SAID the movement was skipped — never inferred from an empty
   // set list (the P0-1 provenance rule). `sub_failure` is deliberately NOT accepted here: it is a
@@ -218,6 +225,28 @@ export const logStrengthSessionSchema = z
           path: ['supersets', i],
           message: 'Superset members need distinct orders.',
         });
+      }
+    }
+
+    // (6) V1-30: BW and band are MODES of a weight. On a time or a distance they mean nothing, and
+    // the set refine accepts a mode in place of a number, so `3 × BW` on a timed hold would save with
+    // no time at all, and be uneditable (the edit path is mass-only). One issue per set, on the
+    // set's `weight` path. A BLANK set with no mode is already rejected by the set refine, so it is
+    // not re-checked here: every bad set gets exactly one message.
+    for (const [i, m] of val.movements.entries()) {
+      const dimension = UNIT_DIMENSION_BY_CODE[m.unit];
+      if (dimension === UNIT_DIMENSION.mass) continue;
+      const what = (LOGGABLE_DIMENSION_LABELS[dimension] ?? dimension)
+        .toLowerCase()
+        .replace(' / ', ' or ');
+      for (const [j, set] of m.sets.entries()) {
+        if (set.isBodyweight || set.isBand) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['movements', i, 'sets', j, 'weight'],
+            message: `Turn off BW / band — they don’t apply to a ${what}.`,
+          });
+        }
       }
     }
   });

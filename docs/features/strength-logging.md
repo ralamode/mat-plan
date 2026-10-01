@@ -119,9 +119,13 @@ regresses.
 4b. **The unit belongs to the MOVEMENT; its dimension is DERIVED from it.** There is no per-set unit
 and no stored dimension on the movement — `UNIT_DIMENSION_BY_CODE[unit]` is the single source, so
 the pair can never disagree with `units(code, dimension)`. The form asks "Measuring?" first and
-then offers only `unitsOfDimension(d)`, which is what makes a squat-logged-in-seconds unreachable
-rather than merely unlikely. `LOGGABLE_UNITS` is derived from the `primary` slot's declared
-dimensions, so every offerable unit is one the composite FK accepts.
+then offers only `loggableUnitsOf(d)`, which makes a squat-logged-in-seconds **unlikely** (a
+deliberate change of Measuring), not impossible. **The athlete picks the dimension; the catalog's
+`unit_default` only seeds it**, and the server never checks one against the other (ADR 0004
+addendum, V1-30). **Offerable ⊆ accepted ⊆ exportable** is enforced by the chain test in
+`packages/shared/src/units.test.ts`, which runs the wired `sessionMovementSchema.shape.unit`.
+V1-30 was this chain broken: the form offered 9 units, the server accepted 2 and the export wrote 4. On a non-mass movement BW / band are refused (one message per set): they are modes of a
+weight.
 
 5. **A quantity's unit is guarded by TWO composite FKs sharing its `dimension` column.** `lb` in a
    box-jump height is rejected by the database. The writer must therefore derive `dimension` from the
@@ -187,9 +191,16 @@ Real ones, each with the file to look at.
   assertions. It takes a `Unit`, not a `string`, so a DTO whose unit is typed loosely fails to compile
   rather than rendering whatever it holds.
   ⚠️ **It is NOT `@mat-plan/shared/csv`'s `formatQuantity`, and the two must not be merged.** The CSV
-  one emits a **bare** number for a mass, `20s` for seconds, and **throws** on `kg`, because those are
-  contract bytes a downstream workflow diffs. Using it here would drop the unit off every weight on
+  one emits a **bare** number for `lb`, `85kg` for `kg`, and `20s` for seconds, because those are
+  contract bytes a downstream workflow diffs (and a bare number there means pounds). Using it here would drop the unit off every weight on
   screen; using the display one there would corrupt the export. A test pins the difference.
+
+- **A time or distance set is not editable, and recovery means WRITING a correction (V1-30).** The edit
+  guard is mass-only, in the form (`isEditableSet`) and in SQL (`updateStrengthSetById`), and
+  invariant 3 keeps them identical. Before V1-30 no non-mass set could be saved, so this population is
+  new. A typo (`300 sec`) needs a new entry in `packages/db/scripts/corrections/registry.ts`, since
+  there is no generic "fix a set" correction. Making non-mass sets editable is its own backlog row.
+  `db:verify` pins the refusal.
 
 - **`EditableSet`'s collapse-on-success is the shared `useOnActionSuccess` hook (V1-24 PR 1b).** The
   during-render idiom — adjust state while rendering, so the editor never flashes open over its saved

@@ -1,9 +1,11 @@
 import {
   type BodyweightUnit,
+  isLoggableUnit,
   MAX_SESSION_MOVEMENTS,
   MAX_SETS_PER_MOVEMENT,
   newId,
   type Unit,
+  UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 
@@ -85,7 +87,9 @@ export function scaffoldMovements(
      * Presentation-only client state: it is never serialized into the submitted `movements` JSON,
      * because the server has the catalog and does not need the form to tell it.
      */
-    declaredLoaded: row.isBodyweight === false && row.unitDefault !== null,
+    // A MASS unit (AUDIT-1 P2-2): "loaded" means weighted. A declared `sec` hold is not loaded, and a
+    // BW hint there would be noise. Same idiom as `set-display.ts` and `csv/load.ts`.
+    declaredLoaded: row.isBodyweight === false && declaredMass(row.unitDefault),
     // Never 0 rows: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
     // (`[].every(...)` is true), and a non-skipped movement with no sets fails the schema anyway.
     sets: Array.from({ length: clampSetCount(row.sets) }, () => ({
@@ -129,8 +133,16 @@ export const DEFAULT_SCAFFOLD_SETS = 3;
  * household default is the safe direction: wrong-but-visible beats empty.
  */
 function declaredUnit(unitDefault: string | null): Unit | undefined {
+  // LOGGABLE, not merely known (AUDIT-1 P2-1): a `count` default would seed the Measuring select to a
+  // dimension it has no option for. `isLoggableUnit` also drops the old `in`-operator check, which
+  // accepted inherited keys like `'constructor'`.
   if (unitDefault === null) return undefined;
-  return unitDefault in UNIT_DIMENSION_BY_CODE ? (unitDefault as Unit) : undefined;
+  return isLoggableUnit(unitDefault) ? unitDefault : undefined;
+}
+
+function declaredMass(unitDefault: string | null): boolean {
+  const unit = declaredUnit(unitDefault);
+  return unit !== undefined && UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass;
 }
 
 /** Prescribed sets → set-row count, clamped to what the session schema will accept. */
