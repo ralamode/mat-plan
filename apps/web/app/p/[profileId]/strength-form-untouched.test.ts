@@ -294,6 +294,12 @@ describe('dropTrailingUntouchedSets', () => {
   it('a gap is NOT dropped (so set numbers still match the screen)', () => {
     expect(sent([done(), blankSet(), done()])).toBe(3);
   });
+  it('a gap survives even when the same card ALSO has a trailing run — only the run goes', () => {
+    // done, gap, done, trailing: 3 sent, and set 2 is still the gap the athlete sees as set 2.
+    const [m] = dropTrailingUntouchedSets([card([done(), blankSet(), done(), blankSet()])]);
+    expect(m!.sets).toHaveLength(3);
+    expect(isUntouchedSet(m!.sets[1]!)).toBe(true);
+  });
   it('an all-untouched card is returned unchanged', () => {
     const m = card([blankSet(), blankSet()]);
     expect(dropTrailingUntouchedSets([m])[0]).toBe(m);
