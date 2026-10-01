@@ -116,7 +116,8 @@ with no rule citation is taste. Mark it P2, or drop it.
    effect). Threaded values are asserted with `toMatchObject` (lessons.md → Vitest). Schema changes
    have a `db:verify` proof. There's **no coverage tool**, so judge by reading: is each new branch
    exercised? Don't claim a percentage.
-7. **Docs that ride with the change.** `docs/status.md` changelog/row, the feature guide (the gate
+7. **Docs that ride with the change.** A [`docs/changelog/` fragment](../../../docs/changelog/README.md) (correct links:
+   it's one level deeper than status.md; nothing added to the frozen histories), the `docs/status.md` backlog row and pointer if the change moves them, the feature guide (the gate
    only checks that it was touched, not that it's right; read the diff against its invariants),
    `docs/plan.md` row, the plan's review-response log, lessons.md if a failure took several attempts,
    `docs/architecture.md` + a Mermaid diagram for a pivotal flow or model change.
@@ -136,11 +137,11 @@ item is a finding only if this PR makes it worse.
 
 ## 4. Severity
 
-| Level  | Means                                                                                                         | Examples                                                                          |
-| ------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| **P0** | Must fix before merge: wrong data, security exposure, a red or bypassed gate, or a hard AGENTS.md rule broken | double-write on retry; `db` outside the DAL; an edited applied migration; red CI  |
-| **P1** | Should fix in this PR, since it's cheap now and expensive later                                               | duplicated constant; missing boundary test; status.md not updated; 360px overflow |
-| **P2** | Follow-up or nit; file it rather than block                                                                   | naming, a clearer comment, a test that could be tighter                           |
+| Level  | Means                                                                                                         | Examples                                                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **P0** | Must fix before merge: wrong data, security exposure, a red or bypassed gate, or a hard AGENTS.md rule broken | double-write on retry; `db` outside the DAL; an edited applied migration; red CI                                                      |
+| **P1** | Should fix in this PR, since it's cheap now and expensive later                                               | duplicated constant; missing boundary test; no changelog fragment, or a merged backlog item's status.md row unchanged; 360px overflow |
+| **P2** | Follow-up or nit; file it rather than block                                                                   | naming, a clearer comment, a test that could be tighter                                                                               |
 
 ## 5. Verify before reporting
 
