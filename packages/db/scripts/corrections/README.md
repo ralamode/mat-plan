@@ -29,6 +29,11 @@ still needs its own PR. Each correction below names the row that fixes the cause
    deleted row.
 6. **Keep them after they run.** A correction is a record of what was wrong and when. They are cheap
    to keep and they document the failure; a row in the **Applied** table below marks one as done.
+7. **All writes in one `db.transaction`.** The runner's refusal message tells the operator a failure
+   rolled back; that is only true when every write is inside one transaction.
+8. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
+   privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
+   or commit — replace it with `…`.
 
 ## Adding one
 
@@ -38,6 +43,14 @@ fixes the cause, and a `run(db, apply)` that returns what it changed. Nothing el
 
 ## Applied
 
-| Name                        | What                                                          | Cause fixed by |
-| --------------------------- | ------------------------------------------------------------- | -------------- |
-| `liam-kb-swings-2026-09-28` | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb` | V1-24          |
+**`Applied`** is the date `--apply` actually ran, or `pending` — the `Correction` type carries no
+applied flag and `--apply` leaves no artifact, so this column is the only record. A correction merges
+before it is run, so a row lands here as `pending` and is dated in a follow-up commit.
+
+| Name                                    | What                                                          | Cause fixed by | Applied        |
+| --------------------------------------- | ------------------------------------------------------------- | -------------- | -------------- |
+| `liam-kb-swings-2026-09-28`             | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb` | V1-24          | **2026-09-30** |
+| `liam-bodyweight-duplicates-2026-09-30` | 3 weigh-ins on one day; the 12:17 morning row is the keeper   | V1-24          | **pending**    |
+
+<sub>The KB-swings date is read off the rows themselves (`entry_sets.updated_at =
+2026-09-30 00:26:52+00`), not recalled — the column was added after that correction ran.</sub>
