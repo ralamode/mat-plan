@@ -80,13 +80,19 @@ try {
     );
   }
 } catch (err) {
-  console.error('\n✗ REFUSED — nothing was written (any transaction rolled back).');
+  console.error(
+    '\n✗ REFUSED/FAILED — if the error came from inside a single transaction it rolled back; ' +
+      're-run the dry run to see the current state.',
+  );
   console.error(`  ${err instanceof Error ? err.message : String(err)}`);
   // Print the cause too. A driver/connection failure arrives as drizzle's "Failed query: …", whose
   // message says nothing about WHY — the reason (ENOTFOUND, auth, a constraint name) is on `cause`,
   // and without it a refusal is undiagnosable. Found by the first prod dry run doing exactly that.
   const cause = err instanceof Error ? err.cause : undefined;
   if (cause) console.error(`  cause: ${cause instanceof Error ? cause.message : String(cause)}`);
+  // The stack, so a crash in a correction's own code is locatable (an unhandled rejection used to
+  // print it). It carries ids and guards, never a value: no correction binds one.
+  if (err instanceof Error && err.stack) console.error(`\n${err.stack}`);
   console.error('');
   process.exitCode = 1;
 } finally {

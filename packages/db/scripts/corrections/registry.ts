@@ -243,6 +243,8 @@ const liamBodyweightDuplicates: Correction = {
       .where(
         and(
           eq(schema.entries.publicId, KEEPER.publicId),
+          eq(schema.entries.profileId, profile.id),
+          eq(schema.entries.activityDate, DUP_DAY),
           eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
           isNull(schema.entries.deletedAt),
         ),
@@ -256,8 +258,10 @@ const liamBodyweightDuplicates: Correction = {
       );
     }
 
+    // The value is privileged (SECURITY.md) and this repo is public, so it is printed ONCE, on its own
+    // marked line, and never inside the per-change lines — a pasted diff then carries no value.
     const keeping =
-      `keeping ${KEEPER.publicId} (${keeper.value} ${keeper.unit}, logged ${keeper.loggedAt} UTC` +
+      `keeping ${KEEPER.publicId} (logged ${keeper.loggedAt} UTC` +
       `${keeper.amended ? ', amended since the read' : ''})`;
 
     // ── 3. classify every named loser ───────────────────────────────────────────────────────────
@@ -295,7 +299,26 @@ const liamBodyweightDuplicates: Correction = {
       );
     }
 
+    // ── 3b. the day's live count, in BOTH modes ────────────────────────────────────────────────
+    // The dry run must check everything the apply checks, and the 0-change re-run is the proof the
+    // runbook relies on: the day must hold exactly the keeper plus what is still to delete. A FOURTH
+    // live row (logged after the read) is refused here instead of only at the apply's invariant.
+    const [{ live: liveNow }] = await db
+      .select({ live: sql<number>`count(*)::int` })
+      .from(schema.entries)
+      .where(liveBodyweightOn(profile.id, DUP_DAY));
+
+    if (liveNow !== doomed.length + 1) {
+      throw new Error(
+        `${liveNow} live bodyweight rows on ${DUP_DAY}, expected ${doomed.length + 1} (the keeper + ` +
+          `${doomed.length} still to delete). Another row was logged since the read. Nothing was ` +
+          `written; re-run the duplicate query.`,
+      );
+    }
+
     if (doomed.length === 0) return [];
+
+    console.log(`  keeper value (privileged, do not paste): ${keeper.value} ${keeper.unit}\n`);
 
     const changes = doomed.map(
       (l) => `soft-delete ${l.publicId} (logged ${l.loggedAt} UTC) — ${keeping}`,
@@ -317,6 +340,8 @@ const liamBodyweightDuplicates: Correction = {
         .where(
           and(
             eq(schema.entries.publicId, KEEPER.publicId),
+            eq(schema.entries.profileId, profile.id),
+            eq(schema.entries.activityDate, DUP_DAY),
             eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
             isNull(schema.entries.deletedAt),
           ),

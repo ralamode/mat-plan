@@ -43,18 +43,30 @@ the [README](../packages/db/scripts/corrections/README.md) for the rules.
 `liam-bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
 `CREATE UNIQUE INDEX` cannot tolerate**, and the order is not optional:
 
-1. `--apply` the correction, then
+0. **dry run** — check the printed `target:` host is prod, and read the diff (the keeper's value
+   prints on its own line; never paste it anywhere — this repo is public);
+1. `--apply` the correction;
+   1b. **re-run it** — it must print 0 changes (it now also refuses unless the day holds exactly one
+   live weight, so this is the proof, not a formality);
 2. **re-run the duplicate query** (the literal SQL is committed in
    [the plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"), because any render made
    before another device saved can still create a duplicate until PR 1e moves the `ON CONFLICT`
-   arbiter, then
-3. merge 1d.
+   arbiter;
+3. date the correction's **Applied** cell in
+   [the corrections README](../packages/db/scripts/corrections/README.md) (`pending` → the date);
+4. merge 1d.
+
+**Rollback** needs no restore branch — this is a soft delete. Before 1d lands, undo is
+`UPDATE entries SET deleted_at = NULL, updated_at = now() WHERE public_id IN (<the two losers>) AND
+deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `public_id`). After 1d
+lands, un-deleting a row would violate its index.
 
 **If 1d merges first**, `migrate.yml` — which runs on **every** push to `main`, with no path filter and
 no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
 and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
-then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. The app keeps
-working throughout, because the arbiter has not moved yet.
+then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. Bodyweight
+logging keeps working (the arbiter has not moved yet), but **any later PR that needs a migration or a
+seed row is broken in prod until the wedge clears — freeze merges to `main` until then.**
 
 ---
 

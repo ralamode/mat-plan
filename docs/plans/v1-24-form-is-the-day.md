@@ -477,14 +477,19 @@ the app imports. **Not in this PR:** the unique index (1d), the arbiter (1e), an
 ### The correction, exactly
 
 ```ts
-const LIAM = '019826b4-0000-7000-8000-000000000001'; // read-captured, deliberately not the seed const
-const DAY = '2026-09-30';
-const LOSER_UNIT = 'lb' satisfies Unit;
-const KEEPER = { publicId: '01a0f23f-…-41468c2ad38c', token: '2026-09-30 12:17:07.217351+00' };
-const LOSERS = [
-  { publicId: '01a0f3db-08b6-…-f56256017ba5…', token: '2026-09-30 19:46:53.241117+00' },
+// As shipped in registry.ts (synced 2026-10-01 after review).
+const LIAM_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001'; // read-captured, not the seed const
+const DUP_DAY = '2026-09-30';
+const DUP_UNIT: Unit = 'lb';
+const KEEPER: CapturedRow = {
+  publicId: '01a0f23f-…-41468c2ad38c',
+  token: '2026-09-30 12:17:07.217351+00',
+};
+// Deliberately NOT `as const`: literal types would make the assert below a tautology (TS2367).
+const LOSERS: readonly CapturedRow[] = [
+  { publicId: '01a0f3db-08b6-…-5195e090d5fe', token: '2026-09-30 19:46:53.241117+00' },
   { publicId: '01a0f3db-1f7a-…-a1c79cfac928', token: '2026-09-30 19:46:59.068208+00' },
-] as const;
+];
 // Free, and the two 19:46 rows differ from the keeper by token alone after Decision 20.
 assert(!LOSERS.some((l) => l.publicId === KEEPER.publicId));
 ```
@@ -498,7 +503,7 @@ they cannot drift into matching different rows:
 | ``sql`updated_at = ${token}::timestamptz` `` | **Yes.** The drift check — see Decision 20. Cast in SQL because a JS `Date` holds ms against Postgres's µs; probed by two lenses, 0 rows vs 1.                          |
 | `deleted_at IS NULL`                         | **Yes.** README rule 5, and it is the predicate that makes a second run a no-op.                                                                                        |
 | `metric_key = SEED_METRIC_KEYS.bodyweight`   | Defence. The shape pin as a constant, never an argument (Decision 6's rule).                                                                                            |
-| `unit = LOSER_UNIT`                          | Defence.                                                                                                                                                                |
+| `unit = DUP_UNIT`                            | Defence.                                                                                                                                                                |
 | `activity_date = DAY`                        | Defence. Listed in Decision 3's required set; kept so this section complies rather than silently narrowing it.                                                          |
 | `status = ENTRY_STATUS.done`                 | Defence. Free — the read established it for all three rows — and it matches 1b's `amendableBodyweight` shape guard.                                                     |
 
@@ -509,10 +514,11 @@ deleted, and a guard table that implies otherwise invites the next correction to
 re-select inside the transaction, which meant the one gate a human reads never touched the keeper and
 printed the author's hard-coded snapshot. Both the correctness and DB-safety lenses rejected that.
 
-1. **Resolve the profile** by `public_id` with `deleted_at IS NULL`. Absent → refuse. (This predicate
-   is `isLiveProfile` in 1b's `writers/ownership.ts`; 1c does **not** import it — see Decision 21.)
-2. **Re-select the keeper**, live, under the bodyweight shape pin. **Absent → throw**, in both modes.
-   Its **live** value and token go into the printed line — never a constant. A keeper whose token has
+1. **Resolve the profile** with `isLiveProfile` (1b's `writers/ownership.ts`), **imported** — #192
+   merged while this PR was in flight. Absent → refuse.
+2. **Re-select the keeper**, live, pinned to the bodyweight metric, the owner's `profile_id` and
+   `DUP_DAY`. **Absent → throw**, in both modes. Its **live** value is printed once, on its own line
+   marked privileged — never inside the per-change lines, and never a constant. A keeper whose token has
    moved is reported, **not** refused: that is Ray amending the weight he is keeping, which is fine.
 3. **Select the live losers** under the full guard, and classify every named loser:
    - matched → it will be soft-deleted;
@@ -521,6 +527,9 @@ printed the author's hard-coded snapshot. Both the correctness and DB-safety len
 proceeding`. This is the finding both lenses raised independently: `correct.ts:64-67` prints
      _"No matching rows — already corrected, or the guard did not match"_ and exits **0**, so without
      this branch genuine drift is indistinguishable from a completed correction.
+     3b. **Count the day's live bodyweight rows, in both modes**: refuse unless it is exactly the keeper
+     plus the losers still to delete. So a fourth row logged after the read is refused by the **dry
+     run**, and a 0-change re-run proves the day holds exactly one weight — the precondition 1d needs.
 4. **Nothing to do for either loser → return `[]`** before opening a transaction, the `liamKbSwings`
    shape (`registry.ts:74`). That is what makes a second `--apply` a no-op instead of a throw — the
    first draft specified both and could not have had both.
@@ -564,8 +573,9 @@ migrated, seeded sandbox. So:
 
 1. **Rehearse** on an ephemeral Postgres — `startEmbeddedPostgres` + `migrateAndSeed`
    (`apps/web/scripts/embedded-pg.ts`, the `e2e:local` helpers) driven by a throwaway script, so it
-   runs the **real** node-postgres driver, the real migrations and the real seed. **Done, 20/20 checks,
-   transcript in the PR description.** Six phases: dry run writes nothing and prints the keeper's
+   runs the **real** node-postgres driver, the real migrations and the real seed. **Done: 21/21 checks in the
+   author's harness, 19/19 in an independent reviewer's** (not committed — they used arbitrary
+   weights; see the PR description). Six phases: dry run writes nothing and prints the keeper's
    **live** value · apply · a second apply returns 0 · **mutation check** — a loser whose `updated_at`
    moved is refused · keeper soft-deleted → abort with both losers still live · a fourth live row → the
    post-write invariant throws and everything rolls back. The harness used **arbitrary** weights, since
@@ -626,7 +636,7 @@ from-values. Ray's call, taken 2026-09-30 with both options on the table. Decisi
 re-run is a no-op, a drifted row is refused — is met by `deleted_at IS NULL` and the token
 respectively.
 
-### 21. The profile id stays a literal, and the ownership predicate is not imported
+### 21. The profile id stays a literal; the ownership predicate IS imported (amended 2026-10-01)
 
 `SEED_PROFILE_PUBLIC_ID` means _"the profile the seed creates"_ (`seed-ids.ts:14`), consumed by
 `seed.ts`, `programming.ts` and the screenshot script. It does **not** mean _"the profile that owned
@@ -637,10 +647,10 @@ architecture lenses got here independently. The corollary: **`registry.ts:41`'s 
 literal is not converted in this PR** either.
 
 The same reasoning stops short of the ownership predicate, which genuinely has a home:
-`isLiveProfile` in 1b's `writers/ownership.ts`, whose docblock counts **eleven** copies. 1c does not
-import it, for two reasons stated rather than hidden: that file exists only on #192's unmerged branch,
-so importing it would couple a prod data fix to a code review; and a comment names it as the home so
-this call site joins the DAL-2 sweep with the other nine. Nor is the **UPDATE** scoped by profile:
+`isLiveProfile` in 1b's `writers/ownership.ts`. The first draft did **not** import it, because that
+file existed only on #192's unmerged branch. **#192 merged while this PR was in flight, so
+`registry.ts` imports it** — the original reason no longer holds, and a 12th hand-typed copy would
+have been the defect. Nor is the **UPDATE** scoped by profile:
 it targets a total-UNIQUE `public_id` captured from a committed read, there is no request-supplied id,
 and step 1 has already asserted the owner — so the BOLA argument that forces the subselect in a
 _writer_ does not apply to a hard-coded one-off. Stated as a deviation, not assumed.
@@ -1144,7 +1154,7 @@ checks everything the apply checks instead of printing the author's snapshot.
 | E17 | Correctness, DB-safety    | The designed `throw` has no handler — `correct.ts:61-62` skips `pool.end()` and surfaces a raw unhandled rejection                                                                                  | **accepted**                             | `correct.ts` added to the file table: `try/finally` + a `✗ REFUSED` block                                                                                                                                                                               |
 | E18 | DB-safety                 | No `lock_timeout`/`statement_timeout`; `createDbPool` sets only `connectionTimeoutMillis`, so a blocked row lock waits forever                                                                      | **accepted**                             | `SET LOCAL` both, first statement in the transaction                                                                                                                                                                                                    |
 | E19 | Reuse, Architecture       | `SEED_PROFILE_PUBLIC_ID` means "the seeded profile", not "the profile that owned these rows" — a frozen record must not follow a const                                                              | **accepted**                             | Decision 21; the literal stays, and `registry.ts:41` is **not** converted either                                                                                                                                                                        |
-| E20 | Correctness, Reuse        | `UNIT_CODES`-derived `'lb'` names an API that does not exist (flat `as const` array, no keyed member)                                                                                               | **accepted**                             | `const LOSER_UNIT = 'lb' satisfies Unit`                                                                                                                                                                                                                |
+| E20 | Correctness, Reuse        | `UNIT_CODES`-derived `'lb'` names an API that does not exist (flat `as const` array, no keyed member)                                                                                               | **accepted**                             | `const DUP_UNIT: Unit = 'lb'` (as shipped)                                                                                                                                                                                                              |
 | E21 | Architecture              | The **Applied** table would assert "done" for a correction that has not been applied, and has no status column                                                                                      | **accepted**                             | An `Applied` column, the sibling backfilled, 1c's row `pending`                                                                                                                                                                                         |
 | E22 | DB-safety                 | The 1c→1d ordering hazard — the window where merging 1d wedges `migrate.yml` — is documented only in a plan file                                                                                    | **accepted**                             | `docs/runbooks.md` carries the sequence **and** the consequence                                                                                                                                                                                         |
 | E23 | Scope, Architecture       | The runbooks line as drafted (naming this correction for discoverability) is padding that starts a third list                                                                                       | **accepted**                             | Reconciled with E22: no list entry, only the ordering hazard. `db:correct` with no name already lists them                                                                                                                                              |

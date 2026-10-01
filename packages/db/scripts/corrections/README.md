@@ -29,6 +29,11 @@ still needs its own PR. Each correction below names the row that fixes the cause
    deleted row.
 6. **Keep them after they run.** A correction is a record of what was wrong and when. They are cheap
    to keep and they document the failure; a row in the **Applied** table below marks one as done.
+7. **All writes in one `db.transaction`.** The runner's refusal message tells the operator a failure
+   rolled back; that is only true when every write is inside one transaction.
+8. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
+   privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
+   or commit — replace it with `…`.
 
 ## Adding one
 
