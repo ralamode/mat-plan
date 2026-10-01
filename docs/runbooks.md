@@ -96,6 +96,11 @@ Vercel env + the GH secret together; note what re-deploys are needed._
 
 ### `CLAUDE_CODE_OAUTH_TOKEN` (the `@claude review` workflow, DX-1)
 
+**Dormant by choice since 2026-09-30:** the secret is unset because reviews run locally (the
+`review-pr` skill). An `@claude review` comment gets the "failed or ran out of budget" notice. To
+activate, follow the steps below, then run the DX-1 plan's tests 3–5 before relying on it. While
+dormant, a `claude-code-action` bump doesn't need step 6's re-read; activation does.
+
 1. On a machine logged in to a Claude Pro/Max account: `claude setup-token`, and copy the token.
 2. GitHub → Settings → Secrets and variables → Actions → **New repository secret**
    `CLAUDE_CODE_OAUTH_TOKEN` (or update it). Nothing else reads it; no redeploy.
