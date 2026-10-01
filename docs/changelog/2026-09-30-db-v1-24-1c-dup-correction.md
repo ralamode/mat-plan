@@ -11,5 +11,5 @@
   corrections README grew an `Applied` column, because a table that said a row "marks one as done" had
   no way to say "merged, not yet run". **Applied to prod 2026-10-01**: 2 rows soft-deleted, the mandated
   re-run prints 0, and a direct query confirms 0 duplicate groups table-wide. **1d is unblocked, but
-  re-run the duplicate query immediately before merging it** — procedure in [runbooks.md](../runbooks.md). The read also answered
-  CSV-1's blocking question for free: prod has **zero `kg` rows**, so that P0 is now a pure app fix.
+  re-run the duplicate query immediately before merging it** — procedure in
+  [runbooks.md](../runbooks.md). The read also answered CSV-1's blocking question for free: prod has **zero `kg` rows**, so that P0 is now a pure app fix.

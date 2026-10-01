@@ -14,8 +14,9 @@ token-pinned guard, re-checks the keeper under a row lock, and asserts the day e
 live weight before committing — rehearsed 20/20 on an ephemeral Postgres
 ([plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"). **No bodyweight value is
 committed:** `.github/SECURITY.md` makes kid bodyweight privileged and this repo is public, so the
-`updated_at` token does the guard's job instead (Decision 20). **Applied 2026-10-01 15:13 UTC**: 2 rows soft-deleted, the mandated re-run prints 0, and a direct
-query confirms 0 duplicate groups table-wide. **PR 1d's unique index is unblocked** — re-run the
+`updated_at` token does the guard's job instead (Decision 20). **Applied 2026-10-01 15:13 UTC**: 2
+rows soft-deleted, the mandated re-run prints 0, and a direct query confirms 0 duplicate groups
+table-wide. **PR 1d's unique index is unblocked** — re-run the
 duplicate query immediately before merging it, since nothing stops a new duplicate until 1e moves the
 `ON CONFLICT` arbiter ([runbooks](./runbooks.md)).
 
