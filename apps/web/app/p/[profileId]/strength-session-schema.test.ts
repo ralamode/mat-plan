@@ -1,10 +1,12 @@
 import {
   ENTRY_STATUS,
   ENTRY_STATUSES,
+  LOGGABLE_UNITS,
   logStrengthSessionSchema,
   MOVEMENT_STATUSES,
   movementSlug,
   newId,
+  UNIT_CODES,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -270,5 +272,58 @@ describe('logStrengthSessionSchema — skipped movements (GAP-1 P1-1a)', () => {
   it('MOVEMENT_STATUSES is a strict subset of ENTRY_STATUSES', () => {
     expect(ENTRY_STATUSES).toEqual(expect.arrayContaining([...MOVEMENT_STATUSES]));
     expect(MOVEMENT_STATUSES).not.toContain(ENTRY_STATUS.sub_failure);
+  });
+});
+
+describe('logStrengthSessionSchema — every loggable unit is accepted (V1-30)', () => {
+  // Built from the shared lists, never re-typed (AGENTS.md → constants). The one literal pin of the
+  // non-loggable set lives next to the chain test in packages/shared/src/units.test.ts.
+  const NON_LOGGABLE = UNIT_CODES.filter((u) => !LOGGABLE_UNITS.includes(u));
+  const oneMovement = (unit: string, set: Record<string, unknown>) =>
+    base({ movements: [{ ...move({ clientId: newId() }), unit, sets: [set] }] });
+
+  it.each(LOGGABLE_UNITS)('accepts a movement logged in %s', (unit) => {
+    const res = logStrengthSessionSchema.safeParse(oneMovement(unit, { reps: 1, weight: '30' }));
+    expect(res.success).toBe(true);
+  });
+
+  it.each([...NON_LOGGABLE, 'furlong'])('rejects a movement logged in %s', (unit) => {
+    const res = logStrengthSessionSchema.safeParse(oneMovement(unit, { reps: 1, weight: '30' }));
+    expect(res.success).toBe(false);
+  });
+});
+
+describe('logStrengthSessionSchema — a time or distance set carries its number, never a mode (V1-30)', () => {
+  const issuesFor = (unit: string, set: Record<string, unknown>) => {
+    const res = logStrengthSessionSchema.safeParse(
+      base({ movements: [{ ...move({ clientId: newId() }), unit, sets: [set] }] }),
+    );
+    return res.success ? [] : res.error.issues;
+  };
+
+  it('accepts 30 sec', () => {
+    expect(issuesFor('sec', { reps: 1, weight: '30' })).toEqual([]);
+  });
+
+  it.each([
+    ['sec', { reps: 3, isBodyweight: true }, 'time'],
+    ['sec', { reps: 3, isBodyweight: true, weight: '30' }, 'time'],
+    ['m', { reps: 3, isBand: true }, 'height or distance'],
+  ])('rejects %s with %o — exactly one message, on the set', (unit, set, dimension) => {
+    const issues = issuesFor(unit, set);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ path: ['movements', 0, 'sets', 0, 'weight'] });
+    expect(issues[0]!.message).toContain('Turn off BW / band');
+    expect(issues[0]!.message).toContain(dimension);
+  });
+
+  it('a blank time set gets exactly one message (the set check’s), with no BW advice', () => {
+    const issues = issuesFor('sec', { reps: 3 });
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.message).not.toMatch(/BW/);
+  });
+
+  it('BW alone is still a valid MASS set', () => {
+    expect(issuesFor('lb', { reps: 10, isBodyweight: true })).toEqual([]);
   });
 });

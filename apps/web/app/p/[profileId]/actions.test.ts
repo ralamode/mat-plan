@@ -249,7 +249,7 @@ function strengthForm(opts: {
     unit?: string;
     clientId?: string;
     status?: string;
-    sets: Array<{ reps: string; weight: string }>;
+    sets: Array<{ reps: string; weight?: string; isBodyweight?: boolean; isBand?: boolean }>;
   }>;
   movementsRaw?: string;
 }): FormData {
@@ -314,6 +314,64 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  // V1-30: the form offers every LOGGABLE unit; the server must accept each, and the DAL must receive
+  // the unit the athlete chose. Before the fix only lb/kg got through.
+  it('accepts lb, kg, sec and m movements and hands each unit to the DAL', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
+          { unit: 'kg', sets: [{ reps: '5', weight: '60' }] },
+          { unit: 'sec', sets: [{ reps: '1', weight: '30' }] },
+          { unit: 'm', sets: [{ reps: '1', weight: '20' }] },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
+      movements: [{ unit: 'lb' }, { unit: 'kg' }, { unit: 'sec' }, { unit: 'm' }],
+    });
+  });
+
+  it('rejects a unit no form offers (count) without touching the DAL', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ unit: 'count', sets: [{ reps: '5', weight: '5' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Movement 1: /);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('names the movement AND the set when BW is tapped on a timed hold', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
+          {
+            unit: 'sec',
+            sets: [
+              { reps: '1', weight: '30' },
+              { reps: '1', isBodyweight: true },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements).toEqual([
+      expect.stringMatching(/^Movement 2, set 2: Turn off BW \/ band/),
+    ]);
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
