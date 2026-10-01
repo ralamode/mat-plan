@@ -17,15 +17,15 @@ came out of writing it down.
 
 ### P0
 
-| #   | What                                                                                                         | Row(s)                    | State                                                                                                                              |
-| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Anything blocking**                                                                                        | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
-| 2   | **Open bugs**                                                                                                | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
-| 3   | **Logged forms look complete**                                                                               | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). 1a ✅ #180 · 1b ✅ #192 · **1c next**.        |
-| 4   | **Athlete editor** — add/remove from the dashboard, new households start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                         |
-| 5   | **Edit programs, and choose which days they run**                                                            | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
-| 6   | **OAuth login (Google / Facebook)**                                                                          | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
-| 7   | **Streaks on the athlete card**                                                                              | **MOT-1** (picker half)   |                                                                                                                                    |
+| #   | What                                                                                                         | Row(s)                    | State                                                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Anything blocking**                                                                                        | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                                     |
+| 2   | **Open bugs**                                                                                                | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss.       |
+| 3   | **Logged forms look complete**                                                                               | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). 1a ✅ #180 · 1b ✅ #192 · 1c ✅ #200 · **1d next**. |
+| 4   | **Athlete editor** — add/remove from the dashboard, new households start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                               |
+| 5   | **Edit programs, and choose which days they run**                                                            | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                        |
+| 6   | **OAuth login (Google / Facebook)**                                                                          | **new — AUTH-1**          | Replaces the shared access code.                                                                                                         |
+| 7   | **Streaks on the athlete card**                                                                              | **MOT-1** (picker half)   |                                                                                                                                          |
 
 ### P1
 
@@ -884,7 +884,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
 - **V1-24 — the form IS the day's state: edit what you already logged.**
   **PR 1a ✅** (the receipt, read-only — removes the second-submit path through the UI; concurrent
   mounts can still duplicate until 1d) · **PR 1b ✅** (the amend — a logged weight is correctable, on
-  every day including closed ones) · **PR 1c ✅ written, pending `--apply`** (the duplicate-row
+  every day including closed ones) · **PR 1c ✅ applied 2026-10-01** (the duplicate-row
   correction: the prod read is committed in the plan — one group, Liam 2026-09-30, keeper named by
   Ray). **Next: 1d** (the bodyweight-scoped unique index, **now slot-ready for V1-32**: it adds
   `context` and keys on `(profile, day, context)`; see the plan's 2026-09-30 amendment), then 1e (the
