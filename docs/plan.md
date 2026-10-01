@@ -11,17 +11,21 @@ Making the repo public reframed the backlog: **"someone who is not Ray can use t
 a v1.5 concern and became the headline. The list below is Ray's, with the sequencing findings that
 came out of writing it down.
 
+> **Sequenced as a milestone:** [Beta](./milestones/beta-1.md) orders these rows (plus the ops,
+> tenancy and privacy work a second family needs) into **Beta 0** (one invited family) and **Beta 1**
+> (3–5 families), with exit criteria. When the two disagree on order, the milestone wins.
+
 ### P0
 
-| #   | What                                                                                                                          | Row(s)                    | State                                                                                                                              |
-| --- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Anything blocking**                                                                                                         | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
-| 2   | **Open bugs**                                                                                                                 | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
-| 3   | **Logged forms look complete**                                                                                                | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
-| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on [The Daily Five](../programs/daily-five-default.md) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
-| 5   | **Edit programs, and choose which days they run**                                                                             | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
-| 6   | **OAuth login (Google / Facebook)**                                                                                           | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
-| 7   | **Streaks on the athlete card**                                                                                               | **MOT-1** (picker half)   |                                                                                                                                    |
+| #   | What                                                                                                       | Row(s)                    | State                                                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Anything blocking**                                                                                      | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
+| 2   | **Open bugs**                                                                                              | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
+| 3   | **Logged forms look complete**                                                                             | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
+| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (branch `docs/onb-2-daily-five`).                                                               |
+| 5   | **Edit programs, and choose which days they run**                                                          | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
+| 6   | **OAuth login (Google / Facebook)**                                                                        | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
+| 7   | **Streaks on the athlete card**                                                                            | **MOT-1** (picker half)   |                                                                                                                                    |
 
 ### P1
 
@@ -152,7 +156,10 @@ NL logging via Anthropic structured outputs → human-confirm chip → write, wi
   the measurement columns AI-1 extracts into**, so AI-1 sequences **behind GAP-3**: legacy CSV samples
   → GAP-3 plan + panels → GAP-3 → V1-13 → AI-1. Rationale + the two rejected alternatives: plan **S5**.
 
-## v1.5 — offline + auth (the local-first / distributed-systems phase, isolated)
+## v1.5 — offline (the local-first / distributed-systems phase, isolated)
+
+> **Auth moved out of v1.5** (2026-09-30): Clerk login is pulled forward to [AUTH-1](#auth-1) in
+> [Beta 0](./milestones/beta-1.md). The Clerk step below is kept for history.
 
 PWA manifest+SW → Dexie append-outbox → TanStack Query offline reads → per-event-UUID `POST /api/sync`
 (LWW comparing client timestamp) → sync-status badge → **Clerk household login** (`pin_hash` column
@@ -402,6 +409,43 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   merged. **Fix:** add the last ~5 lines of
   `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
   Small; no plan needed.
+
+## BETA — share with other families ([milestone](./milestones/beta-1.md))
+
+Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
+
+- **ONB-2 — new athletes start on The Daily Five.** <a id="onb-2"></a> A daily program (no A/B rotation,
+  no weekday map), so a new household needs no scheduling to start. The draft lives on branch
+  `docs/onb-2-daily-five`, which **also carries pre-rewrite history with the minors' roster** — rescue
+  the draft onto a fresh branch from `main`, then delete that branch. _(Beta 0.)_
+- **OPS-1 — previews hold neither production data nor production credentials.** Today every Vercel
+  preview gets the prod `DATABASE_URL` ([deploy.md](./deploy.md)). Previews get a seed-only database
+  (never a branch of prod, which would clone every family's data), the Preview scope holds no
+  production secret (separate Clerk dev instance, Upstash, Sentry DSN), and Vercel's fork-PR protection
+  is verified on. _(Beta 0.)_
+- **OPS-2 — split the seed: reference data for prod, fixtures for dev/CI.** `migrate.yml` seeds prod on
+  every push; the seed writes Ray's family with public fixed UUIDs and re-creates them if deleted, and
+  expands ramp targets over every kid in the database. Split into `seedReference` and `seedFixtures`;
+  keep `PROGRAM_SEED` reaching prod until V1-22; scope ramp targets by household. _(Beta 0.)_
+- **OPS-3 — restore one household from backup, rehearsed.** The runbook's restore section is a TODO.
+  Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
+  point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
+  drill branch. _(Beta 0.)_
+- **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
+  every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to Ray's household;
+  AUTH-1 swaps its implementation. `db:verify` proves a second household cannot read, write, correct or
+  export the first's data, at every entry point, including `findOrCreateMovementId`. Needs the
+  household-addressing ADR first. _(Beta 0.)_
+- **TEN-2 — custom movements per household.** `movements.slug` is globally unique and
+  `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
+  `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
+  Three PRs. _(Beta 0 if TEN-1 can't prove the catalog stays per household; else Beta 1.)_
+- **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires
+  (multiple families + third-party processors). A notice listing data and processors, consent at
+  sign-up, a written retention policy, a defined deletion (hard delete + Clerk users, residuals stated),
+  run as a guarded correction for Beta 0 and self-serve with step-up in Beta 1, and SECURITY.md's
+  threat model rewritten for many households. Signed off by a named reviewer; not legal advice.
+  _(Beta 0.)_
 
 ## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
 
@@ -888,7 +932,10 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   authors into. HH-1 can land the routing _before_ Clerk — the household id in the path is useful with
   the access gate alone, and it decouples the URL decision from v1.5's auth work.
 
-- **AUTH-1 — OAuth login (Google / Facebook).** _(Ray, 2026-09-30, P0 — new.)_ Replaces the shared
+- **AUTH-1 — OAuth login (Google / Facebook).** _(Ray, 2026-09-30, P0 — new.)_ **Narrowed the same day for
+  [Beta 0](./milestones/beta-1.md): Google only, via Clerk, sign-up invitation-only; Ray's existing
+  household is claimed by a guarded correction before the gate goes; a `household_members` table;
+  every entry point rejects a caller with no session. Facebook waits for a tester to ask.** Replaces the shared
   access code with per-person identity.
 
   **Why it became P0 the day the repo went public:** the access gate is a single shared password, and
