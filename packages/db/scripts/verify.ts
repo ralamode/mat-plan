@@ -1083,6 +1083,24 @@ assert.equal(
 assert.equal(Number(dalPush.target), 45, 'V1-6b-2: pushups target = 45');
 assert.equal(dalPush.label, 'Push-ups', 'V1-6b-2: label comes from the metric_definitions join');
 
+// DAL-1: a soft-deleted profile owns no adherence rows (the same `isLiveProfile` scope as the day
+// read). Restored straight after.
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.profiles.id, rampTestProfile.id));
+const deadProfileAdherence = await weeklyAdherenceRows(asPg, {
+  profilePublicId: RAMP_TEST_PROFILE_PUBLIC_ID,
+  weekStart: RAMP_TEST_WEEK_START,
+  activityTypeId: calisthenicsId,
+  metricKeys: CALISTHENICS_METRIC_KEYS,
+});
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: null })
+  .where(eq(schema.profiles.id, rampTestProfile.id));
+assert.equal(deadProfileAdherence.length, 0, 'DAL-1: a soft-deleted profile has no adherence rows');
+
 const dalVsit = dalByMetric.get(METRIC_KEYS.vsit_skill_step);
 assert.ok(dalVsit, 'V1-6b-2: vsit_skill_step row present');
 assert.equal(assertRollupAggregation(dalVsit.aggregation as MetricAggregation), 'max');
