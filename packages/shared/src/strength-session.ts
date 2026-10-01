@@ -7,11 +7,16 @@ import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
 import { strengthSetSchema } from './strength';
 import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
 import {
-  LOGGABLE_DIMENSION_LABELS,
+  isMassUnit,
+  LOGGABLE_DIMENSION_NOUNS,
   loggableUnitSchema,
-  UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
 } from './units';
+
+/** The copy when BW / band is tapped on a time or a distance (V1-30). Exported so tests assert
+ *  through it rather than re-typing it. */
+export const modeNotApplicableMessage = (noun: string) =>
+  `Turn off BW / band — they don’t apply to a ${noun}.`;
 
 /** Max movements per session, and max supersets (each needs ≥2 of the movements → floor(N/2)). Named
  *  so the derivation is expressed in code, not two magic numbers that can drift. */
@@ -47,8 +52,7 @@ export const sessionMovementSchema = z.object({
       (v) => !hasCommaOrLineBreak(v),
       'A movement name can’t contain a comma or a line break.',
     ),
-  // V1-30: every unit the form's Measuring picker offers. Was `BODYWEIGHT_UNITS` (lb/kg), which made
-  // a timed hold or a distance fail the whole session since #141.
+  // Every unit the form's Measuring picker offers (V1-30; the chain test in units.test.ts).
   unit: loggableUnitSchema,
   clientId: uuidSchema,
   // GAP-1 P1-1a. `skipped` means a human SAID the movement was skipped — never inferred from an empty
@@ -234,17 +238,14 @@ export const logStrengthSessionSchema = z
     // set's `weight` path. A BLANK set with no mode is already rejected by the set refine, so it is
     // not re-checked here: every bad set gets exactly one message.
     for (const [i, m] of val.movements.entries()) {
-      const dimension = UNIT_DIMENSION_BY_CODE[m.unit];
-      if (dimension === UNIT_DIMENSION.mass) continue;
-      const what = (LOGGABLE_DIMENSION_LABELS[dimension] ?? dimension)
-        .toLowerCase()
-        .replace(' / ', ' or ');
+      if (isMassUnit(m.unit)) continue;
+      const noun = LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[m.unit]] ?? 'this measurement';
       for (const [j, set] of m.sets.entries()) {
         if (set.isBodyweight || set.isBand) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['movements', i, 'sets', j, 'weight'],
-            message: `Turn off BW / band — they don’t apply to a ${what}.`,
+            message: modeNotApplicableMessage(noun),
           });
         }
       }

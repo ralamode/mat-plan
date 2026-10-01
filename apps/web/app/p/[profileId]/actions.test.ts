@@ -2,7 +2,9 @@ import {
   ACTIVITY_TYPE_KEYS,
   BODYWEIGHT_UNITS,
   FREE_TEXT_NOTE_MAX,
+  LOGGABLE_DIMENSION_NOUNS,
   METRIC_KEYS,
+  modeNotApplicableMessage,
   newId,
   ROUTINE_VERSION,
 } from '@mat-plan/shared';
@@ -370,7 +372,7 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     );
     expect(res.ok).toBe(false);
     expect(res.fieldErrors?.movements).toEqual([
-      expect.stringMatching(/^Movement 2, set 2: Turn off BW \/ band/),
+      `Movement 2, set 2: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
     ]);
     expect(logStrengthSession).not.toHaveBeenCalled();
   });

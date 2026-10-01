@@ -11,6 +11,7 @@ owns:
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
   - packages/shared/src/quantity-slots.ts
+  - packages/shared/src/units.ts
   - packages/db/src/writers/strength-session.ts
 ---
 
@@ -104,6 +105,13 @@ regresses.
    no delete action in this app.** This was `parseLoad`'s first branch until PR 4a split the load
    across three fields, which removed the single-field invariant and made the rule explicit.
 
+   **On a time or distance the rule is split across two files (V1-30)**, because a mode is not a load
+   there: the set refine (`strength.ts`) rejects a BLANK set with no mode, and the session refine
+   (`strength-session.ts`, check 6) rejects BW / band, where it can see the movement's unit. Each
+   skips the other's case, which is what gives exactly one message per FAULT, each naming its set
+   (a BW set with an out-of-range number has two faults and gets two messages). Moving the blank
+   check into the session refine would double it (probed by the V1-30 panel).
+
    **Corollary: `required` on the weight input must be FALSE whenever a mode is toggled.** A
    `required` field that must be empty blocks the native submit with an invisible error — see Traps.
 
@@ -123,9 +131,9 @@ then offers only `loggableUnitsOf(d)`, which makes a squat-logged-in-seconds **u
 deliberate change of Measuring), not impossible. **The athlete picks the dimension; the catalog's
 `unit_default` only seeds it**, and the server never checks one against the other (ADR 0004
 addendum, V1-30). **Offerable ⊆ accepted ⊆ exportable** is enforced by the chain test in
-`packages/shared/src/units.test.ts`, which runs the wired `sessionMovementSchema.shape.unit`.
-V1-30 was this chain broken: the form offered 9 units, the server accepted 2 and the export wrote 4. On a non-mass movement BW / band are refused (one message per set): they are modes of a
-weight.
+`packages/shared/src/units.test.ts`, which runs the wired `sessionMovementSchema.shape.unit`
+([V1-30 plan](../plans/v1-30-loggable-units.md)). On a non-mass movement BW / band are refused: they
+are modes of a weight (see invariant 2 for where each half of that lives).
 
 5. **A quantity's unit is guarded by TWO composite FKs sharing its `dimension` column.** `lb` in a
    box-jump height is rejected by the database. The writer must therefore derive `dimension` from the

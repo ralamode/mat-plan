@@ -125,11 +125,9 @@ export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] =
 export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
 
 /**
- * The movement unit the write path accepts (V1-30). Exactly `LOGGABLE_UNITS`, so "every unit the
- * form offers is one the server accepts" holds by construction. Before V1-30 the session schema used
- * `BODYWEIGHT_UNITS` (lb/kg) and rejected the other 7 units the form offered. zod 4 takes the
- * widened `readonly Unit[]` and still infers `Unit`. The chain test (`units.test.ts`) also requires
- * every option to be exportable.
+ * The movement unit the write path accepts: exactly `LOGGABLE_UNITS`. zod 4 takes the widened
+ * `readonly Unit[]` and still infers `Unit`. The chain test (`units.test.ts`) holds it to the form on
+ * one side and the export on the other (docs/plans/v1-30-loggable-units.md).
  */
 export const loggableUnitSchema = z.enum(LOGGABLE_UNITS);
 
@@ -157,3 +155,19 @@ export const LOGGABLE_DIMENSION_LABELS: Record<string, string> = {
   length: 'Height / distance',
   time: 'Time',
 };
+
+/**
+ * The same dimensions as a noun for running copy ("…don't apply to a TIME"). Its own map, not the
+ * label rewritten by string surgery, so respelling a label can't silently garble an error message.
+ * `units.test.ts` requires a noun for every loggable dimension.
+ */
+export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = {
+  mass: 'weight',
+  length: 'height or distance',
+  time: 'time',
+};
+
+/** Is this unit a weight? The one spelling of the check (`csv/load.ts` and `set-display.ts` too). */
+export function isMassUnit(unit: Unit): boolean {
+  return UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass;
+}

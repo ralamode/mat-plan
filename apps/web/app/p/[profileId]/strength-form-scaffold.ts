@@ -1,12 +1,11 @@
 import {
   type BodyweightUnit,
   isLoggableUnit,
+  isMassUnit,
   MAX_SESSION_MOVEMENTS,
   MAX_SETS_PER_MOVEMENT,
   newId,
   type Unit,
-  UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 
 import type { MovementVals } from './strength-form';
@@ -88,7 +87,7 @@ export function scaffoldMovements(
      * because the server has the catalog and does not need the form to tell it.
      */
     // A MASS unit (AUDIT-1 P2-2): "loaded" means weighted. A declared `sec` hold is not loaded, and a
-    // BW hint there would be noise. Same idiom as `set-display.ts` and `csv/load.ts`.
+    // BW hint there would be noise.
     declaredLoaded: row.isBodyweight === false && declaredMass(row.unitDefault),
     // Never 0 rows: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
     // (`[].every(...)` is true), and a non-skipped movement with no sets fails the schema anyway.
@@ -142,7 +141,7 @@ function declaredUnit(unitDefault: string | null): Unit | undefined {
 
 function declaredMass(unitDefault: string | null): boolean {
   const unit = declaredUnit(unitDefault);
-  return unit !== undefined && UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass;
+  return unit !== undefined && isMassUnit(unit);
 }
 
 /** Prescribed sets → set-row count, clamped to what the session schema will accept. */

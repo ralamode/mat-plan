@@ -1,12 +1,17 @@
 import {
+  BLANK_SET_MESSAGE,
   ENTRY_STATUS,
   ENTRY_STATUSES,
+  LOGGABLE_DIMENSION_NOUNS,
   LOGGABLE_UNITS,
   logStrengthSessionSchema,
+  modeNotApplicableMessage,
   MOVEMENT_STATUSES,
   movementSlug,
   newId,
+  type Unit,
   UNIT_CODES,
+  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -294,7 +299,7 @@ describe('logStrengthSessionSchema — every loggable unit is accepted (V1-30)',
 });
 
 describe('logStrengthSessionSchema — a time or distance set carries its number, never a mode (V1-30)', () => {
-  const issuesFor = (unit: string, set: Record<string, unknown>) => {
+  const issuesFor = (unit: Unit, set: Record<string, unknown>) => {
     const res = logStrengthSessionSchema.safeParse(
       base({ movements: [{ ...move({ clientId: newId() }), unit, sets: [set] }] }),
     );
@@ -305,22 +310,23 @@ describe('logStrengthSessionSchema — a time or distance set carries its number
     expect(issuesFor('sec', { reps: 1, weight: '30' })).toEqual([]);
   });
 
-  it.each([
-    ['sec', { reps: 3, isBodyweight: true }, 'time'],
-    ['sec', { reps: 3, isBodyweight: true, weight: '30' }, 'time'],
-    ['m', { reps: 3, isBand: true }, 'height or distance'],
-  ])('rejects %s with %o — exactly one message, on the set', (unit, set, dimension) => {
+  it.each<[Unit, Record<string, unknown>]>([
+    ['sec', { reps: 3, isBodyweight: true }],
+    ['sec', { reps: 3, isBodyweight: true, weight: '30' }],
+    ['m', { reps: 3, isBand: true }],
+  ])('rejects %s with %o — exactly one message, on the set', (unit, set) => {
     const issues = issuesFor(unit, set);
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatchObject({ path: ['movements', 0, 'sets', 0, 'weight'] });
-    expect(issues[0]!.message).toContain('Turn off BW / band');
-    expect(issues[0]!.message).toContain(dimension);
+    expect(issues[0]).toMatchObject({
+      path: ['movements', 0, 'sets', 0, 'weight'],
+      message: modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]]!),
+    });
   });
 
   it('a blank time set gets exactly one message (the set check’s), with no BW advice', () => {
     const issues = issuesFor('sec', { reps: 3 });
     expect(issues).toHaveLength(1);
-    expect(issues[0]!.message).not.toMatch(/BW/);
+    expect(issues[0]!.message).toBe(BLANK_SET_MESSAGE);
   });
 
   it('BW alone is still a valid MASS set', () => {

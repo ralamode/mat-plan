@@ -712,16 +712,17 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
 - **V1-30 — the log form offers units the server rejects.** ✅ **30a** (every offered unit saves and exports; BW/band refused on a time or distance) · 📋 [**plan**](./plans/v1-30-loggable-units.md). 🔴 **P0, reported 2026-09-30** by the
   `review-pr` run on #171: the strength form offers 9 units and the server's schema rejects 7 of them
-  (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit. Not yet
-  reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
-  review so it isn't carried only by a changelog line.
+  (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit.
+  Reproduced by #201's red-first commit; filed from #176's review.
 
 - **V1-30b — the form stops inviting the shapes V1-30a refuses.** 🟡 Filed 2026-10-01 from the V1-30
   UX lens ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
   Hide BW / band on a time or distance movement and clear them when Measuring changes; label the field
   `time` / `distance` instead of `weight` (placeholder and aria-label); per-dimension blank copy
   ("Enter the time."); a hint when Measuring differs from the catalog's dimension; `step="0.5"` blocks
-  `6.25 ft`. A UI PR: a UX reviewer plus screenshots.
+  `6.25 ft`; the shared 2000 cap now refuses a real 2-mile run in metres (3219) or a 40-minute hold in
+  `sec` as "too high" (per-dimension caps, copy "check the unit"); history shows raw codes (`20 m`)
+  where the picker says "Metres". A UI PR: a UX reviewer plus screenshots.
 
 - **V1-33 — time and distance sets can't be edited.** 🟡 Filed 2026-10-01 (V1-30 UX lens). The edit
   guard is mass-only (form and SQL, invariant 3), so a `300 sec` typo needs a hand-written correction.

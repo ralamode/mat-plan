@@ -1,4 +1,5 @@
 import {
+  BLANK_SET_MESSAGE,
   editStrengthSetSchema,
   ENTRY_STATUS,
   ENTRY_STATUSES,
@@ -154,8 +155,7 @@ describe('strengthSetSchema — a set must carry SOME load (replaces parseLoad b
     const r = strengthSetSchema.safeParse({ reps: '5' });
     expect(r.success).toBe(false);
     const issue = r.success ? undefined : r.error.issues.find((i) => i.path[0] === 'weight');
-    // Unit-neutral since V1-30: this set may be a time or a distance, where BW / band are refused.
-    expect(issue?.message).toBe('Enter a number.');
+    expect(issue?.message).toBe(BLANK_SET_MESSAGE);
   });
 
   it('REJECTS an explicitly blank weight with no mode', () => {

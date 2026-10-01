@@ -298,8 +298,13 @@ export async function logStrengthSessionAction(
       // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
       // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
       // (a multi-card form otherwise shows an unlocatable "reps must be positive").
+      // Sorted by (movement, set), so the banner reads top-to-bottom like the form: the set refine's
+      // issues and the session refine's would otherwise arrive grouped by which check raised them.
+      const at = (i: { path: PropertyKey[] }, k: number) =>
+        typeof i.path[k] === 'number' ? (i.path[k] as number) : -1;
       const movementMsgs = parsed.error.issues
         .filter((i) => i.path[0] === 'movements')
+        .sort((a, b) => at(a, 1) - at(b, 1) || at(a, 3) - at(b, 3))
         .map((i) => {
           if (typeof i.path[1] !== 'number') return i.message;
           // V1-30: name the SET too when the issue sits on one, so three bad sets read as three

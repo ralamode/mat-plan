@@ -64,8 +64,7 @@ export function buildLoad(set: ExportSet, context: string): string {
   //
   //   a WORN MASS attaches to the head with `+` and names its slot, because a bare `(8)` would be
   //   meaningless        →  BW+8 (vest)     — no spaces around the `+`, the contract is explicit
-  //   It carries its unit suffix like the primary does (`lb` bare, `BW+8kg (vest)`). Writing the bare
-  //   number here was safe only while `kg` threw; after V1-30 it would read an 8 kg vest as 8 lb.
+  //   It carries its unit suffix like the primary (`BW+8kg (vest)`); a bare kg would read as pounds.
   //
   //   a LENGTH is self-describing, because its unit says what it is
   //                      →  123 (50ft)

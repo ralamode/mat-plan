@@ -110,8 +110,6 @@ the app defines them, following the corpus pattern (value + unit code, no space)
 | `yd`  | `40yd`                  | No space (the `40 yd` in `prescribed` is free text).                |
 | `min` | `3min`                  | **Minutes**.                                                        |
 
-A worn mass carries its unit like the primary: `BW+8 (vest)` in pounds, `BW+8kg (vest)` in kilograms.
-
 ### Timed movements — easy to get wrong
 
 **Duration goes in `load`; `reps` is `1`, not the seconds.**
@@ -217,5 +215,5 @@ its bytes. The reader is an external workflow, so each entry names what that wor
 
 - **2026-10-01 — V1-30:** `load` can now carry `kg`, `cm`, `m` (metres), `yd` and `min` (minutes),
   as above, and a `kg` worn mass is suffixed (`BW+8kg (vest)`). Before this, a set in any of those
-  units made the export throw. **Workflow:** the external `strength-log/README.md` `load` bullet lists
-  the new suffixes. A bare number is still pounds.
+  units made the export throw. **Workflow:** the external `strength-log/README.md` `load` bullet must
+  list the new suffixes. A bare number is still pounds.

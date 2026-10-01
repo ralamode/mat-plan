@@ -28,6 +28,13 @@ export const numericSetSchema = z.object({
 });
 
 /**
+ * A set with no number and no mode. Unit-neutral since V1-30: this set may be a time or a distance,
+ * where BW / band are refused (the session refine), so "or tap BW / band" would point at a button
+ * that fails. Exported so tests assert through it.
+ */
+export const BLANK_SET_MESSAGE = 'Enter a number.';
+
+/**
  * One set as the LOG form submits it.
  *
  * **GAP-3 PR 4a — the form stopped describing a load in prose and started naming its parts.** It used
@@ -105,9 +112,7 @@ export const strengthSetSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['weight'],
-        // Unit-neutral since V1-30: this set may be a time or a distance, where BW / band are refused
-        // (the session refine), so the old "or tap BW / band" sent a kid to the button that fails.
-        message: 'Enter a number.',
+        message: BLANK_SET_MESSAGE,
       });
     }
   });
