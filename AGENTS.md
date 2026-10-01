@@ -47,7 +47,8 @@ never live prescriptions.
   v2. The progression engine is **pure TS** (`packages/engine`, no DB/IO). Python/FastAPI only at v3.
 - **DB:** Postgres on **Neon** + **Drizzle**. Runtime = pooled string + `pg`/node-postgres through
   PgBouncer, **Node runtime**, Fluid `attachDatabasePool`. Migrations = direct/unpooled string.
-- **Auth:** Clerk (household login) from v1.5; access-gate stopgap before that. Profile tiles are a
+- **Auth:** Clerk (household login, Google) from Beta 0 (AUTH-1, pulled forward from v1.5 —
+  [milestone](./docs/milestones/beta-1.md)); access-gate stopgap before that. Profile tiles are a
   UX switch, **not** a security boundary.
 - **Host / CI:** Vercel + GitHub Actions + Playwright.
 
@@ -61,7 +62,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
 - **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that _must_
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
-- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `design.md`,
+- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `milestones/` (cross-PR milestones: order + exit criteria), `design.md`,
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
   (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
