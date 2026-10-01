@@ -780,6 +780,12 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   timeout or dropped connection inside a bodyweight write ships the value to a third party
   (SECURITY.md → Logging). **Fix:** cut each exception value at `\nparams:` (and drop `params` keys
   from `extra`/`contexts`) in `scrubSentryEvent`, with a test built on a real `DrizzleQueryError`.
+- **SEC-4 — `safeInternalPath` accepts only same-origin paths.** ✅ Found 2026-09-30 by #193's security
+  lens. The shared redirect helper (the gate page and the gate Server Action) checked only for a single
+  leading slash, but the URL parser rewrites `\` to `/` and drops tab/CR/LF, so some single-slash
+  paths resolve to another origin. It now rejects backslashes and control characters (raw or
+  percent-encoded) and requires the path to resolve to the same origin. Fixed before AUTH-1 or an
+  invite flow reuses the helper.
 
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is

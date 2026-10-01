@@ -69,7 +69,26 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
     ['an empty string', ''],
     ['null', null],
     ['undefined', undefined],
+    // SEC-4: a leading single slash is not enough — the URL parser treats `\\` as `/` and
+    // drops tab/CR/LF, so these all resolve to another origin.
+    ['a backslash after the slash', '/\\evil.com'],
+    ['a percent-encoded backslash', '/%5Cevil.com'],
+    ['a tab between the slashes', '/\t/evil.com'],
+    ['a newline between the slashes', '/\n/evil.com'],
+    ['a percent-encoded second slash', '/%2F%2Fevil.com'],
+    ['a percent-encoded slash pair', '/%2f/evil.com'],
+    ['a javascript: URL', 'javascript:alert(1)'],
+    ['a malformed escape', '/%E0%A4%A'],
   ])('clamps %s to the root', (_label, value) => {
     expect(safeInternalPath(value)).toBe('/');
+  });
+
+  it.each([
+    ['the root', '/'],
+    ['a profile page', '/p/019826b4-0000-7000-8000-000000000001'],
+    ['a dated routine page', '/p/019826b4-0000-7000-8000-000000000001/routine?d=2026-09-30'],
+    ['an encoded space', '/p/a%20b'],
+  ])('keeps %s', (_label, value) => {
+    expect(safeInternalPath(value)).toBe(value);
   });
 });
