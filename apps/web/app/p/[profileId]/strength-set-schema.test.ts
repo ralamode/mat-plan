@@ -1,9 +1,11 @@
 import {
+  BLANK_SET_MESSAGE,
   editStrengthSetSchema,
   ENTRY_STATUS,
   ENTRY_STATUSES,
   LOGGABLE_DIMENSIONS,
   LOGGABLE_UNITS,
+  NUMBER_TOO_HIGH_MESSAGE,
   numericSetSchema,
   QUANTITY_SLOT,
   QUANTITY_SLOT_DIMENSIONS_BY_CODE,
@@ -154,7 +156,7 @@ describe('strengthSetSchema — a set must carry SOME load (replaces parseLoad b
     const r = strengthSetSchema.safeParse({ reps: '5' });
     expect(r.success).toBe(false);
     const issue = r.success ? undefined : r.error.issues.find((i) => i.path[0] === 'weight');
-    expect(issue?.message ?? '').toMatch(/weight|BW/i);
+    expect(issue?.message).toBe(BLANK_SET_MESSAGE);
   });
 
   it('REJECTS an explicitly blank weight with no mode', () => {
@@ -213,5 +215,15 @@ describe('LOGGABLE_UNITS is DERIVED, so it cannot drift from the slot vocabulary
     for (const u of ['count', 'bool', 'timing'] as const) {
       expect(LOGGABLE_UNITS).not.toContain(u);
     }
+  });
+});
+
+describe('strengthSetSchema — the ceiling names the likely cause (V1-30 review)', () => {
+  it('refuses a number over the ceiling with the check-the-unit copy', () => {
+    const res = strengthSetSchema.safeParse({ reps: '1', weight: '3200' });
+    expect(res.success).toBe(false);
+    expect(res.success ? [] : res.error.issues.map((i) => i.message)).toContain(
+      NUMBER_TOO_HIGH_MESSAGE,
+    );
   });
 });

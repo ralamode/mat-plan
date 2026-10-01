@@ -29,8 +29,8 @@ export function formatNumeric(value: string | number): string {
  * place that catches it before the export silently invents a shape.
  *
  * Two rules the corpus fixes and a naive `${value}${unit}` gets wrong:
- * - **Mass is BARE.** Every legacy load number is unit-less and means pounds — `80`, `65/65/65`,
- *   `123 (50ft)`. There is no `80lb` anywhere.
+ * - **Pounds are BARE.** Every legacy load number is unit-less and means pounds — `80`, `65/65/65`,
+ *   `123 (50ft)`. There is no `80lb` anywhere. (`kg` is therefore suffixed, never bare; see below.)
  * - **Seconds is `s`, not `sec`.** The unit CODE is `sec`; the corpus writes `20s` / `30s`. Naive
  *   concatenation emits `20sec` and the diff fails. (Caught by the engineering panel.)
  */
@@ -39,14 +39,15 @@ export const CSV_UNIT_SUFFIX: Record<Unit, string | null> = {
   in: 'in', // 30in / 36in, no space
   ft: 'ft', // 50ft
   sec: 's', // 20s — NOT `sec`
-  // Everything below has no legacy spelling, because nothing was ever logged in it. `null` means
-  // "this unit cannot appear in a load", which `assertExportableUnit` turns into a loud refusal
-  // rather than a plausible-looking wrong number.
-  kg: null,
-  cm: null,
-  m: null,
-  yd: null,
-  min: null,
+  // APP-DEFINED (V1-30): no corpus spelling exists. The rules (`kg` never bare, `m` = metres,
+  // `min` = minutes) are docs/csv-export-contract.md → "App-defined spellings".
+  kg: 'kg',
+  cm: 'cm',
+  m: 'm',
+  yd: 'yd',
+  min: 'min',
+  // No form offers these (they are not LOGGABLE_UNITS). `null` means "cannot appear in a load", which
+  // `assertExportableUnit` turns into a loud refusal rather than a plausible-looking wrong number.
   count: null,
   bool: null,
   timing: null,
@@ -66,9 +67,9 @@ export const EXPORTABLE_UNITS = (Object.keys(CSV_UNIT_SUFFIX) as Unit[]).filter(
  * injury risk, that is the worst defect available in this feature.
  *
  * Converting was rejected: it writes a number the athlete never logged, and ADR 0004 §6's whole point
- * is that the resolved unit rides the row. Incidence today is ~0 (`lb` is the default and the only
- * mass unit the form offers), so this is a **tripwire, not a tax** — and the first time it fires is a
- * real decision to make with real data, not a silent 2.2×.
+ * is that the resolved unit rides the row. Since V1-30 every unit a form offers has a spelling (the
+ * chain test in `units.test.ts` enforces it), so this guards only units no form offers: a
+ * **tripwire, not a tax**.
  */
 export function assertExportableUnit(unit: Unit, context: string): string {
   const suffix = CSV_UNIT_SUFFIX[unit];

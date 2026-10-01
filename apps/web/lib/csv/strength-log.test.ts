@@ -4,7 +4,7 @@ import {
   csvMovement,
   csvRow,
   csvSessionType,
-  EXPORTABLE_UNITS,
+  CSV_UNIT_SUFFIX,
   formatNumeric,
   type StrengthLogRow,
   STRENGTH_LOG_HEADER,
@@ -231,20 +231,78 @@ describe('numeric formatting — drizzle returns numeric as a STRING', () => {
 });
 
 describe('the unit tripwire — refuse, never convert', () => {
-  // A kg load written as a bare number is read as lb: a 2.2x error in the column that drives load
-  // progression, invisible to the contract's own sets-vs-list-length check.
-  it('REFUSES a unit with no legacy spelling, naming the movement', () => {
+  // A unit with no spelling must never reach the file as a bare number: in this column a bare number
+  // is POUNDS, so a bare kg is a 2.2x error in the value that drives load progression. Since V1-30
+  // every loggable unit has a spelling, so the tripwire guards the units no form offers.
+  it('REFUSES a unit with no spelling, naming the movement', () => {
     expect(() =>
+      bodyOf(
+        row({
+          sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'count', value: '5' }] })],
+        }),
+      ),
+    ).toThrow(/logged in 'count'[\s\S]*refuses rather than converting/);
+  });
+
+  // THE contract pin (AGENTS.md → constants: the literal belongs on the assertion side, exactly once).
+  // Corpus-observed: lb (bare), in, ft, sec → s. App-defined in V1-30: kg, cm, m, yd, min.
+  it('spells every unit exactly as the contract says', () => {
+    expect(CSV_UNIT_SUFFIX).toEqual({
+      lb: '',
+      kg: 'kg',
+      in: 'in',
+      cm: 'cm',
+      ft: 'ft',
+      m: 'm',
+      yd: 'yd',
+      sec: 's',
+      min: 'min',
+      count: null,
+      bool: null,
+      timing: null,
+    });
+  });
+
+  it('kg is SUFFIXED, never bare and never converted', () => {
+    expect(
       bodyOf(
         row({
           sets: [set({ quantities: [{ slot: QUANTITY_SLOT.primary, unit: 'kg', value: '85' }] })],
         }),
       ),
-    ).toThrow(/logged in 'kg'[\s\S]*refuses rather than converting/);
+    ).toContain(',85kg,');
   });
 
-  it('accepts exactly lb / in / ft / sec', () => {
-    expect([...EXPORTABLE_UNITS].sort()).toEqual(['ft', 'in', 'lb', 'sec']);
+  it('a suffixed slash-list: metres per set', () => {
+    const metres = (value: string) => ({ slot: QUANTITY_SLOT.primary, unit: 'm' as const, value });
+    expect(
+      bodyOf(
+        row({
+          sets: [
+            set({ reps: 1, quantities: [metres('20')] }),
+            set({ reps: 1, quantities: [metres('25')] }),
+            set({ reps: 1, quantities: [metres('25')] }),
+          ],
+        }),
+      ),
+    ).toContain(',3,1,20m/25m/25m,');
+  });
+
+  // A worn mass used to be written with formatNumeric, dropping the suffix. Harmless while kg threw;
+  // after V1-30 it would have exported an 8 kg vest as `BW+8 (vest)` — read as 8 lb.
+  it('a kg vest keeps its unit; an lb vest stays bare', () => {
+    const vest = (unit: 'kg' | 'lb') =>
+      buildLoad(
+        {
+          reps: 5,
+          isBodyweight: true,
+          isBand: false,
+          quantities: [{ slot: QUANTITY_SLOT.vest, unit, value: '8' }],
+        },
+        'x',
+      );
+    expect(vest('kg')).toBe('BW+8kg (vest)');
+    expect(vest('lb')).toBe('BW+8 (vest)');
   });
 
   it('mass is BARE — there is no `80lb` anywhere in the corpus', () => {

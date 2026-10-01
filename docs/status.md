@@ -7,16 +7,18 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-🔧 **V1-24 PR 1c — the duplicate weigh-ins have a correction, pending `--apply`** (2026-09-30).
+🔧 **V1-24 PR 1c — Liam's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
 A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
 and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a
 token-pinned guard, re-checks the keeper under a row lock, and asserts the day ends with exactly one
 live weight before committing — rehearsed 20/20 on an ephemeral Postgres
 ([plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"). **No bodyweight value is
 committed:** `.github/SECURITY.md` makes kid bodyweight privileged and this repo is public, so the
-`updated_at` token does the guard's job instead (Decision 20). ⚠️ **PR 1d's unique index is gated on
-this being applied AND the duplicate query re-run** — `migrate.yml` runs on every push, so landing 1d
-early wedges the migrator for every later PR ([runbooks](./runbooks.md)).
+`updated_at` token does the guard's job instead (Decision 20). **Applied 2026-10-01 15:13 UTC**: 2
+rows soft-deleted, the mandated re-run prints 0, and a direct query confirms 0 duplicate groups
+table-wide. **PR 1d's unique index is unblocked** — re-run the
+duplicate query immediately before merging it, since nothing stops a new duplicate until 1e moves the
+`ON CONFLICT` arbiter ([runbooks](./runbooks.md)).
 
 🆕 **DUALS-1 — the first parent-facing surface** (2026-09-25). `/duals/[event]/[team]` renders a
 tournament day sheet — pool, round order, mat, and the weight-by-weight matchup per round — for the
