@@ -413,7 +413,64 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
 ## BETA — share with other families ([milestone](./milestones/beta-1.md))
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
-ONB-2 (the default program) is its own row, filed by #198.
+
+<a id="onb-2"></a>
+
+- **ONB-2 — a default program for new households: The Daily Five.** _(Filed by Ray 2026-09-28; doses
+  drafted by a model session, pending confirmation.)_ **Status: model-drafted definition, not yet
+  confirmed — Ray (or a qualified coach) signs off each dose before it is seeded; the seed PR cites the
+  sign-off.** Full definition, movement table, catalog additions and how-to copy:
+  [programs/daily-five-default.md](./programs/daily-five-default.md). _(Beta 0.)_
+
+  ONB-0 establishes that a brand-new household's first screen is **Ray's family's routine**. That is one
+  of two shapes: `routine_config` is an ordered list of activity keys; a **program** is
+  `program_blocks → prescriptions → prescription_targets`. A stranger needs a neutral default of
+  **both**, or their first screen is still Ray's family's day. **ONB-2 is the program half.** It is
+  derived from a research pass (youth resistance-training guidance, injury epidemiology,
+  distributed-practice literature) rather than from Ray's household — that provenance is the point.
+
+  **Why it seeds clean: prescriptions with NO `prescription_targets`.** Per-athlete loads live in
+  targets (`prescriptions` has no load column); a neutral default has none to write because it does not
+  know the athlete. `BW` comes from the movement and durations ride in `target_reps` with
+  `unit_default: sec`. A fresh household renders from prescriptions alone, via `programDayRows`' LEFT
+  JOIN (no target → null load). **The default is per household**: blocks are household-scoped, so an
+  athlete added to an existing household gets that household's program, not this one.
+
+  **Shape:** "Daily Five" → slug `daily_five`. Eight prescription rows (~8–10 min): 4-way neck
+  isometrics, submaximal pull-ups + dead hang, submaximal push-ups (`push-ups` — the existing slug), a
+  squat → deep-hold → Cossack flow, hollow-body hold, side plank. Bodyweight only; every item has a
+  stated fallback, logged as the movement actually done (`dead_hang`, `inverted_rows`). The finisher
+  (15 penetration steps) is the routine's `shot` check-in, not a prescription. Seven movements are
+  catalog additions (listed in the program doc).
+
+  **Scheduling — decided: the A/B stopgap** _(Ray, 2026-09-30)_. No `daily` role exists and Today's
+  role is global A/B parity, so the same rows are seeded under **both `strength_a` and `strength_b`**.
+  No new role, no CHECK migration, **no SCHED-1 dependency** — ONB-2 stays in Beta 0. Accepted
+  consequences: CSV `session_type` alternates `strength-a` / `strength-b` by day (no `daily-five`
+  value); the program runs every day (under parity there is no program rest day); the real
+  per-household daily role is deferred to SCHED-1 (Beta 1), which can migrate these rows later.
+
+  **The load-bearing constraint: no set ever goes to failure.** It has a **UI obligation** — first
+  run must say it, and the ramp must enforce it. **Personalisation without a questionnaire:** one tap
+  per movement (Too easy / Just right / Too hard), with a weekly ramp cap. **The ramp is computed
+  deterministically (`packages/engine`, golden vectors), never by an LLM.** No max testing anywhere.
+
+  **`sprawl-to-stance` is held back** _(Ray, 2026-09-28)_ — the sixth movement of the full Daily Six
+  and the first graduation unlock; the cost (competency coverage 8/8 → 6/8, the only item that raises
+  heart rate) is recorded in the program doc.
+
+  **CSV:** strength-log only today, since prescribed push-ups and pull-ups are movement entries; routing
+  them to `calisthenics-log` is an open decision (it needs a calisthenics export and a per-program
+  rule, because Ray's household already writes `pull-up` to strength-log). Contract:
+  [csv-export-contract.md](./csv-export-contract.md).
+
+  **Dependencies:** ONB-0 first (a first-run surface worth seeding into); the catalog additions; the
+  dose sign-off; a UX panel before implementation (the tap loop is new UI). No GAP-3 unit work is
+  needed: everything is `BW` or seconds.
+
+  **Open questions for Ray:** audience — tuned for **youth wrestlers ~8–14** with a parent present; if
+  mat-plan will serve high-school and open wrestlers, onboarding needs an age gate. **One rule stays
+  hard at every tier:** never substitute a loaded wrestler's bridge for the neck isometrics.
 
 - **OPS-1 — previews hold neither production data nor production credentials.** Today every Vercel
   preview gets the prod `DATABASE_URL` ([deploy.md](./deploy.md)). Previews get a seed-only database
@@ -1223,76 +1280,6 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   `units.code` (`:255`) but **nothing in the app reads it**. Only weigh-ins carry `lb | kg`, so **a kg household is
   unrepresentable across the whole strength path today**. It is no longer its own row because units and typed
   measurements are the same migration — see **GAP-3** and [ADR 0004 §6](./decisions/0004-typed-measurements.md).
-- **ONB-2 — a default program for newly onboarded users: The Daily Five.** _(Ray, 2026-09-28.)_
-  ONB-0 establishes that a brand-new household's first screen is **Ray's family's routine**, and calls
-  for "a **neutral** default routine." That is one of two shapes. `routine_config` is an ordered list of
-  activity keys; a **program** is `program_blocks → prescriptions → prescription_targets`. A stranger
-  who signs up needs a neutral default of **both**, or their first screen is still Ray's family's day —
-  ONB-0 fixes the habit list and leaves the strength side pointing at nothing.
-
-  **ONB-2 is the program half.** Full definition, movement table, and how-to copy:
-  [programs/daily-five-default.md](./programs/daily-five-default.md). Derived from a research pass
-  (youth LTAD / NSCA position stands, wrestling injury epidemiology, grease-the-groove and
-  distributed-practice literature) rather than from Ray's household — **that provenance is the point**,
-  and it is why this one is safe to seed for a stranger where `kids_s&c_foundation` is not.
-
-  **Why it seeds clean, and the reason this is cheaper than it looks: it is prescriptions with NO
-  `prescription_targets`.** Per-athlete loads live in targets; a neutral default has none to write
-  because it does not know who the athlete is. Every load is `BW` or a duration — a property of the
-  **movement**, not the person. Contrast `kids-sc-foundation-archived.md`, which carries a Liam column
-  and a Scarlett column and therefore can never be a default. Consequence: a fresh household renders
-  entirely from prescriptions and every set row is an empty field they fill, which is exactly the
-  behaviour V1-23's "a null prescription scaffolds 3 set rows, not 1" already bought.
-
-  **Shape:** `slug: daily_five_default`, `day_role: daily` — runs every day, **no A/B rotation and no
-  weekday map**, so unlike YDP it needs nothing from SCHED-1 and can ship before it. Eight prescription
-  rows (~8–10 min) plus a 15-rep `penetration_step` finisher: 4-way neck isometrics, submaximal
-  pull-ups + dead hang, submaximal push-ups, a squat → deep-hold → Cossack flow, hollow-body hold, side
-  plank. Bodyweight only; the pull-up bar is optional and **every item has a stated fallback** (no bar →
-  table rows; no pull-up yet → slow negatives; push-up form breaking → incline, not knees).
-
-  **The load-bearing constraint, and the thing an implementer will be tempted to drop: no set ever goes
-  to failure.** Guidance saying 2–3 sessions/week is about sets taken _close to failure_; submaximal
-  high-frequency work is a different stimulus with a different recovery cost. A program the user grinds
-  is not a daily program. This has a **UI obligation** — first run must say it, and the ramp must
-  enforce it.
-
-  **Personalisation without a questionnaire** (same shape ONB-0 and ONB-1 already committed to). A
-  default program cannot reference "40% of your max": a new user has no max, and asking them to find one
-  is the exact behaviour the program exists to avoid. So fixed conservative doses plus **one tap per
-  movement — Too easy / Just right / Too hard** → +10–15% / hold / −20%. Two ceilings the app enforces
-  regardless of taps: never prescribe past ~50% of the user's observed best single set, and never ramp
-  more than 15%/week. A user tapping "too easy" daily is being allowed to grind. **No max testing
-  anywhere in the flow.**
-
-  **`sprawl-to-stance` is deliberately held back from the seeded program** _(Ray, 2026-09-28)_ — it is
-  the sixth movement of the full **Daily Six** and the first graduation unlock. The cost is recorded in
-  the program doc and is not zero: competency coverage drops **8/8 → 6/8** (loses jump/land/rebound and
-  accel/decel), and it was the only item that raises heart rate or puts the user in a wrestling
-  position. It is also the most defensible cut for an unsupervised stranger — floor space, noise, and
-  the movement here most likely to be done badly with no coach watching. **Naming follows the cut:** the
-  seeded default is "The Daily Five" so the name does not lie about item count, and the sixth movement
-  arrives as an _unlock_ rather than a rediscovery.
-
-  **CSV consequences** (contract: [csv-export-contract.md](./csv-export-contract.md)) — two decisions
-  this program forces, both easy to get wrong: `session_type` is **`daily-five`** (kebab-case, matching
-  the existing `strength-a`; the full version emits `daily-six`), and **push-ups/pull-ups route to
-  `calisthenics-log`, not `strength-log`** — those two movements _are_ the grease-the-groove push/pull
-  track, which is what those columns exist for. **Do not double-count.** The finisher writes `shot` in
-  `checkins` and touches no other column. Timed holds follow the established convention: duration in
-  `load`, `reps` = 1, per-side in `prescribed`.
-
-  **Dependencies:** none blocking — no SCHED-1, no UNIT-1 (everything is `BW` or seconds, so the missing
-  unit column cannot bite), no auth work. It is a seeder + prescription rows + the tap control. **It
-  does depend on ONB-0 shipping first** to have a first-run surface worth seeding into, and it inherits
-  ONB-0's **UX panel before implementation** requirement (AGENTS.md) since the tap loop is new UI.
-
-  **Open question for Ray:** audience. This is tuned for **youth wrestlers ~8–14**, where mat-plan
-  starts, and scales up through the ramp rule. If mat-plan will serve high-school and open wrestlers,
-  the onboarding flow needs an age gate. **One rule stays hard at every tier regardless:** never
-  substitute a loaded wrestler's bridge for the neck isometrics — the bridge is a pin-defense skill, not
-  the strength stimulus.
-
 - **ONB-1 — self-serve onboarding: bring-your-own-program** — **scope clarified 2026-09-18:** "import"
   here means a **program** (prescriptions, targets, the plan going forward). **Importing a family's
   historical logged data is NOT a goal** — a new household enters their program and starts logging;
