@@ -531,7 +531,7 @@ verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each ro
 | #   | Branch                           | What                                                                                                                                                                                   | Owes                                                      |
 | --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 1   | `fix/v1-30-loggable-units`       | ✅ **V1-30a**: every offered unit saves and exports; boundary tests, `db:verify`, guide invariant 4b                                                                                   | plan + engineering panel, one UX reviewer                 |
-| 2   | `fix/v1-27-partial-sets`         | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                                                                                             | its existing plan                                         |
+| 2   | `fix/v1-27-partial-sets`         | ✅ **V1-27**: partial sets on a scaffolded movement can be submitted (#207)                                                                                                            | its existing plan                                         |
 | 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md)) | expedited; security lens post-implementation              |
 | 4   | `chore/sec-2-pin-actions`        | ✅ **SEC-2:** every action in all 5 workflows SHA-pinned; `check-action-pins.mjs` guards it in `verify` + `quality`                                                                    | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
 | 5   | `chore/ci-1-audit-in-ci`         | P1: `pnpm audit --prod` in the `quality` job                                                                                                                                           | plan-exempt one-liner (say so)                            |
@@ -814,7 +814,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   percent-encoded) and requires the path to resolve to the same origin. Fixed before AUTH-1 or an
   invite flow reuses the helper.
 
-- **V1-27 — doing SOME of a movement's sets blocks the submit.** 📋 [**plan**](./plans/v1-27-partial-sets.md) (revised after the independent panels; awaiting Ray; lands after #201). 🔴 **P0, found 2026-09-30** by
+- **V1-27 — doing SOME of a movement's sets blocks the submit.** ✅ **Fixed (#207)** — trailing empty sets are no longer required or sent, and a line above **Log strength** says what will be logged. 📋 [**plan**](./plans/v1-27-partial-sets.md) (approved by Ray 2026-10-01, trailing-set trade-off accepted). 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
   per-**set** equivalent. So a kid who does **2 of 3 prescribed sets** cannot submit at all — the

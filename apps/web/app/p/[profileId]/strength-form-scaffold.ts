@@ -9,7 +9,6 @@ import {
 } from '@mat-plan/shared';
 
 import type { MovementVals } from './strength-form';
-import { isDefaultStatus } from './strength-form-supersets';
 
 /**
  * V1-19 — build the strength form's movement cards from the day's program, so the athlete stops
@@ -153,38 +152,4 @@ function clampSetCount(sets: number | null): number {
   // vacuous-truth shape, not silently replaced with three rows they never asked for.
   if (sets < 1) return 1;
   return Math.min(sets, MAX_SETS_PER_MOVEMENT);
-}
-
-/**
- * Did the athlete touch this scaffolded card at all? Deliberately NOT `isUntouchedMovement` — that
- * predicate requires an empty `movementName`, and every scaffolded card has one, so it reports every
- * scaffolded card as touched forever. The name is excluded here precisely because the scaffold, not
- * the athlete, supplied it; everything else is the same test.
- *
- * Status is compared via the shared `isDefaultStatus`, never to `undefined`: a card marked skipped and
- * then UNMARKED must become droppable again (the same reasoning that predicate already carries).
- */
-export function isUntouchedScaffold(m: {
-  scaffolded?: boolean;
-  sets: readonly {
-    reps: string;
-    weight: string;
-    status?: string;
-    isBodyweight?: boolean;
-    isBand?: boolean;
-  }[];
-  status?: string;
-}): boolean {
-  return (
-    m.scaffolded === true &&
-    isDefaultStatus(m.status) &&
-    m.sets.every(
-      (s) =>
-        s.reps.trim() === '' &&
-        s.weight.trim() === '' &&
-        !s.isBodyweight &&
-        !s.isBand &&
-        isDefaultStatus(s.status),
-    )
-  );
 }

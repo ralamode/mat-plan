@@ -168,3 +168,31 @@ export const AMEND_ERROR_COPY = {
    */
   staleWrite: 'That was changed on another device — the latest is showing now.',
 } as const;
+
+/**
+ * V1-27 — the strength form's partial-set copy. The plan (`docs/plans/v1-27-partial-sets.md`) explains
+ * each: the summary line is the real mitigation for dropping trailing empty sets, the hint is the local
+ * cue on a mixed card, and the missing-field message names the way out of a block.
+ */
+export const PARTIAL_SETS_COPY = {
+  /** After **Add set** on a card with touched sets and a trailing empty run. "At the end" because a gap
+   *  card has a trailing run too, and its gap row still blocks. */
+  trailingHint: "Empty sets at the end won't be logged.",
+  /** Set as the custom validity of a required, blank reps or weight input in the LOG form only. */
+  missingField: "Fill in this set, or tap Remove if you didn't do it.",
+  /** The summary line when the browser would refuse the tap on a blank required field. */
+  blocked: 'A set needs finishing before this can log.',
+  /** The summary line when nothing would be logged (including a payload of only skipped movements). */
+  empty: 'Nothing to log yet.',
+} as const;
+
+/**
+ * The line above **Log strength**: what the tap will log, from the exact post-drop payload. A skipped
+ * movement is sent with `sets: []` and is not "logged", so it is counted separately.
+ */
+export function strengthSummary(movements: number, sets: number, skipped: number): string {
+  if (movements === 0) return PARTIAL_SETS_COPY.empty;
+  const m = `${movements} ${movements === 1 ? 'movement' : 'movements'}`;
+  const s = `${sets} ${sets === 1 ? 'set' : 'sets'}`;
+  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skipped} skipped` : ''}.`;
+}

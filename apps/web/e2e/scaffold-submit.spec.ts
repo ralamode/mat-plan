@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { PARTIAL_SETS_COPY } from '../lib/constants';
+
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -36,11 +38,9 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
   // plan's acceptance criterion names — some movements done, the rest not — and it is the one PR-A
   // could regress.
   //
-  // ⚠️ Every set row of the open card is filled, and that is NOT incidental. `DEFAULT_SCAFFOLD_SETS`
-  // is 3 and `reps` is unconditionally `required`, while `isUntouchedScaffold` drops a whole
-  // MOVEMENT and has no per-SET equivalent — so doing 2 of 3 sets is currently unsubmittable without
-  // discovering "Remove". Found by an earlier draft of this test; filed as **V1-27**, out of scope
-  // here. This spec deliberately does not assert that bug either way.
+  // Every set row of the open card is filled here on purpose: this test is about MOVEMENTS. Doing only
+  // SOME of a card's sets — V1-27, found by an earlier draft of this test — is pinned by the
+  // "2 of 3 sets" test below, in a real browser.
   const repsFields = strength.getByPlaceholder('reps');
   const weightFields = strength.getByPlaceholder('weight');
   const openSets = await repsFields.count();
@@ -81,4 +81,73 @@ test('a scaffolded card shows the unit the catalog declares', async ({ page }) =
   await expect(
     strength.getByRole('checkbox', { name: 'BW — Bodyweight — movement 1 set 1' }),
   ).not.toBeChecked();
+});
+
+/**
+ * **V1-27 — doing some of a movement's sets submits, in a real browser.** Native constraint validation
+ * is the whole bug (a `required` reps input on the row the athlete deliberately left blank), and jsdom
+ * never runs it — so this is the only place the fix is proven.
+ *
+ * Retry-safe and neighbour-safe: values distinct from the test above (`7 × 17.5`), and the assertion is
+ * a before/after DELTA on the logged entries rather than an absolute count.
+ */
+test("doing all but the last of a card's sets submits exactly those sets (V1-27)", async ({
+  page,
+}) => {
+  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^7 × 17\.5\b/);
+  const before = await logged.count();
+
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
+
+  // The scaffold's row count depends on the day's prescription, so it is READ, not assumed.
+  const repsFields = strength.getByPlaceholder('reps');
+  const weightFields = strength.getByPlaceholder('weight');
+  const n = await repsFields.count();
+  expect(n, 'card 1 needs at least 2 rows for a trailing empty row').toBeGreaterThan(1);
+  for (let i = 0; i < n - 1; i++) {
+    await repsFields.nth(i).fill('7');
+    await weightFields.nth(i).fill('17.5');
+  }
+  // The line above the button says what will be logged, before the tap.
+  await expect(
+    strength.getByText(`Logs 1 movement, ${n - 1} ${n - 1 === 1 ? 'set' : 'sets'}.`),
+  ).toBeVisible();
+  await expect(strength.getByText(PARTIAL_SETS_COPY.trailingHint)).toBeVisible();
+
+  await strength.getByRole('button', { name: 'Log strength' }).click();
+  await expect(logged).toHaveCount(before + n - 1, { timeout: 15_000 });
+});
+
+/**
+ * A half-entered set still blocks — NATIVELY, with the named message. Asserted on the field and on the
+ * network, never on "nothing was written": the server would reject this set too, so a test that only
+ * checked the outcome could not tell the browser's block from the server's (correctness panel cor-S2).
+ */
+test('a half-entered set blocks natively, with a message naming the way out (V1-27)', async ({
+  page,
+}) => {
+  await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
+
+  const actionRequests: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.headers()['next-action']) actionRequests.push(r.url());
+  });
+
+  // Weight typed, reps blank: the row is touched, so its reps stay required.
+  const reps = strength.getByPlaceholder('reps').first();
+  await strength.getByPlaceholder('weight').first().fill('17.5');
+  await strength.getByRole('button', { name: 'Log strength' }).click();
+
+  expect(await reps.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
+  expect(await reps.evaluate((el) => (el as HTMLInputElement).validationMessage)).toBe(
+    PARTIAL_SETS_COPY.missingField,
+  );
+  await expect(strength.getByText(PARTIAL_SETS_COPY.blocked)).toBeVisible();
+  // Give a (wrongly) un-blocked submit time to leave the page before asserting none did.
+  await page.waitForTimeout(1_000);
+  expect(actionRequests, 'the browser should have blocked the submit').toEqual([]);
 });

@@ -5,7 +5,7 @@
 >
 > **Status: ✅ approved by Ray (2026-10-01)** after the independent engineering and UX panels and three
 > re-review rounds. Ray explicitly accepted the trade-off: a forgotten _trailing_ set is logged short
-> rather than blocking the session (the summary line is the mitigation). Lands AFTER #201 (V1-30)**, which edits `strength-form.tsx`, `strength-form-scaffold.ts`,
+> rather than blocking the session (the summary line is the mitigation). **Implemented after #201 (V1-30)**, which edits `strength-form.tsx`, `strength-form-scaffold.ts`,
 > `actions.ts` and the shared strength schemas. The implementation PR is cut from a `main` that already
 > has #201, so it is reviewed against the code it will actually merge into.
 
@@ -347,3 +347,13 @@ architecture/reuse/scope (arch), and UX across interaction, a11y/360px and trust
 | fr-P3 | A non-blank invalid value blocks natively while the summary says "Logs…"                                                      | **Accepted** as a trap (Risks); the browser names the field itself                                                                                                                                                                                                 |
 | fr-P4 | `type=number` partial input is `''` in state but `badInput` to the browser                                                    | **Accepted** as a pre-existing trap (Risks, guide)                                                                                                                                                                                                                 |
 | fr-P5 | A skipped-only payload's summary is unspecified                                                                               | **Decided** — "Nothing to log yet."; added to the summary test                                                                                                                                                                                                     |
+
+## Implementation deviation log
+
+Recorded here rather than by changing the design above.
+
+| #   | Deviation                                                                                                           | Why                                                                                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | The movement-name input's `required` is now `nameRequired(m)` = `!isDroppableMovement(m)`, not always on            | `isSubmitBlocked` counts a blank name only on a non-droppable card (fr-BA). The input was unconditionally `required`, so a blank hand-added card — dropped from the payload — still blocked natively in a real browser. Making the input agree with the summary also closes that pre-existing wall. |
+| D2  | `isSubmitBlocked` considers every **rendered** card (`!(scaffolded && not expanded)`), not only "the expanded card" | A hand-added card is always rendered and is never "the expanded one" (that state tracks scaffolded cards only). Taking the plan literally would miss a blank required field on a hand-added card while the browser blocks it.                                                                       |
+| D3  | Two small exported helpers beyond decision 4: `nameRequired` (D1) and `hasTrailingUntouched` (the hint's condition) | So the form renders the hint and the name's `required` from the module rather than re-deriving them inline — the one-call-site-per-concept rule decision 4 states.                                                                                                                                  |

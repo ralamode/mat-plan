@@ -1,6 +1,26 @@
 'use client';
 
+import { type RefObject, useEffect, useRef } from 'react';
+
 import { INPUT_CLASS } from '@/lib/constants';
+
+/**
+ * V1-27 decision 6 — the custom "missing" message, set DECLARATIVELY from state, never by an
+ * `onInvalid` event. An event-set message lingers when the field stops being required by other means
+ * (BW tapped, or the later set removed so this row became trailing) and the form stays blocked on a
+ * field that must stay empty — the "form appears dead" trap. Only a BLANK required value gets it, so a
+ * step/min failure (reps `0`, `2.5`) keeps the browser's own message. No message ⇒ no custom validity.
+ */
+function useMissingMessage(
+  ref: RefObject<HTMLInputElement | null>,
+  required: boolean,
+  value: string,
+  message: string | undefined,
+) {
+  useEffect(() => {
+    ref.current?.setCustomValidity(message && required && value.trim() === '' ? message : '');
+  }, [ref, required, value, message]);
+}
 
 /**
  * The reps × weight number-input pair — the SINGLE source shared by the log form's set rows
@@ -18,7 +38,10 @@ export function SetRepsWeightFields({
   ariaLabel,
   nameReps,
   nameWeight,
+  repsRequired = true,
   weightRequired = true,
+  missingMessage,
+  repsDescribedBy,
   unitLabel,
 }: {
   reps: string;
@@ -38,6 +61,18 @@ export function SetRepsWeightFields({
    */
   weightRequired?: boolean;
   /**
+   * V1-27 — FALSE on a trailing untouched row of the log form: it is not sent, so it must not block.
+   * The edit form leaves the default.
+   */
+  repsRequired?: boolean;
+  /**
+   * V1-27 — the message a required, blank field shows instead of the browser's generic one. Passed by
+   * the LOG form only: the edit form has no Remove button, so "tap Remove" would be false there.
+   */
+  missingMessage?: string;
+  /** V1-27 — `aria-describedby` on the reps input (the trailing-rows hint, while the card is mixed). */
+  repsDescribedBy?: string;
+  /**
    * The movement's unit, rendered as static text after the field and folded into the accessible name.
    * Since PR 4a a movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled "weight" is
    * ambiguous to a sighted user and meaningless to a screen reader. Omitted by the edit form, which
@@ -49,14 +84,20 @@ export function SetRepsWeightFields({
   nameReps?: string;
   nameWeight?: string;
 }) {
+  const repsRef = useRef<HTMLInputElement>(null);
+  const weightRef = useRef<HTMLInputElement>(null);
+  useMissingMessage(repsRef, repsRequired, reps, missingMessage);
+  useMissingMessage(weightRef, weightRequired, weight, missingMessage);
   return (
     <>
       <input
+        ref={repsRef}
         type="number"
         inputMode="numeric"
         min="1"
         step="1"
-        required
+        required={repsRequired}
+        aria-describedby={repsDescribedBy}
         name={nameReps}
         placeholder="reps"
         aria-label={`${ariaLabel} reps`}
@@ -69,6 +110,7 @@ export function SetRepsWeightFields({
           be typed at all — iOS's decimal pad has no letters and no ABC toggle. `BW` is a toggle now,
           so the keypad comes back for the ~90% case that is genuinely a number. */}
       <input
+        ref={weightRef}
         type="number"
         inputMode="decimal"
         min="0"

@@ -8,7 +8,12 @@ import {
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
 } from '@mat-plan/shared';
 
-import { BODYWEIGHT_COPY, DEFAULT_TIME_ZONE, MIN_TAP_TARGET_PX } from '../lib/constants';
+import {
+  BODYWEIGHT_COPY,
+  DEFAULT_TIME_ZONE,
+  MIN_TAP_TARGET_PX,
+  PARTIAL_SETS_COPY,
+} from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { resolveDayRole } from '../lib/programming/day-role-schedule';
 import {
@@ -233,6 +238,11 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
 
   await expectNoHorizontalOverflow(page, 'strength form (360px, modes on)');
   await expectTapTargets(page, 'strength form (360px)');
+
+  // V1-27 — set 1 is touched and set 2 is an empty trailing row, so this card is MIXED: the
+  // "empty sets at the end" hint and the summary line are on screen. Scan that state too.
+  await expect(strength.getByText(PARTIAL_SETS_COPY.trailingHint)).toBeVisible();
+  await expectNoAxeViolations(page, 'strength form (360px, mixed card with the V1-27 hint)');
 });
 
 /**
