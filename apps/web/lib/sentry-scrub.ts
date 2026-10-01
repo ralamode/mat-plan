@@ -56,8 +56,12 @@ function stripQueryParams<T>(value: T): T {
  * `params` key collapses to "[Array]" while its `message` and `stack` STRINGS still carry the values
  * (the console integration's breadcrumb `data.arguments`, for one).
  */
-function scrubTree(node: unknown, seen = new Set<unknown>()): void {
-  if (!node || typeof node !== 'object' || seen.has(node)) return;
+/** Deeper than Sentry's own `normalizeDepth`, so a normalized event is walked in full; the cap only
+ *  bounds raw breadcrumb data, which arrives before normalization. */
+const MAX_SCRUB_DEPTH = 20;
+
+function scrubTree(node: unknown, seen = new Set<unknown>(), depth = 0): void {
+  if (!node || typeof node !== 'object' || seen.has(node) || depth > MAX_SCRUB_DEPTH) return;
   seen.add(node);
   const record = node as Record<string, unknown>;
   for (const key of Object.keys(record)) {
@@ -66,8 +70,11 @@ function scrubTree(node: unknown, seen = new Set<unknown>()): void {
       continue;
     }
     const value = record[key];
-    if (typeof value === 'string') record[key] = stripQueryParams(value);
-    else scrubTree(value, seen);
+    if (typeof value === 'string') {
+      // Write only when something changed: never touch a caller-owned object needlessly.
+      const stripped = stripQueryParams(value);
+      if (stripped !== value) record[key] = stripped;
+    } else scrubTree(value, seen, depth + 1);
   }
 }
 
@@ -139,8 +146,15 @@ function scrubBreadcrumb(crumb: Breadcrumb): Breadcrumb {
 }
 
 /** `beforeBreadcrumb` hook — scrubs at record time, before a breadcrumb can ride along on ANY event. */
-export function beforeBreadcrumbScrubbed(breadcrumb: Breadcrumb): Breadcrumb {
-  return scrubBreadcrumb(breadcrumb);
+export function beforeBreadcrumbScrubbed(breadcrumb: Breadcrumb): Breadcrumb | null {
+  // Breadcrumb data is RAW (not yet normalized): a frozen object or a throwing getter would throw here,
+  // and `addBreadcrumb` does not catch. Fail closed — drop the breadcrumb rather than keep it unscrubbed.
+  // (A live Error's non-enumerable message/stack is missed here but re-walked, normalized, in beforeSend.)
+  try {
+    return scrubBreadcrumb(breadcrumb);
+  } catch {
+    return null;
+  }
 }
 
 /**

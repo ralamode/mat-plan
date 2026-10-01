@@ -206,8 +206,9 @@ describe('scrubSentryEvent — query params never leave the server (SEC-3)', () 
       message: String(err.stack),
       data: { logger: 'console', arguments: [err] },
     });
-    expect(crumb.data).toEqual({ logger: 'console' });
-    expect(crumb.message).not.toContain('123.45');
+    expect(crumb).not.toBeNull();
+    expect(crumb?.data).toEqual({ logger: 'console' });
+    expect(crumb?.message).not.toContain('123.45');
   });
 
   it('beforeSendLog strips the log message and any attribute string', () => {
@@ -249,5 +250,13 @@ describe('scrubSentryEvent — query params never leave the server (SEC-3)', () 
     } as ErrorEvent);
     expect(event.exception?.values?.[0]?.value).toBe(value);
     expect(event.message).toBe('hi');
+  });
+
+  it('beforeBreadcrumb fails closed on data it cannot scrub, and leaves clean frozen data alone', () => {
+    const dirty = Object.freeze({ note: 'Failed query: x\nparams: 123.45' });
+    expect(beforeBreadcrumbScrubbed({ category: 'app', data: { dirty } })).toBeNull();
+    const clean = Object.freeze({ note: 'nothing to strip' });
+    const kept = beforeBreadcrumbScrubbed({ category: 'app', data: { clean } });
+    expect(kept?.data?.clean).toBe(clean);
   });
 });
