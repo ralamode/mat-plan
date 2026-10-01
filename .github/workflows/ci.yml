@@ -47,9 +47,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           resolve=--resolve
-          if [ -n "$BASE_SHA" ] && ! git diff --name-only "$BASE_SHA" HEAD -- \
-               .github/workflows .github/scripts/check-action-pins.mjs | grep -q .; then
-            resolve= # this PR touches no workflow: the offline format check is enough
+          if [ -n "$BASE_SHA" ]; then
+            # Captured first, so a failing `git diff` aborts the step (bash -e) instead of
+            # reading as "no workflow changed" and silently dropping --resolve.
+            changed="$(git diff --name-only "$BASE_SHA" HEAD -- \
+              .github/workflows .github/scripts/check-action-pins.mjs)"
+            [ -z "$changed" ] && resolve= # no workflow touched: the offline check is enough
           fi
           node .github/scripts/check-action-pins.mjs $resolve
 

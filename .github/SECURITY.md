@@ -90,7 +90,7 @@ machine token.
   moved by whoever controls it, and `migrate.yml` holds the prod DB credential. Nothing may follow the
   version, because Dependabot rewrites the comment only when it ends with it.
   - **Enforced** by `check-action-pins.mjs`: offline in `pnpm verify` (`actions:check`), and in CI's
-    `quality` job with `--resolve`, which requires each SHA to **equal** its version tag's commit in the
+    `quality` job with `--resolve` (on every push to `main` and on PRs touching a workflow or the guard), which requires each SHA to **equal** its version tag's commit in the
     canonical repo. A fork's commit is reachable through the parent's path, so a SHA that merely exists
     proves nothing.
   - **Residual risks:** a remote composite action can still pull its own actions by tag; pinning only

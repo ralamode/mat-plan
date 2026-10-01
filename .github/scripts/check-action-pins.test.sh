@@ -85,6 +85,39 @@ expect "every offender is listed" 1 "2 action ref(s)" <<'EOF'
       - uses: actions/cache@v6
 EOF
 
+expect "major-only comment fails (a major tag moves)" 1 "# v7" <<EOF
+      - uses: actions/checkout@$sha # v7
+EOF
+expect "no space before the comment fails" 1 "" <<EOF
+      - uses: actions/checkout@$sha#v7.0.1
+EOF
+expect ".. segment in the action path fails" 1 "" <<EOF
+      - uses: actions/checkout/../../evil@$sha # v7.0.1
+EOF
+expect ".YML extension is scanned" 1 "@v7" w.YML <<'EOF'
+      - uses: actions/checkout@v7
+EOF
+
+# --- fails closed on shapes the strict regex doesn't read ---
+expect "value on the next line fails" 1 "on one line" <<'EOF'
+      - name: Setup
+        uses:
+          pnpm/action-setup@v6
+EOF
+expect "comment, then value on the next line, fails" 1 "on one line" <<'EOF'
+      - uses: # hi
+          pnpm/action-setup@v6
+EOF
+expect "flow mapping fails" 1 "on one line" <<'EOF'
+      - {uses: pnpm/action-setup@v6}
+EOF
+rm -rf "$tmp/wf" && mkdir -p "$tmp/wf"
+printf '      - uses: actions/checkout@%s # v7.0.1\n' "$sha" >"$tmp/wf/a.yml"
+printf '      - uses: actions/checkout@v7\r\n      - run: echo\r\n' >"$tmp/wf/b.yml"
+out="$(node "$guard" "$tmp/wf" 2>&1)"
+if [ $? -eq 1 ] && grep -qF "b.yml:1" <<<"$out"; then printf '✓ CRLF file is scanned\n'
+else printf '✗ CRLF file: %s\n' "$out"; fails=$((fails + 1)); fi
+
 # --- no match ---
 expect "statuses: read with uses: in its comment is not a ref" 0 "1 ref(s)" <<EOF
     permissions:

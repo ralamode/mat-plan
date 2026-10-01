@@ -27,8 +27,8 @@ sharing one [reporting contract](./review-pr/reporting-contract.md).
 ## Guards (mechanisms, not procedures)
 
 Where a rule failed as prose, it became a check. Each ships with a self-test, and `pnpm guards:test`
-(in `verify`, not in CI) runs them all. The guards themselves run locally too, except
-`check-action-pins`, which CI also runs.
+(in `verify`, not in CI) runs them all. Of the guards themselves, `check-action-pins` alone also runs
+in CI (`quality`).
 
 | Guard                                                                                                                                           | Enforces                                                                                                                                                                                                                                | Self-test                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |

@@ -266,3 +266,29 @@ Round 2 confirmed `--resolve` defeats the imposter commit, that it exposes no ne
 (`checkout` already writes the same read-only token into `.git/config`), and that the anchored
 comment rule matches dependabot-core. Scope confirmed it is one concern at ~170 changed lines.
 No open critiques remain.
+
+### Implementation review (security, correctness) on the diff
+
+Both lenses re-resolved all 23 pins independently (the security lens anonymously). Every SHA is its
+`vX.Y.Z` tag's commit, and for the 18 new pins it is also the old major tag's commit, so no version
+changed. Correctness ran 14 mutations against the guard; 13 were caught, and the survivor is now
+tested.
+
+| #   | Lens                   | Finding (short)                                                                                                    | Verdict      | Resolution                                                                                                                                                                |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I1  | Security               | A `uses:` whose value is on the next line, after a comment, or in a flow mapping is never matched, so it passes    | **accepted** | Fail closed: any non-comment line that mentions a `uses:` key but isn't the accepted one-line form fails. The plan's "known gap" (flow style) is closed too. Three tests. |
+| I2  | Correctness            | A CRLF workflow is never matched (`.` doesn't match `\r`), so it passes                                            | **accepted** | Split on `\r?\n`. The I1 detector also rejects a CRLF line, so it's caught two ways. One test.                                                                            |
+| I3  | Security · Correctness | If `git diff` errors in the CI step, `--resolve` is silently dropped                                               | **accepted** | The diff is captured first, so `bash -e` aborts the step. Simulated: a bad base SHA now fails the step instead of skipping.                                               |
+| I4  | Security · Correctness | `# v7` passes, but the rule is `# vX.Y.Z`, and a major tag moves, so `--resolve` would turn `main` red later       | **accepted** | The comment must be a full `vX.Y.Z`. Test. (The plan's regex had this defect; the code inherited it.)                                                                     |
+| I5  | Correctness            | Surviving mutation: `^\s+#` → `^\s*#` passes every test                                                            | **accepted** | Test: `@<sha>#v7.0.1` fails.                                                                                                                                              |
+| I6  | Correctness            | A `..` segment in the action path passes offline                                                                   | **accepted** | Path segments may not be `.` or `..`. Test.                                                                                                                               |
+| I7  | Security               | `.YML` (upper case) files aren't scanned                                                                           | **accepted** | Case-insensitive extension. Test.                                                                                                                                         |
+| I8  | Correctness            | No fetch timeout: a stalled connection waits ~300s, twice                                                          | **accepted** | `AbortSignal.timeout(15s)`. A timeout then counts as a network error: one retry, then exit 2.                                                                             |
+| I9  | Correctness            | SECURITY.md and the skills README overstate where `--resolve` runs and misread who runs the guard                  | **accepted** | Both corrected. SECURITY.md (the one statement) says when `--resolve` runs.                                                                                               |
+| I10 | Correctness            | The plan's Risks row says "API unreachable"; the script says "GitHub API lookup failed … not a verdict on the pin" | **noted**    | Deliberate: a 401/403/429 is not "unreachable", and the new text covers both. Still distinguishable from a bad pin, which is what the row requires.                       |
+| I11 | Correctness            | The PR description lacks the resolver output and the hand-run failures the plan promises                           | **accepted** | Added to #195's description.                                                                                                                                              |
+
+Deviations from the file-by-file table: none in substance. The script is ~165 lines rather than ~70,
+because of the status table and the fail-closed detector. The `ci.yml` comment fix is 3 lines, not 1.
+One stale comment of the same kind is left: `ci.yml`'s forward-only step still says it "blocks merges
+immediately". It's outside this plan; AUDIT-1 #8 picks it up.

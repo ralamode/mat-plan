@@ -15,7 +15,9 @@
  * commit is reachable through the parent's path (the "imposter commit"). Only a 200 is compared;
  * anything else fails, so a check that couldn't check never passes.
  *
- * Known gap: a flow-style mapping (`- {uses: x@v1}`) isn't matched. None exist; it's unidiomatic.
+ * Fails closed on shape: any line that MENTIONS a `uses:` key (outside a comment) but isn't the one
+ * accepted form fails, so a value on the next line, a flow mapping (`- {uses: x@v1}`) or a quoting
+ * trick can't slip past the strict regex. CRLF files are read line by line like LF ones.
  *
  * Usage:
  *   node .github/scripts/check-action-pins.mjs [--resolve] [dir]   # default: <repo>/.github/workflows
@@ -28,8 +30,11 @@ import { fileURLToPath } from 'node:url';
 const RULE =
   'pin to a full commit SHA with a bare "# vX.Y.Z" comment (.github/SECURITY.md → "Supply chain")';
 const USES = /^\s*(?:-\s+)?["']?uses["']?\s*:\s*["']?([^\s"'#]+)["']?(.*)$/;
-const REMOTE = /^[A-Za-z0-9][\w.-]*\/[\w.-]+(?:\/[\w./-]+)?@[0-9a-f]{40}$/;
-const VERSION = /^\s+#\s*(v\d+(?:\.\d+)*)\s*$/;
+// Owner, repo, then an optional path whose segments may not be `.` or `..`.
+const REMOTE = /^[A-Za-z0-9][\w.-]*\/[\w.-]+(?:\/(?!\.\.?(?:\/|@))[\w.-]+)*@[0-9a-f]{40}$/;
+const VERSION = /^\s+#\s*(v\d+\.\d+\.\d+)\s*$/; // a full vX.Y.Z: a bare major tag moves
+const MENTIONS_USES = /(?:^|[\s{,?-])["']?uses["']?\s*:/;
+const COMMENT = /(?:^|\s)#.*$/;
 const LOCAL_WORKFLOW = /^\.\/\.github\/workflows\/[\w.-]+\.ya?ml$/;
 
 const args = process.argv.slice(2);
@@ -43,7 +48,7 @@ const dir = rest[0] ?? fileURLToPath(new URL('../workflows', import.meta.url));
 
 let files;
 try {
-  files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f));
+  files = readdirSync(dir).filter((f) => /\.ya?ml$/i.test(f));
 } catch (e) {
   console.error(`check-action-pins: cannot read ${dir}: ${e.message}`);
   process.exit(2);
@@ -62,12 +67,18 @@ for (const f of files.sort()) {
   const rel = relative(process.cwd(), path);
   const where0 = rel && !rel.startsWith('..') ? rel : path;
   readFileSync(path, 'utf8')
-    .split('\n')
+    .split(/\r?\n/)
     .forEach((line, i) => {
-      const m = USES.exec(line);
-      if (!m) return;
-      const [, ref, after] = m;
       const where = `${where0}:${i + 1}`;
+      const m = USES.exec(line);
+      if (!m) {
+        if (MENTIONS_USES.test(line.replace(COMMENT, '')))
+          bad.push(
+            `${where}  ${line.trim()}  — write \`uses: owner/repo@<sha> # vX.Y.Z\` on one line`,
+          );
+        return;
+      }
+      const [, ref, after] = m;
       if (ref.startsWith('./')) {
         if (!LOCAL_WORKFLOW.test(ref))
           bad.push(
@@ -109,7 +120,7 @@ if (resolve) {
     let last = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetch(url, { headers });
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
         if (res.status === 200) {
           const sha = (await res.json()).sha;
           return /^[0-9a-f]{40}$/.test(sha ?? '')
