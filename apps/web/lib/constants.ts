@@ -1,3 +1,10 @@
+import {
+  isMassUnit,
+  LOGGABLE_DIMENSION_NOUNS,
+  type Unit,
+  UNIT_DIMENSION_BY_CODE,
+} from '@mat-plan/shared';
+
 /**
  * App-only, cross-feature constants. **Zero dependencies** — kept import-free (like
  * `lib/access-gate.ts`) so it is safe to import from a `'use client'` component or the
@@ -183,12 +190,23 @@ export const PARTIAL_SETS_COPY = {
   missingReps: "Fill in the reps, or tap Remove if you didn't do this set.",
   /** …and on a one-set card, which has no per-set Remove to point at. */
   missingRepsOnly: 'Fill in the reps for this set.',
-  /** Custom validity of a required, blank WEIGHT input. Points at BW, the real way out for a set that
-   *  was done with no weight — "if you didn't do it" would be false, and typing `0` records a fake load. */
-  missingWeight: "Enter the weight, or tap BW if there wasn't one.",
+  /** Custom validity of a required, blank WEIGHT input on a MASS unit. Points at BW / band, the real way
+   *  out for a set done with no weight — "if you didn't do it" would be false, and typing `0` records a
+   *  fake load. Use `missingQuantityMessage(unit)`, which also covers time and distance. */
+  missingWeight: "Enter the weight, or tap BW or band if there wasn't one.",
   /** The summary line when nothing would be logged (including a payload of only skipped movements). */
   empty: 'Nothing to log yet.',
 } as const;
+
+/**
+ * The blank-quantity bubble for a set's number field, by unit. BW / band are modes of a WEIGHT (V1-30
+ * refuses them on time and distance), so only a mass unit points at them; a time or distance asks for
+ * the number, with the same noun the server's refusal uses (`LOGGABLE_DIMENSION_NOUNS`).
+ */
+export function missingQuantityMessage(unit: Unit): string {
+  if (isMassUnit(unit)) return PARTIAL_SETS_COPY.missingWeight;
+  return `Enter the ${LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]] ?? 'measurement'}.`;
+}
 
 /** Longest movement name the blocked summary quotes before truncating — keeps the line on one row at
  *  360px (~44 chars × ~7px ≈ 308px of the ~328px usable). */

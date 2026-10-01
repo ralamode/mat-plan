@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UNIT_DIMENSION } from '@mat-plan/shared';
 
 // The form imports the Server Action module ('use server'), which cannot be evaluated under jsdom.
 // Mock it — this test is about what the form SERIALIZES, not about the action, which has its own
 // boundary tests in actions.test.ts.
 vi.mock('./actions', () => ({ logStrengthSessionAction: vi.fn() }));
 
-import { PARTIAL_SETS_COPY } from '@/lib/constants';
+import { missingQuantityMessage, PARTIAL_SETS_COPY } from '@/lib/constants';
 
 import { SetRepsWeightFields } from './set-fields';
 import { StrengthForm } from './strength-form';
@@ -476,6 +477,17 @@ describe('StrengthForm — the custom "missing" message never lingers (V1-27 dec
     fireEvent.change(repsOf(1, 1), { target: { value: '8' } });
     fireEvent.change(weightOf(1, 1), { target: { value: '20' } });
     expect(weightOf(1, 1).validity.customError).toBe(false);
+  });
+
+  it('a TIMED card asks for the time and never points at BW (V1-30 refuses BW there)', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Plank' } });
+    fireEvent.change(screen.getByLabelText('What movement 1 measures'), {
+      target: { value: UNIT_DIMENSION.time },
+    });
+    fireEvent.change(repsOf(1, 1), { target: { value: '1' } });
+    expect(weightOf(1, 1).validationMessage).toBe(missingQuantityMessage('sec'));
+    expect(weightOf(1, 1).validationMessage).not.toMatch(/BW|band/);
   });
 
   it('blank reps on a multi-set card points at the per-set Remove', () => {

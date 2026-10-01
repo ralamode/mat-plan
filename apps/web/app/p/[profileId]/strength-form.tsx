@@ -22,7 +22,13 @@ import { useActionState, useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { blockedSummary, INPUT_CLASS, PARTIAL_SETS_COPY, strengthSummary } from '@/lib/constants';
+import {
+  blockedSummary,
+  INPUT_CLASS,
+  missingQuantityMessage,
+  PARTIAL_SETS_COPY,
+  strengthSummary,
+} from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
@@ -765,7 +771,7 @@ function MovementCard({
                         ? PARTIAL_SETS_COPY.missingReps
                         : PARTIAL_SETS_COPY.missingRepsOnly
                     }
-                    weightMissingMessage={PARTIAL_SETS_COPY.missingWeight}
+                    weightMissingMessage={missingQuantityMessage(movement.unit as Unit)}
                     repsDescribedBy={describedBy}
                     unitLabel={movement.unit}
                   />

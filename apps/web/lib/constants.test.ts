@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { blockedSummary, SUMMARY_NAME_MAX } from './constants';
+import {
+  blockedSummary,
+  missingQuantityMessage,
+  PARTIAL_SETS_COPY,
+  SUMMARY_NAME_MAX,
+} from './constants';
 
 describe('blockedSummary — the summary names the first blocker (V1-27)', () => {
   it('a set: "<name> set N needs finishing."', () => {
@@ -23,5 +28,19 @@ describe('blockedSummary — the summary names the first blocker (V1-27)', () =>
     });
     expect(out.endsWith('… set 20 needs finishing.')).toBe(true);
     expect(out.indexOf('…')).toBeLessThanOrEqual(SUMMARY_NAME_MAX);
+  });
+});
+
+describe('missingQuantityMessage', () => {
+  it('a mass unit points at BW or band', () => {
+    expect(missingQuantityMessage('lb')).toBe(PARTIAL_SETS_COPY.missingWeight);
+    expect(missingQuantityMessage('kg')).toBe(PARTIAL_SETS_COPY.missingWeight);
+  });
+  it('a time or distance asks for the number and never mentions BW (V1-30 refuses it there)', () => {
+    for (const unit of ['sec', 'min', 'm', 'yd', 'cm', 'in', 'ft'] as const) {
+      const msg = missingQuantityMessage(unit);
+      expect(msg).not.toMatch(/BW|band/);
+      expect(msg).toMatch(/^Enter the .+\.$/);
+    }
   });
 });
