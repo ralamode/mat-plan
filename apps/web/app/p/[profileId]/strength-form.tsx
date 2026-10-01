@@ -22,7 +22,7 @@ import { useActionState, useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { INPUT_CLASS, PARTIAL_SETS_COPY, strengthSummary } from '@/lib/constants';
+import { blockedSummary, INPUT_CLASS, PARTIAL_SETS_COPY, strengthSummary } from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
@@ -36,7 +36,8 @@ import {
   dropUntouchedMovements,
   hasTrailingUntouched,
   isDroppableMovement,
-  isSubmitBlocked,
+  firstBlocker,
+  isCollapsed,
   isUntouchedSet,
   nameRequired,
   repsRequired,
@@ -262,8 +263,9 @@ function StrengthFormBody({
   // refuse the tap on a blank required field, the line says so instead of describing a payload that will
   // not be sent — computed from the same `required` rules the inputs render from.
   const loggedMovements = submittable.filter((m) => m.status !== ENTRY_STATUS.skipped);
-  const summary = isSubmitBlocked(movements, expanded)
-    ? PARTIAL_SETS_COPY.blocked
+  const blocker = firstBlocker(movements, expanded);
+  const summary = blocker
+    ? blockedSummary(blocker)
     : strengthSummary(
         loggedMovements.length,
         loggedMovements.reduce((n, m) => n + m.sets.length, 0),
@@ -359,7 +361,7 @@ function StrengthFormBody({
               movement={m}
               // V1-19 — a scaffolded card collapses to a one-line summary until opened. A hand-added
               // card is always open: the athlete just asked for it, and there is only ever one.
-              collapsed={m.scaffolded === true && expanded !== m.clientId}
+              collapsed={isCollapsed(m, expanded)}
               onExpand={() => setExpanded(m.clientId)}
               canRemove={movements.length > 1}
               // GAP-1 P1-1c. `undefined` (not 'done') on uncheck, so the payload spread keeps
@@ -627,7 +629,7 @@ function MovementCard({
             id={nameId}
             type="text"
             // V1-27: only a card that will be SENT needs a name. A droppable card is never sent, so
-            // its blank name must not block the tap (and `isSubmitBlocked` reads the same rule).
+            // its blank name must not block the tap (and `firstBlocker` reads the same rule).
             required={nameRequired(movement)}
             placeholder="Back squat"
             autoComplete="off"
@@ -755,7 +757,15 @@ function MovementCard({
                     // required at all (it is not sent). The summary line reads the same functions.
                     repsRequired={repsRequired(movement, i)}
                     weightRequired={weightRequired(movement, i)}
-                    missingMessage={PARTIAL_SETS_COPY.missingField}
+                    // Per field (UX review P1): blank reps points at the per-set Remove only when it
+                    // exists (more than one set); blank weight points at BW — "tap Remove" there would
+                    // send a kid to the movement's Remove (no undo), or invite a fake `0` load.
+                    repsMissingMessage={
+                      movement.sets.length > 1
+                        ? PARTIAL_SETS_COPY.missingReps
+                        : PARTIAL_SETS_COPY.missingRepsOnly
+                    }
+                    weightMissingMessage={PARTIAL_SETS_COPY.missingWeight}
                     repsDescribedBy={describedBy}
                     unitLabel={movement.unit}
                   />

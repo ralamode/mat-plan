@@ -24,6 +24,10 @@ import { SEED_PROFILE_ROUTE } from './steps';
  */
 test('scaffold the day, do some of it, and the form still submits', async ({ page }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  // A before/after DELTA, not an absolute count: a retry after a write-then-fail attempt would see the
+  // first attempt's rows too, and an absolute `toHaveCount(openSets)` would then fail forever.
+  const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^8 × 20 lb$/);
+  const before = await logged.count();
 
   const strength = page.getByRole('region', { name: 'Log strength' });
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
@@ -55,9 +59,7 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
   // The assertion is that the write HAPPENED, and that EVERY set of the open card landed. A wedged
   // form fails silently — the button returns to its resting state and nothing is written — so
   // asserting the button, or the absence of an error, would pass on the very bug this test is for.
-  await expect(
-    page.getByRole('region', { name: 'Logged entries' }).getByText(/^8 × 20 lb$/),
-  ).toHaveCount(openSets, { timeout: 15_000 });
+  await expect(logged).toHaveCount(before + openSets, { timeout: 15_000 });
 });
 
 /**
@@ -143,10 +145,12 @@ test('a half-entered set blocks natively, with a message naming the way out (V1-
   await strength.getByRole('button', { name: 'Log strength' }).click();
 
   expect(await reps.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
+  // Card 1 of a scaffolded day has several rows, so the reps message names the per-set Remove.
   expect(await reps.evaluate((el) => (el as HTMLInputElement).validationMessage)).toBe(
-    PARTIAL_SETS_COPY.missingField,
+    PARTIAL_SETS_COPY.missingReps,
   );
-  await expect(strength.getByText(PARTIAL_SETS_COPY.blocked)).toBeVisible();
+  // The summary names the blocker (card 1's name rotates with the day, so only its tail is fixed).
+  await expect(strength.getByText(/ set 1 needs finishing\.$/)).toBeVisible();
   // Give a (wrongly) un-blocked submit time to leave the page before asserting none did.
   await page.waitForTimeout(1_000);
   expect(actionRequests, 'the browser should have blocked the submit').toEqual([]);

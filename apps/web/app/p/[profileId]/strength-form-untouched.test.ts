@@ -4,7 +4,9 @@ import { type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
 import {
   dropTrailingUntouchedSets,
   dropUntouchedMovements,
+  firstBlocker,
   hasTrailingUntouched,
+  isCollapsed,
   isDroppableMovement,
   isSubmitBlocked,
   isUntouchedMovement,
@@ -362,5 +364,42 @@ describe('isSubmitBlocked — what the BROWSER would refuse', () => {
     expect(isSubmitBlocked([card([done(), blankSet(), done()], { status: 'skipped' })], 'c1')).toBe(
       false,
     );
+  });
+});
+
+describe('firstBlocker — WHERE the browser would refuse, in on-screen order', () => {
+  it('names the first blank required SET, by on-screen card and set number', () => {
+    expect(firstBlocker([card([done(), blankSet(), done()])], 'c1')).toEqual({
+      kind: 'set',
+      index: 0,
+      setIndex: 1,
+      movementName: 'Back squat',
+    });
+  });
+  it('counts collapsed cards in the card number but never blames them', () => {
+    const collapsedGap = card([done(), blankSet(), done()], { clientId: 'a' });
+    const openGap = card([blankSet(), done()], { clientId: 'b', movementName: 'Dips' });
+    expect(firstBlocker([collapsedGap, openGap], 'b')).toEqual({
+      kind: 'set',
+      index: 1,
+      setIndex: 0,
+      movementName: 'Dips',
+    });
+  });
+  it("a card's blank NAME comes before its rows", () => {
+    expect(
+      firstBlocker([card([blankSet(), done()], { scaffolded: undefined, movementName: '' })], null),
+    ).toEqual({ kind: 'name', index: 0 });
+  });
+  it('null when nothing would block', () => {
+    expect(firstBlocker([card([done(), done(), blankSet()])], 'c1')).toBeNull();
+  });
+});
+
+describe('isCollapsed — V1-19, the one copy', () => {
+  it('only a scaffolded card that is not the expanded one', () => {
+    expect(isCollapsed(card([done()]), 'other')).toBe(true);
+    expect(isCollapsed(card([done()]), 'c1')).toBe(false);
+    expect(isCollapsed(card([done()], { scaffolded: undefined }), 'other')).toBe(false);
   });
 });

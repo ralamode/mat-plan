@@ -124,31 +124,55 @@ export function nameRequired(m: MovementDraft): boolean {
   return !isDroppableMovement(m);
 }
 
+/** V1-19's collapse rule — a scaffolded card is collapsed unless it is the expanded one. The ONE copy:
+ *  the form renders from it and `firstBlocker` reads it, so the summary cannot drift from the page. */
+export function isCollapsed(
+  m: MovementDraft & { clientId: string },
+  expandedId: string | null,
+): boolean {
+  return m.scaffolded === true && expandedId !== m.clientId;
+}
+
+/** What would make the browser refuse the tap, located on screen (0-based card and set numbers). */
+export type SubmitBlocker =
+  | { kind: 'name'; index: number }
+  | { kind: 'set'; index: number; setIndex: number; movementName: string };
+
 /**
- * Would the BROWSER refuse the tap on a blank required field? Mirrors exactly what is rendered:
- * a card is rendered unless it is scaffolded and not the expanded one (V1-19's collapse), and a
- * skipped card renders its name but not its rows. Reads the same `nameRequired` / `repsRequired` /
- * `weightRequired` the inputs render from, so the summary line and the inputs cannot drift.
+ * The FIRST blank required field the BROWSER would refuse the tap on, in on-screen order (card, then its
+ * name before its rows), or `null`. Mirrors exactly what is rendered: a collapsed card renders nothing
+ * the browser checks (`isCollapsed`), and a skipped card renders its name but not its rows. Reads the
+ * same `nameRequired` / `repsRequired` / `weightRequired` the inputs render from, so the summary line and
+ * the inputs cannot drift.
  *
  * Blind, by design, to non-blank invalid values (reps `0` / `2.5`, a step failure) and to a
  * `type=number` input holding partial input (`badInput`): neither is visible in form state. A collapsed
- * gap card is not "blocked" either — its inputs are unmounted, so the tap sends and the server refuses.
+ * gap card is not a blocker either — its inputs are unmounted, so the tap sends and the server refuses.
  */
-export function isSubmitBlocked(
+export function firstBlocker(
   movements: readonly (MovementDraft & { clientId: string })[],
   expandedId: string | null,
-): boolean {
-  return movements.some((m) => {
-    const rendered = !(m.scaffolded === true && expandedId !== m.clientId);
-    if (!rendered) return false;
-    if (nameRequired(m) && m.movementName.trim() === '') return true;
-    if (m.status === ENTRY_STATUS.skipped) return false;
-    return m.sets.some(
+): SubmitBlocker | null {
+  for (const [index, m] of movements.entries()) {
+    if (isCollapsed(m, expandedId)) continue;
+    if (nameRequired(m) && m.movementName.trim() === '') return { kind: 'name', index };
+    if (m.status === ENTRY_STATUS.skipped) continue;
+    const setIndex = m.sets.findIndex(
       (s, i) =>
         (repsRequired(m, i) && s.reps.trim() === '') ||
         (weightRequired(m, i) && s.weight.trim() === ''),
     );
-  });
+    if (setIndex !== -1) return { kind: 'set', index, setIndex, movementName: m.movementName };
+  }
+  return null;
+}
+
+/** Would the browser refuse the tap? `firstBlocker` without the location. */
+export function isSubmitBlocked(
+  movements: readonly (MovementDraft & { clientId: string })[],
+  expandedId: string | null,
+): boolean {
+  return firstBlocker(movements, expandedId) !== null;
 }
 
 /** Drop the droppable cards before building the payload. Preserves the schema's min(1): if EVERY card

@@ -188,13 +188,18 @@ Real ones, each with the file to look at.
   [plan](../plans/v1-27-partial-sets.md)). Pinned in a real browser by `e2e/scaffold-submit.spec.ts`.
 
 - **⚠️ `required` now depends on SIBLING rows (V1-27).** Whether set 2 is required depends on whether
-  set 3 is touched: removing set 3 makes set 2 trailing and un-required. So the custom "Fill in this
-  set, or tap Remove" message is set DECLARATIVELY from state (a `setCustomValidity` effect in
-  `set-fields.tsx`), never by an `onInvalid` event — an event-set message lingers after the field stops
-  being required, and the form appears dead. Only the log form passes `missingMessage`; the edit form
-  has no Remove button.
+  set 3 is touched: removing set 3 makes set 2 trailing and un-required. So the custom "missing"
+  messages are set DECLARATIVELY from state (a `setCustomValidity` effect in `set-fields.tsx`), never by
+  an `onInvalid` event — an event-set message lingers after the field stops being required, and the form
+  appears dead. They are PER FIELD (`repsMissingMessage` / `weightMissingMessage`): blank reps names the
+  per-set Remove only when it exists (more than one set); blank weight names **BW** — "tap Remove" there
+  points at the movement's Remove (no undo), and "if you didn't do it" invites a fake `0` load. Only the
+  log form passes them; the edit form has no Remove button.
 
-- **⚠️ The summary's "needs finishing" state reads `isSubmitBlocked`, which is blind to two things.** It
+- **⚠️ The summary's blocked state reads `firstBlocker`, which is blind to two things.** It names the FIRST
+  blank required field in on-screen order ("Push-ups set 2 needs finishing." / "Movement 1 needs a
+  name.") — the one the browser's bubble lands on — and reads the same collapse rule the form renders
+  from (`isCollapsed`, the one copy). It
   agrees with the browser on every blank required field (it reads the same `nameRequired` /
   `repsRequired` / `weightRequired` the inputs render from), but it cannot see a non-blank invalid value
   (reps `0` / `2.5` fail native step/min) or a `type=number` field holding partial input (`.` on the iOS

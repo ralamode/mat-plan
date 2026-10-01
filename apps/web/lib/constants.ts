@@ -178,13 +178,42 @@ export const PARTIAL_SETS_COPY = {
   /** After **Add set** on a card with touched sets and a trailing empty run. "At the end" because a gap
    *  card has a trailing run too, and its gap row still blocks. */
   trailingHint: "Empty sets at the end won't be logged.",
-  /** Set as the custom validity of a required, blank reps or weight input in the LOG form only. */
-  missingField: "Fill in this set, or tap Remove if you didn't do it.",
-  /** The summary line when the browser would refuse the tap on a blank required field. */
-  blocked: 'A set needs finishing before this can log.',
+  /** Custom validity of a required, blank REPS input (log form only) when the card has a per-set
+   *  Remove button — it renders only when the movement has more than one set. */
+  missingReps: "Fill in the reps, or tap Remove if you didn't do this set.",
+  /** …and on a one-set card, which has no per-set Remove to point at. */
+  missingRepsOnly: 'Fill in the reps for this set.',
+  /** Custom validity of a required, blank WEIGHT input. Points at BW, the real way out for a set that
+   *  was done with no weight — "if you didn't do it" would be false, and typing `0` records a fake load. */
+  missingWeight: "Enter the weight, or tap BW if there wasn't one.",
   /** The summary line when nothing would be logged (including a payload of only skipped movements). */
   empty: 'Nothing to log yet.',
 } as const;
+
+/** Longest movement name the blocked summary quotes before truncating — keeps the line on one row at
+ *  360px (~44 chars × ~7px ≈ 308px of the ~328px usable). */
+export const SUMMARY_NAME_MAX = 20;
+
+/**
+ * The summary line when the browser would refuse the tap, naming the FIRST blocker so a kid knows
+ * where to look — on a phone it can be several cards up the page. `index` is the on-screen card
+ * number (0-based), `setIndex` the on-screen set number (0-based).
+ */
+export function blockedSummary(
+  blocker:
+    | { kind: 'name'; index: number }
+    | { kind: 'set'; index: number; setIndex: number; movementName: string },
+): string {
+  if (blocker.kind === 'name') return `Movement ${blocker.index + 1} needs a name.`;
+  const name = blocker.movementName.trim();
+  const label =
+    name === ''
+      ? `Movement ${blocker.index + 1}`
+      : name.length > SUMMARY_NAME_MAX
+        ? `${name.slice(0, SUMMARY_NAME_MAX - 1).trimEnd()}…`
+        : name;
+  return `${label} set ${blocker.setIndex + 1} needs finishing.`;
+}
 
 /**
  * The line above **Log strength**: what the tap will log, from the exact post-drop payload. A skipped

@@ -304,14 +304,22 @@ const summaryText = () => {
   return document.getElementById(id)!.textContent;
 };
 /**
- * The summary must agree with the browser on blank required fields (final re-review B-A): it reads
- * "needs finishing" IFF some RENDERED input is required and blank.
+ * The summary must agree with the browser on blank required fields (final re-review B-A): it names a
+ * blocker IFF some RENDERED input is required and blank — and, when it does, that input is the FIRST
+ * blank required one on the page (the one the browser's bubble lands on).
  */
+const BLOCKED_TEXT = /needs (finishing|a name)\.$/;
 const expectSummaryAgrees = () => {
-  const blankRequired = Array.from(
+  const firstBlank = Array.from(
     document.querySelectorAll<HTMLInputElement>('form input[required]'),
-  ).some((el) => el.value.trim() === '');
-  expect(summaryText() === PARTIAL_SETS_COPY.blocked).toBe(blankRequired);
+  ).find((el) => el.value.trim() === '');
+  expect(BLOCKED_TEXT.test(summaryText() ?? '')).toBe(firstBlank !== undefined);
+  if (!firstBlank) return;
+  // The first blank required input's own label says which card/set it is.
+  const label = firstBlank.getAttribute('aria-label') ?? '';
+  const where = /^Movement (\d+) set (\d+) /.exec(label);
+  if (where) expect(summaryText()).toMatch(new RegExp(` set ${where[2]} needs finishing\\.$`));
+  else expect(summaryText()).toMatch(/needs a name\.$/);
 };
 
 describe('StrengthForm — partial sets submit (V1-27)', () => {
@@ -341,7 +349,7 @@ describe('StrengthForm — partial sets submit (V1-27)', () => {
     expect(repsOf(1, 2).required).toBe(true);
     expect(weightOf(1, 2).required).toBe(true);
     expect(setsSent()).toBe(3);
-    expect(summaryText()).toBe(PARTIAL_SETS_COPY.blocked);
+    expect(summaryText()).toBe('Back Squat set 2 needs finishing.');
     expectSummaryAgrees();
   });
 
@@ -350,7 +358,7 @@ describe('StrengthForm — partial sets submit (V1-27)', () => {
     fill(1, 1);
     fireEvent.change(weightOf(1, 2), { target: { value: '20' } });
     expect(repsOf(1, 2).required).toBe(true);
-    expect(summaryText()).toBe(PARTIAL_SETS_COPY.blocked);
+    expect(summaryText()).toBe('Back Squat set 2 needs finishing.');
     expectSummaryAgrees();
   });
 
@@ -389,7 +397,7 @@ describe('StrengthForm — partial sets submit (V1-27)', () => {
     renderWith3();
     fireEvent.change(screen.getByDisplayValue('Back Squat'), { target: { value: 'Front Squat' } });
     expect(repsOf(1, 1).required).toBe(true);
-    expect(summaryText()).toBe(PARTIAL_SETS_COPY.blocked);
+    expect(summaryText()).toBe('Front Squat set 1 needs finishing.');
     expectSummaryAgrees();
     // Opening card 2 used to collapse card 1. A renamed card is hand-added now: it stays open.
     fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
@@ -400,7 +408,7 @@ describe('StrengthForm — partial sets submit (V1-27)', () => {
     renderForm();
     fill(1, 1);
     expect(nameInput()).toHaveProperty('required', true);
-    expect(summaryText()).toBe(PARTIAL_SETS_COPY.blocked);
+    expect(summaryText()).toBe('Movement 1 needs a name.');
     expectSummaryAgrees();
   });
 
@@ -448,7 +456,7 @@ describe('StrengthForm — the custom "missing" message never lingers (V1-27 dec
     renderWith3();
     fireEvent.change(repsOf(1, 1), { target: { value: '8' } });
     expect(weightOf(1, 1).validity.customError).toBe(true);
-    expect(weightOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingField);
+    expect(weightOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingWeight);
     fireEvent.click(screen.getByRole('checkbox', { name: /^BW — Bodyweight — movement 1 set 1$/ }));
     expect(weightOf(1, 1).validity.customError).toBe(false);
   });
@@ -470,7 +478,26 @@ describe('StrengthForm — the custom "missing" message never lingers (V1-27 dec
     expect(weightOf(1, 1).validity.customError).toBe(false);
   });
 
-  it('without `missingMessage` (the edit form) no custom validity is ever set', () => {
+  it('blank reps on a multi-set card points at the per-set Remove', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 3);
+    expect(repsOf(1, 2).validationMessage).toBe(PARTIAL_SETS_COPY.missingReps);
+  });
+
+  it('a ONE-set card never mentions Remove: reps say "fill in", weight says "tap BW"', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Push-ups' } });
+    fireEvent.change(repsOf(1, 1), { target: { value: '10' } });
+    expect(weightOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingWeight);
+    expect(weightOf(1, 1).validationMessage).not.toContain('Remove');
+    fireEvent.change(repsOf(1, 1), { target: { value: '' } });
+    fireEvent.change(weightOf(1, 1), { target: { value: '20' } });
+    expect(repsOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingRepsOnly);
+    expect(repsOf(1, 1).validationMessage).not.toContain('Remove');
+  });
+
+  it('without a missing message (the edit form) no custom validity is ever set', () => {
     render(
       <form>
         <SetRepsWeightFields

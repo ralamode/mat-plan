@@ -40,7 +40,8 @@ export function SetRepsWeightFields({
   nameWeight,
   repsRequired = true,
   weightRequired = true,
-  missingMessage,
+  repsMissingMessage,
+  weightMissingMessage,
   repsDescribedBy,
   unitLabel,
 }: {
@@ -66,10 +67,13 @@ export function SetRepsWeightFields({
    */
   repsRequired?: boolean;
   /**
-   * V1-27 — the message a required, blank field shows instead of the browser's generic one. Passed by
-   * the LOG form only: the edit form has no Remove button, so "tap Remove" would be false there.
+   * V1-27 — the message a required, blank REPS field shows instead of the browser's generic one, and
+   * the same for WEIGHT. Per field because the way out differs: blank reps on a multi-set card is
+   * "tap Remove", blank weight is "tap BW". Passed by the LOG form only: the edit form has no Remove
+   * button, so neither applies there.
    */
-  missingMessage?: string;
+  repsMissingMessage?: string;
+  weightMissingMessage?: string;
   /** V1-27 — `aria-describedby` on the reps input (the trailing-rows hint, while the card is mixed). */
   repsDescribedBy?: string;
   /**
@@ -86,8 +90,8 @@ export function SetRepsWeightFields({
 }) {
   const repsRef = useRef<HTMLInputElement>(null);
   const weightRef = useRef<HTMLInputElement>(null);
-  useMissingMessage(repsRef, repsRequired, reps, missingMessage);
-  useMissingMessage(weightRef, weightRequired, weight, missingMessage);
+  useMissingMessage(repsRef, repsRequired, reps, repsMissingMessage);
+  useMissingMessage(weightRef, weightRequired, weight, weightMissingMessage);
   return (
     <>
       <input
