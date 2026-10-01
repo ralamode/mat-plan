@@ -93,7 +93,7 @@ flowchart LR
   carry it, and only **GitHub Support** can purge PR refs and cached commit views — Ray files that
   request. Then re-scan every ref (branches + `refs/pull/*`) with gitleaks.
 - **Open P0s:** V1-30, V1-27, CSV-1 (check prod for kg rows first), DAL-1, SEC-3.
-- **SEC-2** (SHA-pin every action, #195) and **the shared redirect helper fix** from #193's review —
+- **SEC-2** (SHA-pin every action, #195) and **the shared redirect helper fix (SEC-4)** from #193's review —
   `safeInternalPath` must reject `\`, `%5C`, `//`, absolute and `javascript:` URLs **before** any
   sign-in or invite flow reuses it.
 - **DX-5(a)** — required checks, up-to-date branches, no direct pushes. A repo-settings change. (Its CI

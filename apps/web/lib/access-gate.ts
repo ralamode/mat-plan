@@ -18,14 +18,51 @@ export const GATE_COOKIE_NAME = 'mp_gate';
 /** Route of the access-gate entry page (also the `app/gate/` segment). */
 export const GATE_PATH = '/gate';
 
+/** A backslash, or a C0 control character / DEL — all of which the URL parser rewrites or drops. */
+function hasUnsafeChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c === 0x5c || c <= 0x1f || c === 0x7f) return true;
+  }
+  return false;
+}
+
+/** Any origin works: it only has to be one a same-origin path can't change. */
+const PROBE_ORIGIN = 'http://internal.invalid';
+
 /**
  * Clamp a caller-supplied redirect target to a same-origin absolute path, so a
- * `?from=` value can never become an open redirect (`//evil.com`, `https://…`)
- * or an XSS sink. Falls back to the site root. Shared by the proxy, the gate
- * page, and the gate Server Action so the rule can't drift between them.
+ * `?from=` value can never become an open redirect or an XSS sink. Falls back to
+ * the site root. Shared by the gate page and the gate Server Action so the rule
+ * can't drift between them (SEC-4).
+ *
+ * A prefix check is not enough: browsers and the URL parser treat `\` as `/` and
+ * drop tab/CR/LF, so a path that merely *starts* with one slash can still resolve
+ * to another origin. So: reject backslashes and control characters (raw or
+ * percent-encoded), then resolve the path against a fixed origin and require the
+ * origin to be unchanged. Return the parser's NORMALIZED form, never the input:
+ * dot segments (`/.//x`) normalize to a `//` pathname that Next's client router
+ * would push as a scheme-relative href, and non-ASCII characters must come back
+ * percent-encoded because the target is written into a response header.
  */
 export function safeInternalPath(path: string | null | undefined): string {
-  return path && path.startsWith('/') && !path.startsWith('//') ? path : '/';
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return '/';
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    return '/';
+  }
+  if (hasUnsafeChar(path) || hasUnsafeChar(decoded)) return '/';
+  if (decoded.startsWith('//')) return '/';
+  let url: URL;
+  try {
+    url = new URL(path, PROBE_ORIGIN);
+  } catch {
+    return '/';
+  }
+  if (url.origin !== PROBE_ORIGIN || url.pathname.startsWith('//')) return '/';
+  return url.pathname + url.search + url.hash;
 }
 
 async function sha256Hex(input: string): Promise<string> {
