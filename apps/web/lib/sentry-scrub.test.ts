@@ -1,8 +1,15 @@
 import type { ErrorEvent, Event } from '@sentry/nextjs';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { describe, expect, it } from 'vitest';
 
 import { GATE_COOKIE_NAME } from './access-gate';
-import { beforeSendScrubbed, scrubSentryEvent } from './sentry-scrub';
+import {
+  beforeBreadcrumbScrubbed,
+  beforeSendLogScrubbed,
+  beforeSendScrubbed,
+  beforeSendTransactionScrubbed,
+  scrubSentryEvent,
+} from './sentry-scrub';
 
 /**
  * V1-14a — THE security assertion of the Sentry wiring. Each case below corresponds to a real leak path
@@ -89,5 +96,167 @@ describe('scrubSentryEvent — shape safety', () => {
     } as ErrorEvent);
     expect(event).not.toBeNull();
     expect(event.request?.cookies).toBeUndefined();
+  });
+});
+
+// SEC-3 — a DB failure inside a write must not ship the write's values. drizzle-orm's
+// `DrizzleQueryError` message embeds `params: …` after the SQL, and the instrumentation captures it on
+// any driver error. Built from the REAL error class so a drizzle message-format change shows up here.
+describe('scrubSentryEvent — query params never leave the server (SEC-3)', () => {
+  // Neutral numbers; what matters is that they appear in the message and must not survive.
+  const PARAMS = [123.45, 'bw-row-id'];
+  const err = new DrizzleQueryError(
+    'update "entries" set "value_num" = $1 where "public_id" = $2',
+    PARAMS,
+  );
+
+  it('the real DrizzleQueryError message carries the params (the leak this guards)', () => {
+    expect(err.message).toContain('params:');
+    expect(err.message).toContain('123.45');
+  });
+
+  it('cuts the params off exception values, keeping the SQL', () => {
+    const event = scrubSentryEvent({
+      exception: { values: [{ type: 'DrizzleQueryError', value: err.message }] },
+    } as ErrorEvent);
+    const value = event.exception?.values?.[0]?.value ?? '';
+    expect(value).not.toContain('123.45');
+    expect(value).not.toContain('params:');
+    expect(value).toContain('Failed query: update "entries"');
+  });
+
+  it('cuts them from every exception in a cause chain, the message, logentry and breadcrumbs', () => {
+    const event = scrubSentryEvent({
+      exception: { values: [{ value: 'driver: timeout' }, { value: err.message }] },
+      message: err.message,
+      logentry: { message: err.message, params: [123.45] },
+      breadcrumbs: [{ message: err.message, data: { params: PARAMS, ok: 1 } }],
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+    expect(JSON.stringify(event)).not.toContain('params');
+    expect(event.exception?.values?.[0]?.value).toBe('driver: timeout');
+    expect(event.breadcrumbs?.[0]?.data).toEqual({ ok: 1 });
+  });
+
+  it('drops `params` keys an integration copied into extra or contexts, at any depth', () => {
+    const event = scrubSentryEvent({
+      extra: { params: PARAMS, note: 'kept' },
+      contexts: { DrizzleQueryError: { query: 'select 1', params: PARAMS } },
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+    expect(event.extra).toEqual({ note: 'kept' });
+    expect(event.contexts?.DrizzleQueryError).toEqual({ query: 'select 1' });
+  });
+
+  // The review's probe: Sentry's default console integration records a breadcrumb whose
+  // `data.arguments` hold the logged error, already NORMALIZED (message/stack as strings, `params`
+  // collapsed to "[Array]"), and Next logs a failed action with console.error. Dropping the `params`
+  // key alone left the values in `message` and `stack`.
+  it('strips params inside normalized console breadcrumb arguments', () => {
+    const event = scrubSentryEvent({
+      breadcrumbs: [
+        {
+          category: 'console',
+          message: String(err.stack),
+          data: {
+            logger: 'console',
+            arguments: [
+              {
+                name: 'Error',
+                message: err.message,
+                stack: err.stack,
+                query: err.query,
+                params: '[Array]',
+              },
+            ],
+          },
+        },
+      ],
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+  });
+
+  it('strips a normalized error anywhere in breadcrumb data, not only console arguments', () => {
+    const event = scrubSentryEvent({
+      breadcrumbs: [
+        {
+          category: 'http',
+          data: {
+            error: { name: 'Error', message: err.message, stack: err.stack, params: '[Array]' },
+          },
+        },
+      ],
+      extra: { lastError: { message: err.message } },
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+  });
+
+  it('cuts params after an escaped newline (a JSON-serialized message)', () => {
+    const serialized = JSON.stringify(err.message).slice(1, -1); // newline becomes a literal backslash-n
+    expect(serialized).toContain('\\nparams:');
+    const event = scrubSentryEvent({ message: serialized } as ErrorEvent);
+    expect(event.message).not.toContain('123.45');
+    expect(event.message).toContain('Failed query: update');
+  });
+
+  it("beforeBreadcrumb drops a console breadcrumb's logged arguments and strips its message", () => {
+    const crumb = beforeBreadcrumbScrubbed({
+      category: 'console',
+      level: 'error',
+      message: String(err.stack),
+      data: { logger: 'console', arguments: [err] },
+    });
+    expect(crumb).not.toBeNull();
+    expect(crumb?.data).toEqual({ logger: 'console' });
+    expect(crumb?.message).not.toContain('123.45');
+  });
+
+  it('beforeSendLog strips the log message and any attribute string', () => {
+    const log = beforeSendLogScrubbed({
+      level: 'error',
+      message: err.message,
+      attributes: { error: err.message, params: PARAMS, route: '/p/x' },
+    });
+    expect(JSON.stringify(log)).not.toContain('123.45');
+    expect(log.attributes).toEqual({
+      error: expect.stringContaining('Failed query'),
+      route: '/p/x',
+    });
+  });
+
+  it("strips a transaction span's status and description", () => {
+    const event = beforeSendTransactionScrubbed({
+      type: 'transaction',
+      spans: [
+        {
+          span_id: 'a',
+          trace_id: 'b',
+          start_timestamp: 0,
+          description: err.message,
+          status: err.message,
+          data: { 'db.statement': 'update x', note: err.message },
+        },
+      ],
+    } as unknown as Event);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+    expect(event.spans?.[0]?.data?.['db.statement']).toBe('update x');
+  });
+
+  it('leaves an ordinary error untouched', () => {
+    const value = 'TypeError: cannot read properties of undefined';
+    const event = beforeSendScrubbed({
+      exception: { values: [{ value }] },
+      message: 'hi',
+    } as ErrorEvent);
+    expect(event.exception?.values?.[0]?.value).toBe(value);
+    expect(event.message).toBe('hi');
+  });
+
+  it('beforeBreadcrumb fails closed on data it cannot scrub, and leaves clean frozen data alone', () => {
+    const dirty = Object.freeze({ note: 'Failed query: x\nparams: 123.45' });
+    expect(beforeBreadcrumbScrubbed({ category: 'app', data: { dirty } })).toBeNull();
+    const clean = Object.freeze({ note: 'nothing to strip' });
+    const kept = beforeBreadcrumbScrubbed({ category: 'app', data: { clean } });
+    expect(kept?.data?.clean).toBe(clean);
   });
 });
