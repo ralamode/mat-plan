@@ -790,7 +790,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   percent-encoded) and requires the path to resolve to the same origin. Fixed before AUTH-1 or an
   invite flow reuses the helper.
 
-- **V1-27 — doing SOME of a movement's sets blocks the submit.** 📋 [**plan**](./plans/v1-27-partial-sets.md) (draft; lands after #201). 🔴 **P0, found 2026-09-30** by
+- **V1-27 — doing SOME of a movement's sets blocks the submit.** 📋 [**plan**](./plans/v1-27-partial-sets.md) (revised after the independent panels; awaiting Ray; lands after #201). 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
   per-**set** equivalent. So a kid who does **2 of 3 prescribed sets** cannot submit at all — the
@@ -802,11 +802,19 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   constraint validation, and no e2e had ever submitted a scaffolded form. The V1-26 spec now does, and
   it fills every row precisely so it does not depend on this bug either way.
 
-  **Likely fix, to be planned:** an untouched scaffolded SET is dropped at submit the way an untouched
-  scaffolded movement already is — which means `required` can no longer carry the "don't submit
-  nothing" job alone, and `strengthSetSchema`'s superRefine has to. Related to V1-25 §1 (the athlete
-  should be able to choose the set count up front) but strictly worse, because that one is friction
-  and this one is a wall.
+  **Planned fix:** untouched sets **after the last touched set** of a movement are not `required` and
+  are not submitted, and a line above **Log strength** states what the tap will log. A gap (an untouched
+  set before a touched one) still blocks, with a message naming the way out. No server validation or
+  wire change: the server already rejects a blank set. Related to V1-25 §1 (the athlete should be able
+  to choose the set count up front) but strictly worse, because that one is friction and this one is a
+  wall.
+
+- **V1-35 — an error names "Pull-up" when the day has two Pull-ups.** 🟢 Filed 2026-10-01 (V1-27's
+  panel). Strength-session errors were numbered by payload index ("Movement 3"), which drifts when an
+  untouched card is dropped before the faulty one; #201 replaces the number with the movement's name.
+  A name is ambiguous when the same movement appears twice in a day (legitimate — two blocks of
+  pull-ups). Fix when it bites: carry the card's on-screen position for the label, bounded so it can
+  never reject a valid session, read only on the error path, and never stored.
 
   ### 3. A logged form should look complete, not empty
 
@@ -876,6 +884,11 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     floors every `?d=` into the writable window; covering them needs a backdated-profile fixture (the
     screenshot script's `seedClosedDays` is the precedent). Fold into 1b, which adds a control to
     every one of these states and must audit them anyway.
+  - **Follow-up (from V1-27's panel, 2026-10-01): add a set to a logged strength entry.** Once V1-27
+    drops trailing blank rows, a set done but not entered (or entered after an early **Log** tap) has
+    no in-app recovery: logging it again creates a second entry for the movement on that day, and only
+    a `db:correct` correction can merge them. 1b amends values; 3a/3b are a receipt and a list move.
+    Belongs with the strength half of the amend.
 
   📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
   as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
