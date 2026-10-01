@@ -167,7 +167,8 @@ export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = 
   time: 'time',
 };
 
-/** Is this unit a weight? The one spelling of the check (`csv/load.ts` and `set-display.ts` too). */
+/** Is this unit a weight? The one spelling of the check for a UNIT (`set-display.ts` checks a stored
+ *  dimension instead, so it has no unit to pass). */
 export function isMassUnit(unit: Unit): boolean {
   return UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass;
 }

@@ -1,5 +1,6 @@
 import {
   ACTIVITY_TYPE_KEYS,
+  BLANK_SET_MESSAGE,
   BODYWEIGHT_UNITS,
   FREE_TEXT_NOTE_MAX,
   LOGGABLE_DIMENSION_NOUNS,
@@ -375,6 +376,30 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
       `Movement 2, set 2: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
     ]);
     expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('lists errors in FORM order, whichever check raised them', async () => {
+    // The set check (blank) runs before the session check (BW on a time), so without the sort set 2
+    // would be listed above set 1.
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          {
+            unit: 'sec',
+            sets: [
+              { reps: '3', isBodyweight: true },
+              { reps: '3', weight: '' },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(res.fieldErrors?.movements).toEqual([
+      `Movement 1, set 1: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
+      `Movement 1, set 2: ${BLANK_SET_MESSAGE}`,
+    ]);
   });
 
   it('rejects a non-integer rep count', async () => {

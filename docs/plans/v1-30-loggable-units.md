@@ -257,3 +257,10 @@ No P0 or P1 from reuse, architecture or UX. Every fix below landed in the same P
 | C-I2 | Correctness     | "Offerable" came from the server's own enum, so the chain test couldn't fail on it                                                     | **accepted**           | Independent check: `loggableUnitsOf(d)` equals `unitsOfDimension(d)` and is non-empty for every offered dimension.                                                                                                     |
 | C-I3 | Correctness     | Error lines not in set order                                                                                                           | **accepted**           | `actions.ts` sorts by (movement, set).                                                                                                                                                                                 |
 | C-I4 | Correctness     | Mutation checks: reverting the schema, the vest suffix, or the edit guard each turns a test red; `060be23` was assertion-red on `main` | **verified**           | —                                                                                                                                                                                                                      |
+
+**Second pass (fresh reviewer, for shipit):** ready, no P0/P1. Three P2s, all fixed:
+
+- the set-order sort had no test; one was added, and it is red without the sort (mutation-checked);
+- the refine's comment still said "one message per set"; it now says one per fault;
+- `isMassUnit`'s docblock claimed callers it didn't have; `csv/load.ts` now uses it, and the docblock
+  says why `set-display.ts` doesn't.

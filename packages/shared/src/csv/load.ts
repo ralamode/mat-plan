@@ -1,6 +1,6 @@
 import { QUANTITY_SLOT, type QuantitySlot } from '../quantity-slots';
-import { type Unit, UNIT_DIMENSION } from '../units';
-import { dimensionOf, formatQuantity } from './value';
+import { isMassUnit, type Unit } from '../units';
+import { formatQuantity } from './value';
 
 /** One measured quantity of one set, as the export reads it. */
 export type ExportQuantity = {
@@ -71,7 +71,7 @@ export function buildLoad(set: ExportSet, context: string): string {
   const lengths: string[] = [];
   for (const q of auxiliary) {
     const magnitude = formatQuantity(q.value, q.unit, `${context} ${q.slot}`);
-    if (dimensionOf(q.unit) === UNIT_DIMENSION.mass) {
+    if (isMassUnit(q.unit)) {
       head += `+${magnitude} (${q.slot})`;
     } else {
       lengths.push(magnitude);

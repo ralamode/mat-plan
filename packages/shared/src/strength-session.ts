@@ -236,7 +236,8 @@ export const logStrengthSessionSchema = z
     // the set refine accepts a mode in place of a number, so `3 × BW` on a timed hold would save with
     // no time at all, and be uneditable (the edit path is mass-only). One issue per set, on the
     // set's `weight` path. A BLANK set with no mode is already rejected by the set refine, so it is
-    // not re-checked here: every bad set gets exactly one message.
+    // not re-checked here: each fault gets exactly one message (a BW set
+    // that is also out of range has two faults, so two messages).
     for (const [i, m] of val.movements.entries()) {
       if (isMassUnit(m.unit)) continue;
       const noun = LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[m.unit]] ?? 'this measurement';
