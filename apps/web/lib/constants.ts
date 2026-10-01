@@ -80,7 +80,7 @@ export const BODYWEIGHT_COPY = {
   several: (values: readonly string[]) =>
     `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
   /**
-   * The ONE line under a duplicates headline, replacing `onePerDay` and `recovery` (rounds 2–3 on
+   * The ONE line under a duplicates headline, replacing `onePerDay` (rounds 2–3 on
    * #180). Two different situations, so two different asks:
    * - **All the same value** (a double submit): the extra row(s) are the problem.
    * - **Different values** (e.g. two phones): someone has to decide which weight is right, and
@@ -99,15 +99,6 @@ export const BODYWEIGHT_COPY = {
   },
   /** Why there is no form on a day that has a weight — a hidden form with no reason reads as broken. */
   onePerDay: 'One weigh-in per day.',
-  /**
-   * The real recovery path for a typo: a parent runs `db:correct` (docs/runbooks.md).
-   *
-   * ⚠️ PR 1b ships the amend and **deletes this line**; if it still renders after 1b, that is the bug.
-   * It deliberately does NOT say "coming next": that was a promise 1a cannot keep, since nothing in 1a
-   * can change the value. (1b's amend itself has NO day bound — plan Decision 5 — so once it ships this
-   * line has no job on any day, open or closed.)
-   */
-  recovery: 'Wrong number? Ask a parent — it can’t be changed in the app yet.',
   /** A closed day with nothing logged — otherwise the section is a bare heading. */
   noneOnClosedDay: 'No weight logged.',
   /** What the status region announces on a save — the FACT, with the value (acceptance 6). */
@@ -119,3 +110,61 @@ export const BODYWEIGHT_COPY = {
  * asserts focus landed on. One id: a page renders one weigh-in section.
  */
 export const BODYWEIGHT_RECEIPT_ID = 'bodyweight-receipt';
+
+/**
+ * The accessible name for an amend control — `Change weight — 84.5 lb` (V1-24 PR 1b).
+ *
+ * A FUNCTION, not a string. By PR 3 several of these share a screen, and six buttons all named
+ * "Change" are indistinguishable in a screen-reader forms list. The visible text (`Change`) is a
+ * PREFIX of the accessible name, satisfying WCAG 2.5.3 Label in Name — the rule the load-mode and
+ * Sub-failure controls already follow. The specs assert through this function, never a re-typed
+ * literal, which is the `life-form.tsx` / `e2e/steps.ts` drift it exists to prevent.
+ */
+export function changeLabel(subject: string, value: string): string {
+  return `${AMEND_COPY.change} ${subject} — ${value}`;
+}
+
+/** The amend interaction's copy (V1-24 PR 1b), shared by the island and the specs. */
+export const AMEND_COPY = {
+  /** The visible control. **"Change", not "Edit"** — plainer for an eight-year-old. `editable-set.tsx`
+   *  still says Edit; PR 2 unifies them when the shared primitive is extracted. */
+  change: 'Change',
+  save: 'Save',
+  cancel: 'Cancel',
+  /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
+   *  `<span>` a screen reader would otherwise never pair with the number. */
+  valueLabel: (unit: string) => `Weight (${unit})`,
+} as const;
+
+/**
+ * The notice on a day outside the write window (V1-15). Since V1-24 PR 1b a logged weight CAN be
+ * corrected there, so "you can still see what was logged" alone read as view-only directly above a
+ * working Change button. It now says what is closed (new entries) and what is still allowed.
+ */
+export const CLOSED_DAY_NOTICE =
+  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a logged weight.';
+
+/** The pending label on every Save button (amend islands and the routine editor). */
+export const SAVING_LABEL = 'Saving…';
+
+/**
+ * Typed-error copy shared by every amend path (V1-24 PR 1b).
+ *
+ * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would
+ * have re-worded the same failure. One place, so the two cannot answer it differently.
+ */
+export const AMEND_ERROR_COPY = {
+  /**
+   * The row is gone, was never theirs, or is not amendable. ONE message for all three **on purpose**:
+   * a crafted cross-profile id must learn nothing a stale id wouldn't. The action revalidates first,
+   * so "what's saved" is true and the kid has a way forward that isn't tapping Save again.
+   */
+  notFound: (subject: string) =>
+    `That ${subject} could not be found — the page now shows what's saved.`,
+  /**
+   * Someone amended it under this render. It states what the system DID — the page has revalidated,
+   * so the value on screen is already the one that won — because "reload the day" names a control
+   * that does not exist, and a kid mid-session would simply tap Save again.
+   */
+  staleWrite: 'That was changed on another device — the latest is showing now.',
+} as const;

@@ -301,11 +301,22 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
     section.getByText(BODYWEIGHT_COPY.saved(shownWeight(widest)), { exact: true }),
   ).toBeVisible();
   await expect(section.getByText(BODYWEIGHT_COPY.onePerDay, { exact: true })).toBeVisible();
-  await expect(section.getByText(BODYWEIGHT_COPY.recovery, { exact: true })).toBeVisible();
 
   await expectNoAxeViolations(page, 'weigh-in (receipt)');
   await expectTapTargets(page, 'weigh-in (receipt)');
   await expectNoHorizontalOverflow(page, 'weigh-in (receipt, 360px, widest value)');
+
+  // ── V1-24 PR 1b: the OPEN editor, at 360px with the widest value ─────────────────────────────
+  // No test had ever opened an edit form before this. Measured here with `widest` already on screen,
+  // because that is the worst case: the longest value the bound allows, plus the editor's controls.
+  //
+  // ⚠️ These gates are the FLOOR, not what makes the editor safe — an inline editor passes all three
+  // (flex wraps; the tap-target check measures height only). See `bodyweight-amend.tsx`.
+  await section.getByRole('button', { name: /^Change weight/ }).click();
+  await expect(section.getByLabel(/^Weight \(/)).toBeVisible();
+  await expectNoAxeViolations(page, 'weigh-in (editing)');
+  await expectTapTargets(page, 'weigh-in (editing)');
+  await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');
 });
 
 /**

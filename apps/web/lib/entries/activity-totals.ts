@@ -248,12 +248,17 @@ export type LoggedBodyweight = {
  * `listEntriesForDay` already excludes soft-deleted rows and orders ascending (V1-17), so "live" and
  * "oldest first" come from the DAL; this only filters. A value-less row is skipped: it has nothing to
  * show, and must not suppress the form (the bodyweight writer cannot produce one — its schema
- * requires a value).
+ * requires a value). A non-`done` row is skipped too (V1-24 PR 1b): the amend refuses it, so showing
+ * it would put a Change control on the screen that can only ever fail.
  */
 export function loggedBodyweight(entries: readonly EntryDTO[]): LoggedBodyweight[] {
   const logged: LoggedBodyweight[] = [];
   for (const e of entries) {
-    if (e.metricKey === SEED_METRIC_KEYS.bodyweight && e.value !== null) {
+    if (
+      e.metricKey === SEED_METRIC_KEYS.bodyweight &&
+      e.value !== null &&
+      e.status === ENTRY_STATUS.done
+    ) {
       logged.push({ entryId: e.id, value: e.value, unit: e.unit });
     }
   }

@@ -33,6 +33,7 @@ import {
   routineConfigSchema,
   ROUTINE_VERSION,
   SESSION_TYPES,
+  ENTRY_KIND,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
@@ -56,6 +57,7 @@ import { schema } from '../src/client';
 import { loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { programDayRows } from '../src/queries/program-day';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
+import { findAmendableBodyweight, updateBodyweightEntryById } from '../src/writers/bodyweight';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 import {
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -2680,6 +2682,213 @@ const deletedEdit = await updateStrengthSetById(asPg, {
 assert.equal(deletedEdit, null, 'V1-9: a soft-deleted set is not editable');
 console.log(
   '✓ V1-9: edit-set writer — owner edit persists (LWW); cross-profile, labeled, + soft-deleted rejected',
+);
+
+// ── V1-24 PR 1b: the bodyweight amend writer, and every pin in its guard ────────────────────────
+// The app DAL and this proof call the SAME `updateBodyweightEntryById`, so the shipped WHERE is what
+// gets exercised. It reuses the V1-9 block's already-seeded profiles rather than minting a third.
+
+/** Seed one metric entry for the amend proofs. Ids are allocated from a local counter so adding a
+ *  case never collides with the hand-assigned ids elsewhere in this file. */
+let bwProbe = 0;
+async function insertBodyweightProbe(args: {
+  profileId: number;
+  value: number;
+  unit?: string;
+  metricKey?: string;
+  status?: (typeof ENTRY_STATUS)[keyof typeof ENTRY_STATUS];
+  softDeleted?: boolean;
+  valueText?: string;
+}): Promise<{ publicId: string }> {
+  // 3 hex digits, so the last UUID group stays exactly 12 characters.
+  const n = (bwProbe += 1).toString(16).padStart(3, '0');
+  const publicId = `019826b4-0000-7000-8000-00000000b${n}`;
+  await db.insert(schema.entries).values({
+    publicId,
+    clientId: `019826b4-0000-7000-8000-00000000c${n}`,
+    profileId: args.profileId,
+    activityDate: '2026-09-30',
+    kind: ENTRY_KIND.bodyweight,
+    unit: args.unit ?? 'lb',
+    valueNum: String(args.value),
+    activityTypeId: await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn),
+    metricKey: args.metricKey ?? SEED_METRIC_KEYS.bodyweight,
+    status: args.status ?? ENTRY_STATUS.done,
+    ...(args.valueText ? { valueText: args.valueText } : {}),
+    ...(args.softDeleted ? { deletedAt: new Date() } : {}),
+  });
+  return { publicId };
+}
+
+const bwOwner = ssArgs.profilePublicId;
+const [bwOwnerRow] = await db
+  .select({ id: schema.profiles.id })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, bwOwner));
+
+// (a) The happy path — the amend persists and advances updated_at.
+const bwTarget = await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 84.5 });
+const amended = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: bwTarget.publicId,
+  value: 85.2,
+  unit: 'lb',
+  seenValue: 84.5,
+});
+assert.ok(amended, 'V1-24 1b: an owner amend returns the entry public id');
+const [afterAmend] = await db
+  .select({ valueNum: schema.entries.valueNum, unit: schema.entries.unit })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, bwTarget.publicId));
+assert.equal(Number(afterAmend.valueNum), 85.2, 'V1-24 1b: the value is corrected');
+assert.equal(afterAmend.unit, 'lb', 'V1-24 1b: the unit is NOT written by an amend');
+
+// (b) BOLA — a different profile amending the same entry matches nothing.
+const foreignAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009b0', // sessionProfileB — not the owner
+  entryId: bwTarget.publicId,
+  value: 999,
+  unit: 'lb',
+  seenValue: 85.2,
+});
+assert.equal(foreignAmend, null, 'V1-24 1b: a cross-profile amend matches no row');
+
+// (c) ⚠️ THE shape guard. A pushups entry, addressed through the bodyweight amend, must refuse —
+// otherwise this endpoint rewrites any owned entry into a bodyweight.
+const pushupRow = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 20,
+  unit: 'count',
+  metricKey: METRIC_KEYS.pushups,
+});
+const wrongMetric = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: pushupRow.publicId,
+  value: 85,
+  unit: 'count',
+  seenValue: 20,
+});
+assert.equal(wrongMetric, null, 'V1-24 1b: a non-bodyweight metric is not amendable here');
+const [pushupAfter] = await db
+  .select({ valueNum: schema.entries.valueNum })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, pushupRow.publicId));
+assert.equal(Number(pushupAfter.valueNum), 20, 'V1-24 1b: ...and the row is untouched');
+
+// (d) Optimistic concurrency — a stale seenValue refuses, so a second phone cannot be reverted.
+const staleAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: bwTarget.publicId,
+  value: 70,
+  unit: 'lb',
+  seenValue: 84.5, // the row is 85.2 now
+});
+assert.equal(staleAmend, null, 'V1-24 1b: a stale seenValue matches no row');
+
+// (e) The unit is a GUARD: claiming kg to slip a value past the lb bound matches nothing.
+const wrongUnit = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: bwTarget.publicId,
+  value: 200,
+  unit: 'kg',
+  seenValue: 85.2,
+});
+assert.equal(wrongUnit, null, 'V1-24 1b: a mismatched unit matches no row');
+
+// (f) A soft-deleted entry is not amendable.
+const deadRow = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 70,
+  softDeleted: true,
+});
+const deadAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: deadRow.publicId,
+  value: 71,
+  unit: 'lb',
+  seenValue: 70,
+});
+assert.equal(deadAmend, null, 'V1-24 1b: a soft-deleted entry is not amendable');
+
+// (g) A non-`done` row is not amendable: correcting it would mean changing its status.
+const skippedRow = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 70,
+  status: ENTRY_STATUS.skipped,
+});
+const skippedAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: skippedRow.publicId,
+  value: 71,
+  unit: 'lb',
+  seenValue: 70,
+});
+assert.equal(skippedAmend, null, 'V1-24 1b: a non-done entry is not amendable');
+
+// (h) A row carrying `value_text` is not amendable: setting value_num would leave two value sources.
+const textRow = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 70,
+  valueText: 'x',
+});
+const textAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: textRow.publicId,
+  value: 71,
+  unit: 'lb',
+  seenValue: 70,
+});
+assert.equal(textAmend, null, 'V1-24 1b: a text-valued entry is not amendable');
+
+// (i) The re-read the action branches on shares the UPDATE's shape and ownership: it sees the owner's
+// amendable row, and NOTHING the UPDATE could not have written.
+assert.deepEqual(
+  await findAmendableBodyweight(asPg, { profilePublicId: bwOwner, entryId: bwTarget.publicId }),
+  { value: 85.2, unit: 'lb' },
+  "V1-24 1b: the re-read returns the owner's current value",
+);
+for (const [entryId, profilePublicId, why] of [
+  [bwTarget.publicId, '019826b4-0000-7000-8000-0000000009b0', 'cross-profile'],
+  [skippedRow.publicId, bwOwner, 'non-done'],
+  [textRow.publicId, bwOwner, 'text-valued'],
+  [pushupRow.publicId, bwOwner, 'wrong metric'],
+  [deadRow.publicId, bwOwner, 'soft-deleted'],
+] as const) {
+  assert.equal(
+    await findAmendableBodyweight(asPg, { profilePublicId, entryId }),
+    null,
+    `V1-24 1b: the re-read refuses a ${why} row`,
+  );
+}
+
+// (j) THE profile half of `isLiveProfile`, for BOTH writers that share it: a soft-deleted profile owns
+// nothing. Neither V1-9's proof nor (a)–(i) covered this. Restored straight after.
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.profiles.id, bwOwnerRow.id));
+const deadProfileAmend = await updateBodyweightEntryById(asPg, {
+  profilePublicId: bwOwner,
+  entryId: bwTarget.publicId,
+  value: 90,
+  unit: 'lb',
+  seenValue: 85.2,
+});
+const deadProfileEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: bwOwner,
+  setId: editTarget.publicId,
+  reps: 99,
+  weight: 99,
+});
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: null })
+  .where(eq(schema.profiles.id, bwOwnerRow.id));
+assert.equal(deadProfileAmend, null, 'V1-24 1b: a soft-deleted profile cannot amend a bodyweight');
+assert.equal(deadProfileEdit, null, 'V1-9/V1-24: a soft-deleted profile cannot edit a set');
+
+console.log(
+  '✓ V1-24 1b: bodyweight amend — persists; cross-profile, wrong metric, stale value, wrong unit, soft-deleted, non-done, text-valued and dead-profile all refused; the re-read shares the guard',
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,

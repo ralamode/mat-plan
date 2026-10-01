@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 
 import {
   ACTIVITY_TYPE_KEYS,
+  editBodyweightSchema,
   editStrengthSetSchema,
   logBodyweightSchema,
   logStrengthSessionSchema,
@@ -16,6 +17,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
+import { AMEND_ERROR_COPY } from '@/lib/constants';
 import {
   CHECKIN_FIELDS,
   clientIdInputName,
@@ -30,6 +32,8 @@ import {
   logCheckinEntries,
   logStrengthSession,
   type CheckinItemInput,
+  editBodyweight,
+  ownedBodyweightValue,
 } from '@/lib/dal/entries';
 import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
@@ -40,6 +44,23 @@ import type { ActionState } from './action-state';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
+// The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
+// export ONLY async functions — the Server Actions compiler registers every export as an action
+// reference, so even a re-exported TYPE trips a runtime `ReferenceError: ActionState is not defined`.
+// So DO NOT re-export it here; consumers import `ActionState` straight from ./action-state.
+//
+// ── Sentry, once, for every action below (V1-14a; collapsed from 6 byte-identical copies in V1-24
+//    PR 1b, which would otherwise have made it 7) ────────────────────────────────────────────────
+// Wrapped INSIDE each body, never as a HOF: the rule above means every export must literally be
+// `export async function`. `return await` is load-bearing — the SDK returns Promise<ReturnType<A>>,
+// i.e. Promise<Promise<ActionState>> for an async callback.
+//
+// NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
+// a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). The "every export is an async
+// function" rule is enforced by `use-server-exports.test.ts`. Expected failures RETURN a
+// typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
+// convention for free rather than needing a filter.
+
 /**
  * Server Action: log a bodyweight (V0-8, scoped to a profile at V1-3). A Server
  * Action is a PUBLIC POST, so it validates its own input (zod) and re-checks the
@@ -47,14 +68,8 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
  * hidden field) is re-validated server-side via `getProfileByPublicId` — the
  * ownership seam v1.5's Clerk household scoping plugs into (profile tiles are a
  * UX switch, not a security boundary). Returns a typed envelope for
- * `useActionState` (expected errors don't throw). Sentry
- * `withServerActionInstrumentation` wrapping lands with observability (V1-14).
+ * `useActionState` (expected errors don't throw).
  */
-// The `ActionState` type + `INITIAL_ACTION_STATE` live in ./action-state. A 'use server' module may
-// export ONLY async functions — the Server Actions compiler registers every export as an action
-// reference, so even a re-exported TYPE trips a runtime `ReferenceError: ActionState is not defined`.
-// So DO NOT re-export it here; consumers import `ActionState` straight from ./action-state.
-
 // The not-found copy. An un-gated caller gets exactly this too (SEC-1), so it learns nothing about
 // whether the gate or the profile turned it away.
 const NO_PROFILE_LOG = 'No profile found to log against.';
@@ -64,15 +79,7 @@ export async function logBodyweightAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const parsed = logBodyweightSchema.safeParse({
@@ -155,15 +162,7 @@ export async function logCheckinsAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
@@ -266,15 +265,7 @@ export async function logStrengthSessionAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const raw = formData.get('movements');
@@ -370,15 +361,7 @@ export async function logLifeActivitiesAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const profileId = uuidSchema.safeParse(formData.get('profileId'));
@@ -451,15 +434,7 @@ export async function editStrengthSetAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
     const parsed = editStrengthSetSchema.safeParse({
@@ -485,10 +460,91 @@ export async function editStrengthSetAction(
       reps: parsed.data.reps,
       weight: parsed.data.weight,
     });
-    if (!updated) return { ok: false, error: 'That set could not be found.' };
-
+    // Revalidate on refusal too, so the page shows what IS saved (the copy says so).
     revalidatePath(`/p/${profile.id}`);
+    if (!updated) return { ok: false, error: AMEND_ERROR_COPY.notFound('set') };
+
     return { ok: true, error: null };
+  });
+}
+
+/**
+ * Server Action: amend an already-logged bodyweight (V1-24 PR 1b).
+ *
+ * The public-POST discipline of every writer here: zod-validate, re-resolve the profile by
+ * `public_id`, and let the DAL's guarded UPDATE prove ownership. **No `resolveDeclaredDay`** — an
+ * amend never moves the entry's date, so a ±1 day bound buys no integrity and would render a dead
+ * control on exactly the history days a typo is found on (plan Decision 5, the same reasoning
+ * `editStrengthSetAction` states for itself).
+ *
+ * ## Zero rows has four causes and they are NOT interchangeable
+ *
+ * Wrong owner · stale/deleted id · wrong shape · someone amended it under this render. Collapsing
+ * them into one message is wrong in both directions: "that changed, here's the latest" is
+ * recoverable and the parent should see it, while "wrong owner" must stay indistinguishable from
+ * "not found". So a refusal re-selects under the SAME ownership scope and branches three ways.
+ *
+ * ⚠️ **Branch (b) is the replay case, and it is mandatory** (AGENTS.md: replay → one effect,
+ * identical response). A parent taps Save on gym wifi, the write lands, the response is lost, the
+ * POST retries. The row has already moved, so a naive guard would answer *"someone else changed
+ * this"* — about nobody, over a value that is already exactly what they asked for.
+ */
+export async function editBodyweightAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
+  return await Sentry.withServerActionInstrumentation('editBodyweightAction', async () => {
+    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const parsed = editBodyweightSchema.safeParse({
+      profileId: formData.get('profileId'),
+      entryId: formData.get('entryId'),
+      value: formData.get('value'),
+      unit: formData.get('unit'),
+      seenValue: formData.get('seenValue'),
+    });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: 'Please fix the errors below.',
+        fieldErrors: parsed.error.flatten().fieldErrors,
+      };
+    }
+
+    const profile = await getProfileByPublicId(parsed.data.profileId);
+    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
+
+    const updated = await editBodyweight({
+      profilePublicId: profile.id,
+      entryId: parsed.data.entryId,
+      value: parsed.data.value,
+      unit: parsed.data.unit,
+      seenValue: parsed.data.seenValue,
+    });
+    if (updated) {
+      revalidatePath(`/p/${profile.id}`);
+      return { ok: true, error: null };
+    }
+
+    const current = await ownedBodyweightValue({
+      profilePublicId: profile.id,
+      entryId: parsed.data.entryId,
+    });
+    // (a) The row is gone, was never theirs, or is not an amendable bodyweight — one message, so a
+    // crafted cross-profile id learns nothing a stale id wouldn't.
+    // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
+    if (!current) {
+      revalidatePath(`/p/${profile.id}`);
+      return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
+    }
+    // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
+    if (current.value === parsed.data.value && current.unit === parsed.data.unit) {
+      revalidatePath(`/p/${profile.id}`);
+      return { ok: true, error: null };
+    }
+    // (c) Someone else got there first. Revalidate so the receipt shows the value that won.
+    revalidatePath(`/p/${profile.id}`);
+    return { ok: false, error: AMEND_ERROR_COPY.staleWrite };
   });
 }
 
@@ -507,15 +563,7 @@ export async function editRoutineAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  // Sentry (V1-14a). Wrapped INSIDE the body, never as a HOF: `use-server-exports.test.ts` requires
-  // every export in a 'use server' module to be `export async function` (the compiler registers each
-  // export as an action reference). `return await` is load-bearing — the SDK returns
-  // Promise<ReturnType<A>>, i.e. Promise<Promise<ActionState>> for an async callback.
-  //
-  // NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-  // a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). Expected failures RETURN a
-  // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
-  // convention for free rather than needing a filter.
+  // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
     if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_SAVE };
     const raw = formData.get('routine');

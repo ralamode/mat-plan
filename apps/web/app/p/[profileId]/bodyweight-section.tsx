@@ -1,6 +1,7 @@
 import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, BODYWEIGHT_VALUE_JOINER } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 
+import { BodyweightAmend } from './bodyweight-amend';
 import { BodyweightForm } from './bodyweight-form';
 import { BodyweightReceipt, formatLoggedWeights } from './bodyweight-receipt';
 import { SavedAnnouncer } from './saved-announcer';
@@ -59,7 +60,33 @@ export function BodyweightSection({
         // and error with it.
         <BodyweightForm key={`form-${day}`} profileId={profileId} day={day} />
       ) : (
-        <BodyweightReceipt logged={logged} writable={writable} />
+        <BodyweightReceipt
+          logged={logged}
+          writable={writable}
+          // ⚠️ Passed on EVERY day, closed ones included — the amend has no day bound (Decision 5).
+          // Gating it on `writable` would be that bound wearing a client-side hat, and would hide
+          // the control on exactly the history days a typo is found on.
+          //
+          // ⚠️ ...but only when there is ONE row. The receipt renders duplicates as a single
+          // `2 weights logged: 84.5 lb, 845 lb` line into a row that takes ONE control, and an
+          // amend addresses ONE entryId — so a lone Change there would silently edit an unstated
+          // one of them, most likely the correct one, leaving two wrong values where there was one.
+          // `BODYWEIGHT_COPY.duplicates` keeps saying "ask a parent" until 1c/1d remove the extra
+          // row, which an amend cannot do. A per-row control is a receipt-shape change, not a slot.
+          control={
+            logged.length === 1 ? (
+              // ⚠️ Keyed on the ENTRY, like the create form is keyed on the day: paging days is a
+              // client-side transition, so an unkeyed island would survive it with day A's typed
+              // value while its hidden entryId/seenValue re-rendered to day B's — and Save would
+              // amend B. A row replaced under the same day remounts it too.
+              <BodyweightAmend
+                key={`amend-${logged[0]!.entryId}`}
+                profileId={profileId}
+                logged={logged[0]!}
+              />
+            ) : undefined
+          }
+        />
       )}
     </section>
   );

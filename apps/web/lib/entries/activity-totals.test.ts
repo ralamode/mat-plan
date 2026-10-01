@@ -359,6 +359,10 @@ describe('loggedBodyweight (V1-24 PR 1a)', () => {
     ).toEqual([]);
   });
 
+  it('skips a non-done row — the amend refuses it, so a Change control there could only fail', () => {
+    expect(loggedBodyweight([weighIn({ status: ENTRY_STATUS.skipped })])).toEqual([]);
+  });
+
   /**
    * ⚠️ A day can hold MORE than one weigh-in until PR 1d's unique index lands — prod has such days,
    * and a two-phone race can still make one. The receipt must show them ALL: collapsing to one would

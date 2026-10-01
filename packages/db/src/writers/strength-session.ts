@@ -8,12 +8,13 @@ import {
   UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
-import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
-import type { NodePgDatabase, NodePgQueryResultHKT } from 'drizzle-orm/node-postgres';
-import type { PgTransaction } from 'drizzle-orm/pg-core';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
+import type { Schema } from '../client';
 import { schema } from '../client';
+import type { Executor } from './executor';
+import { ownedEntryIds } from './ownership';
 
 /**
  * The strength-session write core (V1-8-2), single-sourced HERE in `packages/db` — NOT in the
@@ -25,11 +26,6 @@ import { schema } from '../client';
  * PRE-RESOLVED catalog ids (the caller owns `findOrCreateMovementId` / `getActivityTypeIdByKey`,
  * which live app-side). No `server-only`, no app imports.
  */
-
-/** A db handle or an open transaction — both satisfy the query-builder surface the helpers use. */
-type Executor =
-  | NodePgDatabase<typeof schema>
-  | PgTransaction<NodePgQueryResultHKT, typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
 /** The three graph tables that share the `client_id` + `deleted_at` idempotency shape. */
 type GraphTable = typeof schema.sessions | typeof schema.supersets | typeof schema.entries;
@@ -277,7 +273,7 @@ async function writeSessionStrengthEntry(
  * the caller and passed in. Returns the session's `public_id`.
  */
 export async function writeStrengthSession(
-  db: NodePgDatabase<typeof schema>,
+  db: NodePgDatabase<Schema>,
   args: {
     profilePublicId: string;
     day: string;
@@ -395,19 +391,11 @@ export async function updateStrengthSetById(
   exec: Executor,
   args: { profilePublicId: string; setId: string; reps: number; weight: number },
 ): Promise<{ publicId: string } | null> {
-  // Subquery: the internal ids of entries owned by this live profile. Drizzle `update()` can't JOIN, so
-  // the parent-ownership proof rides in the WHERE via `inArray(entry_id, <this select>)` (no sql.raw).
-  const ownedEntryIds = exec
-    .select({ id: schema.entries.id })
-    .from(schema.entries)
-    .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
-    .where(
-      and(
-        eq(schema.profiles.publicId, args.profilePublicId),
-        isNull(schema.profiles.deletedAt),
-        isNull(schema.entries.deletedAt),
-      ),
-    );
+  // The internal ids of entries owned by this live profile. Drizzle `update()` can't JOIN, so the
+  // parent-ownership proof rides in the WHERE via `inArray(entry_id, <this select>)` (no sql.raw).
+  // V1-24 PR 1b lifted this into `ownership.ts` when the bodyweight amend needed the identical
+  // subselect — a security predicate with two callers is exactly what must not be copy-pasted.
+  const owned = ownedEntryIds(exec, args.profilePublicId);
 
   // GAP-3: the editable shape is "carries exactly one live PRIMARY MASS quantity". This replaces the
   // old `weight_num IS NOT NULL` guard — a set whose primary quantity is a LENGTH (a box jump) or a
@@ -447,7 +435,7 @@ export async function updateStrengthSetById(
           // the row rather than half-editing it. Mirrors `isEditableSet`; the client guard is advisory
           // (a crafted POST is the real threat), which is why both halves exist and must stay identical.
           eq(schema.entrySets.status, ENTRY_STATUS.done),
-          inArray(schema.entrySets.entryId, ownedEntryIds),
+          inArray(schema.entrySets.entryId, owned),
         ),
       )
       .returning({ id: schema.entrySets.id, publicId: schema.entrySets.publicId });

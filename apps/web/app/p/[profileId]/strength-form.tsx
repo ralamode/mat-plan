@@ -30,6 +30,7 @@ import { DayField } from './day-field';
 import { SetModeToggles } from './set-mode-toggles';
 import { SetRepsWeightFields } from './set-fields';
 import { isUntouchedScaffold, type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
+import { useOnActionSuccess } from './use-on-action-success';
 import {
   dissolveSmallSupersets,
   isUntouchedMovement,
@@ -116,11 +117,7 @@ export function StrengthForm({
     INITIAL_ACTION_STATE,
   );
   const [gen, setGen] = useState(0);
-  const [seenState, setSeenState] = useState(state);
-  if (state !== seenState) {
-    setSeenState(state);
-    if (state.ok) setGen((n) => n + 1);
-  }
+  useOnActionSuccess(state, () => setGen((n) => n + 1));
 
   return (
     <StrengthFormBody

@@ -703,9 +703,10 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
 - **V1-24 — the form IS the day's state: edit what you already logged.**
-  **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
-  the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
-  2 (check-ins), 3a/3b (strength).
+  **PR 1a ✅** (the receipt, read-only — removes the second-submit path through the UI; concurrent
+  mounts can still duplicate until 1d) · **PR 1b ✅** (the amend — a logged weight is correctable, on
+  every day including closed ones). **Next: 1c** (the duplicate-row correction), then 1d (the
+  bodyweight-scoped unique index), 2 (check-ins), 3a/3b (strength).
   - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
     CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
 logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,

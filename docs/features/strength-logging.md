@@ -191,6 +191,16 @@ Real ones, each with the file to look at.
   contract bytes a downstream workflow diffs. Using it here would drop the unit off every weight on
   screen; using the display one there would corrupt the export. A test pins the difference.
 
+- **`EditableSet`'s collapse-on-success is the shared `useOnActionSuccess` hook (V1-24 PR 1b).** The
+  during-render idiom — adjust state while rendering, so the editor never flashes open over its saved
+  value — had **four** copies before this, one of which called itself _"the strength-form during-render
+  idiom"_ in a comment. All four (and the bodyweight amend) use the hook now; `onSuccess` must still
+  only touch the caller's OWN state.
+
+- **`updateStrengthSetById`'s ownership subselect is `writers/ownership.ts`.** Same predicate as the
+  bodyweight amend, extracted when the second caller arrived — which means V1-9's existing
+  cross-profile `db:verify` proof now covers the shared helper too.
+
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
