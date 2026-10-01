@@ -30,11 +30,11 @@
     "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.2",
-    "@commitlint/config-conventional": "^21.2.2",
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
-    "prettier": "^3.9.7"
+    "prettier": "^3.9.9"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,md,mdx,css,yml,yaml}": "prettier --write",

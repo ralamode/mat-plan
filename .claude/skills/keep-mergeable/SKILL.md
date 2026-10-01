@@ -1,13 +1,14 @@
 ---
 name: keep-mergeable
-description: Keep every mat-plan PR with a `shipit` comment mergeable until it lands: merge main into any that went CONFLICTING or behind, auto-resolve only changelog/append-style conflicts, and stop and ask on a real one. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
+description: Keep every mat-plan PR with a `shipit` comment mergeable until it lands: merge main into any that went CONFLICTING or behind, auto-resolve only append-style conflicts, move a pre-DX-2 changelog entry into a fragment, and stop and ask on a real one. Use right after a merge lands, when a shipit'd PR shows conflicts, or when the user says "fix the merge conflicts", "keep the PRs mergeable", "update the branches".
 ---
 
 # Keep shipit'd PRs mergeable
 
 **Posting `shipit` is a promise, not a snapshot.** It says "ready to merge", and it stays true only if
 the PR keeps up with `main`. Merges land in batches, and each one re-conflicts the other approved PRs,
-almost always at the same line: the top of the `docs/status.md` changelog. Whoever posted `shipit`
+usually at a shared insertion point: before DX-2, the top of the `docs/status.md` changelog; since, the
+append-only tables and lists that remain. Whoever posted `shipit`
 keeps the PR mergeable until it merges, without being asked. The rule for posting `shipit` at all is
 in [review-pr](../review-pr/SKILL.md) → "Shipit".
 
@@ -69,11 +70,11 @@ their own worktree needs a `git pull --no-rebase` first ([ship-pr](../ship-pr/SK
 
 Auto-resolve **only** these shapes:
 
-| Conflict                                                                                                                                                                       | Resolution                                                                                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| Two entries inserted at the top of `docs/status.md` → Changelog (goes away with [DX-2](../../../docs/plans/dx-2-changelog-fragments.md))                                       | Keep both, **this PR's first** (newest on top); no blank line between entries                                                     |
-| Two entries appended to an append-only list (the `.claude/skills/README.md` changelog, a `docs/plan.md` section) where each side only **added** bullets **with different ids** | Keep both, **`main`'s first** (merge order). The same id on both sides (two PRs each adding `DX-3`) is real                       |
-| A table where each side **only added** rows                                                                                                                                    | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited, or the same id added on both sides, is real |
+| Conflict                                                                                                                                                                                                                                                                                          | Resolution                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A **pre-DX-2 branch** whose changelog entry is in a frozen history: `docs/status.md` → Changelog or `.claude/skills/README.md` → Changelog (a conflict there, or a clean merge that then fails `status:check` in step 4 with "adds to a changelog that DX-2 froze", **whatever the branch type**) | **Move only its changelog entry lines** into `docs/changelog/<date>-<headRefName with / → ->.md`, where `<date>` is **the entry's own date** ([format](../../../docs/changelog/README.md); fix links for the extra `../`), and keep its backlog-row and pointer edits in status.md. Afterwards `git diff origin/main HEAD -- docs/status.md` shows only rows or pointer |
+| Two entries appended to an append-only list (a `docs/plan.md` section) where each side only **added** bullets **with different ids**                                                                                                                                                              | Keep both, **`main`'s first** (merge order). The same id on both sides (two PRs each adding `DX-3`) is real                                                                                                                                                                                                                                                             |
+| A table where each side **only added** rows                                                                                                                                                                                                                                                       | Keep all rows; ignore column padding (prettier re-pads). A row **both** sides edited, or the same id added on both sides, is real                                                                                                                                                                                                                                       |
 
 **Anything else is a real conflict: stop and ask**, and name the files and hunks. That includes
 **`package.json`**: when two scripts land on one line, one side often adds an aggregate (`verify`,
@@ -98,7 +99,8 @@ git rev-parse -q --verify MERGE_HEAD >/dev/null && git commit --no-edit
 
 ```bash
 pnpm install --frozen-lockfile                # AFTER the merge: main may have changed the lockfile
-pnpm verify && pnpm guides:check && pnpm status:check
+pnpm verify && pnpm guides:check
+STATUS_BRANCH="$b" pnpm status:check          # detached worktree: the guard needs the branch name
 bash .claude/skills/hold-the-bar/check.sh origin/main
 git diff origin/main HEAD --stat              # only this PR's files; nothing of main's reverted
 git fetch origin "$b" && git merge-base --is-ancestor "origin/$b" HEAD \

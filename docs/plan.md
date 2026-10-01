@@ -365,10 +365,12 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   #176 resolved). **Implemented in #185**; live once `CLAUDE_CODE_OAUTH_TOKEN` is set, then the post-merge
   injection smoke (plan, test 4) is the acceptance gate. #179's `.claude/settings.json` would have
   tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
-- **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
+- ✅ **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
-  on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
-  branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
+  on 2026-09-30). One file per change in `docs/changelog/`. ✅ **Implemented in #190:** `status:check` requires a
+  fragment on product branches once `docs/changelog/README.md` is in the branch (so a legacy branch
+  meets the rule when it merges `main`), and fails any branch that adds to the frozen status.md or
+  skills-README history. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
   the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
 - **DX-3 — `screenshot:ephemeral` silently captures a stale build.** It reuses `apps/web/.next`
   whenever a `BUILD_ID` exists; only `--build` forces a rebuild. On #180 that posted a screenshot of
@@ -390,8 +392,32 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
-  needs its own plan and panel. Then update AGENTS.md's gate list, which #181 corrected to say "by
-  convention", in the same PR.
+  needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
+  Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
+  reading the top of the status.md changelog, which DX-2 froze. The hook
+  (`.claude/hooks/session-context.mjs`) prints the "Where we are" pointer and open PRs, not what just
+  merged. **Fix:** add the last ~5 lines of
+  `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
+  Small; no plan needed.
+
+## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
+
+`review-pr` in audit mode over the whole repo at `78ec41a` (2026-09-30): **2 P0 · 5 P1 · 7 P2**, plus
+verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each row says what it owes.
+
+| #   | Branch                            | What                                                                                                               | Owes                                      |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| 1   | `fix/v1-30-loggable-units`        | **P0** = **V1-30**: the server accepts every unit the form offers; boundary tests, `db:verify`, guide invariant 4b | plan + engineering panel, one UX reviewer |
+| 2   | `fix/v1-27-partial-sets`          | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                         | its existing plan                         |
+| 3   | `fix/sec-1-gate-defence-in-depth` | P1: pin "prefetch-header requests never reach the app" with a test, and re-check the gate outside the proxy        | plan + security panel                     |
+| 4   | `chore/sec-2-pin-actions`         | P1: SHA-pin the actions in `migrate.yml` (prod DB credential) and third-party ones in `ci.yml`                     | short plan (CI) + security lens           |
+| 5   | `chore/ci-1-audit-in-ci`          | P1: `pnpm audit --prod` in the `quality` job                                                                       | plan-exempt one-liner (say so)            |
+| 6   | `docs/status-headline`            | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                  | exempt                                    |
+| 7   | `fix/v1-26-bw-live-region`        | P1: the BW warning's live region mounts with its text; tie it to the chip                                          | one UX reviewer                           |
+| 8   | `docs/agents-md-truth`            | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                      | exempt                                    |
+| 9   | `chore/ci-2-typecheck-packages`   | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                | short plan (CI config)                    |
+| 10  | `test/v1-26-test-hardening`       | #171's test leftovers                                                                                              | exempt                                    |
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 

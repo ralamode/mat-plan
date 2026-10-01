@@ -16,6 +16,7 @@ Every PR must satisfy:
 - [ ] `client_id` stamped on writes
 - [ ] Playwright updated if a critical flow changed
 - [ ] Preview deploy manually verified
+- [ ] Changelog fragment added in `docs/changelog/` (product branches must; docs/chore usually do) — [format](./changelog/README.md); status.md's "Where we are" pointer and backlog row moved if this change moves them
 - [ ] Conventional Commit PR title; PR template filled
 - [ ] All required CI checks green
 
