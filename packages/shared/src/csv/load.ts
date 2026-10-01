@@ -1,6 +1,6 @@
 import { QUANTITY_SLOT, type QuantitySlot } from '../quantity-slots';
-import { type Unit, UNIT_DIMENSION } from '../units';
-import { dimensionOf, formatNumeric, formatQuantity } from './value';
+import { isMassUnit, type Unit } from '../units';
+import { formatQuantity } from './value';
 
 /** One measured quantity of one set, as the export reads it. */
 export type ExportQuantity = {
@@ -32,7 +32,7 @@ export type ExportSet = {
  * | `band` | `is_band` |
  * | `80` | one `primary` mass |
  * | `30in` · `20s` | one `primary` at length / time |
- * | `BW+8 (vest)` | `is_bodyweight` + a `vest` quantity |
+ * | `BW+8 (vest)` · `BW+8kg (vest)` | `is_bodyweight` + a `vest` quantity (`lb` bare, any other mass suffixed) |
  * | `123 (50ft)` | `primary` mass + a `distance` quantity |
  *
  * The last two need GAP-3 PR 4b to be *loggable*, but they are built here already: 4b turns them on
@@ -64,14 +64,15 @@ export function buildLoad(set: ExportSet, context: string): string {
   //
   //   a WORN MASS attaches to the head with `+` and names its slot, because a bare `(8)` would be
   //   meaningless        →  BW+8 (vest)     — no spaces around the `+`, the contract is explicit
+  //   It carries its unit suffix like the primary (`BW+8kg (vest)`); a bare kg would read as pounds.
   //
   //   a LENGTH is self-describing, because its unit says what it is
   //                      →  123 (50ft)
   const lengths: string[] = [];
   for (const q of auxiliary) {
     const magnitude = formatQuantity(q.value, q.unit, `${context} ${q.slot}`);
-    if (dimensionOf(q.unit) === UNIT_DIMENSION.mass) {
-      head += `+${formatNumeric(q.value)} (${q.slot})`;
+    if (isMassUnit(q.unit)) {
+      head += `+${magnitude} (${q.slot})`;
     } else {
       lengths.push(magnitude);
     }

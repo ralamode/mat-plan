@@ -1940,6 +1940,24 @@ assert.equal(durationSet.slot, QUANTITY_SLOT.primary, "GAP-3: a hold's duration 
 assert.equal(durationSet.dimension, UNIT_DIMENSION.time, 'GAP-3: …at dimension time');
 assert.equal(durationSet.unit, 'sec', 'GAP-3: …with the unit stored ON THE ROW (ADR 0004 §6)');
 assert.equal(durationSet.value_num, '30.000', 'GAP-3: …and the magnitude as a number');
+
+// V1-30: a non-mass set is UNEDITABLE by design. The edit guard keys on a live primary MASS quantity
+// (writers/strength-session.ts), and the form's `isEditableSet` agrees (strength-logging invariant 3).
+// This set has no mode flag and one quantity, so the dimension is the ONLY thing refusing it. Since
+// V1-30 the form can save time and distance sets, so this is the population the refusal now covers;
+// recovering a typo in one means writing a correction (docs/features/strength-logging.md).
+const [durationSetRow] = (
+  await db.execute(sql`
+    select es.public_id from entry_sets es join entries e on e.id = es.entry_id
+    where e.client_id = ${LABELED_MOVEMENT_CLIENT_ID} and es.idx = ${durationSet.idx}`)
+).rows as unknown as { public_id: string }[];
+const timedEdit = await updateStrengthSetById(asPg, {
+  profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA, the set's owner
+  setId: durationSetRow.public_id,
+  reps: 1,
+  weight: 45,
+});
+assert.equal(timedEdit, null, 'V1-30: a time set is not editable (the edit path is mass-only)');
 // The two bodyweight sets carry no quantity at all — a MODE is not a magnitude.
 assert.ok(
   labeledSets.slice(0, 2).every((r) => r.value_num === null),
@@ -2125,6 +2143,70 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   );
 
   console.log('✓ V1-13b: export reads — skipped LEFT JOIN, quantities, half-open month, BOLA');
+}
+
+// ── V1-30: a newly loggable unit round-trips from the REAL writer to the export read ───────────────
+// The CSV tests build rows by hand; this proves the stored side. Before V1-30 the session schema
+// refused `m` outright and a `kg` set made the export throw. The fold + CSV builder live in apps/web
+// (`foldStrengthRows`), out of reach here, so this asserts on what they consume: the quantity row's
+// (dimension, unit) and `strengthMonthRows`' unit + value — the bytes `20m`/`85kg` are pinned by the
+// strength-log CSV tests over those same fields.
+{
+  const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
+  await writeStrengthSession(asPg, {
+    profilePublicId: V130_PROFILE,
+    day: '2026-05-14',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: newId(),
+    activityTypeId: scLiftActivityId,
+    movements: [
+      {
+        movementName: movX.name,
+        unit: 'kg',
+        movementId: movX.id,
+        clientId: newId(),
+        sets: [{ reps: 5, weight: 85 }],
+      },
+      {
+        movementName: movY.name,
+        unit: 'm',
+        movementId: movY.id,
+        clientId: newId(),
+        sets: [{ reps: 1, weight: 20 }],
+      },
+    ],
+  });
+  const stored = (
+    await db.execute(sql`
+      select q.dimension, q.unit, q.value_num::float8 as value
+      from entry_set_quantities q
+      join entry_sets es on es.id = q.entry_set_id
+      join entries e on e.id = es.entry_id
+      join profiles p on p.id = e.profile_id
+      where p.public_id = ${V130_PROFILE} and e.activity_date = '2026-05-14'
+      order by q.unit`)
+  ).rows as unknown as { dimension: string; unit: string; value: number }[];
+  assert.deepEqual(
+    stored.map((r) => [r.dimension, r.unit, r.value]),
+    [
+      ['mass', 'kg', 85],
+      ['length', 'm', 20],
+    ],
+    'V1-30: kg stores as (mass, kg) and m as (length, m)',
+  );
+  const read = await strengthMonthRows(asPg, { profilePublicId: V130_PROFILE, month: '2026-05' });
+  assert.deepEqual(
+    read
+      .filter((r) => r.valueNum !== null)
+      .map((r) => [r.unit, Number(r.valueNum)])
+      .sort(),
+    [
+      ['kg', 85],
+      ['m', 20],
+    ],
+    'V1-30: the export read returns each unit with its value',
+  );
+  console.log('✓ V1-30: kg and m round-trip from the writer to the export read');
 }
 
 // ── GAP-3: the composite-FK unit guard, and the shapes fixed columns could not hold ────────────────

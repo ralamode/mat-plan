@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
 
+/** Over the per-set ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
+ *  real 3200 m or 2400 s is usually a unit slip, and the copy must not imply the athlete is wrong. */
+export const NUMBER_TOO_HIGH_MESSAGE = 'That number looks too high — check the unit.';
+
 /**
  * A NUMERIC set — reps × a number. This is the original `strengthSetSchema`, preserved **unchanged**
  * under a new name (GAP-1 P0-2).
@@ -26,6 +30,13 @@ export const numericSetSchema = z.object({
     z.coerce.number().min(0, 'Weight can’t be negative.').max(2000),
   ),
 });
+
+/**
+ * A set with no number and no mode. Unit-neutral since V1-30: this set may be a time or a distance,
+ * where BW / band are refused (the session refine), so "or tap BW / band" would point at a button
+ * that fails. Exported so tests assert through it.
+ */
+export const BLANK_SET_MESSAGE = 'Enter a number.';
 
 /**
  * One set as the LOG form submits it.
@@ -62,12 +73,12 @@ export const strengthSetSchema = z
             if (!/^\d+(\.\d{1,3})?$/.test(v)) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                message: 'Enter a plain number like 62.5, or tap BW.',
+                message: 'Enter a plain number like 62.5.',
               });
               return;
             }
             if (Number(v) > 2000) {
-              ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'That weight looks too high.' });
+              ctx.addIssue({ code: z.ZodIssueCode.custom, message: NUMBER_TOO_HIGH_MESSAGE });
             }
           }),
       )
@@ -105,7 +116,7 @@ export const strengthSetSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['weight'],
-        message: 'Enter a weight, or tap BW / band.',
+        message: BLANK_SET_MESSAGE,
       });
     }
   });

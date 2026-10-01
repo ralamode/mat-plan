@@ -298,11 +298,34 @@ export async function logStrengthSessionAction(
       // `flatten()` collapses every nested `movements[i].sets[j]` issue onto the one `movements` key
       // with no index. Rebuild it from the raw issues so each message names WHICH movement is wrong
       // (a multi-card form otherwise shows an unlocatable "reps must be positive").
+      // Sorted by (movement, set), so the banner reads top-to-bottom like the form: the set refine's
+      // issues and the session refine's would otherwise arrive grouped by which check raised them.
+      const at = (i: { path: PropertyKey[] }, k: number) =>
+        typeof i.path[k] === 'number' ? (i.path[k] as number) : -1;
+      // Name the movement, not its index: `path[1]` indexes the SUBMITTED list, which drops untouched
+      // scaffolded cards, so "Movement 3" can point at the wrong card on screen (V1-30 review). The
+      // raw name is untrusted text, rendered as text; capped so a long one can't swamp the banner.
+      const movementLabel = (index: number) => {
+        const raw = Array.isArray(movements)
+          ? (movements[index] as { movementName?: unknown } | undefined)?.movementName
+          : undefined;
+        const name = typeof raw === 'string' ? raw.trim().slice(0, 60) : '';
+        return name || `Movement ${index + 1}`;
+      };
       const movementMsgs = parsed.error.issues
         .filter((i) => i.path[0] === 'movements')
-        .map((i) =>
-          typeof i.path[1] === 'number' ? `Movement ${i.path[1] + 1}: ${i.message}` : i.message,
-        );
+        .sort((a, b) => at(a, 1) - at(b, 1) || at(a, 3) - at(b, 3))
+        .map((i) => {
+          if (typeof i.path[1] !== 'number') return i.message;
+          // V1-30: name the SET too when the issue sits on one, so three bad sets read as three
+          // distinct, locatable lines rather than one string repeated (also duplicate React keys).
+          const movement = movementLabel(i.path[1]);
+          const where =
+            i.path[2] === 'sets' && typeof i.path[3] === 'number'
+              ? `${movement}, set ${i.path[3] + 1}`
+              : movement;
+          return `${where}: ${i.message}`;
+        });
       if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;
       // Superset-level issues (≥2 members, distinct order) key on `['supersets', i]` — surface them too,
       // or a form bug in the grouping logic shows only the generic banner with no recoverable message.

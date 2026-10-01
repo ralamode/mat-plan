@@ -125,6 +125,27 @@ export const LOGGABLE_DIMENSIONS: readonly UnitDimension[] =
 export const LOGGABLE_UNITS: readonly Unit[] = LOGGABLE_DIMENSIONS.flatMap(unitsOfDimension);
 
 /**
+ * The movement unit the write path accepts: exactly `LOGGABLE_UNITS`. zod 4 takes the widened
+ * `readonly Unit[]` and still infers `Unit`. The chain test (`units.test.ts`) holds it to the form on
+ * one side and the export on the other (docs/plans/v1-30-loggable-units.md).
+ */
+export const loggableUnitSchema = z.enum(LOGGABLE_UNITS);
+
+/** The one "may a movement be logged in this?" predicate — a narrowing guard, no casts. */
+export function isLoggableUnit(value: string): value is Unit {
+  return loggableUnitSchema.safeParse(value).success;
+}
+
+/**
+ * The units a movement measured in `dimension` may be logged in: what the form's Unit select offers.
+ * Named so "offerable" is a code fact the chain test can iterate, rather than a re-derivation inside
+ * a component.
+ */
+export function loggableUnitsOf(dimension: UnitDimension): Unit[] {
+  return unitsOfDimension(dimension).filter(isLoggableUnit);
+}
+
+/**
  * What a movement's primary quantity is called, in words a parent or a ten-year-old reads without
  * translating. `mass` → "Weight", not "Mass"; `length` covers a box-jump HEIGHT and a broad-jump
  * DISTANCE, so it cannot be called either one alone.
@@ -134,3 +155,20 @@ export const LOGGABLE_DIMENSION_LABELS: Record<string, string> = {
   length: 'Height / distance',
   time: 'Time',
 };
+
+/**
+ * The same dimensions as a noun for running copy ("…don't apply to a TIME"). Its own map, not the
+ * label rewritten by string surgery, so respelling a label can't silently garble an error message.
+ * `units.test.ts` requires a noun for every loggable dimension.
+ */
+export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = {
+  mass: 'weight',
+  length: 'height or distance',
+  time: 'time',
+};
+
+/** Is this unit a weight? The one spelling of the check for a UNIT (`set-display.ts` checks a stored
+ *  dimension instead, so it has no unit to pass). */
+export function isMassUnit(unit: Unit): boolean {
+  return UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass;
+}

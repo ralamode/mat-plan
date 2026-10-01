@@ -18,9 +18,9 @@ import type { Unit } from '@mat-plan/shared';
  *
  * | | display (here) | CSV (`csv/value.ts`) |
  * | --- | --- | --- |
- * | a mass | `84.5 lb` | `84.5` — **bare**, the corpus writes no unit |
+ * | pounds | `84.5 lb` | `84.5` — **bare**, the corpus writes no unit |
  * | seconds | `20 sec` | `20s` |
- * | kilograms | `5 kg` | **throws** (`assertExportableUnit`) |
+ * | kilograms | `5 kg` | `5kg` — suffixed, never bare (V1-30) |
  *
  * Those are contract bytes a downstream workflow diffs, not prose. Reusing it here would drop the
  * unit off every weight on screen; reusing this one there would corrupt the export. Naming this

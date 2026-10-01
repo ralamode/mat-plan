@@ -28,6 +28,9 @@ half of GAP-1 P0-2
 > 3. **The four dimensions in §6 were incomplete** (`bool` and `timing` fit none of them), and
 >    `UNIT_CODES` had no length dimension whatsoever — which is most of why a box-jump height ended up
 >    inside a string.
+> 4. **§6 rule 2's "the movement declares the dimension" is a DEFAULT, not a declaration** (V1-30,
+>    2026-10-01). The form asks "Measuring?" and the athlete can change it; the catalog only seeds it.
+>    See the addendum under rule 2.
 
 ## Context
 
@@ -118,7 +121,12 @@ well-worn pattern, and the alternative costs either correctness or ad-hoc loggin
 1. **Never typed, never inferred.** Units come from the `units` reference table (exists;
    `movements.unit_default` FKs to it and **nothing reads it**).
 2. **The movement declares the _dimension_.** Box jump → length. Sled → mass + length. Hold → time.
-   The user is never asked "is this a weight or a height."
+   ~~The user is never asked "is this a weight or a height."~~ (They are, as of GAP-3 PR 4a's
+   Measuring select; see banner item 4.)
+   _Addendum (2026-10-01, V1-30):_ the catalog's declared dimension is a **default the athlete can
+   change** (the form's Measuring select). The server enforces dimension ↔ unit consistency (the
+   composite FKs), not catalog ↔ dimension: forcing the catalog's dimension would block a legitimate
+   choice, such as a carry logged for time. See strength-logging invariant 4b.
 3. **The household sets the _magnitude_ preference once** — lb/kg, in/cm. Not per set.
 4. **Store the resolved unit ON THE ROW, and never convert on write.**
 

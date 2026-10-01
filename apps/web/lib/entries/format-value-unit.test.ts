@@ -18,7 +18,7 @@ describe('formatValueUnit', () => {
    */
   it('keeps the unit on a mass — unlike the CSV formatter, deliberately', () => {
     expect(formatValueUnit(84.5, DEFAULT_BODYWEIGHT_UNIT)).toBe('84.5 lb');
-    expect(formatValueUnit(5, 'kg')).toBe('5 kg'); // the CSV path THROWS on kg; display must not
+    expect(formatValueUnit(5, 'kg')).toBe('5 kg'); // the CSV writes `5kg` (no space); display keeps the space
   });
 
   it('does not pad or round — the DTO value is already a JS number', () => {
