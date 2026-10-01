@@ -14,8 +14,8 @@
  *   status.md alone fails. The format lives in docs/changelog/README.md, not here.
  * - LEGACY — no README yet: docs/status.md touched, as before DX-2.
  * - FROZEN HISTORY (post-DX-2, EVERY branch type, before the owes check, STATUS_SKIP can't bypass it):
- *   adding a line to status.md's "## Changelog (merged PRs)" or the skills README's "## Changelog"
- *   fails. A docs/chore branch cut before DX-2 owes nothing, yet can merge its entry cleanly into the
+ *   adding an ENTRY (a `- ` line, net of edited ones) to status.md's "## Changelog (merged PRs)" or
+ *   the skills README's "## Changelog" fails, as does renaming either heading. A docs/chore branch cut before DX-2 owes nothing, yet can merge its entry cleanly into the
  *   closed history; this is what catches it.
  *
  * What this no longer proves: that status.md's "Where we are" pointer and backlog rows moved with a
@@ -134,9 +134,13 @@ if (postDx2) {
     const where = `${section.file} → "${section.heading}"`;
     const atBase = sectionEntries(mergeBase, section);
     const now = sectionEntries(null, section);
+    const tipRaw = sectionEntries(base, section);
+    // Gone here but also gone on main's tip: main retired it, not this branch.
     if (now === null)
-      return atBase === null ? [] : [`${where}: the heading was renamed or removed`];
-    const atTip = sectionEntries(base, section) ?? [];
+      return atBase === null || tipRaw === null
+        ? []
+        : [`${where}: the heading was renamed or removed`];
+    const atTip = tipRaw ?? [];
     const known = new Set([...(atBase ?? []), ...atTip]);
     const tip = new Set(atTip);
     const nowSet = new Set(now);
