@@ -790,7 +790,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   percent-encoded) and requires the path to resolve to the same origin. Fixed before AUTH-1 or an
   invite flow reuses the helper.
 
-- **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
+- **V1-27 — doing SOME of a movement's sets blocks the submit.** 📋 [**plan**](./plans/v1-27-partial-sets.md) (draft; lands after #201). 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
   per-**set** equivalent. So a kid who does **2 of 3 prescribed sets** cannot submit at all — the
