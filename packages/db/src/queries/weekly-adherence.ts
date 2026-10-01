@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
+import { isLiveProfile } from '../writers/ownership';
 
 /**
  * The weekly calisthenics ramp-adherence query (V1-6b-2), single-sourced here so the app read
@@ -39,8 +40,8 @@ export function weeklyAdherenceRows(
         actualMax: max(schema.entries.valueNum),
       })
       .from(schema.rampTargets)
-      // Ownership seam: scope by the profile's public_id, never a raw internal id (the same join
-      // `listEntriesForDay` uses). Household scope plugs in here at v1.5.
+      // Ownership seam: scope by the LIVE profile's public_id (`isLiveProfile`, the same predicate
+      // `listEntriesForDay` uses — DAL-1), never a raw internal id. Household scope plugs in here (TEN-1).
       .innerJoin(schema.profiles, eq(schema.rampTargets.profileId, schema.profiles.id))
       // For the metric's display label AND its rollup aggregation.
       .innerJoin(
@@ -66,7 +67,7 @@ export function weeklyAdherenceRows(
       )
       .where(
         and(
-          eq(schema.profiles.publicId, args.profilePublicId),
+          isLiveProfile(args.profilePublicId),
           eq(schema.rampTargets.weekStart, args.weekStart),
           isNull(schema.rampTargets.deletedAt),
           inArray(schema.rampTargets.metricKey, [...args.metricKeys]),

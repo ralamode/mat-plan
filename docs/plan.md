@@ -769,7 +769,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
   soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
   place to make it unskippable.
-- **DAL-2 — the live-profile ownership predicate is still hand-written at eight sites** (nine until DAL-1). V1-24 PR 1b
+- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites** (DAL-1 moved the two sites that lacked the soft-delete half — `listEntriesForDay`, `weeklyAdherenceRows` — onto the helper). V1-24 PR 1b
   extracts it to `packages/db/src/writers/ownership.ts` and converts the strength writer; the rest are
   untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
   what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s

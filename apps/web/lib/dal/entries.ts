@@ -165,7 +165,7 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     .where(
       and(
         // DAL-1: THE live-profile predicate (writers/ownership.ts), not a re-typed `publicId =` — this
-        // read was the one ownership site that skipped `profiles.deleted_at IS NULL`.
+        // read was one of two ownership sites that skipped `profiles.deleted_at IS NULL`.
         isLiveProfile(profilePublicId),
         eq(schema.entries.activityDate, day),
         isNull(schema.entries.deletedAt),
