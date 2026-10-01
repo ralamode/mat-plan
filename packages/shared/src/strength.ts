@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
 
+/** Over the per-set ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
+ *  real 3200 m or 2400 s is usually a unit slip, and the copy must not imply the athlete is wrong. */
+export const NUMBER_TOO_HIGH_MESSAGE = 'That number looks too high — check the unit.';
+
 /**
  * A NUMERIC set — reps × a number. This is the original `strengthSetSchema`, preserved **unchanged**
  * under a new name (GAP-1 P0-2).
@@ -74,7 +78,7 @@ export const strengthSetSchema = z
               return;
             }
             if (Number(v) > 2000) {
-              ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'That number looks too high.' });
+              ctx.addIssue({ code: z.ZodIssueCode.custom, message: NUMBER_TOO_HIGH_MESSAGE });
             }
           }),
       )

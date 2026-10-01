@@ -18,6 +18,11 @@ import {
 export const modeNotApplicableMessage = (noun: string) =>
   `Turn off BW / band — they don’t apply to a ${noun}.`;
 
+/** The same fault with the number ALSO blank: turning the chip off makes the field required, so name
+ *  both fixes at once rather than costing a second round trip (V1-30 review F1). */
+export const modeNotApplicableBlankMessage = (noun: string) =>
+  `Turn off BW / band and enter the ${noun}.`;
+
 /** Max movements per session, and max supersets (each needs ≥2 of the movements → floor(N/2)). Named
  *  so the derivation is expressed in code, not two magic numbers that can drift. */
 export const MAX_SESSION_MOVEMENTS = 12;
@@ -240,13 +245,16 @@ export const logStrengthSessionSchema = z
     // that is also out of range has two faults, so two messages).
     for (const [i, m] of val.movements.entries()) {
       if (isMassUnit(m.unit)) continue;
-      const noun = LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[m.unit]] ?? 'this measurement';
+      const noun = LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[m.unit]] ?? 'measurement';
       for (const [j, set] of m.sets.entries()) {
         if (set.isBodyweight || set.isBand) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['movements', i, 'sets', j, 'weight'],
-            message: modeNotApplicableMessage(noun),
+            message:
+              set.weight === null
+                ? modeNotApplicableBlankMessage(noun)
+                : modeNotApplicableMessage(noun),
           });
         }
       }

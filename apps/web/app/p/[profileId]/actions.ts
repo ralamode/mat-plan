@@ -302,6 +302,16 @@ export async function logStrengthSessionAction(
       // issues and the session refine's would otherwise arrive grouped by which check raised them.
       const at = (i: { path: PropertyKey[] }, k: number) =>
         typeof i.path[k] === 'number' ? (i.path[k] as number) : -1;
+      // Name the movement, not its index: `path[1]` indexes the SUBMITTED list, which drops untouched
+      // scaffolded cards, so "Movement 3" can point at the wrong card on screen (V1-30 review). The
+      // raw name is untrusted text, rendered as text; capped so a long one can't swamp the banner.
+      const movementLabel = (index: number) => {
+        const raw = Array.isArray(movements)
+          ? (movements[index] as { movementName?: unknown } | undefined)?.movementName
+          : undefined;
+        const name = typeof raw === 'string' ? raw.trim().slice(0, 60) : '';
+        return name || `Movement ${index + 1}`;
+      };
       const movementMsgs = parsed.error.issues
         .filter((i) => i.path[0] === 'movements')
         .sort((a, b) => at(a, 1) - at(b, 1) || at(a, 3) - at(b, 3))
@@ -309,10 +319,11 @@ export async function logStrengthSessionAction(
           if (typeof i.path[1] !== 'number') return i.message;
           // V1-30: name the SET too when the issue sits on one, so three bad sets read as three
           // distinct, locatable lines rather than one string repeated (also duplicate React keys).
+          const movement = movementLabel(i.path[1]);
           const where =
             i.path[2] === 'sets' && typeof i.path[3] === 'number'
-              ? `Movement ${i.path[1] + 1}, set ${i.path[3] + 1}`
-              : `Movement ${i.path[1] + 1}`;
+              ? `${movement}, set ${i.path[3] + 1}`
+              : movement;
           return `${where}: ${i.message}`;
         });
       if (movementMsgs.length > 0) fieldErrors.movements = movementMsgs;

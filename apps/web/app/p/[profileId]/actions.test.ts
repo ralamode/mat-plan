@@ -5,6 +5,7 @@ import {
   FREE_TEXT_NOTE_MAX,
   LOGGABLE_DIMENSION_NOUNS,
   METRIC_KEYS,
+  modeNotApplicableBlankMessage,
   modeNotApplicableMessage,
   newId,
   ROUTINE_VERSION,
@@ -350,7 +351,7 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
       }),
     );
     expect(res.ok).toBe(false);
-    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Movement 1: /);
+    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Back squat: /);
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
 
@@ -362,6 +363,7 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
         movements: [
           { unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
           {
+            movementName: 'Plank',
             unit: 'sec',
             sets: [
               { reps: '1', weight: '30' },
@@ -372,8 +374,9 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
       }),
     );
     expect(res.ok).toBe(false);
+    // The time is blank too, so the copy names both fixes (one round trip, not two).
     expect(res.fieldErrors?.movements).toEqual([
-      `Movement 2, set 2: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
+      `Plank, set 2: ${modeNotApplicableBlankMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
     ]);
     expect(logStrengthSession).not.toHaveBeenCalled();
   });
@@ -387,6 +390,7 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
         profileId: PROFILE_ID,
         movements: [
           {
+            movementName: 'Plank',
             unit: 'sec',
             sets: [
               { reps: '3', isBodyweight: true },
@@ -397,9 +401,46 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
       }),
     );
     expect(res.fieldErrors?.movements).toEqual([
-      `Movement 1, set 1: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
-      `Movement 1, set 2: ${BLANK_SET_MESSAGE}`,
+      `Plank, set 1: ${modeNotApplicableBlankMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
+      `Plank, set 2: ${BLANK_SET_MESSAGE}`,
     ]);
+  });
+
+  it('names the faulty card by its movement, not its index in the submitted list', async () => {
+    // On screen: 1 Squat, 2 Pull-up, 3 RDL (untouched → dropped by the form), 4 Plank. The server sees
+    // three movements, so an index would say "Movement 3" — the RDL card. The name says Plank.
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementName: 'Squat', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
+          { movementName: 'Pull-up', unit: 'lb', sets: [{ reps: '5', weight: '0' }] },
+          {
+            movementName: 'Plank',
+            unit: 'sec',
+            sets: [{ reps: '1', weight: '30', isBodyweight: true }],
+          },
+        ],
+      }),
+    );
+    expect(res.fieldErrors?.movements).toEqual([
+      `Plank, set 1: ${modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS.time!)}`,
+    ]);
+  });
+
+  it('falls back to the movement number only when the name is empty', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementName: 'Squat', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
+          { movementName: '  ', unit: 'lb', sets: [{ reps: '5', weight: '135' }] },
+        ],
+      }),
+    );
+    expect(res.fieldErrors?.movements?.[0]).toMatch(/^Movement 2: /);
   });
 
   it('rejects a non-integer rep count', async () => {

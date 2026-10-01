@@ -141,9 +141,11 @@ flowchart LR
   form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
   e2e warm-up used `0.5`).
 
-- **A strength-session zod issue renders as `Movement N, set M: <message>` (V1-30).** `flatten()`
+- **A strength-session zod issue renders as `<movement name>, set M: <message>` (V1-30).** `flatten()`
   loses the index, so `logStrengthSessionAction` rebuilds each message from the issue path: `path[1]`
-  is the movement, and `path[2] === 'sets'` with a numeric `path[3]` adds the set. A refine that wants
+  is the movement — **named, never numbered**, because `path[1]` indexes the SUBMITTED list, which
+  drops untouched scaffolded cards, so a number can point at the wrong card on screen (`Movement N`
+  only when the name is empty), and `path[2] === 'sets'` with a numeric `path[3]` adds the set. A refine that wants
   a message to point at a row must file its issue on that path (the non-mass BW/band check uses
   `['movements', i, 'sets', j, 'weight']`). Without the set number, three bad sets repeat one string,
   which is unlocatable and also a duplicate React key in the form's error list.

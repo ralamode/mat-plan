@@ -5,6 +5,7 @@ import {
   LOGGABLE_DIMENSION_NOUNS,
   LOGGABLE_UNITS,
   logStrengthSessionSchema,
+  modeNotApplicableBlankMessage,
   modeNotApplicableMessage,
   MOVEMENT_STATUSES,
   movementSlug,
@@ -310,16 +311,16 @@ describe('logStrengthSessionSchema — a time or distance set carries its number
     expect(issuesFor('sec', { reps: 1, weight: '30' })).toEqual([]);
   });
 
-  it.each<[Unit, Record<string, unknown>]>([
-    ['sec', { reps: 3, isBodyweight: true }],
-    ['sec', { reps: 3, isBodyweight: true, weight: '30' }],
-    ['m', { reps: 3, isBand: true }],
-  ])('rejects %s with %o — exactly one message, on the set', (unit, set) => {
+  it.each<[Unit, Record<string, unknown>, typeof modeNotApplicableMessage]>([
+    ['sec', { reps: 3, isBodyweight: true }, modeNotApplicableBlankMessage],
+    ['sec', { reps: 3, isBodyweight: true, weight: '30' }, modeNotApplicableMessage],
+    ['m', { reps: 3, isBand: true }, modeNotApplicableBlankMessage],
+  ])('rejects %s with %o — exactly one message, on the set', (unit, set, message) => {
     const issues = issuesFor(unit, set);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({
       path: ['movements', 0, 'sets', 0, 'weight'],
-      message: modeNotApplicableMessage(LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]]!),
+      message: message(LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]]!),
     });
   });
 

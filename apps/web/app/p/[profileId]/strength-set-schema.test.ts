@@ -5,6 +5,7 @@ import {
   ENTRY_STATUSES,
   LOGGABLE_DIMENSIONS,
   LOGGABLE_UNITS,
+  NUMBER_TOO_HIGH_MESSAGE,
   numericSetSchema,
   QUANTITY_SLOT,
   QUANTITY_SLOT_DIMENSIONS_BY_CODE,
@@ -214,5 +215,15 @@ describe('LOGGABLE_UNITS is DERIVED, so it cannot drift from the slot vocabulary
     for (const u of ['count', 'bool', 'timing'] as const) {
       expect(LOGGABLE_UNITS).not.toContain(u);
     }
+  });
+});
+
+describe('strengthSetSchema — the ceiling names the likely cause (V1-30 review)', () => {
+  it('refuses a number over the ceiling with the check-the-unit copy', () => {
+    const res = strengthSetSchema.safeParse({ reps: '1', weight: '3200' });
+    expect(res.success).toBe(false);
+    expect(res.success ? [] : res.error.issues.map((i) => i.message)).toContain(
+      NUMBER_TOO_HIGH_MESSAGE,
+    );
   });
 });
