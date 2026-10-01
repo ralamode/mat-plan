@@ -665,6 +665,41 @@ Dropped from the draft on the panel's advice: the e2e CSV assertion (V1-14b's
   violation. Filed, not fixed here.
 - Offline/sync (v1.5).
 
+## Amendment (2026-09-30): the index is slot-ready (V1-32)
+
+_Added after merge, by Ray's decision. The plan above is unchanged; this section governs 1d/1e where
+they differ._
+
+Ray wants several weigh-ins a day, one per time-of-day slot ([V1-32](../plan.md)), built **later**.
+Shipping the `(profile_id, activity_date)` index from Decision 1 would turn that later feature into
+an index drop and rebuild, plus a second move of 1e's arbiter. So **1d is widened, and nothing
+else moves earlier**:
+
+- **1d adds the slot and keys on it.**
+  - A `context` column. Its values are defined once in `packages/shared` and enforced with text +
+    CHECK or a reference table (AGENTS.md → Enums; no `pgEnum`).
+  - The index becomes `(profile_id, activity_date, context) WHERE deleted_at IS NULL AND metric_key
+= 'bodyweight'`.
+  - Every existing and new weigh-in is `morning`, which matches 100% of the legacy rows.
+  - The index is still scoped to bodyweight. Decision 1's push-up proof still applies, and so do
+    Decision 2 (no `CONCURRENTLY`) and Decision 3 (duplicate pre-check).
+- **1e's arbiter targets the same three columns**, and the bodyweight writer stamps `context =
+'morning'`. With one slot in use, behaviour is identical to "one weigh-in per day".
+- **The CSV export writes `context`** instead of always-empty, which ends the regression documented
+  in `packages/shared/src/csv/bodyweight.ts`. That's 1e or its own small PR; 1d stays app-code-free.
+
+**Traps for 1d's own plan and its DB-safety lens:**
+
+- **NULL defeats the index.** Postgres treats NULLs as distinct, so a bodyweight row with
+  `context IS NULL` escapes uniqueness, and two of them are exactly the duplicate this PR stops.
+  Bodyweight rows must be non-null, by NOT NULL with a default, by a CHECK scoped to
+  `metric_key = 'bodyweight'`, or by `NULLS NOT DISTINCT`. The `entries` table is shared with
+  metrics that have no slot, so decide the column's nullability for those too.
+- **Backfill before the index exists.** The existing rows get `morning` before 1d's duplicate
+  pre-check runs, or that check and the index judge different keys.
+- **Deploy order is unchanged.** Expand first (column plus index), then the app that writes it
+  (1e).
+
 ## Open questions
 
 0. **Does the weigh-in amend outrank the incident that opened this row?** V1-24 exists because Liam's
