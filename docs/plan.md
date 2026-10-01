@@ -698,7 +698,7 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   What shipped instead: the declared unit seeds the select (visible, overridable), and tapping BW on a
   catalog-declared-loaded movement raises a **non-blocking** note.
 
-- **V1-30 — the log form offers units the server rejects.** 🔴 **P0, reported 2026-09-30** by the
+- **V1-30 — the log form offers units the server rejects.** 📋 [**plan**](./plans/v1-30-loggable-units.md) (V1-30a; V1-30b filed in it). 🔴 **P0, reported 2026-09-30** by the
   `review-pr` run on #171: the strength form offers 9 units and the server's schema rejects 7 of them
   (`sec`, `min`, `in`, `cm`, `ft`, `m`, `yd`), since #141. Picking one fails the whole submit. Not yet
   reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
