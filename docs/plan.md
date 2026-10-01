@@ -648,6 +648,28 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
   select); fix only if it reproduces, with an e2e.
 
+- **V1-32 — several weigh-ins a day, one per time-of-day slot.** 🟢 **Feature, deferred** (Ray,
+  2026-09-30). Weigh on waking and before bed, and see the **overnight change** (bedtime on day D →
+  morning on D+1). Each weigh-in carries a **slot** (`context`: `morning · pre-practice ·
+post-practice · bedtime · other`), and the natural key is **one per (profile, day, slot)**: a
+  double-tap still can't make two `morning` rows, but morning and bedtime coexist. **Slots, not free
+  timestamps**, because a bare timestamp brings back the duplicate row V1-24 exists to stop. The saved
+  time still shows on the receipt. **All profiles** (Ray's call, B). The legacy CSV already has this
+  column (`docs/samples/legacy-csv/bodyweight/README.md`: `morning / pre-practice / post-practice /
+random`), so this also ends the export's always-empty `context` (`packages/shared/src/csv/bodyweight.ts`).
+  - **Schema prerequisite rides in V1-24 1d, not here** (the
+    [1d amendment](./plans/v1-24-form-is-the-day.md#amendment-2026-09-30-the-index-is-slot-ready-v1-32)):
+    the `context` column and the `(profile, day, context)` index land there, with every weigh-in
+    `morning`, so this row needs **no index swap** later. What remains here is the slot picker,
+    a receipt listing several weigh-ins, the overnight delta, and the form accepting slots other than
+    `morning`.
+  - **Owes:** a plan + **full UX panel** (the weigh-in form changes on a phone, on the gym floor).
+  - **For the panel:** the legacy README's youth-safety rule says bodyweight is for _"tracking growth
+    and relative strength, NOT weight management… never cut weight"_. Ray chose all profiles knowingly.
+    The panel decides how an overnight delta reads on a kid's profile, and `morning` stays the weight
+    that relative strength uses.
+  - **After** V1-24 1d/1e and the AUDIT-1 P0s.
+
 - **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **P0, found
   2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
   has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
@@ -749,7 +771,8 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   **PR 1a ✅** (the receipt, read-only — removes the second-submit path through the UI; concurrent
   mounts can still duplicate until 1d) · **PR 1b ✅** (the amend — a logged weight is correctable, on
   every day including closed ones). **Next: 1c** (the duplicate-row correction), then 1d (the
-  bodyweight-scoped unique index), 2 (check-ins), 3a/3b (strength).
+  bodyweight-scoped unique index, **now slot-ready for V1-32**: it adds `context` and keys on
+  `(profile, day, context)`; see the plan's 2026-09-30 amendment), 2 (check-ins), 3a/3b (strength).
   - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
     CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
 logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,
