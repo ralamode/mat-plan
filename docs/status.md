@@ -7,6 +7,17 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🔧 **V1-24 PR 1c — the duplicate weigh-ins have a correction, pending `--apply`** (2026-09-30).
+A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
+and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a
+token-pinned guard, re-checks the keeper under a row lock, and asserts the day ends with exactly one
+live weight before committing — rehearsed 20/20 on an ephemeral Postgres
+([plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"). **No bodyweight value is
+committed:** `.github/SECURITY.md` makes kid bodyweight privileged and this repo is public, so the
+`updated_at` token does the guard's job instead (Decision 20). ⚠️ **PR 1d's unique index is gated on
+this being applied AND the duplicate query re-run** — `migrate.yml` runs on every push, so landing 1d
+early wedges the migrator for every later PR ([runbooks](./runbooks.md)).
+
 🆕 **DUALS-1 — the first parent-facing surface** (2026-09-25). `/duals/[event]/[team]` renders a
 tournament day sheet — pool, round order, mat, and the weight-by-weight matchup per round — for the
 2026 Tyrant Columbus Day Duals, in time for the Assassins squads wrestling that weekend. Static

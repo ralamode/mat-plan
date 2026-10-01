@@ -39,6 +39,23 @@ the cause. Adding one is a single entry in
 [`packages/db/scripts/corrections/registry.ts`](../packages/db/scripts/corrections/registry.ts) — see
 the [README](../packages/db/scripts/corrections/README.md) for the rules.
 
+**A correction merges before it runs, and `--apply` is manual — so mind what is queued behind it.**
+`liam-bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
+`CREATE UNIQUE INDEX` cannot tolerate**, and the order is not optional:
+
+1. `--apply` the correction, then
+2. **re-run the duplicate query** (the literal SQL is committed in
+   [the plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"), because any render made
+   before another device saved can still create a duplicate until PR 1e moves the `ON CONFLICT`
+   arbiter, then
+3. merge 1d.
+
+**If 1d merges first**, `migrate.yml` — which runs on **every** push to `main`, with no path filter and
+no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
+and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
+then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. The app keeps
+working throughout, because the arbiter has not moved yet.
+
 ---
 
 ## Rename / correct a seeded profile in prod

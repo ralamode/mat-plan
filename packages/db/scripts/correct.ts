@@ -58,18 +58,37 @@ console.log(`  cause: ${correction.issue}`);
 console.log(`  target: ${host}`);
 console.log(`  mode: ${apply ? 'APPLY — this writes' : 'dry run — nothing will be written'}\n`);
 
-const changes = await correction.run(db, apply);
-await pool.end();
+// A correction may REFUSE. `liam-bodyweight-duplicates-2026-09-30` is the first one designed to:
+// its guard throws when a target row has moved since the read, and when the row it is keeping has
+// gone (deleting the others would leave the day with no weight — worse than the duplicate). So the
+// throw path needs a readable landing and the pool must close either way; without the `finally` a
+// refusal surfaced as a raw unhandled rejection with the pool still open.
+try {
+  const changes = await correction.run(db, apply);
 
-if (changes.length === 0) {
-  // Not an error: a guarded correction that matches nothing has almost certainly already run.
-  console.log('No matching rows — already corrected, or the guard did not match. Nothing to do.');
-  process.exit(0);
+  if (changes.length === 0) {
+    // Not an error: a guarded correction that matches nothing has almost certainly already run.
+    // A correction that cannot tell "already applied" from "the guard refused" should say so from
+    // inside `run` — see the bodyweight one, which throws rather than returning nothing.
+    console.log('No matching rows — already corrected, or the guard did not match. Nothing to do.');
+  } else {
+    for (const line of changes) console.log(`  ${apply ? '✓' : '·'} ${line}`);
+    console.log(
+      apply
+        ? `\n✓ applied ${changes.length} change(s).`
+        : `\n${changes.length} change(s) would be made. Re-run with --apply to write them.`,
+    );
+  }
+} catch (err) {
+  console.error('\n✗ REFUSED — nothing was written (any transaction rolled back).');
+  console.error(`  ${err instanceof Error ? err.message : String(err)}`);
+  // Print the cause too. A driver/connection failure arrives as drizzle's "Failed query: …", whose
+  // message says nothing about WHY — the reason (ENOTFOUND, auth, a constraint name) is on `cause`,
+  // and without it a refusal is undiagnosable. Found by the first prod dry run doing exactly that.
+  const cause = err instanceof Error ? err.cause : undefined;
+  if (cause) console.error(`  cause: ${cause instanceof Error ? cause.message : String(cause)}`);
+  console.error('');
+  process.exitCode = 1;
+} finally {
+  await pool.end();
 }
-
-for (const line of changes) console.log(`  ${apply ? '✓' : '·'} ${line}`);
-console.log(
-  apply
-    ? `\n✓ applied ${changes.length} change(s).`
-    : `\n${changes.length} change(s) would be made. Re-run with --apply to write them.`,
-);

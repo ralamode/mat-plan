@@ -21,7 +21,7 @@ came out of writing it down.
 | --- | ------------------------------------------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Anything blocking**                                                                                        | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
 | 2   | **Open bugs**                                                                                                | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
-| 3   | **Logged forms look complete**                                                                               | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
+| 3   | **Logged forms look complete**                                                                               | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). 1a ✅ #180 · 1b ✅ #192 · **1c next**.        |
 | 4   | **Athlete editor** — add/remove from the dashboard, new households start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                         |
 | 5   | **Edit programs, and choose which days they run**                                                            | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
 | 6   | **OAuth login (Google / Facebook)**                                                                          | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
@@ -403,6 +403,17 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
   needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
   Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-7 — `packages/db/scripts/**` is typechecked by nothing.** 🔴 Found 2026-09-30 while writing
+  V1-24 PR 1c. `pnpm typecheck` is `pnpm --filter web exec tsc --noEmit`, and `apps/web/tsconfig.json`
+  is the **only** tsconfig in the repo — its `include` is relative to `apps/web`, so `verify.ts`
+  (3,388 lines), `migrate.ts`, `seed.ts` and `corrections/` are never checked. `tsx` strips types
+  without checking them, so a type error there surfaces as a runtime failure against a real database.
+  An ad-hoc `tsc` over that directory found **3 pre-existing errors** in `verify.ts`
+  (`:1882,:1883,:1947` — `weight` missing from a set literal) plus 1c's own tautological `assert`,
+  which is how the gap was noticed. **Fix:** a `packages/db/tsconfig.json` and a root `typecheck` that
+  runs both projects, then fix what it finds. Small, but it is a gate that does not exist where the
+  DB proofs live.
+
 - **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
   reading the top of the status.md changelog, which DX-2 froze. The hook
   (`.claude/hooks/session-context.mjs`) prints the "Where we are" pointer and open PRs, not what just
@@ -744,8 +755,10 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   So a kg weigh-in exports as `84.5`, and the Claude workflow reads that as **pounds**: a silent 2.2×
   error in a trend a coach reads. It doesn't throw, which is what makes it bad. `csv/value.ts` refuses
   exactly this for strength loads (_"a converted number is one the athlete never logged"_), and the
-  bodyweight path has no equivalent. **Fix:** (1) check prod for existing kg rows, since any that exist
-  need a `db:correct` before the export starts throwing; (2) select `unit` in `bodyweightMonthRows`
+  bodyweight path has no equivalent. **Fix:** ~~(1) check prod for existing kg rows~~ — **answered
+  2026-09-30 by V1-24 PR 1c's read: there are none.** All 10 live bodyweight rows are `lb`
+  (`2026-07-29` → `2026-09-30`), so no correction is owed and this is now a **pure app PR**; (2) select
+  `unit` in `bodyweightMonthRows`
   and call `assertExportableUnit` in `buildBodyweight`, so the export refuses loudly; (3) convert, or
   widen the contract. That last one is Ray's decision, because the header is legacy bytes.
 - **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
@@ -837,9 +850,15 @@ random`), so this also ends the export's always-empty `context` (`packages/share
 - **V1-24 — the form IS the day's state: edit what you already logged.**
   **PR 1a ✅** (the receipt, read-only — removes the second-submit path through the UI; concurrent
   mounts can still duplicate until 1d) · **PR 1b ✅** (the amend — a logged weight is correctable, on
-  every day including closed ones). **Next: 1c** (the duplicate-row correction), then 1d (the
-  bodyweight-scoped unique index, **now slot-ready for V1-32**: it adds `context` and keys on
-  `(profile, day, context)`; see the plan's 2026-09-30 amendment), 2 (check-ins), 3a/3b (strength).
+  every day including closed ones) · **PR 1c ✅ written, pending `--apply`** (the duplicate-row
+  correction: the prod read is committed in the plan — one group, Liam 2026-09-30, keeper named by
+  Ray). **Next: 1d** (the bodyweight-scoped unique index, **now slot-ready for V1-32**: it adds
+  `context` and keys on `(profile, day, context)`; see the plan's 2026-09-30 amendment), then 1e (the
+  arbiter), 2 (check-ins), 3a/3b (strength).
+  - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
+    re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that
+    lands before the data is clean fails the index build and then **re-fails on every later push**,
+    taking `db:seed` with it. Procedure in [runbooks.md](./runbooks.md).
   - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
     CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
 logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,
