@@ -102,7 +102,7 @@ describe('safeInternalPath (open-redirect / XSS guard)', () => {
 
   // Whatever survives, it never starts with `//` — a mid-path `..//` normalizes to an on-origin
   // `/p//…`, which is harmless; only a LEADING `//` is scheme-relative.
-  it.each(['/p/a/..//evil.com', '/./p//x', '/p/..//p/x'])(
+  it.each(['/a/..//evil.com', '/p/a/..//evil.com', '/./p//x', '/p/..//p/x'])(
     'never returns a leading // for %s',
     (value) => {
       expect(safeInternalPath(value).startsWith('//')).toBe(false);
