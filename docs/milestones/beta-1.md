@@ -161,11 +161,14 @@ known profile id writes to that profile"). Accepted with one family; a breach wi
 - **PROF-1 (create)** — add an athlete. The first profile-creating endpoint: both panels, the full
   boundary-test set.
 - **ONB-2** — a new **household** starts on [The Daily Five](../programs/daily-five-default.md)
-  (#198). Programs are per household, not per athlete. **Decided (Ray, 2026-09-30): the A/B
+  (#198, corrected in #199). Programs are per household, not per athlete. **Decided (Ray, 2026-09-30): the A/B
   stopgap** — the same rows seeded under both `strength_a` and `strength_b`, so there is no new day
   role, no CHECK migration and **no SCHED-1 dependency**. Accepted consequences: CSV `session_type`
   alternates `strength-a`/`strength-b`; it runs every day; the real per-household daily role waits for
   SCHED-1 in Beta 1. Its doses are model-drafted and need Ray's (or a coach's) sign-off before seeding.
+  Beta 0 ships **fixed doses + first-run copy**; the per-movement tap loop and ramp wait for the engine
+  (post-beta). The rows are written at household creation, never via `PROGRAM_SEED` under Ray's
+  household (that would replace YDP).
 - **V1-9b** — delete a logged item and clear a day.
 - **PRIV-1 — privacy, done as a review, not a checkbox.** SECURITY.md defers COPPA only while there is
   "no third-party sharing"; multiple families plus Clerk, Google, Sentry, Vercel, Neon and Upstash is

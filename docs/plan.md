@@ -17,15 +17,15 @@ came out of writing it down.
 
 ### P0
 
-| #   | What                                                                                                       | Row(s)                    | State                                                                                                                              |
-| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Anything blocking**                                                                                      | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
-| 2   | **Open bugs**                                                                                              | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
-| 3   | **Logged forms look complete**                                                                             | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
-| 4   | **Athlete editor** — add/remove from the dashboard, new athletes start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                         |
-| 5   | **Edit programs, and choose which days they run**                                                          | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
-| 6   | **OAuth login (Google / Facebook)**                                                                        | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
-| 7   | **Streaks on the athlete card**                                                                            | **MOT-1** (picker half)   |                                                                                                                                    |
+| #   | What                                                                                                         | Row(s)                    | State                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Anything blocking**                                                                                        | **V1-14b**                | The MVP finish line: log a day → export → diff. Unblocked; has real logged data now.                                               |
+| 2   | **Open bugs**                                                                                                | **V1-24 / V1-26 / V1-30** | Planned + panelled. A bodyweight set is uncorrectable and the form ignores the catalog — the pair that caused the 09/28 data loss. |
+| 3   | **Logged forms look complete**                                                                               | **V1-25 §3**              | UX pass done; planned jointly with V1-24 ([plan](./plans/v1-24-form-is-the-day.md)). PR 1a (the bodyweight receipt) is next.       |
+| 4   | **Athlete editor** — add/remove from the dashboard, new households start on The Daily Five ([ONB-2](#onb-2)) | **PROF-1 + ONB-2**        | ONB-2's default program is drafted (#198).                                                                                         |
+| 5   | **Edit programs, and choose which days they run**                                                            | **V1-22 + SCHED-1**       | The authoring half of onboarding.                                                                                                  |
+| 6   | **OAuth login (Google / Facebook)**                                                                          | **new — AUTH-1**          | Replaces the shared access code.                                                                                                   |
+| 7   | **Streaks on the athlete card**                                                                              | **MOT-1** (picker half)   |                                                                                                                                    |
 
 ### P1
 
@@ -440,8 +440,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   isometrics, submaximal pull-ups + dead hang, submaximal push-ups (`push-ups` — the existing slug), a
   squat → deep-hold → Cossack flow, hollow-body hold, side plank. Bodyweight only; every item has a
   stated fallback, logged as the movement actually done (`dead_hang`, `inverted_rows`). The finisher
-  (15 penetration steps) is the routine's `shot` check-in, not a prescription. Seven movements are
-  catalog additions (listed in the program doc).
+  (15 penetration steps) is the routine's `shot` check-in, not a prescription. Six movements are
+  catalog additions, and `hollow-body_hold`'s shared unit default changes to `sec` (a guarded
+  correction or migration, since the seed never updates an existing row).
 
   **Scheduling — decided: the A/B stopgap** _(Ray, 2026-09-30)_. No `daily` role exists and Today's
   role is global A/B parity, so the same rows are seeded under **both `strength_a` and `strength_b`**.
@@ -449,11 +450,16 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   consequences: CSV `session_type` alternates `strength-a` / `strength-b` by day (no `daily-five`
   value); the program runs every day (under parity there is no program rest day); the real
   per-household daily role is deferred to SCHED-1 (Beta 1), which can migrate these rows later.
+  **Constraints:** never add it to `PROGRAM_SEED` under Ray's household (it would replace YDP on both
+  roles); the A and B copies drift under a one-sided V1-22 edit; a later single-role block alternates
+  with it; programs on other roles never reach Today. **The rows are written at household creation**
+  (TEN-1/AUTH-1 or ONB-0's first run), not by `seed.ts`.
 
-  **The load-bearing constraint: no set ever goes to failure.** It has a **UI obligation** — first
-  run must say it, and the ramp must enforce it. **Personalisation without a questionnaire:** one tap
-  per movement (Too easy / Just right / Too hard), with a weekly ramp cap. **The ramp is computed
-  deterministically (`packages/engine`, golden vectors), never by an LLM.** No max testing anywhere.
+  **The load-bearing constraint: no set ever goes to failure.** In Beta 0, ONB-2 is **fixed,
+  signed-off doses + the write at household creation + first-run copy that says it**; nothing yet
+  enforces it. **Deferred with the engine (post-beta):** the per-movement tap (Too easy / Just right /
+  Too hard), the ramp and its ceilings — computed deterministically (`packages/engine`, golden
+  vectors), never by an LLM. No max testing anywhere.
 
   **`sprawl-to-stance` is held back** _(Ray, 2026-09-28)_ — the sixth movement of the full Daily Six
   and the first graduation unlock; the cost (competency coverage 8/8 → 6/8, the only item that raises
@@ -464,9 +470,11 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   rule, because Ray's household already writes `pull-up` to strength-log). Contract:
   [csv-export-contract.md](./csv-export-contract.md).
 
-  **Dependencies:** ONB-0 first (a first-run surface worth seeding into); the catalog additions; the
-  dose sign-off; a UX panel before implementation (the tap loop is new UI). No GAP-3 unit work is
-  needed: everything is `BW` or seconds.
+  **Dependencies:** ONB-0 first (a first-run surface worth seeding into, and a neutral routine that
+  includes `shot`, where the finisher is logged); **V1-27** (every row prescribes `sets`, so with V1-27
+  open a partial set blocks submit on every movement); the catalog additions and the hollow-body
+  change; the dose sign-off; a UX panel before implementation (the first-run copy). No GAP-3 unit work
+  is needed: everything is `BW` or seconds.
 
   **Open questions for Ray:** audience — tuned for **youth wrestlers ~8–14** with a parent present; if
   mat-plan will serve high-school and open wrestlers, onboarding needs an age gate. **One rule stays

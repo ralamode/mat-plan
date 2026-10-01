@@ -7,7 +7,7 @@ owns: []
 
 > **Status: model-drafted definition, not yet confirmed** — Ray (or a qualified coach) signs off each
 > dose before it is seeded; the seed PR cites the sign-off. Drafted by a model session on 2026-09-28
-> and corrected after review (#198). AGENTS.md: the model may draft _definitions_ a human confirms,
+> rescued in #198 and corrected after review in #199. AGENTS.md: the model may draft _definitions_ a human confirms,
 > never live prescriptions — and no dose here may reach a stranger's child until that sign-off exists.
 
 The program a brand-new household gets seeded with, before they author anything
@@ -37,13 +37,15 @@ the habit. Avoiding failure also keeps reps clean, which matters more for a
 child learning the movement than for the number.
 
 If a user grinds the Daily Five, it stops being a daily program. **The app must
-say this on first run**, and the feedback loop below exists to enforce it.
+say this on first run** — that copy ships with ONB-2 in Beta 0. Nothing in Beta 0
+_enforces_ it: the doses are fixed, and the feedback loop below (which would) is
+deferred with the engine.
 
 ## The seeded program
 
 | idx | movement           | sets | target_reps | load | How to do it                                                                                                                                                                                                                                                              |
 | --- | ------------------ | ---- | ----------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | `neck_isometric`   | 2    | 4 × 10s     | BW   | 4-way. Palm on forehead, push head into hand — no movement, just tension. Repeat behind head, then each side. Head stays **neutral**, never cranked back.                                                                                                                 |
+| 0   | `neck_isometric`   | 8    | 10s         | BW   | 8 holds = 4 directions × 2 rounds. Palm on forehead, push head into hand — no movement, just tension. Repeat behind head, then each side; then the round again. Head stays **neutral**, never cranked back.                                                               |
 | 1   | `pull-up`          | 3    | 2           | BW   | Stop well short of a grind. Finish the last set with a 15s dead hang. **No pull-up yet:** 3 × 15s dead hang instead (negatives are optional, a few a week, not daily — they are near-maximal eccentric work for a child). **No bar:** 3 × 8 table rows (`inverted_rows`). |
 | 2   | `push-ups`         | 2    | 8           | BW   | Hands under shoulders, ribs down, body one line, full lockout. Stop 5+ reps short of failure. **If form breaks:** hands on a couch or counter — incline before knees.                                                                                                     |
 | 3   | `bodyweight_squat` | 1    | 15          | BW   | Slow, full depth, heels down. Flows straight into idx 4.                                                                                                                                                                                                                  |
@@ -63,26 +65,32 @@ check-in metric (`catalog-metrics.ts`), one row per day.
 ### Catalog additions this program needs
 
 Each new movement's slug must equal `movementSlug(name)` (pinned by a test in
-`packages/shared`), and timed holds need `unitDefault: 'sec'` or the form can't
-offer seconds (`docs/features/strength-logging.md`).
+`packages/shared`), and timed holds get `unitDefault: 'sec'` so the form
+**defaults** to seconds — the form asks "Measuring?" and the default only
+preselects (`docs/features/strength-logging.md`). Rep movements use `null`, as
+the existing ones do (`reps` is not a unit code).
 
-| Name             | Slug               | Unit default | Note                                                              |
-| ---------------- | ------------------ | ------------ | ----------------------------------------------------------------- |
-| Neck isometric   | `neck_isometric`   | `sec`        | new                                                               |
-| Bodyweight squat | `bodyweight_squat` | reps         | new                                                               |
-| Deep-squat hold  | `deep-squat_hold`  | `sec`        | new                                                               |
-| Cossack squat    | `cossack_squat`    | reps         | new                                                               |
-| Side plank       | `side_plank`       | `sec`        | new                                                               |
-| Dead hang        | `dead_hang`        | `sec`        | new — the "no pull-up yet" substitute, logged as its own movement |
-| Pull-up          | `pull-up`          | reps         | **exists**                                                        |
-| Push-ups         | `push-ups`         | reps         | **exists** — never add `push-up`; it would split the history      |
-| Hollow-body hold | `hollow-body_hold` | `sec`        | **exists**                                                        |
-| Inverted rows    | `inverted_rows`    | reps         | **exists** — the "no bar" substitute                              |
+| Name             | Slug               | Unit default | Note                                                                                                                                                                                                                                                                             |
+| ---------------- | ------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Neck isometric   | `neck_isometric`   | `sec`        | new                                                                                                                                                                                                                                                                              |
+| Bodyweight squat | `bodyweight_squat` | `null`       | new                                                                                                                                                                                                                                                                              |
+| Deep-squat hold  | `deep-squat_hold`  | `sec`        | new                                                                                                                                                                                                                                                                              |
+| Cossack squat    | `cossack_squat`    | `null`       | new                                                                                                                                                                                                                                                                              |
+| Side plank       | `side_plank`       | `sec`        | new                                                                                                                                                                                                                                                                              |
+| Dead hang        | `dead_hang`        | `sec`        | new — the "no pull-up yet" substitute, logged as its own movement                                                                                                                                                                                                                |
+| Pull-up          | `pull-up`          | `null`       | **exists**                                                                                                                                                                                                                                                                       |
+| Push-ups         | `push-ups`         | `null`       | **exists** — never add `push-up`; it would split the history                                                                                                                                                                                                                     |
+| Hollow-body hold | `hollow-body_hold` | `sec`        | **exists, but CHANGE**: its catalog `unitDefault` is `null` today. The movement seed is `onConflictDoNothing` on `slug`, so editing the catalog never reaches a deployed DB — it needs a guarded correction or migration, and it changes the shared row for **every** household. |
+| Inverted rows    | `inverted_rows`    | `null`       | **exists** — the "no bar" substitute                                                                                                                                                                                                                                             |
 
 Fallbacks are logged **as the movement actually done** (a dead hang is a
 `dead_hang` set, not a pull-up set with a note), so the history stays honest.
 Incline push-ups are logged as `push-ups` with a note; the incline is a form
 cue, not a different movement.
+
+That is **six** additions (neck isometric, bodyweight squat, deep-squat hold,
+Cossack squat, side plank, dead hang) and **one change** (hollow-body hold's
+unit default).
 
 ## What was held back, and what it costs
 
@@ -107,11 +115,17 @@ Recording the cost honestly, because it is not zero:
   it is loud, and it is the one movement here that a user who has never wrestled
   is likely to perform badly without a coach watching.
 
-**Where it comes back:** the first graduation prompt once the feedback loop has
-a week of data, or when the household authors its own program. The full Daily
-Six stays documented so the sixth movement is an _unlock_, not a rediscovery.
+**Where it comes back:** the first graduation prompt once the feedback loop
+exists and has a week of data, or when the household authors its own program.
+The full Daily Six stays in Ray's private notes, so the sixth movement can arrive
+as an _unlock_, not a rediscovery.
 
-## The feedback loop (how it personalizes)
+## The feedback loop — deferred, not in Beta 0
+
+> **Beta 0 ships fixed, signed-off doses only.** Everything in this section —
+> the taps, the ramp and its ceilings — needs `packages/engine`, which the beta
+> milestone puts after beta (v2). It is recorded here so the design isn't lost;
+> it gets its own row when the engine starts.
 
 A default program cannot reference "40% of your max" — a new user has no max,
 and asking them to find one is precisely the behavior this program exists to
@@ -128,7 +142,7 @@ avoid. So: **conservative fixed doses + one tap per movement.**
 **The ramp is computed deterministically** — `packages/engine`, covered by
 golden vectors — **never by an LLM.** A tap is an input; the dose is arithmetic.
 
-**Ceilings the app enforces regardless of taps:** never ramp more than 15% in a
+**Ceilings the engine would enforce regardless of taps:** never ramp more than 15% in a
 week. A second ceiling — "never prescribe past ~50% of the user's best logged
 set" — only binds once the user has logged a set **above** the prescription
 (logged reps are what they did, not what was asked); until then the weekly cap is
@@ -153,7 +167,7 @@ from the movement (`movements.is_bodyweight`) and a duration is carried in
 `target_reps` text with the movement's `unit_default: sec`. Both are properties
 of the _movement_, not of the person.
 That is what makes this seedable for a stranger where Ray's S&C block is not
-(`kids-sc-foundation-archived.md` carries a Liam column and a Scarlett column).
+(`kids-sc-foundation-archived.md` carries a per-athlete column for each child).
 
 Consequence: a fresh household's first program renders entirely from
 prescriptions, and every set row the user touches is an empty field they fill.
@@ -227,6 +241,25 @@ dependency** and stays in Beta 0. The consequences, accepted:
 - **The real per-household daily role is deferred to SCHED-1 (Beta 1),** which
   can migrate these rows to it later (and fix the CSV label then).
 
+**Constraints the stopgap imposes** — `programDayRows` shows the household's
+**newest block that programs the day's role**, so:
+
+- **Never add the Daily Five to `PROGRAM_SEED` under Ray's household**
+  (`SEED_HOUSEHOLD_PUBLIC_ID`, also the dev/e2e household). It would be newer than
+  YDP on both roles and silently replace it on every A and B day.
+- **The A and B copies can drift.** It is 16 rows, 8 per role; a V1-22 edit to one
+  copy changes only that role. Until SCHED-1, an editor must edit both or treat them
+  as one.
+- **A later block on only one role alternates with it.** A household that authors a
+  `strength_a`-only program sees that on A days and the Daily Five on B days.
+- **Programs on any other role never reach Today**, because parity only ever
+  returns `strength_a` or `strength_b`.
+
+**Who writes the rows:** not `seed.ts` (that is Ray's household and the fixtures).
+The Daily Five is written **when a household is created** — owned by the
+household-creation path (TEN-1/AUTH-1's first sign-in, or ONB-0's first run,
+whichever lands that write).
+
 The rejected alternative — a new `daily_five` role plus a CHECK migration plus
 per-household role resolution — is a slice of SCHED-1, and pulling it into Beta 0
 would have made ONB-2 wait on it.
@@ -236,7 +269,8 @@ would have made ONB-2 wait on it.
 The four legacy CSVs and their byte-level contract are authoritative in
 [csv-export-contract.md](../csv-export-contract.md). **Facts today:** the V1-13
 export emits strength-log, bodyweight and checkins only (there is no calisthenics
-export); `session_type` is `csvSessionType(dayRole)`, the day role with `_` → `-`;
+export); `session_type` is `csvSessionType(dayRole, sessionType)` — the day role
+(falling back to the session type) with `_` → `-`;
 movements are `csvMovement(slug)`; and because prescriptions are movement-based,
 every prescribed set — push-ups and pull-ups included — is a movement entry that
 lands in **strength-log**.
@@ -254,7 +288,8 @@ lands in **strength-log**.
 Sample, for a `strength_a` day with push/pull left in strength-log (the
 next day's rows read `strength-b`). Timed holds follow the
 contract: **duration in `load`, `reps` = 1**; per-side lives in `prescribed`.
-The neck block is 2 rounds × 4 directions = 8 holds.
+The neck block is prescribed as 8 sets of `10s` (2 rounds × 4 directions), so
+`prescribed` is `8x10s`, exactly what the export builds from `sets` and `target_reps`.
 
 ```
 date,session_type,movement,sets,reps,load,prescribed,notes
