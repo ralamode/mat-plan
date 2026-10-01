@@ -401,6 +401,24 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
   Small; no plan needed.
 
+## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
+
+`review-pr` in audit mode over the whole repo at `78ec41a` (2026-09-30): **2 P0 · 5 P1 · 7 P2**, plus
+verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each row says what it owes.
+
+| #   | Branch                            | What                                                                                                               | Owes                                      |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| 1   | `fix/v1-30-loggable-units`        | **P0** = **V1-30**: the server accepts every unit the form offers; boundary tests, `db:verify`, guide invariant 4b | plan + engineering panel, one UX reviewer |
+| 2   | `fix/v1-27-partial-sets`          | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                         | its existing plan                         |
+| 3   | `fix/sec-1-gate-defence-in-depth` | P1: pin "prefetch-header requests never reach the app" with a test, and re-check the gate outside the proxy        | plan + security panel                     |
+| 4   | `chore/sec-2-pin-actions`         | P1: SHA-pin the actions in `migrate.yml` (prod DB credential) and third-party ones in `ci.yml`                     | short plan (CI) + security lens           |
+| 5   | `chore/ci-1-audit-in-ci`          | P1: `pnpm audit --prod` in the `quality` job                                                                       | plan-exempt one-liner (say so)            |
+| 6   | `docs/status-headline`            | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                  | exempt                                    |
+| 7   | `fix/v1-26-bw-live-region`        | P1: the BW warning's live region mounts with its text; tie it to the chip                                          | one UX reviewer                           |
+| 8   | `docs/agents-md-truth`            | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                      | exempt                                    |
+| 9   | `chore/ci-2-typecheck-packages`   | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                | short plan (CI config)                    |
+| 10  | `test/v1-26-test-hardening`       | #171's test leftovers                                                                                              | exempt                                    |
+
 ## i18n — externalize strings (post-MVP, near the bottom)
 
 Replace every hardcoded user-facing string with a **key from an i18n library** (e.g. `next-intl`),
