@@ -231,6 +231,147 @@ still satisfies.
 tz projection — and §Open questions already suspected it was noise), `SavedRow`, any action, any
 schema change.
 
+## File-by-file — PR 1b (the amend)
+
+> **Rewritten after a four-lens panel.** The first draft of this section was written against the plan's
+> _memory_ of 1a rather than against 1a as shipped, and against the plan's own earlier decisions rather
+> than its accepted ones. Every lens found the same root cause. Two of its mechanisms were **proved
+> dead on arrival** by probes. Nothing from that draft is preserved; the log is at the end.
+
+### What 1a actually shipped (read this before touching the table)
+
+#180 was reworked across three review rounds before merge — **29 files, +1,372/−84**. Four things the
+first draft got wrong by not reading it:
+
+- The state switch lives in **`bodyweight-section.tsx`**, not `page.tsx:188` (which only mounts it).
+- The copy object is **`BODYWEIGHT_COPY`**; `SAVED_STATE_COPY.notYetAmendable` never existed. The
+  string 1b deletes is **`BODYWEIGHT_COPY.recovery`**. `saved(value)` and `announced(value)` already
+  exist — adding them again forks the constant that exists to unfork them.
+- `loggedBodyweight` returns a **list**, because duplicates are still possible until 1d, and the
+  receipt surfaces every row rather than silently picking one.
+- `BodyweightReceipt` already has the `control` slot, and its docblock states 1b's contract:
+  the control renders **on every day, closed ones included**.
+
+### 1b files
+
+| Path                                                                                                      | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/bodyweight.ts`                                                                       | EDIT   | Restructure so both paths share **one** plausibility bound: an unrefined `bodyweightValueShape` object, one `checkBodyweightBound` refiner, and `logBodyweightSchema` / `editBodyweightSchema` each `.extend(...).superRefine(checkBodyweightBound)`. ⚠️ **`.pick()` is impossible** — see §Decision 11. `editBodyweightSchema` is `{ profileId, entryId, value, seenValue }` — **no `unit`**, see §Decision 13.                                                                                                                                                                                                                                               |
+| `packages/shared/src/bodyweight.test.ts`                                                                  | EDIT   | `editBodyweightSchema` **rejects `845 lb`**. Without it the amend becomes a new way to write the implausible weight the bound was added for — and that bound is the stated reason 1a was allowed to ship without an amend.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `packages/db/src/writers/ownership.ts`                                                                    | NEW    | `isLiveProfile(publicId)` + `ownedEntryIds(exec, publicId)`. The subselect 1b needs is **line-for-line identical** to `strength-session.ts:398-410`, and the predicate has **11 copies** today. `program-day.ts:37-39` already argues this against itself: _"Named once … so the two can never drift into scoping by different rules — which is exactly how a BOLA hole gets introduced by a later edit."_ `updateStrengthSetById` converts to a caller **in this PR** — the second consumer arriving is the trigger, and V1-9's existing `db:verify` cross-profile proof then covers the helper for free. The other 9 sites are a separate `refactor/` sweep. |
+| `packages/db/src/writers/bodyweight.ts`                                                                   | NEW    | `updateBodyweightEntryById(exec, { profilePublicId, entryId, value, seenValue })`. **In `packages/db`** — `verify.ts` imports only `../src/*`, so an app-DAL writer cannot be proved against the real code (`updateStrengthSetById`'s docblock says exactly this). **Not generic over `metricKey`** — see §Decision 12.                                                                                                                                                                                                                                                                                                                                        |
+| ↳                                                                                                         |        | **The shape guard is the security boundary.** WHERE pins `metric_key = SEED_METRIC_KEYS.bodyweight` (a constant, not an argument), `status = 'done'`, `value_num IS NOT NULL`, `value_text IS NULL`, `deleted_at IS NULL` at entry **and** profile, and `entry_id IN ownedEntryIds(...)`. Without the metric pin a crafted POST rewrites _any_ owned entry — a push-up bout, a sleep-hours reading, a `scale_10` score — into a bodyweight. Keep these identical to `loggedBodyweight`'s read-side guards, the rule `strength-session.ts:377` states for the strength pair.                                                                                    |
+| ↳                                                                                                         |        | Single atomic UPDATE, **no transaction** — the value lives on `entries` itself, one level shallower than the strength writer, whose docblock records that GAP-3 made _it_ a transaction only when its value moved to a child row.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/lib/entries/activity-totals.ts`                                                                 | EDIT   | `loggedBodyweight` filters `status === ENTRY_STATUS.done`, mirroring the writer. A non-`done` row would otherwise render a Change the server always refuses — acceptance 5's dead control.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `apps/web/lib/dal/entries.ts`                                                                             | EDIT   | `editBodyweight(args)` — a four-line pass-through, exactly like `editStrengthSet:497`. No logic; the guard lives once, where `db:verify` reaches it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/app/p/[profileId]/actions.ts`                                                                   | EDIT   | `editBodyweightAction`. **No `resolveDeclaredDay`** (Decision 5). **Three-way zero-rows branch** — see §Decision 14. Also: collapse the **7 byte-identical 9-line Sentry comment blocks** into the module docblock that already hosts the sibling `'use server'` warning, leaving a one-liner each. That is **−54 lines**, and 1b is the PR that would otherwise make it 63.                                                                                                                                                                                                                                                                                   |
+| `apps/web/lib/constants.ts`                                                                               | EDIT   | Delete **`BODYWEIGHT_COPY.recovery`** (its own docblock says 1b deletes it). Keep `onePerDay` — the create form is still hidden over a saved value. Add `changeLabel(subject, value)` (plan §The receipt, accepted as **C28**, and missing from the first draft) and `AMEND_ERROR_COPY = { notFound(subject), staleWrite }`. `editStrengthSetAction:478`'s inline `'That set could not be found.'` becomes `AMEND_ERROR_COPY.notFound('set')` — second consumer, so the extraction is due.                                                                                                                                                                     |
+| `apps/web/app/p/[profileId]/use-on-action-success.ts`                                                     | NEW    | `useOnActionSuccess(state, fn)` (~10 lines), converting the **four** existing copies (`editable-set.tsx:41-45`, `checkin-form.tsx:80-88`, `strength-form.tsx:119-123`, `routine-editor.tsx:49-54` — whose own comment calls itself _"the strength-form during-render idiom"_). **Accepted as C22 for 1b** and silently dropped from the first draft; the island would have been the fifth copy. `saved-announcer.tsx` stays as-is: different input, different transition.                                                                                                                                                                                      |
+| `apps/web/app/p/[profileId]/bodyweight-amend.tsx`                                                         | NEW    | `'use client'` island: Change → a **stacked** editor (number input + static unit + Save/Cancel on their own row) → Save. Re-seeds from props on open (`editable-set.tsx:56-58`, verbatim) and after any refused settle. ⚠️ **Stacked, not inline** — see §Decision 13.                                                                                                                                                                                                                                                                                                                                                                                         |
+| `apps/web/app/p/[profileId]/bodyweight-receipt.tsx`                                                       | EDIT   | One prop: the row renders `row ?? <p>{…}</p>`, so Editing **replaces** the value line instead of sitting beside it. Keeps the receipt a dumb server component.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `apps/web/app/p/[profileId]/bodyweight-section.tsx`                                                       | EDIT   | Pass the island **unconditionally** — not `when writable` (Decision 5, and 1a's docblock). **Only when `logged.length === 1`** — see §Decision 15.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `apps/web/app/p/[profileId]/saved-announcer.tsx`                                                          | EDIT   | **One line**: `if (saved !== null && saved !== previous) setMessage(saved)`. Today it requires `previous === null`, so an amend (value→value) announces **nothing** and never moves focus — the Save button unmounts and focus drops to `<body>`, the exact S1 defect 1a exists to fix. First render stays silent for free (`previous` is seeded from `saved`).                                                                                                                                                                                                                                                                                                |
+| `apps/web/app/p/[profileId]/bodyweight-section.test.tsx` · `saved-announcer.test.tsx` · `actions.test.ts` | EDIT   | **Seven boundary tests**: unauth · wrong-owner · bad body · unknown/soft-deleted id · wrong shape (a `pushups` id refuses) · stale `seenValue` → typed error · **replay** (same submission twice → one effect, `{ ok: true }`). The last is AGENTS.md's mandatory replay case and the first draft had none.                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/db/scripts/verify.ts`                                                                           | EDIT   | Generalise the existing `insertCalisthenicsBout:898-917` into `insertMetricEntry(...)` rather than adding a sixth hand-rolled bodyweight insert; reuse the V1-9 block's already-seeded second profile as the wrong-owner rather than minting a third. Proofs: amend persists · cross-profile → **0** · a `pushups` id → **0** · stale `seenValue` → **0** · soft-deleted → **0**. Constants, never bare `'bodyweight'`.                                                                                                                                                                                                                                        |
+| `apps/web/e2e/bodyweight-receipt.spec.ts`                                                                 | EDIT   | Change → new value → receipt and entries list agree · **Cancel → reopen shows the saved value, not the abandoned one** · focus is not `body` after Save. ⚠️ `:42` currently asserts `toHaveCount(0)` on buttons in the receipt — the Change button breaks it by design.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `apps/web/e2e/a11y.spec.ts`                                                                               | EDIT   | axe + tap targets + 360px on the **Editing** state (acceptance 7). ⚠️ **This is not the guard** — see §Decision 13; both gates provably pass the broken layout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `apps/web/scripts/screenshot-ephemeral.ts`                                                                | EDIT   | `--state bodyweight-editing` as an INTERACTION (the `form-bw-warning` precedent) — the open editor is transient client state no fixture can seed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `.claude/skills/add-server-action/SKILL.md`                                                               | EDIT   | It still says _"rotate [the clientId] after an ok result"_ — which 1a made **the bug**. `.claude/skills/README.md:89-91`: if a skill and a doc disagree, fix the skill in that PR.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `docs/features/write-path.md` · `strength-logging.md`                                                     | EDIT   | The amend seam, the shape-guard rule, the ownership helper. `strength-logging.md` because `editable-set.tsx` is converted. CI-enforced.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+**Estimate: ~600 lines**, against AGENTS.md's <400 target. Stated rather than disguised: the first
+draft claimed 350 for what the panel priced at ~1,135. What brings it to 600 is cutting the seen-token
+plumbing (Decision 11), the generic writer (12), the unit (13), 1b-ii, and the backdated fixture; what
+keeps it above 400 is a new security boundary plus seven boundary tests and five proofs, which is the
+part that must not be thinned. **Splitting the write path from the UI was considered and rejected** —
+it would put an action nothing calls on `main` for a week.
+
+## Decisions 11-16 (the panel's)
+
+### 11. `logBodyweightSchema.pick()` **throws at module load** — probed, not predicted
+
+1a added a `.superRefine` (the plausibility bound), and zod 4.6.5 refuses `.pick()`/`.omit()` on a
+refined object: _"`.pick()` cannot be used on object schemas containing refinements."_ Schemas are
+top-level consts, so this is a **throw on `import '@mat-plan/shared'`** — the whole app, at first
+evaluation. `tsc` does not catch it. The `editStrengthSetSchema` precedent I cited works only because
+`numericSetSchema` has no refinements, and `strength.ts:10-13` says so in a comment I did not read.
+And even if it worked it would **strip the bound** from the one path that writes a corrected weight.
+
+**Related, and the reason the first draft's token is gone:** it specified `seenUpdatedAt:
+z.coerce.date()` — contradicting this plan's own **Decision 7**, 220 lines below, which had already
+rejected a JS `Date` token. A probe settled it: Postgres stores µs, drizzle hands back a ms `Date`,
+and a hidden input renders it to _second_ precision, so `updated_at = $1` matches **zero rows, always**
+— every amend would report a conflict with nobody. Worse, **PGlite's `now()` is ms-resolution**, so the
+`db:verify` proof would have passed green on the broken mechanism: a test that cannot fail on the thing
+it names.
+
+**So the token is gone entirely.** 1b guards on the **value** instead: `WHERE value_num = seenValue`.
+`numeric(8,3)` compares exactly, the value is **already on the DTO**, and it states the intent
+precisely — _amend only if this is still the weight I saw_. No DTO field, no `::text` select, no token
+schema, no precision class of bug. ~30 lines instead of ~80.
+
+### 12. The writer is bodyweight-only, and that makes the guard unforgeable
+
+The first draft made it generic over `metricKey` "so PR 2 reuses it". PR 2 mostly **cannot**: a bare
+habit row carries `metricKey: null`, so a WHERE pinning `metric_key = args.metricKey` cannot address
+it at all, and Undo is a soft delete, not a value update. Generality bought for unwritten code — and a
+_parameter_ can be passed wrong where a pinned constant cannot. Widening later is one line.
+
+### 13. No unit in the amend, and the editor stacks
+
+**The unit is dropped from `editBodyweightSchema` and rendered as static text.** A two-option native
+picker 8px from the number input is one thumb-drag from turning `84.5 lb` into `84.5 kg` — **186 lb on
+a child**, in the row a coach scans. Nothing catches it: the plausibility bound is _per unit_, so
+84.5 kg is comfortably legal. And the amend's job is a typo in the digits; a unit is a per-household
+constant. This also deletes the need for a shared value+unit field component, and avoids widening the
+export bug below.
+
+**The editor stacks, because the slot cannot hold it.** At 360px the receipt row has **~294px usable**;
+an inline editor (value line + input + select + Save + Cancel + gaps) is **~424px**. It does not
+overflow — flex _wraps_ — so the number being corrected ends up in a 96px box in the right-hand gutter
+beside a two-line label. ⚠️ **Both CI gates pass this**: the overflow check reads `scrollWidth`, and the
+tap-target check measures **height only**, which `min-h-11` satisfies. Stacked: `[input 96 + unit ~24]`
+on one line (128 ≤ 294 ✓), two `flex-1` buttons on the next — thumb-width on both axes, which the
+height-only gate cannot ask for and a gym floor can.
+
+### 14. Zero rows must say **which** failure, and a replay is not a conflict
+
+The first draft said zero rows is one return for every refusal; **Decision 7 already said the
+opposite**, and it is right. "That changed, here's the latest" is recoverable and the parent should
+retry; "not found" must stay indistinguishable from wrong-owner. The re-select is safe because it is
+scoped by `public_id` **and** the owned-profile subselect, so a crafted cross-profile id leaks nothing.
+
+**And the replay case, which the first draft had no answer for:** a parent taps Save on gym wifi, the
+write lands, the response is lost, the POST retries. The row has already changed, so a naive guard
+answers _"someone else changed this"_ — about nobody, over a value that is already exactly what they
+asked for. Three-way branch: **(a)** no row → not-found; **(b)** row exists and already equals the
+submitted value → `{ ok: true }` (one effect, success); **(c)** otherwise → stale + `revalidatePath`.
+
+### 15. One control, and only when there is one row
+
+The receipt renders `2 weights logged: 84.5 lb, 845 lb` into the **same row** that takes one `control`,
+and an island needs one `entryId`. The duplicates case is the single most likely reason a parent opens
+this screen, and the first draft had no answer for which row Change edits. Worse, `BODYWEIGHT_COPY.duplicates`
+says _"it can't be fixed in the app yet"_ — directly beside a button that can change one of them.
+
+**1b passes `control` only when `logged.length === 1`.** One line, and the copy stays honest: after 1b
+the _value_ can be fixed; the extra _row_ still cannot, until 1c/1d. A per-row control is a receipt
+shape change (a `<ul>` of rows, each with a slot) and belongs with the primitive, not smuggled into a
+slot built for one.
+
+### 16. 1b-ii is cut; the primitive waits for a real second consumer
+
+The first draft paid ~250 lines to extract a primitive from `EditableSet` and render `Locked` for a
+non-editable strength set. That `Locked` consumer exists **in order to justify the API** — abstraction
+driving its own consumer, which is C15's failure wearing C16's clothes.
+
+This supersedes **C16's remedy while keeping its principle**: do not design the shared API against
+bodyweight, the only unconstrained surface. The genuinely constrained consumer is **PR 2's check-in
+amend**, whose nested-`<form>` problem (§Staging) is the thing that will actually shape the contract.
+Extract there, from three real consumers. Until then, two similar-but-different edit surfaces is
+~105 + ~120 lines of readable duplication — cheaper at ~4h/wk than a refactor with no user-visible
+change.
+
 ## Key decisions the panel forced
 
 ### 1. The unique index is scoped to bodyweight, or it takes the app down
@@ -525,6 +666,12 @@ Dropped from the draft on the panel's advice: the e2e CSV assertion (V1-14b's
 - Offline/sync (v1.5).
 
 ## Open questions
+
+0. **Does the weigh-in amend outrank the incident that opened this row?** V1-24 exists because Liam's
+   KB swings were logged `20 × BW` — a **strength set**, fixed in 3a/3b, behind 1b/1c/1d/2. The scope
+   lens is right that the plan never says why. It is not a trivial reorder (converting a BW set to a
+   loaded one means inserting a quantity row and flipping `is_bodyweight`, not relaxing a WHERE), and
+   V1-26 PR-B already owns remove+undo. **Ray's call**, and the answer belongs in §Staging either way.
 
 1. ~~`metric_key` or `kind`?~~ **Resolved as a defect** — see Decision 1.
 2. **Does `Locked`'s reason copy differ between "not amendable" and "this day is closed"?** They are

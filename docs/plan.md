@@ -362,16 +362,44 @@ above; the skills index holds the smaller items.
 review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
-  #176 resolved). **Note:** `main` now carries `.claude/settings.json` (#179: two hooks, both no-op under CI,
-  no permissions/MCP/env keys). The DX-1 implementation PR must replace prefetch step 8's blanket
-  fail-closed with a narrower check: reject `permissions`, `mcpServers`, `enableAllProjectMcpServers`,
-  `env`, and any hook command not in an explicit allowlist, and require allowlisted hooks to be
-  CI-no-op. Its panel re-reviews that.
-- **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
+  #176 resolved). **Implemented in #185**; live once `CLAUDE_CODE_OAUTH_TOKEN` is set, then the post-merge
+  injection smoke (plan, test 4) is the acceptance gate. #179's `.claude/settings.json` would have
+  tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
+- ✅ **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
-  on 2026-09-30). One file per change in `docs/changelog/`; `status:check` requires a fragment on
-  branches cut after it. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
+  on 2026-09-30). One file per change in `docs/changelog/`. ✅ **Implemented in #190:** `status:check` requires a
+  fragment on product branches once `docs/changelog/README.md` is in the branch (so a legacy branch
+  meets the rule when it merges `main`), and fails any branch that adds to the frozen status.md or
+  skills-README history. [Plan](./plans/dx-2-changelog-fragments.md) (two engineering panel rounds:
   the guard detects DX-2 from the working tree, so a conflicted keep-mergeable merge can't slip through).
+- **DX-3 — `screenshot:ephemeral` silently captures a stale build.** It reuses `apps/web/.next`
+  whenever a `BUILD_ID` exists; only `--build` forces a rebuild. On #180 that posted a screenshot of
+  copy the PR had already changed, and it was caught only by a reviewer reading the image. **Fix:** record
+  the commit (plus a dirty-tree flag) the build came from, and rebuild when it differs from `HEAD`.
+  Add a `docs/lessons.md` entry. Small; no plan needed.
+- **DX-4 — the main-checkout guard blocks harmless variable-named commands.** #179's `PreToolUse` hook
+  denies any command whose name comes from a variable or `$(…)` in the main checkout. That's right for
+  git, but it also blocked a read-only `gh pr checks` polling loop and a `for w in …; git worktree remove`
+  cleanup loop on 2026-09-30. It fails safe, but each false positive teaches agents the escape hatch.
+  **Fix:** resolve the name when the loop's values are literal, or allow variable-named commands when no
+  git/gh mutation can result. Self-tests for both loops. The guard is ~1,000 lines, so check the file-size
+  rule first.
+- **DX-5 — nothing enforces the merge gates.** Verified via the API (2026-09-30): classic branch
+  protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
+  **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
+  `clean`), and a direct push to `main` is possible. Separately, `audit --prod`, `skills:check` and
+  `guards:test` run only in local `pnpm verify`, never in CI (GHSA-vcvr reached every branch with CI
+  green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
+  (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
+  `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
+  needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
+  Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
+  reading the top of the status.md changelog, which DX-2 froze. The hook
+  (`.claude/hooks/session-context.mjs`) prints the "Where we are" pointer and open PRs, not what just
+  merged. **Fix:** add the last ~5 lines of
+  `git log origin/main --diff-filter=A --format='%cs %s' -- docs/changelog/`, with a hook self-test.
+  Small; no plan needed.
 
 ## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
 
@@ -566,6 +594,35 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   reproduced outside that review; the fix PR starts by writing the failing test. Filed from #176's
   review so it isn't carried only by a changelog line.
 
+- **V1-31 — the strength form's dropdowns may snap back after a rejected save.** 🟡 **Suspected, not
+  yet reproduced** (found 2026-09-30 while fixing #180). React 19 resets a `<form action>` after the
+  action returns, **including on an error**, and its native `form.reset()` puts a controlled `<select>`
+  back to its first option: React keeps a controlled input's reset target in step with state but not a
+  select's `defaultSelected`. #180 hit exactly this on the bodyweight Unit (kg silently became lb) and
+  fixed it with a layout-effect resync (`bodyweight-form.tsx`, see `docs/features/write-path.md`).
+  `strength-form.tsx`'s Measuring and Unit selects sit inside a form action the same way. Its saved data
+  comes from state, so a submit is probably right, but after a rejected save the VISIBLE select may show
+  the wrong unit. **First step: a probe** (reject a strength save with a non-default unit, read the
+  select); fix only if it reproduces, with an e2e.
+
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** 🔴 **P0, found
+  2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
+  has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
+  `unit`**, and `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`.
+  So a kg weigh-in exports as `84.5`, and the Claude workflow reads that as **pounds**: a silent 2.2×
+  error in a trend a coach reads. It doesn't throw, which is what makes it bad. `csv/value.ts` refuses
+  exactly this for strength loads (_"a converted number is one the athlete never logged"_), and the
+  bodyweight path has no equivalent. **Fix:** (1) check prod for existing kg rows, since any that exist
+  need a `db:correct` before the export starts throwing; (2) select `unit` in `bodyweightMonthRows`
+  and call `assertExportableUnit` in `buildBodyweight`, so the export refuses loudly; (3) convert, or
+  widen the contract. That last one is Ray's decision, because the header is legacy bytes.
+- **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** 🔴 **P0, found 2026-09-30**
+  alongside CSV-1 (#187). Its WHERE omits `isNull(profiles.deletedAt)`, alone among the 11 ownership
+  sites in the codebase. It's inert today because no profile is soft-deleted, but it breaks the
+  ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
+  soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
+  place to make it unskippable.
+
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
@@ -634,6 +691,17 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
 - **V1-24 — the form IS the day's state: edit what you already logged.**
+  **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
+  the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
+  2 (check-ins), 3a/3b (strength).
+  - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
+    CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
+logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,
+    but **no axe or 360px-overflow e2e**. The e2e seeds its profiles today, so `resolveViewedDay`
+    floors every `?d=` into the writable window; covering them needs a backdated-profile fixture (the
+    screenshot script's `seedClosedDays` is the precedent). Fold into 1b, which adds a control to
+    every one of these states and must audit them anyway.
+
   📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
   as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**
   — and then **could not fix it**, for either of two independent reasons. First data-correctness bug

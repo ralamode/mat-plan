@@ -1,6 +1,6 @@
 ---
 name: plan-with-panel
-description: Draft a mat-plan implementation plan (docs/plans/<id>-<slug>.md) and harden it with the adversarial review panels BEFORE any implementation code — the engineering panel (correctness, simplicity/scope, architecture, reuse, plus DB-safety for migrations) and, for anything a user sees, the UX panel (interaction/first-run, a11y at 360px, trust/data-entry burden). Runs the lenses as parallel subagents, reconciles every critique, writes the review-response log, and links the plan from the backlog. Use when start-task says a plan or UX panel is owed, or when the user says "plan X", "run the panel", "review this plan", "UX review".
+description: Draft a mat-plan implementation plan (docs/plans/<id>-<slug>.md) and harden it BEFORE any implementation code with the adversarial review panels — engineering, plus UX for anything a user sees — run as parallel subagents, reconciled into a committed review-response log. Use when start-task says a plan or UX panel is owed, or when the user says "plan X", "run the panel", "review this plan", "UX review".
 ---
 
 # Plan with panel

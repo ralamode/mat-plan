@@ -15,16 +15,18 @@ import {
 } from '@mat-plan/db';
 import {
   ACTIVITY_TYPE_KEYS,
+  DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
   ENTRY_STATUS,
   METRIC_KEYS,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
+  SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
 import { DEFAULT_TIME_ZONE } from '../lib/constants';
-import { isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
+import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
 import {
@@ -143,6 +145,78 @@ async function seedStatusBadges(dbUrl: string): Promise<void> {
   }
 }
 
+/**
+ * V1-24 PR 1a — write bodyweight rows for the seeded profile, `daysAgo` before today (app zone).
+ * Direct inserts, not the Server Action: the duplicate shape is exactly what the UI no longer
+ * produces, and a closed day is outside the action's ±1 window by definition.
+ */
+async function seedWeighIns(
+  dbUrl: string,
+  rows: readonly { daysAgo: number; value: string }[],
+  opts: { backdateProfileDays?: number } = {},
+): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [profile] = await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
+      .limit(1);
+    if (!profile) throw new Error('seeded profile not found — did db:seed run?');
+    const [weighIn] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.weigh_in))
+      .limit(1);
+
+    // A CLOSED day needs a profile older than the ±1 write window: `resolveViewedDay` floors `?d=`
+    // at `created_at`, and the seed creates the profile today (the e2e limit day-navigation.spec
+    // documents). Throwaway DB only, so moving `created_at` back is safe here.
+    if (opts.backdateProfileDays) {
+      await db
+        .update(schema.profiles)
+        .set({ createdAt: new Date(Date.now() - opts.backdateProfileDays * 86_400_000) })
+        .where(eq(schema.profiles.id, profile.id));
+    }
+
+    const today = localDayIso(DEFAULT_TIME_ZONE);
+    if (rows.length > 0) {
+      await db.insert(schema.entries).values(
+        rows.map((r) => ({
+          publicId: newId(),
+          clientId: newId(),
+          profileId: profile.id,
+          activityDate: addDays(today, -r.daysAgo),
+          unit: DEFAULT_BODYWEIGHT_UNIT,
+          valueNum: r.value,
+          activityTypeId: weighIn.id,
+          metricKey: SEED_METRIC_KEYS.bodyweight,
+          status: ENTRY_STATUS.done,
+        })),
+      );
+    }
+    console.log(`✓ seeded ${rows.length} weigh-in(s)`);
+  } finally {
+    await pool.end();
+  }
+}
+
+/** The closed days the `bodyweight-closed*` states capture: one with a weight, one without. */
+const CLOSED_DAY_WITH_WEIGHT = 5;
+const CLOSED_DAY_EMPTY = 4;
+const seedClosedDays = (dbUrl: string) =>
+  seedWeighIns(dbUrl, [{ daysAgo: CLOSED_DAY_WITH_WEIGHT, value: '84.5' }], {
+    backdateProfileDays: 10,
+  });
+
+/** Navigate the loaded Today to `?d=<n days ago>` — a closed day, once the profile is backdated. */
+const gotoDaysAgo = (n: number) => async (page: Page) => {
+  const url = new URL(page.url());
+  url.searchParams.set('d', addDays(localDayIso(DEFAULT_TIME_ZONE), -n));
+  await page.goto(url.toString(), { waitUntil: 'networkidle' });
+};
+
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
   empty: null,
@@ -164,6 +238,20 @@ const STATES = {
   // V1-26 PR-A — the BW-tap warning on a catalog-declared-loaded movement. Interaction-only, and
   // like `form-scaffolded` it needs a PROGRAMMED day — pair it with `--tz` if today has none.
   'form-bw-warning': null,
+  // V1-24 PR 1a — the bodyweight receipt's other states (today's single value is `already-logged`).
+  // Two rows on today: the pre-1c prod duplicate (or a two-phone race) — `2 weights logged: …`.
+  'bodyweight-duplicates': (dbUrl: string) =>
+    seedWeighIns(dbUrl, [
+      { daysAgo: 0, value: '84.5' },
+      { daysAgo: 0, value: '845' },
+    ]),
+  // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
+  // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
+  'bodyweight-closed': seedClosedDays,
+  'bodyweight-closed-empty': seedClosedDays,
+  // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
+  // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
+  'bodyweight-rejected': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -174,6 +262,15 @@ type StateName = keyof typeof STATES;
  * Runs per viewport against a fresh page → must be idempotent from a clean load.
  */
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
+  'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
+  'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
+  'bodyweight-rejected': async (page) => {
+    const section = page.getByRole('region', { name: 'Bodyweight' });
+    await section.getByLabel('Unit').selectOption('kg');
+    await section.getByLabel('Weight', { exact: true }).fill('845');
+    await section.getByRole('button', { name: 'Log weight' }).click();
+    await section.getByRole('alert').waitFor();
+  },
   // V1-19 — the whole point of the reviewed design is what the form looks like AFTER the tap:
   // collapsed cards with a per-movement done/total counter, because scaffolding 7 movements × 4 sets
   // renders ~6,600px of blank inputs at 360px otherwise. A reviewer cannot approve that from the
@@ -314,6 +411,14 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
       .from(schema.metricDefinitions)
       .where(eq(schema.metricDefinitions.key, METRIC_KEYS.stance))
       .limit(1);
+    // V1-24 PR 1a — the weigh-in, so this fixture also renders the bodyweight RECEIPT. Added here
+    // rather than as a second `--state`: "this day has stuff logged" is exactly what this fixture
+    // already means, and the receipt is the same already-logged read state the check-in rows show.
+    const [weighIn] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, ACTIVITY_TYPE_KEYS.weigh_in))
+      .limit(1);
 
     const day = localDayIso(DEFAULT_TIME_ZONE);
     // Mirrors logCheckinEntries' shape exactly: ALWAYS value_num='1', NEVER movement_name,
@@ -343,12 +448,27 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
           metricKey: stance.key,
           status: ENTRY_STATUS.done,
         },
+        {
+          publicId: newId(),
+          clientId: newId(),
+          profileId: profile.id,
+          activityDate: day,
+          unit: DEFAULT_BODYWEIGHT_UNIT,
+          // A DECIMAL on purpose: the receipt must render `84.5 lb`, not `84.50` or `85` — the
+          // value is a JS number at the DTO boundary and must not be re-formatted.
+          valueNum: '84.5',
+          activityTypeId: weighIn.id,
+          metricKey: SEED_METRIC_KEYS.bodyweight,
+          status: ENTRY_STATUS.done,
+        },
       ])
       .onConflictDoNothing({
         target: schema.entries.clientId,
         where: isNull(schema.entries.deletedAt),
       });
-    console.log('✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance)');
+    console.log(
+      '✓ seeded already-logged fixture (rice_bucket habit + brush_teeth:stance + a weigh-in)',
+    );
   } finally {
     await pool.end();
   }

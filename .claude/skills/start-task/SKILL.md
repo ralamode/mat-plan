@@ -41,7 +41,7 @@ and the drift surfaces in CI instead of at your desk. A shared checkout lets one
 
 Read these in order and stop as soon as you have enough:
 
-1. **The backlog row**: `grep -n '<ID>' docs/plan.md docs/status.md`. Copy its acceptance criterion
+1. **The backlog row**: `grep -rn '<ID>' docs/plan.md docs/status.md docs/changelog/`. Copy its acceptance criterion
    verbatim; it becomes the plan's Acceptance and the PR's Description.
 2. **An existing plan**: `ls docs/plans/ | grep -i <id>`. If one exists, it is the contract. Follow it,
    and record any deviation in the PR rather than editing the merged plan.

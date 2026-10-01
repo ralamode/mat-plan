@@ -91,8 +91,30 @@ skipping` warning.
 
 ## Rotate a secret (Neon password / access-gate code / GitHub Actions secret)
 
-_TODO — document rotating `DATABASE_URL(_UNPOOLED)`, `ACCESS_GATE_PASSWORD`, and the GitHub Actions
-secret; update `.env.local` + Vercel env + the GH secret together; note what re-deploys are needed._
+_TODO — document rotating `DATABASE_URL(_UNPOOLED)` and `ACCESS_GATE_PASSWORD`; update `.env.local` +
+Vercel env + the GH secret together; note what re-deploys are needed._
+
+### `CLAUDE_CODE_OAUTH_TOKEN` (the `@claude review` workflow, DX-1)
+
+1. On a machine logged in to a Claude Pro/Max account: `claude setup-token`, and copy the token.
+2. GitHub → Settings → Secrets and variables → Actions → **New repository secret**
+   `CLAUDE_CODE_OAUTH_TOKEN` (or update it). Nothing else reads it; no redeploy.
+3. Check: comment `@claude review` on a PR **you** opened. Until the DX-1 injection smoke (plan,
+   test 4) has passed, don't `@claude review` a PR from someone else. Within ~20 minutes there is one comment, a
+   review, or a notice with a run URL.
+4. **Expired or revoked token:** the review job fails at the action step and the PR gets
+   "claude-review failed or ran out of budget" with the run URL. Rotate with steps 1–2.
+5. **If a review was ever "withheld"** (a secret pattern matched), treat the token as leaked: revoke it
+   (claude.ai → settings) and rotate. Don't re-run a claude-review job with debug logging on: its
+   tool output lands in a public log.
+6. **A `claude-code-action` bump** (Dependabot opens it alone; it is excluded from the actions group):
+   the action's SHA also fixes the CLI version (`src/entrypoints/run.ts`), the read-block semantics,
+   `restore-config.ts`, the step skipped by `classify_inline_comments`, and `git-config.ts`. Re-read
+   those at the new SHA against the DX-1 plan's threat model, then re-run the injection smoke (plan,
+   test 4) before merging. A green CI says nothing about any of this.
+7. **"failed or ran out of budget" right after a `.claude/settings.json` change** is the settings pin,
+   not the budget: the prefetch refuses until `SETTINGS_SHA256` in `review-prefetch.sh` is updated.
+   Re-read the threat model, then update the hash (the script's comment has the command).
 
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 

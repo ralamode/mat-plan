@@ -1,23 +1,17 @@
 ---
 name: ui-screenshot
-description: Capture Playwright screenshot(s) of a mat-plan UI screen for a PR — boots the prod build, logs through the access gate, navigates to the route, saves a PNG to .screenshots/, and attaches it for the PR. Use on ANY PR that changes the UI (new/changed page, component, or visible state), before opening the PR.
+description: Capture Playwright screenshot(s) of a mat-plan UI screen for a PR — boots the prod build, logs through the access gate, navigates to the route, saves PNGs at three widths to .screenshots/, and publishes them to the PR. Use on ANY PR that changes the UI (new/changed page, component, or visible state), before opening the PR.
 ---
 
 # UI screenshot for a PR
 
-**When:** every PR that changes something visible (a page, component, or state). This is a
-required part of the front-end workflow — see AGENTS.md "UI PR rules" and the DoD. Do it before
-finalizing the PR; attach the image(s) to the PR's Screenshots section.
-
-**Where it goes (placement):** the **first** screenshots for a PR go **in the PR description** — the
-reviewer's baseline. When a later push changes the visuals, add the **latest** screenshot(s) as a
-**PR comment** rather than editing the description, so the description stays the original baseline
-and the comment thread shows the progression.
-
-Screenshots go in the gitignored `.screenshots/` folder — they are **attached to the PR, never
+**When:** every PR that changes something visible (a page, component, or state), before finalizing
+the PR. Placement, the three widths and the `--note` rule are in AGENTS.md → "UI PR rules". Every
+capture is taken at mobile (390), tablet (820) and desktop (1280) automatically (`VIEWPORTS` in
+`apps/web/scripts/capture.ts`). PNGs go in the gitignored `.screenshots/` folder and are **never
 committed**.
 
-## Procedure — the ephemeral-DB script (primary, since chore/screenshot-ephemeral-db)
+## Procedure — the ephemeral-DB script (primary)
 
 Playwright is a real dev dependency and the capture is a committed script built on the **same**
 gate-login helper the E2E smoke uses (`apps/web/e2e/gate-login.ts`). No MCP needed.
@@ -40,7 +34,7 @@ pnpm --filter web screenshot:ephemeral /p --state already-logged  # Today with a
 ### ⚠️ If the state only exists after a TAP, capture it anyway — do not write it off
 
 **There are two kinds of `--state`, and forgetting the second is how a PR ships with screenshots that
-do not show the change.** (Ray, 2026-09-30, on exactly that mistake.)
+do not show the change.**
 
 - **Seeded states** — `STATES` in `screenshot-ephemeral.ts` maps the name to a fixture seeder that
   writes rows before the capture (`already-logged`, `calisthenics`, `strength-session`,
@@ -64,8 +58,9 @@ Two things that bite:
   Playwright's actionability check treats a clipped element as not visible and times out.
 
 - `--state already-logged` seeds fixture rows so the **data-dependent** "already logged today" state
-  renders — impossible to capture safely before, because it required writing to the real DB.
-- The PNG lands in `apps/web/.screenshots/<slug>.png` (e.g. `today.png`, `today-already-logged.png`);
+  renders without writing to the real DB.
+- The PNGs land in `apps/web/.screenshots/<slug>-<width>.png` (e.g. `today-mobile.png`,
+  `today-already-logged-desktop.png`);
   the first run builds (`next build`) and is slower; later runs reuse `.next` (pass `--build` to force).
 - Run `pnpm --filter web exec playwright install chromium` once if the browser isn't present.
 
@@ -84,8 +79,11 @@ ACCESS_GATE_PASSWORD=$(grep '^ACCESS_GATE_PASSWORD=' apps/web/.env.local | sed -
 Override the target with `SCREENSHOT_BASE_URL` if not on `:3996`. (The bare `pnpm --filter web
 screenshot <route>` script still exists for this same already-running-server case.)
 
-**Hand it over:** `SendUserFile` the PNG, then attach it to the PR per "Posting to the PR" below.
-Confirm `git status` is clean (`.screenshots/` is gitignored). If you started a `--use-live-db`
+**Publish:** `pnpm --filter web screenshots:publish --pr <n> --comment` (add
+`--note "<what changed>"` from the second round; the script refuses without it, and `--only <substr>`
+filters files). It uploads to the orphan `screenshots` branch and posts `github.com/.../raw/...` links,
+the form that renders; `raw.githubusercontent.com` and base64 `data:` URIs don't (AGENTS.md → "Why the
+tooling exists"). Confirm `git status` is clean (`.screenshots/` is gitignored). If you started a `--use-live-db`
 server, kill it (`pkill -f "next start -p 3996"`) — the default ephemeral flow cleans up after itself.
 
 ## Fallback — the Playwright MCP (when the script can't run)
@@ -107,39 +105,3 @@ the Playwright MCP directly (load via ToolSearch: `browser_navigate`, `browser_s
   changed screen, a before/after pair is ideal.
 - Prefer the **prod build** over `next dev` so the screenshot reflects real CSP/styling.
 - Optional: capture light **and** dark (the app is theme-aware) when the change is visual/design-heavy.
-- Keep filenames descriptive and versioned to the PR (e.g. `v0-7-today-empty.png`).
-
-## Posting to the PR — private repo, read this
-
-`gh` is authenticated (via `GH_TOKEN`), so **post the PR body with `gh pr create/edit --body-file`** —
-no copy-paste. BUT:
-
-- **This repo is PRIVATE.** GitHub renders inline markdown images through an anonymous proxy (camo)
-  that **cannot fetch a private repo's `raw.githubusercontent.com` / blob URLs → the image shows
-  broken.** Do NOT embed raw/assets-branch URLs here (an "assets branch" trick only works on _public_
-  repos). This was learned the hard way on V0-10.
-- The **only** way to get an inline image in a private-repo PR is GitHub's **user-attachments** upload
-  (the web drag-drop) — session-authenticated and **not** scriptable via `gh`/PAT. But it **is**
-  drivable through the **Chrome browser MCP**, which holds the user's authenticated GitHub session.
-- **Preferred flow (no manual drag):** post the body via `gh` (`--body-file`), then use the Chrome MCP
-  to attach the inline image where it belongs:
-  1. `mcp__claude-in-chrome__navigate` to the PR page (`.../pull/<n>`).
-  2. `find` the comment/description **textbox** + the **"Add files"** `type=file` input.
-  3. Type any caption into the textbox, then `mcp__claude-in-chrome__file_upload` the PNG onto the file
-     input's ref — GitHub uploads to its user-attachments CDN and inserts the `<img …>` markdown
-     (**heads-up: the upload replaces the textbox contents**, so re-type the caption above the tag
-     after it lands). Submit.
-  - First-screenshot case → do this in the **description editor**; later-change case → do it in a **new
-    comment** (matches the placement rule above). Verified working on PR #19/#21.
-- Fallback (if the browser MCP is unavailable): post the body via `gh` referencing the shot as
-  _"attached below"_ and **`SendUserFile` the PNG** so the user drags it in — one manual drop.
-- Zero-drag alternative (only if asked): commit the PNG into the PR branch so it renders in the **Files
-  changed** tab — costs a small binary in `main` on squash-merge.
-- If the repo ever goes **public**, `raw.githubusercontent.com` embeds work and the image can be
-  automated too.
-
-## History
-
-Graduated at **V0-11**: Playwright became a real dev dependency and this flow moved from the
-MCP-driven procedure to the committed `pnpm --filter web screenshot <route>` script above (reusable by
-humans, built on the shared `e2e/gate-login.ts` helper). The MCP path is kept as the fallback.

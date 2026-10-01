@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { DEFAULT_TIME_ZONE } from '../lib/constants';
+import { BODYWEIGHT_COPY, DEFAULT_TIME_ZONE } from '../lib/constants';
 import { formatDayLong, localDayIso } from '../lib/date';
 import {
   logBodyweight,
@@ -27,7 +27,11 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
   await expect(page.getByRole('heading', { name: /Who.s logging today/, level: 1 })).toBeVisible();
   await selectProfile(page, 'Liam');
 
-  await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toBeVisible();
+  // V1-24 PR 1a: one heading in every state. Liam's TODAY is this spec's alone (the e2e rule — see
+  // `global.setup.ts`), so this takes the CREATE path, including the focus-on-receipt assertion.
+  await expect(
+    page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
+  ).toBeVisible();
   await logBodyweight(page, '72.5');
 
   // V1-5: the kind-NULL write path (a bare habit + a rated metric), on the same warm
@@ -102,5 +106,7 @@ test('an unknown profile id renders not-found', async ({ page }) => {
   await page.goto('/p/does-not-exist');
   await expect(page.getByText(/this page could not be found/i)).toBeVisible();
   // never leaks a scoped Today for a bogus id
-  await expect(page.getByRole('heading', { name: 'Log bodyweight' })).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
+  ).toHaveCount(0);
 });

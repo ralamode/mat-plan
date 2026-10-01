@@ -10,7 +10,7 @@ See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan
 [docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**),
 [.claude/skills/](./.claude/skills/README.md) (agent skills — the task lifecycle as procedures:
 `start-task` → `plan-with-panel` → `ship-pr` → `review-pr`, plus task skills for migrations,
-Server Actions, data corrections and CI failures; the index lists them all).
+Server Actions, data corrections and CI failures; each skill's `description` is its index entry).
 
 **About to change a large feature? Read its guide in [docs/features/](./docs/features/) FIRST** — the
 file map, the cross-file invariants and the known traps, so the change costs one read instead of an
@@ -61,7 +61,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
 - **Root** holds ONLY: `README.md`, `AGENTS.md`, `.gitignore`, and tool-mandated config that _must_
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
-- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `design.md`,
+- **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `design.md`,
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
   (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
@@ -172,8 +172,9 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
 ## Git & branch workflow
 
-- **Trunk-based.** `main` is always deployable and **protected** — no direct pushes (except the one
-  bootstrap commit). All work goes via PR.
+- **Trunk-based.** `main` is always deployable. All work goes via PR, **by convention**: the "Protect
+  Main" ruleset blocks only branch deletion and force-pushes (verified via the API, 2026-09-30), so a
+  direct push to `main` is technically possible. Don't.
 - One short-lived branch = one PR = one backlog item / one concern. Keep small (target <400 lines).
 - **Every task runs in its own git worktree, cut from a freshly-fetched `main`. This is the default,
   not only for parallel work.**
@@ -206,12 +207,18 @@ bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
     day as prose.
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
-- Keep the branch up to date with `main` before merge ("require branches up to date" is ON); rebase
-  preferred for linear history.
+- Keep the branch up to date with `main` before merge. ⚠️ **By convention only:** branch protection is
+  off (verified via the API, 2026-09-30), so GitHub neither blocks nor flags a behind PR. The
+  `keep-mergeable` skill checks behind-ness with git for approved PRs. Rebase
+  preferred **before the branch is first pushed**. **Once it is on the remote, merge `main` in and never
+  rebase**, whether you're the author or someone keeping it mergeable (the `keep-mergeable` skill): a
+  rebase then needs a force-push, and the squash merge keeps `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
-- **Status rides with the work.** Update `docs/status.md` (the "where we are" pointer, backlog row,
-  and changelog) **in the same PR** as the change it tracks — no separate status-bump PRs.
+- **Status rides with the work.** In the **same PR** as the change it tracks, add a changelog
+  fragment ([docs/changelog/](./docs/changelog/README.md), one file per change, so PRs never conflict
+  on it) and update `docs/status.md`'s "where we are" pointer and backlog row if the change moves
+  them. No separate status-bump PRs. `pnpm status:check` checks the fragment.
 - **Implementation plans for significant PRs.** A **significant** PR gets a committed file-by-file
   plan at `docs/plans/<id>-<slug>.md`, written and **reviewed before** implementation code is
   committed (the Plan agent drafts it; a human reviews it). "Significant" = the change touches CI, a
@@ -274,11 +281,15 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   touches Neon and never pollutes the `pnpm dev` sandbox. Extra args pass through
   (`pnpm e2e:local --project=chromium`, or a single spec). Bare `pnpm --filter web e2e` provisions no
   database and inherits `.env.local` — use `e2e:local`.
-- **CI required checks (block merge):** typecheck · lint · `prettier --check` · full test suite ·
+- **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
+  `review-pr` shipit bar, "CI green", is what holds the line; verified via the API, 2026-09-30):
+  typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
   Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
   only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI
   green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
+  **`@claude review` is NOT a gate either:** a writer's comment runs the `review-pr` skill in CI
+  (`.github/workflows/claude-review.yml`, which defines the trigger) and posts one advisory comment.
   **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on
   demand** (`.github/workflows/codeql.yml`) — a minutes-long scan on every PR is the wrong trade at ~4h/wk,
   and every merged PR is one squashed commit on `main`, so the push trigger still sees all of it. Findings

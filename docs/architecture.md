@@ -253,6 +253,8 @@ flowchart TB
     G["<b>gitleaks</b> (required)"]
   end
   CI --> PREV["Vercel preview + Neon branch (prod-shaped)"]
+  DEV -. "a writer comments @claude review<br/>(on request only)" .-> CR["<b>claude-review</b> (advisory, never required)<br/>review: model, read-only token, PR head as data<br/>→ post: no model; scans, then one comment"]
+  CR -. "one review comment" .-> REV
   PREV --> REV["review + squash-merge to main"]
   REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>(direct/unpooled Neon)"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
