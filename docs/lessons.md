@@ -258,6 +258,25 @@ access token`, which reads like a permissions problem with the repo. The cause w
   **drop its `name`** (`name={isLogged ? undefined : …}`) so it renders but doesn't submit — keeps it
   focusable + announced, unlike real `disabled`. A one-submit e2e won't catch this; test a **re-submit**. (V1-6a)
 
+- **A rotated idempotency key on a form that stays on screen makes a second submit a second ROW.**
+  The bodyweight form rotated its `clientId` after every ok result (the `add-server-action` skill said
+  to), and `logBodyweight` dedupes only on `client_id` — so "did I already weigh in?" → tap again →
+  a duplicate. → Keep the key stable for as long as the form can resubmit the same record (a resubmit is
+  then an `ON CONFLICT DO NOTHING` no-op), and stop rendering a create form over an existing record.
+  Rotate only on append-style forms that genuinely create a new row each time (`checkin-form.tsx`).
+  (V1-24 PR 1a)
+
+- **A value→value change in server props is not evidence that THIS user saved.** The bodyweight
+  announcer fired on any change of the saved value, so a refused amend that revalidated in another
+  device's value was announced as "saved" and pulled focus out of the still-open editor. → Announce
+  and move focus from the action's own `ok` result (`useOnActionSuccess`), not from a diff of props.
+  (V1-24 PR 1b)
+
+- **An unkeyed client island survives a `?d=` day change.** Same-route searchParam navigation keeps
+  client state, so the amend editor kept day A's typed value while its hidden `entryId`/`seenValue`
+  re-rendered to day B's row, and Save amended B. → Key every stateful island on what it edits
+  (`key={`amend-${entryId}`}`), as the create form is keyed on the day. (V1-24 PR 1b)
+
 ## Vitest / RTL (component tests)
 
 - **A whole feature shipped INERT with every gate green — an action parsed a field and then forgot to
@@ -309,6 +328,12 @@ access token`, which reads like a permissions problem with the repo. The cause w
   (`ci-build-placeholder`) slip through by luck — don't rely on that. (V0-11)
 
 ## Next.js 16
+
+- **The access gate was bypassable by any request that carried a prefetch header.** → The proxy
+  matcher's `missing: [prefetch headers]` decides whether the proxy RUNS AT ALL, and the header is
+  client-controlled. A local probe saw a 400 from Next and called it safe; a Vercel preview served the
+  full page. → No `missing:`/`has:` condition on a matcher that guards access, and re-check the gate in
+  every action and page (`lib/dal/gate.ts`). Probe the deployed edge, not just `next start`. (SEC-1)
 
 - **`middleware.ts` silently ignored.** → Next 16 renamed it to **`proxy.ts`** (function `proxy`,
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing

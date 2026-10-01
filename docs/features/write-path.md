@@ -36,10 +36,12 @@ flowchart LR
   end
 
   subgraph writer["packages/db/src/writers"]
-    TX["ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
+    TX["CREATE: ONE transaction<br/>profile resolved by public_id IN-TX<br/>per-row ON CONFLICT"]
+    UPD["AMEND: ONE guarded UPDATE, no tx<br/>shape + ownership + seen-value in the WHERE<br/>null → re-read, branch"]
   end
 
   ACTION --> DALFN --> TX --> DB[(postgres)]
+  DALFN --> UPD --> DB
   ACTION -->|"typed envelope<br/>{ok:false, error, fieldErrors?}"| CLIENT
   TX -.->|"throws"| ERRBOUND["error.tsx + Sentry"]
 ```
@@ -48,16 +50,20 @@ flowchart LR
 
 | File / dir                     | What it is for                                                                                                                                                                                                       |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Six actions today.                                                                                                                               |
+| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Seven actions today.                                                                                                                             |
 | `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                |
 | `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                      |
-| `packages/db/src/writers/`     | The transactional write cores — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                          |
+| `packages/db/src/writers/`     | The write cores — transactional creates, single guarded-UPDATE amends — shared so the DAL **and** `db:verify` prove the same guard.                                                                                  |
 | `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone. |
 
 ## Invariants
 
 1. **Every Server Action is a PUBLIC endpoint.** Page middleware does not protect it — it is a POST
    anyone can craft. Re-authenticate, re-authorize ownership, and zod-validate **inside** each one.
+   Re-authenticating means `hasGateAccess()` (`lib/dal/gate.ts`) as the action's **first** line,
+   returning the action's not-found copy. Until SEC-1 no action did, and requests carrying a prefetch
+   header skipped the proxy, so every action was reachable without the gate cookie. A new action
+   without it fails the unauth suite in `actions.test.ts` only if you add it to that suite: do.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
@@ -89,6 +95,28 @@ flowchart LR
 - **A DB constraint reached by a crafted body is a 500 that discards the whole transaction.** For a
   gym-floor session that is the worst possible failure — the athlete loses everything they logged.
   Validate at the boundary so the constraint is a backstop, not the error message.
+
+- **⚠️ An AMEND is a different verb from a CREATE, and its guard is the WHERE (V1-24 PR 1b).**
+  `updateBodyweightEntryById` / `updateStrengthSetById` do not re-check ownership in the action — the
+  guarded UPDATE _is_ the check, and it lives in `packages/db/src/writers/` so `db:verify` runs the
+  same code the app does. Every pin in that WHERE refuses a crafted POST, and the metric pin matters
+  most: **without `metric_key = 'bodyweight'` the endpoint rewrites any entry the profile owns** — a
+  push-up bout, a sleep reading — into a bodyweight. It is a **constant, never an argument**, because
+  a parameter can be passed wrong by a future caller.
+
+  Two more rules that WHERE encodes:
+  - **The live-profile predicate is `writers/ownership.ts` — for the two WRITERS.** It had 11 hand-typed
+    copies; the two amend writers use the helper, and **nine copies remain** in queries and the app DAL
+    (the live-profile ownership sweep row in `docs/plan.md`). A security predicate is the last thing
+    that should drift between call sites, so a new write uses the helper, never a twelfth copy.
+  - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
+    three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not
+    the app DAL, so `db:verify` proves it.
+  - **Zero rows means four different things** — wrong owner, stale id, wrong shape, someone got there
+    first — and the action must tell them apart. `editBodyweightAction` re-selects under the same
+    ownership scope and branches three ways, including the **replay** case: a lost response on gym
+    wifi retries the POST, the row has already moved, and answering _"someone else changed this"_
+    would be a conflict with nobody, over a value that is already correct.
 
 - **⚠️ `logBodyweight` dedupes ONLY on `client_id`, so the UI is what prevents a second submit
   (V1-24 PR 1a).** `entries` has no natural-key uniqueness — the only unique index is

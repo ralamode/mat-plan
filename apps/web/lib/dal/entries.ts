@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { schema, updateStrengthSetById, writeStrengthSession } from '@mat-plan/db';
+import {
+  findAmendableBodyweight,
+  schema,
+  updateBodyweightEntryById,
+  updateStrengthSetById,
+  writeStrengthSession,
+} from '@mat-plan/db';
 import {
   ENTRY_KIND,
   ENTRY_STATUS,
@@ -485,6 +491,39 @@ export async function logStrengthSession(
     supersets: args.supersets,
     movements,
   });
+}
+
+/**
+ * Amend ONE logged bodyweight's value (V1-24 PR 1b). Thin, exactly like `editStrengthSet`: the
+ * single-sourced `updateBodyweightEntryById` core owns the guard, so no ownership check leaks out
+ * here and `db:verify` proves the same code the app runs.
+ *
+ * `null` means the guarded WHERE matched nothing — wrong owner, stale/deleted id, wrong shape, or a
+ * `seenValue` that no longer matches. **The action must tell those apart** (a stale value is
+ * recoverable and the parent should see the latest; a wrong owner must stay indistinguishable from
+ * not-found), so it re-selects under the same ownership scope before choosing its message.
+ */
+export async function editBodyweight(args: {
+  profilePublicId: string;
+  entryId: string;
+  value: number;
+  unit: string;
+  seenValue: number;
+}): Promise<{ entryId: string } | null> {
+  const updated = await updateBodyweightEntryById(db, args);
+  return updated ? { entryId: updated.publicId } : null;
+}
+
+/**
+ * Re-read ONE amendable bodyweight the profile owns, for the action's three-way branch after a refused
+ * amend (V1-24 PR 1b). Thin: the single-sourced `findAmendableBodyweight` shares the UPDATE's shape
+ * predicate and ownership scope, so `null` covers a wrong owner and a wrong shape alike.
+ */
+export async function ownedBodyweightValue(args: {
+  profilePublicId: string;
+  entryId: string;
+}): Promise<{ value: number; unit: string } | null> {
+  return findAmendableBodyweight(db, args);
 }
 
 /**

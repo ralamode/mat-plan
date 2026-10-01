@@ -16,6 +16,7 @@ import { formatDayShort, localDayIso, localWeekStartIso } from '@/lib/date';
 import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
+import { requireGatedPage } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
@@ -29,6 +30,7 @@ import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
+import { CLOSED_DAY_NOTICE } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { EditableSet } from './editable-set';
@@ -52,6 +54,7 @@ export default async function TodayPage({
   // Next 16: a Promise, and `?d=a&d=b` arrives as an array.
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  await requireGatedPage(); // SEC-1: the proxy is not the boundary
   const { profileId } = await params;
   // Re-validate the URL-supplied public id server-side (the V1-3 ownership seam;
   // profile tiles are a UX switch, not a security boundary). Unknown → 404.
@@ -178,8 +181,7 @@ export default async function TodayPage({
           which is the finding that explains the 2026-09-28 incident. */}
       {!writable ? (
         <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
-          Logging is closed for this day — it&rsquo;s more than a day ago. You can still see what
-          was logged.
+          {CLOSED_DAY_NOTICE}
         </p>
       ) : null}
 

@@ -362,8 +362,10 @@ above; the skills index holds the smaller items.
 review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth; never automatic;
   advisory, never a required check. [Plan](./plans/dx-1-claude-review.md) (engineering panel rounds
   1–2: 4 + 1 blocking → redesigned as a read-only model job + a model-free post job; PR review on
-  #176 resolved). **Implemented in #185**; live once `CLAUDE_CODE_OAUTH_TOKEN` is set, then the post-merge
-  injection smoke (plan, test 4) is the acceptance gate. #179's `.claude/settings.json` would have
+  #176 resolved). **Implemented in #185. Dormant by choice (2026-09-30):** Ray reviews from
+  Claude Code at the desk (the local `review-pr` skill does the same review with no secret), so
+  `CLAUDE_CODE_OAUTH_TOKEN` is deliberately unset. To activate: [runbook](./runbooks.md), then the post-merge
+  injection smoke (plan, tests 3–5) is the acceptance gate. #179's `.claude/settings.json` would have
   tripped the plan's blanket settings guard, so #185 pins that file by hash instead (plan, D1).
 - ✅ **DX-2 — changelog fragments: no shared insertion point.** Every PR inserts its changelog entry at
   the top of `docs/status.md` → Changelog, so every merge re-conflicts the other open PRs (all seven
@@ -407,18 +409,18 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
 `review-pr` in audit mode over the whole repo at `78ec41a` (2026-09-30): **2 P0 · 5 P1 · 7 P2**, plus
 verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each row says what it owes.
 
-| #   | Branch                            | What                                                                                                               | Owes                                                      |
-| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| 1   | `fix/v1-30-loggable-units`        | **P0** = **V1-30**: the server accepts every unit the form offers; boundary tests, `db:verify`, guide invariant 4b | plan + engineering panel, one UX reviewer                 |
-| 2   | `fix/v1-27-partial-sets`          | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                         | its existing plan                                         |
-| 3   | `fix/sec-1-gate-defence-in-depth` | P1: pin "prefetch-header requests never reach the app" with a test, and re-check the gate outside the proxy        | plan + security panel                                     |
-| 4   | `chore/sec-2-pin-actions`         | P1: SHA-pin the actions in `migrate.yml` (prod DB credential) and third-party ones in `ci.yml`                     | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
-| 5   | `chore/ci-1-audit-in-ci`          | P1: `pnpm audit --prod` in the `quality` job                                                                       | plan-exempt one-liner (say so)                            |
-| 6   | `docs/status-headline`            | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                  | exempt                                                    |
-| 7   | `fix/v1-26-bw-live-region`        | P1: the BW warning's live region mounts with its text; tie it to the chip                                          | one UX reviewer                                           |
-| 8   | `docs/agents-md-truth`            | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                      | exempt                                                    |
-| 9   | `chore/ci-2-typecheck-packages`   | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                | short plan (CI config)                                    |
-| 10  | `test/v1-26-test-hardening`       | #171's test leftovers                                                                                              | exempt                                                    |
+| #   | Branch                           | What                                                                                                                                                                                   | Owes                                                      |
+| --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | `fix/v1-30-loggable-units`       | **P0** = **V1-30**: the server accepts every unit the form offers; boundary tests, `db:verify`, guide invariant 4b                                                                     | plan + engineering panel, one UX reviewer                 |
+| 2   | `fix/v1-27-partial-sets`         | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                                                                                             | its existing plan                                         |
+| 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md)) | expedited; security lens post-implementation              |
+| 4   | `chore/sec-2-pin-actions`        | P1: SHA-pin the actions in `migrate.yml` (prod DB credential) and third-party ones in `ci.yml`                                                                                         | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
+| 5   | `chore/ci-1-audit-in-ci`         | P1: `pnpm audit --prod` in the `quality` job                                                                                                                                           | plan-exempt one-liner (say so)                            |
+| 6   | `docs/status-headline`           | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                                                                                      | exempt                                                    |
+| 7   | `fix/v1-26-bw-live-region`       | P1: the BW warning's live region mounts with its text; tie it to the chip                                                                                                              | one UX reviewer                                           |
+| 8   | `docs/agents-md-truth`           | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                                                                                          | exempt                                                    |
+| 9   | `chore/ci-2-typecheck-packages`  | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                                                                                    | short plan (CI config)                                    |
+| 10  | `test/v1-26-test-hardening`      | #171's test leftovers                                                                                                                                                                  | exempt                                                    |
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 
@@ -623,6 +625,18 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
   soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
   place to make it unskippable.
+- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites.** V1-24 PR 1b
+  extracts it to `packages/db/src/writers/ownership.ts` and converts the strength writer; the rest are
+  untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
+  what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s
+  cross-profile proofs as the check. No behaviour change.
+- **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** 🔴 Found 2026-09-30 by #192's
+  security lens. drizzle-orm's `DrizzleQueryError` message embeds the query's params
+  (`Failed query: … params: …`), `withServerActionInstrumentation` captures the thrown error, and
+  `scrubSentryEvent` strips cookies, headers and form data but not `exception.values[].value`. So any
+  timeout or dropped connection inside a bodyweight write ships the value to a third party
+  (SECURITY.md → Logging). **Fix:** cut each exception value at `\nparams:` (and drop `params` keys
+  from `extra`/`contexts`) in `scrubSentryEvent`, with a test built on a real `DrizzleQueryError`.
 
 - **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
@@ -692,9 +706,10 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   was already safe (its checked state is controlled, with a comment saying exactly why).
 
 - **V1-24 — the form IS the day's state: edit what you already logged.**
-  **PR 1a ✅ merged** (the bodyweight receipt, read-only — removes the second-submit path through
-  the UI; concurrent mounts can still duplicate until 1d). **Next: 1b** (amend), then 1c (the duplicate correction), 1d (the scoped unique index),
-  2 (check-ins), 3a/3b (strength).
+  **PR 1a ✅** (the receipt, read-only — removes the second-submit path through the UI; concurrent
+  mounts can still duplicate until 1d) · **PR 1b ✅** (the amend — a logged weight is correctable, on
+  every day including closed ones). **Next: 1c** (the duplicate-row correction), then 1d (the
+  bodyweight-scoped unique index), 2 (check-ins), 3a/3b (strength).
   - **Follow-up (from #180's round-2 review, not yet done):** the receipt's three states the e2e
     CANNOT reach today — a **closed day with a weight**, a **closed empty day** (`No weight
 logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.tsx`) and screenshots,

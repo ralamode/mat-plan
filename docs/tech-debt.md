@@ -169,8 +169,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   worse, real ids are non-enumerable UUIDv7 (SECURITY.md's anti-IDOR design), so an attacker cannot land
   in a real bucket even by accident. Such a limit would constrain **only the household**, while adding a
   Redis round-trip to every tap on the gym floor (an INP cost against the ADR-0001 budget).
-- **Impact:** low today. Reaching these actions at all requires the gate cookie, which IS now rate
-  limited; the app is a single household on an unlisted URL. The residual exposure is a gate-holder
+- **Impact:** low today. Reaching these actions at all requires the gate cookie (re-checked inside
+  each action since SEC-1; before that only the proxy checked it, and prefetch-flagged requests
+  skipped the proxy), and the gate IS now rate limited; the app is a single household on an unlisted URL. The residual exposure is a gate-holder
   writing unbounded rows — annoying, not dangerous, and visible in the log.
 - **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
   and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
