@@ -1,7 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
 
 import { env } from '@/lib/env';
-import { beforeSendScrubbed, beforeSendTransactionScrubbed } from '@/lib/sentry-scrub';
+import {
+  beforeBreadcrumbScrubbed,
+  beforeSendLogScrubbed,
+  beforeSendScrubbed,
+  beforeSendTransactionScrubbed,
+} from '@/lib/sentry-scrub';
 
 /**
  * Sentry — Edge runtime (V1-14a).
@@ -16,6 +21,8 @@ Sentry.init({
   sendDefaultPii: false,
   beforeSend: beforeSendScrubbed,
   beforeSendTransaction: beforeSendTransactionScrubbed,
+  beforeBreadcrumb: beforeBreadcrumbScrubbed,
+  beforeSendLog: beforeSendLogScrubbed,
   tracesSampleRate: 0,
   debug: false,
 });

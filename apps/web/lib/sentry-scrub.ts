@@ -1,4 +1,4 @@
-import type { ErrorEvent, Event } from '@sentry/nextjs';
+import type { Breadcrumb, ErrorEvent, Event, Log } from '@sentry/nextjs';
 
 /**
  * PII scrubbing for Sentry events (V1-14a) — **the security-critical part of the Sentry wiring.**
@@ -22,8 +22,10 @@ import type { ErrorEvent, Event } from '@sentry/nextjs';
  *     goes. `extraErrorDataIntegration` (if ever enabled) would also copy the error's own `params`
  *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
- * So this runs on every event and every transaction, and its test is the assertion that matters most in
- * V1-14a. It strips rather than redacts: none of this is diagnostically useful, and a redacted marker
+ * So this runs on every error event and every transaction (spans included), and — through
+ * `beforeBreadcrumbScrubbed` and `beforeSendLogScrubbed` — on every breadcrumb and every Sentry log. Its
+ * test is the assertion that matters most in V1-14a. Not covered: spans sent standalone (span streaming,
+ * `beforeSendSpan`), which this app does not enable (`tracesSampleRate: 0`). It strips rather than redacts: none of this is diagnostically useful, and a redacted marker
  * would only tempt someone to "temporarily" turn it off.
  */
 
@@ -33,8 +35,12 @@ const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authoriz
 /** The `extra` key prefix Sentry uses for Server Action form fields (`formData` option). */
 const FORM_DATA_EXTRA_PREFIX = 'server_action_form_data.';
 
-/** A line starting `params:` and everything after it — drizzle's `DrizzleQueryError` tail (SEC-3). */
-const QUERY_PARAMS_TAIL = /(^|\n)[ \t]*params:[\s\S]*$/;
+/**
+ * A line starting `params:` and everything after it — drizzle's `DrizzleQueryError` tail (SEC-3).
+ * Also after a LITERAL backslash-n, which is what the newline becomes once the message has been through
+ * `JSON.stringify` (a serialized or re-logged error).
+ */
+const QUERY_PARAMS_TAIL = /(^|\n|\\n)[ \t]*params:[\s\S]*$/;
 
 /** The object key drizzle's error carries its values under, wherever an integration copies it. */
 const PARAMS_KEY = 'params';
@@ -44,13 +50,24 @@ function stripQueryParams<T>(value: T): T {
   return (typeof value === 'string' ? value.replace(QUERY_PARAMS_TAIL, '') : value) as T;
 }
 
-/** Delete every key named `params`, at any depth, from a plain object tree (in place). */
-function dropParamsKeys(node: unknown, seen = new Set<unknown>()): void {
+/**
+ * Walk a plain object/array tree in place: delete every key named `params`, and cut the query params
+ * off EVERY string it holds. Both halves matter — Sentry normalizes a logged error into an object whose
+ * `params` key collapses to "[Array]" while its `message` and `stack` STRINGS still carry the values
+ * (the console integration's breadcrumb `data.arguments`, for one).
+ */
+function scrubTree(node: unknown, seen = new Set<unknown>()): void {
   if (!node || typeof node !== 'object' || seen.has(node)) return;
   seen.add(node);
-  for (const key of Object.keys(node as Record<string, unknown>)) {
-    if (key === PARAMS_KEY) delete (node as Record<string, unknown>)[key];
-    else dropParamsKeys((node as Record<string, unknown>)[key], seen);
+  const record = node as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key === PARAMS_KEY && !Array.isArray(node)) {
+      delete record[key];
+      continue;
+    }
+    const value = record[key];
+    if (typeof value === 'string') record[key] = stripQueryParams(value);
+    else scrubTree(value, seen);
   }
 }
 
@@ -84,14 +101,13 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   event.message = stripQueryParams(event.message);
   if (event.logentry) {
     event.logentry.message = stripQueryParams(event.logentry.message);
-    dropParamsKeys(event.logentry); // its own `params` are the message's format arguments — values too
+    scrubTree(event.logentry); // its own `params` are the message's format arguments — values too
   }
-  for (const crumb of event.breadcrumbs ?? []) {
-    crumb.message = stripQueryParams(crumb.message);
-    dropParamsKeys(crumb.data);
-  }
-  dropParamsKeys(event.extra);
-  dropParamsKeys(event.contexts);
+  for (const crumb of event.breadcrumbs ?? []) scrubBreadcrumb(crumb);
+  scrubTree(event.extra);
+  scrubTree(event.contexts);
+  // A transaction's spans: Next records the error message as a span's status/description.
+  scrubTree(event.spans);
 
   // Contexts can carry a duplicate of the request under `contexts.request` on some paths.
   const requestContext = event.contexts?.request;
@@ -108,6 +124,33 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   }
 
   return event;
+}
+
+/**
+ * Scrub one breadcrumb in place. A `console` breadcrumb's `data.arguments` is the logged value itself —
+ * Next logs a failed action with `console.error(err)` — so it is dropped outright (its `message` is
+ * kept, stripped); everything else is walked.
+ */
+function scrubBreadcrumb(crumb: Breadcrumb): Breadcrumb {
+  crumb.message = stripQueryParams(crumb.message);
+  if (crumb.category === 'console' && crumb.data) delete crumb.data.arguments;
+  scrubTree(crumb.data);
+  return crumb;
+}
+
+/** `beforeBreadcrumb` hook — scrubs at record time, before a breadcrumb can ride along on ANY event. */
+export function beforeBreadcrumbScrubbed(breadcrumb: Breadcrumb): Breadcrumb {
+  return scrubBreadcrumb(breadcrumb);
+}
+
+/**
+ * `beforeSendLog` hook (Sentry logs). Inert until `enableLogs` is turned on (AGENTS.md → Observability
+ * plans it), wired now so turning logs on cannot reopen SEC-3.
+ */
+export function beforeSendLogScrubbed(log: Log): Log {
+  log.message = stripQueryParams(log.message);
+  scrubTree(log.attributes);
+  return log;
 }
 
 /** `beforeSend` hook (errors). Kept as a named export so the config reads declaratively. The SDK passes

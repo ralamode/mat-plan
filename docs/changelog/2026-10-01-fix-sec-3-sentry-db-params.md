@@ -2,8 +2,12 @@
   drizzle-orm's `DrizzleQueryError` message is `Failed query: <sql>` followed by `params: <values>`,
   and the Server Action instrumentation captures it on any driver failure, such as a timeout or a
   dropped connection. So a weigh-in that failed to save sent the child's weight to a third party.
-  `scrubSentryEvent` now cuts the `params:` tail off every exception value (the whole cause chain),
-  the event message, `logentry` and breadcrumbs, keeping the SQL (placeholders, not values), and
-  drops any key named `params` at any depth in `extra`, `contexts` and breadcrumb data, which is
-  where an error-data integration would copy the error's own property. Server and edge configs both
-  use it. Tested on a real `DrizzleQueryError`.
+  The scrubber now cuts the `params:` tail (also after an escaped `\n`, as in a serialized message)
+  off every exception value in the cause chain, the event message and `logentry`, and walks
+  `extra`, `contexts`, breadcrumb data and a transaction's spans, stripping every string and
+  dropping every key named `params`. The walk matters: Next logs a failed action with
+  `console.error`, and Sentry's console breadcrumb holds the normalized error, whose `message` and
+  `stack` strings still carry the values after `params` collapses to "[Array]". A new
+  `beforeBreadcrumb` hook drops a console breadcrumb's logged arguments outright, and a
+  `beforeSendLog` hook covers Sentry logs before `enableLogs` is ever turned on. Server and edge
+  configs both wire all four hooks. Tested on a real `DrizzleQueryError`.
