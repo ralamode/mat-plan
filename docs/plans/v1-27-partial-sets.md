@@ -3,8 +3,9 @@
 > Backlog: [plan.md](../plan.md) row V1-27 (🔴 P0) and AUDIT-1 row 2. Branch: `fix/v1-27-partial-sets`.
 > Feature guide: [strength-logging](../features/strength-logging.md) (owns every code file below).
 >
-> **Status: revised after the independent engineering and UX panels and their re-review (2026-10-01);
-> awaiting Ray's review. Lands AFTER #201 (V1-30)**, which edits `strength-form.tsx`, `strength-form-scaffold.ts`,
+> **Status: ✅ approved by Ray (2026-10-01)** after the independent engineering and UX panels and three
+> re-review rounds. Ray explicitly accepted the trade-off: a forgotten _trailing_ set is logged short
+> rather than blocking the session (the summary line is the mitigation). Lands AFTER #201 (V1-30)**, which edits `strength-form.tsx`, `strength-form-scaffold.ts`,
 > `actions.ts` and the shared strength schemas. The implementation PR is cut from a `main` that already
 > has #201, so it is reviewed against the code it will actually merge into.
 
