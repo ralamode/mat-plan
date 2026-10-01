@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * Action-pin guard (SEC-2): every `uses:` in a workflow is pinned to a full commit SHA with a bare
- * `# vX.Y.Z` comment. A tag can be moved by whoever controls it; a SHA can't. The rule and its
- * reasoning live in .github/SECURITY.md → "Supply chain"; plan: docs/plans/sec-2-pin-actions.md.
+ * Action-pin guard (SEC-2). The rule and why: .github/SECURITY.md → "Supply chain". Plan:
+ * docs/plans/sec-2-pin-actions.md.
  *
  * Offline (every run): the ref is `owner/repo[/path]@<40 lowercase hex>` and the rest of the line is
- * exactly `# vX.Y.Z`. Nothing may follow the version: Dependabot rewrites the comment only when it
- * ENDS with the version (dependabot-core version_commenter.rb), so trailing prose would go stale.
+ * exactly `# vX.Y.Z` (dependabot-core version_commenter.rb only rewrites a comment ENDING in it).
  * A local `./` action fails too (its own `uses:` lines are not scanned), except a local reusable
  * workflow under `./.github/workflows/`, which this scan already covers.
  *
- * `--resolve` (CI, on push to main and on PRs touching workflows): each pin must EQUAL the commit its
- * version tag points to in the canonical repo. A SHA that merely exists proves nothing: a fork's
- * commit is reachable through the parent's path (the "imposter commit"). Only a 200 is compared;
- * anything else fails, so a check that couldn't check never passes.
+ * `--resolve` (when CI passes it: see the "Action pins" step in ci.yml): each pin must EQUAL the
+ * commit its version tag points to in the canonical repo. Only a 200 is compared; anything else
+ * fails, so a check that couldn't check never passes.
  *
- * Fails closed on shape: any line that MENTIONS a `uses:` key (outside a comment) but isn't the one
- * accepted form fails, so a value on the next line, a flow mapping (`- {uses: x@v1}`) or a quoting
- * trick can't slip past the strict regex. CRLF files are read line by line like LF ones.
+ * Fails closed on the shapes an honest edit produces: any line that mentions a `uses:` key (outside
+ * a `#` comment) but isn't the one accepted form fails, e.g. a value on the next line, a one-line
+ * flow mapping, CRLF. It is a line scanner, not a YAML parser: DELIBERATELY crafted YAML (an escaped
+ * key, a `?` explicit key, a multi-line flow mapping) can still get past it. That is the hostile-
+ * author residual in SECURITY.md, which no in-PR guard closes: the same diff could delete the step.
+ * A `uses:` line inside a `run: |` block fails too (safe, if noisy).
  *
  * Usage:
  *   node .github/scripts/check-action-pins.mjs [--resolve] [dir]   # default: <repo>/.github/workflows
@@ -27,8 +27,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RULE =
-  'pin to a full commit SHA with a bare "# vX.Y.Z" comment (.github/SECURITY.md → "Supply chain")';
+const FORM = '`uses: owner/repo@<sha> # vX.Y.Z`';
+const RULE = `write ${FORM}: a full commit SHA, a bare version (.github/SECURITY.md → "Supply chain")`;
 const USES = /^\s*(?:-\s+)?["']?uses["']?\s*:\s*["']?([^\s"'#]+)["']?(.*)$/;
 // Owner, repo, then an optional path whose segments may not be `.` or `..`.
 const REMOTE = /^[A-Za-z0-9][\w.-]*\/[\w.-]+(?:\/(?!\.\.?(?:\/|@))[\w.-]+)*@[0-9a-f]{40}$/;
@@ -73,9 +73,7 @@ for (const f of files.sort()) {
       const m = USES.exec(line);
       if (!m) {
         if (MENTIONS_USES.test(line.replace(COMMENT, '')))
-          bad.push(
-            `${where}  ${line.trim()}  — write \`uses: owner/repo@<sha> # vX.Y.Z\` on one line`,
-          );
+          bad.push(`${where}  ${line.trim()}  — ${RULE}, on one line`);
         return;
       }
       const [, ref, after] = m;

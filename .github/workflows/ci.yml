@@ -27,8 +27,7 @@ jobs:
           fetch-depth: 0
 
       # ── Action pins (SEC-2; .github/SECURITY.md → "Supply chain") ──────────
-      # Every `uses:` is pinned to a commit SHA with a bare `# vX.Y.Z`; a tag can be
-      # moved by whoever controls it. migrate.yml only runs AFTER merge, so GitHub's
+      # migrate.yml only runs AFTER merge, so GitHub's
       # own run-time pin setting would let a tag-pinned edit merge green and then
       # stop prod migrations. Only a pre-merge check catches that.
       #
@@ -37,9 +36,8 @@ jobs:
       # Plain node, no install. A step in `quality`, not a job, for the reason the
       # feature-guides step gives below.
       #
-      # `--resolve` asks GitHub whether each SHA IS its version tag's commit, which
-      # defeats a fork's "imposter" commit. It runs only on push and on PRs that touch
-      # a workflow or this guard: a bad pin can only arrive that way, and an API
+      # `--resolve` (each SHA must BE its version tag's commit) runs only on push and on
+      # PRs that touch a workflow or this guard. This is the one place that says when: a bad pin can only arrive that way, and an API
       # outage then can't turn unrelated PRs red. The skip is step-level (AGENTS.md).
       - name: Action pins (SHA + version; resolved against GitHub when workflows change)
         env:
@@ -228,8 +226,7 @@ jobs:
       # because it gets trusted instead of verified.
       #
       # In `quality`, not its own job: a new job needs its own branch-protection
-      # entry before it can block, while a step rides with `quality`. (Today NO
-      # check is required — AGENTS.md → "CI checks" — so this is about DX-5.)
+      # entry before it can block, while a step rides with `quality`.
       #
       # Needs no pnpm/node install: plain node + git, and it runs BEFORE the setup
       # steps so a docs-only miss fails in seconds rather than after a full build.

@@ -55,7 +55,7 @@ EOF
 expect "branch with a version comment still fails" 1 "@main" <<'EOF'
       - uses: actions/checkout@main # v7
 EOF
-expect "sha without a comment fails" 1 "bare \"# vX.Y.Z\"" <<EOF
+expect "sha without a comment fails" 1 "a bare version" <<EOF
       - uses: actions/checkout@$sha
 EOF
 expect "non-version comment fails" 1 "# pinned" <<EOF
