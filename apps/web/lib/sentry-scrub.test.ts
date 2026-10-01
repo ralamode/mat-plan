@@ -1,4 +1,5 @@
 import type { ErrorEvent, Event } from '@sentry/nextjs';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { describe, expect, it } from 'vitest';
 
 import { GATE_COOKIE_NAME } from './access-gate';
@@ -89,5 +90,65 @@ describe('scrubSentryEvent — shape safety', () => {
     } as ErrorEvent);
     expect(event).not.toBeNull();
     expect(event.request?.cookies).toBeUndefined();
+  });
+});
+
+// SEC-3 — a DB failure inside a write must not ship the write's values. drizzle-orm's
+// `DrizzleQueryError` message embeds `params: …` after the SQL, and the instrumentation captures it on
+// any driver error. Built from the REAL error class so a drizzle message-format change shows up here.
+describe('scrubSentryEvent — query params never leave the server (SEC-3)', () => {
+  // Neutral numbers; what matters is that they appear in the message and must not survive.
+  const PARAMS = [123.45, 'bw-row-id'];
+  const err = new DrizzleQueryError(
+    'update "entries" set "value_num" = $1 where "public_id" = $2',
+    PARAMS,
+  );
+
+  it('the real DrizzleQueryError message carries the params (the leak this guards)', () => {
+    expect(err.message).toContain('params:');
+    expect(err.message).toContain('123.45');
+  });
+
+  it('cuts the params off exception values, keeping the SQL', () => {
+    const event = scrubSentryEvent({
+      exception: { values: [{ type: 'DrizzleQueryError', value: err.message }] },
+    } as ErrorEvent);
+    const value = event.exception?.values?.[0]?.value ?? '';
+    expect(value).not.toContain('123.45');
+    expect(value).not.toContain('params:');
+    expect(value).toContain('Failed query: update "entries"');
+  });
+
+  it('cuts them from every exception in a cause chain, the message, logentry and breadcrumbs', () => {
+    const event = scrubSentryEvent({
+      exception: { values: [{ value: 'driver: timeout' }, { value: err.message }] },
+      message: err.message,
+      logentry: { message: err.message, params: [123.45] },
+      breadcrumbs: [{ message: err.message, data: { params: PARAMS, ok: 1 } }],
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+    expect(JSON.stringify(event)).not.toContain('params');
+    expect(event.exception?.values?.[0]?.value).toBe('driver: timeout');
+    expect(event.breadcrumbs?.[0]?.data).toEqual({ ok: 1 });
+  });
+
+  it('drops `params` keys an integration copied into extra or contexts, at any depth', () => {
+    const event = scrubSentryEvent({
+      extra: { params: PARAMS, note: 'kept' },
+      contexts: { DrizzleQueryError: { query: 'select 1', params: PARAMS } },
+    } as unknown as ErrorEvent);
+    expect(JSON.stringify(event)).not.toContain('123.45');
+    expect(event.extra).toEqual({ note: 'kept' });
+    expect(event.contexts?.DrizzleQueryError).toEqual({ query: 'select 1' });
+  });
+
+  it('leaves an ordinary error untouched', () => {
+    const value = 'TypeError: cannot read properties of undefined';
+    const event = beforeSendScrubbed({
+      exception: { values: [{ value }] },
+      message: 'hi',
+    } as ErrorEvent);
+    expect(event.exception?.values?.[0]?.value).toBe(value);
+    expect(event.message).toBe('hi');
   });
 });

@@ -773,7 +773,8 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
   what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s
   cross-profile proofs as the check. No behaviour change.
-- **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** 🔴 Found 2026-09-30 by #192's
+- **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** ✅ **Fixed 2026-10-01** (`fix/sec-3-sentry-db-params`):
+  the scrubber cuts `params:` off every message and drops `params` keys at any depth. 🔴 Found 2026-09-30 by #192's
   security lens. drizzle-orm's `DrizzleQueryError` message embeds the query's params
   (`Failed query: … params: …`), `withServerActionInstrumentation` captures the thrown error, and
   `scrubSentryEvent` strips cookies, headers and form data but not `exception.values[].value`. So any

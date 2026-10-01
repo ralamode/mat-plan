@@ -15,6 +15,12 @@ import type { ErrorEvent, Event } from '@sentry/nextjs';
  *     `setExtra('server_action_form_data.' + key, value)`. `.github/SECURITY.md`: "Kid bodyweight is
  *     privileged … never logged." (We never pass `formData`; again, defence in depth.)
  *  3. **The plaintext access code**, by the same route on the gate action.
+ *  4. **Query parameters, bodyweight included (SEC-3).** drizzle-orm's `DrizzleQueryError` message is
+ *     `Failed query: <sql>\nparams: <values>`, and the instrumentation captures it on ANY driver
+ *     failure (a timeout, a dropped connection) — so a weigh-in write that fails ships the weight.
+ *     The SQL half has placeholders, not values, and is kept; everything from the `params:` line on
+ *     goes. `extraErrorDataIntegration` (if ever enabled) would also copy the error's own `params`
+ *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
  * So this runs on every event and every transaction, and its test is the assertion that matters most in
  * V1-14a. It strips rather than redacts: none of this is diagnostically useful, and a redacted marker
@@ -26,6 +32,27 @@ const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authoriz
 
 /** The `extra` key prefix Sentry uses for Server Action form fields (`formData` option). */
 const FORM_DATA_EXTRA_PREFIX = 'server_action_form_data.';
+
+/** A line starting `params:` and everything after it — drizzle's `DrizzleQueryError` tail (SEC-3). */
+const QUERY_PARAMS_TAIL = /(^|\n)[ \t]*params:[\s\S]*$/;
+
+/** The object key drizzle's error carries its values under, wherever an integration copies it. */
+const PARAMS_KEY = 'params';
+
+/** Cut a query's params off a message, keeping the SQL. Non-strings pass through. */
+function stripQueryParams<T>(value: T): T {
+  return (typeof value === 'string' ? value.replace(QUERY_PARAMS_TAIL, '') : value) as T;
+}
+
+/** Delete every key named `params`, at any depth, from a plain object tree (in place). */
+function dropParamsKeys(node: unknown, seen = new Set<unknown>()): void {
+  if (!node || typeof node !== 'object' || seen.has(node)) return;
+  seen.add(node);
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    if (key === PARAMS_KEY) delete (node as Record<string, unknown>)[key];
+    else dropParamsKeys((node as Record<string, unknown>)[key], seen);
+  }
+}
 
 /**
  * Strip credentials and PII from a Sentry event, in place-ish (returns the same object).
@@ -49,6 +76,22 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
       if (key.startsWith(FORM_DATA_EXTRA_PREFIX)) delete event.extra[key];
     }
   }
+
+  // SEC-3: query params, wherever the message or an integration put them.
+  for (const exception of event.exception?.values ?? []) {
+    exception.value = stripQueryParams(exception.value);
+  }
+  event.message = stripQueryParams(event.message);
+  if (event.logentry) {
+    event.logentry.message = stripQueryParams(event.logentry.message);
+    dropParamsKeys(event.logentry); // its own `params` are the message's format arguments — values too
+  }
+  for (const crumb of event.breadcrumbs ?? []) {
+    crumb.message = stripQueryParams(crumb.message);
+    dropParamsKeys(crumb.data);
+  }
+  dropParamsKeys(event.extra);
+  dropParamsKeys(event.contexts);
 
   // Contexts can carry a duplicate of the request under `contexts.request` on some paths.
   const requestContext = event.contexts?.request;
