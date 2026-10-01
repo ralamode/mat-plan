@@ -393,6 +393,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
   needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
+  (SEC-2's `check-action-pins.mjs` already runs in `quality`; its self-test, in `guards:test`, does not.)
   Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
 - **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
   reading the top of the status.md changelog, which DX-2 froze. The hook

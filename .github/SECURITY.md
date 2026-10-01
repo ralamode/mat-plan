@@ -85,6 +85,17 @@ machine token.
 
 - Commit the lockfile; CI uses `--frozen-lockfile`; Dependabot with a cooldown / min-age
   (post-Shai-Hulud); `pnpm audit` gate; minimize dependencies.
+- **Every GitHub Action is pinned to a full commit SHA with a bare `# vX.Y.Z` comment** (SEC-2,
+  [plan](../docs/plans/sec-2-pin-actions.md)); this is the one statement of the rule. A tag can be
+  moved by whoever controls it, and `migrate.yml` holds the prod DB credential. Nothing may follow the
+  version, because Dependabot rewrites the comment only when it ends with it.
+  - **Enforced** by `check-action-pins.mjs`: offline in `pnpm verify` (`actions:check`), and in CI's
+    `quality` job with `--resolve`, which requires each SHA to **equal** its version tag's commit in the
+    canonical repo. A fork's commit is reachable through the parent's path, so a SHA that merely exists
+    proves nothing.
+  - **Residual risks:** a remote composite action can still pull its own actions by tag; pinning only
+    freezes them at that commit. CI runs the PR's own copy of the guard, so it catches mistakes, not a
+    hostile author: **a diff touching the guard or its step is itself a review flag**.
 - **Committed Claude Code settings** (`.claude/settings.json`): stricter than "only hooks that no-op
   under CI". The file is **hash-pinned**, so ANY change, even a CI-no-op hook, fails the review
   workflow until the pin is re-read and updated. See "CI / Actions secrets" above; it is the one

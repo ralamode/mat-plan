@@ -18,13 +18,40 @@ jobs:
     name: quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # base.sha must be diffable; the default shallow checkout has no base,
           # and a `git diff` with nothing to compare against would make the guard
           # below silently ALWAYS PASS — worse than no guard. `gitleaks` already
           # uses fetch-depth: 0 on an 8.7MB repo, so this is precedent, not cost.
           fetch-depth: 0
+
+      # ── Action pins (SEC-2; .github/SECURITY.md → "Supply chain") ──────────
+      # Every `uses:` is pinned to a commit SHA with a bare `# vX.Y.Z`; a tag can be
+      # moved by whoever controls it. migrate.yml only runs AFTER merge, so GitHub's
+      # own run-time pin setting would let a tag-pinned edit merge green and then
+      # stop prod migrations. Only a pre-merge check catches that.
+      #
+      # First, right after checkout, so a pin failure shows even when a later guard
+      # fails. It can't check the checkout above it (itself one of the pins checked).
+      # Plain node, no install. A step in `quality`, not a job, for the reason the
+      # feature-guides step gives below.
+      #
+      # `--resolve` asks GitHub whether each SHA IS its version tag's commit, which
+      # defeats a fork's "imposter" commit. It runs only on push and on PRs that touch
+      # a workflow or this guard: a bad pin can only arrive that way, and an API
+      # outage then can't turn unrelated PRs red. The skip is step-level (AGENTS.md).
+      - name: Action pins (SHA + version; resolved against GitHub when workflows change)
+        env:
+          GH_TOKEN: ${{ github.token }} # read-only; lifts the 60/h anonymous API limit
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          resolve=--resolve
+          if [ -n "$BASE_SHA" ] && ! git diff --name-only "$BASE_SHA" HEAD -- \
+               .github/workflows .github/scripts/check-action-pins.mjs | grep -q .; then
+            resolve= # this PR touches no workflow: the offline format check is enough
+          fi
+          node .github/scripts/check-action-pins.mjs $resolve
 
       # ── Forward-only migrations (AGENTS.md → DB rules) ──────────────────────
       # A migration already on main has run against prod and its SQL is hashed in
@@ -197,9 +224,9 @@ jobs:
       # to update is a doc that lies — and a lying guide is worse than none,
       # because it gets trusted instead of verified.
       #
-      # In `quality`, not its own job — same reasoning as the two guards above: a
-      # new job is not a REQUIRED check until branch protection is edited, so it
-      # would look wired while blocking nothing.
+      # In `quality`, not its own job: a new job needs its own branch-protection
+      # entry before it can block, while a step rides with `quality`. (Today NO
+      # check is required — AGENTS.md → "CI checks" — so this is about DX-5.)
       #
       # Needs no pnpm/node install: plain node + git, and it runs BEFORE the setup
       # steps so a docs-only miss fails in seconds rather than after a full build.
@@ -212,10 +239,10 @@ jobs:
         run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -276,7 +303,7 @@ jobs:
       DATABASE_URL_UNPOOLED: postgres://mat:mat@localhost:5432/mat_plan_test
       ACCESS_GATE_PASSWORD: ci-e2e-placeholder-1234
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # The smoke is SKIPPED (heavy steps gated) but the job still SUCCEEDS in two
       # cases — so once `e2e` is a required check (planned at V0/PR-28), neither
@@ -291,7 +318,7 @@ jobs:
       #      packages, workflows, config, lockfile) forces the smoke to run.
       - name: Resolve e2e override
         id: guard
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -337,11 +364,11 @@ jobs:
 
       - name: Setup pnpm
         if: steps.guard.outputs.skip != 'true'
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
 
       - name: Setup Node
         if: steps.guard.outputs.skip != 'true'
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
@@ -352,7 +379,7 @@ jobs:
 
       - name: Cache Playwright browsers
         if: steps.guard.outputs.skip != 'true'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -373,7 +400,7 @@ jobs:
 
       - name: Upload report + traces on failure
         if: failure() && steps.guard.outputs.skip != 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: |
@@ -388,11 +415,11 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Scan for secrets
-        uses: gitleaks/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

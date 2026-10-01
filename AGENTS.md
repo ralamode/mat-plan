@@ -266,10 +266,11 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 - **pre-push:** `tsc --noEmit` (whole project) + affected tests.
 - **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job does,
   plus the production audit: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
-  `skills:check` (every path and `pnpm` script a skill cites exists) → `guards:test` (the hook and
+  `skills:check` (every path and `pnpm` script a skill cites exists) → `actions:check` (every action
+  SHA-pinned) → `guards:test` (the hook and
   guard self-tests) → `audit --prod`. **~35s** on a warm cache, so there is no excuse to skip it.
   `skills:check` and `guards:test` run **only here, not in CI** (`ci.yml` doesn't run them; wiring them
-  in is a CI change that needs its own plan). `db:verify` runs on
+  in is a CI change that needs its own plan). `actions:check` runs in both. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (its own command —
   see the next bullet), gitleaks, and the forward-only guard (inherently a diff-against-base check).
@@ -285,7 +286,8 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   `review-pr` shipit bar, "CI green", is what holds the line; verified via the API, 2026-09-30):
   typecheck · lint · `prettier --check` · full test suite ·
   `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
-  Plus **forward-only** + **Squawk** on new migrations. ⚠️ **`audit --prod` is NOT a CI gate:** it runs
+  Plus **forward-only** + **Squawk** on new migrations, and **action pins**
+  (`check-action-pins.mjs --resolve`; the rule is in [SECURITY.md](./.github/SECURITY.md) → Supply chain). ⚠️ **`audit --prod` is NOT a CI gate:** it runs
   only inside local `pnpm verify`, which no workflow runs, so a critical advisory reaches `main` with CI
   green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
   **`@claude review` is NOT a gate either:** a writer's comment runs the `review-pr` skill in CI
