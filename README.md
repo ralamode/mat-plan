@@ -1,17 +1,40 @@
 # mat-plan
 
-A portable, entity-based **activity logger**. Logs everything in a
-training day — weigh-ins, S&C lifts, calisthenics, the brush-the-teeth routine, habits, wrestling
-practice — on a phone/iPad, works **offline**, and coexists with (then upgrades) the existing
-Claude + CSV workflow.
+A strength-and-conditioning logger for a **parent coaching their own kids' training.** It replaces
+the trainer I was paying to write my kids' programming — logging weigh-ins, lifts, calisthenics,
+habits and practice on a phone, and feeding the CSV workflow I already ran by hand.
 
-It doubles as a **learning / portfolio project**: Next.js App Router + TypeScript + Drizzle/Neon
-Postgres + Clerk, deployed on Vercel with GitHub Actions CI and Playwright E2E.
+It is also the project I use to work in the open. Real users (my family), real constraints, and a
+design rule that makes the engineering interesting: **in this system a bad number doesn't degrade a
+metric, it tells a child to lift something.**
+
+🔗 **[mat-plan.dev](https://mat-plan.dev)** — currently behind an access gate while v1 finishes.
+
+## What's interesting here
+
+If you're reading this to see how I build, start with these:
+
+|                                                                                                                                                                                                                                                                   | Where                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **An AI feature with a hard authority boundary.** Natural-language logging via Anthropic structured outputs → human-confirm chip → write. The model extracts what was _performed_; it can never emit a prescribed load. A deterministic engine owns every number. | [plans/ai-1-nl-logging.md](./docs/plans/ai-1-nl-logging.md)                                                     |
+| **An eval design where three cases test a safety property, not accuracy** — and therefore get their own 100% gate, separate from the accuracy gate. A threshold may only average over measurements that fail the same way.                                        | same doc, S4                                                                                                    |
+| **Decisions argued, not asserted.** Every ADR states the rule, applies it, and names the alternative it rejects and why that alternative was tempting.                                                                                                            | [docs/decisions/](./docs/decisions/)                                                                            |
+| **A schema decision made from evidence.** Before designing typed measurement columns I censused two years of my own handwritten logs: 12 apparent shapes, 68% of which weren't numbers, a quarter of which turned out to need no column at all.                   | [ADR 0004](./docs/decisions/0004-typed-measurements.md) · [the census](./docs/plans/gap3-typed-measurements.md) |
+| **Adversarial review before implementation.** UI and schema changes get multi-lens critique panels — written up, findings answered — before code exists.                                                                                                          | [AGENTS.md](./AGENTS.md) · [plans/](./docs/plans/)                                                              |
+| **Migration discipline.** Expand → backfill → contract, never in one step. Drift guards and `db:verify` proofs run the real insert path in CI.                                                                                                                    | [docs/spec.md](./docs/spec.md)                                                                                  |
+
+Accessibility is enforced in CI, not aspired to. Tests are Playwright E2E + Vitest, and CodeQL runs
+on every push.
 
 ## Status
 
-**v0 in progress.** Scaffold (V0-1) + design system (V0-1b) landed; building the vertical slice.
-See [docs/status.md](./docs/status.md).
+**v1 (the MVP) — mid-build**, ~155 merged PRs. The data model, the logging surfaces, per-kid
+routines, supersets, timezone-correct day boundaries and the strength write path are in. The MVP
+finish line is: the kids log a full day online, and CSV export keeps the existing Claude workflow
+alive.
+
+**Next:** typed measurements (GAP-3) — the schema work that unblocks CSV export and the AI feature,
+in that order. See [docs/status.md](./docs/status.md) and [docs/plan.md](./docs/plan.md).
 
 ## Local development
 
