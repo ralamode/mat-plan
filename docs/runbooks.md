@@ -67,9 +67,18 @@ is the next step. After 1d lands, un-deleting a row would violate its index.
 more than one live weigh-in"_), `migrate.yml` — which runs on **every** push to `main`, with no path filter and
 no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
 and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
-then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. Bodyweight
-logging keeps working (the arbiter has not moved yet), but **any later PR that needs a migration or a
-seed row is broken in prod until the wedge clears — freeze merges to `main` until then.**
+then re-running `migrate.yml` via `workflow_dispatch`. Bodyweight logging keeps working (the arbiter
+has not moved yet), but **any later PR that needs a migration or a seed row is broken in prod until the
+wedge clears — freeze merges to `main` until then.**
+
+- **The correction PR is the one exception to the freeze.** A correction must be on `main` before it can
+  `--apply`, so it merges while migrate is wedged — and that merge's own `migrate.yml` run **fails too,
+  as expected** (the duplicates are still there until you `--apply`). Don't chase that red run: apply,
+  then `workflow_dispatch`.
+- **A `lock_timeout` failure is not this.** If the run fails with `canceling statement due to lock
+timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long transaction) rather than
+  the pre-check's message above, nothing is wrong with the data: re-run `migrate.yml` via
+  `workflow_dispatch`, and the freeze is the same until it goes green.
 
 ---
 

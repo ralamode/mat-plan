@@ -3084,17 +3084,30 @@ console.log(
   try {
     await db.transaction(async (tx) => {
       await tx.execute(sql`DROP INDEX "uq_entries_profile_day_bodyweight"`);
-      await tx.insert(schema.entries).values({
-        publicId: '019826b4-0000-7000-8000-0000000d1d01',
-        clientId: '019826b4-0000-7000-8000-0000000d1d02',
-        profileId: bwOwnerRow.id,
-        activityDate: '2026-05-01', // (a)'s day already holds a live weigh-in
+      const row = (n: string, profileId: number, activityDate: string, context: string | null) => ({
+        publicId: `019826b4-0000-7000-8000-0000000d1d${n}`,
+        clientId: `019826b4-0000-7000-8000-0000000d1e${n}`,
+        profileId,
+        activityDate,
+        context,
         kind: ENTRY_KIND.bodyweight,
-        unit: 'lb',
+        unit: 'lb' as const,
         valueNum: '82',
         activityTypeId: weighInTypeId,
         metricKey: SEED_METRIC_KEYS.bodyweight,
       });
+      // The fixture is built so each wrong grouping changes the COUNT the pre-check reports:
+      // - the duplicate is 'morning' beside (a)'s NULL-context row → a bare-`context` key sees two
+      //   different slots and reports 0 groups (the coalesce is what makes them one);
+      // - (f) put another profile on 2026-05-01, and two more profiles' single weigh-ins share
+      //   2026-05-06 → a key without `profile_id` merges them and reports 2 groups.
+      await tx
+        .insert(schema.entries)
+        .values([
+          row('01', bwOwnerRow.id, '2026-05-01', DEFAULT_BODYWEIGHT_CONTEXT),
+          row('03', bwOwnerRow.id, '2026-05-06', null),
+          row('04', otherProfile.id, '2026-05-06', null),
+        ]);
       await tx.execute(doBlock); // the migration's own text, verbatim — not interpolated input
     });
   } catch (e) {

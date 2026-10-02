@@ -1020,6 +1020,20 @@ amendment's first bullet:
   own `DO` pre-check, read from the file, refuses an existing duplicate. The 1b amend probes now each
   get their own day. Mutation-checked: a bare `context` key, no metric scope, no `deleted_at`
   predicate, no slot column, and a weakened pre-check each fail `db:verify`.
+- **Deviation from "the index only" (DB-safety review, P2-1): an interim typed envelope.** Once the
+  index exists, a same-day second weigh-in (two phones, a stale tab) is an EXPECTED outcome, and
+  AGENTS.md → Errors says expected outcomes are a typed `{ ok: false, error }`, never a throw into
+  `error.tsx`. So `logBodyweight` catches exactly `23505` on `BODYWEIGHT_DAY_UNIQUE_INDEX`
+  (`isBodyweightDayConflict`, walking drizzle's `cause` chain) and returns `{ dayTaken: true }`; the
+  action answers "A weight is already logged for this day — refresh to see it." and revalidates.
+  Every other error still throws. **1e replaces this** when it moves the arbiter onto the natural key
+  (its replay branch answers the same case without an error at all).
+- **The pre-check proof was strengthened** (DB-safety review, P2-3): its fixture now puts a `'morning'`
+  duplicate beside a NULL-context row and two different profiles' single weigh-ins on one day, so a
+  pre-check grouping on bare `context` (reports 0) or dropping `profile_id` (reports 2) both fail the
+  exact count — previously only a weakened `HAVING` did.
+- **Tooling:** the `bodyweight-duplicates` screenshot state seeded two live same-day rows and now hits
+  the index; it was removed (the multi-row receipt returns with V1-32's real slots).
 
 ## Open questions
 

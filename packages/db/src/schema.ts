@@ -151,6 +151,13 @@ export const profiles = pgTable(
   ],
 );
 
+/**
+ * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012). Named once: the schema below
+ * builds it, and the write path matches a `23505` against it to answer "already logged" with a typed
+ * envelope instead of a crash (AGENTS.md → Errors). Renaming it means a new migration too.
+ */
+export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
+
 export const entries = pgTable(
   'entries',
   {
@@ -225,7 +232,7 @@ export const entries = pgTable(
     // - The predicate and the slot are SQL LITERALS, never `SEED_METRIC_KEYS.bodyweight` /
     //   `DEFAULT_BODYWEIGHT_CONTEXT`: drizzle-kit renders an interpolated const as `$1` in the DDL and
     //   the CREATE INDEX fails (precedent: entries_kind_check below). Tests pin both values.
-    uniqueIndex('uq_entries_profile_day_bodyweight')
+    uniqueIndex(BODYWEIGHT_DAY_UNIQUE_INDEX)
       .on(t.profileId, t.activityDate, sql`coalesce(${t.context}, 'morning')`)
       .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'bodyweight'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
