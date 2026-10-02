@@ -360,6 +360,36 @@ publishing; publishing before it lands ships the artifact without its headline.
 behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
 going public, not just on V1-13.
 
+## OSS-2 — a public landing screen at `/`
+
+- **OSS-2 — a public landing screen at `/`.** _(Ray, 2026-10-01, after OSS-1 made the repo public.)_
+  An unauthenticated visitor — the link on Ray's resume — gets a page that says what mat-plan is and a
+  link to the source, instead of a bare password prompt. **The profile picker moves to `/p`.** The gate
+  is unchanged and still guards every other route.
+  [Plan](./plans/oss-2-public-landing.md) (eight-lens panel; two blocking defects found before any code
+  — see its review-response log).
+
+  **Three PRs, in this order:**
+
+  1. **§A — the public route** (this one): `/` public, picker → `/p`, copy + one link into the README's
+     own "what's interesting here", `app/loading.tsx` → `app/p/loading.tsx`, the gate matcher's
+     unanchored lookahead fixed, a `pages-are-gated` test, `/` and `/gate` axe-scanned un-gated for the
+     first time, and every `'/'`-means-the-app-home literal routed through `APP_HOME_PATH`.
+  2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
+     are already published in `seed.ts`, `global.setup.ts` and `steps.ts`; renaming them closes the real
+     exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.
+  3. **§B — the hero image.** Deliberately last: 🔴 **`next/image` on a `public/` asset is broken in
+     this app today** — measured, 400 for every caller, gated or not, because the optimizer's internal
+     fetch re-enters the proxy with no cookie. §B un-gates `public/landing/`, scopes
+     `images.localPatterns`, sets `metadataBase`, and narrows `ci.yml`'s inert-file allowlist so an
+     image that is now **served content** can no longer auto-skip the smoke.
+
+  ⚠️ **Does NOT include sign-in.** The "Sign in with Google" half of the original ask is
+  [AUTH-1](#auth-1), which is several PRs behind the household-addressing ADR
+  ([beta-1](./milestones/beta-1.md) orders it `ADR → TEN-1 → AUTH-1`). The landing fixes the resume link
+  on its own; an env flag that merely turns the gate **off** is rejected — with no auth behind it, its
+  only reachable state publishes two children's logged health data.
+
 ## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
 
 Tooling that makes each PR cheaper and safer to produce. It sits outside the product priority order
@@ -531,7 +561,7 @@ verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each ro
 | #   | Branch                           | What                                                                                                                                                                                   | Owes                                                      |
 | --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 1   | `fix/v1-30-loggable-units`       | ✅ **V1-30a**: every offered unit saves and exports; boundary tests, `db:verify`, guide invariant 4b                                                                                   | plan + engineering panel, one UX reviewer                 |
-| 2   | `fix/v1-27-partial-sets`         | **P0** = **V1-27**: partial sets on a scaffolded movement can be submitted                                                                                                             | its existing plan                                         |
+| 2   | `fix/v1-27-partial-sets`         | ✅ **V1-27**: partial sets on a scaffolded movement can be submitted (#207)                                                                                                            | its existing plan                                         |
 | 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md)) | expedited; security lens post-implementation              |
 | 4   | `chore/sec-2-pin-actions`        | ✅ **SEC-2:** every action in all 5 workflows SHA-pinned; `check-action-pins.mjs` guards it in `verify` + `quality`                                                                    | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
 | 5   | `chore/ci-1-audit-in-ci`         | P1: `pnpm audit --prod` in the `quality` job                                                                                                                                           | plan-exempt one-liner (say so)                            |
@@ -818,7 +848,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   percent-encoded) and requires the path to resolve to the same origin. Fixed before AUTH-1 or an
   invite flow reuses the helper.
 
-- **V1-27 — doing SOME of a movement's sets blocks the submit.** 🔴 **P0, found 2026-09-30** by
+- **V1-27 — doing SOME of a movement's sets blocks the submit.** ✅ **Fixed (#207)** — trailing empty sets are no longer required or sent, and a line above **Log strength** says what will be logged. 📋 [**plan**](./plans/v1-27-partial-sets.md) (approved by Ray 2026-10-01, trailing-set trade-off accepted). 🔴 **P0, found 2026-09-30** by
   `e2e/scaffold-submit.spec.ts` while building V1-26 PR-A. `DEFAULT_SCAFFOLD_SETS` is 3 and `reps` is
   unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement** and has no
   per-**set** equivalent. So a kid who does **2 of 3 prescribed sets** cannot submit at all — the
@@ -830,11 +860,19 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   constraint validation, and no e2e had ever submitted a scaffolded form. The V1-26 spec now does, and
   it fills every row precisely so it does not depend on this bug either way.
 
-  **Likely fix, to be planned:** an untouched scaffolded SET is dropped at submit the way an untouched
-  scaffolded movement already is — which means `required` can no longer carry the "don't submit
-  nothing" job alone, and `strengthSetSchema`'s superRefine has to. Related to V1-25 §1 (the athlete
-  should be able to choose the set count up front) but strictly worse, because that one is friction
-  and this one is a wall.
+  **Planned fix:** untouched sets **after the last touched set** of a movement are not `required` and
+  are not submitted, and a line above **Log strength** states what the tap will log. A gap (an untouched
+  set before a touched one) still blocks, with a message naming the way out. No server validation or
+  wire change: the server already rejects a blank set. Related to V1-25 §1 (the athlete should be able
+  to choose the set count up front) but strictly worse, because that one is friction and this one is a
+  wall.
+
+- **V1-35 — an error names "Pull-up" when the day has two Pull-ups.** 🟢 Filed 2026-10-01 (V1-27's
+  panel). Strength-session errors were numbered by payload index ("Movement 3"), which drifts when an
+  untouched card is dropped before the faulty one; #201 replaces the number with the movement's name.
+  A name is ambiguous when the same movement appears twice in a day (legitimate — two blocks of
+  pull-ups). Fix when it bites: carry the card's on-screen position for the label, bounded so it can
+  never reject a valid session, read only on the error path, and never stored.
 
   ### 3. A logged form should look complete, not empty
 
@@ -904,6 +942,11 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     floors every `?d=` into the writable window; covering them needs a backdated-profile fixture (the
     screenshot script's `seedClosedDays` is the precedent). Fold into 1b, which adds a control to
     every one of these states and must audit them anyway.
+  - **Follow-up (from V1-27's panel, 2026-10-01): add a set to a logged strength entry.** Once V1-27
+    drops trailing blank rows, a set done but not entered (or entered after an early **Log** tap) has
+    no in-app recovery: logging it again creates a second entry for the movement on that day, and only
+    a `db:correct` correction can merge them. 1b amends values; 3a/3b are a receipt and a list move.
+    Belongs with the strength half of the amend.
 
   📋 [**plan**](./plans/v1-24-form-is-the-day.md) (with V1-25 §3 — the two rows are planned together,
   as this row says they must be). _(Ray, 2026-09-28, from logging a real session.)_ He logged Liam's KB swings as **`20 × BW`** when it was **10 reps × 20 lb**

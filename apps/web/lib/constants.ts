@@ -1,3 +1,10 @@
+import {
+  isMassUnit,
+  LOGGABLE_DIMENSION_NOUNS,
+  type Unit,
+  UNIT_DIMENSION_BY_CODE,
+} from '@mat-plan/shared';
+
 /**
  * App-only, cross-feature constants. **Zero dependencies** — kept import-free (like
  * `lib/access-gate.ts`) so it is safe to import from a `'use client'` component or the
@@ -168,3 +175,71 @@ export const AMEND_ERROR_COPY = {
    */
   staleWrite: 'That was changed on another device — the latest is showing now.',
 } as const;
+
+/**
+ * V1-27 — the strength form's partial-set copy. The plan (`docs/plans/v1-27-partial-sets.md`) explains
+ * each: the summary line is the real mitigation for dropping trailing empty sets, the hint is the local
+ * cue on a mixed card, and the missing-field message names the way out of a block.
+ */
+export const PARTIAL_SETS_COPY = {
+  /** After **Add set** on a card with touched sets and a trailing empty run. "At the end" because a gap
+   *  card has a trailing run too, and its gap row still blocks. */
+  trailingHint: "Empty sets at the end won't be logged.",
+  /** Custom validity of a required, blank REPS input (log form only) when the card has a per-set
+   *  Remove button — it renders only when the movement has more than one set. */
+  missingReps: "Fill in the reps, or tap Remove if you didn't do this set.",
+  /** …and on a one-set card, which has no per-set Remove to point at. */
+  missingRepsOnly: 'Fill in the reps for this set.',
+  /** Custom validity of a required, blank WEIGHT input on a MASS unit. Points at BW / band, the real way
+   *  out for a set done with no weight — "if you didn't do it" would be false, and typing `0` records a
+   *  fake load. Use `missingQuantityMessage(unit)`, which also covers time and distance. */
+  missingWeight: "Enter the weight, or tap BW or band if there wasn't one.",
+  /** The summary line when nothing would be logged (including a payload of only skipped movements). */
+  empty: 'Nothing to log yet.',
+} as const;
+
+/**
+ * The blank-quantity bubble for a set's number field, by unit. BW / band are modes of a WEIGHT (V1-30
+ * refuses them on time and distance), so only a mass unit points at them; a time or distance asks for
+ * the number, with the same noun the server's refusal uses (`LOGGABLE_DIMENSION_NOUNS`).
+ */
+export function missingQuantityMessage(unit: Unit): string {
+  if (isMassUnit(unit)) return PARTIAL_SETS_COPY.missingWeight;
+  return `Enter the ${LOGGABLE_DIMENSION_NOUNS[UNIT_DIMENSION_BY_CODE[unit]] ?? 'measurement'}.`;
+}
+
+/** Longest movement name the blocked summary quotes before truncating — keeps the line on one row at
+ *  360px (~44 chars × ~7px ≈ 308px of the ~328px usable). */
+export const SUMMARY_NAME_MAX = 20;
+
+/**
+ * The summary line when the browser would refuse the tap, naming the FIRST blocker so a kid knows
+ * where to look — on a phone it can be several cards up the page. `index` is the on-screen card
+ * number (0-based), `setIndex` the on-screen set number (0-based).
+ */
+export function blockedSummary(
+  blocker:
+    | { kind: 'name'; index: number }
+    | { kind: 'set'; index: number; setIndex: number; movementName: string },
+): string {
+  if (blocker.kind === 'name') return `Movement ${blocker.index + 1} needs a name.`;
+  const name = blocker.movementName.trim();
+  const label =
+    name === ''
+      ? `Movement ${blocker.index + 1}`
+      : name.length > SUMMARY_NAME_MAX
+        ? `${name.slice(0, SUMMARY_NAME_MAX - 1).trimEnd()}…`
+        : name;
+  return `${label} set ${blocker.setIndex + 1} needs finishing.`;
+}
+
+/**
+ * The line above **Log strength**: what the tap will log, from the exact post-drop payload. A skipped
+ * movement is sent with `sets: []` and is not "logged", so it is counted separately.
+ */
+export function strengthSummary(movements: number, sets: number, skipped: number): string {
+  if (movements === 0) return PARTIAL_SETS_COPY.empty;
+  const m = `${movements} ${movements === 1 ? 'movement' : 'movements'}`;
+  const s = `${sets} ${sets === 1 ? 'set' : 'sets'}`;
+  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skipped} skipped` : ''}.`;
+}
