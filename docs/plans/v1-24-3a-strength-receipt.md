@@ -63,14 +63,14 @@ the inputs. Update the `AMEND_COPY.change` docblock, which says "editable-set.ts
 **I2 — Layout at 280px** (a superset member's content width; a11y lens width math). The editor
 stacks, deterministically, as the 1b amend does: reps × weight + unit on one row; Save and Cancel on
 their own `w-full` row. The weight input's name and visible suffix carry the set's unit
-(`UNIT_LABELS[unit]`, the lesson `AMEND_COPY.valueLabel` documents).
+(`UNIT_LABELS[unit]`, the lesson `AMEND_COPY.valueLabel` documents). _(Superseded by J1: the visible suffix is the unit **code**, `lb`/`kg`.)_
 
 **I3 — Focus and announcement** (the `bodyweight-amend.tsx` pattern). On Save, focus returns to the
 set's Change button. On Cancel, also to Change. An `sr-only` `role="status"` renders **outside the
 read/edit conditional, in both states** (a region mounted with its text is never announced), and
 announces the subject: `Back squat set 2 changed: 5 × 140 lb.`. The error `role="alert"` has a
 **per-set** id (`amend-error-${set.publicId}`), referenced by the inputs' `aria-describedby` only
-while the error renders.
+while the error renders. _(Superseded by J9: the id is `set-amend-error-${set.publicId}`, via `setAmendErrorId`; J2 adds focus on reps when the editor opens.)_
 
 **I4 — Locked, with a true reason.** `lockedReason(set): LockedReason | null` lives in `set-display.ts`
 next to `isEditableSet`, and is derived from the same clauses (a test pins that

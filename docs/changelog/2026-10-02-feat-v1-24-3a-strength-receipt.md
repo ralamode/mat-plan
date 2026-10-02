@@ -3,5 +3,5 @@
   editor stacks so a superset member fits a phone; Save and Cancel return focus to Change; the save is
   announced by the set's own status region; an error is tied to its inputs by a per-set id. A set with
   no Change now says **why**, truthfully (`lockedReason`, pinned to `isEditableSet`), and what to do:
-  "Wrong? Ask a parent — don't log it again." `MovementLine` moved to its own file. The plan, reshaped
+  `AMEND_COPY.lockedRecovery` ("Wrong? Don't log it again — tell a parent so they can fix it.") `MovementLine` moved to its own file. The plan, reshaped
   by two seven-lens panel rounds, also sets out 3a-ii (the section receipt) and 3a-iii.
