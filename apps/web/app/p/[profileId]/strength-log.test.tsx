@@ -80,7 +80,7 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
     ]);
   });
 
-  it('Cancel hides (never unmounts): a typed draft survives a reopen, and focus returns to the toggle', () => {
+  it('Close hides (never unmounts): a typed draft survives a reopen, and focus returns to the toggle', () => {
     render(island(S1, 'Back squat, Bench'));
     fireEvent.click(toggle());
     fireEvent.change(nameInput(), { target: { value: 'Rows' } });
