@@ -78,7 +78,7 @@ export const BODYWEIGHT_VALUE_JOINER = ', ';
 export const BODYWEIGHT_COPY = {
   /** A second weigh-in refused by V1-24 1d's one-per-day index (two phones, or a stale tab). The
    *  page revalidates on refresh and shows the one that landed; the amend corrects its value. */
-  dayTaken: 'A weight is already logged for this day — refresh to see it.',
+  dayTaken: 'A weight is already logged for this day.',
   /** The section heading in EVERY state — a noun that is true over a form, a receipt, or nothing. */
   heading: 'Bodyweight',
   /** One saved value: `Saved: 84.5 lb`. */

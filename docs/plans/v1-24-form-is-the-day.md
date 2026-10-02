@@ -1025,7 +1025,7 @@ amendment's first bullet:
   AGENTS.md → Errors says expected outcomes are a typed `{ ok: false, error }`, never a throw into
   `error.tsx`. So `logBodyweight` catches exactly `23505` on `BODYWEIGHT_DAY_UNIQUE_INDEX`
   (`isBodyweightDayConflict`, walking drizzle's `cause` chain) and returns `{ dayTaken: true }`; the
-  action answers "A weight is already logged for this day — refresh to see it." and revalidates.
+  action answers "A weight is already logged for this day." and revalidates. A **concurrent replay** of the same submit can trip the day index after passing the client_id arbiter (it checks before the original commits); `logBodyweight` therefore re-selects by client_id on a day conflict and answers success when the row is its own — a replay never reads as "already logged" (confirmation review P2; `entries-bodyweight.test.ts`).
   Every other error still throws. **1e replaces this** when it moves the arbiter onto the natural key
   (its replay branch answers the same case without an error at all).
 - **The pre-check proof was strengthened** (DB-safety review, P2-3): its fixture now puts a `'morning'`

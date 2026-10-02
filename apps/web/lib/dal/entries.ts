@@ -322,6 +322,7 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodywei
   const metricKey = await assertMetricKeyExists(SEED_METRIC_KEYS.bodyweight);
 
   let inserted: { publicId: string } | undefined;
+  let dayConflict = false;
   try {
     [inserted] = await db
       .insert(schema.entries)
@@ -346,19 +347,24 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodywei
       })
       .returning({ publicId: schema.entries.publicId });
   } catch (err) {
-    if (isBodyweightDayConflict(err)) return { dayTaken: true };
-    throw err;
+    if (!isBodyweightDayConflict(err)) throw err;
+    // The day is taken — but possibly by THIS submit: a concurrent replay of the same client_id
+    // passes the arbiter check before the original commits, then trips the day index once it does.
+    // A replay must still answer success (AGENTS.md → Idempotency), so look the row up first.
+    dayConflict = true;
   }
 
   if (inserted) return { id: inserted.publicId };
 
-  // Conflict → the entry already exists for this client_id; return it.
+  // Conflict → the entry may already exist for this client_id (a replay); return it.
   const [existing] = await db
     .select({ publicId: schema.entries.publicId })
     .from(schema.entries)
     .where(eq(schema.entries.clientId, args.clientId))
     .limit(1);
-  return { id: existing.publicId };
+  if (existing) return { id: existing.publicId };
+  if (dayConflict) return { dayTaken: true };
+  throw new Error('logBodyweight: insert was a no-op but no row exists for its client_id');
 }
 
 export type CheckinItemInput = {
