@@ -2,6 +2,10 @@
 
 > Backlog: [plan.md](../plan.md) row OSS-2. Branch: `feat/oss-2-public-landing`.
 >
+> **Shipped plan-only (#208), before any implementation code** — the pattern `docs/plans/README.md`
+> allows. §A follows in its own PR; where a section below says "this PR", it means the PR that
+> implements that section.
+>
 > **Reshaped by two panel rounds.** Eight lenses (correctness, scope, architecture, reuse, security,
 > and the three UX lenses) found two blocking defects in the first draft — a hero image that is a 400
 > for every caller, and an acceptance criterion that could not fail. Both are fixed below; the
@@ -57,7 +61,7 @@ problem from making a route public**, and it is currently broken app-wide. So:
 
 |        | Concern                                                                                          | Ships       |
 | ------ | ------------------------------------------------------------------------------------------------ | ----------- |
-| **§A** | The public landing route: `/` public, picker → `/p`, copy, links, a11y, the e2e move             | **this PR** |
+| **§A** | The public landing route: `/` public, picker → `/p`, copy, links, a11y, the e2e move             | **next**    |
 | —      | **OSS-1 follow-up:** rename the seed fixtures' real first names to neutral ones                  | next, small |
 | **§B** | The hero image: un-gating a `public/` asset, the capture tooling, OG metadata, the committed PNG | after that  |
 
@@ -507,8 +511,11 @@ on a **public** repo, and every seeded capture renders the profile name as the `
 ([p/[profileId]/page.tsx:136](../../apps/web/app/p/[profileId]/page.tsx)) beside a weigh-in. The seed
 rename fixes that whole class; a §B-local guard would have fixed one file.
 
-**Bodyweight is already safe by construction** — the fixtures write committed constants (`84.5` at
-`screenshot-ephemeral.ts:475`), never real values. A stronger claim than the draft's, and it narrows
+**The captured screen's bodyweight is safe by construction** — the screenshot fixtures write committed
+constants (`84.5` at `screenshot-ephemeral.ts:475`, chosen for a rendering property, per its own
+comment), never real values. Scoped deliberately: this is a claim about **what the capture renders**,
+not about the repo, which OSS-1's audit shows does hold 14 real dated weigh-ins in the legacy CSV
+samples. A stronger claim than the draft's, and it narrows
 the residual risk to names, which the rename then removes.
 
 **Two controls still earn their place in §B**, because the rename does not cover them:

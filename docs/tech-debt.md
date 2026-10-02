@@ -25,6 +25,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   legacy branch of the guard and its test cases, and drop the "LEGACY" paragraph from the docblock.
 - **Severity:** low.
 
+### An image under `apps/web/public/` auto-skips the e2e smoke (demonstrated 2026-10-01, #208)
+
+- **What & why:** `.github/workflows/ci.yml`'s e2e auto-skip treats any
+  `\.(png|jpe?g|gif|svg|webp|ico)$` file as provably inert. That was right while images were only PR
+  comment attachments. It stops being right the moment an image is **served content**.
+- **Demonstrated, not theorized:** #208 added `apps/web/public/brand/mat-plan-mark.{svg,png}` and the
+  job logged `e2e smoke skipped (docs/tooling-only change — 5 file(s), all inert); job still reports
+success.` Harmless there — nothing referenced the files yet.
+- **Impact:** medium, and **latent until OSS-2 §B**, which puts an image on the public landing page.
+  After that, a PR that swaps only the hero PNG changes what every unauthenticated visitor sees and
+  skips the smoke entirely.
+- **Proposed fix:** exclude `apps/web/public/` from the inert allowlist (keep `.screenshots/` and
+  `docs/` images inert). Scheduled in OSS-2 §B ([plan](./plans/oss-2-public-landing.md)).
+- **Severity:** medium. **Payoff trigger:** OSS-2 §B, or any earlier PR that renders a `public/` asset.
+
 ### The access-gate matcher excludes `/api`, so any Route Handler there is ungated (found 2026-09-24)
 
 - **What & why:** `apps/web/proxy.ts` matches `'/((?!api|_next/static|_next/image|favicon.ico).*)'`.
@@ -43,7 +58,18 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   or require every handler to call the gate check itself and **prove it with a test per route**. The
   first is one character and covers the class; the second is the AGENTS.md rule ("every Route Handler
   is a PUBLIC endpoint") and does not depend on a matcher staying correct. Do both.
-- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5.
+- ⚠️ **Wider than this entry said (measured 2026-10-01, OSS-2 #208).** The lookahead is **unanchored at
+  its tail**, so the exclusion is a PREFIX match, not a segment match. Measured against the live
+  pattern: `/api` and `/api/x` skip (intended) — and so do **`/apiary`**, **`/apifoo`**,
+  **`/favicon.icon`** and **`/_next/imagex`**. So the hole is not confined to a future `/api` route:
+  any page whose path merely _starts_ with one of those strings is ungated by the matcher today.
+  Bounded in practice only because no such route exists and every page re-checks the gate itself.
+  This is the exact `startsWith` error DUALS-1's own lesson warns about
+  (`apps/web/lib/access-gate.ts`). **Fix:** `(?!api(?:/|$)|_next/static/|_next/image|favicon\.ico$)`,
+  with the four negatives pinned. Scheduled in OSS-2 §A
+  ([plan](./plans/oss-2-public-landing.md)), since that PR's thesis is segment-exact matching.
+- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5; the prefix fix lands
+  sooner, with OSS-2 §A.
 
 ### Test-time path overrides are ad-hoc, so gates quietly go vacuous (audit, 2026-09-24)
 
