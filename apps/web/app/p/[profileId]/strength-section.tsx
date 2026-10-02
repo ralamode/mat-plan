@@ -1,13 +1,16 @@
 import type { DayRole } from '@mat-plan/shared';
 
-import { STRENGTH_COPY, VALUE_JOINER } from '@/lib/constants';
-import { loggedMovements, sessionMovements, type SessionRow } from '@/lib/entries/activity-totals';
-import { entryLabel } from '@/lib/entries/entry-label';
+import { STRENGTH_COPY } from '@/lib/constants';
+import { movementNames, sessionMovements, type SessionRow } from '@/lib/entries/activity-totals';
 import type { ProgramDayDTO } from '@/lib/programming/program-day';
 
 import { ProgramReference } from './program-reference';
 import { StrengthForm } from './strength-form';
-import { sessionOrdinals, StrengthSessionReceipt } from './strength-session-receipt';
+import {
+  sessionHeading,
+  sessionOrdinals,
+  StrengthSessionReceipt,
+} from './strength-session-receipt';
 
 /**
  * The strength section of Today (V1-24 3a-ii): the day's strength RECORD, not just a form. A server
@@ -47,16 +50,11 @@ export function StrengthSection({
     ) : null;
   const logged = sessions.map((s) => ({
     id: s.session.id,
-    names: sessionMovements(s).map(entryLabel).join(VALUE_JOINER),
+    heading: sessionHeading(s, ordinals.get(s.session.id)),
+    names: movementNames(sessionMovements(s)),
   }));
   const alreadySaved =
-    sessions.length > 0
-      ? loggedMovements(sessions)
-          .map(({ entry, skipped }) =>
-            skipped ? `${entryLabel(entry)} ${STRENGTH_COPY.skippedSuffix}` : entryLabel(entry),
-          )
-          .join(VALUE_JOINER)
-      : null;
+    sessions.length > 0 ? movementNames(sessions.flatMap(sessionMovements)) : null;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">

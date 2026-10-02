@@ -15,6 +15,29 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Four copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
+
+- **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
+  `StrengthForm` island each render an `sr-only` `role="status"` line and move focus by id or ref in
+  an effect. What TRIGGERS each is deliberately different (B5: an island announces its own save,
+  never a value diff), but the presentational half is copied.
+- **Impact:** low; each copy is tested. A fix to one (e.g. clearing on open) has to be made four times.
+- **Proposed fix:** PR 2 (check-ins) extracts the shared amend primitive (parent Decision 16); give
+  it a small `useAnnounceAndFocus` hook and move all four onto it.
+- **Severity:** low.
+
+### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)
+
+- **What & why:** `reselectLiveByClientId` (`packages/db/src/writers/strength-session.ts`, from #59)
+  re-selects a session by `client_id` only. Replaying another profile's session `client_id` under
+  profile B would attach B's entries to A's session, and since V1-24 3a-ii return A's public id as
+  `savedId`.
+- **Impact:** low today: it needs a device-generated `client_id` that is never exposed, and ownership
+  is existence-only until AUTH-1. It becomes a cross-household leak once households exist.
+- **Proposed fix:** add the profile (or household) to the re-select's WHERE, with a `db:verify` proof.
+  Fold into AUTH-1's ownership pass.
+- **Severity:** medium after AUTH-1.
+
 ### The status guard keeps a pre-DX-2 legacy path (added 2026-09-30, #190)
 
 - **What & why:** `.github/scripts/check-status-touched.mjs` still accepts a `docs/status.md` touch

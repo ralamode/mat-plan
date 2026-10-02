@@ -9,7 +9,10 @@ import {
   SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 
+import { STRENGTH_COPY, VALUE_JOINER } from '@/lib/constants';
 import type { EntryDTO } from '@/lib/dal/entries';
+
+import { entryLabel } from './entry-label';
 
 /**
  * Calisthenics daily totals (V1-6a) — the digital tally sheet. Pure and route-agnostic
@@ -157,6 +160,22 @@ export function sessionMovements(session: SessionRow): EntryDTO[] {
 }
 
 /**
+ * The display names of these movements, a skipped one marked "(skipped)" and repeats removed — the
+ * ONE builder for both "Already saved for this day" and the save announcement (they disagreed about
+ * skipped movements in review).
+ */
+export function movementNames(entries: readonly EntryDTO[]): string {
+  const names = loggedMovementsOf(entries).map(({ entry, skipped }) =>
+    skipped ? `${entryLabel(entry)} ${STRENGTH_COPY.skippedSuffix}` : entryLabel(entry),
+  );
+  return [...new Set(names)].join(VALUE_JOINER);
+}
+
+function loggedMovementsOf(entries: readonly EntryDTO[]) {
+  return entries.map((entry) => ({ entry, skipped: entry.status === ENTRY_STATUS.skipped }));
+}
+
+/**
  * Every movement logged in these sessions, and whether it was SKIPPED (V1-24 3a-ii). The ONE
  * definition of "logged today": "Already saved today" renders it, and 3a-iii's fill filter reuses it,
  * so the two can never disagree (a skipped movement is not logged work; the line marks it, the fill
@@ -165,9 +184,7 @@ export function sessionMovements(session: SessionRow): EntryDTO[] {
 export function loggedMovements(
   sessions: readonly SessionRow[],
 ): { entry: EntryDTO; skipped: boolean }[] {
-  return sessions
-    .flatMap(sessionMovements)
-    .map((entry) => ({ entry, skipped: entry.status === ENTRY_STATUS.skipped }));
+  return loggedMovementsOf(sessions.flatMap(sessionMovements));
 }
 
 export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {

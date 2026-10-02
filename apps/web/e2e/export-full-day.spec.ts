@@ -156,7 +156,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
     await page.getByLabel(new RegExp(`^Movement 1 set ${i + 1} weight`)).fill(set.weight);
   }
 
-  const logStrength = page.getByRole('button', { name: 'Log strength' });
+  const logStrength = page.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
   await logStrength.click();
   // V1-24 3a-ii: a save FOLDS the form behind "Log more strength" (the submit is hidden), so the
   // signal the save landed is the folded toggle, then the record below.

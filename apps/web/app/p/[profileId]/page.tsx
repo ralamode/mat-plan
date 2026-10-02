@@ -121,9 +121,8 @@ export default async function TodayPage({
   const sessionRows = rows.filter((r): r is SessionRow => r.kind === 'session');
   const ordinals = sessionOrdinals(sessionRows);
   // Whether the strength SECTION renders: if it does, it owns Change and the list copy is read-only.
-  const strengthOnPage = buildRoutineBlocks(profile.routine.order).some(
-    (b) => b.kind === 'strength',
-  );
+  const routineBlocks = buildRoutineBlocks(profile.routine.order);
+  const strengthOnPage = routineBlocks.some((b) => b.kind === 'strength');
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
@@ -196,7 +195,7 @@ export default async function TodayPage({
           writable={writable}
           logged={bodyweight}
         />
-        {buildRoutineBlocks(profile.routine.order).map((block, i) => {
+        {routineBlocks.map((block, i) => {
           if (block.kind === 'strength') {
             // V1-24 3a-ii: the section is the day's strength RECORD (receipts + the collapsible form).
             return (
@@ -281,7 +280,17 @@ export default async function TodayPage({
       {adherence.length > 0 ? <WeeklyAdherence rows={adherence} /> : null}
 
       <section aria-labelledby="entries-heading">
-        <h2 id="entries-heading" className="sr-only">
+        {/* Visible when the strength section ALSO shows today's sessions (V1-24 3a-ii UX review): two
+            identical unlabelled cards read as a double-log, which has no in-app undo. 3b demotes the
+            list properly. */}
+        <h2
+          id="entries-heading"
+          className={
+            strengthOnPage && sessionRows.length > 0
+              ? 'text-muted-foreground text-sm font-medium'
+              : 'sr-only'
+          }
+        >
           Logged entries
         </h2>
 

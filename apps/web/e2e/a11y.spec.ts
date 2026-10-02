@@ -13,6 +13,7 @@ import {
   BODYWEIGHT_COPY,
   changeLabel,
   STRENGTH_COPY,
+  STRENGTH_RECEIPT_ID_PREFIX,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PARTIAL_SETS_COPY,
@@ -255,7 +256,7 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
   // V1-27 — the BLOCKED state, by keyboard. The hand-added card's name is blank and set 1 (BW + band,
   // no reps) is touched, so the browser would refuse the tap; the summary must name the first blocker,
   // fit at 360px, pass axe, and a keyboard Enter on Log strength must land focus on that field.
-  const submit = strength.getByRole('button', { name: 'Log strength' });
+  const submit = strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
   await expect(strength.getByText('Movement 1 needs a name.')).toBeVisible();
   await expectNoHorizontalOverflow(page, 'strength form (360px, blocked summary)');
   await expectNoAxeViolations(page, 'strength form (360px, blocked)');
@@ -377,11 +378,11 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
 
   if ((await entries.getByText(PROBE, { exact: true }).count()) === 0) {
     await openStrengthForm(page);
-    const strength = page.getByRole('region', { name: 'Log strength', exact: true });
+    const strength = strengthSection(page);
     await strength.getByLabel('Movement', { exact: true }).fill(PROBE);
     await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('12');
     await strength.getByLabel(/^Movement 1 set 1 weight/).fill('137.5'); // a wide value
-    await strength.getByRole('button', { name: 'Log strength', exact: true }).click();
+    await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
     await expect(entries.getByText(PROBE, { exact: true })).toBeVisible({ timeout: 15_000 });
   }
 
@@ -393,6 +394,10 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
     exact: true,
   });
   await expect(change).toHaveText(AMEND_COPY.change);
+  // Exactly ONE Change for this set on the whole PAGE: the list's copy is read-only (3a-ii, D1).
+  await expect(
+    page.getByRole('button', { name: changeLabel(subject, '12 × 137.5 lb'), exact: true }),
+  ).toHaveCount(1);
   await change.click();
   await expect(owner.getByLabel(`${subject} reps`, { exact: true })).toBeFocused(); // focus on open
   await expect(owner.getByLabel(weightInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
@@ -420,41 +425,49 @@ test('the strength section renders saved sessions as receipts, at 360px (V1-24 3
   await page.setViewportSize(NARROW);
   await page.goto(SEED_PROFILE_2_ROUTE, { waitUntil: 'networkidle' });
   const strength = strengthSection(page);
-  const receipts = strength.locator('[id^="strength-receipt-"]');
+  const receipts = strength.locator(`[id^="${STRENGTH_RECEIPT_ID_PREFIX}"]`);
+  const submit = strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
+  const card = (n: number) => strength.getByRole('group', { name: `Movement ${n}`, exact: true });
 
-  if (testInfo.retry === 0 && (await receipts.count()) === 0) {
+  // Gated on the STATE, not the attempt number (docs/lessons.md: retry-safe writes): a first attempt
+  // that died before its save leaves nothing behind, so the retry must write. The focus assertions
+  // run only where this attempt did the writing.
+  if ((await receipts.count()) === 0) {
     await openStrengthForm(page); // open by default here: nothing is logged, so there's no toggle
-    const names = strength.getByLabel('Movement', { exact: true });
-    await names.nth(0).fill('A11y Receipt Press');
+    await card(1).getByLabel('Movement', { exact: true }).fill('A11y Receipt Press');
     await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('5');
     await strength.getByLabel(/^Movement 1 set 1 weight/).fill('95');
     await strength.getByRole('button', { name: 'Add movement', exact: true }).click();
-    await names.nth(1).fill('A11y Receipt Plank');
+    await card(2).getByLabel('Movement', { exact: true }).fill('A11y Receipt Plank');
     await strength.getByLabel('Movement 2 set 1 reps', { exact: true }).fill('10');
-    await strength.getByText('BW', { exact: true }).nth(1).click(); // the label is the chip
+    // `sr-only` chip: the input is 1px, so check it with `force` (the screenshot script's idiom).
+    await strength
+      .getByRole('checkbox', { name: 'BW — Bodyweight — movement 2 set 1', exact: true })
+      .check({ force: true });
     await strength.getByRole('button', { name: 'Add movement', exact: true }).click();
-    await names.nth(2).fill('A11y Receipt Skip');
-    await strength.getByText('Skipped', { exact: true }).nth(2).click();
-    await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
+    await card(3).getByLabel('Movement', { exact: true }).fill('A11y Receipt Skip');
+    await strength.getByLabel('Movement 3 skipped', { exact: true }).check({ force: true });
+    await submit.click();
 
-    // The first save: the receipt renders, the form collapses, focus lands on THIS receipt.
+    // The first save: the receipt renders, the form FOLDS (its submit is hidden), focus lands on it.
     await expect(receipts).toHaveCount(1, { timeout: 15_000 });
+    await expect(submit).toBeHidden();
     const first = await receipts.first().getAttribute('id');
     await expect(page.locator(`[id="${first}"]`)).toBeFocused();
-    await expect(
-      strength.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true }),
-    ).toHaveAttribute('aria-expanded', 'false');
 
     // The second session of the day: focus lands on the NEW receipt.
     await openStrengthForm(page);
-    await expect(strength.getByText(/^Already saved today: /)).toBeVisible();
-    await names.nth(0).fill('A11y Receipt Rows');
+    await expect(strength.getByText(STRENGTH_COPY.alreadySaved('').split(':')[0]!)).toBeVisible();
+    await card(1).getByLabel('Movement', { exact: true }).fill('A11y Receipt Rows');
     await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('8');
     await strength.getByLabel(/^Movement 1 set 1 weight/).fill('95');
-    await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
+    await submit.click();
     await expect(receipts).toHaveCount(2, { timeout: 15_000 });
+    await expect(submit).toBeHidden();
     const second = await receipts.nth(1).getAttribute('id');
     await expect(page.locator(`[id="${second}"]`)).toBeFocused();
+  } else {
+    expect(testInfo.retry, 'receipts before any write: another spec logs Scarlett today').toBe(1);
   }
 
   await expect(receipts.first()).toBeVisible();

@@ -529,6 +529,26 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
 });
 
 describe('logStrengthSessionAction — happy path (multi-movement session)', () => {
+  // V1-24 3a-ii: the island announces and focuses the save from `savedId`, the session's PUBLIC id —
+  // and a replay (same client_id) must return the SAME id, or a retried submit focuses nothing.
+  it('returns the session public id as savedId, and the same id on a replay', async () => {
+    const clientId = newId();
+    const form = () =>
+      strengthForm({
+        profileId: PROFILE_ID,
+        clientId,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      });
+    const first = await logStrengthSessionAction(initial, form());
+    const replay = await logStrengthSessionAction(initial, form());
+    expect(first).toMatchObject({ ok: true, savedId: 'session-pub-id' });
+    expect(replay).toMatchObject({ ok: true, savedId: first.savedId });
+    expect(vi.mocked(logStrengthSession).mock.calls.map((c) => c[0].clientId)).toEqual([
+      clientId,
+      clientId,
+    ]);
+  });
+
   it('passes the parsed movements + defaulted sessionType to the DAL and revalidates', async () => {
     const clientId = newId();
     const res = await logStrengthSessionAction(

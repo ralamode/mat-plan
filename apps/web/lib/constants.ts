@@ -154,6 +154,9 @@ export const AMEND_COPY = {
     status: '',
     shape: 'Some sets here can’t be changed in the app.',
   },
+  /** A Locked sentence that names its movements first ("Pull-Up: Bodyweight and band sets …"), so
+   *  the names attach to the sets, not to "the app". */
+  lockedFor: (names: string, sentence: string) => `${names}: ${sentence}`,
   /** Ends every Locked line. With no delete action, re-logging is the move that makes it permanent. */
   lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
@@ -170,19 +173,31 @@ export function weightInputLabel(subject: string, unitLabel?: string): string {
 export const STRENGTH_COPY = {
   heading: 'Log strength',
   submit: 'Log strength',
+  submitting: 'Logging…',
   logMore: 'Log more strength',
-  cancel: 'Cancel',
-  /** The trust guard, on screen while "Log more" is open: what is already saved today. */
-  alreadySaved: (names: string) => `Already saved today: ${names}.`,
+  /** The open toggle. "Close", not "Cancel": closing KEEPS the typed draft (it is hidden, not reset). */
+  close: 'Close',
+  /** The opened form's group name — distinct from the h2 and the submit, which share "Log strength". */
+  group: 'New strength session',
+  /** The trust guard while "Log more" is open. "For this day", not "today": yesterday is writable too. */
+  alreadySaved: (names: string) => `Already saved for this day: ${names}.`,
   newSession: 'Adds a new session.',
   saved: 'Saved',
-  /** What the island announces on its own successful save — that session's movements. */
-  announced: (names: string) => `Strength saved: ${names}.`,
+  /** The island's announcement on its OWN save. Leads with the receipt's heading, so a second session
+   *  with the same movements is still a text change, and so it names the receipt focus lands on. */
+  announced: (heading: string, names: string) => `${heading} saved: ${names}.`,
   skippedSuffix: '(skipped)',
 } as const;
 
-/** A session receipt's id in the strength section — the focus target after its save. */
-export const strengthReceiptId = (sessionPublicId: string) => `strength-receipt-${sessionPublicId}`;
+/** "1 movement" / "3 movements": the one spelling, shared by the receipt and `strengthSummary`. */
+export const movementCount = (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`;
+export const skippedCount = (n: number) => `${n} skipped`;
+
+/** A session receipt's id in the strength section — the focus target after its save. The prefix is
+ *  exported so a locator can find "any receipt" without re-typing it. */
+export const STRENGTH_RECEIPT_ID_PREFIX = 'strength-receipt-';
+export const strengthReceiptId = (sessionPublicId: string) =>
+  `${STRENGTH_RECEIPT_ID_PREFIX}${sessionPublicId}`;
 
 /** A strength set amend's error id, unique per island (20 sets must not share one id). */
 export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
@@ -283,7 +298,7 @@ export function blockedSummary(
  */
 export function strengthSummary(movements: number, sets: number, skipped: number): string {
   if (movements === 0) return PARTIAL_SETS_COPY.empty;
-  const m = `${movements} ${movements === 1 ? 'movement' : 'movements'}`;
+  const m = movementCount(movements);
   const s = `${sets} ${sets === 1 ? 'set' : 'sets'}`;
-  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skipped} skipped` : ''}.`;
+  return `Logs ${m}, ${s}${skipped > 0 ? `, ${skippedCount(skipped)}` : ''}.`;
 }

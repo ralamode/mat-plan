@@ -6,7 +6,14 @@ import {
   SESSION_TYPE_LABELS,
 } from '@mat-plan/shared';
 
-import { AMEND_COPY, STRENGTH_COPY, strengthReceiptId, VALUE_JOINER } from '@/lib/constants';
+import {
+  AMEND_COPY,
+  movementCount,
+  skippedCount,
+  STRENGTH_COPY,
+  strengthReceiptId,
+  VALUE_JOINER,
+} from '@/lib/constants';
 import { sessionMovements, type SessionRow } from '@/lib/entries/activity-totals';
 import { entryLabel } from '@/lib/entries/entry-label';
 
@@ -20,6 +27,11 @@ export function sessionTypeLabel(session: SessionRow['session']): string {
   return session.dayRole
     ? DAY_ROLE_LABELS[session.dayRole]
     : SESSION_TYPE_LABELS[session.type ?? DEFAULT_SESSION_TYPE];
+}
+
+/** The receipt's h3 ("Strength A session 2"); also what the save announcement leads with. */
+export function sessionHeading(row: SessionRow, ordinal = 1): string {
+  return `${sessionTypeLabel(row.session)} session${ordinal > 1 ? ` ${ordinal}` : ''}`;
 }
 
 /**
@@ -66,7 +78,7 @@ export function StrengthSessionReceipt({
   const movements = sessionMovements(row);
   const skipped = movements.filter((m) => m.status === ENTRY_STATUS.skipped).length;
   const count = row.movementCount;
-  const heading = `${sessionTypeLabel(row.session)} session${ordinal > 1 ? ` ${ordinal}` : ''}`;
+  const heading = sessionHeading(row, ordinal);
   const item = (entry: (typeof movements)[number]) => (
     <SessionMovementItem
       key={entry.id}
@@ -92,11 +104,11 @@ export function StrengthSessionReceipt({
               <span aria-hidden="true"> · </span>
             </>
           ) : null}
-          {count} {count === 1 ? 'movement' : 'movements'}
+          {movementCount(count)}
           {skipped > 0 ? (
             <>
               <span aria-hidden="true"> · </span>
-              {skipped} skipped
+              {skippedCount(skipped)}
             </>
           ) : null}
         </span>
@@ -140,12 +152,12 @@ function SessionLockedLine({ movements }: { movements: ReturnType<typeof session
     if (r === null) continue;
     byReason.set(r, [...(byReason.get(r) ?? []), entryLabel(m)]);
   }
-  if (byReason.size === 0) return null;
   const sentences = [...byReason.entries()]
     .filter(([r]) => r !== LOCKED_REASON.status)
-    .map(
-      ([r, names]) => `${AMEND_COPY.locked[r].replace(/\.$/, '')} (${names.join(VALUE_JOINER)}).`,
-    );
+    .map(([r, names]) => AMEND_COPY.lockedFor(names.join(VALUE_JOINER), AMEND_COPY.locked[r]));
+  // A status-only lock (sub-failure) is badge-only: a lone "Wrong? …" with no referent would read as
+  // an accusation about a correctly logged set (3a-i acceptance 4).
+  if (sentences.length === 0) return null;
   return (
     <p className="text-muted-foreground text-sm">
       {[...sentences, AMEND_COPY.lockedRecovery].join(' ')}

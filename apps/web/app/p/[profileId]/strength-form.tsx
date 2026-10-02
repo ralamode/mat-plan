@@ -135,7 +135,7 @@ export function StrengthForm({
    * and shows the "Log more" toggle once it is non-empty. It never collapses BECAUSE this changed: a
    * session arriving from another device must not hide a typed draft.
    */
-  logged?: readonly { id: string; names: string }[];
+  logged?: readonly { id: string; heading: string; names: string }[];
   /** V1-24 3a-ii D3 — "Back squat, Bench, Rows (skipped)": the trust guard shown while "Log more" is open. */
   alreadySaved?: string | null;
   /** V1-24 3a-ii D4 — the program card, rendered INSIDE the form (it is reference for typing). */
@@ -176,7 +176,7 @@ export function StrengthForm({
   const [focusReceipt, setFocusReceipt] = useState<{ id: string; n: number } | null>(null);
   if (savedNow) {
     setPendingSaved(null);
-    setAnnouncement(STRENGTH_COPY.announced(savedNow.names));
+    setAnnouncement(STRENGTH_COPY.announced(savedNow.heading, savedNow.names));
     setFocusReceipt((f) => ({ id: strengthReceiptId(savedNow.id), n: (f?.n ?? 0) + 1 }));
   }
   useEffect(() => {
@@ -224,7 +224,7 @@ export function StrengthForm({
             }
           }}
         >
-          {open ? STRENGTH_COPY.cancel : STRENGTH_COPY.logMore}
+          {open ? STRENGTH_COPY.close : STRENGTH_COPY.logMore}
         </Button>
       ) : null}
       {/* HIDDEN, never unmounted, when collapsed: a mis-tapped Cancel keeps the typed draft, and
@@ -234,7 +234,7 @@ export function StrengthForm({
         id={groupId}
         ref={groupRef}
         role="group"
-        aria-label={STRENGTH_COPY.heading}
+        aria-label={STRENGTH_COPY.group}
         aria-describedby={hasLogged && alreadySaved ? `${alreadyId} ${newSessionId}` : undefined}
         tabIndex={-1}
         hidden={!open}
@@ -601,7 +601,7 @@ function StrengthFormBody({
             className="text-base"
             aria-describedby={summaryId}
           >
-            {pending ? 'Logging…' : 'Log strength'}
+            {pending ? STRENGTH_COPY.submitting : STRENGTH_COPY.submit}
           </Button>
         </div>
       </div>

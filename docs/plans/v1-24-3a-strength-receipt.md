@@ -98,8 +98,8 @@ starts collapsed; 3a-ii's new strength writes must use another `(profile, day)`.
 
 **What PR 2's shared primitive must keep (the two amends differ on purpose):** bodyweight follows the
 server value while open (`seenProp`), sets do not; bodyweight shows `fieldErrors`, sets only
-`state.error`; bodyweight focuses its receipt on save, a set its Change; the Change variant is
-`outline` (bodyweight) vs `ghost` (sets); both clear their announcement on open.
+`state.error`; bodyweight focuses its receipt on save, a set its Change; both Change buttons are
+`outline` (since 3a-ii); both clear their announcement on open.
 
 **3a-i files:** `editable-set.tsx`, `set-display.ts` (+ test), `lib/constants.ts` (`AMEND_COPY`,
 `CLOSED_DAY_NOTICE`), `movement-line.tsx` (NEW: `MovementLine` + `SessionMovementItem` moved from
@@ -390,3 +390,28 @@ No P0. Every P1 and P2 is fixed in the PR unless marked.
 | J15 | UX                       | The Locked line repeats on a bodyweight-heavy day                           | **3a-ii**: the session receipt owns session-level layout (one line per session, listing movements). |
 | J16 | UX (outside)             | A muted ghost "Change" barely reads as a control                            | **3a-ii**, where it becomes the primary surface.                                                    |
 | J17 | Correctness (also)       | Inputs aren't disabled while a save is pending                              | Not changed: the bodyweight amend shares it; PR 2's primitive decides once.                         |
+
+### 3a-ii implementation review (`review-pr` on #212): correctness, UX, reuse
+
+No P0. Every P1 and P2 is fixed in the PR unless marked.
+
+| #   | Lens                     | Finding (short)                                                                    | Resolution                                                                                                                        |
+| --- | ------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| K1  | UX                       | "Already saved **today**" is false on yesterday, a writable day                    | "Already saved for this day: …".                                                                                                  |
+| K2  | UX · Reuse · Correctness | The announcement named a skipped movement as saved; two builders disagreed         | One `movementNames` (skipped marked, repeats removed) for both.                                                                   |
+| K3  | Correctness              | A second session with the same names wasn't a text change, so not announced        | The announcement leads with the receipt's heading ("Strength A session 2 saved: …"); tested.                                      |
+| K4  | UX                       | A sub-failure-only session showed a lone "Wrong? …" line                           | Badge-only (no line); tested.                                                                                                     |
+| K5  | UX · Reuse               | The Locked line's names landed on "the app", built by regex-editing the copy       | `AMEND_COPY.lockedFor`: "Pull-Up: Bodyweight and band sets …".                                                                    |
+| K6  | UX                       | The open toggle read "Cancel", implying the draft is discarded                     | "Close" (the draft is kept).                                                                                                      |
+| K7  | UX                       | The list's copy of a session looked like a double-log                              | The "Logged entries" heading is visible when the section also shows sessions. 3b demotes the list properly.                       |
+| K8  | Reuse · UX               | The submit rendered a literal its constant duplicated; specs re-typed copy and ids | `STRENGTH_COPY.submit`/`submitting` rendered; specs and the screenshot script use the constants and `STRENGTH_RECEIPT_ID_PREFIX`. |
+| K9  | Reuse                    | The plural/skipped wording was hand-built twice                                    | `movementCount` / `skippedCount`, shared with `strengthSummary`.                                                                  |
+| K10 | Correctness              | Nothing tested `savedId` or the replay id                                          | An action test: same id on replay.                                                                                                |
+| K11 | Correctness              | "Exactly one Change on the page" wasn't pinned where it's wired                    | Page-scope count in the 3a-i e2e case.                                                                                            |
+| K12 | Correctness              | Collapse and pending-disable checked only as attributes                            | e2e asserts the submit is hidden after each save; RTL asserts the toggle is disabled while pending.                               |
+| K13 | Correctness              | The receipt case couldn't heal a failed first attempt; nth-match locators          | Gated on state, not attempt; locators by label/role per card.                                                                     |
+| K14 | UX                       | The group shared the name "Log strength" with the h2 and the submit                | "New strength session".                                                                                                           |
+| K15 | Reuse                    | The plan said `ghost` for set Change                                               | Fixed above.                                                                                                                      |
+| K16 | Reuse                    | Four copies of announce-then-focus                                                 | **Filed** in tech-debt for PR 2's primitive.                                                                                      |
+| K17 | Reuse                    | Duplicated `EntryDTO` fixtures across three tests                                  | **Not changed**: a shared fixture module is worth doing with the next test that needs one.                                        |
+| K18 | Correctness (outside)    | The replay re-select isn't scoped to the profile                                   | **Filed** in tech-debt (folds into AUTH-1).                                                                                       |

@@ -89,7 +89,17 @@ describe('StrengthSessionReceipt — one renderer, two placements (V1-24 3a-ii)'
     render(<StrengthSessionReceipt row={ONE} profileId="p1" placement="section" />);
     const lines = screen.getAllByText((t) => t.includes(AMEND_COPY.lockedRecovery));
     expect(lines).toHaveLength(1);
-    expect(lines[0]!.textContent).toContain('(Push-Ups, Pull-Up)');
+    expect(lines[0]!.textContent).toContain(
+      AMEND_COPY.lockedFor('Push-Ups, Pull-Up', AMEND_COPY.locked.mode),
+    );
+  });
+
+  it('a session locked only by a sub-failure set has NO Locked line (the badge says it)', () => {
+    const sub = sessionsOf([
+      move({ id: 'a', sets: [{ ...loaded('set-s'), status: ENTRY_STATUS.sub_failure }] }),
+    ])[0]!;
+    render(<StrengthSessionReceipt row={sub} profileId="p1" placement="section" />);
+    expect(screen.queryByText((t) => t.includes(AMEND_COPY.lockedRecovery))).toBeNull();
   });
 
   it('list beside the section: no ids, no Change (the section owns it)', () => {

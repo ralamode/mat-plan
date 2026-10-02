@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { PARTIAL_SETS_COPY } from '../lib/constants';
+import { PARTIAL_SETS_COPY, STRENGTH_COPY } from '../lib/constants';
 
 import { openStrengthForm, SEED_PROFILE_ROUTE, strengthSection } from './steps';
 
@@ -54,7 +54,7 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
     await weightFields.nth(i).fill('20');
   }
 
-  const submit = strength.getByRole('button', { name: 'Log strength' });
+  const submit = strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
   await submit.click();
 
   // The assertion is that the write HAPPENED, and that EVERY set of the open card landed. A wedged
@@ -121,7 +121,7 @@ test("doing all but the last of a card's sets submits exactly those sets (V1-27)
   ).toBeVisible();
   await expect(strength.getByText(PARTIAL_SETS_COPY.trailingHint)).toBeVisible();
 
-  await strength.getByRole('button', { name: 'Log strength' }).click();
+  await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
   await expect(logged).toHaveCount(before + n - 1, { timeout: 15_000 });
 });
 
@@ -146,7 +146,7 @@ test('a half-entered set blocks natively, with a message naming the way out (V1-
   // Weight typed, reps blank: the row is touched, so its reps stay required.
   const reps = strength.getByPlaceholder('reps').first();
   await strength.getByPlaceholder('weight').first().fill('17.5');
-  await strength.getByRole('button', { name: 'Log strength' }).click();
+  await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
 
   expect(await reps.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
   // Card 1 of a scaffolded day has several rows, so the reps message names the per-set Remove.

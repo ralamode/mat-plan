@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { CLOSED_DAY_NOTICE } from '../lib/constants';
 
-import { isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
+import { isoDaysAgo, SEED_PROFILE_ROUTE, strengthSection } from './steps';
 
 /**
  * Day navigation (V1-15).
@@ -45,7 +45,7 @@ test('yesterday KEEPS its forms — the UI must not be stricter than the server'
   // would refuse what the endpoint allows — and it is exactly how Ray's 09/29 session, submitted on
   // 09/30 from a stale tab, succeeded.
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
-  await expect(page.getByRole('region', { name: 'Log strength' })).toBeVisible();
+  await expect(strengthSection(page)).toBeVisible();
   await expect(page.getByText(CLOSED_DAY_NOTICE)).toHaveCount(0);
 });
 

@@ -16,8 +16,8 @@ import { StrengthForm } from './strength-form';
 // announcing + focusing a save from its OWN action result (never from a server-side count change).
 afterEach(cleanup);
 
-type Logged = { id: string; names: string }[];
-const S1: Logged = [{ id: 's1', names: 'Back squat, Bench' }];
+type Logged = { id: string; heading: string; names: string }[];
+const S1: Logged = [{ id: 's1', heading: 'Strength A session', names: 'Back squat, Bench' }];
 const island = (logged: Logged, alreadySaved: string | null = null) => (
   <>
     {/* Stand-ins for the section's receipts, so focus has somewhere to land. */}
@@ -37,7 +37,7 @@ const island = (logged: Logged, alreadySaved: string | null = null) => (
 const toggle = () => screen.getByRole('button', { name: STRENGTH_COPY.logMore });
 // By attribute, not role: a `hidden` group is (correctly) out of the accessibility tree.
 const group = () =>
-  document.querySelector<HTMLElement>(`[role="group"][aria-label="${STRENGTH_COPY.heading}"]`)!;
+  document.querySelector<HTMLElement>(`[role="group"][aria-label="${STRENGTH_COPY.group}"]`)!;
 const statusText = () => screen.getAllByRole('status')[0]!.textContent;
 const nameInput = () => screen.getByLabelText('Movement');
 function fillOneSet() {
@@ -55,7 +55,7 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
   it('nothing logged: no toggle, the form is simply open', () => {
     render(island([]));
     expect(screen.queryByRole('button', { name: STRENGTH_COPY.logMore })).toBeNull();
-    expect(screen.queryByRole('button', { name: STRENGTH_COPY.cancel })).toBeNull();
+    expect(screen.queryByRole('button', { name: STRENGTH_COPY.close })).toBeNull();
     expect(group().hidden).toBe(false);
   });
 
@@ -84,7 +84,7 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
     render(island(S1, 'Back squat, Bench'));
     fireEvent.click(toggle());
     fireEvent.change(nameInput(), { target: { value: 'Rows' } });
-    fireEvent.click(screen.getByRole('button', { name: STRENGTH_COPY.cancel }));
+    fireEvent.click(screen.getByRole('button', { name: STRENGTH_COPY.close }));
     expect(group().hidden).toBe(true);
     expect(document.activeElement).toBe(toggle());
     fireEvent.click(toggle());
@@ -108,8 +108,8 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
     expect(group().hidden).toBe(true);
     expect(document.activeElement).toBe(toggle());
     expect(statusText()).toBe('');
-    rerender(island([{ id: 's-new', names: 'Rows' }], 'Rows'));
-    expect(statusText()).toBe(STRENGTH_COPY.announced('Rows'));
+    rerender(island([{ id: 's-new', heading: 'Strength A session', names: 'Rows' }], 'Rows'));
+    expect(statusText()).toBe(STRENGTH_COPY.announced('Strength A session', 'Rows'));
     expect(document.activeElement?.id).toBe(strengthReceiptId('s-new'));
   });
 
@@ -123,9 +123,49 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
     fireEvent.click(toggle());
     fillOneSet();
     await submit();
-    rerender(island([...S1, { id: 's2', names: 'Rows' }], 'Back squat, Bench, Rows'));
+    rerender(
+      island(
+        [...S1, { id: 's2', heading: 'Strength A session 2', names: 'Rows' }],
+        'Back squat, Bench, Rows',
+      ),
+    );
     expect(group().hidden).toBe(true);
-    expect(statusText()).toBe(STRENGTH_COPY.announced('Rows'));
+    expect(statusText()).toBe(STRENGTH_COPY.announced('Strength A session 2', 'Rows'));
     expect(document.activeElement?.id).toBe(strengthReceiptId('s2'));
+  });
+
+  it('a second session with the SAME movements is still a text change (the heading differs)', async () => {
+    const first = { id: 's1', heading: 'Strength A session', names: 'Rows' };
+    vi.mocked(logStrengthSessionAction).mockResolvedValueOnce({
+      ok: true,
+      error: null,
+      savedId: 's2',
+    });
+    const { rerender } = render(island([first], 'Rows'));
+    fireEvent.click(toggle());
+    fillOneSet();
+    await submit();
+    rerender(island([first, { id: 's2', heading: 'Strength A session 2', names: 'Rows' }], 'Rows'));
+    expect(statusText()).toBe(STRENGTH_COPY.announced('Strength A session 2', 'Rows'));
+    expect(STRENGTH_COPY.announced('Strength A session 2', 'Rows')).not.toBe(
+      STRENGTH_COPY.announced('Strength A session', 'Rows'),
+    );
+  });
+
+  it('the toggle is disabled while a save is pending', async () => {
+    let resolve!: (v: { ok: boolean; error: null; savedId: string }) => void;
+    vi.mocked(logStrengthSessionAction).mockImplementationOnce(
+      () => new Promise((r) => (resolve = r)),
+    );
+    render(island(S1, 'Back squat, Bench'));
+    fireEvent.click(toggle());
+    fillOneSet();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: STRENGTH_COPY.submit }));
+    });
+    expect(screen.getByRole('button', { name: STRENGTH_COPY.close }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    await act(async () => resolve({ ok: true, error: null, savedId: 's9' }));
   });
 });
