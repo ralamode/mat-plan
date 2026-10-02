@@ -360,6 +360,36 @@ publishing; publishing before it lands ships the artifact without its headline.
 behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
 going public, not just on V1-13.
 
+## OSS-2 — a public landing screen at `/`
+
+- **OSS-2 — a public landing screen at `/`.** _(Ray, 2026-10-01, after OSS-1 made the repo public.)_
+  An unauthenticated visitor — the link on Ray's resume — gets a page that says what mat-plan is and a
+  link to the source, instead of a bare password prompt. **The profile picker moves to `/p`.** The gate
+  is unchanged and still guards every other route.
+  [Plan](./plans/oss-2-public-landing.md) (eight-lens panel; two blocking defects found before any code
+  — see its review-response log).
+
+  **Three PRs, in this order:**
+
+  1. **§A — the public route** (this one): `/` public, picker → `/p`, copy + one link into the README's
+     own "what's interesting here", `app/loading.tsx` → `app/p/loading.tsx`, the gate matcher's
+     unanchored lookahead fixed, a `pages-are-gated` test, `/` and `/gate` axe-scanned un-gated for the
+     first time, and every `'/'`-means-the-app-home literal routed through `APP_HOME_PATH`.
+  2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
+     are already published in `seed.ts`, `global.setup.ts` and `steps.ts`; renaming them closes the real
+     exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.
+  3. **§B — the hero image.** Deliberately last: 🔴 **`next/image` on a `public/` asset is broken in
+     this app today** — measured, 400 for every caller, gated or not, because the optimizer's internal
+     fetch re-enters the proxy with no cookie. §B un-gates `public/landing/`, scopes
+     `images.localPatterns`, sets `metadataBase`, and narrows `ci.yml`'s inert-file allowlist so an
+     image that is now **served content** can no longer auto-skip the smoke.
+
+  ⚠️ **Does NOT include sign-in.** The "Sign in with Google" half of the original ask is
+  [AUTH-1](#auth-1), which is several PRs behind the household-addressing ADR
+  ([beta-1](./milestones/beta-1.md) orders it `ADR → TEN-1 → AUTH-1`). The landing fixes the resume link
+  on its own; an env flag that merely turns the gate **off** is rejected — with no auth behind it, its
+  only reachable state publishes two children's logged health data.
+
 ## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
 
 Tooling that makes each PR cheaper and safer to produce. It sits outside the product priority order
