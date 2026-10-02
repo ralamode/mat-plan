@@ -149,6 +149,13 @@ date,weight_lb,context,notes
 > in one column. A round-trip through a float normalises `71` → `71.0` and blows the golden diff. This
 > is a **data-model consequence**, not just a formatting one — see Open questions.
 
+> ⚠️ **`weight_lb` holds pounds (CSV-1, Ray 2026-10-02).** An `lb` weigh-in is written as logged. A
+> `kg` weigh-in is **converted** — kg × 2.20462262185, rounded half-up to one decimal (the form's
+> precision) — and `logged <value> kg` is appended to `notes` (joined with `; ` if notes were present),
+> so the logged number is never lost. Never suffixed (`84.5kg` would break the column) and never bare
+> (it would read as pounds). Any other unit refuses the export.
+> e.g. `2026-09-30,186.3,,logged 84.5 kg`
+
 `context` observed: `morning` only; README also allows `pre-practice` / `post-practice` / `random`.
 Gaps are normal — **not every day has a row; do not backfill.**
 

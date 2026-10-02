@@ -190,6 +190,14 @@ flowchart LR
   (a matcher edit or a rewrite silently exposes it). **This is a live hazard for the `/api/sync`
   AGENTS.md plans.**
 
+- **⚠️ The bodyweight export carries each row's UNIT; `kg` is converted, everything but `lb`/`kg`
+  throws (CSV-1).** The legacy column is `weight_lb`, so a kg weigh-in written bare reads as pounds
+  downstream. `lib/dal/export.ts` must keep mapping `unit` from `bodyweightMonthRows`. A kg row writes
+  the pounds equivalent (one decimal) and keeps `logged <value> kg` in notes — Ray's decision
+  (2026-10-02), because a kg weigh-in is ordinary and cannot be repaired in the app (the amend keeps the
+  unit; there is no delete), so refusing would have 500'd the whole export (EXP-1). A NEW bodyweight unit
+  must get its own rule in `buildBodyweight`, or it throws.
+
 - **`sslmode=require` encrypts but does NOT verify the certificate.** Neon's strings ship `require`,
   which leaves the connection open to an active machine-in-the-middle. `createDbPool` upgrades it to
   `verify-full`, and deliberately leaves a string with **no** `sslmode` untouched — local Postgres has
