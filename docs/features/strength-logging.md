@@ -4,6 +4,7 @@ owns:
   - apps/web/app/p/[profileId]/strength-form.tsx
   - apps/web/app/p/[profileId]/strength-form-scaffold.ts
   - apps/web/app/p/[profileId]/strength-form-supersets.ts
+  - apps/web/app/p/[profileId]/strength-form-untouched.ts
   - apps/web/app/p/[profileId]/set-fields.tsx
   - apps/web/app/p/[profileId]/set-mode-toggles.tsx
   - apps/web/app/p/[profileId]/editable-set.tsx
@@ -69,19 +70,20 @@ flowchart TD
 
 ## Files
 
-| File                          | What it is for                                                                                         |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `strength-form.tsx`           | The whole client form: movement cards, set rows, collapse state, the untouched-card logic. ~660 lines. |
-| `strength-form-scaffold.ts`   | V1-19. Turns today's program into blank cards. **Structure only — never a load or a rep count.**       |
-| `strength-form-supersets.ts`  | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                    |
-| `set-fields.tsx`              | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.              |
-| `load-chips.tsx`              | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                             |
-| `set-display.ts`              | `formatSetLine` (the read line) and `isEditableSet` (whether V1-9's inline edit is offered).           |
-| `editable-set.tsx`            | The V1-9 fix-a-set row.                                                                                |
-| `shared/strength.ts`          | `parseLoad` + `strengthSetSchema` — one wire key becomes a typed load.                                 |
-| `shared/strength-session.ts`  | The session envelope: movements, supersets, client ids, the pairing refines.                           |
-| `shared/quantity-slots.ts`    | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions.      |
-| `writers/strength-session.ts` | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`.  |
+| File                          | What it is for                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `strength-form.tsx`           | The whole client form: movement cards, set rows, collapse state, the summary line. ~800 lines.                                 |
+| `strength-form-scaffold.ts`   | V1-19. Turns today's program into blank cards. **Structure only — never a load or a rep count.**                               |
+| `strength-form-supersets.ts`  | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                                            |
+| `strength-form-untouched.ts`  | V1-27. The ONE "touched" judgement and all it drives: card and trailing-set drops, each input's `required`, `isSubmitBlocked`. |
+| `set-fields.tsx`              | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.                                      |
+| `load-chips.tsx`              | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                     |
+| `set-display.ts`              | `formatSetLine` (the read line) and `isEditableSet` (whether V1-9's inline edit is offered).                                   |
+| `editable-set.tsx`            | The V1-9 fix-a-set row.                                                                                                        |
+| `shared/strength.ts`          | `parseLoad` + `strengthSetSchema` — one wire key becomes a typed load.                                                         |
+| `shared/strength-session.ts`  | The session envelope: movements, supersets, client ids, the pairing refines.                                                   |
+| `shared/quantity-slots.ts`    | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions.                              |
+| `writers/strength-session.ts` | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`.                          |
 
 ## Invariants
 
@@ -176,12 +178,41 @@ Real ones, each with the file to look at.
   directly, and `e2e/scaffold-submit.spec.ts` asserts the submit itself in a real browser — jsdom
   never runs native constraint validation, so only the e2e can see this class of failure.
 
-- **⚠️ Doing SOME of a movement's sets blocks the submit (V1-27, open).** `DEFAULT_SCAFFOLD_SETS` is
-  3 and `reps` is unconditionally `required`, while `isUntouchedScaffold` drops a whole **movement**
-  and has no per-**set** equivalent. So 2 of 3 sets is unsubmittable until the athlete discovers the
-  per-row "Remove" button — on a gym floor, mid-session, which is the single most likely way to do a
-  prescribed movement. Found by `e2e/scaffold-submit.spec.ts` while writing V1-26 PR-A; that spec
-  deliberately fills every row of the open card and asserts nothing about this either way.
+- **✅ Doing SOME of a movement's sets submits (V1-27, fixed).** It used to block: `reps` was
+  unconditionally `required` and there was no per-**set** drop. Now the **trailing** untouched sets (the
+  empty rows after the last touched set) are not `required` and are not sent — dropped at serialization,
+  never in state. Only trailing rows, so every sent set's index still equals its on-screen number and the
+  server's `set M` labels stay right. A gap, a half-entered set and a named all-blank card still block.
+  The line above **Log strength** states what will be logged, from the post-drop payload — the real
+  safeguard, because a forgotten last set is now logged short (Ray accepted that trade-off; see the
+  [plan](../plans/v1-27-partial-sets.md)). Pinned in a real browser by `e2e/scaffold-submit.spec.ts`.
+
+- **⚠️ `required` now depends on SIBLING rows (V1-27).** Whether set 2 is required depends on whether
+  set 3 is touched: removing set 3 makes set 2 trailing and un-required. So the custom "missing"
+  messages are set DECLARATIVELY from state (a `setCustomValidity` effect in `set-fields.tsx`), never by
+  an `onInvalid` event — an event-set message lingers after the field stops being required, and the form
+  appears dead. They are PER FIELD (`repsMissingMessage` / `weightMissingMessage`): blank reps names the
+  per-set Remove only when it exists (more than one set); the blank number is chosen BY UNIT
+  (`missingQuantityMessage`) — a mass unit names **BW or band**, a time or distance just asks for the number
+  (V1-30 refuses BW there, so "tap BW" would send the kid into a server rejection). "Tap Remove" on the
+  number would point at the movement's Remove (no undo), and "if you didn't do it" invites a fake `0` load. Only the
+  log form passes them; the edit form has no Remove button.
+
+- **⚠️ The summary's blocked state reads `firstBlocker`, which is blind to two things.** It names the FIRST
+  blank required field in on-screen order ("Push-ups set 2 needs finishing." / "Movement 1 needs a
+  name.") — the one the browser's bubble lands on — and reads the same collapse rule the form renders
+  from (`isCollapsed`, the one copy). It
+  agrees with the browser on every blank required field (it reads the same `nameRequired` /
+  `repsRequired` / `weightRequired` the inputs render from), but it cannot see a non-blank invalid value
+  (reps `0` / `2.5` fail native step/min) or a `type=number` field holding partial input (`.` on the iOS
+  decimal pad is `''` in React state and `badInput` to the browser). In both, the browser blocks with its
+  own message while the line says "Logs…". A COLLAPSED gap card is not "needs finishing" either: its
+  inputs are unmounted, so the tap sends and the server refuses it with a message naming the movement.
+
+- **A renamed scaffolded card never collapses again (V1-27).** Renaming clears `scaffolded` (as it clears
+  `declaredLoaded`), so the card counts as hand-added and named: it is never silently dropped, and it can
+  never become an invisible block on a collapsed card. A rename that is then reverted stays hand-added —
+  it errs toward blocking, and Remove clears it.
 
 - **⚠️ Uncontrolled fields survive a DAY navigation — key on the day (V1-28).** V1-15 made day
   navigation a client-side RSC transition, so `StrengthFormBody` does not remount when only the day
@@ -225,11 +256,11 @@ Real ones, each with the file to look at.
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
   legitimately empty is this bug.
 
-- **"Untouched" is computed per set-level field, in THREE places.** `strength-form-supersets.ts` and
-  `strength-form-scaffold.ts` both drop a card whose sets are all blank — silently, with no error —
-  and `strength-form.tsx`'s collapsed-card progress counter uses a third copy. Add a set-level field
-  without teaching all three and a set carrying ONLY that field is deleted at submit, or the counter
-  reads 0/3 for a fully-logged bodyweight movement. PR 4a had to extend all three for the mode flags.
+- **"Untouched" is computed in ONE place: `isUntouchedSet` (`strength-form-untouched.ts`, V1-27).** It
+  used to be three copies (two card predicates and the collapsed counter), and they had drifted — the
+  counter ignored sub-failure. Every drop, every `required`, the counter and the summary now derive
+  from it. Add a set-level field without teaching `isUntouchedSet` and a set carrying ONLY that field is
+  deleted at submit. PR 4a had to extend all three copies for the mode flags; now it would be one.
 
 - **The set-row count has a DEFAULT and a FLOOR, and they are deliberately different numbers.**
   `clampSetCount` in `strength-form-scaffold.ts`: `sets == null` → `DEFAULT_SCAFFOLD_SETS` (3);
@@ -264,13 +295,13 @@ Real ones, each with the file to look at.
 
 ## Changing it
 
-| If you are…                 | Start here                                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| adding a field to a set     | `SetVals` in `strength-form.tsx` → both untouched-predicates → `strengthSetSchema` → writer |
-| changing what a load can be | `shared/strength.ts`, then `set-display.ts` (BOTH functions), then the writer               |
-| changing the read line      | `set-display.ts` only — it is single-sourced so the read and edit views cannot disagree     |
-| adding a measurement role   | `shared/quantity-slots.ts` (const + dimensions) → seed → `db:verify` parity proof           |
-| touching the edit path      | `isEditableSet` **and** `updateStrengthSetById` together, always                            |
+| If you are…                 | Start here                                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| adding a field to a set     | `SetVals` in `strength-form.tsx` → `isUntouchedSet` (`strength-form-untouched.ts`) → `strengthSetSchema` → writer |
+| changing what a load can be | `shared/strength.ts`, then `set-display.ts` (BOTH functions), then the writer                                     |
+| changing the read line      | `set-display.ts` only — it is single-sourced so the read and edit views cannot disagree                           |
+| adding a measurement role   | `shared/quantity-slots.ts` (const + dimensions) → seed → `db:verify` parity proof                                 |
+| touching the edit path      | `isEditableSet` **and** `updateStrengthSetById` together, always                                                  |
 
 Then: `pnpm verify` (includes `db:verify` on PGlite, no Docker) and `pnpm e2e:local`. A UI change also
 needs screenshots at mobile/tablet/desktop and a UX panel — see AGENTS.md → "UI PR rules".

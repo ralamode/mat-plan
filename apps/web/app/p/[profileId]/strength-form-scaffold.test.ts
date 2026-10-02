@@ -8,10 +8,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_SCAFFOLD_SETS,
-  isUntouchedScaffold,
   type ScaffoldRow,
   scaffoldMovements,
 } from './strength-form-scaffold';
+import { isUntouchedScaffold } from './strength-form-untouched';
 
 const row = (over: Partial<ScaffoldRow> = {}): ScaffoldRow => ({
   idx: 0,
@@ -133,59 +133,6 @@ describe('catalog names survive the session schema', () => {
       (name) => !field.safeParse(name).success,
     );
     expect(rejected).toEqual([]);
-  });
-});
-
-describe('isUntouchedScaffold', () => {
-  const scaffolded = () => scaffoldMovements([row({ sets: 2 })], 'lb')[0]!;
-
-  it('is true for a scaffolded card the athlete never touched', () => {
-    expect(isUntouchedScaffold(scaffolded())).toBe(true);
-  });
-
-  it('is false once any value is typed', () => {
-    const m = scaffolded();
-    expect(isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, reps: '5' }, m.sets[1]!] })).toBe(
-      false,
-    );
-    expect(isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, weight: '95' }, m.sets[1]!] })).toBe(
-      false,
-    );
-  });
-
-  // GAP-3 PR 4a. THE regression this guards: tapping BW is the ONLY input a bodyweight set needs
-  // before reps, and if the predicate cannot see it, a scaffolded "Push-ups" card the kid tapped BW
-  // on three times is silently DROPPED at submit — no error, the movement just is not in the log.
-  // Caught by the UX panel, which found the predicate keyed on reps/weight alone.
-  it('is false once a MODE is tapped, even with no reps or weight typed', () => {
-    const m = scaffolded();
-    expect(
-      isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBodyweight: true }, m.sets[1]!] }),
-    ).toBe(false);
-    expect(isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBand: true }, m.sets[1]!] })).toBe(
-      false,
-    );
-  });
-
-  it('stays droppable when a mode is tapped and then untapped', () => {
-    const m = scaffolded();
-    expect(
-      isUntouchedScaffold({ ...m, sets: [{ ...m.sets[0]!, isBodyweight: false }, m.sets[1]!] }),
-    ).toBe(true);
-  });
-
-  it('is false once a status is set, and true again when it is cleared', () => {
-    const m = scaffolded();
-    expect(isUntouchedScaffold({ ...m, status: 'skipped' })).toBe(false);
-    // Compared to the DEFAULT, never to `undefined` — un-skipping must return the card to droppable.
-    expect(isUntouchedScaffold({ ...m, status: 'done' })).toBe(true);
-  });
-
-  // The whole reason this predicate exists separately: a hand-added blank card is caught by
-  // `isUntouchedMovement`, which requires an empty NAME — and a scaffolded card always has one.
-  it('never applies to a card the athlete added by hand', () => {
-    const m = scaffolded();
-    expect(isUntouchedScaffold({ ...m, scaffolded: undefined })).toBe(false);
   });
 });
 

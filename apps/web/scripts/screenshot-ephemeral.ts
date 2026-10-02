@@ -255,6 +255,10 @@ const STATES = {
   // Round 3 on #180 — a save the plausibility bound REJECTS: the alert under the field, the typed value
   // and the chosen unit still there (React 19's form reset used to wipe both). Interaction-only.
   'bodyweight-rejected': null,
+  // V1-27 — partial sets. Interaction-only: all but the last row of card 1 filled (the mixed card, its
+  // "empty sets at the end" hint and the summary line), and a half-entered row (the blocked summary).
+  'form-partial-sets': null,
+  'form-partial-blocked': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -264,7 +268,28 @@ type StateName = keyof typeof STATES;
  * marks one attempt. A reviewer approving those needs to see them, so the capture performs the taps.
  * Runs per viewport against a fresh page → must be idempotent from a clean load.
  */
+/** V1-27 — scaffold the day and return the open card's reps/weight inputs. */
+async function scaffoldOpenCard(page: Page) {
+  const strength = page.getByRole('region', { name: 'Log strength' });
+  await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
+  return { reps: strength.getByPlaceholder('reps'), weight: strength.getByPlaceholder('weight') };
+}
+
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
+  'form-partial-sets': async (page) => {
+    const { reps, weight } = await scaffoldOpenCard(page);
+    const n = await reps.count();
+    for (let i = 0; i < n - 1; i++) {
+      await reps.nth(i).fill('8');
+      await weight.nth(i).fill('20');
+    }
+  },
+  'form-partial-blocked': async (page) => {
+    const { reps, weight } = await scaffoldOpenCard(page);
+    await reps.nth(0).fill('8');
+    await weight.nth(0).fill('20');
+    await weight.nth(1).fill('20'); // weight, no reps: touched, so its reps stay required
+  },
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {

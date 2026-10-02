@@ -8,7 +8,12 @@ import {
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
 } from '@mat-plan/shared';
 
-import { BODYWEIGHT_COPY, DEFAULT_TIME_ZONE, MIN_TAP_TARGET_PX } from '../lib/constants';
+import {
+  BODYWEIGHT_COPY,
+  DEFAULT_TIME_ZONE,
+  MIN_TAP_TARGET_PX,
+  PARTIAL_SETS_COPY,
+} from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { resolveDayRole } from '../lib/programming/day-role-schedule';
 import {
@@ -233,6 +238,33 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
 
   await expectNoHorizontalOverflow(page, 'strength form (360px, modes on)');
   await expectTapTargets(page, 'strength form (360px)');
+
+  // V1-27 — set 1 is touched and set 2 is an empty trailing row, so this card is MIXED: the
+  // "empty sets at the end" hint and the summary line are on screen. Scan that state too.
+  await expect(strength.getByText(PARTIAL_SETS_COPY.trailingHint)).toBeVisible();
+  await expectNoAxeViolations(page, 'strength form (360px, mixed card with the V1-27 hint)');
+
+  // V1-27 — the BLOCKED state, by keyboard. The hand-added card's name is blank and set 1 (BW + band,
+  // no reps) is touched, so the browser would refuse the tap; the summary must name the first blocker,
+  // fit at 360px, pass axe, and a keyboard Enter on Log strength must land focus on that field.
+  const submit = strength.getByRole('button', { name: 'Log strength' });
+  await expect(strength.getByText('Movement 1 needs a name.')).toBeVisible();
+  await expectNoHorizontalOverflow(page, 'strength form (360px, blocked summary)');
+  await expectNoAxeViolations(page, 'strength form (360px, blocked)');
+  // Card 1 (the form opens with a card; the test added a second, which is blank and dropped).
+  const name1 = strength
+    .getByRole('group', { name: 'Movement 1' })
+    .getByLabel('Movement', { exact: true });
+  await submit.focus();
+  await page.keyboard.press('Enter');
+  await expect(name1).toBeFocused();
+
+  // Name it: the next blocker is set 1's reps, and the summary follows.
+  await name1.fill('Push-ups');
+  await expect(strength.getByText('Push-ups set 1 needs finishing.')).toBeVisible();
+  await submit.focus();
+  await page.keyboard.press('Enter');
+  await expect(strength.getByLabel('Movement 1 set 1 reps')).toBeFocused();
 });
 
 /**
