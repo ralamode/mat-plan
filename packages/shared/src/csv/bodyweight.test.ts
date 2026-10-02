@@ -57,4 +57,8 @@ describe('buildBodyweight — weight_lb holds pounds; kg is converted with the o
   it('the form default is the column unit, so a default weigh-in exports as logged', () => {
     expect(DEFAULT_BODYWEIGHT_UNIT).toBe(BODYWEIGHT_CSV_UNIT);
   });
+
+  it('an empty kg weight stays empty, never "0" lb', () => {
+    expect(buildBodyweight([row({ weight: '', unit: 'kg' })])).toBe(`${HEADER}2026-09-30,,,\n`);
+  });
 });

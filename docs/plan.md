@@ -784,7 +784,8 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   2026-09-30 by V1-24 PR 1c's read: there are none.** All 10 live bodyweight rows are `lb`
   (`2026-07-29` → `2026-09-30`), so no correction is owed and this is now a **pure app PR**; (2) select
   `unit` in `bodyweightMonthRows`
-  and refuse a non-`lb` weight in `buildBodyweight`, so the export fails loudly. ⚠️ **Not**
+  and ~~refuse a non-`lb` weight in `buildBodyweight`, so the export fails loudly~~ (superseded by (3): kg is
+  converted; only an unknown unit still throws). ⚠️ **Not**
   `assertExportableUnit`: since V1-30 it RETURNS `'kg'` (strength loads spell it `85kg`), so calling it
   here would write `84.5kg` under a `weight_lb` header. CSV-1 needs its own lb-only guard for that
   column. (3) Convert, or widen the contract — **decided 2026-10-02: convert, keeping the original in

@@ -8,7 +8,8 @@ export const BODYWEIGHT_HEADER = ['date', 'weight_lb', 'context', 'notes'] as co
 /** The unit the `weight_lb` column holds — the header is legacy bytes (CSV-1). */
 export const BODYWEIGHT_CSV_UNIT = 'lb' as const satisfies Unit;
 
-/** Pounds per kilogram, exact by definition (1 lb = 0.45359237 kg). CSV-1. */
+/** Pounds per kilogram: 1 / 0.45359237 (1 lb = 0.45359237 kg exactly) to 11 decimal places. Every
+ *  one-decimal output over the form's range is identical to using the exact reciprocal. CSV-1. */
 export const LB_PER_KG = 2.20462262185;
 
 /** Decimals a converted weight is written with — the form's own `step="0.1"`, so a converted value
@@ -64,6 +65,8 @@ export function buildBodyweight(rows: readonly BodyweightRow[]): string {
 function toWeightLb(r: BodyweightRow): { weightLb: string; notes: string } {
   if (r.unit === BODYWEIGHT_CSV_UNIT) return { weightLb: formatNumeric(r.weight), notes: r.notes };
   if (r.unit === 'kg') {
+    // An empty weight stays empty (as an lb row's would): never "0" lb with "logged  kg".
+    if (r.weight.trim() === '') return { weightLb: '', notes: r.notes };
     const scale = 10 ** CONVERTED_WEIGHT_DECIMALS;
     const lb = Math.round(Number(r.weight) * LB_PER_KG * scale) / scale;
     const logged = `logged ${formatNumeric(r.weight)} kg`;
