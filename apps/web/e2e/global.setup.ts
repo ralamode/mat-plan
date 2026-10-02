@@ -27,7 +27,8 @@ setup('authenticate + warm the write path', async ({ page }) => {
   // ⚠️ **Scarlett's today, not Liam's** (V1-24 PR 1a). Once a day has a weight the surface renders a
   // RECEIPT with no form, so whoever writes first owns that `(profile, day)`. The e2e rule (plan, under
   // the 1a table): warm-up → Scarlett today; smoke → Liam today; export → Liam yesterday; a11y →
-  // Scarlett yesterday (bodyweight, and since V1-24 3a-i one strength probe — a different surface). No
+  // Scarlett yesterday (bodyweight, and since V1-24 3a-i one strength probe — a different surface);
+  // 3a-ii's receipt case logs strength on Scarlett today (beside this warm-up's weigh-in). No
   // two writers of the same surface share a day; 3a-ii's collapsed strength form makes strength writes
   // count too. The action is profile-agnostic, so the cold cost
   // is absorbed either way.

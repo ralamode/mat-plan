@@ -9,7 +9,10 @@ import {
   SEED_METRIC_KEYS,
 } from '@mat-plan/shared';
 
+import { STRENGTH_COPY, VALUE_JOINER } from '@/lib/constants';
 import type { EntryDTO } from '@/lib/dal/entries';
+
+import { entryLabel } from './entry-label';
 
 /**
  * Calisthenics daily totals (V1-6a) — the digital tally sheet. Pure and route-agnostic
@@ -149,6 +152,38 @@ function buildSessionItems(members: readonly EntryDTO[]): SessionItem[] {
     items.push({ kind: 'movement', entry: m });
   }
   return items;
+}
+
+/** A session's movements in performed order, superset members flattened into their position. */
+export function sessionMovements(session: SessionRow): EntryDTO[] {
+  return session.items.flatMap((i) => (i.kind === 'movement' ? [i.entry] : i.members));
+}
+
+/**
+ * The display names of these movements, a skipped one marked "(skipped)" and repeats removed — the
+ * ONE builder for both "Already saved for this day" and the save announcement (they disagreed about
+ * skipped movements in review).
+ */
+export function movementNames(entries: readonly EntryDTO[]): string {
+  const names = loggedMovementsOf(entries).map(({ entry, skipped }) =>
+    skipped ? `${entryLabel(entry)} ${STRENGTH_COPY.skippedSuffix}` : entryLabel(entry),
+  );
+  return [...new Set(names)].join(VALUE_JOINER);
+}
+
+function loggedMovementsOf(entries: readonly EntryDTO[]) {
+  return entries.map((entry) => ({ entry, skipped: entry.status === ENTRY_STATUS.skipped }));
+}
+
+/**
+ * Every movement logged in these sessions, and whether it was SKIPPED (V1-24 3a-ii). The ONE
+ * definition of "logged": `movementNames` displays it, and 3a-iii's fill filter reuses it (a skipped
+ * movement is not logged work: the display marks it, the fill offers it again).
+ */
+export function loggedMovements(
+  sessions: readonly SessionRow[],
+): { entry: EntryDTO; skipped: boolean }[] {
+  return loggedMovementsOf(sessions.flatMap(sessionMovements));
 }
 
 export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {

@@ -25,7 +25,7 @@ import {
 } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
-import { DEFAULT_TIME_ZONE } from '../lib/constants';
+import { DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
 import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
@@ -227,6 +227,8 @@ const STATES = {
   'strength-session': seedStrengthSession,
   // V1-24 3a-i: the same session with Change OPEN on a superset member (the 280px worst case).
   'strength-amend': seedStrengthSession,
+  // V1-24 3a-ii: the same session as a section receipt, with "Log more strength" OPENED.
+  'strength-log-more': seedStrengthSession,
   // GAP-1 P1-1c — interaction-only states (no fixtures; see INTERACTIONS below).
   'form-skipped': null,
   'form-sub-failure': null,
@@ -272,7 +274,7 @@ type StateName = keyof typeof STATES;
  */
 /** V1-27 — scaffold the day and return the open card's reps/weight inputs. */
 async function scaffoldOpenCard(page: Page) {
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
   return { reps: strength.getByPlaceholder('reps'), weight: strength.getByPlaceholder('weight') };
 }
@@ -361,11 +363,14 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
       'no catalog-declared-loaded movement on this day — the warning cannot render; try another --tz',
     );
   },
-  /**
-   * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
-   * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
-   * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
-   */
+  /** V1-24 3a-ii — the session as a section receipt, with "Log more strength" opened. */
+  'strength-log-more': async (page) => {
+    const toggle = page.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true });
+    if ((await toggle.count()) === 0) {
+      throw new Error('no "Log more strength" — this state needs the strength-session fixture');
+    }
+    await toggle.click();
+  },
   'strength-amend': async (page) => {
     // `set 1` Change buttons in render order: the standalone movement's, then the superset's first
     // member's (nth 1) — the narrowest editor on the page.
@@ -375,6 +380,11 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     }
     await changes.nth(1).click();
   },
+  /**
+   * V1-24 PR 1b — the amend, open. The reviewable surface of the PR is a state two taps in: the
+   * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
+   * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
+   */
   'bodyweight-editing': async (page) => {
     const change = page.getByRole('button', { name: /^Change weight/ });
     if ((await change.count()) === 0) {

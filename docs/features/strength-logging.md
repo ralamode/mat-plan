@@ -9,6 +9,8 @@ owns:
   - apps/web/app/p/[profileId]/set-mode-toggles.tsx
   - apps/web/app/p/[profileId]/editable-set.tsx
   - apps/web/app/p/[profileId]/movement-line.tsx
+  - apps/web/app/p/[profileId]/strength-section.tsx
+  - apps/web/app/p/[profileId]/strength-session-receipt.tsx
   - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
@@ -71,21 +73,23 @@ flowchart TD
 
 ## Files
 
-| File                          | What it is for                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `strength-form.tsx`           | The whole client form: movement cards, set rows, collapse state, the summary line. ~800 lines.                                 |
-| `strength-form-scaffold.ts`   | V1-19. Turns today's program into blank cards. **Structure only — never a load or a rep count.**                               |
-| `strength-form-supersets.ts`  | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                                            |
-| `strength-form-untouched.ts`  | V1-27. The ONE "touched" judgement and all it drives: card and trailing-set drops, each input's `required`, `isSubmitBlocked`. |
-| `set-fields.tsx`              | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.                                      |
-| `set-mode-toggles.tsx`        | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                     |
-| `set-display.ts`              | `formatSetLine` (the read line), `isEditableSet` (whether Change is offered) and `lockedReason` (why not).                     |
-| `editable-set.tsx`            | The per-set amend: **Change**, a stacked editor, focus return, its own status region (V1-24 3a-i).                             |
-| `movement-line.tsx`           | One movement's label, status and sets; the Locked reason line. Renders **every** entry kind in the list, not only strength.    |
-| `shared/strength.ts`          | `strengthSetSchema` — reps, an optional magnitude and the two mode flags.                                                      |
-| `shared/strength-session.ts`  | The session envelope: movements, supersets, client ids, the pairing refines.                                                   |
-| `shared/quantity-slots.ts`    | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions.                              |
-| `writers/strength-session.ts` | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`.                          |
+| File                           | What it is for                                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `strength-form.tsx`            | The whole client form: movement cards, set rows, collapse state, the summary line. ~800 lines.                                  |
+| `strength-form-scaffold.ts`    | V1-19. Turns today's program into blank cards. **Structure only — never a load or a rep count.**                                |
+| `strength-form-supersets.ts`   | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                                             |
+| `strength-form-untouched.ts`   | V1-27. The ONE "touched" judgement and all it drives: card and trailing-set drops, each input's `required`, `isSubmitBlocked`.  |
+| `set-fields.tsx`               | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.                                       |
+| `set-mode-toggles.tsx`         | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                      |
+| `set-display.ts`               | `formatSetLine` (the read line), `isEditableSet` (whether Change is offered) and `lockedReason` (why not).                      |
+| `editable-set.tsx`             | The per-set amend: **Change**, a stacked editor, focus return, its own status region (V1-24 3a-i).                              |
+| `movement-line.tsx`            | One movement's label, status and sets; the Locked reason line. Renders **every** entry kind in the list, not only strength.     |
+| `strength-section.tsx`         | Today's strength section (V1-24 3a-ii): h2, a receipt per session, then the form island (open on an empty day, else collapsed). |
+| `strength-session-receipt.tsx` | One session, rendered by BOTH the section (`placement="section"`: focus id, "Saved", one Locked line) and the list.             |
+| `shared/strength.ts`           | `strengthSetSchema` — reps, an optional magnitude and the two mode flags.                                                       |
+| `shared/strength-session.ts`   | The session envelope: movements, supersets, client ids, the pairing refines.                                                    |
+| `shared/quantity-slots.ts`     | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions.                               |
+| `writers/strength-session.ts`  | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`.                           |
 
 ## Invariants
 
@@ -157,6 +161,27 @@ are modes of a weight (see invariant 2 for where each half of that lives).
 8. **Absent ≠ default on the wire.** `status` is `.optional()`, never `.default('done')` — an omitted
    status means the writer omits the column and Postgres applies its own default. One default, in one
    place. Adding `.default()` anywhere here forks it and changes every stored row.
+
+5b. **The strength section is the day's record; the form is an island inside it (V1-24 3a-ii).**
+
+- **One renderer, two placements.** `StrengthSessionReceipt` renders a session in the section and in
+  "Logged entries". While the section is on the page the list's copy is **read-only**, so each set
+  has exactly one Change (and one accessible name).
+- **`StrengthForm` owns open/collapsed**, not the section (a server component can't). It is open
+  with **no toggle** on an empty day, starts **collapsed** behind "Log more strength" once a session
+  exists, and collapses on **its own** successful save. It never collapses because the server's
+  session list changed: another device's session must not hide a typed draft.
+- **Collapsing HIDES the form** (`hidden`), never unmounts it, so **Close** keeps a draft and
+  `aria-controls` stays valid. The body still remounts on `${day}:${gen}` after a save (fresh
+  idempotency keys), and the island is keyed on the day by the section.
+- **A save is announced and focused from the action's own result** (`savedId`, the session's public
+  id), once that id appears in the section's props, and it **leads with the receipt's heading**
+  ("Strength A session 2 saved: …") so a second session with the same movements is still a text
+  change. `SavedAnnouncer` is NOT used: it deliberately ignores value→value changes (parent B5).
+- **Names and "logged", in `lib/entries/activity-totals.ts`:** `movementNames` is the ONE display
+  builder for "Already saved for this day" and the announcement (skipped marked, repeats removed);
+  `loggedMovements` is the shared notion of "logged" (done vs skipped) that 3a-iii's fill filter
+  reuses. Neither surface builds names inline.
 
 ## Traps
 

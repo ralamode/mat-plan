@@ -941,7 +941,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   Ray). **Next: 1d** (the bodyweight-scoped unique index, **now slot-ready for V1-32**: it adds
   `context` and keys on `(profile, day, context)`; see the plan's 2026-09-30 amendment), then 1e (the
   arbiter), then **3a** (strength, ahead of 2 by Ray's call 2026-10-02; split into **3a-i** ✅ the per-set
-  amend → **3a-ii** the section receipt → **3a-iii** the fill skips logged movements, a dependency of
+  amend → **3a-ii** ✅ the section receipt → **3a-iii** the fill skips logged movements, a dependency of
   3a-ii; 📋 [plan](./plans/v1-24-3a-strength-receipt.md)), 2 (check-ins), 3b (demote the list, plus
   session-less strength entries and the `Strength` heading rename).
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
