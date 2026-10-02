@@ -242,12 +242,9 @@ const STATES = {
   // fixture: the open state is transient client state no seeder can produce.
   'bodyweight-editing': seedAlreadyLogged,
   // V1-24 PR 1a — the bodyweight receipt's other states (today's single value is `already-logged`).
-  // Two rows on today: the pre-1c prod duplicate (or a two-phone race) — `2 weights logged: …`.
-  'bodyweight-duplicates': (dbUrl: string) =>
-    seedWeighIns(dbUrl, [
-      { daysAgo: 0, value: '84.5' },
-      { daysAgo: 0, value: '845' },
-    ]),
+  // (`bodyweight-duplicates` was removed in PR 1d: two live weigh-ins on one day are now refused by
+  // `uq_entries_profile_day_bodyweight`, so the seeder hit 23505. The multi-row receipt returns as a
+  // real state with V1-32's slots — a seeder for it belongs in that PR, with a real slot value.)
   // A closed day WITH a weight (the receipt, recovery line, no form) and one WITHOUT
   // (`No weight logged.`). Both backdate the profile, then navigate (see INTERACTIONS).
   'bodyweight-closed': seedClosedDays,

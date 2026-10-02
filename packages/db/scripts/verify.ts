@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { PGlite } from '@electric-sql/pglite';
@@ -10,6 +11,7 @@ import {
   activityTypeSeedRowSchema,
   assertRollupAggregation,
   CALISTHENICS_METRIC_KEYS,
+  DEFAULT_BODYWEIGHT_CONTEXT,
   ENTRY_STATUS,
   foldAggregation,
   METRIC_AGGREGATION,
@@ -2799,15 +2801,21 @@ async function insertBodyweightProbe(args: {
   status?: (typeof ENTRY_STATUS)[keyof typeof ENTRY_STATUS];
   softDeleted?: boolean;
   valueText?: string;
+  activityDate?: string;
+  context?: string | null;
 }): Promise<{ publicId: string }> {
+  bwProbe += 1;
   // 3 hex digits, so the last UUID group stays exactly 12 characters.
-  const n = (bwProbe += 1).toString(16).padStart(3, '0');
+  const n = bwProbe.toString(16).padStart(3, '0');
+  // V1-24 1d: each probe gets its OWN day by default — `uq_entries_profile_day_bodyweight` allows one
+  // live weigh-in per (profile, day, slot), and these proofs are about the amend guard, not the index.
+  const ownDay = new Date(Date.UTC(2026, 6, 1) + bwProbe * 86_400_000).toISOString().slice(0, 10);
   const publicId = `019826b4-0000-7000-8000-00000000b${n}`;
   await db.insert(schema.entries).values({
     publicId,
     clientId: `019826b4-0000-7000-8000-00000000c${n}`,
     profileId: args.profileId,
-    activityDate: '2026-09-30',
+    activityDate: args.activityDate ?? ownDay,
     kind: ENTRY_KIND.bodyweight,
     unit: args.unit ?? 'lb',
     valueNum: String(args.value),
@@ -2815,6 +2823,7 @@ async function insertBodyweightProbe(args: {
     metricKey: args.metricKey ?? SEED_METRIC_KEYS.bodyweight,
     status: args.status ?? ENTRY_STATUS.done,
     ...(args.valueText ? { valueText: args.valueText } : {}),
+    ...(args.context !== undefined ? { context: args.context } : {}),
     ...(args.softDeleted ? { deletedAt: new Date() } : {}),
   });
   return { publicId };
@@ -2989,6 +2998,135 @@ assert.equal(deadProfileEdit, null, 'V1-9/V1-24: a soft-deleted profile cannot e
 
 console.log(
   '✓ V1-24 1b: bodyweight amend — persists; cross-profile, wrong metric, stale value, wrong unit, soft-deleted, non-done, text-valued and dead-profile all refused; the re-read shares the guard',
+);
+
+// ── V1-24 PR 1d: one live weigh-in per (profile, day, slot) ─────────────────────────────────────
+// `uq_entries_profile_day_bodyweight` keys on (profile_id, activity_date, coalesce(context,'morning'))
+// for live bodyweight rows. Each case uses its own day so the cases cannot interfere.
+{
+  const UQ = 'uq_entries_profile_day_bodyweight';
+  // (a) A second live weigh-in on the same day is rejected.
+  await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 80, activityDate: '2026-05-01' });
+  await expectRejectedBy(UQ, () =>
+    insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 81, activityDate: '2026-05-01' }),
+  );
+  // (b) NULL context and the 'morning' slot are the SAME slot — the reason for `coalesce`: no writer
+  // sets `context` before 1e, so a bare-`context` key would let a NULL row beside a 'morning' row.
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 80,
+    activityDate: '2026-05-02',
+    context: DEFAULT_BODYWEIGHT_CONTEXT,
+  });
+  await expectRejectedBy(UQ, () =>
+    insertBodyweightProbe({
+      profileId: bwOwnerRow.id,
+      value: 81,
+      activityDate: '2026-05-02',
+      context: null,
+    }),
+  );
+  // (c) A soft-deleted weigh-in frees the slot: the 1c correction's losers sit beside the keeper.
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 80,
+    activityDate: '2026-05-03',
+    softDeleted: true,
+  });
+  await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 81, activityDate: '2026-05-03' });
+  // (d) A different slot on the same day is allowed (V1-32's several-a-day).
+  await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 80, activityDate: '2026-05-04' });
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 81,
+    activityDate: '2026-05-04',
+    context: 'evening',
+  });
+  // (e) Scoped to bodyweight: another metric may repeat on a day.
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 10,
+    activityDate: '2026-05-05',
+    metricKey: METRIC_KEYS.pushups,
+  });
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 12,
+    activityDate: '2026-05-05',
+    metricKey: METRIC_KEYS.pushups,
+  });
+  // (f) Another profile may weigh in on the same day.
+  const [otherProfile] = await db
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.publicId, '019826b4-0000-7000-8000-0000000009b0'));
+  await insertBodyweightProbe({
+    profileId: otherProfile.id,
+    value: 60,
+    activityDate: '2026-05-01',
+  });
+
+  // (g) The migration's pre-check REFUSES on an existing duplicate — run the migration file's own DO
+  // block (read from disk, so this cannot drift from what ships) against a duplicate, with the index
+  // dropped inside a transaction that is always rolled back.
+  const migrationSql = readFileSync(
+    new URL('../migrations/0012_bodyweight_one_per_day.sql', import.meta.url),
+    'utf8',
+  );
+  const doBlock = migrationSql
+    .split('--> statement-breakpoint')
+    .map((s) => s.trim())
+    .find((s) => s.startsWith('DO $$'));
+  assert.ok(doBlock, 'V1-24 1d: the migration ships its duplicate pre-check');
+  // Resolved BEFORE the transaction: PGlite has one connection, so a query on `db` inside `tx` waits forever.
+  const weighInTypeId = await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  let refusal = '';
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`DROP INDEX "uq_entries_profile_day_bodyweight"`);
+      const row = (n: string, profileId: number, activityDate: string, context: string | null) => ({
+        publicId: `019826b4-0000-7000-8000-0000000d1d${n}`,
+        clientId: `019826b4-0000-7000-8000-0000000d1e${n}`,
+        profileId,
+        activityDate,
+        context,
+        kind: ENTRY_KIND.bodyweight,
+        unit: 'lb' as const,
+        valueNum: '82',
+        activityTypeId: weighInTypeId,
+        metricKey: SEED_METRIC_KEYS.bodyweight,
+      });
+      // The fixture is built so each wrong grouping changes the COUNT the pre-check reports:
+      // - the duplicate is 'morning' beside (a)'s NULL-context row → a bare-`context` key sees two
+      //   different slots and reports 0 groups (the coalesce is what makes them one);
+      // - (f) put another profile on 2026-05-01, and two more profiles' single weigh-ins share
+      //   2026-05-06 → a key without `profile_id` merges them and reports 2 groups.
+      await tx
+        .insert(schema.entries)
+        .values([
+          row('01', bwOwnerRow.id, '2026-05-01', DEFAULT_BODYWEIGHT_CONTEXT),
+          row('03', bwOwnerRow.id, '2026-05-06', null),
+          row('04', otherProfile.id, '2026-05-06', null),
+        ]);
+      await tx.execute(doBlock); // the migration's own text, verbatim — not interpolated input
+    });
+  } catch (e) {
+    refusal = String(
+      (e as { cause?: { message?: string } })?.cause?.message ?? (e as Error).message,
+    );
+  }
+  assert.match(
+    refusal,
+    /V1-24 1d: 1 \(profile, day, slot\) group/,
+    'V1-24 1d: the pre-check refuses',
+  );
+  // The rollback restored the index: a duplicate is still rejected.
+  await expectRejectedBy(UQ, () =>
+    insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 83, activityDate: '2026-05-01' }),
+  );
+}
+console.log(
+  '✓ V1-24 1d: one live weigh-in per (profile, day, slot) — a duplicate and a NULL-beside-morning are refused; soft-deleted, another slot, another metric and another profile are allowed; the migration pre-check refuses an existing duplicate',
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,
