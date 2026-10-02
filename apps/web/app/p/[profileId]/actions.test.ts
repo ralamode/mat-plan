@@ -531,7 +531,9 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
 describe('logStrengthSessionAction — happy path (multi-movement session)', () => {
   // V1-24 3a-ii: the island announces and focuses the save from `savedId`, the session's PUBLIC id —
   // and a replay (same client_id) must return the SAME id, or a retried submit focuses nothing.
-  it('returns the session public id as savedId, and the same id on a replay', async () => {
+  // The REPLAY id is proven against a real DB in packages/db/scripts/verify.ts ("same id"); here the
+  // DAL is mocked, so this pins that the action forwards whatever id the DAL returns, on every call.
+  it("returns the DAL's session id as savedId, and passes the same clientId on a retry", async () => {
     const clientId = newId();
     const form = () =>
       strengthForm({

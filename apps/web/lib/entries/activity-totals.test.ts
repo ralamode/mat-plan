@@ -9,12 +9,14 @@ import {
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
+import { STRENGTH_COPY } from '@/lib/constants';
 import type { EntryDTO } from '@/lib/dal/entries';
 
 import {
   calisthenicsTotals,
   loggedBodyweight,
   loggedMovements,
+  movementNames,
   sessionMovements,
   todayRows,
   type SessionRow,
@@ -196,6 +198,17 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       ],
       ...o,
     });
+
+  it('movementNames: skipped marked, repeats removed, order kept (V1-24 3a-ii)', () => {
+    expect(
+      movementNames([
+        move({ id: 'a', movementName: 'Back squat' }),
+        move({ id: 'b', movementName: 'Rows', status: ENTRY_STATUS.skipped, sets: [] }),
+        move({ id: 'c', movementName: 'Back squat' }), // a repeat (a second session)
+        move({ id: 'd', movementName: 'Rows' }), // done later: a different fact, kept
+      ]),
+    ).toBe(`Back squat, Rows ${STRENGTH_COPY.skippedSuffix}, Rows`);
+  });
 
   it('loggedMovements: every movement across sessions, a SKIPPED one marked (V1-24 3a-ii)', () => {
     const rows = todayRows([

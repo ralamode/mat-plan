@@ -78,7 +78,7 @@ export const strengthSection = (page: Page) =>
  * **Make the strength form usable, retry-safely (V1-24 3a-ii).** Once a day has a strength session, the
  * form starts COLLAPSED behind "Log more strength"; a spec that needs the form calls this first. It
  * clicks the toggle only while it reads collapsed (`aria-expanded="false"`, never the open state's
- * "Cancel"), and retries until the submit is visible, so a click that lands before hydration (no
+ * "Close"), and retries until the submit is visible, so a click that lands before hydration (no
  * handler yet) can't pass silently. Call it again after a client-side day change.
  */
 export async function openStrengthForm(page: Page): Promise<void> {

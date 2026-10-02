@@ -20,7 +20,7 @@ import {
  * 2. a receipt per logged session (`placement="section"`, focusable, Change on every day: the amend has
  *    no day bound, parent Decision 5);
  * 3. on a writable day, the `StrengthForm` island: open when nothing is logged, otherwise collapsed
- *    behind "Log more strength", with "Already saved today" and the program card inside it.
+ *    behind "Log more strength", with "Already saved for this day" and the program card inside it.
  *
  * On a closed day there is no form and no toggle; the program card renders here, as before.
  */

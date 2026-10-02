@@ -413,8 +413,9 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
 /**
  * V1-24 3a-ii — the strength SECTION as the day's record: receipts, the collapsed "Log more strength",
  * and the form opened from it. Writes strength on **Scarlett's today** (its other write is the warm-up
- * weigh-in, a different surface; Scarlett's yesterday holds 3a-i's probe). Logs only on the first
- * attempt (a retry reuses the DB), so the focus assertions run once and the scans run every time.
+ * weigh-in, a different surface; Scarlett's yesterday holds 3a-i's probe). Logs only when no receipt
+ * exists yet (gated on STATE, so a failed first attempt is healed by the retry); the focus assertions
+ * run where that write happens, and the scans run every time.
  *
  * The superset bracket is covered by the receipt's unit tests and the screenshots; building one
  * through the UI here would cost more than it checks.

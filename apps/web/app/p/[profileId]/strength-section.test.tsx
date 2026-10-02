@@ -6,7 +6,7 @@ import {
   QUANTITY_SLOT,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./actions', () => ({ editStrengthSetAction: vi.fn(), logStrengthSessionAction: vi.fn() }));
@@ -87,5 +87,29 @@ describe('StrengthSection (V1-24 3a-ii)', () => {
     render(section(true, []));
     expect(screen.getByRole('button', { name: STRENGTH_COPY.submit })).toBeTruthy();
     expect(screen.queryByRole('button', { name: STRENGTH_COPY.logMore })).toBeNull();
+  });
+
+  it('"Already saved for this day" is the section\'s own text: skipped marked, repeats once', () => {
+    const base = session[0]!.items[0]!;
+    const entry = base.kind === 'movement' ? base.entry : base.members[0]!;
+    const two = todayRows([
+      { ...entry, id: 'a', sessionId: 's1', movementName: 'Back squat' },
+      {
+        ...entry,
+        id: 'b',
+        sessionId: 's1',
+        movementName: 'Rows',
+        status: ENTRY_STATUS.skipped,
+        sets: [],
+      },
+      { ...entry, id: 'c', sessionId: 's2', movementName: 'Back squat' },
+    ]).filter((r): r is SessionRow => r.kind === 'session');
+    render(section(true, two));
+    fireEvent.click(screen.getByRole('button', { name: STRENGTH_COPY.logMore }));
+    expect(
+      screen.getByText(
+        STRENGTH_COPY.alreadySaved(`Back squat, Rows ${STRENGTH_COPY.skippedSuffix}`),
+      ),
+    ).toBeTruthy();
   });
 });

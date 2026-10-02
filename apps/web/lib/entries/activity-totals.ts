@@ -177,9 +177,8 @@ function loggedMovementsOf(entries: readonly EntryDTO[]) {
 
 /**
  * Every movement logged in these sessions, and whether it was SKIPPED (V1-24 3a-ii). The ONE
- * definition of "logged today": "Already saved today" renders it, and 3a-iii's fill filter reuses it,
- * so the two can never disagree (a skipped movement is not logged work; the line marks it, the fill
- * offers it again).
+ * definition of "logged": `movementNames` displays it, and 3a-iii's fill filter reuses it (a skipped
+ * movement is not logged work: the display marks it, the fill offers it again).
  */
 export function loggedMovements(
   sessions: readonly SessionRow[],

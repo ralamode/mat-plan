@@ -227,7 +227,7 @@ export function StrengthForm({
           {open ? STRENGTH_COPY.close : STRENGTH_COPY.logMore}
         </Button>
       ) : null}
-      {/* HIDDEN, never unmounted, when collapsed: a mis-tapped Cancel keeps the typed draft, and
+      {/* HIDDEN, never unmounted, when collapsed: a mis-tapped Close keeps the typed draft, and
           `aria-controls` always points at a mounted element. Focusable as a group described by the
           trust lines, so a screen-reader user hears them on open. */}
       <div

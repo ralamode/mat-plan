@@ -171,14 +171,17 @@ are modes of a weight (see invariant 2 for where each half of that lives).
   with **no toggle** on an empty day, starts **collapsed** behind "Log more strength" once a session
   exists, and collapses on **its own** successful save. It never collapses because the server's
   session list changed: another device's session must not hide a typed draft.
-- **Collapsing HIDES the form** (`hidden`), never unmounts it, so Cancel keeps a draft and
+- **Collapsing HIDES the form** (`hidden`), never unmounts it, so **Close** keeps a draft and
   `aria-controls` stays valid. The body still remounts on `${day}:${gen}` after a save (fresh
   idempotency keys), and the island is keyed on the day by the section.
 - **A save is announced and focused from the action's own result** (`savedId`, the session's public
-  id), once that id appears in the section's props. `SavedAnnouncer` is NOT used: it deliberately
-  ignores value→value changes (parent B5), and a second session is exactly that.
-- "Already saved today" and 3a-iii's fill filter share one definition of "logged":
-  `loggedMovements` in `lib/entries/activity-totals.ts`.
+  id), once that id appears in the section's props, and it **leads with the receipt's heading**
+  ("Strength A session 2 saved: …") so a second session with the same movements is still a text
+  change. `SavedAnnouncer` is NOT used: it deliberately ignores value→value changes (parent B5).
+- **Names and "logged", in `lib/entries/activity-totals.ts`:** `movementNames` is the ONE display
+  builder for "Already saved for this day" and the announcement (skipped marked, repeats removed);
+  `loggedMovements` is the shared notion of "logged" (done vs skipped) that 3a-iii's fill filter
+  reuses. Neither surface builds names inline.
 
 ## Traps
 

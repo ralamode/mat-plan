@@ -134,22 +134,33 @@ describe('StrengthForm island — the form after a save (V1-24 3a-ii)', () => {
     expect(document.activeElement?.id).toBe(strengthReceiptId('s2'));
   });
 
-  it('a second session with the SAME movements is still a text change (the heading differs)', async () => {
-    const first = { id: 's1', heading: 'Strength A session', names: 'Rows' };
-    vi.mocked(logStrengthSessionAction).mockResolvedValueOnce({
-      ok: true,
-      error: null,
-      savedId: 's2',
+  it('two saves in a row with the SAME movements both reach the live region', async () => {
+    const at = (n: number) => ({
+      id: `s${n}`,
+      heading: n === 1 ? 'Strength A session' : `Strength A session ${n}`,
+      names: 'Rows',
     });
-    const { rerender } = render(island([first], 'Rows'));
-    fireEvent.click(toggle());
-    fillOneSet();
-    await submit();
-    rerender(island([first, { id: 's2', heading: 'Strength A session 2', names: 'Rows' }], 'Rows'));
-    expect(statusText()).toBe(STRENGTH_COPY.announced('Strength A session 2', 'Rows'));
-    expect(STRENGTH_COPY.announced('Strength A session 2', 'Rows')).not.toBe(
-      STRENGTH_COPY.announced('Strength A session', 'Rows'),
-    );
+    vi.mocked(logStrengthSessionAction)
+      .mockResolvedValueOnce({ ok: true, error: null, savedId: 's2' })
+      .mockResolvedValueOnce({ ok: true, error: null, savedId: 's3' });
+    const { rerender } = render(island([at(1)], 'Rows'));
+    const seen: string[] = [];
+    for (const n of [2, 3]) {
+      fireEvent.click(toggle());
+      fillOneSet();
+      await submit();
+      rerender(
+        island(
+          Array.from({ length: n }, (_, k) => at(k + 1)),
+          'Rows',
+        ),
+      );
+      seen.push(statusText() ?? '');
+    }
+    expect(seen).toEqual([
+      STRENGTH_COPY.announced('Strength A session 2', 'Rows'),
+      STRENGTH_COPY.announced('Strength A session 3', 'Rows'),
+    ]);
   });
 
   it('the toggle is disabled while a save is pending', async () => {
