@@ -9,7 +9,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { SetDTO, SetQuantityDTO } from '@/lib/dal/entries';
 
-import { formatSetLine, isEditableSet } from './set-display';
+import {
+  formatSetLine,
+  isEditableSet,
+  LOCKED_REASON,
+  lockedReason,
+  movementLockedReason,
+} from './set-display';
 
 /** A quantity, built from the shared consts rather than re-typed literals (AGENTS.md). */
 const qty = (o: Partial<SetQuantityDTO>): SetQuantityDTO => ({
@@ -183,5 +189,63 @@ describe('ENTRY_STATUS_LABELS (GAP-1 P1-1c)', () => {
 
   it('covers every status, so a new one cannot render as a raw enum', () => {
     for (const s of ENTRY_STATUSES) expect(ENTRY_STATUS_LABELS[s]).toBeTruthy();
+  });
+});
+
+describe('lockedReason — WHY a set has no Change (V1-24 3a-i)', () => {
+  // One fixture per isEditableSet clause, plus the editable baseline.
+  const cases = [
+    { name: 'editable', s: set({}), reason: null },
+    {
+      name: 'bodyweight',
+      s: set({ isBodyweight: true, quantities: [] }),
+      reason: LOCKED_REASON.mode,
+    },
+    { name: 'band', s: set({ isBand: true, quantities: [] }), reason: LOCKED_REASON.mode },
+    { name: 'BW + vest', s: set({ isBodyweight: true }), reason: LOCKED_REASON.mode },
+    {
+      name: 'sub-failure',
+      s: set({ status: ENTRY_STATUS.sub_failure }),
+      reason: LOCKED_REASON.status,
+    },
+    {
+      name: 'timed',
+      s: set({ quantities: [qty({ dimension: UNIT_DIMENSION.time, unit: 'sec' })] }),
+      reason: LOCKED_REASON.notMass,
+    },
+    {
+      name: 'distance',
+      s: set({ quantities: [qty({ dimension: UNIT_DIMENSION.length, unit: 'in' })] }),
+      reason: LOCKED_REASON.notMass,
+    },
+    { name: 'no reps', s: set({ reps: null }), reason: LOCKED_REASON.shape },
+    { name: 'no quantity', s: set({ quantities: [] }), reason: LOCKED_REASON.shape },
+    {
+      name: 'two quantities',
+      s: set({
+        quantities: [
+          qty({}),
+          qty({ slot: QUANTITY_SLOT.distance, dimension: UNIT_DIMENSION.length, unit: 'ft' }),
+        ],
+      }),
+      reason: LOCKED_REASON.shape,
+    },
+  ];
+
+  it.each(cases)('$name → $reason', ({ s, reason }) => {
+    expect(lockedReason(s)).toBe(reason);
+  });
+
+  // THE pin: a reason exists exactly when isEditableSet refuses. Change one, change the other.
+  it.each(cases)('$name: isEditableSet agrees with lockedReason', ({ s }) => {
+    expect(isEditableSet(s)).toBe(lockedReason(s) === null);
+  });
+
+  it('a movement shows ONE reason: the shared one, or the generic line when they differ', () => {
+    const bw = set({ isBodyweight: true, quantities: [] });
+    const timed = set({ quantities: [qty({ dimension: UNIT_DIMENSION.time, unit: 'sec' })] });
+    expect(movementLockedReason([set({}), set({})])).toBeNull();
+    expect(movementLockedReason([set({}), bw, bw])).toBe(LOCKED_REASON.mode);
+    expect(movementLockedReason([bw, timed])).toBe(LOCKED_REASON.shape);
   });
 });

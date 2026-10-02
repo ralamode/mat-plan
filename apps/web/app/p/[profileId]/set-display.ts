@@ -71,3 +71,42 @@ export function isEditableSet(set: SetShape): boolean {
     set.status === ENTRY_STATUS.done
   );
 }
+
+/**
+ * WHY a set is not editable, or `null` when it is (V1-24 3a-i). The parent plan's Locked state must
+ * state a reason, and a wrong reason is worse than none, so this is derived from the SAME clauses as
+ * `isEditableSet`, in the same order, and a test pins `isEditableSet(s) === (lockedReason(s) === null)`
+ * over one fixture per clause. Change one, change the other (and the SQL guard, invariant 3).
+ *
+ * - `mode`: bodyweight or band (a mode is not a number to change)
+ * - `status`: not `done` (sub-failure, failed); the badge already names it
+ * - `notMass`: a time or a distance (V1-33 would make these editable)
+ * - `shape`: anything else the numeric editor can't represent (no reps, several quantities)
+ */
+export const LOCKED_REASON = {
+  mode: 'mode',
+  status: 'status',
+  notMass: 'notMass',
+  shape: 'shape',
+} as const;
+export type LockedReason = (typeof LOCKED_REASON)[keyof typeof LOCKED_REASON];
+
+export function lockedReason(set: SetShape): LockedReason | null {
+  if (isEditableSet(set)) return null;
+  if (set.isBodyweight || set.isBand) return LOCKED_REASON.mode;
+  if (set.status !== ENTRY_STATUS.done) return LOCKED_REASON.status;
+  const primary = primaryOf(set);
+  if (primary !== undefined && primary.dimension !== UNIT_DIMENSION.mass)
+    return LOCKED_REASON.notMass;
+  return LOCKED_REASON.shape;
+}
+
+/**
+ * The one reason a MOVEMENT shows (plan I4: always one line per movement): the shared reason of its
+ * locked sets, or `shape` (the generic line) when they differ. `null` when nothing is locked.
+ */
+export function movementLockedReason(sets: readonly SetShape[]): LockedReason | null {
+  const reasons = new Set(sets.map(lockedReason).filter((r) => r !== null));
+  if (reasons.size === 0) return null;
+  return reasons.size === 1 ? [...reasons][0]! : LOCKED_REASON.shape;
+}
