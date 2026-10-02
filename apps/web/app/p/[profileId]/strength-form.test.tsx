@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UNIT_DIMENSION } from '@mat-plan/shared';
 
 // The form imports the Server Action module ('use server'), which cannot be evaluated under jsdom.
 // Mock it — this test is about what the form SERIALIZES, not about the action, which has its own
 // boundary tests in actions.test.ts.
 vi.mock('./actions', () => ({ logStrengthSessionAction: vi.fn() }));
 
+import { missingQuantityMessage, PARTIAL_SETS_COPY } from '@/lib/constants';
+
+import { SetRepsWeightFields } from './set-fields';
 import { StrengthForm } from './strength-form';
 
 // COMPONENT TIER (RTL/jsdom — the profile-tile.test.tsx idiom). This file exists for ONE reason:
@@ -270,5 +274,300 @@ describe('StrengthForm — the movement’s declaration (V1-26 PR-A)', () => {
     const p = payload();
     expect(p).toHaveLength(1);
     expect(p[0].movementName).toBe('Med-Ball Slam');
+  });
+});
+
+// ── V1-27 — partial sets (docs/plans/v1-27-partial-sets.md) ─────────────────────────────────────────
+// Card 1 has THREE rows, so "2 of 3" is a real trailing run; card 2 is collapsed until opened.
+const PROGRAM3 = [
+  { idx: 0, movementName: 'Back Squat', sets: 3, isBodyweight: false, unitDefault: 'lb' },
+  { idx: 1, movementName: 'Push-Ups', sets: 3, isBodyweight: true, unitDefault: null },
+];
+const renderWith3 = () => {
+  render(
+    <StrengthForm profileId="p1" day="2026-08-12" defaultDayRole={null} programDay={PROGRAM3} />,
+  );
+  fireEvent.click(fillButton());
+};
+const repsOf = (card: number, set: number) =>
+  screen.getByLabelText(`Movement ${card} set ${set} reps`) as HTMLInputElement;
+const weightOf = (card: number, set: number) =>
+  screen.getByLabelText(new RegExp(`^Movement ${card} set ${set} weight`)) as HTMLInputElement;
+const fill = (card: number, set: number, reps = '8', weight = '20') => {
+  fireEvent.change(repsOf(card, set), { target: { value: reps } });
+  fireEvent.change(weightOf(card, set), { target: { value: weight } });
+};
+const setsSent = (i = 0) => (payload()[i]!.sets as unknown[]).length;
+const summaryText = () => {
+  const button = screen.getByRole('button', { name: /log strength/i });
+  const id = button.getAttribute('aria-describedby');
+  if (!id) throw new Error('Log strength has no aria-describedby');
+  return document.getElementById(id)!.textContent;
+};
+/**
+ * The summary must agree with the browser on blank required fields (final re-review B-A): it names a
+ * blocker IFF some RENDERED input is required and blank — and, when it does, that input is the FIRST
+ * blank required one on the page (the one the browser's bubble lands on).
+ */
+const BLOCKED_TEXT = /needs (finishing|a name)\.$/;
+const expectSummaryAgrees = () => {
+  const firstBlank = Array.from(
+    document.querySelectorAll<HTMLInputElement>('form input[required]'),
+  ).find((el) => el.value.trim() === '');
+  expect(BLOCKED_TEXT.test(summaryText() ?? '')).toBe(firstBlank !== undefined);
+  if (!firstBlank) return;
+  // The first blank required input's own label says which card/set it is.
+  const label = firstBlank.getAttribute('aria-label') ?? '';
+  const where = /^Movement (\d+) set (\d+) /.exec(label);
+  if (where) expect(summaryText()).toMatch(new RegExp(` set ${where[2]} needs finishing\\.$`));
+  else expect(summaryText()).toMatch(/needs a name\.$/);
+};
+
+describe('StrengthForm — partial sets submit (V1-27)', () => {
+  it('2 of 3: sends 2 sets; set 3 is not required; the summary says so', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 2);
+    expect(setsSent()).toBe(2);
+    expect([1, 2, 3].map((s) => repsOf(1, s).required)).toEqual([true, true, false]);
+    expect(weightOf(1, 3).required).toBe(false);
+    expect(summaryText()).toBe('Logs 1 movement, 2 sets.');
+    expectSummaryAgrees();
+  });
+
+  it('1 of 3: sends 1 set', () => {
+    renderWith3();
+    fill(1, 1);
+    expect(setsSent()).toBe(1);
+    expect(summaryText()).toBe('Logs 1 movement, 1 set.');
+    expectSummaryAgrees();
+  });
+
+  it('a gap stays required, is sent, and the summary says the tap is blocked', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 3);
+    expect(repsOf(1, 2).required).toBe(true);
+    expect(weightOf(1, 2).required).toBe(true);
+    expect(setsSent()).toBe(3);
+    expect(summaryText()).toBe('Back Squat set 2 needs finishing.');
+    expectSummaryAgrees();
+  });
+
+  it('a half-entered last set (weight, no reps) still blocks', () => {
+    renderWith3();
+    fill(1, 1);
+    fireEvent.change(weightOf(1, 2), { target: { value: '20' } });
+    expect(repsOf(1, 2).required).toBe(true);
+    expect(summaryText()).toBe('Back Squat set 2 needs finishing.');
+    expectSummaryAgrees();
+  });
+
+  it('a sub-failure-only last set still blocks (it records what WAS done)', () => {
+    renderWith3();
+    fill(1, 1);
+    fireEvent.click(screen.getByLabelText(/sub-failure — movement 1 set 2/i));
+    expect(repsOf(1, 2).required).toBe(true);
+    expectSummaryAgrees();
+  });
+
+  it.each([
+    ['BW', /^BW — Bodyweight — movement 1 set 3$/],
+    ['band', /^band — .* — movement 1 set 3$/],
+  ])('%s + reps: reps required, weight NOT (the exemption), and not blocked', (_l, chip) => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 2);
+    fireEvent.change(repsOf(1, 3), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: chip }));
+    expect(repsOf(1, 3).required).toBe(true);
+    expect(weightOf(1, 3).required).toBe(false);
+    expect(summaryText()).toBe('Logs 1 movement, 3 sets.');
+    expectSummaryAgrees();
+  });
+
+  it('an untouched scaffolded card, even expanded, requires nothing and logs nothing', () => {
+    renderWith3();
+    expect(repsOf(1, 1).required).toBe(false);
+    expect(screen.getByDisplayValue('Back Squat')).toHaveProperty('required', false);
+    expect(summaryText()).toBe(PARTIAL_SETS_COPY.empty);
+    expectSummaryAgrees();
+  });
+
+  it('a RENAMED scaffolded card with nothing entered blocks, and no longer collapses', () => {
+    renderWith3();
+    fireEvent.change(screen.getByDisplayValue('Back Squat'), { target: { value: 'Front Squat' } });
+    expect(repsOf(1, 1).required).toBe(true);
+    expect(summaryText()).toBe('Front Squat set 1 needs finishing.');
+    expectSummaryAgrees();
+    // Opening card 2 used to collapse card 1. A renamed card is hand-added now: it stays open.
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    expect(screen.getByDisplayValue('Front Squat')).toBeTruthy();
+  });
+
+  it('a hand-added card with filled sets and a BLANK name blocks', () => {
+    renderForm();
+    fill(1, 1);
+    expect(nameInput()).toHaveProperty('required', true);
+    expect(summaryText()).toBe('Movement 1 needs a name.');
+    expectSummaryAgrees();
+  });
+
+  it('a blank hand-added card is dropped — its name is not required either', () => {
+    renderForm();
+    expect(nameInput()).toHaveProperty('required', false);
+    expect(summaryText()).toBe(PARTIAL_SETS_COPY.empty);
+    expectSummaryAgrees();
+  });
+
+  it('a COLLAPSED card with 2 of 3 sends 2 sets', () => {
+    renderWith3();
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    fill(2, 1);
+    fill(2, 2);
+    fireEvent.click(screen.getByRole('button', { name: /1\. Back Squat/ })); // collapses card 2
+    expect(setsSent(0)).toBe(2);
+    expect(summaryText()).toBe('Logs 1 movement, 2 sets.');
+  });
+
+  it('a COLLAPSED gap card is sent as-is and is not "needs finishing" (the server refuses it)', () => {
+    renderWith3();
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    fill(2, 1);
+    fill(2, 3);
+    fireEvent.click(screen.getByRole('button', { name: /1\. Back Squat/ }));
+    expect(setsSent(0)).toBe(3);
+    expect(summaryText()).toBe('Logs 1 movement, 3 sets.');
+    expectSummaryAgrees();
+  });
+
+  it('the collapsed counter counts a sub-failure-only row (one predicate, ux-S1)', () => {
+    renderWith3();
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    fill(2, 1);
+    fill(2, 2);
+    fireEvent.click(screen.getByLabelText(/sub-failure — movement 2 set 3/i));
+    fireEvent.click(screen.getByRole('button', { name: /1\. Back Squat/ }));
+    expect(screen.getByRole('button', { name: /2\. Push-Ups/ }).textContent).toContain('3/3');
+  });
+});
+
+describe('StrengthForm — the custom "missing" message never lingers (V1-27 decision 6)', () => {
+  it('a blank required weight carries the message; tapping BW clears it', () => {
+    renderWith3();
+    fireEvent.change(repsOf(1, 1), { target: { value: '8' } });
+    expect(weightOf(1, 1).validity.customError).toBe(true);
+    expect(weightOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingWeight);
+    fireEvent.click(screen.getByRole('checkbox', { name: /^BW — Bodyweight — movement 1 set 1$/ }));
+    expect(weightOf(1, 1).validity.customError).toBe(false);
+  });
+
+  it('a gap row carries it; removing the later set makes the row trailing and clears it', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 3);
+    expect(repsOf(1, 2).validity.customError).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove movement 1 set 3' }));
+    expect(repsOf(1, 2).required).toBe(false);
+    expect(repsOf(1, 2).validity.customError).toBe(false);
+  });
+
+  it('filling the field clears it', () => {
+    renderWith3();
+    fireEvent.change(repsOf(1, 1), { target: { value: '8' } });
+    fireEvent.change(weightOf(1, 1), { target: { value: '20' } });
+    expect(weightOf(1, 1).validity.customError).toBe(false);
+  });
+
+  it('a TIMED card asks for the time and never points at BW (V1-30 refuses BW there)', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Plank' } });
+    fireEvent.change(screen.getByLabelText('What movement 1 measures'), {
+      target: { value: UNIT_DIMENSION.time },
+    });
+    fireEvent.change(repsOf(1, 1), { target: { value: '1' } });
+    expect(weightOf(1, 1).validationMessage).toBe(missingQuantityMessage('sec'));
+    expect(weightOf(1, 1).validationMessage).not.toMatch(/BW|band/);
+  });
+
+  it('blank reps on a multi-set card points at the per-set Remove', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 3);
+    expect(repsOf(1, 2).validationMessage).toBe(PARTIAL_SETS_COPY.missingReps);
+  });
+
+  it('a ONE-set card never mentions Remove: reps say "fill in", weight says "tap BW"', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Push-ups' } });
+    fireEvent.change(repsOf(1, 1), { target: { value: '10' } });
+    expect(weightOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingWeight);
+    expect(weightOf(1, 1).validationMessage).not.toContain('Remove');
+    fireEvent.change(repsOf(1, 1), { target: { value: '' } });
+    fireEvent.change(weightOf(1, 1), { target: { value: '20' } });
+    expect(repsOf(1, 1).validationMessage).toBe(PARTIAL_SETS_COPY.missingRepsOnly);
+    expect(repsOf(1, 1).validationMessage).not.toContain('Remove');
+  });
+
+  it('without a missing message (the edit form) no custom validity is ever set', () => {
+    render(
+      <form>
+        <SetRepsWeightFields
+          reps=""
+          weight=""
+          onReps={() => {}}
+          onWeight={() => {}}
+          ariaLabel="Edit"
+        />
+      </form>,
+    );
+    expect(screen.getByLabelText('Edit reps')).toHaveProperty('required', true);
+    expect((screen.getByLabelText('Edit reps') as HTMLInputElement).validity.customError).toBe(
+      false,
+    );
+  });
+});
+
+describe('StrengthForm — the summary line and the hint (V1-27 UX)', () => {
+  it('counts a skipped movement separately', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 2);
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    fireEvent.click(screen.getByLabelText(/movement 2 skipped/i));
+    expect(summaryText()).toBe('Logs 1 movement, 2 sets, 1 skipped.');
+  });
+
+  it('a payload of only skipped movements reads "Nothing to log yet."', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Dips' } });
+    fireEvent.click(skippedBox());
+    expect(summaryText()).toBe(PARTIAL_SETS_COPY.empty);
+  });
+
+  it('plural forms', () => {
+    renderWith3();
+    fill(1, 1);
+    fill(1, 2);
+    fireEvent.click(screen.getByRole('button', { name: /2\. Push-Ups/ }));
+    fill(2, 1);
+    expect(summaryText()).toBe('Logs 2 movements, 3 sets.');
+  });
+
+  it('the hint shows only on a mixed card, and the trailing rows and Add set point at it', () => {
+    renderWith3();
+    expect(screen.queryByText(PARTIAL_SETS_COPY.trailingHint)).toBeNull();
+    fill(1, 1);
+    const hint = screen.getByText(PARTIAL_SETS_COPY.trailingHint);
+    expect(hint.id).not.toBe('');
+    expect(repsOf(1, 1).getAttribute('aria-describedby')).toBeNull();
+    expect(repsOf(1, 2).getAttribute('aria-describedby')).toBe(hint.id);
+    expect(repsOf(1, 3).getAttribute('aria-describedby')).toBe(hint.id);
+    expect(screen.getByRole('button', { name: /add set/i }).getAttribute('aria-describedby')).toBe(
+      hint.id,
+    );
+    fill(1, 2);
+    fill(1, 3);
+    expect(screen.queryByText(PARTIAL_SETS_COPY.trailingHint)).toBeNull();
   });
 });

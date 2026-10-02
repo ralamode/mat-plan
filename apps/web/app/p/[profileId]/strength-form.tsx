@@ -18,26 +18,39 @@ import {
   UNIT_LABELS,
   type UnitDimension,
 } from '@mat-plan/shared';
-import { useActionState, useState } from 'react';
+import { useActionState, useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { INPUT_CLASS } from '@/lib/constants';
+import {
+  blockedSummary,
+  INPUT_CLASS,
+  missingQuantityMessage,
+  PARTIAL_SETS_COPY,
+  strengthSummary,
+} from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE, type ActionState } from './action-state';
 import { logStrengthSessionAction } from './actions';
 import { DayField } from './day-field';
 import { SetModeToggles } from './set-mode-toggles';
 import { SetRepsWeightFields } from './set-fields';
-import { isUntouchedScaffold, type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
-import { useOnActionSuccess } from './use-on-action-success';
+import { type ScaffoldRow, scaffoldMovements } from './strength-form-scaffold';
+import { dissolveSmallSupersets, groupSelected, ungroupSuperset } from './strength-form-supersets';
 import {
-  dissolveSmallSupersets,
-  isUntouchedMovement,
+  dropTrailingUntouchedSets,
   dropUntouchedMovements,
-  groupSelected,
-  ungroupSuperset,
-} from './strength-form-supersets';
+  hasTrailingUntouched,
+  isDroppableMovement,
+  firstBlocker,
+  isCollapsed,
+  isUntouchedSet,
+  nameRequired,
+  repsRequired,
+  trailingStart,
+  weightRequired,
+} from './strength-form-untouched';
+import { useOnActionSuccess } from './use-on-action-success';
 
 // Form-held movement/set state. Values are strings (the schema's `strengthSetSchema` z.coerce's
 // reps/weight), serialized into the hidden `movements` JSON field on each render. Each movement
@@ -49,9 +62,9 @@ export type SetVals = {
   reps: string;
   weight: string;
   // GAP-3 PR 4a. The two load MODES, as booleans — they replaced the `BW`/`band` STRINGS the old chips
-  // wrote into `weight`. ⚠️ Anything added here must also be taught to the two "is this card
-  // untouched?" predicates (`strength-form-supersets.ts`, `strength-form-scaffold.ts`) or a set
-  // carrying ONLY the new field is silently DELETED at submit.
+  // wrote into `weight`. ⚠️ Anything added here must also be taught to `isUntouchedSet`
+  // (`strength-form-untouched.ts`, V1-27) — the ONE "touched" judgement every drop, `required` and
+  // counter derives from — or a set carrying ONLY the new field is silently DELETED at submit.
   isBodyweight?: boolean;
   isBand?: boolean;
   status?: SetStatus;
@@ -182,7 +195,7 @@ function StrengthFormBody({
    *  replayed scaffold would reuse entry `client_id`s and the write path's ON CONFLICT would silently
    *  turn the next submit into a no-op. */
   const fillFromProgram = () => {
-    const replaced = movements.filter((m) => !isUntouchedMovement(m) && !isUntouchedScaffold(m));
+    const replaced = movements.filter((m) => !isDroppableMovement(m));
     const next = scaffoldMovements(programDay, DEFAULT_BODYWEIGHT_UNIT);
     setUndoStash(movements);
     setMovements(next);
@@ -243,7 +256,28 @@ function StrengthFormBody({
   // added-but-unused card doesn't block the log with empty-field errors — then dissolve any superset a
   // drop left with a lone member. A partially-typed card is NOT dropped (it validates). If every card is
   // untouched the payload is [] and the schema's "add at least one movement" still fires.
-  const submittable = dissolveSmallSupersets(dropUntouchedMovements(movements));
+  //
+  // V1-27: then drop each movement's TRAILING untouched sets (the empty rows after its last touched
+  // set) — at serialization, never in state. Only trailing rows, so every sent set's index still equals
+  // its on-screen number and the server's `set M` labels stay right. A gap stays, and blocks.
+  const submittable = dissolveSmallSupersets(
+    dropTrailingUntouchedSets(dropUntouchedMovements(movements)),
+  );
+
+  // V1-27 — the summary line, from the EXACT payload above: what the tap will log. A skipped movement
+  // is sent with `sets: []` and is not "logged", so it is counted separately. When the browser would
+  // refuse the tap on a blank required field, the line says so instead of describing a payload that will
+  // not be sent — computed from the same `required` rules the inputs render from.
+  const loggedMovements = submittable.filter((m) => m.status !== ENTRY_STATUS.skipped);
+  const blocker = firstBlocker(movements, expanded);
+  const summary = blocker
+    ? blockedSummary(blocker)
+    : strengthSummary(
+        loggedMovements.length,
+        loggedMovements.reduce((n, m) => n + m.sets.length, 0),
+        submittable.length - loggedMovements.length,
+      );
+  const summaryId = useId();
 
   // The wire shape the action JSON.parses + zod-validates (strings; the schema coerces numbers). Superset
   // tags ride here per-movement; the action DERIVES the supersets[] from these distinct ids.
@@ -333,7 +367,7 @@ function StrengthFormBody({
               movement={m}
               // V1-19 — a scaffolded card collapses to a one-line summary until opened. A hand-added
               // card is always open: the athlete just asked for it, and there is only ever one.
-              collapsed={m.scaffolded === true && expanded !== m.clientId}
+              collapsed={isCollapsed(m, expanded)}
               onExpand={() => setExpanded(m.clientId)}
               canRemove={movements.length > 1}
               // GAP-1 P1-1c. `undefined` (not 'done') on uncheck, so the payload spread keeps
@@ -350,8 +384,16 @@ function StrengthFormBody({
               // Renaming clears the carried declaration: `declaredLoaded` was derived from the
               // scaffolded name, and typing over it makes this a different movement the catalog has
               // said nothing about. A warning that outlived its subject would be worse than none.
+              //
+              // V1-27: it clears `scaffolded` too. A renamed card is the athlete naming a movement,
+              // so it must never be silently dropped as an untouched scaffold — and, intended, it
+              // never collapses again, so a named all-blank card can never become an invisible block.
               onName={(v) =>
-                patchMovement(m.clientId, { movementName: v, declaredLoaded: undefined })
+                patchMovement(m.clientId, {
+                  movementName: v,
+                  declaredLoaded: undefined,
+                  scaffolded: undefined,
+                })
               }
               onUnit={(v) => patchMovement(m.clientId, { unit: v })}
               onRemove={() => removeMovement(m.clientId)}
@@ -426,10 +468,24 @@ function StrengthFormBody({
         />
       </div>
 
-      <div>
-        <Button type="submit" size="lg" disabled={pending} className="text-base">
-          {pending ? 'Logging…' : 'Log strength'}
-        </Button>
+      {/* V1-27 — the real mitigation for dropping trailing empty sets: a dropped set or card is visible
+          HERE, at the moment of commit, whatever is collapsed. A description of the button, not an event,
+          so `aria-describedby` rather than a live region. */}
+      <div className="flex flex-col gap-1.5">
+        <p id={summaryId} className="text-muted-foreground text-sm">
+          {summary}
+        </p>
+        <div>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={pending}
+            className="text-base"
+            aria-describedby={summaryId}
+          >
+            {pending ? 'Logging…' : 'Log strength'}
+          </Button>
+        </div>
       </div>
 
       {movementErrs.length > 0 || supersetErrs.length > 0 ? (
@@ -497,18 +553,19 @@ function MovementCard({
   const dimension = UNIT_DIMENSION_BY_CODE[movement.unit as Unit];
   const inSuperset = movement.supersetClientId != null;
   const isSkipped = movement.status === ENTRY_STATUS.skipped;
+  // V1-27 — a touched set AND an empty run after it: those rows will not be logged.
+  const mixed = hasTrailingUntouched(movement);
+  const trailingFrom = trailingStart(movement.sets);
+  const hintId = `movement-${movement.clientId}-trailing-hint`;
 
   // V1-19 — the collapsed summary. NOT a native <details>, and the set rows are UNMOUNTED rather than
   // CSS-hidden: `SetRepsWeightFields` marks its inputs `required`, and a hidden-but-present required
   // input blocks the native submit with an invisible "not focusable" error — the form simply appears
   // dead. That is the identical trap the Skipped branch already documents below, at a scale of 25 rows.
   if (collapsed) {
-    const filled = movement.sets.filter(
-      // GAP-3 PR 4a: a BW-only set IS progress. Without the flags the collapsed card's counter reads
-      // 0/3 for a fully-tapped bodyweight movement, and that counter is the only "where am I" signal
-      // across a 7-movement day.
-      (s) => s.reps.trim() !== '' || s.weight.trim() !== '' || s.isBodyweight || s.isBand,
-    ).length;
+    // V1-27: the ONE "touched" predicate — a BW-only (GAP-3 PR 4a) or sub-failure-only set IS progress.
+    // The old inline copy ignored sub-failure, so `2/3` disagreed with what was sent.
+    const filled = movement.sets.filter((s) => !isUntouchedSet(s)).length;
     return (
       <button
         type="button"
@@ -577,7 +634,9 @@ function MovementCard({
           <input
             id={nameId}
             type="text"
-            required
+            // V1-27: only a card that will be SENT needs a name. A droppable card is never sent, so
+            // its blank name must not block the tap (and `firstBlocker` reads the same rule).
+            required={nameRequired(movement)}
             placeholder="Back squat"
             autoComplete="off"
             value={movement.movementName}
@@ -675,73 +734,94 @@ function MovementCard({
       ) : (
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium">Sets</span>
-          {movement.sets.map((s, i) => (
-            // Two EXPLICIT lines, not flex-wrap luck. At 360px the usable width is ~296px
-            // (main px-4 + fieldset px-4) and line 1 alone is ~262px, so the chips + toggle + remove
-            // must be their own row or they overflow on the phone this is used on.
-            <div key={s.key} className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
-                <SetRepsWeightFields
-                  reps={s.reps}
-                  weight={s.weight}
-                  onReps={(v) => onSet(s.key, { reps: v })}
-                  onWeight={(v) => onSet(s.key, { weight: v })}
-                  ariaLabel={`Movement ${index + 1} set ${i + 1}`}
-                  // ⚠️ LOAD-BEARING. A BW or band set legitimately has NO magnitude, and a `required`
-                  // input that must be empty blocks the native submit with an error the browser will
-                  // not render — the form just appears dead. `strengthSetSchema`'s superRefine is what
-                  // actually enforces "a set must carry some load", because it can see all three
-                  // fields at once and reports through fieldErrors.
-                  weightRequired={!s.isBodyweight && !s.isBand}
-                  unitLabel={movement.unit}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pl-7">
-                {/* One-tap load modes. Without these, `BW` — the most common load in the program —
+          {movement.sets.map((s, i) => {
+            // V1-27 — while the card is mixed (a touched set AND an empty run at the end), the trailing
+            // rows' reps input and Add set point at the hint, so forms-mode screen readers meet it.
+            const describedBy =
+              mixed && i >= trailingFrom && isUntouchedSet(s) ? hintId : undefined;
+            return (
+              // Two EXPLICIT lines, not flex-wrap luck. At 360px the usable width is ~296px
+              // (main px-4 + fieldset px-4) and line 1 alone is ~262px, so the chips + toggle + remove
+              // must be their own row or they overflow on the phone this is used on.
+              <div key={s.key} className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground w-5 text-sm tabular-nums">{i + 1}</span>
+                  <SetRepsWeightFields
+                    reps={s.reps}
+                    weight={s.weight}
+                    onReps={(v) => onSet(s.key, { reps: v })}
+                    onWeight={(v) => onSet(s.key, { weight: v })}
+                    ariaLabel={`Movement ${index + 1} set ${i + 1}`}
+                    // ⚠️ LOAD-BEARING. A BW or band set legitimately has NO magnitude, and a `required`
+                    // input that must be empty blocks the native submit with an error the browser will
+                    // not render — the form just appears dead. `strengthSetSchema`'s superRefine is what
+                    // actually enforces "a set must carry some load", because it can see all three
+                    // fields at once and reports through fieldErrors.
+                    //
+                    // V1-27: both now come from `strength-form-untouched.ts` — the BW/band exemption is
+                    // kept verbatim inside `weightRequired`, and a TRAILING untouched row is not
+                    // required at all (it is not sent). The summary line reads the same functions.
+                    repsRequired={repsRequired(movement, i)}
+                    weightRequired={weightRequired(movement, i)}
+                    // Per field (UX review P1): blank reps points at the per-set Remove only when it
+                    // exists (more than one set); blank weight points at BW — "tap Remove" there would
+                    // send a kid to the movement's Remove (no undo), or invite a fake `0` load.
+                    repsMissingMessage={
+                      movement.sets.length > 1
+                        ? PARTIAL_SETS_COPY.missingReps
+                        : PARTIAL_SETS_COPY.missingRepsOnly
+                    }
+                    weightMissingMessage={missingQuantityMessage(movement.unit as Unit)}
+                    repsDescribedBy={describedBy}
+                    unitLabel={movement.unit}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pl-7">
+                  {/* One-tap load modes. Without these, `BW` — the most common load in the program —
                 would be the hardest thing to enter on a phone, because iOS's numeric keypad has no
                 letters. Since PR 4a they write BOOLEANS rather than text into the weight field, so
                 `BW` and a weight can now coexist (that pairing is `BW+8 (vest)`). */}
-                <SetModeToggles
-                  isBodyweight={s.isBodyweight ?? false}
-                  isBand={s.isBand ?? false}
-                  onChange={(patch) => onSet(s.key, patch)}
-                  ariaLabel={`movement ${index + 1} set ${i + 1}`}
-                />
-                {/* GAP-1 P1-1c — this ATTEMPT went to failure short of the prescribed reps. Same idiom as
+                  <SetModeToggles
+                    isBodyweight={s.isBodyweight ?? false}
+                    isBand={s.isBand ?? false}
+                    onChange={(patch) => onSet(s.key, patch)}
+                    ariaLabel={`movement ${index + 1} set ${i + 1}`}
+                  />
+                  {/* GAP-1 P1-1c — this ATTEMPT went to failure short of the prescribed reps. Same idiom as
                 the Skipped checkbox (one toggle pattern per card). The accessible name is unique per
                 set — five controls all named "Sub-failure" are indistinguishable in a screen-reader
                 forms list — and the visible text is a SUBSTRING of it (WCAG 2.5.3 Label in Name).
                 `reps` stays required: a sub-failure set records what WAS achieved. */}
-                <label className="flex min-h-11 items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5"
-                    checked={s.status === ENTRY_STATUS.sub_failure}
-                    onChange={(e) =>
-                      onSet(s.key, {
-                        // undefined, never 'done', on untoggle — so "absent stays absent" on the wire.
-                        status: e.target.checked ? ENTRY_STATUS.sub_failure : undefined,
-                      })
-                    }
-                    aria-label={`Sub-failure — movement ${index + 1} set ${i + 1}`}
-                  />
-                  Sub-failure
-                </label>
-                {movement.sets.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveSet(s.key)}
-                    aria-label={`Remove movement ${index + 1} set ${i + 1}`}
-                  >
-                    Remove
-                  </Button>
-                ) : null}
+                  <label className="flex min-h-11 items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5"
+                      checked={s.status === ENTRY_STATUS.sub_failure}
+                      onChange={(e) =>
+                        onSet(s.key, {
+                          // undefined, never 'done', on untoggle — so "absent stays absent" on the wire.
+                          status: e.target.checked ? ENTRY_STATUS.sub_failure : undefined,
+                        })
+                      }
+                      aria-label={`Sub-failure — movement ${index + 1} set ${i + 1}`}
+                    />
+                    Sub-failure
+                  </label>
+                  {movement.sets.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onRemoveSet(s.key)}
+                      aria-label={`Remove movement ${index + 1} set ${i + 1}`}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {/* V1-26 PR-A — the 2026-09-28 incident, said out loud. Liam's KB swings were logged
               `20 × BW` when the session was `10 × 20 lb`, and the app said nothing at the moment of
               the mistake and then could not fix it afterwards.
@@ -760,10 +840,23 @@ function MovementCard({
             </p>
           ) : null}
           <div>
-            <Button type="button" variant="outline" size="sm" onClick={onAddSet}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAddSet}
+              aria-describedby={mixed ? hintId : undefined}
+            >
               Add set
             </Button>
           </div>
+          {/* V1-27 — the local cue. AFTER Add set, so appearing or disappearing never moves a control
+              under the thumb. Not a live region: a description, carried by aria-describedby above. */}
+          {mixed ? (
+            <p id={hintId} className="text-muted-foreground text-sm">
+              {PARTIAL_SETS_COPY.trailingHint}
+            </p>
+          ) : null}
         </div>
       )}
     </fieldset>
