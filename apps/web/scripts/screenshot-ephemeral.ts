@@ -227,6 +227,8 @@ const STATES = {
   'strength-session': seedStrengthSession,
   // V1-24 3a-i: the same session with Change OPEN on a superset member (the 280px worst case).
   'strength-amend': seedStrengthSession,
+  // V1-24 3a-ii: the same session as a section receipt, with "Log more strength" OPENED.
+  'strength-log-more': seedStrengthSession,
   // GAP-1 P1-1c — interaction-only states (no fixtures; see INTERACTIONS below).
   'form-skipped': null,
   'form-sub-failure': null,
@@ -366,6 +368,13 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
    * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
    * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
    */
+  'strength-log-more': async (page) => {
+    const toggle = page.getByRole('button', { name: 'Log more strength', exact: true });
+    if ((await toggle.count()) === 0) {
+      throw new Error('no "Log more strength" — this state needs the strength-session fixture');
+    }
+    await toggle.click();
+  },
   'strength-amend': async (page) => {
     // `set 1` Change buttons in render order: the standalone movement's, then the superset's first
     // member's (nth 1) — the narrowest editor on the page.

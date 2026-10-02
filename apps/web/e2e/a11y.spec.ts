@@ -12,6 +12,7 @@ import {
   AMEND_COPY,
   BODYWEIGHT_COPY,
   changeLabel,
+  STRENGTH_COPY,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PARTIAL_SETS_COPY,
@@ -23,9 +24,11 @@ import {
   bodyweightSection,
   isoDaysAgo,
   logBodyweight,
+  openStrengthForm,
   SEED_PROFILE_2_ROUTE,
   SEED_PROFILE_ROUTE,
   shownWeight,
+  strengthSection,
 } from './steps';
 
 /**
@@ -187,7 +190,8 @@ test('the strength form meets the tap-target bar in its EXPANDED state', async (
   // form into the state where every control exists, then measure.
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: 'Add movement' }).click();
   await strength.getByRole('button', { name: 'Add set' }).first().click();
 
@@ -225,7 +229,8 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
   await page.setViewportSize(NARROW);
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: 'Add movement' }).click();
   await strength.getByRole('button', { name: 'Add set' }).first().click();
 
@@ -371,6 +376,7 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
   const entries = page.getByRole('region', { name: 'Logged entries', exact: true });
 
   if ((await entries.getByText(PROBE, { exact: true }).count()) === 0) {
+    await openStrengthForm(page);
     const strength = page.getByRole('region', { name: 'Log strength', exact: true });
     await strength.getByLabel('Movement', { exact: true }).fill(PROBE);
     await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('12');
@@ -380,21 +386,86 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
   }
 
   const subject = `${PROBE} set 1`;
-  const change = entries.getByRole('button', {
+  // Since V1-24 3a-ii the SECTION's receipt owns Change; the list copy is read-only beside it.
+  const owner = strengthSection(page);
+  const change = owner.getByRole('button', {
     name: changeLabel(subject, '12 × 137.5 lb'),
     exact: true,
   });
   await expect(change).toHaveText(AMEND_COPY.change);
   await change.click();
-  await expect(entries.getByLabel(`${subject} reps`, { exact: true })).toBeFocused(); // focus on open
-  await expect(entries.getByLabel(weightInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
+  await expect(owner.getByLabel(`${subject} reps`, { exact: true })).toBeFocused(); // focus on open
+  await expect(owner.getByLabel(weightInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
   await expectNoAxeViolations(page, 'strength set (editing)');
   await expectTapTargets(page, 'strength set (editing)');
   await expectNoHorizontalOverflow(page, 'strength set (editing, 360px)');
 
   // Cancel returns focus to Change (the button that had it unmounts).
-  await entries.getByRole('button', { name: AMEND_COPY.cancel, exact: true }).click();
+  await owner.getByRole('button', { name: AMEND_COPY.cancel, exact: true }).click();
   await expect(change).toBeFocused();
+});
+
+/**
+ * V1-24 3a-ii — the strength SECTION as the day's record: receipts, the collapsed "Log more strength",
+ * and the form opened from it. Writes strength on **Scarlett's today** (its other write is the warm-up
+ * weigh-in, a different surface; Scarlett's yesterday holds 3a-i's probe). Logs only on the first
+ * attempt (a retry reuses the DB), so the focus assertions run once and the scans run every time.
+ *
+ * The superset bracket is covered by the receipt's unit tests and the screenshots; building one
+ * through the UI here would cost more than it checks.
+ */
+test('the strength section renders saved sessions as receipts, at 360px (V1-24 3a-ii)', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize(NARROW);
+  await page.goto(SEED_PROFILE_2_ROUTE, { waitUntil: 'networkidle' });
+  const strength = strengthSection(page);
+  const receipts = strength.locator('[id^="strength-receipt-"]');
+
+  if (testInfo.retry === 0 && (await receipts.count()) === 0) {
+    await openStrengthForm(page); // open by default here: nothing is logged, so there's no toggle
+    const names = strength.getByLabel('Movement', { exact: true });
+    await names.nth(0).fill('A11y Receipt Press');
+    await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('5');
+    await strength.getByLabel(/^Movement 1 set 1 weight/).fill('95');
+    await strength.getByRole('button', { name: 'Add movement', exact: true }).click();
+    await names.nth(1).fill('A11y Receipt Plank');
+    await strength.getByLabel('Movement 2 set 1 reps', { exact: true }).fill('10');
+    await strength.getByText('BW', { exact: true }).nth(1).click(); // the label is the chip
+    await strength.getByRole('button', { name: 'Add movement', exact: true }).click();
+    await names.nth(2).fill('A11y Receipt Skip');
+    await strength.getByText('Skipped', { exact: true }).nth(2).click();
+    await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
+
+    // The first save: the receipt renders, the form collapses, focus lands on THIS receipt.
+    await expect(receipts).toHaveCount(1, { timeout: 15_000 });
+    const first = await receipts.first().getAttribute('id');
+    await expect(page.locator(`[id="${first}"]`)).toBeFocused();
+    await expect(
+      strength.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true }),
+    ).toHaveAttribute('aria-expanded', 'false');
+
+    // The second session of the day: focus lands on the NEW receipt.
+    await openStrengthForm(page);
+    await expect(strength.getByText(/^Already saved today: /)).toBeVisible();
+    await names.nth(0).fill('A11y Receipt Rows');
+    await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('8');
+    await strength.getByLabel(/^Movement 1 set 1 weight/).fill('95');
+    await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
+    await expect(receipts).toHaveCount(2, { timeout: 15_000 });
+    const second = await receipts.nth(1).getAttribute('id');
+    await expect(page.locator(`[id="${second}"]`)).toBeFocused();
+  }
+
+  await expect(receipts.first()).toBeVisible();
+  await expectNoAxeViolations(page, 'strength section (receipts, collapsed)');
+  await expectTapTargets(page, 'strength section (receipts, collapsed)');
+  await expectNoHorizontalOverflow(page, 'strength section (receipts, collapsed, 360px)');
+
+  await openStrengthForm(page);
+  await expectNoAxeViolations(page, 'strength section (receipts, Log more open)');
+  await expectTapTargets(page, 'strength section (receipts, Log more open)');
+  await expectNoHorizontalOverflow(page, 'strength section (receipts, Log more open, 360px)');
 });
 
 /**
@@ -416,7 +487,8 @@ test("Today's program card is accessible in BOTH its expanded and collapsed stat
   await page.setViewportSize(NARROW);
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   // Resolving the card BY ITS ACCESSIBLE NAME is the assertion, not just a locator: the name comes from
   // `aria-labelledby`, so a `getByRole('region', { name })` that still matches proves the id resolves.
   const card = strength.getByRole('region', { name: /Today.s program/ });
@@ -454,7 +526,7 @@ test("Today's program card is accessible in BOTH its expanded and collapsed stat
   // which is what the form's own status/alert regions would say.
   // The form's live region is always in the DOM but EMPTY until something happens, so "empty" is the
   // assertion, not "absent" — a submit would fill it, or raise an `alert` on rejection.
-  await expect(strength.getByRole('status')).toBeEmpty();
+  await expect(strength.locator('form').getByRole('status')).toBeEmpty();
   await expect(strength.getByRole('alert')).toHaveCount(0);
   // And the card sits OUTSIDE the `<form>`, so the trap has no reach here. Pinned, because a future
   // change that moves it inside would silently re-arm it for any non-`<summary>` trigger.
@@ -511,7 +583,8 @@ test.describe('scaffolded state', () => {
     // at 390px, which the single-card expanded scan cannot surface.
     await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-    const strength = page.getByRole('region', { name: 'Log strength' });
+    const strength = strengthSection(page);
+    await openStrengthForm(page);
     const fill = strength.getByRole('button', { name: /Fill in today.s movements/i });
 
     // NO skip. `PROGRAMMED_TZ` guarantees today programs strength, so an absent button is a real
@@ -525,7 +598,9 @@ test.describe('scaffolded state', () => {
     await fill.click();
     // Prove the scaffolded DOM really is present, so this cannot pass by measuring the default form.
     await expect(strength.getByRole('button', { name: 'Undo' })).toBeVisible();
-    await expect(strength.getByRole('status')).toContainText(/Loaded \d+ movements/);
+    await expect(strength.locator('form').getByRole('status')).toContainText(
+      /Loaded \d+ movements/,
+    );
 
     await expectTapTargets(page, 'strength form (scaffolded, collapsed)');
     await expectNoAxeViolations(page, 'strength form (scaffolded, collapsed)');

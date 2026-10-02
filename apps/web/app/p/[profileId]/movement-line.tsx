@@ -12,10 +12,25 @@ import { formatSetLine, isEditableSet, movementLockedReason } from './set-displa
  * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
  * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
  */
-export function SessionMovementItem({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
+export function SessionMovementItem({
+  entry,
+  profileId,
+  editable = true,
+  lockedLine = true,
+}: {
+  entry: EntryDTO;
+  profileId: string;
+  editable?: boolean;
+  lockedLine?: boolean;
+}) {
   return (
     <li className="flex flex-col gap-1">
-      <MovementLine entry={entry} profileId={profileId} />
+      <MovementLine
+        entry={entry}
+        profileId={profileId}
+        editable={editable}
+        lockedLine={lockedLine}
+      />
     </li>
   );
 }
@@ -25,9 +40,22 @@ export function SessionMovementItem({ entry, profileId }: { entry: EntryDTO; pro
  * `{kind:'entry'}` row and each movement inside a session block, so the reps × weight/label fallback
  * lives once. The caller supplies the `<li>` wrapper (flat = a bordered row; session = a nested item).
  */
-export function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
+export function MovementLine({
+  entry,
+  profileId,
+  editable = true,
+  lockedLine = true,
+}: {
+  entry: EntryDTO;
+  profileId: string;
+  /** V1-24 3a-ii: FALSE renders every set read-only — the list's copy while the strength section owns
+   *  Change, so each set has exactly one Change (and one accessible name) on the page. */
+  editable?: boolean;
+  /** V1-24 3a-ii: FALSE when the caller renders ONE Locked line for the whole session instead. */
+  lockedLine?: boolean;
+}) {
   const label = entryLabel(entry);
-  const locked = movementLockedReason(entry.sets);
+  const locked = editable && lockedLine ? movementLockedReason(entry.sets) : null;
   return (
     <>
       <div className="flex items-center justify-between">
@@ -45,7 +73,7 @@ export function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId:
         // single-sourced in formatSetLine, shared by both branches.
         <ul className="text-muted-foreground flex flex-col gap-0.5 text-sm tabular-nums">
           {entry.sets.map((s) =>
-            isEditableSet(s) ? (
+            editable && isEditableSet(s) ? (
               <EditableSet
                 key={s.publicId}
                 set={s}

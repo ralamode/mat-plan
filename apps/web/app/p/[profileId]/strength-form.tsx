@@ -18,7 +18,7 @@ import {
   UNIT_LABELS,
   type UnitDimension,
 } from '@mat-plan/shared';
-import { useActionState, useId, useState } from 'react';
+import { type ReactNode, useActionState, useEffect, useId, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 
@@ -27,6 +27,8 @@ import {
   INPUT_CLASS,
   missingQuantityMessage,
   PARTIAL_SETS_COPY,
+  STRENGTH_COPY,
+  strengthReceiptId,
   strengthSummary,
 } from '@/lib/constants';
 
@@ -113,6 +115,9 @@ export function StrengthForm({
   day,
   defaultDayRole,
   programDay,
+  logged = [],
+  alreadySaved = null,
+  programCard = null,
 }: {
   profileId: string;
   day: string;
@@ -124,38 +129,151 @@ export function StrengthForm({
   /** V1-19 — today's prescribed movements, for the scaffold button. NARROWED (no `load`): the authored
    *  load must never cross into client state, so the boundary is the type, not a test. */
   programDay: readonly ScaffoldRow[];
+  /**
+   * V1-24 3a-ii — the day's logged sessions as the SECTION rendered them (public id + movement names).
+   * The island announces and focuses a save once ITS id is in this list (keyed on props, not timing),
+   * and shows the "Log more" toggle once it is non-empty. It never collapses BECAUSE this changed: a
+   * session arriving from another device must not hide a typed draft.
+   */
+  logged?: readonly { id: string; names: string }[];
+  /** V1-24 3a-ii D3 — "Back squat, Bench, Rows (skipped)": the trust guard shown while "Log more" is open. */
+  alreadySaved?: string | null;
+  /** V1-24 3a-ii D4 — the program card, rendered INSIDE the form (it is reference for typing). */
+  programCard?: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(
     logStrengthSessionAction,
     INITIAL_ACTION_STATE,
   );
   const [gen, setGen] = useState(0);
-  useOnActionSuccess(state, () => setGen((n) => n + 1));
+  // V1-24 3a-ii D2 — open when nothing is logged; collapsed once something is. Owned HERE so the
+  // section (a server component) never has to, and keyed on the day by the section.
+  const [open, setOpen] = useState(logged.length === 0);
+  const [pendingSaved, setPendingSaved] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+  const [focusGroup, setFocusGroup] = useState(0);
+  const [focusToggle, setFocusToggle] = useState(0);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const ids = useId();
+  const groupId = `${ids}-log`;
+  const alreadyId = `${ids}-already`;
+  const newSessionId = `${ids}-new`;
+
+  // This device's OWN success: remount the body (fresh idempotency keys), collapse, and remember which
+  // session to announce and focus. Legal during-render updates of OWN state (`useOnActionSuccess`).
+  useOnActionSuccess(state, () => {
+    setGen((n) => n + 1);
+    setOpen(false);
+    setPendingSaved(state.savedId ?? null);
+    setAnnouncement('');
+  });
+
+  // The revalidated receipt for THIS save is in the section's props: announce it and target its
+  // focus. A during-render update of OWN state (the `useOnActionSuccess` idiom), keyed on the props,
+  // not on timing, so a result that lands a render before the receipt still finds it later.
+  const savedNow = pendingSaved === null ? undefined : logged.find((l) => l.id === pendingSaved);
+  const [focusReceipt, setFocusReceipt] = useState<{ id: string; n: number } | null>(null);
+  if (savedNow) {
+    setPendingSaved(null);
+    setAnnouncement(STRENGTH_COPY.announced(savedNow.names));
+    setFocusReceipt((f) => ({ id: strengthReceiptId(savedNow.id), n: (f?.n ?? 0) + 1 }));
+  }
+  useEffect(() => {
+    if (focusReceipt) document.getElementById(focusReceipt.id)?.focus();
+  }, [focusReceipt]);
+  // Not rendered yet (or never will be): the submit button that had focus is gone, so hold focus on
+  // the toggle rather than letting it drop to <body>.
+  const awaiting = pendingSaved !== null && savedNow === undefined;
+  useEffect(() => {
+    if (awaiting) toggleRef.current?.focus();
+  }, [awaiting]);
+
+  useEffect(() => {
+    if (focusGroup > 0) groupRef.current?.focus();
+  }, [focusGroup]);
+  useEffect(() => {
+    if (focusToggle > 0) toggleRef.current?.focus();
+  }, [focusToggle]);
+
+  const hasLogged = logged.length > 0;
+  // No toggle on a day with nothing logged: the form is simply open, and "more" would be false.
+  const showToggle = hasLogged || !open;
 
   return (
-    <StrengthFormBody
-      // ⚠️ **The DAY is part of the key, and that is a fix, not a nicety (V1-28).**
-      //
-      // V1-15 made day navigation a client-side RSC transition, so this subtree does NOT remount when
-      // the day changes — and every uncontrolled field in it keeps the DOM value React set on first
-      // mount. The damage is the day-role select: `defaultValue` is applied once, so paging from a
-      // Strength B day back to a Strength A day left the select reading "Strength B" while the header
-      // above it read "Strength A". Submitting that writes a day role the athlete never chose, into
-      // the column whose entire worth is PROVENANCE (see the select's own note) and which V1-13's CSV
-      // reads as `session_type`. Reported from real use, 2026-09-30.
-      //
-      // Remounting also clears typed-but-unsubmitted movement cards on a day change. That is the
-      // intended trade: carrying them silently means Day B's movements can be submitted onto Day A,
-      // under Day A's heading, with Day B's role. A refresh already loses them.
-      key={`${day}:${gen}`}
-      profileId={profileId}
-      day={day}
-      defaultDayRole={defaultDayRole}
-      programDay={programDay}
-      state={state}
-      formAction={formAction}
-      pending={pending}
-    />
+    <div className="flex flex-col gap-3">
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
+      {showToggle ? (
+        <Button
+          ref={toggleRef}
+          type="button"
+          variant="outline"
+          className="w-full"
+          aria-expanded={open}
+          aria-controls={groupId}
+          disabled={pending}
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              setFocusToggle((n) => n + 1);
+            } else {
+              setOpen(true);
+              setFocusGroup((n) => n + 1);
+            }
+          }}
+        >
+          {open ? STRENGTH_COPY.cancel : STRENGTH_COPY.logMore}
+        </Button>
+      ) : null}
+      {/* HIDDEN, never unmounted, when collapsed: a mis-tapped Cancel keeps the typed draft, and
+          `aria-controls` always points at a mounted element. Focusable as a group described by the
+          trust lines, so a screen-reader user hears them on open. */}
+      <div
+        id={groupId}
+        ref={groupRef}
+        role="group"
+        aria-label={STRENGTH_COPY.heading}
+        aria-describedby={hasLogged && alreadySaved ? `${alreadyId} ${newSessionId}` : undefined}
+        tabIndex={-1}
+        hidden={!open}
+        className="flex flex-col gap-3"
+      >
+        {hasLogged && alreadySaved ? (
+          <div className="flex flex-col gap-0.5 text-sm">
+            <p id={alreadyId}>{STRENGTH_COPY.alreadySaved(alreadySaved)}</p>
+            <p id={newSessionId} className="text-muted-foreground">
+              {STRENGTH_COPY.newSession}
+            </p>
+          </div>
+        ) : null}
+        {programCard}
+        <StrengthFormBody
+          // ⚠️ **The DAY is part of the key, and that is a fix, not a nicety (V1-28).**
+          //
+          // V1-15 made day navigation a client-side RSC transition, so this subtree does NOT remount when
+          // the day changes — and every uncontrolled field in it keeps the DOM value React set on first
+          // mount. The damage is the day-role select: `defaultValue` is applied once, so paging from a
+          // Strength B day back to a Strength A day left the select reading "Strength B" while the header
+          // above it read "Strength A". Submitting that writes a day role the athlete never chose, into
+          // the column whose entire worth is PROVENANCE (see the select's own note) and which V1-13's CSV
+          // reads as `session_type`. Reported from real use, 2026-09-30.
+          //
+          // Remounting also clears typed-but-unsubmitted movement cards on a day change. That is the
+          // intended trade: carrying them silently means Day B's movements can be submitted onto Day A,
+          // under Day A's heading, with Day B's role. A refresh already loses them.
+          key={`${day}:${gen}`}
+          profileId={profileId}
+          day={day}
+          defaultDayRole={defaultDayRole}
+          programDay={programDay}
+          state={state}
+          formAction={formAction}
+          pending={pending}
+        />
+      </div>
+    </div>
   );
 }
 

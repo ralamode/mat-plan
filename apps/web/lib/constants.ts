@@ -67,7 +67,7 @@ export const SAVED_STATE_COPY = {
 } as const;
 
 /** Joins several logged values in the receipt and the announcement (`84.5 lb, 845 lb`). */
-export const BODYWEIGHT_VALUE_JOINER = ', ';
+export const VALUE_JOINER = ', ';
 
 /**
  * The weigh-in surface's copy (V1-24 PR 1a) — the plan's §"The 1a receipt, exactly" strings, verbatim.
@@ -85,7 +85,7 @@ export const BODYWEIGHT_COPY = {
    * 845 lb`. The receipt never silently picks one — a hidden duplicate is uncorrectable twice over.
    */
   several: (values: readonly string[]) =>
-    `${values.length} weights logged: ${values.join(BODYWEIGHT_VALUE_JOINER)}`,
+    `${values.length} weights logged: ${values.join(VALUE_JOINER)}`,
   /**
    * The ONE line under a duplicates headline, replacing `onePerDay` (rounds 2–3 on
    * #180). Two different situations, so two different asks:
@@ -162,6 +162,27 @@ export const AMEND_COPY = {
 export function weightInputLabel(subject: string, unitLabel?: string): string {
   return unitLabel ? `${subject} weight in ${unitLabel}` : `${subject} weight`;
 }
+
+/**
+ * The strength section's copy (V1-24 3a-ii). The h2 stays "Log strength" until 3b renames it to the
+ * noun "Strength" (agreed; deferred for size), so `heading` is the CURRENT text the specs assert.
+ */
+export const STRENGTH_COPY = {
+  heading: 'Log strength',
+  submit: 'Log strength',
+  logMore: 'Log more strength',
+  cancel: 'Cancel',
+  /** The trust guard, on screen while "Log more" is open: what is already saved today. */
+  alreadySaved: (names: string) => `Already saved today: ${names}.`,
+  newSession: 'Adds a new session.',
+  saved: 'Saved',
+  /** What the island announces on its own successful save — that session's movements. */
+  announced: (names: string) => `Strength saved: ${names}.`,
+  skippedSuffix: '(skipped)',
+} as const;
+
+/** A session receipt's id in the strength section — the focus target after its save. */
+export const strengthReceiptId = (sessionPublicId: string) => `strength-receipt-${sessionPublicId}`;
 
 /** A strength set amend's error id, unique per island (20 sets must not share one id). */
 export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;

@@ -1,9 +1,4 @@
-import {
-  DAY_ROLE_LABELS,
-  DEFAULT_SESSION_TYPE,
-  DEFAULT_SUPERSET_LABEL,
-  SESSION_TYPE_LABELS,
-} from '@mat-plan/shared';
+import { DAY_ROLE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -18,7 +13,12 @@ import { requireGatedPage } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
-import { calisthenicsTotals, loggedBodyweight, todayRows } from '@/lib/entries/activity-totals';
+import {
+  calisthenicsTotals,
+  loggedBodyweight,
+  type SessionRow,
+  todayRows,
+} from '@/lib/entries/activity-totals';
 import {
   buildRoutineBlocks,
   checkinFieldsForKeys,
@@ -31,9 +31,9 @@ import { CLOSED_DAY_NOTICE } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { LifeForm } from './life-form';
-import { MovementLine, SessionMovementItem } from './movement-line';
-import { ProgramReference } from './program-reference';
-import { StrengthForm } from './strength-form';
+import { MovementLine } from './movement-line';
+import { StrengthSection } from './strength-section';
+import { sessionOrdinals, StrengthSessionReceipt } from './strength-session-receipt';
 import { DayNav } from './day-nav';
 import { TimeZoneSync } from './tz-sync';
 import { WeeklyAdherence } from './weekly-adherence';
@@ -117,6 +117,13 @@ export default async function TodayPage({
   // Display rows for the "Logged entries" list: calisthenics bouts grouped into one row per
   // exercise (so repeated bouts don't read as duplicate rows), everything else individual.
   const rows = todayRows(entries);
+  // V1-24 3a-ii: today's strength sessions feed the strength section; the list reuses the receipt.
+  const sessionRows = rows.filter((r): r is SessionRow => r.kind === 'session');
+  const ordinals = sessionOrdinals(sessionRows);
+  // Whether the strength SECTION renders: if it does, it owns Change and the list copy is read-only.
+  const strengthOnPage = buildRoutineBlocks(profile.routine.order).some(
+    (b) => b.kind === 'strength',
+  );
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
@@ -191,45 +198,18 @@ export default async function TodayPage({
         />
         {buildRoutineBlocks(profile.routine.order).map((block, i) => {
           if (block.kind === 'strength') {
+            // V1-24 3a-ii: the section is the day's strength RECORD (receipts + the collapsible form).
             return (
-              <section key={`b${i}`} aria-labelledby={`str-${i}`} className="flex flex-col gap-3">
-                <h2 id={`str-${i}`} className="text-lg font-medium">
-                  Log strength
-                </h2>
-                {/* V1-10: today's programmed movements, read-only, directly above the form the coach
-                    types the PERFORMED values into. Inside the routine's strength gate — a kid whose
-                    routine has no strength block sees no program card either. */}
-                {dayRole && programDay.length > 0 ? (
-                  <ProgramReference dayRole={dayRole} rows={programDay} />
-                ) : null}
-                {/* GAP-1 P0-1: the weekday's role PRE-SELECTS the form's day picker; it is never
-                    submitted implicitly (see the note on that select). */}
-                {writable ? (
-                  <StrengthForm
-                    profileId={profile.id}
-                    day={day}
-                    defaultDayRole={dayRole}
-                    // V1-19 — NARROWED on purpose: `ProgramDayDTO` also carries this kid's prescribed
-                    // `load`, and the one invariant the scaffold exists to protect is that no authored
-                    // load reaches an input. Mapping it away here makes that a property of the type
-                    // rather than something a unit test has to notice.
-                    //
-                    // V1-26 PR-A widens it by exactly two fields, and `load` is still the one left
-                    // out: `isBodyweight`/`unitDefault` are the MOVEMENT's declaration — what kind of
-                    // number this is — where `load` is the coach's prescribed magnitude for this kid.
-                    // Structure crosses; a number does not.
-                    programDay={programDay.map(
-                      ({ idx, movementName, sets, isBodyweight, unitDefault }) => ({
-                        idx,
-                        movementName,
-                        sets,
-                        isBodyweight,
-                        unitDefault,
-                      }),
-                    )}
-                  />
-                ) : null}
-              </section>
+              <StrengthSection
+                key={`b${i}`}
+                headingId={`str-${i}`}
+                profileId={profile.id}
+                day={day}
+                writable={writable}
+                dayRole={dayRole}
+                programDay={programDay}
+                sessions={sessionRows}
+              />
             );
           }
           if (block.kind === 'checkins') {
@@ -332,60 +312,19 @@ export default async function TodayPage({
                 );
               }
               if (row.kind === 'session') {
-                // V1-8-3a: a logged strength session as ONE block — a type header + movement count, its
-                // items nested (each via the shared <MovementLine>). V1-8-3d: superset members sub-bracket.
-                // GAP-1 P0-1: prefer the ASSERTED programmed day ("Strength B") over the generic
-                // session type ("Strength"). Surfacing it is what makes the stored value auditable —
-                // a role nobody sees is one nobody can notice is wrong.
-                const typeLabel = row.session.dayRole
-                  ? DAY_ROLE_LABELS[row.session.dayRole]
-                  : SESSION_TYPE_LABELS[row.session.type ?? DEFAULT_SESSION_TYPE];
-                const count = row.movementCount;
+                // V1-8-3a: a logged strength session as ONE block, via the SAME renderer the strength
+                // section uses (V1-24 3a-ii). Read-only here while the section is on the page, so each
+                // set has exactly one Change; the list keeps Change when the routine has no strength
+                // block (it is then the only surface).
                 return (
-                  <li
-                    key={`s:${row.session.id}`}
-                    className="flex flex-col gap-2 rounded-lg border px-4 py-3"
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <h3 className="font-medium">{typeLabel} session</h3>
-                      <span className="text-muted-foreground text-sm">
-                        {count} {count === 1 ? 'movement' : 'movements'}
-                      </span>
-                    </div>
-                    {row.session.feel ? (
-                      // V1-8-3b: the optional session feel. Truthiness-guarded so a normalized-empty
-                      // feel never renders a blank line.
-                      <p className="text-muted-foreground text-sm italic">
-                        Felt: {row.session.feel}
-                      </p>
-                    ) : null}
-                    <ul className="flex flex-col gap-2">
-                      {row.items.map((item) =>
-                        item.kind === 'superset' ? (
-                          // V1-8-3d: a superset bracket — its members alternate, so group them under a
-                          // labeled sub-list (each member still via the shared <MovementLine>).
-                          <li
-                            key={`ss:${item.superset.id}`}
-                            className="border-foreground/25 flex flex-col gap-1.5 border-l-2 pl-3"
-                          >
-                            <span className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                              {DEFAULT_SUPERSET_LABEL}
-                            </span>
-                            <ul className="flex flex-col gap-1.5">
-                              {item.members.map((m) => (
-                                <SessionMovementItem key={m.id} entry={m} profileId={profile.id} />
-                              ))}
-                            </ul>
-                          </li>
-                        ) : (
-                          <SessionMovementItem
-                            key={item.entry.id}
-                            entry={item.entry}
-                            profileId={profile.id}
-                          />
-                        ),
-                      )}
-                    </ul>
+                  <li key={`s:${row.session.id}`}>
+                    <StrengthSessionReceipt
+                      row={row}
+                      profileId={profile.id}
+                      placement="list"
+                      ordinal={ordinals.get(row.session.id)}
+                      editable={!strengthOnPage}
+                    />
                   </li>
                 );
               }

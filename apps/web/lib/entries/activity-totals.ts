@@ -151,6 +151,25 @@ function buildSessionItems(members: readonly EntryDTO[]): SessionItem[] {
   return items;
 }
 
+/** A session's movements in performed order, superset members flattened into their position. */
+export function sessionMovements(session: SessionRow): EntryDTO[] {
+  return session.items.flatMap((i) => (i.kind === 'movement' ? [i.entry] : i.members));
+}
+
+/**
+ * Every movement logged in these sessions, and whether it was SKIPPED (V1-24 3a-ii). The ONE
+ * definition of "logged today": "Already saved today" renders it, and 3a-iii's fill filter reuses it,
+ * so the two can never disagree (a skipped movement is not logged work; the line marks it, the fill
+ * offers it again).
+ */
+export function loggedMovements(
+  sessions: readonly SessionRow[],
+): { entry: EntryDTO; skipped: boolean }[] {
+  return sessions
+    .flatMap(sessionMovements)
+    .map((entry) => ({ entry, skipped: entry.status === ENTRY_STATUS.skipped }));
+}
+
 export function todayRows(entries: readonly EntryDTO[]): TodayRow[] {
   const totalByMetric = new Map(calisthenicsTotals(entries).map((t) => [t.metricKey, t]));
 

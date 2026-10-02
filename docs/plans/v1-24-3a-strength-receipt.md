@@ -267,6 +267,22 @@ measures "session 2". `global.setup.ts`'s allocation comment is extended to stre
 **The remaining overage is accepted:** the island, its two RTL suites and the e2e retargeting are one
 indivisible change (collapsing without the e2e fixes breaks CI).
 
+**3a-ii as shipped** (deviations from the table above, decided during implementation):
+
+- **The island is `StrengthForm` itself**, not a new `strength-log.tsx`: it already owned the
+  `useActionState` the island needs, and lifting it into a wrapper would have split one component's
+  state across two files. Its new props (`logged`, `alreadySaved`, `programCard`) are optional, so its
+  existing tests render it unchanged.
+- **The announcement is a during-render update of the island's own state** (the `useOnActionSuccess`
+  idiom) once the saved id is in the props; the effects only move DOM focus. (`react-hooks/
+set-state-in-effect` forbids the effect-based version.)
+- **The list's session block changed too**, because it is the same renderer: the header shows the
+  honest counts and the session ordinal there as well (not "Saved", which is section-only).
+- **The new a11y case writes on Scarlett's today** (not her yesterday, which 3a-i's probe holds).
+  Its superset coverage is the receipt's unit tests and the screenshots.
+- **The review's carry-overs from 3a-i landed here:** one Locked line per session listing its
+  movements (J15), and Change is an outline button that reads as a control (J16).
+
 ## 3a-iii — recorded decisions (its own plan later)
 
 - Match **logged ↔ prescribed by movement slug** (the export's key, `lib/dal/export.ts`;

@@ -11,6 +11,7 @@ import {
   BODYWEIGHT_RECEIPT_ID,
   DEFAULT_TIME_ZONE,
   SAVED_STATE_COPY,
+  STRENGTH_COPY,
 } from '../lib/constants';
 import { addDays, localDayIso } from '../lib/date';
 import { formatValueUnit } from '../lib/entries/format-value-unit';
@@ -68,6 +69,29 @@ export async function selectProfile(page: Page, name: string): Promise<void> {
 /** The weigh-in section, by its heading — `Bodyweight` in every state (V1-24 PR 1a). */
 export const bodyweightSection = (page: Page) =>
   page.getByRole('region', { name: BODYWEIGHT_COPY.heading, exact: true });
+
+/** The strength section, by its heading (`exact`: the program card's own region name has "Strength"). */
+export const strengthSection = (page: Page) =>
+  page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
+
+/**
+ * **Make the strength form usable, retry-safely (V1-24 3a-ii).** Once a day has a strength session, the
+ * form starts COLLAPSED behind "Log more strength"; a spec that needs the form calls this first. It
+ * clicks the toggle only while it reads collapsed (`aria-expanded="false"`, never the open state's
+ * "Cancel"), and retries until the submit is visible, so a click that lands before hydration (no
+ * handler yet) can't pass silently. Call it again after a client-side day change.
+ */
+export async function openStrengthForm(page: Page): Promise<void> {
+  const section = strengthSection(page);
+  const submit = section.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
+  await expect(async () => {
+    const toggle = section.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true });
+    if ((await toggle.count()) > 0 && (await toggle.getAttribute('aria-expanded')) === 'false') {
+      await toggle.click();
+    }
+    await expect(submit).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+}
 
 /** How the app displays a weight the specs log in the default unit (`84.5` → `84.5 lb`). */
 export const shownWeight = (value: string) =>

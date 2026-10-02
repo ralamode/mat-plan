@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { PARTIAL_SETS_COPY } from '../lib/constants';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { openStrengthForm, SEED_PROFILE_ROUTE, strengthSection } from './steps';
 
 /**
  * **V1-26 PR-A — the submit wedge, in a real browser.**
@@ -29,7 +29,8 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
   const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^8 × 20 lb$/);
   const before = await logged.count();
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // The YDP programs 6-7 movements a day, so this is the real shape: several cards, one open, the
@@ -69,7 +70,8 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
 test('a scaffolded card shows the unit the catalog declares', async ({ page }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // Whichever movement card 1 holds — the YDP rotates on date parity, so the name is not fixed — its
@@ -100,7 +102,8 @@ test("doing all but the last of a card's sets submits exactly those sets (V1-27)
   const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^7 × 17\.5\b/);
   const before = await logged.count();
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // The scaffold's row count depends on the day's prescription, so it is READ, not assumed.
@@ -131,7 +134,8 @@ test('a half-entered set blocks natively, with a message naming the way out (V1-
   page,
 }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   const actionRequests: string[] = [];
