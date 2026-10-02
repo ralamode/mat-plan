@@ -140,6 +140,7 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
     ).map((r) => ({
       date: r.date,
       weight: r.value ?? '',
+      unit: r.unit,
       // `context` is `morning` on 100% of real rows and the app can NEVER write it —
       // `logBodyweightSchema` has no such field. A known regression of a populated column.
       context: r.context ?? '',
