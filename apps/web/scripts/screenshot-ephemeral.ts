@@ -225,6 +225,8 @@ const STATES = {
   calisthenics: seedCalisthenics,
   // V1-8-2: a logged flat multi-movement strength session (via the shipped write core).
   'strength-session': seedStrengthSession,
+  // V1-24 3a-i: the same session with Change OPEN on a superset member (the 280px worst case).
+  'strength-amend': seedStrengthSession,
   // GAP-1 P1-1c — interaction-only states (no fixtures; see INTERACTIONS below).
   'form-skipped': null,
   'form-sub-failure': null,
@@ -364,6 +366,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
    * fixture logs a weight, then Change opens the stacked editor. Worth a state of its own because
    * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
    */
+  'strength-amend': async (page) => {
+    // Change buttons in render order: the standalone movement's two sets, then the superset's first
+    // member — the narrowest editor on the page.
+    const changes = page.getByRole('button', { name: /^Change .* set 1 — / });
+    if ((await changes.count()) < 2) {
+      throw new Error('no superset Change control — this state needs the strength-session fixture');
+    }
+    await changes.nth(1).click();
+  },
   'bodyweight-editing': async (page) => {
     const change = page.getByRole('button', { name: /^Change weight/ });
     if ((await change.count()) === 0) {
@@ -649,8 +660,8 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
     const movementRows = await db
       .select({ id: schema.movements.id, name: schema.movements.name })
       .from(schema.movements)
-      .limit(3);
-    if (movementRows.length < 3) throw new Error('seeded movements not found — did db:seed run?');
+      .limit(4);
+    if (movementRows.length < 4) throw new Error('seeded movements not found — did db:seed run?');
 
     // V1-8-3d: one standalone movement + a 2-movement SUPERSET, so the screenshot shows the bracket.
     const supersetClientId = newId();
@@ -690,6 +701,18 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
           sets: [{ reps: 10, weight: 30 }],
           supersetClientId,
           supersetOrder: 2,
+        },
+        // V1-24 3a-i: a BODYWEIGHT movement, so the Locked reason line ("can't be changed … ask a
+        // parent") is in the capture beside sets that do have Change.
+        {
+          movementName: movementRows[3].name,
+          unit: 'lb',
+          movementId: movementRows[3].id,
+          clientId: newId(),
+          sets: [
+            { reps: 10, weight: null, isBodyweight: true },
+            { reps: 8, weight: null, isBodyweight: true },
+          ],
         },
       ],
     });
