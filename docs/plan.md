@@ -735,7 +735,9 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
 - **EXP-1 — one unexportable unit 500s the whole export.** 🟡 Filed 2026-10-01 (V1-30 architecture
   lens, pre-existing). `export/route.ts` has no try/catch around the builders, so any tripwire unit
-  (none is offered since V1-30, but a new unit code could be) fails every row. Per-row failure or a
+  (none is offered: V1-30 made every strength unit export, and CSV-1 converts a kg bodyweight rather than
+  throwing — but a new unit code could still trip one) fails every row. Do NOT fix it by skipping the bad
+  row: gaps are normal in these files, so a dropped row reads as a day off — silent loss. Per-row failure or a
   typed error page.
 
 - **V1-31 — the strength form's dropdowns may snap back after a rejected save.** 🟡 **Suspected, not
@@ -771,7 +773,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
     that relative strength uses.
   - **After** V1-24 1d/1e and the AUDIT-1 P0s.
 
-- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** ✅ **Fixed** — the export read carries the unit and `buildBodyweight` refuses a non-`lb` weigh-in (no conversion; widening the contract stays Ray's call). 🔴 **P0, found
+- **CSV-1 — a `kg` bodyweight exports as a bare number under `weight_lb`.** ✅ **Fixed — kg is CONVERTED (Ray, 2026-10-02).** The export read carries the unit; `buildBodyweight` writes an `lb` weigh-in as logged and a `kg` one as kg × `LB_PER_KG` (exact) rounded half-up to one decimal (the form's `step`), appending `logged <value> kg` to its notes so the number the athlete logged stays in the row. Any other unit still throws (a tripwire). Chosen over refusing — a kg tap is ordinary, unrepairable in the app, and would have 500'd the profile's whole export history — and over widening the contract (the header is legacy bytes). 🔴 **P0, found
   2026-09-30** by V1-24 PR 1b's correctness lens (#187), **outside that diff**. `bodyweight-form.tsx`
   has offered `kg` since V1-3 (#35). But `packages/db/src/queries/export-month.ts` has **never selected
   `unit`**, and `buildBodyweight` writes `formatNumeric(r.weight)` into a column headed `weight_lb`.
@@ -785,7 +787,8 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   and refuse a non-`lb` weight in `buildBodyweight`, so the export fails loudly. ⚠️ **Not**
   `assertExportableUnit`: since V1-30 it RETURNS `'kg'` (strength loads spell it `85kg`), so calling it
   here would write `84.5kg` under a `weight_lb` header. CSV-1 needs its own lb-only guard for that
-  column. (3) Convert, or widen the contract. That last one is Ray's decision, because the header is legacy bytes.
+  column. (3) Convert, or widen the contract — **decided 2026-10-02: convert, keeping the original in
+  notes** (above).
 - **DAL-1 — `listEntriesForDay` does not exclude a soft-deleted profile.** ✅ **Fixed** (it now scopes by
   `isLiveProfile`, pinned by `lib/dal/entries.test.ts`; review found `weeklyAdherenceRows` had copied
   the same join, so it was fixed too, with a `db:verify` proof). 🔴 **P0, found 2026-09-30**

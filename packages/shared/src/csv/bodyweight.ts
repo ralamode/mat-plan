@@ -5,14 +5,21 @@ import { formatNumeric } from './value';
 /** Header verbatim from the real files. */
 export const BODYWEIGHT_HEADER = ['date', 'weight_lb', 'context', 'notes'] as const;
 
-/** The only unit the `weight_lb` column can hold — the header is legacy bytes (CSV-1). */
+/** The unit the `weight_lb` column holds — the header is legacy bytes (CSV-1). */
 export const BODYWEIGHT_CSV_UNIT = 'lb' as const satisfies Unit;
+
+/** Pounds per kilogram, exact by definition (1 lb = 0.45359237 kg). CSV-1. */
+export const LB_PER_KG = 2.20462262185;
+
+/** Decimals a converted weight is written with — the form's own `step="0.1"`, so a converted value
+ *  claims no more precision than a typed one. */
+export const CONVERTED_WEIGHT_DECIMALS = 1;
 
 export type BodyweightRow = {
   date: string;
   /** Still a STRING from pg — `numeric` never comes back as a number. */
   weight: string;
-  /** The unit the weight was LOGGED in. Only `BODYWEIGHT_CSV_UNIT` exports (CSV-1). */
+  /** The unit the weight was LOGGED in. `lb` exports as logged; `kg` is converted (CSV-1). */
   unit: string;
   context: string;
   notes: string;
@@ -37,28 +44,38 @@ export type BodyweightRow = {
  */
 export function buildBodyweight(rows: readonly BodyweightRow[]): string {
   const body = rows.map((r) => {
-    assertBodyweightUnit(r);
-    return csvRow([r.date, formatNumeric(r.weight), r.context, r.notes], BODYWEIGHT_HEADER);
+    const { weightLb, notes } = toWeightLb(r);
+    return csvRow([r.date, weightLb, r.context, notes], BODYWEIGHT_HEADER);
   });
   return csvFile(BODYWEIGHT_HEADER, body);
 }
 
 /**
- * CSV-1: refuse, never convert. The form offers `kg`, but the column is `weight_lb`, so a kg number
- * written bare reads as POUNDS downstream — a silent 2.2× error in a trend a coach reads. Not
- * `assertExportableUnit`: since V1-30 that RETURNS `'kg'` (strength loads spell it `85kg`), which
- * would write `84.5kg` under a `weight_lb` header. Converting would publish a number the athlete never
- * logged, and widening the contract is Ray's call (the header is legacy bytes) — so the export fails
- * loudly instead. Production holds no kg weigh-in (V1-24 1c's read, 2026-09-30).
+ * CSV-1 — Ray's decision (2026-10-02): CONVERT a kg weigh-in, never refuse it and never write it bare.
+ * - `lb` is written exactly as logged (byte-identical to before CSV-1).
+ * - `kg` writes `weight_lb` = kg × `LB_PER_KG`, rounded half-up to `CONVERTED_WEIGHT_DECIMALS`, and
+ *   APPENDS `logged <value> kg` to the row's notes — so the number the athlete actually logged stays in
+ *   the row (the export's rule is that a converted number must not stand in for one alone). The note
+ *   has no comma or newline, so it can never trip `csvRow`'s notes rules.
+ * - Any other unit throws: `BODYWEIGHT_UNITS` is lb/kg today, and a future unit must not slip through
+ *   silently as a bare number under a pounds header.
+ * Not `assertExportableUnit`: that spells strength loads (`85kg`), which is no spelling for this column.
  */
-function assertBodyweightUnit(r: BodyweightRow): void {
-  if (r.unit !== BODYWEIGHT_CSV_UNIT) {
-    throw new Error(
-      `CSV export: the bodyweight on ${r.date} is logged in '${r.unit}', but the bodyweight file's ` +
-        `column is weight_lb. The exporter refuses rather than converting — a converted number is ` +
-        `one the athlete never logged.`,
-    );
+function toWeightLb(r: BodyweightRow): { weightLb: string; notes: string } {
+  if (r.unit === BODYWEIGHT_CSV_UNIT) return { weightLb: formatNumeric(r.weight), notes: r.notes };
+  if (r.unit === 'kg') {
+    const scale = 10 ** CONVERTED_WEIGHT_DECIMALS;
+    const lb = Math.round(Number(r.weight) * LB_PER_KG * scale) / scale;
+    const logged = `logged ${formatNumeric(r.weight)} kg`;
+    return {
+      weightLb: formatNumeric(lb.toFixed(CONVERTED_WEIGHT_DECIMALS)),
+      notes: r.notes.trim() === '' ? logged : `${r.notes}; ${logged}`,
+    };
   }
+  throw new Error(
+    `CSV export: the bodyweight on ${r.date} is logged in '${r.unit}', which the weight_lb column ` +
+      `has no rule for (lb is written as logged, kg is converted).`,
+  );
 }
 
 export function bodyweightPath(profilePublicId: string, month: string): string {
