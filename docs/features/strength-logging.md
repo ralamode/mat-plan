@@ -167,9 +167,9 @@ Real ones, each with the file to look at.
   in the app**. So a mis-tapped BW is permanent data. Found by real use on 2026-09-28 (V1-24): Ray
   logged `20 × BW` KB swings that were `10 × 20 lb` and had no way back. The guard is correct in
   intent — a numeric edit would misrepresent a genuinely bodyweight set — but "refuse the edit" plus
-  "no delete" adds up to "unrecoverable", which is not what either half intended. Since V1-24 3a-i the
-  row says so: "Bodyweight and band sets can't be changed in the app. Wrong? Ask a parent — don't log
-  it again." (re-logging is the move that makes it permanent twice). The fix is V1-26 PR-B.
+  "no delete" adds up to "unrecoverable", which is not what either half intended. Since V1-24 3a-i the row states its reason and the recovery route (`AMEND_COPY.locked`,
+  `lockedRecovery` in `lib/constants.ts`), which steers away from re-logging, the move that makes it
+  permanent twice. The fix is V1-26 PR-B.
 
 - **~~The form does not read the movement's `isBodyweight` / `unitDefault`.~~** ✅ **Fixed, V1-26
   PR-A.** `programDayRows` now selects both, and they ride `ProgramDayDTO` → `ScaffoldRow` →

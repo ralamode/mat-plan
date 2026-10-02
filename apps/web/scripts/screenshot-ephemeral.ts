@@ -367,8 +367,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
    * the LAYOUT is the thing under review (why: `bodyweight-amend.tsx`).
    */
   'strength-amend': async (page) => {
-    // Change buttons in render order: the standalone movement's two sets, then the superset's first
-    // member — the narrowest editor on the page.
+    // `set 1` Change buttons in render order: the standalone movement's, then the superset's first
+    // member's (nth 1) — the narrowest editor on the page.
     const changes = page.getByRole('button', { name: /^Change .* set 1 — / });
     if ((await changes.count()) < 2) {
       throw new Error('no superset Change control — this state needs the strength-session fixture');
@@ -717,7 +717,7 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
       ],
     });
     console.log(
-      `✓ seeded strength-session fixture (${movementRows[0].name} standalone + ${movementRows[1].name}/${movementRows[2].name} superset)`,
+      `✓ seeded strength-session fixture (${movementRows[0].name} standalone + ${movementRows[1].name}/${movementRows[2].name} superset + a BW movement)`,
     );
   } finally {
     await pool.end();

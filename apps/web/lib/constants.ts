@@ -152,14 +152,19 @@ export const AMEND_COPY = {
     mode: 'Bodyweight and band sets can’t be changed in the app.',
     notMass: 'Timed and distance sets can’t be changed in the app yet.',
     status: '',
-    shape: 'This set can’t be changed in the app.',
+    shape: 'Some sets here can’t be changed in the app.',
   },
   /** Ends every Locked line. With no delete action, re-logging is the move that makes it permanent. */
-  lockedRecovery: 'Wrong? Ask a parent — don’t log it again.',
+  lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
 
-/** The per-set amend error's id, unique per island (20 sets must not share one id). */
-export const amendErrorId = (setPublicId: string) => `amend-error-${setPublicId}`;
+/** A set's weight input accessible name — one source for the field and the specs that find it. */
+export function weightInputLabel(subject: string, unitLabel?: string): string {
+  return unitLabel ? `${subject} weight in ${unitLabel}` : `${subject} weight`;
+}
+
+/** A strength set amend's error id, unique per island (20 sets must not share one id). */
+export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
 
 /**
  * The notice on a day outside the write window (V1-15). Since V1-24 PR 1b a logged weight CAN be
@@ -167,7 +172,7 @@ export const amendErrorId = (setPublicId: string) => `amend-error-${setPublicId}
  * working Change button. It now says what is closed (new entries) and what is still allowed.
  */
 export const CLOSED_DAY_NOTICE =
-  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a logged weight or set.';
+  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a weigh-in or a strength set.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';

@@ -89,6 +89,18 @@ next to `isEditableSet`, and is derived from the same clauses (a test pins that
 **I5 — Closed days.** No change: Change keeps rendering on every day. `CLOSED_DAY_NOTICE` changes to
 "…correct a logged weight or set", because 3a-i makes the set correction visible as a peer.
 
+**As shipped (implementation review):** the a11y e2e case logs its own plain probe set on **Scarlett's
+yesterday** and opens Change there (~294px), rather than reusing a 3a-ii session; logging a superset
+through the UI in a test costs far more. The 280px superset-member case is covered by the unit test's
+structural assertion, the width math (with the unit **code** as the suffix) and the `strength-amend`
+screenshot. ⚠️ **For 3a-ii:** that probe means Scarlett's yesterday has strength logged, so its section
+starts collapsed; 3a-ii's new strength writes must use another `(profile, day)`.
+
+**What PR 2's shared primitive must keep (the two amends differ on purpose):** bodyweight follows the
+server value while open (`seenProp`), sets do not; bodyweight shows `fieldErrors`, sets only
+`state.error`; bodyweight focuses its receipt on save, a set its Change; the Change variant is
+`outline` (bodyweight) vs `ghost` (sets); both clear their announcement on open.
+
 **3a-i files:** `editable-set.tsx`, `set-display.ts` (+ test), `lib/constants.ts` (`AMEND_COPY`,
 `CLOSED_DAY_NOTICE`), `movement-line.tsx` (NEW: `MovementLine` + `SessionMovementItem` moved from
 `page.tsx` unchanged, then the reason line added; owned by the strength-logging guide), `page.tsx`
@@ -338,3 +350,27 @@ No BLOCKING findings. Every SHOULD is accepted except where noted.
 | A3b      | A11y                  | `aria-controls` dangles when the form unmounts                                 | The form is hidden, not unmounted (D2).                                                                                   |
 | A5       | A11y                  | "Session 2" outside the h3 gives identical headings                            | Inside the h3 (D4).                                                                                                       |
 | A6       | A11y                  | New e2e writes need their own `(profile, day)` and a retry guard               | Scarlett yesterday; log only if no receipt; the allocation comment is extended.                                           |
+
+### 3a-i implementation review (`review-pr` on #211): correctness, UX, reuse
+
+No P0. Every P1 and P2 is fixed in the PR unless marked.
+
+| #   | Lens                     | Finding (short)                                                             | Resolution                                                                                          |
+| --- | ------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| J1  | UX                       | A kg editor overflows a 280px superset member ("Kilograms" suffix)          | The visible unit is the **code** (`lb`, `kg`), as on the read line and in the log form.             |
+| J2  | UX                       | Opening Change drops focus to `<body>`                                      | Reps is focused on open (`autoFocusReps`); tested in RTL and e2e.                                   |
+| J3  | Reuse · UX · Correctness | Re-saving the same value isn't announced                                    | The announcement is cleared on open; a two-save test, mutation-checked.                             |
+| J4  | Correctness              | The status-region test couldn't fail                                        | It now asserts node identity across open and save.                                                  |
+| J5  | UX                       | "Ask a parent" is wrong for an adult profile and leads with the wrong thing | "Wrong? Don't log it again — tell a parent so they can fix it."                                     |
+| J6  | UX                       | "This set" on a line that can cover several sets                            | "Some sets here can't be changed in the app."                                                       |
+| J7  | UX                       | `CLOSED_DAY_NOTICE`: "weight or set" reads redundant                        | "…correct a weigh-in or a strength set."                                                            |
+| J8  | Reuse                    | Tests re-type the weight label and `UNIT_LABELS.lb`                         | `weightInputLabel` in `lib/constants.ts`, used by the field and both specs.                         |
+| J9  | Reuse                    | `amendErrorId` named generically but set-only                               | Renamed `setAmendErrorId`.                                                                          |
+| J10 | Reuse                    | The guide quoted copy that had already drifted                              | The guide points at `AMEND_COPY.locked` / `lockedRecovery`.                                         |
+| J11 | Reuse                    | The two amends' deliberate differences aren't written down                  | Listed above, for PR 2.                                                                             |
+| J12 | Correctness              | Plan vs shipped e2e case; Scarlett-yesterday strength hazard for 3a-ii      | Recorded above ("As shipped").                                                                      |
+| J13 | Correctness              | Unscoped, non-exact e2e locators                                            | Scoped to the region, `exact: true`; Change found by `changeLabel` exactly.                         |
+| J14 | Correctness              | Orphaned `SessionMovementItem` docblock in `page.tsx`                       | Moved with the function.                                                                            |
+| J15 | UX                       | The Locked line repeats on a bodyweight-heavy day                           | **3a-ii**: the session receipt owns session-level layout (one line per session, listing movements). |
+| J16 | UX (outside)             | A muted ghost "Change" barely reads as a control                            | **3a-ii**, where it becomes the primary surface.                                                    |
+| J17 | Correctness (also)       | Inputs aren't disabled while a save is pending                              | Not changed: the bodyweight amend shares it; PR 2's primitive decides once.                         |

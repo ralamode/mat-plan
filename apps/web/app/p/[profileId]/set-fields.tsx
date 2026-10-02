@@ -2,7 +2,7 @@
 
 import { type RefObject, useEffect, useRef } from 'react';
 
-import { INPUT_CLASS } from '@/lib/constants';
+import { INPUT_CLASS, weightInputLabel } from '@/lib/constants';
 
 /**
  * V1-27 decision 6 — the custom "missing" message, set DECLARATIVELY from state, never by an
@@ -45,6 +45,7 @@ export function SetRepsWeightFields({
   repsDescribedBy,
   weightDescribedBy,
   unitLabel,
+  autoFocusReps = false,
 }: {
   reps: string;
   weight: string;
@@ -79,11 +80,15 @@ export function SetRepsWeightFields({
   repsDescribedBy?: string;
   /** V1-24 3a-i — `aria-describedby` on the weight input (the amend's error, while it renders). */
   weightDescribedBy?: string;
+  /** V1-24 3a-i — the amend opens with focus on reps (the Change button that had it unmounts, and on a
+   *  phone this also raises the keypad). The log form leaves it off. */
+  autoFocusReps?: boolean;
   /**
    * The movement's unit, rendered as static text after the field and folded into the accessible name.
    * Since PR 4a a movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled "weight" is
-   * ambiguous to a sighted user and meaningless to a screen reader. The edit form passes it too since
-   * V1-24 3a-i: mass-only still names a unit (lb or kg), the `AMEND_COPY.valueLabel` lesson.
+   * ambiguous to a sighted user and meaningless to a screen reader. Both forms pass the unit CODE
+   * (`lb`, `kg`), matching the read line; a long name ("Kilograms") overflows a 280px superset member
+   * in the edit form (V1-24 3a-i UX review).
    */
   unitLabel?: string;
   // When the fields submit via a native <form> (the V1-9 edit form), pass field names so FormData
@@ -104,6 +109,7 @@ export function SetRepsWeightFields({
         min="1"
         step="1"
         required={repsRequired}
+        autoFocus={autoFocusReps}
         aria-describedby={repsDescribedBy}
         name={nameReps}
         placeholder="reps"
@@ -126,7 +132,7 @@ export function SetRepsWeightFields({
         aria-describedby={weightDescribedBy}
         name={nameWeight}
         placeholder="weight"
-        aria-label={unitLabel ? `${ariaLabel} weight in ${unitLabel}` : `${ariaLabel} weight`}
+        aria-label={weightInputLabel(ariaLabel, unitLabel)}
         value={weight}
         onChange={(e) => onWeight(e.target.value)}
         className={`${INPUT_CLASS} w-24`}

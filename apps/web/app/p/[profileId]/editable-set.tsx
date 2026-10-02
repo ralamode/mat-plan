@@ -1,10 +1,10 @@
 'use client';
 
-import { QUANTITY_SLOT, UNIT_LABELS } from '@mat-plan/shared';
+import { QUANTITY_SLOT } from '@mat-plan/shared';
 import { useActionState, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { AMEND_COPY, amendErrorId, changeLabel, SAVING_LABEL } from '@/lib/constants';
+import { AMEND_COPY, changeLabel, SAVING_LABEL, setAmendErrorId } from '@/lib/constants';
 import type { SetDTO } from '@/lib/dal/entries';
 
 import { INITIAL_ACTION_STATE } from './action-state';
@@ -22,7 +22,8 @@ import { useOnActionSuccess } from './use-on-action-success';
  * - **Change**, named `changeLabel(subject, value)` so N sets on one screen are distinguishable.
  * - A **stacked** editor: inputs on one row, Save/Cancel on their own, so a 280px superset member fits
  *   deterministically rather than by wrap luck (plan I2).
- * - **Focus** returns to Change on Save and on Cancel (the button that had it unmounts).
+ * - **Focus** goes to reps on open, and back to Change on Save and on Cancel (the button that had it
+ *   unmounts each time).
  * - Its **own status region**, outside the read/edit switch so it exists before the save it announces,
  *   driven by the action's success, never by a value diff (parent B5).
  * - An error tied to its inputs by a **per-set** id, and only while it renders.
@@ -75,8 +76,8 @@ export function EditableSet({
   }, [focusChange]);
 
   const error = state !== stateAtOpen ? state.error : null;
-  const errorId = amendErrorId(set.publicId);
-  const unitLabel = primary ? UNIT_LABELS[primary.unit] : undefined;
+  const errorId = setAmendErrorId(set.publicId);
+  const unitLabel = primary?.unit; // the CODE, as the read line and the log form show it
   const line = formatSetLine(set);
 
   // Mounted in both states, before the save it announces (a region that mounts with its text is not
@@ -102,6 +103,8 @@ export function EditableSet({
             setReps(String(set.reps ?? ''));
             setWeight(String(editableWeight ?? ''));
             setStateAtOpen(state);
+            // Cleared on open, so saving the SAME value again is a text change and is announced.
+            setAnnouncement('');
             setEditing(true);
           }}
           aria-label={changeLabel(subject, line)}
@@ -128,6 +131,7 @@ export function EditableSet({
             nameReps="reps"
             nameWeight="weight"
             unitLabel={unitLabel}
+            autoFocusReps
             repsDescribedBy={error ? errorId : undefined}
             weightDescribedBy={error ? errorId : undefined}
           />

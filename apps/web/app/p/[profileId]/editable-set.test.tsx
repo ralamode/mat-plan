@@ -8,7 +8,13 @@ vi.mock('./actions', () => ({
   editStrengthSetAction: vi.fn(async () => ({ ok: true, error: null })),
 }));
 
-import { AMEND_COPY, AMEND_ERROR_COPY, amendErrorId, changeLabel } from '@/lib/constants';
+import {
+  AMEND_COPY,
+  AMEND_ERROR_COPY,
+  changeLabel,
+  setAmendErrorId,
+  weightInputLabel,
+} from '@/lib/constants';
 import type { SetDTO } from '@/lib/dal/entries';
 
 import { editStrengthSetAction } from './actions';
@@ -30,6 +36,7 @@ const set = (o: Partial<SetDTO> = {}): SetDTO => ({
   ...o,
 });
 const SUBJECT = 'Back squat set 2';
+const WEIGHT = weightInputLabel(SUBJECT, 'lb');
 const island = (s = set(), subject = SUBJECT) => (
   <ul>
     <EditableSet set={s} profileId="p-1" subject={subject} />
@@ -45,23 +52,47 @@ describe('EditableSet — the 1b amend standard (V1-24 3a-i)', () => {
     expect(change().textContent).toBe(AMEND_COPY.change);
   });
 
-  it('the status region exists BEFORE the save it announces', () => {
+  it('the status region is ONE node across read and edit (a remounted region is not announced)', async () => {
     render(island());
-    expect(statusText()).toBe('');
+    const region = screen.getByRole('status');
     fireEvent.click(change());
-    expect(statusText()).toBe('');
+    expect(screen.getByRole('status')).toBe(region);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+    });
+    expect(screen.getByRole('status')).toBe(region);
   });
 
-  it('labels the weight input with its unit', () => {
+  it('opening focuses reps (the Change button that had focus unmounts)', () => {
     render(island());
     fireEvent.click(change());
-    expect(screen.getByRole('spinbutton', { name: `${SUBJECT} weight in Pounds` })).toBeTruthy();
+    expect(document.activeElement).toBe(
+      screen.getByRole('spinbutton', { name: `${SUBJECT} reps` }),
+    );
+  });
+
+  it('saving the SAME value again is announced again', async () => {
+    render(island());
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(change());
+      expect(statusText()).toBe(''); // cleared on open, so the next save is a text change
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
+      });
+      expect(statusText()).toBe(AMEND_COPY.setChanged(SUBJECT, formatSetLine(set())));
+    }
+  });
+
+  it('labels the weight input with its unit code', () => {
+    render(island());
+    fireEvent.click(change());
+    expect(screen.getByRole('spinbutton', { name: WEIGHT })).toBeTruthy();
   });
 
   it('save: announces the SUBJECT and the value, and focus returns to Change', async () => {
     render(island());
     fireEvent.click(change());
-    fireEvent.change(screen.getByRole('spinbutton', { name: `${SUBJECT} weight in Pounds` }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: WEIGHT }), {
       target: { value: '140' },
     });
     await act(async () => {
@@ -95,8 +126,8 @@ describe('EditableSet — the 1b amend standard (V1-24 3a-i)', () => {
       fireEvent.click(screen.getByRole('button', { name: AMEND_COPY.save }));
     });
     const alert = screen.getByRole('alert');
-    expect(alert.id).toBe(amendErrorId('set-a'));
-    for (const name of [`${SUBJECT} reps`, `${SUBJECT} weight in Pounds`]) {
+    expect(alert.id).toBe(setAmendErrorId('set-a'));
+    for (const name of [`${SUBJECT} reps`, WEIGHT]) {
       expect(screen.getByRole('spinbutton', { name }).getAttribute('aria-describedby')).toBe(
         alert.id,
       );
@@ -108,7 +139,7 @@ describe('EditableSet — the 1b amend standard (V1-24 3a-i)', () => {
   });
 
   it('two islands never share an error id', () => {
-    expect(amendErrorId('set-a')).not.toBe(amendErrorId('set-b'));
+    expect(setAmendErrorId('set-a')).not.toBe(setAmendErrorId('set-b'));
   });
 
   it('Save and Cancel sit on their own row, apart from the inputs (280px superset member)', () => {

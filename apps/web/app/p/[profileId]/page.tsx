@@ -417,9 +417,3 @@ export default async function TodayPage({
     </main>
   );
 }
-
-/**
- * A movement line as a nested session `<li>` item — shared by superset members and standalone
- * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
- * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
- */
