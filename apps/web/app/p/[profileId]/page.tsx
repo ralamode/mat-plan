@@ -2,8 +2,6 @@ import {
   DAY_ROLE_LABELS,
   DEFAULT_SESSION_TYPE,
   DEFAULT_SUPERSET_LABEL,
-  ENTRY_STATUS,
-  ENTRY_STATUS_LABELS,
   SESSION_TYPE_LABELS,
 } from '@mat-plan/shared';
 import Link from 'next/link';
@@ -15,7 +13,7 @@ import { CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { formatDayShort, localDayIso, localWeekStartIso } from '@/lib/date';
 import { isWritableDay, resolveViewedDay } from '@/lib/entries/declared-day';
 import { getWeeklyAdherence } from '@/lib/dal/adherence';
-import { listEntriesForDay, type EntryDTO } from '@/lib/dal/entries';
+import { listEntriesForDay } from '@/lib/dal/entries';
 import { requireGatedPage } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { getProgramDay } from '@/lib/dal/programming';
@@ -26,16 +24,14 @@ import {
   checkinFieldsForKeys,
   lifeActivitiesForKeys,
 } from '@/lib/routine/catalog';
-import { entryLabel } from '@/lib/entries/entry-label';
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 import { CLOSED_DAY_NOTICE } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
-import { EditableSet } from './editable-set';
-import { formatSetLine, isEditableSet } from './set-display';
 import { LifeForm } from './life-form';
+import { MovementLine, SessionMovementItem } from './movement-line';
 import { ProgramReference } from './program-reference';
 import { StrengthForm } from './strength-form';
 import { DayNav } from './day-nav';
@@ -427,64 +423,3 @@ export default async function TodayPage({
  * movements inside a session block (V1-8-3d), so the wrapper markup lives in ONE place and the two
  * can't drift. The flat `{kind:'entry'}` row keeps its own bordered wrapper (a different context).
  */
-function SessionMovementItem({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
-  return (
-    <li className="flex flex-col gap-1">
-      <MovementLine entry={entry} profileId={profileId} />
-    </li>
-  );
-}
-
-/**
- * One movement's display: its label + (non-done) status, then its sets. Shared (V1-8-3a) by the flat
- * `{kind:'entry'}` row and each movement inside a session block, so the reps × weight/label fallback
- * lives once. The caller supplies the `<li>` wrapper (flat = a bordered row; session = a nested item).
- */
-function MovementLine({ entry, profileId }: { entry: EntryDTO; profileId: string }) {
-  const label = entryLabel(entry);
-  return (
-    <>
-      <div className="flex items-center justify-between">
-        <span className="font-medium">{label}</span>
-        {entry.status !== ENTRY_STATUS.done ? (
-          // GAP-1 P1-1c: humanized via the SHARED map, not the raw enum. `sub-failure` is the CSV
-          // export byte (V1-13 D7), so the badge and the exporter must emit the same string.
-          <span className="text-muted-foreground text-sm">{ENTRY_STATUS_LABELS[entry.status]}</span>
-        ) : null}
-      </div>
-      {entry.sets.length > 0 ? (
-        // A vertical list (was a horizontal wrap) so each set is a tappable row. V1-9: a numeric set gets
-        // an inline Edit affordance via the <EditableSet> CLIENT island; a read-only set (labeled/null)
-        // stays SERVER-rendered here — so only editable sets hydrate (RSC-first). The read line format is
-        // single-sourced in formatSetLine, shared by both branches.
-        <ul className="text-muted-foreground flex flex-col gap-0.5 text-sm tabular-nums">
-          {entry.sets.map((s) =>
-            isEditableSet(s) ? (
-              <EditableSet
-                key={s.publicId}
-                set={s}
-                profileId={profileId}
-                ariaLabel={`${label} set ${s.idx}`}
-              />
-            ) : (
-              // GAP-1 P1-1c. The badge is a SIBLING of the read line, never inside `formatSetLine` —
-              // a status is a distinct affordance, and folding it into the string would leak an
-              // un-styleable blob into any future aria-label. `flex-wrap items-baseline` so a long
-              // load (`12 × BW+8 (vest)`) plus a badge doesn't overflow at 360px.
-              // NOTE only this read-only branch can carry a badge: `isEditableSet` requires
-              // status === 'done', so <EditableSet> never receives a non-done set.
-              <li key={s.publicId} className="flex flex-wrap items-baseline gap-2">
-                <span>{formatSetLine(s)}</span>
-                {s.status !== ENTRY_STATUS.done ? (
-                  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
-                    {ENTRY_STATUS_LABELS[s.status]}
-                  </span>
-                ) : null}
-              </li>
-            ),
-          )}
-        </ul>
-      ) : null}
-    </>
-  );
-}

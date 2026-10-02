@@ -8,6 +8,7 @@ owns:
   - apps/web/app/p/[profileId]/set-fields.tsx
   - apps/web/app/p/[profileId]/set-mode-toggles.tsx
   - apps/web/app/p/[profileId]/editable-set.tsx
+  - apps/web/app/p/[profileId]/movement-line.tsx
   - apps/web/app/p/[profileId]/set-display.ts
   - packages/shared/src/strength.ts
   - packages/shared/src/strength-session.ts
@@ -77,10 +78,11 @@ flowchart TD
 | `strength-form-supersets.ts`  | Superset grouping, and `dissolveSmallSupersets` when a group drops below 2 members.                                            |
 | `strength-form-untouched.ts`  | V1-27. The ONE "touched" judgement and all it drives: card and trailing-set drops, each input's `required`, `isSubmitBlocked`. |
 | `set-fields.tsx`              | The shared `reps × weight` input pair — used by BOTH the log form and the V1-9 edit form.                                      |
-| `load-chips.tsx`              | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                     |
-| `set-display.ts`              | `formatSetLine` (the read line) and `isEditableSet` (whether V1-9's inline edit is offered).                                   |
-| `editable-set.tsx`            | The V1-9 fix-a-set row.                                                                                                        |
-| `shared/strength.ts`          | `parseLoad` + `strengthSetSchema` — one wire key becomes a typed load.                                                         |
+| `set-mode-toggles.tsx`        | One-tap `BW` / `band`. Exists because iOS's numeric keypad has no letters.                                                     |
+| `set-display.ts`              | `formatSetLine` (the read line), `isEditableSet` (whether Change is offered) and `lockedReason` (why not).                     |
+| `editable-set.tsx`            | The per-set amend: **Change**, a stacked editor, focus return, its own status region (V1-24 3a-i).                             |
+| `movement-line.tsx`           | One movement's label, status and sets; the Locked reason line. Renders **every** entry kind in the list, not only strength.    |
+| `shared/strength.ts`          | `strengthSetSchema` — reps, an optional magnitude and the two mode flags.                                                      |
 | `shared/strength-session.ts`  | The session envelope: movements, supersets, client ids, the pairing refines.                                                   |
 | `shared/quantity-slots.ts`    | The measurement-role vocabulary (`primary`/`vest`/`ankle`/`wrist`/`distance`) + legal dimensions.                              |
 | `writers/strength-session.ts` | The only writer. One transaction, per-row `ON CONFLICT` at every level, plus `updateStrengthSetById`.                          |
@@ -119,7 +121,11 @@ regresses.
 
 3. **`isEditableSet` and `updateStrengthSetById`'s WHERE must stay identical.** The client half is
    advisory; the SQL half is the boundary. They are two expressions of one predicate in two languages,
-   and the docblocks on both say so. Change one, change the other.
+   and the docblocks on both say so. Change one, change the other. **And `lockedReason` (V1-24 3a-i)**:
+   it states WHY a set has no Change, derived from the same clauses in the same order, and a test pins
+   `isEditableSet(s) === (lockedReason(s) === null)`. A wrong reason is worse than none. (⚠️ The two
+   halves are not quite identical today: the client requires exactly one quantity and the SQL guard
+   doesn't check the count, filed as V1-36.)
 
 4. **Every magnitude lives in `entry_set_quantities`, never on the set.** Since GAP-3 (#139) there is
    no `weight_num`, no `weight_label`, no `seconds`. The two MODES (`is_bodyweight`, `is_band`) are
@@ -161,7 +167,9 @@ Real ones, each with the file to look at.
   in the app**. So a mis-tapped BW is permanent data. Found by real use on 2026-09-28 (V1-24): Ray
   logged `20 × BW` KB swings that were `10 × 20 lb` and had no way back. The guard is correct in
   intent — a numeric edit would misrepresent a genuinely bodyweight set — but "refuse the edit" plus
-  "no delete" adds up to "unrecoverable", which is not what either half intended.
+  "no delete" adds up to "unrecoverable", which is not what either half intended. Since V1-24 3a-i the
+  row says so: "Bodyweight and band sets can't be changed in the app. Wrong? Ask a parent — don't log
+  it again." (re-logging is the move that makes it permanent twice). The fix is V1-26 PR-B.
 
 - **~~The form does not read the movement's `isBodyweight` / `unitDefault`.~~** ✅ **Fixed, V1-26
   PR-A.** `programDayRows` now selects both, and they ride `ProgramDayDTO` → `ScaffoldRow` →

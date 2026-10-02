@@ -43,6 +43,7 @@ export function SetRepsWeightFields({
   repsMissingMessage,
   weightMissingMessage,
   repsDescribedBy,
+  weightDescribedBy,
   unitLabel,
 }: {
   reps: string;
@@ -76,11 +77,13 @@ export function SetRepsWeightFields({
   weightMissingMessage?: string;
   /** V1-27 — `aria-describedby` on the reps input (the trailing-rows hint, while the card is mixed). */
   repsDescribedBy?: string;
+  /** V1-24 3a-i — `aria-describedby` on the weight input (the amend's error, while it renders). */
+  weightDescribedBy?: string;
   /**
    * The movement's unit, rendered as static text after the field and folded into the accessible name.
    * Since PR 4a a movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled "weight" is
-   * ambiguous to a sighted user and meaningless to a screen reader. Omitted by the edit form, which
-   * is mass-only by construction.
+   * ambiguous to a sighted user and meaningless to a screen reader. The edit form passes it too since
+   * V1-24 3a-i: mass-only still names a unit (lb or kg), the `AMEND_COPY.valueLabel` lesson.
    */
   unitLabel?: string;
   // When the fields submit via a native <form> (the V1-9 edit form), pass field names so FormData
@@ -120,6 +123,7 @@ export function SetRepsWeightFields({
         min="0"
         step="0.5"
         required={weightRequired}
+        aria-describedby={weightDescribedBy}
         name={nameWeight}
         placeholder="weight"
         aria-label={unitLabel ? `${ariaLabel} weight in ${unitLabel}` : `${ariaLabel} weight`}
