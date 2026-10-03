@@ -3265,9 +3265,71 @@ console.log(
     'V1-24 1e: an unexplained no-op throws instead of answering plausibly',
   );
   assert.equal((await liveOn('2026-11-03')).length, 0, 'V1-24 1e: and nothing was written');
+
+  // A replay of a SOFT-DELETED submit (a still-mounted form resubmitting after a correction removed its
+  // row) on a day another weigh-in now holds → dayTaken. The replay lookup must skip deleted rows, or
+  // it would answer the dead row's id: success reported, nothing saved.
+  const resubmit = await insertBodyweightEntry(db, {
+    ...base,
+    publicId: ids1e().publicId,
+    clientId: first.clientId, // `first` was soft-deleted above; `after` holds 2026-11-01
+    day: '2026-11-01',
+    value: 80,
+  });
+  assert.deepEqual(
+    resubmit,
+    { dayTaken: true },
+    "V1-24 1e: a soft-deleted submit's replay is not answered with the dead row",
+  );
+
+  // The replay lookup is pinned to WEIGH-INS: a POST reusing the client_id of the same profile's
+  // non-bodyweight entry conflicts on uq_entries_client_id, and must never be answered with that row's id.
+  const bout = await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 20,
+    metricKey: METRIC_KEYS.pushups,
+    activityDate: '2026-11-05',
+  });
+  const [boutRow] = await db
+    .select({ clientId: schema.entries.clientId })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, bout.publicId));
+  await assert.rejects(
+    insertBodyweightEntry(db, {
+      ...base,
+      publicId: ids1e().publicId,
+      clientId: boutRow.clientId,
+      day: '2026-11-05',
+      value: 84,
+    }),
+    /neither a replay of this submit nor the day's weigh-in/,
+    "V1-24 1e: another metric's client_id is not a replay of this weigh-in",
+  );
+  assert.equal((await liveOn('2026-11-05')).length, 0, 'V1-24 1e: and no weigh-in was written');
+
+  // The day-taken lookup keys on the SAME slot as the index (coalesce(context,'morning')): an EVENING
+  // weigh-in does not take the default slot. Reached via an unexplained conflict on a day that holds
+  // only an evening row → the throw in (c), not a false dayTaken.
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 79,
+    activityDate: '2026-11-06',
+    context: 'evening',
+  });
+  await assert.rejects(
+    insertBodyweightEntry(db, {
+      ...base,
+      publicId: ids1e().publicId,
+      clientId: foreign.clientId,
+      day: '2026-11-06',
+      value: 85,
+    }),
+    /neither a replay of this submit nor the day's weigh-in/,
+    'V1-24 1e: an evening weigh-in does not read as the default slot taken',
+  );
 }
 console.log(
-  "✓ V1-24 1e: target-less DO NOTHING through the app's own statement — insert, replay → same id, other device → dayTaken (value untouched), soft-delete frees the day, a foreign client_id throws without leaking",
+  "✓ V1-24 1e: target-less DO NOTHING through the app's own statement — insert, replay → same id, other device → dayTaken (value untouched), soft-delete frees the day, a foreign client_id throws without leaking; a dead row's replay, another metric's client_id and an evening slot are not misread",
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,

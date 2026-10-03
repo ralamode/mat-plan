@@ -1058,6 +1058,27 @@ amendment's first bullet:
   the first value untouched; soft-delete frees the day; a foreign `client_id` throws and writes nothing.
   Mutation-checked: no replay branch, an unscoped replay lookup, no `dayTaken` branch, (c) answering
   plausibly, and the old `client_id` arbiter each fail `db:verify`.
+- **Review round (2026-10-03, DB-safety + correctness, both READY):** the replay lookup is also pinned
+  to `metric_key = 'bodyweight'` (a POST reusing the same profile's check-in `client_id` was answered
+  with THAT row's id — a weigh-in silently not saved). Three more proofs: a soft-deleted submit's replay
+  → `dayTaken` (not the dead row's id), another metric's `client_id` → throws, an evening slot is not
+  read as the default slot taken. Each of the three filters was removed in turn and `db:verify` failed.
+  `logBodyweight` (now a pass-through) has a unit test of its argument mapping and its unknown-profile
+  guard, mutation-checked. Caveats recorded in write-path invariant 6: keep the insert at READ
+  COMMITTED, and never add a DEFERRABLE unique to `entries`.
+- **Concurrency, proven against real Postgres** (PGlite has one connection, so `db:verify` runs the
+  cases in sequence). A one-off probe, not committed, run 2026-10-03 on embedded Postgres migrated
+  through 0012 (index present), two connections. A opens a transaction and inserts a weigh-in for day D;
+  B calls `insertBodyweightEntry` for D while A is open:
+
+  | Scenario                                   | B while A open | B's result after A ends | Live rows on D |
+  | ------------------------------------------ | -------------- | ----------------------- | -------------- |
+  | A commits, B a different `client_id`       | blocked        | `{ dayTaken: true }`    | 1              |
+  | A commits, B the SAME `client_id` (replay) | blocked        | `{ id: A's public id }` | 1              |
+  | A rolls back, B a different `client_id`    | blocked        | `{ id: B's public id }` | 1              |
+
+  No `23505` in any case: speculative insertion waits on the in-flight conflicting tuple, then does
+  nothing (or inserts after a rollback), and the re-select's fresh READ COMMITTED snapshot sees the winner.
 
 ## Open questions
 

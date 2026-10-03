@@ -50,8 +50,7 @@ the [README](../packages/db/scripts/corrections/README.md) for the rules.
    weight, so this is the proof, not a formality);
 3. **re-run the duplicate query** (the literal SQL is committed in
    [the plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"), because any render made
-   before another device saved can still create a duplicate until PR 1e moves the `ON CONFLICT`
-   arbiter;
+   before another device saved can still create a duplicate until 1d's index is applied;
 4. date the correction's **Applied** cell in
    [the corrections README](../packages/db/scripts/corrections/README.md) (`pending` → the date);
 5. merge 1d. ✅ Steps 0–4 done 2026-10-01 (#206); **re-run step 3 just before merging 1d**.
@@ -62,19 +61,28 @@ deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `
 correction refuses those rows as drifted — expected: their `updated_at` is now `now()`, so re-reading
 is the next step. After 1d lands, un-deleting a row would violate its index.
 
-**1e (the create path's arbiter) merges only after 1d's `migrate.yml` run is green** and `\d entries`
-in prod shows `uq_entries_profile_day_bodyweight`. 1e's target-less `ON CONFLICT DO NOTHING` names no
+**1e (the create path's arbiter) merges only after 1d's index is live in prod.** Check both, don't
+assume:
+
+- `gh run list --workflow migrate.yml --branch main -L 3` shows **success** on 1d's merge SHA;
+- in prod, `SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_entries_profile_day_bodyweight';`
+  returns exactly the `CREATE UNIQUE INDEX` line in `packages/db/migrations/0012_bodyweight_one_per_day.sql`
+  (same key, same `WHERE`). `indisvalid` needs no check: the index is built inside a transaction, not
+  `CONCURRENTLY`.
+
+1e's target-less `ON CONFLICT DO NOTHING` names no
 index, so it cannot fail inference even if the index is missing — the gate is about meaning, not
 breakage: without the index nothing refuses a second same-day row, and 1e's "already logged" answer
 never fires.
 
 **If 1d's migration refuses** (it merged before the data was clean, or a new duplicate appeared before
-1e moved the arbiter — the error names this section: _"V1-24 1d: N (profile, day, slot) group(s) hold
+1d's index existed — the error names this section: _"V1-24 1d: N (profile, day, slot) group(s) hold
 more than one live weigh-in"_), `migrate.yml` — which runs on **every** push to `main`, with no path filter and
 no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
 and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
-then re-running `migrate.yml` via `workflow_dispatch`. Bodyweight logging keeps working (the arbiter
-has not moved yet), but **any later PR that needs a migration or a seed row is broken in prod until the
+then re-running `migrate.yml` via `workflow_dispatch`. Bodyweight logging keeps working (nothing in the
+app depends on the index existing — before 1e the arbiter is `client_id`, after it the arbiter is
+target-less), but **any later PR that needs a migration or a seed row is broken in prod until the
 wedge clears — freeze merges to `main` until then.**
 
 - **The correction PR is the one exception to the freeze.** A correction must be on `main` before it can

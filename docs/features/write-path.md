@@ -92,13 +92,25 @@ flowchart LR
    to it must keep paying them:
    - **(a) `RETURNING` is empty on any conflict** → it re-selects; it never assumes a row.
    - **(b) a second device's different weight must not read as success** → the re-select branches: the
-     row is THIS submit's (`client_id` AND profile match, live) → `{ id }`; the day's slot holds another
+     row is THIS submit's (`client_id` AND profile match, live, AND a weigh-in) → `{ id }`; the day's slot
+     — the SAME `coalesce(context, 'morning')` key as the index — holds another
      submit's row → `{ dayTaken: true }`, the typed "already logged" envelope.
    - **(c) it swallows a violation of ANY unique**, including future ones → a no-op that is neither
      THROWS. Adding a unique index to `entries` means deciding how this writer answers it.
      The replay lookup is scoped to the profile (the pre-1e fallback looked up `client_id` alone and could
      hand back another profile's public id). `db:verify` ("V1-24 1e") drives the app's own statement for
-     insert, replay, other-device, soft-delete and the foreign-`client_id` throw.
+     insert, replay, other-device, soft-delete, the foreign-`client_id` throw, a soft-deleted submit's
+     replay (→ `dayTaken`, never the dead row's id), another metric's `client_id` (→ throws), and an
+     evening slot (not read as the default slot taken). The metric pin on the replay lookup is the same
+     lesson as the amend's: a POST reusing a check-in's `client_id` must not be answered with that row.
+   - **Two caveats that would silently change it:** (1) under **REPEATABLE READ / SERIALIZABLE**, DO
+     NOTHING against a conflicting row the snapshot cannot see raises a serialization failure (40001)
+     instead of doing nothing — `logBodyweight` runs autocommit at READ COMMITTED, keep it there; (2) a
+     **DEFERRABLE** unique constraint on `entries` cannot be an arbiter, and with a target-less ON
+     CONFLICT that makes **every** bodyweight insert error ("ON CONFLICT does not support deferrable
+     unique constraints as arbiters"). Never add one to `entries`.
+   - **Concurrency is proven against real Postgres, not PGlite** (one connection, so `db:verify` can only
+     run the cases in sequence): see the plan's "1e as built" for the two-connection probe.
 
 7. **`ON DELETE CASCADE` is hard-delete only, and this app soft-deletes.** A soft-deleted parent leaves
    live children. Every read must filter through a live parent, or it counts rows whose owner is gone.

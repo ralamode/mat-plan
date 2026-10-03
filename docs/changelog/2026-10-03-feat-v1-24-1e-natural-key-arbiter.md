@@ -8,3 +8,7 @@
   crafted `client_id` can no longer return another profile's entry. Proven in `db:verify` through the
   app's own statement. Merges only after 1d's migrate run is green; the `context` stamp and CHECK move to
   V1-32.
+  Review round: the replay lookup is also pinned to weigh-ins (a reused check-in `client_id` is never
+  answered with that row), with three more `db:verify` proofs, and a two-connection probe on real
+  Postgres confirmed the concurrent cases (blocked, then `dayTaken` / the replay's id / insert after a
+  rollback; never a `23505`).

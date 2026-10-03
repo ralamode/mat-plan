@@ -152,9 +152,10 @@ export const profiles = pgTable(
 );
 
 /**
- * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012). Named once: the schema below
- * builds it, and the write path matches a `23505` against it to answer "already logged" with a typed
- * envelope instead of a crash (AGENTS.md → Errors). Renaming it means a new migration too.
+ * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012), named once for the schema
+ * below. The write path does NOT name it: since 1e the insert's arbiter is target-less (every unique
+ * index arbitrates; see `writers/bodyweight.ts`), so nothing matches on this name at runtime.
+ * Renaming it means a new migration too.
  */
 export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
 

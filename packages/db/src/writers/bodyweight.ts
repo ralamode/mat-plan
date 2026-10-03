@@ -206,7 +206,10 @@ export async function insertBodyweightEntry(
     .returning({ publicId: schema.entries.publicId });
   if (inserted) return { id: inserted.publicId };
 
-  // (a)+(b): a replay of THIS submit — same client_id, same profile, still live.
+  // (a)+(b): a replay of THIS submit — same client_id, same profile, still live, and a WEIGH-IN. The
+  // metric pin matters: a POST reusing the client_id of the same profile's check-in or strength row
+  // conflicts on `uq_entries_client_id` too, and must not be answered with THAT row's id (a weigh-in
+  // silently not saved, reported as success). It falls through to (b) or the throw in (c).
   const [own] = await exec
     .select({ publicId: schema.entries.publicId })
     .from(schema.entries)
@@ -214,6 +217,7 @@ export async function insertBodyweightEntry(
       and(
         eq(schema.entries.clientId, args.clientId),
         eq(schema.entries.profileId, args.profileId),
+        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
         isNull(schema.entries.deletedAt),
       ),
     )
