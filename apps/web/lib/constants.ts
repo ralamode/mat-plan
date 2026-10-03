@@ -136,15 +136,38 @@ export function changeLabel(subject: string, value: string): string {
 
 /** The amend interaction's copy (V1-24 PR 1b), shared by the island and the specs. */
 export const AMEND_COPY = {
-  /** The visible control. **"Change", not "Edit"** — plainer for an eight-year-old. `editable-set.tsx`
-   *  still says Edit; PR 2 unifies them when the shared primitive is extracted. */
+  /** The visible control. **"Change", not "Edit"** — plainer for an eight-year-old. Both amends use it
+   *  (the weigh-in since 1b, a strength set since 3a-i); PR 2 extracts the shared primitive. */
   change: 'Change',
   save: 'Save',
   cancel: 'Cancel',
   /** The amend input's accessible name. The unit is in it because the visible unit is a sibling
    *  `<span>` a screen reader would otherwise never pair with the number. */
   valueLabel: (unit: string) => `Weight (${unit})`,
+  /** A strength set's save, announced by its own island — the subject names WHICH set (3a-i). */
+  setChanged: (subject: string, value: string) => `${subject} changed: ${value}.`,
+  /**
+   * Why a set can't be changed (V1-24 3a-i, the parent plan's Locked state), keyed by `lockedReason`.
+   * Each is TRUE for the sets it labels; "yet" appears only where a backlog row will change it
+   * (V1-33: time and distance). `status` has no sentence of its own: the badge already says it.
+   */
+  locked: {
+    mode: 'Bodyweight and band sets can’t be changed in the app.',
+    notMass: 'Timed and distance sets can’t be changed in the app yet.',
+    status: '',
+    shape: 'Some sets here can’t be changed in the app.',
+  },
+  /** Ends every Locked line. With no delete action, re-logging is the move that makes it permanent. */
+  lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
+
+/** A set's weight input accessible name — one source for the field and the specs that find it. */
+export function weightInputLabel(subject: string, unitLabel?: string): string {
+  return unitLabel ? `${subject} weight in ${unitLabel}` : `${subject} weight`;
+}
+
+/** A strength set amend's error id, unique per island (20 sets must not share one id). */
+export const setAmendErrorId = (setPublicId: string) => `set-amend-error-${setPublicId}`;
 
 /**
  * The notice on a day outside the write window (V1-15). Since V1-24 PR 1b a logged weight CAN be
@@ -152,7 +175,7 @@ export const AMEND_COPY = {
  * working Change button. It now says what is closed (new entries) and what is still allowed.
  */
 export const CLOSED_DAY_NOTICE =
-  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a logged weight.';
+  'New entries are closed for this day — it’s more than a day ago. You can still see what was logged and correct a weigh-in or a strength set.';
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
