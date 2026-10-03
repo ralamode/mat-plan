@@ -2836,7 +2836,12 @@ const [bwOwnerRow] = await db
   .where(eq(schema.profiles.publicId, bwOwner));
 
 // (a) The happy path — the amend persists and advances updated_at.
-const bwTarget = await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 84.5 });
+// A fixed September day (its own, one weigh-in per day — V1-24 1d) so CSV-1's month read below finds it.
+const bwTarget = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 84.5,
+  activityDate: '2026-09-15',
+});
 
 // CSV-1: the bodyweight export read carries each row's UNIT, so the builder can write lb as logged
 // and convert kg (never write a kg number bare under `weight_lb`). A kg probe on its OWN day (one
