@@ -9,10 +9,13 @@ import {
 } from '@mat-plan/shared';
 
 import {
+  AMEND_COPY,
   BODYWEIGHT_COPY,
+  changeLabel,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PARTIAL_SETS_COPY,
+  weightInputLabel,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { resolveDayRole } from '../lib/programming/day-role-schedule';
@@ -349,6 +352,49 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   await expectNoAxeViolations(page, 'weigh-in (editing)');
   await expectTapTargets(page, 'weigh-in (editing)');
   await expectNoHorizontalOverflow(page, 'weigh-in (editing, 360px, widest value)');
+});
+
+/**
+ * V1-24 3a-i — a logged strength set's Change, OPENED, at 360px. No test had ever opened this editor.
+ *
+ * Writes strength on **Scarlett's yesterday** (the a11y day: its other write is bodyweight, an
+ * independent surface). Logs only if the probe isn't there yet, so a retry measures the same state.
+ * The 280px superset-member case is the unit test's structural assertion (Save/Cancel on their own
+ * row) plus the plan's width math; logging a superset through the UI here would cost far more.
+ */
+test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3a-i)', async ({
+  page,
+}) => {
+  const PROBE = 'A11y Probe Press';
+  await page.setViewportSize(NARROW);
+  await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
+  const entries = page.getByRole('region', { name: 'Logged entries', exact: true });
+
+  if ((await entries.getByText(PROBE, { exact: true }).count()) === 0) {
+    const strength = page.getByRole('region', { name: 'Log strength', exact: true });
+    await strength.getByLabel('Movement', { exact: true }).fill(PROBE);
+    await strength.getByLabel('Movement 1 set 1 reps', { exact: true }).fill('12');
+    await strength.getByLabel(/^Movement 1 set 1 weight/).fill('137.5'); // a wide value
+    await strength.getByRole('button', { name: 'Log strength', exact: true }).click();
+    await expect(entries.getByText(PROBE, { exact: true })).toBeVisible({ timeout: 15_000 });
+  }
+
+  const subject = `${PROBE} set 1`;
+  const change = entries.getByRole('button', {
+    name: changeLabel(subject, '12 × 137.5 lb'),
+    exact: true,
+  });
+  await expect(change).toHaveText(AMEND_COPY.change);
+  await change.click();
+  await expect(entries.getByLabel(`${subject} reps`, { exact: true })).toBeFocused(); // focus on open
+  await expect(entries.getByLabel(weightInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
+  await expectNoAxeViolations(page, 'strength set (editing)');
+  await expectTapTargets(page, 'strength set (editing)');
+  await expectNoHorizontalOverflow(page, 'strength set (editing, 360px)');
+
+  // Cancel returns focus to Change (the button that had it unmounts).
+  await entries.getByRole('button', { name: AMEND_COPY.cancel, exact: true }).click();
+  await expect(change).toBeFocused();
 });
 
 /**
