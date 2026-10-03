@@ -56,7 +56,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
-import { loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { programDayRows } from '../src/queries/program-day';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import { findAmendableBodyweight, updateBodyweightEntryById } from '../src/writers/bodyweight';
@@ -2837,6 +2837,24 @@ const [bwOwnerRow] = await db
 
 // (a) The happy path — the amend persists and advances updated_at.
 const bwTarget = await insertBodyweightProbe({ profileId: bwOwnerRow.id, value: 84.5 });
+
+// CSV-1: the bodyweight export read carries each row's UNIT, so the builder can write lb as logged
+// and convert kg (never write a kg number bare under `weight_lb`). A kg probe on its OWN day (one
+// weigh-in per day, V1-24 1d) proves the column is read, not assumed: a constant 'lb' would fail it.
+const bwKgProbe = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 40.2,
+  unit: 'kg',
+  activityDate: '2026-09-14',
+});
+const bwExport = await bodyweightMonthRows(asPg, { profilePublicId: bwOwner, month: '2026-09' });
+const bwExportTarget = bwExport.find((r) => r.value === '84.500');
+assert.ok(bwExportTarget, 'CSV-1: the bodyweight export read returns the logged weight');
+assert.equal(bwExportTarget.unit, 'lb', 'CSV-1: ...carrying the unit it was logged in');
+const bwExportKg = bwExport.find((r) => r.value === '40.200');
+assert.ok(bwExportKg, 'CSV-1: the export read returns the kg weigh-in');
+assert.equal(bwExportKg.unit, 'kg', 'CSV-1: ...as kg, so the builder converts it');
+await db.delete(schema.entries).where(eq(schema.entries.publicId, bwKgProbe.publicId));
 const amended = await updateBodyweightEntryById(asPg, {
   profilePublicId: bwOwner,
   entryId: bwTarget.publicId,

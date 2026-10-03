@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { BODYWEIGHT_UNITS, DEFAULT_BODYWEIGHT_UNIT } from './bodyweight';
+import { buildBodyweight } from './csv/bodyweight';
 import { EXPORTABLE_UNITS } from './csv/value';
 import { sessionMovementSchema } from './strength-session';
 import {
@@ -48,6 +49,17 @@ describe('offerable ⊆ accepted ⊆ exportable', () => {
 
   it.each(wiredUnit.options)('the export can write %s', (unit) => {
     expect(EXPORTABLE_UNITS).toContain(unit);
+  });
+
+  // The bodyweight CSV is a SECOND export path with its own per-unit rule, and `EXPORTABLE_UNITS`
+  // (the strength-load spelling, `85kg`) is no spelling for the `weight_lb` column. Without this
+  // link, a third bodyweight unit passes every check above and then throws inside `buildBodyweight`
+  // at export time -- 500-ing the profile's whole export history, which is the failure CSV-1's own
+  // review rejected. Fail here instead, where it costs a test run.
+  it.each(BODYWEIGHT_UNITS)('the bodyweight export can write %s', (unit) => {
+    expect(() =>
+      buildBodyweight([{ date: '2026-09-30', weight: '50', unit, context: '', notes: '' }]),
+    ).not.toThrow();
   });
 });
 
