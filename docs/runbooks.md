@@ -62,6 +62,12 @@ deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `
 correction refuses those rows as drifted — expected: their `updated_at` is now `now()`, so re-reading
 is the next step. After 1d lands, un-deleting a row would violate its index.
 
+**1e (the create path's arbiter) merges only after 1d's `migrate.yml` run is green** and `\d entries`
+in prod shows `uq_entries_profile_day_bodyweight`. 1e's target-less `ON CONFLICT DO NOTHING` names no
+index, so it cannot fail inference even if the index is missing — the gate is about meaning, not
+breakage: without the index nothing refuses a second same-day row, and 1e's "already logged" answer
+never fires.
+
 **If 1d's migration refuses** (it merged before the data was clean, or a new duplicate appeared before
 1e moved the arbiter — the error names this section: _"V1-24 1d: N (profile, day, slot) group(s) hold
 more than one live weigh-in"_), `migrate.yml` — which runs on **every** push to `main`, with no path filter and

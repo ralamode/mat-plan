@@ -931,7 +931,10 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   Ray). **PR 1d ⏳ in review** (`db/v1-24-1d-bodyweight-unique`: migration 0012, the bodyweight-scoped
   unique index, slot-ready for V1-32 — it keys on `(profile, day, coalesce(context, 'morning'))`;
   `context` already existed and nothing writes it before 1e, so NULL and `morning` must be one slot).
-  Then 1e (the arbiter, plus the `context` values CHECK), 2 (check-ins), 3a/3b (strength).
+  **PR 1e ⏳ stacked on 1d** (`feat/v1-24-1e-natural-key-arbiter`: the create path's arbiter is
+  target-less `ON CONFLICT DO NOTHING` in `insertBodyweightEntry` — replay → same id, another device →
+  typed "already logged"; merges only after 1d's migrate run is green; the `context` stamp and CHECK
+  moved to V1-32). Then 2 (check-ins), 3a/3b (strength).
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
     re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that
     lands before the data is clean fails the index build and then **re-fails on every later push**,

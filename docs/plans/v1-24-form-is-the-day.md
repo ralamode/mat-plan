@@ -1035,6 +1035,30 @@ amendment's first bullet:
 - **Tooling:** the `bodyweight-duplicates` screenshot state seeded two live same-day rows and now hits
   the index; it was removed (the multi-row receipt returns with V1-32's real slots).
 
+**1e as built (2026-10-03).** The create path's arbiter moved; three choices differ from the text above.
+
+- **Target-less `ON CONFLICT DO NOTHING`, not a hand-written clause** (write-path invariant 6). It cannot
+  fail inference (no spec to mis-match, no literal-vs-parameter trap), and with every unique index as an
+  arbiter a concurrent re-POST waits and does nothing — so Decision 4's "catch `23505` on
+  `uq_entries_client_id`" is unnecessary, and 1d's interim `isBodyweightDayConflict` catch is
+  **removed** (subsumed, not kept as dead defence). Its costs are paid in `insertBodyweightEntry`:
+  re-select on an empty `RETURNING` (a), branch replay vs another submit's row (b), and THROW on a no-op
+  that is neither (c).
+- **The writer moved to `packages/db/src/writers/bodyweight.ts`** (Decision 6's doctrine), so
+  `db:verify` drives the app's own drizzle statement. Its replay lookup is scoped to the PROFILE as well
+  as the `client_id`: the pre-1e fallback looked up `client_id` alone, so a crafted `client_id` equal to
+  another profile's entry returned that entry's public id.
+- **`context` is not stamped yet, and its values CHECK is not added.** The index already treats NULL as
+  `'morning'`, so stamping buys nothing until V1-32 adds real slots; stamping only NEW rows would export
+  `morning` beside `''` for every older row in the same month's CSV; and a CHECK is a `NOT VALID` →
+  `VALIDATE` pair across two PRs, which does not belong in an app-code PR whose deploy order is gated.
+  The slot write, its CHECK and the CSV `context` column land together with **V1-32**.
+- **The user-facing copy is unchanged** ("A weight is already logged for this day."), so no e2e moves.
+- **Proofs** (`db:verify`, "V1-24 1e"): insert; replay → the same id; another device → `dayTaken` with
+  the first value untouched; soft-delete frees the day; a foreign `client_id` throws and writes nothing.
+  Mutation-checked: no replay branch, an unscoped replay lookup, no `dayTaken` branch, (c) answering
+  plausibly, and the old `client_id` arbiter each fail `db:verify`.
+
 ## Open questions
 
 0. **Does the weigh-in amend outrank the incident that opened this row?** V1-24 exists because Liam's

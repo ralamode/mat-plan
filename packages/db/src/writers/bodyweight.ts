@@ -1,8 +1,7 @@
-import { ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
+import { DEFAULT_BODYWEIGHT_CONTEXT, ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
-import { BODYWEIGHT_DAY_UNIQUE_INDEX } from '../schema';
 import type { Executor } from './executor';
 import { ownedEntryIds } from './ownership';
 
@@ -138,20 +137,108 @@ function amendableBodyweight(entryId: string) {
 }
 
 /**
- * True when `err` is Postgres refusing a second live weigh-in on a day (`23505` on
- * `BODYWEIGHT_DAY_UNIQUE_INDEX`, V1-24 PR 1d). Drizzle wraps the driver error in a `DrizzleQueryError`
- * whose `cause` is the pg error, so this walks the `cause` chain (bounded). Every OTHER error — another
- * unique index, a timeout, a lost connection — is false, so the caller rethrows it.
+ * Insert ONE weigh-in (V1-24 PR 1e) — the create half of the bodyweight write path, single-sourced HERE
+ * so `db:verify` drives the IDENTICAL statement the app runs (drizzle's parameterised path), as the
+ * amend above does.
  *
- * Interim: until 1e moves `logBodyweight`'s `ON CONFLICT` arbiter onto the natural key, two phones on
- * one day reach this index as a bare violation. 1e turns it into the "already logged" replay branch.
+ * ## The arbiter is target-less `ON CONFLICT DO NOTHING` — every unique index on `entries`
+ *
+ * The natural key, `BODYWEIGHT_DAY_UNIQUE_INDEX` (1d), is an EXPRESSION index —
+ * `(profile_id, activity_date, coalesce(context, 'morning'))` — and drizzle's `onConflict` target takes
+ * columns only, so it cannot name it. The two options were a hand-written `ON CONFLICT (…)` clause or no
+ * target. No target, because:
+ * - **It cannot fail inference.** A hand-written clause must match the index's expression AND predicate
+ *   exactly; `'morning'`/`'bodyweight'` must be SQL literals, and if a parameter slips in, inference can
+ *   depend on custom vs generic plans — a miss raises "no unique or exclusion constraint matching the ON
+ *   CONFLICT specification" on EVERY insert (docs/lessons.md). No target has no spec to miss.
+ * - **Concurrency is handled by Postgres.** With no target, every unique index is an arbiter, so a
+ *   network re-POST racing its own first request waits and then does nothing — never a bare `23505`.
+ *   That subsumes 1d's interim `23505` catch, which is removed.
+ *
+ * Its three costs (write-path invariant 6) are paid below, explicitly:
+ * - **(a) `RETURNING` is empty on any conflict** — so on zero rows this re-selects instead of assuming.
+ * - **(b) a second device's DIFFERENT weight would be dropped as "success"** — so the re-select branches:
+ *   the row is THIS submit's (`client_id` matches, same profile) → a replay → `{ id }`; the day's slot
+ *   holds someone else's row → `{ dayTaken: true }`, a typed answer, never a silent success.
+ * - **(c) it swallows a violation of ANY unique index**, including a future one — so a no-op that is
+ *   neither a replay nor the day slot THROWS rather than returning something plausible.
+ *
+ * The replay lookup is scoped to the PROFILE as well as the `client_id` (the pre-1e fallback filtered on
+ * `client_id` alone, so a crafted `client_id` equal to another profile's entry returned THAT entry's
+ * public id). `client_id` is client-supplied; ownership is not.
+ *
+ * `context` is NOT written yet: the index treats NULL as `'morning'`, so stamping it buys nothing until
+ * V1-32 adds real slots — and stamping only NEW rows would export `morning` beside `''` for every older
+ * row in the same month's CSV. The slot write, its values CHECK and the CSV `context` column land
+ * together with V1-32.
  */
-export function isBodyweightDayConflict(err: unknown): boolean {
-  let e: unknown = err;
-  for (let depth = 0; depth < 5 && e && typeof e === 'object'; depth++) {
-    const { code, constraint } = e as { code?: unknown; constraint?: unknown };
-    if (code === '23505' && constraint === BODYWEIGHT_DAY_UNIQUE_INDEX) return true;
-    e = (e as { cause?: unknown }).cause;
-  }
-  return false;
+export async function insertBodyweightEntry(
+  exec: Executor,
+  args: {
+    /** INTERNAL id of a profile the caller has already resolved as LIVE and owned. */
+    profileId: number;
+    publicId: string;
+    clientId: string;
+    day: string;
+    unit: string;
+    value: number;
+    notes: string | null;
+    activityTypeId: number;
+    kind: string;
+  },
+): Promise<{ id: string } | { dayTaken: true }> {
+  const [inserted] = await exec
+    .insert(schema.entries)
+    .values({
+      publicId: args.publicId,
+      clientId: args.clientId,
+      profileId: args.profileId,
+      activityDate: args.day,
+      kind: args.kind,
+      unit: args.unit,
+      valueNum: String(args.value), // numeric column takes a string (precision-safe)
+      activityTypeId: args.activityTypeId,
+      metricKey: SEED_METRIC_KEYS.bodyweight,
+      status: ENTRY_STATUS.done,
+      notes: args.notes,
+    })
+    .onConflictDoNothing()
+    .returning({ publicId: schema.entries.publicId });
+  if (inserted) return { id: inserted.publicId };
+
+  // (a)+(b): a replay of THIS submit — same client_id, same profile, still live.
+  const [own] = await exec
+    .select({ publicId: schema.entries.publicId })
+    .from(schema.entries)
+    .where(
+      and(
+        eq(schema.entries.clientId, args.clientId),
+        eq(schema.entries.profileId, args.profileId),
+        isNull(schema.entries.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (own) return { id: own.publicId };
+
+  // (b): the day's slot already holds ANOTHER submit's weigh-in. Same key as the index.
+  const [taken] = await exec
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .where(
+      and(
+        eq(schema.entries.profileId, args.profileId),
+        eq(schema.entries.activityDate, args.day),
+        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+        isNull(schema.entries.deletedAt),
+        sql`coalesce(${schema.entries.context}, ${DEFAULT_BODYWEIGHT_CONTEXT}) = ${DEFAULT_BODYWEIGHT_CONTEXT}`,
+      ),
+    )
+    .limit(1);
+  if (taken) return { dayTaken: true };
+
+  // (c): DO NOTHING suppressed a conflict that is neither — never answer with something plausible.
+  throw new Error(
+    'insertBodyweightEntry: the insert was a no-op, but it is neither a replay of this submit nor ' +
+      "the day's weigh-in — an unexpected unique conflict.",
+  );
 }
