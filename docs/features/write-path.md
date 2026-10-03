@@ -83,6 +83,26 @@ flowchart LR
 6. **A partial unique index needs its predicate repeated in `ON CONFLICT`.** Every `client_id` unique
    in this schema is `WHERE deleted_at IS NULL`, so the arbiter must say so too or Postgres rejects the
    statement outright. drizzle: `onConflictDoUpdate({ target, targetWhere })`.
+   ⚠️ **Bodyweight has a second unique since V1-24 PR 1d**: `uq_entries_profile_day_bodyweight`, one
+   live weigh-in per `(profile, day, coalesce(context, 'morning'))`. Until **1e** moves
+   `logBodyweight`'s arbiter onto it, a same-day duplicate (two phones) raises `23505` on it; the DAL
+   catches exactly that (`isBodyweightDayConflict`, matched by `BODYWEIGHT_DAY_UNIQUE_INDEX`) and the
+   action returns the typed "already logged" envelope — every other error still throws. Its key is an
+   EXPRESSION, which drizzle's `onConflict` `target` (columns only) cannot name, so 1e needs
+   `onConflictDoNothing()` with no target (DO NOTHING matches any unique) or a hand-written clause.
+   **Each has costs 1e must pay in the same PR:**
+   - **(a) No target → no `RETURNING` row on a natural-key no-op.** Today's fallback re-selects by
+     `client_id`; on a _different_ client's same-day row it finds nothing and `existing.publicId`
+     throws. The fallback must change with the arbiter.
+   - **(b) A second device's DIFFERENT weight is dropped while the write "succeeds".** 1e must turn that
+     into the typed "already logged" answer (it replaces this interim catch), never a silent ok.
+   - **(c) No target swallows a violation of ANY unique on `entries`**, including ones added later.
+   - **A hand-written clause must spell `'morning'` and `'bodyweight'` as SQL LITERALS.** A drizzle
+     `${const}` becomes `$n`; whether a parameterised expression still infers the index depends on
+     custom vs generic plans, and a miss fails EVERY insert ("no unique or exclusion constraint
+     matching the ON CONFLICT specification", `docs/lessons.md`).
+     1e therefore owes a `db:verify` proof that drives the real DAL statement through drizzle's
+     parameterised path — not hand-written SQL in the test.
 
 7. **`ON DELETE CASCADE` is hard-delete only, and this app soft-deletes.** A soft-deleted parent leaves
    live children. Every read must filter through a live parent, or it counts rows whose owner is gone.

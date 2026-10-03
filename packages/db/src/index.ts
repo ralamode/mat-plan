@@ -2,6 +2,8 @@
 // The app imports the client factory + schema/types from here; migrations and
 // seeds are run via the scripts in ./scripts (GH Actions is the single migrator).
 export * from './client';
+// The one-per-day bodyweight index name (V1-24 1d) — the write path matches its 23505 against it.
+export { BODYWEIGHT_DAY_UNIQUE_INDEX } from './schema';
 export type * from './types';
 // The single-sourced weekly-adherence query (V1-6b-2), run by both the app DAL and db:verify.
 export * from './queries/weekly-adherence';

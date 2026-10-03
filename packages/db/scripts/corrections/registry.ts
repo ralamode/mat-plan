@@ -135,8 +135,9 @@ const liamKbSwings: Correction = {
  * conflict and would insert a *new* row — re-creating the duplicate 1d aborts on. That is why 1d is
  * gated on re-running the duplicate query just before it merges, not on this correction having run.
  *
- * (1d's index is slot-ready since the plan's 2026-09-30 amendment — `(profile, day, context)` for
- * V1-32 — which changes nothing here: every row in prod today is slot-less.)
+ * (1d's index is slot-ready since the plan's 2026-09-30 amendment — `(profile_id, activity_date,
+ * coalesce(context, 'morning'))` for V1-32, so a NULL context IS the default slot — which changes
+ * nothing here: every row in prod today is slot-less.)
  */
 // The profile id is a **literal and not `SEED_PROFILE_PUBLIC_ID`** on purpose: that const means "the
 // profile the seed creates", while this is "the profile that owned these rows in prod on 2026-09-30".
@@ -192,8 +193,8 @@ const loserGuard = (loser: { publicId: string; token: string }) =>
  * correction happens to target.
  *
  * ⚠️ **It is NOT 1d's predicate verbatim any more.** The plan's 2026-09-30 amendment made 1d
- * slot-ready for V1-32: the index keys on `(profile_id, activity_date, context)`, so the general rule
- * becomes one weigh-in per SLOT. That does not weaken this check — every row in prod today is
+ * slot-ready for V1-32: the index keys on `(profile_id, activity_date, coalesce(context, 'morning'))`
+ * — a NULL context and 'morning' are the SAME slot — so the general rule becomes one weigh-in per SLOT. That does not weaken this check — every row in prod today is
  * slot-less, this correction's day must end with exactly one weight either way, and counting without
  * `context` is the stricter of the two.
  */

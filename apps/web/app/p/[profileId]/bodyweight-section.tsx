@@ -16,9 +16,10 @@ import { SavedAnnouncer } from './saved-announcer';
  *
  * ⚠️ **And when a weight IS logged the form is not rendered at all.** An empty input over an existing
  * record is what invited the duplicate row (`logBodyweight` dedupes only on `client_id`, and the form
- * used to rotate that key on every success). This removes the second-submit path; it does NOT make a
- * duplicate impossible — two mounts submitting concurrently (two phones, two tabs) can still write
- * two rows until PR 1d's unique index lands, which is why the receipt lists every row.
+ * used to rotate that key on every success). This removes the second-submit path; since PR 1d the
+ * database forbids a second live weigh-in per (profile, day, slot) too — a two-phone race gets the
+ * typed "already logged" envelope. The receipt still lists every row: a pre-1d row on an old day,
+ * and V1-32's slots (two legitimate weigh-ins on one day), both render as more than one.
  */
 export function BodyweightSection({
   profileId,

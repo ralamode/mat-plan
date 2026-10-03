@@ -17,7 +17,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
-import { AMEND_ERROR_COPY } from '@/lib/constants';
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
 import {
   CHECKIN_FIELDS,
   clientIdInputName,
@@ -105,7 +105,7 @@ export async function logBodyweightAction(
     const profile = await getProfileByPublicId(parsed.data.profileId);
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
-    await logBodyweight({
+    const written = await logBodyweight({
       profilePublicId: profile.id,
       value: parsed.data.value,
       unit: parsed.data.unit,
@@ -113,6 +113,12 @@ export async function logBodyweightAction(
       day: day.day,
       notes: parsed.data.notes ?? null,
     });
+    // V1-24 1d: the day already holds a weigh-in (another device got there first). An expected
+    // outcome → the typed envelope, not error.tsx. Revalidate so the receipt shows the row that landed.
+    if ('dayTaken' in written) {
+      revalidatePath(`/p/${profile.id}`);
+      return { ok: false, error: BODYWEIGHT_COPY.dayTaken };
+    }
 
     revalidatePath(`/p/${profile.id}`);
     return { ok: true, error: null };
