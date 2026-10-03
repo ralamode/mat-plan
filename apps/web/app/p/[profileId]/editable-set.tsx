@@ -96,7 +96,7 @@ export function EditableSet({
         <Button
           ref={changeRef}
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => {
             // Re-seed from the current (possibly just-revalidated) value each time it opens.

@@ -14,7 +14,15 @@ import {
 } from '@mat-plan/shared/csv';
 import { expect, type Page, test } from '@playwright/test';
 
-import { bodyweightEntryLine, isoDaysAgo, logBodyweight, SEED_PROFILE_ROUTE } from './steps';
+import { STRENGTH_COPY } from '../lib/constants';
+
+import {
+  bodyweightEntryLine,
+  isoDaysAgo,
+  logBodyweight,
+  openStrengthForm,
+  SEED_PROFILE_ROUTE,
+} from './steps';
 
 /**
  * **V1-14b — the full-day round trip.** Log a day through the real UI, download the real export,
@@ -139,6 +147,7 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
   // and exercises `ensureMovement`'s slug derivation, which is the column this test is really about.
   // `exact` matters: `Movement 1 skipped`, `Unit for movement 1` and `What movement 1 measures`
   // are all live substring collisions on this card (docs/lessons.md: substring matching bit us in V0-11).
+  await openStrengthForm(page); // collapsed on a retry, once the first attempt's session exists
   await page.getByLabel('Movement', { exact: true }).fill(PROBE_MOVEMENT);
 
   for (const [i, set] of PROBE_SETS.entries()) {
@@ -147,9 +156,13 @@ test('a full day logged through the UI round-trips through the CSV export', asyn
     await page.getByLabel(new RegExp(`^Movement 1 set ${i + 1} weight`)).fill(set.weight);
   }
 
-  const logStrength = page.getByRole('button', { name: 'Log strength' });
+  const logStrength = page.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
   await logStrength.click();
-  await expect(logStrength).toBeEnabled({ timeout: 15_000 });
+  // V1-24 3a-ii: a save FOLDS the form behind "Log more strength" (the submit is hidden), so the
+  // signal the save landed is the folded toggle, then the record below.
+  await expect(
+    page.getByRole('button', { name: STRENGTH_COPY.logMore, exact: true }),
+  ).toHaveAttribute('aria-expanded', 'false', { timeout: 15_000 });
   await expect(
     page.getByRole('region', { name: 'Logged entries' }).getByText(PROBE_MOVEMENT),
   ).toBeVisible({ timeout: 15_000 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { within, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UNIT_DIMENSION } from '@mat-plan/shared';
 
@@ -193,7 +193,9 @@ describe('StrengthForm — program scaffold (V1-19)', () => {
     fireEvent.change(nameInput(), { target: { value: 'Front squat' } });
     fireEvent.click(fillButton());
 
-    expect(screen.getByRole('status').textContent).toMatch(/replacing the 1 you had typed/i);
+    // The scaffold's own region, inside the form (V1-24 3a-ii added the island's save region beside it).
+    const form = document.querySelector('form')!;
+    expect(within(form).getByRole('status').textContent).toMatch(/replacing the 1 you had typed/i);
     expect(payload().map((m) => m.movementName)).not.toContain('Front squat');
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));

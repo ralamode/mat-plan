@@ -161,6 +161,10 @@ flowchart LR
   form. Any spec or fixture that logs a bodyweight through the action must use an in-range value (the
   e2e warm-up used `0.5`).
 
+- **`logStrengthSessionAction` returns the session's PUBLIC id as `savedId` (V1-24 3a-ii).** The form
+  announces and focuses its save from it, so it must stay a public id (never an internal one) and be
+  returned on a replay too (the writer re-selects the session, so a retried submit still lands focus).
+
 - **A strength-session zod issue renders as `<movement name>, set M: <message>` (V1-30).** `flatten()`
   loses the index, so `logStrengthSessionAction` rebuilds each message from the issue path: `path[1]`
   is the movement — **named, never numbered**, because `path[1]` indexes the SUBMITTED list, which

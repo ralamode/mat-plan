@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-import { PARTIAL_SETS_COPY } from '../lib/constants';
+import { PARTIAL_SETS_COPY, STRENGTH_COPY } from '../lib/constants';
 
-import { SEED_PROFILE_ROUTE } from './steps';
+import { openStrengthForm, SEED_PROFILE_ROUTE, strengthSection } from './steps';
 
 /**
  * **V1-26 PR-A — the submit wedge, in a real browser.**
@@ -29,7 +29,8 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
   const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^8 × 20 lb$/);
   const before = await logged.count();
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // The YDP programs 6-7 movements a day, so this is the real shape: several cards, one open, the
@@ -53,7 +54,7 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
     await weightFields.nth(i).fill('20');
   }
 
-  const submit = strength.getByRole('button', { name: 'Log strength' });
+  const submit = strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true });
   await submit.click();
 
   // The assertion is that the write HAPPENED, and that EVERY set of the open card landed. A wedged
@@ -69,7 +70,8 @@ test('scaffold the day, do some of it, and the form still submits', async ({ pag
 test('a scaffolded card shows the unit the catalog declares', async ({ page }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // Whichever movement card 1 holds — the YDP rotates on date parity, so the name is not fixed — its
@@ -100,7 +102,8 @@ test("doing all but the last of a card's sets submits exactly those sets (V1-27)
   const logged = page.getByRole('region', { name: 'Logged entries' }).getByText(/^7 × 17\.5\b/);
   const before = await logged.count();
 
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   // The scaffold's row count depends on the day's prescription, so it is READ, not assumed.
@@ -118,7 +121,7 @@ test("doing all but the last of a card's sets submits exactly those sets (V1-27)
   ).toBeVisible();
   await expect(strength.getByText(PARTIAL_SETS_COPY.trailingHint)).toBeVisible();
 
-  await strength.getByRole('button', { name: 'Log strength' }).click();
+  await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
   await expect(logged).toHaveCount(before + n - 1, { timeout: 15_000 });
 });
 
@@ -131,7 +134,8 @@ test('a half-entered set blocks natively, with a message naming the way out (V1-
   page,
 }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
-  const strength = page.getByRole('region', { name: 'Log strength' });
+  const strength = strengthSection(page);
+  await openStrengthForm(page);
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
 
   const actionRequests: string[] = [];
@@ -142,7 +146,7 @@ test('a half-entered set blocks natively, with a message naming the way out (V1-
   // Weight typed, reps blank: the row is touched, so its reps stay required.
   const reps = strength.getByPlaceholder('reps').first();
   await strength.getByPlaceholder('weight').first().fill('17.5');
-  await strength.getByRole('button', { name: 'Log strength' }).click();
+  await strength.getByRole('button', { name: STRENGTH_COPY.submit, exact: true }).click();
 
   expect(await reps.evaluate((el) => (el as HTMLInputElement).validity.valueMissing)).toBe(true);
   // Card 1 of a scaffolded day has several rows, so the reps message names the per-set Remove.

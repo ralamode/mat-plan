@@ -348,7 +348,7 @@ export async function logStrengthSessionAction(
     const profile = await getProfileByPublicId(parsed.data.profileId);
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
-    await logStrengthSession({
+    const { sessionId } = await logStrengthSession({
       profilePublicId: profile.id,
       sessionType: parsed.data.sessionType,
       clientId: parsed.data.clientId,
@@ -369,7 +369,9 @@ export async function logStrengthSessionAction(
     // Idempotent by the session's `client_id`: a replay (network retry) dedupes via ON CONFLICT and
     // the end state is identical — that IS success (the form rotates the clientId on ok, so a
     // resubmit is a genuine retry, not a new session), not a destructive "already logged" error.
-    return { ok: true, error: null };
+    // V1-24 3a-ii: the session's PUBLIC id, so the form announces this save and focuses its receipt.
+    // A replay returns the same id (the writer re-selects it), so a retry still lands focus.
+    return { ok: true, error: null, savedId: sessionId };
   });
 }
 

@@ -1,4 +1,4 @@
-import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, BODYWEIGHT_VALUE_JOINER } from '@/lib/constants';
+import { BODYWEIGHT_COPY, BODYWEIGHT_RECEIPT_ID, VALUE_JOINER } from '@/lib/constants';
 import type { LoggedBodyweight } from '@/lib/entries/activity-totals';
 
 import { BodyweightAmend } from './bodyweight-amend';
@@ -34,7 +34,7 @@ export function BodyweightSection({
 }) {
   const values = formatLoggedWeights(logged);
   const announcement =
-    values.length > 0 ? BODYWEIGHT_COPY.announced(values.join(BODYWEIGHT_VALUE_JOINER)) : null;
+    values.length > 0 ? BODYWEIGHT_COPY.announced(values.join(VALUE_JOINER)) : null;
 
   return (
     <section aria-labelledby="log-bw-heading" className="flex flex-col gap-3">
