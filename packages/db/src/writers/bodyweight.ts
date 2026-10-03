@@ -2,6 +2,7 @@ import { ENTRY_STATUS, SEED_METRIC_KEYS } from '@mat-plan/shared';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
+import { BODYWEIGHT_DAY_UNIQUE_INDEX } from '../schema';
 import type { Executor } from './executor';
 import { ownedEntryIds } from './ownership';
 
@@ -134,4 +135,23 @@ function amendableBodyweight(entryId: string) {
     isNotNull(schema.entries.valueNum),
     isNull(schema.entries.valueText),
   );
+}
+
+/**
+ * True when `err` is Postgres refusing a second live weigh-in on a day (`23505` on
+ * `BODYWEIGHT_DAY_UNIQUE_INDEX`, V1-24 PR 1d). Drizzle wraps the driver error in a `DrizzleQueryError`
+ * whose `cause` is the pg error, so this walks the `cause` chain (bounded). Every OTHER error — another
+ * unique index, a timeout, a lost connection — is false, so the caller rethrows it.
+ *
+ * Interim: until 1e moves `logBodyweight`'s `ON CONFLICT` arbiter onto the natural key, two phones on
+ * one day reach this index as a bare violation. 1e turns it into the "already logged" replay branch.
+ */
+export function isBodyweightDayConflict(err: unknown): boolean {
+  let e: unknown = err;
+  for (let depth = 0; depth < 5 && e && typeof e === 'object'; depth++) {
+    const { code, constraint } = e as { code?: unknown; constraint?: unknown };
+    if (code === '23505' && constraint === BODYWEIGHT_DAY_UNIQUE_INDEX) return true;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return false;
 }

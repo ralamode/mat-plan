@@ -151,6 +151,13 @@ export const profiles = pgTable(
   ],
 );
 
+/**
+ * The bodyweight one-per-day unique index (V1-24 PR 1d, migration 0012). Named once: the schema below
+ * builds it, and the write path matches a `23505` against it to answer "already logged" with a typed
+ * envelope instead of a crash (AGENTS.md → Errors). Renaming it means a new migration too.
+ */
+export const BODYWEIGHT_DAY_UNIQUE_INDEX = 'uq_entries_profile_day_bodyweight';
+
 export const entries = pgTable(
   'entries',
   {
@@ -216,6 +223,18 @@ export const entries = pgTable(
     uniqueIndex('uq_entries_client_id')
       .on(t.clientId)
       .where(sql`${t.deletedAt} is null`),
+    // V1-24 PR 1d: ONE live weigh-in per (profile, day, slot). Scoped to bodyweight — a check-in or a
+    // calisthenics bout may repeat on a day. Slot-ready for V1-32 (plan amendment, 2026-09-30).
+    // - `coalesce(context, 'morning')`, not `context`: no writer sets `context` until 1e, and NULLs
+    //   are distinct in a unique index, so a bare `context` key would let every NULL row escape — and
+    //   a backfilled 'morning' row would never collide with a new NULL one. Coalescing makes NULL and
+    //   the default slot the SAME slot, with no backfill and no deploy race.
+    // - The predicate and the slot are SQL LITERALS, never `SEED_METRIC_KEYS.bodyweight` /
+    //   `DEFAULT_BODYWEIGHT_CONTEXT`: drizzle-kit renders an interpolated const as `$1` in the DDL and
+    //   the CREATE INDEX fails (precedent: entries_kind_check below). Tests pin both values.
+    uniqueIndex(BODYWEIGHT_DAY_UNIQUE_INDEX)
+      .on(t.profileId, t.activityDate, sql`coalesce(${t.context}, 'morning')`)
+      .where(sql`${t.deletedAt} is null and ${t.metricKey} = 'bodyweight'`),
     check('entries_kind_check', sql`${t.kind} in ('bodyweight', 'strength')`),
     check('entries_status_check', sql`${t.status} in ('done', 'skipped', 'sub_failure')`),
     // Legacy tagged-union shape guard (V0): bodyweight carries value_num (no movement); strength
