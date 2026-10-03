@@ -9,18 +9,22 @@ import {
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
+import { STRENGTH_COPY } from '@/lib/constants';
 import type { EntryDTO } from '@/lib/dal/entries';
 
 import {
   calisthenicsTotals,
   loggedBodyweight,
+  loggedMovements,
+  movementNames,
+  sessionMovements,
   todayRows,
   type SessionRow,
 } from './activity-totals';
 
-// Flatten a session's two-level items (V1-8-3d) back to member entries in display order.
-const members = (s: SessionRow): EntryDTO[] =>
-  s.items.flatMap((it) => (it.kind === 'movement' ? [it.entry] : it.members));
+// Flatten a session's two-level items (V1-8-3d) back to member entries in display order — the
+// shipped helper, so the tests and the receipt can't flatten differently.
+const members = sessionMovements;
 
 // A calisthenics reading DTO. Rows arrive from the DAL OLDEST-FIRST (asc(createdAt), V1-17); tests
 // pass them oldest-first when order matters (e.g. bouts [reading(20), reading(30)] → values [20, 30]).
@@ -194,6 +198,33 @@ describe('todayRows — strength session grouping (V1-8-3a)', () => {
       ],
       ...o,
     });
+
+  it('movementNames: skipped marked, repeats removed, order kept (V1-24 3a-ii)', () => {
+    expect(
+      movementNames([
+        move({ id: 'a', movementName: 'Back squat' }),
+        move({ id: 'b', movementName: 'Rows', status: ENTRY_STATUS.skipped, sets: [] }),
+        move({ id: 'c', movementName: 'Back squat' }), // a repeat (a second session)
+        move({ id: 'd', movementName: 'Rows' }), // done later: a different fact, kept
+      ]),
+    ).toBe(`Back squat, Rows ${STRENGTH_COPY.skippedSuffix}, Rows`);
+  });
+
+  it('loggedMovements: every movement across sessions, a SKIPPED one marked (V1-24 3a-ii)', () => {
+    const rows = todayRows([
+      move({ id: 'a', movementName: 'Back squat' }),
+      move({ id: 'b', movementName: 'Bench', status: ENTRY_STATUS.skipped, sets: [] }),
+      move({ id: 'c', movementName: 'Rows', sessionId: 's2' }),
+    ]);
+    const sessions = rows.filter((r): r is SessionRow => r.kind === 'session');
+    expect(
+      loggedMovements(sessions).map(({ entry, skipped }) => [entry.movementName, skipped]),
+    ).toEqual([
+      ['Back squat', false],
+      ['Bench', true],
+      ['Rows', false],
+    ]);
+  });
 
   it('collapses a 3-movement session into ONE block, movements in insertion order', () => {
     // One tx → shared created_at → DAL returns them id-asc (a, b, c) contiguously.

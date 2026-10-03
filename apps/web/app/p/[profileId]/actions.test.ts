@@ -551,6 +551,28 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
 });
 
 describe('logStrengthSessionAction — happy path (multi-movement session)', () => {
+  // V1-24 3a-ii: the island announces and focuses the save from `savedId`, the session's PUBLIC id —
+  // and a replay (same client_id) must return the SAME id, or a retried submit focuses nothing.
+  // The REPLAY id is proven against a real DB in packages/db/scripts/verify.ts ("same id"); here the
+  // DAL is mocked, so this pins that the action forwards whatever id the DAL returns, on every call.
+  it("returns the DAL's session id as savedId, and passes the same clientId on a retry", async () => {
+    const clientId = newId();
+    const form = () =>
+      strengthForm({
+        profileId: PROFILE_ID,
+        clientId,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      });
+    const first = await logStrengthSessionAction(initial, form());
+    const replay = await logStrengthSessionAction(initial, form());
+    expect(first).toMatchObject({ ok: true, savedId: 'session-pub-id' });
+    expect(replay).toMatchObject({ ok: true, savedId: first.savedId });
+    expect(vi.mocked(logStrengthSession).mock.calls.map((c) => c[0].clientId)).toEqual([
+      clientId,
+      clientId,
+    ]);
+  });
+
   it('passes the parsed movements + defaulted sessionType to the DAL and revalidates', async () => {
     const clientId = newId();
     const res = await logStrengthSessionAction(

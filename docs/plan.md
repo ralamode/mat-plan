@@ -943,7 +943,7 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   writes it, so NULL and `morning` must be one slot) · **PR 1e #214** (the create path's arbiter is
   target-less `ON CONFLICT DO NOTHING` in `insertBodyweightEntry` — replay → same id, another device →
   typed "already logged"; the `context` stamp and CHECK moved to V1-32). Then **3a** (strength, ahead
-  of 2 by Ray's call 2026-10-02; split into **3a-i** ✅ the per-set amend → **3a-ii** the section
+  of 2 by Ray's call 2026-10-02; split into **3a-i** ✅ the per-set amend → **3a-ii** ✅ the section
   receipt → **3a-iii** the fill skips logged movements, a dependency of 3a-ii; 📋
   [plan](./plans/v1-24-3a-strength-receipt.md)), 2 (check-ins), 3b (demote the list, plus session-less
   strength entries and the `Strength` heading rename).

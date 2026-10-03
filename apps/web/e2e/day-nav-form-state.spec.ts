@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { isoDaysAgo, SEED_PROFILE_ROUTE } from './steps';
+import { isoDaysAgo, openStrengthForm, SEED_PROFILE_ROUTE } from './steps';
 
 /**
  * **V1-28 — paging to another day must not leave the last day's form behind.**
@@ -18,6 +18,8 @@ test('the day-role select follows the day being viewed, not the day first loaded
   page,
 }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
+  // V1-24 3a-ii: the form is collapsed on a day that already has strength (other specs log Liam's).
+  await openStrengthForm(page);
 
   const select = page.getByLabel('Which day is this?');
   const today = await select.inputValue();
@@ -26,6 +28,7 @@ test('the day-role select follows the day being viewed, not the day first loaded
   // makes this bug reachable by one tap of the back arrow.
   await page.getByRole('link', { name: /^Previous day/ }).click();
   await page.waitForURL(new RegExp(`d=${isoDaysAgo(1)}`));
+  await openStrengthForm(page); // a client-side day change re-keys the island: open it again
 
   // Scoped to the day-nav: the program card's header carries the same "· Strength A/B" suffix.
   const heading = page
