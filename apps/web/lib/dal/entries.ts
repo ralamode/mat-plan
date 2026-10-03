@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   findAmendableBodyweight,
+  isBodyweightDayConflict,
   isLiveProfile,
   schema,
   updateBodyweightEntryById,
@@ -296,7 +297,15 @@ export type LogBodyweightArgs = {
  * DO NOTHING). Server generates the `public_id`. Returns the entry's public id.
  * Throws if the profile is unknown (the caller re-checks ownership first).
  */
-export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: string }> {
+/**
+ * `{ id }` on a write or a `client_id` replay; `{ dayTaken: true }` when the day already holds a live
+ * weigh-in (V1-24 1d's one-per-day index refused the insert — two phones, or a stale tab). That is an
+ * EXPECTED outcome, so it is a typed result, not a throw (AGENTS.md → Errors). Interim until 1e moves
+ * the `ON CONFLICT` arbiter onto the natural key; every other error still throws.
+ */
+export type LogBodyweightResult = { id: string } | { dayTaken: true };
+
+export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodyweightResult> {
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
@@ -312,38 +321,50 @@ export async function logBodyweight(args: LogBodyweightArgs): Promise<{ id: stri
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
   const metricKey = await assertMetricKeyExists(SEED_METRIC_KEYS.bodyweight);
 
-  const [inserted] = await db
-    .insert(schema.entries)
-    .values({
-      publicId: newId(),
-      clientId: args.clientId,
-      profileId: profile.id,
-      activityDate: args.day,
-      kind: ENTRY_KIND.bodyweight,
-      unit: args.unit,
-      valueNum: String(args.value), // numeric column takes a string (precision-safe)
-      activityTypeId,
-      metricKey,
-      status: ENTRY_STATUS.done,
-      notes: args.notes ?? null,
-    })
-    // client_id UNIQUE is a PARTIAL index (WHERE deleted_at IS NULL), so the
-    // ON CONFLICT arbiter must repeat that predicate to match it.
-    .onConflictDoNothing({
-      target: schema.entries.clientId,
-      where: isNull(schema.entries.deletedAt),
-    })
-    .returning({ publicId: schema.entries.publicId });
+  let inserted: { publicId: string } | undefined;
+  let dayConflict = false;
+  try {
+    [inserted] = await db
+      .insert(schema.entries)
+      .values({
+        publicId: newId(),
+        clientId: args.clientId,
+        profileId: profile.id,
+        activityDate: args.day,
+        kind: ENTRY_KIND.bodyweight,
+        unit: args.unit,
+        valueNum: String(args.value), // numeric column takes a string (precision-safe)
+        activityTypeId,
+        metricKey,
+        status: ENTRY_STATUS.done,
+        notes: args.notes ?? null,
+      })
+      // client_id UNIQUE is a PARTIAL index (WHERE deleted_at IS NULL), so the
+      // ON CONFLICT arbiter must repeat that predicate to match it.
+      .onConflictDoNothing({
+        target: schema.entries.clientId,
+        where: isNull(schema.entries.deletedAt),
+      })
+      .returning({ publicId: schema.entries.publicId });
+  } catch (err) {
+    if (!isBodyweightDayConflict(err)) throw err;
+    // The day is taken — but possibly by THIS submit: a concurrent replay of the same client_id
+    // passes the arbiter check before the original commits, then trips the day index once it does.
+    // A replay must still answer success (AGENTS.md → Idempotency), so look the row up first.
+    dayConflict = true;
+  }
 
   if (inserted) return { id: inserted.publicId };
 
-  // Conflict → the entry already exists for this client_id; return it.
+  // Conflict → the entry may already exist for this client_id (a replay); return it.
   const [existing] = await db
     .select({ publicId: schema.entries.publicId })
     .from(schema.entries)
     .where(eq(schema.entries.clientId, args.clientId))
     .limit(1);
-  return { id: existing.publicId };
+  if (existing) return { id: existing.publicId };
+  if (dayConflict) return { dayTaken: true };
+  throw new Error('logBodyweight: insert was a no-op but no row exists for its client_id');
 }
 
 export type CheckinItemInput = {

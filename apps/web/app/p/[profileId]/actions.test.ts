@@ -79,7 +79,7 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-import { AMEND_ERROR_COPY } from '@/lib/constants';
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -236,6 +236,28 @@ describe('logBodyweightAction — happy path + ownership', () => {
     expect(res.ok).toBe(false);
     expect(logBodyweight).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+  // V1-24 1d: the one-per-day index refused a second weigh-in (another device got there first).
+  // Expected, so a typed envelope — never error.tsx — and the page revalidates to show the row that
+  // landed.
+  it('a day that already holds a weigh-in returns the typed envelope, not a throw', async () => {
+    vi.mocked(logBodyweight).mockResolvedValueOnce({ dayTaken: true });
+    const res = await logBodyweightAction(
+      initial,
+      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+    );
+    expect(res).toEqual({ ok: false, error: BODYWEIGHT_COPY.dayTaken });
+    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+
+  it('any OTHER write failure still throws (error.tsx), never a misleading envelope', async () => {
+    vi.mocked(logBodyweight).mockRejectedValueOnce(new Error('connection lost'));
+    await expect(
+      logBodyweightAction(
+        initial,
+        form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+      ),
+    ).rejects.toThrow('connection lost');
   });
 });
 

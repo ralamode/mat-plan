@@ -54,7 +54,7 @@ the [README](../packages/db/scripts/corrections/README.md) for the rules.
    arbiter;
 4. date the correction's **Applied** cell in
    [the corrections README](../packages/db/scripts/corrections/README.md) (`pending` → the date);
-5. merge 1d.
+5. merge 1d. ✅ Steps 0–4 done 2026-10-01 (#206); **re-run step 3 just before merging 1d**.
 
 **Rollback** needs no restore branch — this is a soft delete. Before 1d lands, undo is
 `UPDATE entries SET deleted_at = NULL, updated_at = now() WHERE public_id IN (<the two losers>) AND
@@ -62,12 +62,23 @@ deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `
 correction refuses those rows as drifted — expected: their `updated_at` is now `now()`, so re-reading
 is the next step. After 1d lands, un-deleting a row would violate its index.
 
-**If 1d merges first**, `migrate.yml` — which runs on **every** push to `main`, with no path filter and
+**If 1d's migration refuses** (it merged before the data was clean, or a new duplicate appeared before
+1e moved the arbiter — the error names this section: _"V1-24 1d: N (profile, day, slot) group(s) hold
+more than one live weigh-in"_), `migrate.yml` — which runs on **every** push to `main`, with no path filter and
 no gate — fails the index build, and then **re-fails on every later push**, taking the `db:seed` step
 and any other pending migration with it. Recovery is a correction for the new duplicates, `--apply`,
-then re-running `migrate.yml` via `workflow_dispatch`; no push to `main` is needed. Bodyweight
-logging keeps working (the arbiter has not moved yet), but **any later PR that needs a migration or a
-seed row is broken in prod until the wedge clears — freeze merges to `main` until then.**
+then re-running `migrate.yml` via `workflow_dispatch`. Bodyweight logging keeps working (the arbiter
+has not moved yet), but **any later PR that needs a migration or a seed row is broken in prod until the
+wedge clears — freeze merges to `main` until then.**
+
+- **The correction PR is the one exception to the freeze.** A correction must be on `main` before it can
+  `--apply`, so it merges while migrate is wedged — and that merge's own `migrate.yml` run **fails too,
+  as expected** (the duplicates are still there until you `--apply`). Don't chase that red run: apply,
+  then `workflow_dispatch`.
+- **A `lock_timeout` failure is not this.** If the run fails with `canceling statement due to lock
+timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long transaction) rather than
+  the pre-check's message above, nothing is wrong with the data: re-run `migrate.yml` via
+  `workflow_dispatch`, and the freeze is the same until it goes green.
 
 ---
 

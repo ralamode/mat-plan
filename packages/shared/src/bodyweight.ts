@@ -11,6 +11,19 @@ export type BodyweightUnit = (typeof BODYWEIGHT_UNITS)[number];
 export const DEFAULT_BODYWEIGHT_UNIT: BodyweightUnit = 'lb';
 
 /**
+ * The time-of-day SLOT a weigh-in belongs to, stored in `entries.context` (V1-24 PR 1d, slot-ready for
+ * V1-32's several-a-day). One slot today; every legacy row is a morning weigh-in.
+ *
+ * ⚠️ `uq_entries_profile_day_bodyweight` keys on `coalesce(context, 'morning')` with the value as a SQL
+ * LITERAL (drizzle-kit renders an interpolated const as `$1` in DDL). `DEFAULT_BODYWEIGHT_CONTEXT` must
+ * stay `'morning'` — `bodyweight.test.ts` pins it — or NULL and the default slot stop meaning the same
+ * thing and the index stops catching a writer that leaves `context` NULL.
+ */
+export const BODYWEIGHT_CONTEXTS = ['morning'] as const;
+export type BodyweightContext = (typeof BODYWEIGHT_CONTEXTS)[number];
+export const DEFAULT_BODYWEIGHT_CONTEXT: BodyweightContext = 'morning';
+
+/**
  * The plausible range for a bodyweight, per unit, inclusive at both ends (V1-24 PR 1a).
  *
  * Not a medical range: a **typo guard**. The failure it exists for is a slipped decimal point —

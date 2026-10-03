@@ -994,6 +994,47 @@ else moves earlier**:
 - **Deploy order is unchanged.** Expand first (column plus index), then the app that writes it
   (1e).
 
+**1d as built (2026-10-01).** Recorded here because it resolves the traps above differently from the
+amendment's first bullet:
+
+- **`entries.context` already existed** (nullable, "warmup/working/amrap qualifier", written by
+  nothing), so 1d adds no column — only `BODYWEIGHT_CONTEXTS` / `DEFAULT_BODYWEIGHT_CONTEXT` in
+  `packages/shared/src/bodyweight.ts`.
+- **NULL is resolved by the KEY, not by a backfill or a NOT NULL.** The index is
+  `(profile_id, activity_date, coalesce(context, 'morning')) WHERE deleted_at IS NULL AND metric_key =
+'bodyweight'`. No writer sets `context` until 1e, so a bare `context` key lets NULL rows escape, and a
+  backfill to `morning` creates exactly the window the trap warns about (a backfilled `morning` row
+  beside a new NULL row never collide). Coalescing makes NULL and the default slot one slot: no
+  backfill, no NOT NULL on a column every other metric shares, no deploy race. `NULLS NOT DISTINCT`
+  was rejected because it still separates NULL from `morning` and drizzle cannot declare it.
+- **Cost, carried by 1e:** drizzle's `onConflict` `target` takes columns only, so the arbiter cannot
+  name the expression. 1e uses `onConflictDoNothing()` with no target (Postgres `DO NOTHING` matches
+  any unique violation — `client_id` replay AND the natural key, which is what 1e wants) or writes the
+  clause by hand. Recorded in `docs/features/write-path.md` invariant 6.
+- **The `context` values CHECK moves to 1e**, with the first writer of `context`. Nothing can write a
+  bad value before then, and it would otherwise be a `NOT VALID` here and a `VALIDATE` later.
+- **Precondition met:** 1c was `--apply`'d 2026-10-01 (#206). Ray re-runs the duplicate query just
+  before merging, per the runbook.
+- **Proofs** (`db:verify`, "V1-24 1d"): a same-day duplicate and a NULL-beside-`morning` are refused;
+  a soft-deleted row, another slot, another metric and another profile are allowed; and the migration's
+  own `DO` pre-check, read from the file, refuses an existing duplicate. The 1b amend probes now each
+  get their own day. Mutation-checked: a bare `context` key, no metric scope, no `deleted_at`
+  predicate, no slot column, and a weakened pre-check each fail `db:verify`.
+- **Deviation from "the index only" (DB-safety review, P2-1): an interim typed envelope.** Once the
+  index exists, a same-day second weigh-in (two phones, a stale tab) is an EXPECTED outcome, and
+  AGENTS.md → Errors says expected outcomes are a typed `{ ok: false, error }`, never a throw into
+  `error.tsx`. So `logBodyweight` catches exactly `23505` on `BODYWEIGHT_DAY_UNIQUE_INDEX`
+  (`isBodyweightDayConflict`, walking drizzle's `cause` chain) and returns `{ dayTaken: true }`; the
+  action answers "A weight is already logged for this day." and revalidates. A **concurrent replay** of the same submit can trip the day index after passing the client_id arbiter (it checks before the original commits); `logBodyweight` therefore re-selects by client_id on a day conflict and answers success when the row is its own — a replay never reads as "already logged" (confirmation review P2; `entries-bodyweight.test.ts`).
+  Every other error still throws. **1e replaces this** when it moves the arbiter onto the natural key
+  (its replay branch answers the same case without an error at all).
+- **The pre-check proof was strengthened** (DB-safety review, P2-3): its fixture now puts a `'morning'`
+  duplicate beside a NULL-context row and two different profiles' single weigh-ins on one day, so a
+  pre-check grouping on bare `context` (reports 0) or dropping `profile_id` (reports 2) both fail the
+  exact count — previously only a weakened `HAVING` did.
+- **Tooling:** the `bodyweight-duplicates` screenshot state seeded two live same-day rows and now hits
+  the index; it was removed (the multi-row receipt returns with V1-32's real slots).
+
 ## Open questions
 
 0. **Does the weigh-in amend outrank the incident that opened this row?** V1-24 exists because Liam's
