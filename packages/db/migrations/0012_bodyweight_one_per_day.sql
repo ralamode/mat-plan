@@ -8,15 +8,15 @@
 --
 -- THE KEY: (profile_id, activity_date, coalesce(context, 'morning')), live bodyweight rows only.
 --   * Scoped to bodyweight: a check-in or a calisthenics bout may legitimately repeat on a day.
---   * `coalesce`, not `context`: no writer sets `context` until 1e, and NULLs are DISTINCT in a unique
+--   * `coalesce`, not `context`: no writer sets `context` (deferred to V1-32), and NULLs are DISTINCT in a unique
 --     index, so a bare `context` key would let every NULL row escape. Coalescing makes NULL and the
 --     default slot the same slot — no backfill, and no window where a NULL row and a 'morning' row for
 --     the same day both pass. V1-32's later slots ('evening', …) are distinct values of the same key.
 --   * The literals are deliberate (drizzle-kit renders an interpolated const as `$1` in DDL).
 --
--- NO APP CODE in this PR. The `ON CONFLICT` arbiter still names `uq_entries_client_id`; it moves to
--- this index in 1e, merged only after this migration's `migrate.yml` run is green — an arbiter naming
--- an index that does not exist fails EVERY insert, and migrate.yml races the Vercel deploy.
+-- The write path keeps its `ON CONFLICT (client_id)` arbiter until 1e, which makes it target-less (every
+-- unique index arbitrates, so nothing can fail to infer). Until this index exists, same-day duplicates
+-- are possible; 1e only changes how a refusal is reported, so it merges after this migrate run is green.
 --
 -- NOT CONCURRENTLY (Decision 2): drizzle-kit migrate wraps the file in a transaction, and the table is
 -- small. `require-concurrent-index-creation` is excluded in .squawk.toml for that reason. No
@@ -26,7 +26,7 @@
 -- lock_timeout) blocks inserts, so the count and the build judge the same rows. If a live duplicate
 -- exists the DO block raises a message naming the runbook instead of a bare 23505.
 -- If it fires: docs/runbooks.md → "If 1d's migration refuses" (add a correction, --apply, re-run
--- migrate.yml by workflow_dispatch; the app keeps logging because the arbiter has not moved).
+-- migrate.yml by workflow_dispatch; the app keeps logging — nothing in it depends on this index existing).
 
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
