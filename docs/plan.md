@@ -763,6 +763,12 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   seeds `lb`, and the quickest path ("tap BW, type 30") saves a mass. Needs a correction or migration,
   because the seed is `ON CONFLICT DO NOTHING`.
 
+- **V1-37 — a timed card asks for reps it doesn't have.** 🟡 Filed 2026-10-03 (V1-30b UX panel). A time
+  card keeps the `reps × time` layout and requires reps ≥ 1, so on a plank a kid's natural move — type
+  `30` into the first field — lands in reps and gets "Enter the time.", and a slip saves `30 × 1 sec`,
+  which can't be edited (V1-33). Decide the timed-set shape (reps optional, defaulting to 1 on submit, or
+  a single duration field); don't prefill a value the athlete didn't confirm. Sequence with V1-33/V1-34.
+
 - **EXP-1 — one unexportable unit 500s the whole export.** 🟡 Filed 2026-10-01 (V1-30 architecture
   lens, pre-existing). `export/route.ts` has no try/catch around the builders, so any tripwire unit
   (none is offered: V1-30 made every strength unit export, and CSV-1 converts a kg bodyweight rather than

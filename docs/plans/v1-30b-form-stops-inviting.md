@@ -2,10 +2,11 @@
 
 > Backlog: [plan.md](../plan.md) row V1-30b. Branch: `fix/v1-30b-form-stops-inviting`.
 > Filed by: [v1-30-loggable-units.md § V1-30b](./v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes).
-> Feature guide: [strength-logging](../features/strength-logging.md) (owns every app file below).
+> Feature guide: [strength-logging](../features/strength-logging.md) (owns every app and shared file below).
 >
-> **Status: DRAFT, awaiting the engineering panel, the UX panel and Ray's approval. No implementation
-> code until then.**
+> **Status: revised after the engineering panel (correctness, scope, architecture, reuse) and the UX
+> panel (interaction, a11y at 360px, trust/data-entry), 2026-10-03, with Ray's two decisions recorded.
+> Awaiting Ray's approval. No implementation code until then.**
 
 ## Goal
 
@@ -16,24 +17,36 @@ browser, and still caps a 2-mile run at the 2000 a weight cap was sized for. Thi
 offer only what the server will keep, and makes the number read as what it is — first in the form
 (30b-i), then in the stored-value bounds and the history line (30b-ii).
 
+## Ray's decisions (2026-10-03)
+
+1. **History wording:** spell `m`, `yd`, `ft`, `in`, `cm` as words with correct singulars (`20 metres`,
+   `1 foot`); keep `lb`, `kg`, `sec`, `min` as codes. The plural is `UNIT_LABELS[u].toLowerCase()`; only
+   the singular is new data, and it lives next to `UNIT_LABELS` in `packages/shared`. No second map.
+2. **Caps** (sanity bounds on what a person typed — never prescriptions; nothing reads them to suggest a
+   load): `lb 2000 · kg 2000 · sec 86400 · min 1440 · in 1200 · cm 3000 · ft 5280 · yd 5280 · m 10000`.
+   Roughly 2× the largest real use, so a 2-mile run typed into Inches (`3219 in`) is caught, and kg
+   stays 2000 so the log and edit paths agree. One exported `quantityCeiling(unit)`; V1-33 adopts it on
+   the edit path.
+
 ## The seven filed items, re-verified against `main` (2026-10-03)
 
-| #   | Filed item                                                                          | State on `main`                                                                                                                                                                                                                                            | Where it goes |
-| --- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| 1   | Hide BW / band on a time or distance movement; clear them when Measuring changes    | **Open.** `SetModeToggles` renders on every card (`strength-form.tsx` ~902); `onUnit` patches only `unit`                                                                                                                                                  | 30b-i         |
-| 2   | Field label/placeholder per dimension (`time` / `distance`, not `weight`)           | **Open.** `placeholder="weight"` and `weightInputLabel` → "… weight in sec" (`set-fields.tsx:134-135`, `constants.ts:168`)                                                                                                                                 | 30b-i         |
-| 3   | Per-dimension blank copy ("Enter the time.")                                        | **✅ Done by V1-27 (#207)** — `missingQuantityMessage(unit)` (`constants.ts`) gives "Enter the time." / "Enter the height or distance." on the client. The server's unit-neutral `BLANK_SET_MESSAGE` ("Enter a number.") stays as the backstop, correctly. | —             |
-| 4   | Mis-tap hint when Measuring differs from the catalog's dimension                    | **Open.** Only the V1-26 "usually logged with a weight" note exists (`strength-form.tsx` ~955), which keys off `declaredLoaded`                                                                                                                            | 30b-i         |
-| 5   | `step="0.5"` blocks `6.25 ft` / `1.25 min`                                          | **Open.** `set-fields.tsx:130`                                                                                                                                                                                                                             | 30b-i         |
-| 6   | The shared 2000 cap refuses a real 3219 m / 2400 sec                                | **Half done.** #201 changed the copy to "…— check the unit." (`NUMBER_TOO_HIGH_MESSAGE`), but the cap is still one number for every unit (`strength.ts:80`)                                                                                                | 30b-ii        |
-| 7   | History shows raw codes (`20 m`, `30 in`) where the picker says "Metres" / "Inches" | **Open.** `formatValueUnit` is `${value} ${unit}` (`format-value-unit.ts:36`)                                                                                                                                                                              | 30b-ii        |
+| #   | Filed item                                                                       | State on `main`                                                                                                                          | Where it goes |
+| --- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| 1   | Hide BW / band on a time or distance movement; clear them when Measuring changes | **Open.** `SetModeToggles` renders on every card; `onUnit` patches only `unit`                                                           | 30b-i         |
+| 2   | Field label/placeholder per dimension                                            | **Open.** `placeholder="weight"`; `weightInputLabel` → "… weight in sec"                                                                 | 30b-i         |
+| 3   | Per-dimension blank copy ("Enter the time.")                                     | **✅ Done by V1-27 (#207)** — `missingQuantityMessage(unit)`. The server's neutral `BLANK_SET_MESSAGE` stays the backstop.               | —             |
+| 4   | Mis-tap hint when Measuring differs from the catalog's dimension                 | **Open.** Only V1-26's weight note exists                                                                                                | 30b-i         |
+| 5   | `step="0.5"` blocks `6.25 ft` / `1.25 min`                                       | **Open** — and on kg too (`61.25 kg`, 1.25 kg plates)                                                                                    | 30b-i         |
+| 6   | The shared 2000 cap refuses a real 3219 m / 2400 sec                             | **Half done.** #201 changed the copy to "…— check the unit." (`NUMBER_TOO_HIGH_MESSAGE`); the cap is still one number (`strength.ts:80`) | 30b-ii        |
+| 7   | History shows raw codes (`20 m`, `30 in`)                                        | **Open.** `formatValueUnit` is `${value} ${unit}`                                                                                        | 30b-ii        |
 
 ## Size and split
 
-Counted against the files: 30b-i is ~130 lines of code + ~170 of tests; 30b-ii is ~70 + ~110. Together
-~480 — over the 400-line target, and two different concerns (what the form offers vs what a stored number
-is allowed to be and how it reads). **Two PRs, 30b-i first**: it removes the only path a kid can reach
-the server's refusal from, which is the user-visible bug. 30b-ii is correctness of bounds and wording.
+Counted against the files (re-checked after the panels): 30b-i ≈ 150 lines of code + ≈ 200 of tests;
+30b-ii ≈ 80 + ≈ 140. Two concerns — what the form offers vs what a stored number may be and how it
+reads — so **two PRs, 30b-i first**: it removes the only path a kid can reach the server's refusal
+from. If 30b-i grows, the mis-tap hint (item 4, an advisory note rather than "stop offering") is the
+first thing to cut to its own PR.
 
 ## Acceptance
 
@@ -46,102 +59,145 @@ shows raw codes (`20 m`) where the picker says "Metres"."_
 
 **30b-i, done when:**
 
-1. A card whose unit is not mass renders **no** BW / band chips; a mass card renders them as today.
+1. A card whose unit is not mass renders **no** BW / band chips (unmounted, not hidden); a mass card
+   renders them as today.
 2. Changing **Measuring** to a non-mass dimension clears `isBodyweight` / `isBand` on every set of that
-   card. Changing the **unit within mass** (lb → kg) clears nothing.
-3. The number field's placeholder and accessible name use the dimension noun: "weight" / "time" /
-   "distance" (accessible name: "Movement 1 set 2 time in sec"). Mass stays byte-identical
-   ("… weight in lb"), so every existing locator holds.
-4. A non-mass field accepts `6.25` / `1.25` natively; a mass field keeps `step="0.5"`.
-5. A scaffolded card whose catalog dimension differs from the chosen Measuring shows one advisory line,
-   "<name> is usually logged as <Label>." (`role="status"`, below the sets, the V1-26 idiom).
-6. The V1-27 summary line and `isSubmitBlocked` still agree with the browser on every case-table row,
-   including a set whose only touch was a BW tap that Measuring then cleared.
+   card, in the same single state update that changes the unit. Changing the **unit within mass**
+   (lb → kg) clears nothing.
+3. The number field's placeholder is the dimension's field word — `weight` / `time` / `length` — and
+   its accessible name spells the unit for non-mass: "Movement 1 set 2 time in seconds",
+   "… length in inches". Mass stays byte-identical ("… weight in lb"), so every mass locator holds.
+4. Every number field uses `step="0.001"`, from a shared `QUANTITY_DECIMALS = 3` that the server's
+   format check also reads: `6.25 ft`, `1.25 min` and `61.25 kg` are accepted natively; a 4th decimal
+   is refused by the browser exactly where the server would refuse it.
+5. A scaffolded card whose declared dimension differs from the chosen Measuring shows one advisory line
+   **directly under the name / Measuring / Unit row**, wired to the Measuring select by
+   `aria-describedby` (read on the control that caused it; no mount-with-text live region).
+6. The V1-27 summary line and `isSubmitBlocked` agree with the browser on every case-table row below,
+   including the three shapes a Measuring change creates.
 
 **30b-ii, done when:**
 
-7. The stored-value ceiling is **per unit** (table below), each ≤ the column's physical limit
-   (`numeric(8,3)` → 99999.999); over it → "That number looks too high — check the unit."
-8. History reads `20 metres`, `30 inches`, `6 feet`, `40 yards`, `75 cm`; `lb`, `kg`, `sec`, `min` are
-   unchanged (open question 1).
+7. The stored-value ceiling is per unit (Ray's table), every cap ≤ `numeric(8,3)`'s 99999.999, enforced
+   once, in the session refine; over it → "That number looks too high — check the unit." One fault,
+   one message.
+8. History reads `20 metres`, `1 metre`, `30 inches`, `1 foot`, `6 feet`, `40 yards`, `75 centimetres`;
+   `lb`, `kg`, `sec`, `min` unchanged. The CSV is untouched (its spellings are separate).
 
 ## Design — 30b-i
 
-- **Hide.** `SetModeToggles` renders only when `isMassUnit(movement.unit)`. Hidden by unmounting, never
-  CSS: a hidden checkbox in the tab order is a trap (the V1-19 lesson).
-- **Clear on dimension change, in the one place the dimension changes.** The Measuring `onChange`
-  becomes `onDimension(next)`: it patches `unit` **and**, when the new unit is not mass, maps every set
-  to `{ ...s, isBodyweight: undefined, isBand: undefined }`. `undefined`, never `false`, so "absent
-  stays absent" on the wire (the existing convention). The Unit select's `onUnit` is unchanged: it
-  never crosses a dimension.
-- **Consequence to state, not to hide:** a set whose ONLY touch was a BW tap becomes untouched once
-  cleared, so if it is trailing V1-27 drops it. Correct — it carried no number, and BW is refused on a
-  time — but the summary line will drop by one set, which is the V1-27 safeguard working as designed. A
-  case-table row and a component test pin it.
-- **Label.** `weightInputLabel(subject, unitLabel)` becomes `quantityInputLabel(subject, unit)` →
-  `${subject} ${noun} in ${unit}`, `noun` from `LOGGABLE_DIMENSION_NOUNS`, but `distance` for `length`
-  (the noun map says "height or distance", which is ~135px — too wide for the `w-24` placeholder; the
-  accessible name uses the same short word for consistency). One copy constant map,
-  `QUANTITY_FIELD_NOUN`, in `lib/constants.ts`. `editable-set.tsx` passes its unit too (it is mass-only
-  until V1-33, so its output is unchanged).
-- **Step.** `step={isMassUnit(unit) ? '0.5' : 'any'}`. `any`, not `0.001`: the server already accepts
-  3 decimals, and `any` keeps the decimal keypad without inventing a precision.
-- **Mis-tap hint.** `MovementVals` gains a TRANSIENT `declaredDimension?: UnitDimension`, set by the
-  scaffold from the catalog's `unitDefault` (the `declaredUnit` helper already exists), cleared on rename
-  (like `declaredLoaded`), never serialized. Copy: `MEASURING_HINT(name, label)`. Only scaffolded or
-  catalog-known cards carry it; a typed name has no declaration, so no hint (no false positives).
-- **What does NOT change:** the server refine 6 stays as the backstop (a crafted body is still refused);
+- **Remove, don't hide.** `SetModeToggles` renders only when `isMassUnit(movement.unit)`. Unmounted,
+  never CSS: a hidden checkbox in the tab order is a trap (the V1-19 lesson).
+- **Clear on dimension change, in one state update.** The Measuring `onChange` becomes
+  `onDimension(next)`: ONE `setMovements` call that sets `unit` and, when the new unit is not mass, maps
+  every set to `{ ...s, isBodyweight: undefined, isBand: undefined }`. One update, so no render ever
+  carries BW on a non-mass unit. `undefined`, never `false` — "absent stays absent" on the wire. The
+  Unit select's `onUnit` is unchanged: it never crosses a dimension.
+- **Rejected alternative (logged):** keep the flags in state and filter them out at serialization. State
+  would still count a BW-only set as touched while the wire carried a blank set the server refuses —
+  invisible "touched" state, the V1-19 collapsed-card wedge (`strength-form-scaffold.ts`, "a pre-tapped
+  chip is invisible state"), and the summary would disagree with the server. Clearing in state keeps
+  every V1-27 predicate correct by construction.
+- **Consequences of the clear, stated** (all correct, all pinned by case-table rows and
+  `expectSummaryAgrees` tests):
+  - **reps + BW on a set (the common shape — a `1 × BW` plank, then switched to Time):** the set keeps
+    its reps, loses BW, so `weightRequired` turns true. The summary flips to "<name> set 1 needs
+    finishing." and the field's bubble is "Enter the time." — a block with the right copy, not a drop.
+  - **BW only, on every row (chips-first, then numbers):** every set becomes untouched, so a scaffolded
+    card becomes droppable (`isUntouchedScaffold`) and the summary loses a movement.
+  - **BW only, on a gap row before a touched set:** it becomes an untouched gap, which `setIsRequired`
+    makes a blocker ("Fill in the reps…").
+  - **BW plus a typed number (the "BW+8 vest" shape):** the number stays and is now read as the new unit
+    ("8 sec"). Visible on the open card; accepted.
+
+  No announcement: no typed number is lost, the chips visibly vanish, the cleared rows are visibly blank
+  on a card the kid has open, and an announcement on every Measuring change would be noise. The one cost
+  is a Weight → Time → Weight mis-tap round trip losing the BW ticks; recovery is re-tapping visible
+  chips.
+
+- **Step: one precision for every unit.** `step="0.001"` everywhere, from `QUANTITY_DECIMALS` in
+  `packages/shared` (used by `strength.ts`'s format check and `set-fields.tsx`). The decimal keypad
+  comes from `inputMode`, not `step`. This also closes the time → mass step mismatch (a `1.25` carried
+  from Time into Weight used to fail `step="0.5"` while the summary said ready), so there is no blind
+  spot to record. A `0.5` step on lb caught no real typo.
+- **Label.** `weightInputLabel(subject, unitLabel)` becomes `quantityInputLabel(subject, unit)`:
+  - mass → `${subject} weight in ${unit}` — byte-identical;
+  - non-mass → `${subject} ${fieldWord} in ${UNIT_LABELS[unit].toLowerCase()}` ("time in seconds").
+  - The **field word** (placeholder and accessible name) is `QUANTITY_FIELD_WORD`: `weight` / `time` /
+    `length`. `length` for the length dimension, because it covers a box-jump HEIGHT and a broad-jump
+    DISTANCE (the `units.ts` note), fits the `w-24` field (~52px), and doesn't contradict the blank
+    copy "Enter the height or distance." (`distance` would mislabel the main length movement, a box
+    jump). The visible echo after the field stays the unit code; the row is ≈ 275 of ≈ 294px at 360px.
+  - `editable-set.tsx` passes its unit (mass-only until V1-33, output unchanged).
+- **Mis-tap hint.** `MovementVals` gains a TRANSIENT `declaredDimension?: UnitDimension`, set **only by
+  the scaffold** from the catalog's `unitDefault` (via the existing `declaredUnit` helper), cleared on
+  rename (like `declaredLoaded`), never serialized. A typed name has no declaration, so no hint.
+  - **Copy, one function:** `usuallyLoggedAs(name, dimension)` built from `LOGGABLE_DIMENSION_NOUNS`:
+    mass → V1-26's exact sentence "<name> is usually logged with a weight."; time → "…as a time.";
+    length → "…as a height or distance." V1-26's inline sentence moves into the same function.
+  - **Placement and announcement:** a `<p id={hintId}>` directly under the name / Measuring / Unit row,
+    and the Measuring `<select>` carries `aria-describedby={hintId}` while the hint shows. No
+    `role="status"`. Reflow is acceptable: it happens as the picker sheet closes, and the thumb is not
+    on the rows that move.
+  - **V1-26's weight note gets the same fix** (cheap, same function): its `<p>` keeps its place below the
+    sets (its trigger is a chip in the sets), gains a stable id, and the BW chip that triggered it
+    carries `aria-describedby`. No mount-with-text `role="status"`.
+- **What does NOT change:** the server refine 6 stays the backstop for a crafted body;
   `strength-form-untouched.ts` is untouched — it reads state, and the clear happens in state.
 
 ## Design — 30b-ii
 
-- **Per-unit ceilings** — `MAX_QUANTITY_BY_UNIT` in `packages/shared/src/units.ts`, enforced in the
-  log schema's quantity refine where the unit is known (the session refine, per movement), replacing the
-  flat 2000 there. **These are sanity bounds on what a person typed, not prescriptions** — nothing reads
-  them to suggest a load, and the LLM-never-authors-loads rule is untouched.
-
-  | unit | cap   | why                         |
-  | ---- | ----- | --------------------------- |
-  | lb   | 2000  | unchanged                   |
-  | kg   | 1000  | ≈ 2000 lb                   |
-  | sec  | 86400 | one day                     |
-  | min  | 1440  | one day                     |
-  | m    | 99999 | the column limit (≈ 100 km) |
-  | yd   | 99999 | column limit                |
-  | ft   | 99999 | column limit                |
-  | in   | 99999 | column limit                |
-  | cm   | 99999 | column limit (1 km)         |
-
-  The set-level numeric schema's `.max(2000)` is the EDIT path's (mass-only until V1-33) and stays.
-
-- **History wording.** `formatValueUnit` keeps codes for `lb`, `kg`, `sec`, `min` (unambiguous, and
-  bodyweight's `84.5 lb` is pinned by e2e) and spells the rest: `UNIT_DISPLAY` in `lib/constants.ts`.
-  `in` is the real bug — "30 in" reads as a preposition.
+- **Per-unit ceilings.** `MAX_QUANTITY_BY_UNIT` (Ray's table) and `quantityCeiling(unit)` in
+  `packages/shared/src/units.ts`. Enforced **once**, in the session refine where the unit is known:
+  - **Delete** the per-set `> 2000` check (`strength.ts:80`); otherwise `3219 m` is still refused there.
+  - Guard `typeof set.weight === 'number'`: the session refine runs even when a set's format check
+    failed and then sees the raw string (a zod 4.6.5 probe: `["plain", "seen string"]`), so an unguarded
+    compare would add "too high" on top of "Enter a plain number" — two messages for one fault.
+  - A unit with no cap is **refused**, never "no cap": `n > undefined` is false, so a missing entry would
+    silently disable the bound. `units.test.ts` also requires a cap for every loggable unit.
+  - The edit path's `numericSetSchema.max(2000)` is mass-only until V1-33, and kg stays 2000, so the two
+    paths agree today; V1-33 switches the edit path to `quantityCeiling(unit)`.
+- **History wording (Ray's decision 1).** `formatValueUnit` spells `m`, `yd`, `ft`, `in`, `cm`:
+  plural `UNIT_LABELS[u].toLowerCase()`, singular from `UNIT_SINGULAR_LABELS` beside it in shared
+  (`metre`, `yard`, `foot`, `inch`, `centimetre`) when `value === 1`. Codes for `lb`, `kg`, `sec`, `min`.
+  It has more callers than the history line — set-display's main and auxiliary quantities
+  (`+50 feet distance`) and `entry-label.ts` metric entries — all intended; the bodyweight callers pass
+  `lb`/`kg` and are unchanged. The CSV uses its own spellings in `csv/value.ts` and is untouched.
 
 ## File-by-file changes
 
 **30b-i**
 
-| Path                                                                                                      | Change | What & why                                                                                                            |
-| --------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/app/p/[profileId]/strength-form.tsx`                                                            | EDIT   | Toggles only on mass; `onDimension` clears modes; `declaredDimension` carried + cleared on rename; the measuring hint |
-| `apps/web/app/p/[profileId]/strength-form-scaffold.ts`                                                    | EDIT   | Set `declaredDimension` from `unitDefault`                                                                            |
-| `apps/web/app/p/[profileId]/set-fields.tsx`                                                               | EDIT   | Placeholder + accessible name per dimension; `step` per dimension; takes `unit` (typed)                               |
-| `apps/web/app/p/[profileId]/editable-set.tsx`                                                             | EDIT   | Pass `unit` to the renamed label helper (output unchanged)                                                            |
-| `apps/web/lib/constants.ts`                                                                               | EDIT   | `quantityInputLabel` (replaces `weightInputLabel`), `QUANTITY_FIELD_NOUN`, `MEASURING_HINT`                           |
-| `apps/web/app/p/[profileId]/strength-form.test.tsx`, `strength-form-scaffold.test.ts`, `set-fields` tests | EDIT   | Below                                                                                                                 |
-| `apps/web/e2e/a11y.spec.ts`, `editable-set.test.tsx`                                                      | EDIT   | Locators → `quantityInputLabel`                                                                                       |
-| `docs/features/strength-logging.md`                                                                       | EDIT   | Invariant 4b (what the form offers per dimension); trap: clearing a mode can un-touch a set                           |
+| Path                                                                            | Change | What & why                                                                                                                             |
+| ------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/strength.ts`                                               | EDIT   | Format check reads `QUANTITY_DECIMALS` (behaviour unchanged)                                                                           |
+| `packages/shared/src/units.ts`                                                  | EDIT   | `QUANTITY_DECIMALS = 3`                                                                                                                |
+| `apps/web/app/p/[profileId]/strength-form.tsx`                                  | EDIT   | Chips only on mass; `onDimension` (one `setMovements`); `declaredDimension` carried + cleared on rename; the hint under the header row |
+| `apps/web/app/p/[profileId]/strength-form-scaffold.ts`                          | EDIT   | `declaredDimension` from `unitDefault`                                                                                                 |
+| `apps/web/app/p/[profileId]/set-fields.tsx`                                     | EDIT   | Placeholder + accessible name per dimension; `step` from `QUANTITY_DECIMALS`; takes `unit` (typed)                                     |
+| `apps/web/app/p/[profileId]/set-mode-toggles.tsx`                               | EDIT   | BW chip accepts `aria-describedby` (the V1-26 note)                                                                                    |
+| `apps/web/app/p/[profileId]/editable-set.tsx`                                   | EDIT   | Pass `unit` to the renamed label helper (output unchanged)                                                                             |
+| `apps/web/lib/constants.ts`                                                     | EDIT   | `quantityInputLabel` (replaces `weightInputLabel`), `QUANTITY_FIELD_WORD`, `usuallyLoggedAs`                                           |
+| `apps/web/app/p/[profileId]/strength-form.test.tsx`                             | EDIT   | The `weightOf` locator (`^Movement N set M weight`) becomes field-word aware — the existing time-card test uses it; new tests below    |
+| `apps/web/app/p/[profileId]/strength-form-scaffold.test.ts`                     | EDIT   | `declaredDimension`                                                                                                                    |
+| `apps/web/app/p/[profileId]/editable-set.test.tsx`, `apps/web/e2e/a11y.spec.ts` | EDIT   | Locators → `quantityInputLabel`; a11y gains a time-card case                                                                           |
+| `apps/web/lib/constants.test.ts`                                                | EDIT   | `quantityInputLabel`, `usuallyLoggedAs`                                                                                                |
+| `docs/features/strength-logging.md`                                             | EDIT   | Invariant 4b (what the form offers per dimension); traps: clearing a mode can un-touch a set; filtering at serialization was rejected  |
 
 **30b-ii**
 
-| Path                                                            | Change | What & why                                                                     |
-| --------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------ |
-| `packages/shared/src/units.ts`                                  | EDIT   | `MAX_QUANTITY_BY_UNIT`                                                         |
-| `packages/shared/src/strength.ts`, `strength-session.ts`        | EDIT   | Per-unit ceiling in the session refine; the flat 2000 leaves the log path only |
-| `apps/web/lib/entries/format-value-unit.ts`, `lib/constants.ts` | EDIT   | `UNIT_DISPLAY`                                                                 |
-| `packages/shared/src/units.test.ts`                             | EDIT   | Every loggable unit has a cap ≤ 99999.999 (the chain test)                     |
-| tests for the refine and `formatValueUnit` callers              | EDIT   | Below                                                                          |
+| Path                                                         | Change | What & why                                                                                    |
+| ------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------- |
+| `packages/shared/src/units.ts`                               | EDIT   | `MAX_QUANTITY_BY_UNIT`, `quantityCeiling`, `UNIT_SINGULAR_LABELS`                             |
+| `packages/shared/src/strength.ts`                            | EDIT   | **Delete** the per-set `> 2000` check                                                         |
+| `packages/shared/src/strength-session.ts`                    | EDIT   | Per-unit ceiling in the session refine (number-guarded; missing cap refuses)                  |
+| `packages/shared/src/units.test.ts`                          | EDIT   | Every loggable unit has a cap ≤ 99999.999 and a singular where spelled                        |
+| `apps/web/app/p/[profileId]/strength-set-schema.test.ts`     | EDIT   | The per-set cap tests (`'99999'`, `'3200'`) move to the session level                         |
+| `apps/web/app/p/[profileId]/strength-session-schema.test.ts` | EDIT   | Per-unit caps; one message when the format check also fails                                   |
+| `apps/web/lib/entries/format-value-unit.ts` (+ `.test.ts`)   | EDIT   | Spell the five codes; singular at 1                                                           |
+| `apps/web/app/p/[profileId]/set-display.test.ts`             | EDIT   | `'3 × 30 in'` → `'3 × 30 inches'`; `'+50 ft distance'` → `'+50 feet distance'`                |
+| `apps/web/lib/entries/entry-label` tests                     | EDIT   | Metric entries spelled                                                                        |
+| `docs/features/strength-logging.md`                          | EDIT   | It owns `units.ts`, `strength.ts`, `strength-session.ts`: the cap moved to the session refine |
 
 ## Test plan
 
@@ -149,62 +205,90 @@ Red first where possible: each new test is committed failing on `main`'s code, t
 
 **30b-i**
 
-- Component: a time card has no BW/band checkbox; a mass card has both.
-- Component: tap BW on a mass card, switch Measuring to Time → no chips, and the serialized payload's
-  sets carry no `isBodyweight`; switch lb → kg → BW still set.
-- Component: a BW-only trailing row cleared by the switch is dropped, and the summary line counts one
-  fewer set (`expectSummaryAgrees` on that row).
-- Component: accessible name "Movement 1 set 1 time in sec"; mass "… weight in lb" byte-identical.
-- Component: a time field has `step="any"`, a mass field `step="0.5"`.
-- Scaffold unit: `declaredDimension` from `unitDefault`; null → none.
-- Component: the measuring hint renders on a scaffolded mismatch, not on a match, not on a typed name;
-  cleared on rename.
-- e2e (`a11y.spec.ts`): a time card at 360px — no overflow, axe clean, tap targets.
-- **Mutations:** render chips unconditionally; skip the clear; clear on a mass unit change; keep
-  `step="0.5"` everywhere; drop the rename clear of `declaredDimension`.
+| Case                                        | Expected                                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Time card                                   | No BW/band checkbox; mass card has both                                                                               |
+| BW on a mass card → Measuring to Time       | No chips; payload sets carry no `isBodyweight`; lb → kg keeps BW                                                      |
+| reps + BW → Time                            | Blocked: summary "<name> set 1 needs finishing.", bubble "Enter the time."                                            |
+| BW only on every row (scaffolded) → Time    | Card droppable; summary one movement fewer                                                                            |
+| BW-only gap row before a touched set → Time | Gap row blocks ("Fill in the reps…")                                                                                  |
+| Accessible name                             | "Movement 1 set 1 time in seconds"; "… length in inches"; mass "… weight in lb" byte-identical                        |
+| Step                                        | `step="0.001"` on every unit; `61.25 kg`, `6.25 ft` valid; `1.2345` invalid                                           |
+| Hint                                        | Under the header row; Measuring select `aria-describedby` → its id; not on a match or a typed name; cleared on rename |
+| V1-26 note                                  | Stable id; BW chip `aria-describedby` → it; no `role="status"`                                                        |
+
+Every blocking and droppable row runs through `expectSummaryAgrees`. Scaffold unit: `declaredDimension`
+from `unitDefault`; null → none. e2e (`a11y.spec.ts`): a time card at 360px — no overflow, axe clean, tap
+targets. **Mutations:** chips unconditionally; skip the clear; clear on a mass unit change; two updates
+instead of one (a render with BW on Time); `step="0.5"` back; the hint's `aria-describedby` dropped;
+drop the rename clear of `declaredDimension`.
 
 **30b-ii**
 
-- Schema: `3219 m` and `2400 sec` accepted; `100000 m` and `86401 sec` refused with the constant;
-  `2001 lb` refused (unchanged); every loggable unit has a cap (`units.test.ts`).
-- `formatValueUnit`: `20 metres`, `30 inches`; `84.5 lb`, `30 sec` unchanged.
-- **Mutations:** flat 2000 back; a unit missing from the map; `in` back to the code.
+- Schema: `3219 m`, `2400 sec`, `100 in` accepted; `3219 in`, `10001 m`, `86401 sec`, `2001 kg`,
+  `2001 lb` refused with `NUMBER_TOO_HIGH_MESSAGE`; `99999.1234` gets ONE message ("Enter a plain
+  number"); a unit with no cap refused; every loggable unit has a cap (`units.test.ts`).
+- `formatValueUnit`: `20 metres`, `1 metre`, `1 foot`, `6 feet`, `30 inches`, `75 centimetres`;
+  `84.5 lb`, `30 sec` unchanged.
+- **Mutations:** the per-set 2000 back; no number guard (two messages); a missing cap read as "no cap";
+  plural at 1; `in` back to the code.
 
 ## Interactions
 
 - **V1-27:** `isSubmitBlocked`, `weightRequired`, `isUntouchedSet` and the summary line all read state;
-  the clear happens in state, so they stay in agreement by construction. The one new behaviour (a
-  BW-only row becoming untouched) is pinned above.
-- **V1-30 refine 6:** unchanged and still the backstop for a crafted body.
-- **Edit form (V1-9/3a-i):** mass-only until V1-33; it gets the renamed label helper with identical
-  output. V1-33 will inherit the per-dimension label for free.
-- **V1-34** (jumps and holds open as Weight/Pounds) is catalog DATA (`unitDefault: null`), fixed by a
-  correction or migration — **out of scope**; the measuring hint cannot fire for them until V1-34 gives
-  them a declaration, which is the honest result.
-- **V1-33** (non-mass sets can't be edited) — **out of scope**, sequenced after this.
+  the clear is a state change, so they agree by construction. The three shapes it creates are pinned
+  above. With one precision for every unit, a step failure can no longer be created by a Measuring
+  switch.
+- **V1-30 refine 6:** unchanged, still the backstop.
+- **Edit form (V1-9 / 3a-i):** mass-only until V1-33; renamed label helper, identical output.
+- **V1-34** (jumps and holds open as Weight / Pounds) is catalog DATA — out of scope. Every catalog
+  `unitDefault` today is `lb`, so the hint can only fire for a weighted movement moved off Weight — the
+  unrecoverable V1-30 U5 case, which is exactly why its placement is the blocking fix.
+- **V1-33** (non-mass sets can't be edited) — out of scope, sequenced after this.
+- **V1-37** (filed by this plan): time cards require reps ≥ 1 in a reps × time layout.
 
 ## Risks / rollback
 
-- Renaming `weightInputLabel` touches every locator that uses it. Mass output is byte-identical, so a
-  missed locator fails loudly in CI, not silently.
-- A BW-only row disappearing on a Measuring switch could surprise; mitigated by the summary line, and it
-  only ever drops a row with no number.
+- Renaming `weightInputLabel` touches every locator that uses it; mass output is byte-identical, so a
+  missed locator fails loudly.
+- A Measuring change can block a set or drop a BW-only card (stated above); every shape is visible on the
+  open card and pinned by tests.
 - Rollback: revert the PR; no schema or data change in either part.
 
 ## Out-of-scope / deferred
 
-V1-33 (edit non-mass), V1-34 (catalog unit defaults), V1-35 (ambiguous duplicate names), a server-side
-per-dimension blank message (the client copy covers the reachable path; the server stays neutral).
+V1-33 (edit non-mass), V1-34 (catalog unit defaults), V1-35 (ambiguous duplicate names), V1-37 (reps on
+time cards), a server-side per-dimension blank message (the client copy covers the reachable path).
 
-## Open questions
+## Review-response log
 
-1. **History wording (30b-ii):** spell `m`, `yd`, `ft`, `in`, `cm` as words (`20 metres`, `30 inches`)
-   and keep `lb`/`kg`/`sec`/`min` as codes — or spell everything? Recommendation: the split above; `in`
-   is the only genuinely misleading code, and changing `lb` would churn the bodyweight receipt for no gain.
-2. **Caps (30b-ii):** are the per-unit ceilings in the table right for your athletes? They are sanity
-   bounds only, never prescriptions.
+**UX panel (2026-10-03)**
 
-## Review-response log (adversarial panel)
+| ID    | Finding                                                                                | Response                                                                                                              |
+| ----- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| UX-B1 | The mis-tap hint rendered ~350px below its trigger, in a mount-with-text live region   | **Accepted.** Under the header row, `aria-describedby` on Measuring, no `role="status"`, component test of the wiring |
+| UX-S1 | Hint copy "…as Weight." (mid-sentence capital, slash) and a second phrasing of V1-26's | **Accepted.** One `usuallyLoggedAs` from `LOGGABLE_DIMENSION_NOUNS`; mass reuses V1-26's sentence                     |
+| UX-S2 | Accessible name "distance in in" reverses the accepted V1-30 item                      | **Accepted.** Non-mass spells the unit ("time in seconds"); mass byte-identical                                       |
+| UX-S3 | The side effect can drop a whole movement and can create a blocking gap                | **Accepted.** Consequences rewritten; case rows + tests; no announcement (reasoned); rejected alternative logged      |
+| UX-S4 | Length caps at the column limit never fire                                             | **Resolved by Ray's decision 2** (tight caps)                                                                         |
+| UX-S5 | History: "1 feet", inconsistent `cm`, a duplicate map                                  | **Resolved by Ray's decision 1** + singulars; plural from `UNIT_LABELS`                                               |
+| UX-N1 | `step="0.5"` blocks `61.25 kg`                                                         | **Accepted.** One `QUANTITY_DECIMALS` step for every unit                                                             |
+| UX-N2 | "distance" placeholder clips on desktop                                                | **Resolved:** the field word is `length` (~52px), which fits with the spinner                                         |
+| UX-O1 | V1-26's note has the same live-region problem                                          | **Accepted** in 30b-i (cheap: the same copy function)                                                                 |
+| UX-O2 | Time cards require reps ≥ 1 in a reps × time layout                                    | **Filed** as V1-37                                                                                                    |
 
-_Empty — the engineering panel (correctness, scope, architecture, reuse) and the UX panel (interaction,
-a11y at 360px, trust/data-entry) run on this draft next._
+**Engineering panel (2026-10-03)**
+
+| ID     | Finding                                                                                      | Response                                                                                                     |
+| ------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| ENG-S1 | The cap move is under-specified; the session refine sees the raw string on a format failure  | **Accepted.** Delete the per-set check; number guard; a missing cap refuses; tests move to the session level |
+| ENG-S2 | The Consequence section missed the common shape (reps + BW → blocked) and the time→mass step | **Accepted.** Rewritten; the step mismatch is removed by one precision for every unit                        |
+| ENG-S3 | Spelling breaks the singular and reaches more callers than history                           | **Accepted.** Singulars; callers and their tests listed; "1 ft" → "1 foot"                                   |
+| ENG-S4 | `UNIT_DISPLAY` duplicates `UNIT_LABELS`                                                      | **Accepted.** Plural derived; singulars beside `UNIT_LABELS` in shared                                       |
+| ENG-S5 | `step="any"` lets through what the server refuses                                            | **Accepted.** `step="0.001"` from shared `QUANTITY_DECIMALS`, also read by the format check                  |
+| ENG-S6 | Accessible name "distance in in"                                                             | **Accepted** (same as UX-S2)                                                                                 |
+| ENG-N1 | kg 1000 makes the log and edit paths disagree                                                | **Resolved by Ray's decision 2** (kg 2000); `quantityCeiling` for V1-33                                      |
+| ENG-N2 | Incomplete file tables                                                                       | **Accepted.** Completed (the `weightOf` locator, the 30b-ii guide row, both schema test files, set-display)  |
+| ENG-A1 | "distance" mislabels a box jump and clashes with the blank copy                              | **Accepted.** Field word `length`                                                                            |
+| ENG-A2 | "Only scaffolded or catalog-known cards" is inaccurate                                       | **Accepted.** Scaffolded only                                                                                |
+| ENG-A3 | Two state updates can render BW on a non-mass unit                                           | **Accepted.** One `setMovements`; a mutation pins it                                                         |
