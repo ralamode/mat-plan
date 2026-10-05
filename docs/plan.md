@@ -746,7 +746,7 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   Reproduced by #201's red-first commit; filed from #176's review.
 
 - **V1-30b — the form stops inviting the shapes V1-30a refuses.** 🟡 Filed 2026-10-01 from the V1-30
-  UX lens ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
+  UX lens. 📋 [**plan**](./plans/v1-30b-form-stops-inviting.md) (draft, split 30b-i form → 30b-ii caps + history; per-dimension blank copy already done by V1-27). Filed from ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
   Hide BW / band on a time or distance movement and clear them when Measuring changes; label the field
   `time` / `distance` instead of `weight` (placeholder and aria-label); per-dimension blank copy
   ("Enter the time."); a hint when Measuring differs from the catalog's dimension; `step="0.5"` blocks
@@ -762,6 +762,12 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   Broad Jump and Hollow-Body Hold have `unitDefault: null` (`catalog-movements.ts`), so the scaffold
   seeds `lb`, and the quickest path ("tap BW, type 30") saves a mass. Needs a correction or migration,
   because the seed is `ON CONFLICT DO NOTHING`.
+
+- **V1-37 — a timed card asks for reps it doesn't have.** 🟡 Filed 2026-10-03 (V1-30b UX panel). A time
+  card keeps the `reps × time` layout and requires reps ≥ 1, so on a plank a kid's natural move — type
+  `30` into the first field — lands in reps and gets "Enter the time.", and a slip saves `30 × 1 sec`,
+  which can't be edited (V1-33). Decide the timed-set shape (reps optional, defaulting to 1 on submit, or
+  a single duration field); don't prefill a value the athlete didn't confirm. Sequence with V1-33/V1-34.
 
 - **EXP-1 — one unexportable unit 500s the whole export.** 🟡 Filed 2026-10-01 (V1-30 architecture
   lens, pre-existing). `export/route.ts` has no try/catch around the builders, so any tripwire unit
