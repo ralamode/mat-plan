@@ -4,7 +4,7 @@ import { type RoutineItem, ROUTINE_VERSION } from '@mat-plan/shared';
 import { useActionState, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { SAVING_LABEL } from '@/lib/constants';
+import { ROUTINE_COPY, SAVING_LABEL } from '@/lib/constants';
 import { type RoutineCatalogItem } from '@/lib/routine/catalog';
 import { moveDown, moveUp, toggle } from '@/lib/routine/editor';
 
@@ -59,7 +59,7 @@ export function RoutineEditor({
       <section aria-labelledby="routine-order-heading" className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <h2 id="routine-order-heading" className="text-lg font-medium">
-            Routine order
+            {ROUTINE_COPY.orderHeading}
           </h2>
           <p className="text-muted-foreground text-sm">Weigh-in always comes first.</p>
         </div>
@@ -144,7 +144,7 @@ export function RoutineEditor({
           disabled={pending || order.length === 0}
           className="text-base"
         >
-          {pending ? SAVING_LABEL : 'Save routine'}
+          {pending ? SAVING_LABEL : ROUTINE_COPY.save}
         </Button>
       </div>
 

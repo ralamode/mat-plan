@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { APP_HOME_PATH } from '@/lib/constants';
+import { APP_HOME_PATH, GATE_COPY } from '@/lib/constants';
 
 /**
  * The gate action's redirect target (OSS-2). Only the target is under test here: the code check, the
@@ -40,9 +40,12 @@ describe('submitGate redirect target', () => {
     expect(await landing({ password })).toBe(APP_HOME_PATH);
   });
 
-  it('goes to the app home when from is the landing itself', async () => {
-    expect(await landing({ password, from: '/' })).toBe(APP_HOME_PATH);
-  });
+  it.each(['/', '/?x=1', '/#top'])(
+    'goes to the app home when from is the landing (%s)',
+    async (from) => {
+      expect(await landing({ password, from })).toBe(APP_HOME_PATH);
+    },
+  );
 
   it('goes to the app home when from is hostile', async () => {
     expect(await landing({ password, from: '//evil.example' })).toBe(APP_HOME_PATH);
@@ -54,7 +57,7 @@ describe('submitGate redirect target', () => {
 
   it('does not redirect on a wrong code', async () => {
     expect(await submitGate({ error: null }, form({ password: 'wrong' }))).toEqual({
-      error: 'Incorrect access code.',
+      error: GATE_COPY.incorrect,
     });
     expect(redirect).not.toHaveBeenCalled();
   });

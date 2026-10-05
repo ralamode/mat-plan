@@ -65,6 +65,11 @@ export function safeInternalPath(path: string | null | undefined): string {
   return url.pathname + url.search + url.hash;
 }
 
+/** The pathname of a path `safeInternalPath` returned (`/?x=1` → `/`), parsed the same way it was. */
+export function internalPathname(path: string): string {
+  return new URL(path, PROBE_ORIGIN).pathname;
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -123,4 +128,13 @@ export const PUBLIC_PATHS = ['/'] as const;
 
 export function isPublicPath(pathname: string): boolean {
   return (PUBLIC_PATHS as readonly string[]).includes(pathname);
+}
+
+/**
+ * Served without the gate cookie: the public paths plus the gate itself (how a caller GETS the cookie).
+ * ONE definition for the three places that must agree — the proxy's bounce, the screenshot capture's
+ * "skip the login" and the pages-are-gated test — so AUTH-1's edit to the exemptions happens once.
+ */
+export function isUngatedPath(pathname: string): boolean {
+  return pathname === GATE_PATH || isPublicPath(pathname);
 }

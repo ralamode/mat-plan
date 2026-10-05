@@ -50,9 +50,9 @@
 }
 
 :root {
-  /* The mark's orange, from public/brand/mat-plan-mark.svg (OSS-2). For the mark ONLY: it is 3.5:1 on
-     white, enough for a graphic but not for text, so it must not become a text or button colour. */
-  --brand: #f64d24;
+  /* The mark's orange — #f64d24 in public/brand/mat-plan-mark.svg (OSS-2). For the mark ONLY: 3.5:1 on
+     white, enough for a graphic but not for text (docs/design.md → Tokens). */
+  --brand: oklch(0.654 0.212 34.36);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

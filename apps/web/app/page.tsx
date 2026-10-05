@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { GitHubMark } from '@/components/brand/github-mark';
+import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';
 import { GATE_PATH } from '@/lib/access-gate';
-import { APP_HOME_PATH, APP_NAME, GITHUB_REPO_URL, LANDING_COPY } from '@/lib/constants';
+import { APP_NAME, GITHUB_REPO_URL, LANDING_COPY } from '@/lib/constants';
 
 export const metadata: Metadata = {
   description: LANDING_COPY.lead,
@@ -44,9 +44,9 @@ export default function LandingPage() {
           </a>
         </Button>
         <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
-          <Link href={`${GATE_PATH}?from=${encodeURIComponent(APP_HOME_PATH)}`}>
-            {LANDING_COPY.gateCta}
-          </Link>
+          {/* No `?from=`: the gate action defaults to the app home, so "where does login land" has one
+              answer (and stays server-resolved if HH-1 makes home dynamic). */}
+          <Link href={GATE_PATH}>{LANDING_COPY.gateCta}</Link>
         </Button>
       </div>
     </main>

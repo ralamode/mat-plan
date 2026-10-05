@@ -43,6 +43,17 @@ describe('proxy routing', () => {
     expect(location?.pathname).toBe(APP_HOME_PATH);
   });
 
+  // The pass-through branches: a regression here is a redirect LOOP (`/gate` → `/gate`, `/p` → `/p`).
+  it('serves the gate itself to an un-gated caller', async () => {
+    const { location } = await run(GATE_PATH, { gated: false });
+    expect(location).toBeNull();
+  });
+
+  it.each([APP_HOME_PATH, '/p/x', '/p/x/routine'])('serves %s to a gated caller', async (path) => {
+    const { location } = await run(path, { gated: true });
+    expect(location).toBeNull();
+  });
+
   // `//` is not here: Next redirects repeated slashes BEFORE the proxy runs (resolve-routes), so the
   // proxy never sees one.
   it.each([APP_HOME_PATH, '/p/some-profile', '/profile', '/%2F', '/%20'])(
@@ -63,9 +74,21 @@ describe('proxy routing', () => {
 // Next's own matcher compiler, so the test sees the regex Next actually runs rather than a re-derivation.
 // Internal and untyped in the package's .d.ts, hence the require + the one-line shape below.
 type MatcherCompiler = (matcher: readonly string[], nextConfig: object) => { regexp: string }[];
-const { getMiddlewareMatchers } = createRequire(import.meta.url)(
-  'next/dist/build/analysis/get-page-static-info',
-) as { getMiddlewareMatchers: MatcherCompiler };
+const MATCHER_COMPILER = 'next/dist/build/analysis/get-page-static-info';
+function loadMatcherCompiler(): MatcherCompiler {
+  const mod = createRequire(import.meta.url)(MATCHER_COMPILER) as {
+    getMiddlewareMatchers?: MatcherCompiler;
+  };
+  if (typeof mod.getMiddlewareMatchers !== 'function') {
+    // A Next bump moved the internal. This is NOT a gate regression: find the new home of
+    // `getMiddlewareMatchers` in node_modules/next/dist and update MATCHER_COMPILER.
+    throw new Error(
+      `${MATCHER_COMPILER} no longer exports getMiddlewareMatchers (Next internal moved)`,
+    );
+  }
+  return mod.getMiddlewareMatchers;
+}
+const getMiddlewareMatchers = loadMatcherCompiler();
 
 describe('proxy matcher', () => {
   const [matcher] = getMiddlewareMatchers(config.matcher, {});

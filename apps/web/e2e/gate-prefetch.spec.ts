@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { GATE_PATH } from '../lib/access-gate';
 import { APP_HOME_PATH, BODYWEIGHT_COPY, PICKER_COPY } from '../lib/constants';
 
+import { NO_GATE_STATE } from './contexts';
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**
@@ -33,7 +34,7 @@ for (const route of GATED_ROUTES) {
     test(`un-gated ${route} with ${Object.keys(header)[0]} goes to the gate`, async ({
       browser,
     }) => {
-      const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+      const context = await browser.newContext({ storageState: NO_GATE_STATE });
       const res = await context.request.get(route, { headers: header, maxRedirects: 0 });
       // The proxy layer: a real redirect to the gate.
       expect(res.status()).toBeGreaterThanOrEqual(300);
@@ -53,7 +54,7 @@ for (const header of PREFETCH_HEADERS) {
   test(`un-gated / with ${Object.keys(header)[0]} is the public landing, with no app content`, async ({
     browser,
   }) => {
-    const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const context = await browser.newContext({ storageState: NO_GATE_STATE });
     const res = await context.request.get('/', { headers: header, maxRedirects: 0 });
     expect(res.status()).toBe(200);
     const body = await res.text();

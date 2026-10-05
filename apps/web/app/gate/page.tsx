@@ -31,6 +31,7 @@ export default async function GatePage({
         href="/"
         className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center self-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3"
       >
+        <span aria-hidden="true">←&nbsp;</span>
         {GATE_COPY.back}
       </Link>
     </main>

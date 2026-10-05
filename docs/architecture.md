@@ -97,7 +97,7 @@ sequenceDiagram
 `/` is the **public landing** (OSS-2): no cookie read, no DB query, the only route in `PUBLIC_PATHS`.
 A caller who already holds the gate cookie never sees it — the proxy sends `/` (and `/gate`) to the
 picker at **`/p`** (`APP_HOME_PATH`). That redirect is convenience routing, not authorization: every
-gated page still calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails the build if one
+gated page still calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails CI if one
 doesn't.
 
 The picker at `/p` lists profiles; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The

@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-import { APP_HOME_PATH, BODYWEIGHT_COPY, DEFAULT_TIME_ZONE, PICKER_COPY } from '../lib/constants';
+import { APP_HOME_PATH, BODYWEIGHT_COPY, DEFAULT_TIME_ZONE } from '../lib/constants';
 import { formatDayLong, localDayIso } from '../lib/date';
+
+import { pickerHeading } from './contexts';
 import {
   logBodyweight,
   logCalisthenics,
@@ -23,10 +25,8 @@ import {
 test('picks a profile then logs a bodyweight in its scoped Today', async ({ page }) => {
   await page.goto(APP_HOME_PATH);
 
-  // V1-3: `/` is the profile picker. Tap a tile → land on the scoped Today.
-  await expect(
-    page.getByRole('heading', { name: PICKER_COPY.heading, exact: true, level: 1 }),
-  ).toBeVisible();
+  // V1-3: the app home is the profile picker. Tap a tile → land on the scoped Today.
+  await expect(pickerHeading(page)).toBeVisible();
   await selectProfile(page, 'Liam');
 
   // V1-24 PR 1a: one heading in every state. Liam's TODAY is this spec's alone (the e2e rule — see

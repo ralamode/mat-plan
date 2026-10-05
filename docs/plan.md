@@ -371,7 +371,7 @@ going public, not just on V1-13.
 
   **Three PRs, in this order:**
 
-  1. ✅ **§A — the public route** (shipped in `feat/oss-2a-public-landing`): `/` public, picker → `/p`, copy + one link into the README's
+  1. ✅ **§A — the public route** (#216): `/` public, picker → `/p`, copy + one link into the README's
      own "what's interesting here", `app/loading.tsx` → `app/p/loading.tsx`, the gate matcher's
      unanchored lookahead fixed, a `pages-are-gated` test, `/` and `/gate` axe-scanned un-gated for the
      first time, and every `'/'`-means-the-app-home literal routed through `APP_HOME_PATH`.

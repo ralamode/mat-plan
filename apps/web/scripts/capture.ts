@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium, type Page } from '@playwright/test';
 
 import { gateLogin } from '../e2e/gate-login';
-import { GATE_PATH, isPublicPath } from '../lib/access-gate';
+import { isUngatedPath } from '../lib/access-gate';
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
@@ -95,7 +95,7 @@ export async function captureScreenshot(opts: {
       // A public route — and the gate itself — is captured as a stranger sees it: logged in, the proxy
       // sends both `/` and `/gate` to the picker.
       const pathname = new URL(opts.route, opts.baseUrl).pathname;
-      if (!isPublicPath(pathname) && pathname !== GATE_PATH) await gateLogin(page);
+      if (!isUngatedPath(pathname)) await gateLogin(page);
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;

@@ -46,8 +46,10 @@ export const PICKER_COPY = {
 /** The product name: the tab title, the landing's `<h1>` and the gate's. */
 export const APP_NAME = 'mat-plan';
 
-/** The public source repository, linked from the landing page. */
-export const GITHUB_REPO_URL = 'https://github.com/ralamode/mat-plan';
+/** The public source repository: `owner/name`, as the GitHub API wants it (screenshot publishing). */
+export const GITHUB_REPO = 'ralamode/mat-plan';
+/** …and as a page, linked from the landing. */
+export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
 
 /**
  * The public landing's copy (OSS-2 §A). Rule from the plan: no claim whose truth depends on repo state
@@ -66,8 +68,17 @@ export const LANDING_COPY = {
  *  public flow, and "preview" promised a timeline the landing deliberately doesn't. */
 export const GATE_COPY = {
   subhead: 'Enter the household access code to continue.',
-  /** The way back out — the one room a stranger can walk into needs an exit. */
-  back: `← About ${APP_NAME}`,
+  /** The way back out — the one room a stranger can walk into needs an exit. The page draws a
+   *  decorative `←` before it, hidden from screen readers so the link isn't "leftwards arrow, About…". */
+  back: `About ${APP_NAME}`,
+  /** A wrong code. */
+  incorrect: 'Incorrect access code.',
+} as const;
+
+/** The routine editor's copy — the e2e replays its Save, so the label has one home. */
+export const ROUTINE_COPY = {
+  orderHeading: 'Routine order',
+  save: 'Save routine',
 } as const;
 
 /** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */

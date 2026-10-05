@@ -4,11 +4,11 @@ import {
   GATE_COOKIE_NAME,
   gateTokenFor,
   isPublicPath,
+  isUngatedPath,
   isValidGateCookie,
   PUBLIC_PATHS,
   safeInternalPath,
 } from './access-gate';
-import { APP_HOME_PATH } from './constants';
 
 // First tests on the harness (pulled forward ahead of V0-8). The access-gate
 // helpers are pure and security-relevant, so they make a good first target:
@@ -73,9 +73,13 @@ describe('PUBLIC_PATHS / isPublicPath (OSS-2)', () => {
   });
 });
 
-describe('APP_HOME_PATH', () => {
-  it('is the profile picker — a contract the proxy, the gate action and the specs share', () => {
-    expect(APP_HOME_PATH).toBe('/p');
+describe('isUngatedPath', () => {
+  it.each(['/', '/gate'])('serves %s without the cookie', (path) => {
+    expect(isUngatedPath(path)).toBe(true);
+  });
+
+  it.each(['/p', '/gatex', '/gate/x', '/p/x'])('gates %s', (path) => {
+    expect(isUngatedPath(path)).toBe(false);
   });
 });
 

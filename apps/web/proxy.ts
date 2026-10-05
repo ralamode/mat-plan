@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { GATE_COOKIE_NAME, GATE_PATH, isPublicPath, isValidGateCookie } from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, GATE_PATH, isUngatedPath, isValidGateCookie } from '@/lib/access-gate';
 import { APP_HOME_PATH } from '@/lib/constants';
 import { env } from '@/lib/env';
 
@@ -63,7 +63,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   // Un-gated → send everything to the gate, except the gate itself and the public paths (OSS-2).
   // `from` is always set: `/` is public now, so the old "no `from` for `/`" guard became unreachable.
-  if (!authed && pathname !== GATE_PATH && !isPublicPath(pathname)) {
+  if (!authed && !isUngatedPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = GATE_PATH;
     url.search = '';
@@ -71,7 +71,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return withSecurityHeaders(NextResponse.redirect(url), csp);
   }
 
-  // Already gated, on the gate or the public landing → straight to the app. Convenience routing
+  // Already gated, on the gate or the public landing → straight to the app. `'/'` and not
+  // `isPublicPath`: a future public path (AUTH-1's `/sign-in/callback`) must NOT bounce to the app. Convenience routing
   // between two pages the caller may already see, NOT authorization: it lives here rather than in
   // `app/page.tsx` so the public page stays branchless, and because a page-level `redirect()` under
   // the root layout's `force-dynamic` streams a 200 (landing HTML) before the redirect lands.

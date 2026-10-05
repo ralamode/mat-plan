@@ -6,8 +6,13 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { GATE_COOKIE_NAME, gateTokenFor, safeInternalPath } from '@/lib/access-gate';
-import { APP_HOME_PATH, COOKIE_MAX_AGE } from '@/lib/constants';
+import {
+  GATE_COOKIE_NAME,
+  gateTokenFor,
+  internalPathname,
+  safeInternalPath,
+} from '@/lib/access-gate';
+import { APP_HOME_PATH, COOKIE_MAX_AGE, GATE_COPY } from '@/lib/constants';
 import { env } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -64,7 +69,7 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
     gateTokenFor(env.ACCESS_GATE_PASSWORD),
   ]);
   if (submitted !== expected) {
-    return { error: 'Incorrect access code.' };
+    return { error: GATE_COPY.incorrect };
   }
 
   const cookieStore = await cookies();
@@ -76,9 +81,9 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
     maxAge: COOKIE_MAX_AGE,
   });
 
-  // No usable `from` → the app home (OSS-2), in ONE hop. `safeInternalPath`'s `'/'` fallback is now the
-  // public landing, which the proxy would bounce to the picker anyway — a second redirect. Resolved
+  // No usable `from`, or one that is the landing → the app home (OSS-2), in ONE hop: the landing would
+  // only bounce a cookie-holder to the picker. Compared on the PATHNAME so `/?x=1` counts too. Resolved
   // here rather than inside `safeInternalPath`, the hostile-input sink SEC-4 hardened.
   const to = safeInternalPath(parsed.data.from);
-  redirect(to === '/' ? APP_HOME_PATH : to);
+  redirect(internalPathname(to) === '/' ? APP_HOME_PATH : to);
 }

@@ -33,6 +33,7 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
+import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -51,9 +52,6 @@ import {
  * vary with viewport width, and control HEIGHT doesn't either — so a tri-viewport matrix would triple
  * the runtime for near-zero marginal signal. Desktop is the secondary case (AGENTS.md).
  */
-
-/** ~iPhone 14 — the primary device. Matches the mobile viewport the screenshot script captures at. */
-const MOBILE = { width: 390, height: 844 };
 
 /**
  * The NARROWEST width AGENTS.md commits to ("every screen must work from ~360px up"). 390 is the
@@ -173,7 +171,7 @@ async function expectNoAxeViolations(page: Page, context: string): Promise<void>
   ).toEqual([]);
 }
 
-test.use({ viewport: MOBILE });
+test.use({ viewport: MOBILE_VIEWPORT });
 
 for (const route of ROUTES) {
   test(`${route.name} has no WCAG A/AA violations and meets the tap-target bar`, async ({
@@ -630,46 +628,51 @@ test.describe('scaffolded state', () => {
   });
 });
 
-test('profile tiles are large touch targets (the link-card exception to the inline-link rule)', async ({
-  page,
-}) => {
-  // Links are excluded from INTERACTIVE because of the SC 2.5.8 inline exception — but a profile tile
-  // is a CARD acting as a button, so it is opted back in explicitly.
-  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
-  for (const tile of await page.getByRole('main').getByRole('link').all()) {
-    const box = await tile.boundingBox();
-    expect(box?.height ?? 0, `profile tile "${await describe(tile)}"`).toBeGreaterThanOrEqual(
+/**
+ * Links that act as buttons (link CARDS, the landing's CTAs, the gate's way back) — opted back into the
+ * tap-target bar one by one, since `INTERACTIVE` excludes links under SC 2.5.8's inline-link exception.
+ * `expected` pins how many there are, so a page that lost one (or rendered none) cannot pass.
+ */
+async function expectLinkTapTargets(page: Page, context: string, expected?: number): Promise<void> {
+  const links = await page.getByRole('main').getByRole('link').all();
+  if (expected === undefined) {
+    expect(links.length, `${context}: found no links — selector is wrong`).toBeGreaterThan(0);
+  } else {
+    expect(links.length, `${context}: link count`).toBe(expected);
+  }
+  for (const link of links) {
+    const box = await link.boundingBox();
+    expect(box?.height ?? 0, `${context} link "${await describe(link)}"`).toBeGreaterThanOrEqual(
       MIN_TAP_TARGET_PX,
     );
   }
+}
+
+test('profile tiles are large touch targets (the link-card exception to the inline-link rule)', async ({
+  page,
+}) => {
+  // A profile tile is a CARD acting as a button, so it is opted back in explicitly.
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expectLinkTapTargets(page, 'profile picker');
 });
 
 /**
  * OSS-2 — the public routes, scanned with NO gate cookie (with one, `/` and `/gate` both redirect to the
- * picker). The landing's CTAs are LINKS, which `INTERACTIVE` excludes (SC 2.5.8's inline-link
- * exception), and `Button asChild` adds no role — so `expectTapTargets` cannot see them and would pass
- * vacuously. They are measured explicitly, like the profile tiles, with a non-empty guard.
+ * picker). The landing's CTAs and the gate's way back are LINKS, which `expectTapTargets` cannot see
+ * (`Button asChild` adds no role), so they are counted and measured by `expectLinkTapTargets`.
  */
 test.describe('public routes', () => {
-  test.use({ storageState: { cookies: [], origins: [] } });
+  test.use({ storageState: NO_GATE_STATE });
 
-  for (const viewport of [MOBILE, NARROW]) {
-    test(`the landing at ${viewport.width}px: axe, no overflow, CTA links ≥ the tap-target bar`, async ({
+  for (const viewport of [MOBILE_VIEWPORT, NARROW]) {
+    test(`the landing at ${viewport.width}px: axe, no overflow, both CTA links ≥ the tap-target bar`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
       await page.goto('/', { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
-
-      const ctas = await page.getByRole('main').getByRole('link').all();
-      expect(ctas.length, 'landing: found no CTA links').toBeGreaterThan(0);
-      for (const cta of ctas) {
-        const box = await cta.boundingBox();
-        expect(box?.height ?? 0, `landing CTA "${await describe(cta)}"`).toBeGreaterThanOrEqual(
-          MIN_TAP_TARGET_PX,
-        );
-      }
+      await expectLinkTapTargets(page, `landing (${viewport.width}px)`, 2);
     });
 
     test(`the gate at ${viewport.width}px: axe, no overflow, tap targets`, async ({ page }) => {
@@ -678,6 +681,7 @@ test.describe('public routes', () => {
       await expectNoAxeViolations(page, `gate (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `gate (${viewport.width}px)`);
       await expectTapTargets(page, `gate (${viewport.width}px)`);
+      await expectLinkTapTargets(page, `gate (${viewport.width}px)`, 1);
     });
   }
 });
