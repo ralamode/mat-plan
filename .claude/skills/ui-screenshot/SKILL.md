@@ -33,7 +33,7 @@ pnpm --filter web screenshot:ephemeral /p/<seed-id> --state already-logged  # To
   `SEED_PROFILE_ROUTE` from it); that's where the check-ins/bodyweight/strength forms live. A Today
   capture is named `today`. **There is no `/p` shorthand any more** (OSS-2): `/p` is the real picker
   route, and the shorthand would have silently captured the wrong screen.
-- A route in `PUBLIC_PATHS` (today just `/`) is captured **without** the gate login — a logged-in
+- A route in `PUBLIC_PATHS` (today just `/`), and `/gate` itself, is captured **without** the gate login — a logged-in
   capture of `/` would show the picker the proxy redirects to.
 - **Always pass `--build`** after changing UI: the script reuses an existing `.next`, so without it
   you capture whatever was last built (often `main`'s UI).
