@@ -299,18 +299,18 @@ Deferred outright, each needing its own row and plan:
 
 ## Backlog impact
 
-| Row                      | Impact                                                                                                                              |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **V1-22**                | **This is it.** A2/A3 are the milestone; its plan's BOLA route reasoning and its A-slice split survive and are the strongest parts. |
-| **V1-25 §1**             | The editor half lands here; the scaffold-time half waits on the form work.                                                          |
-| **GAP-1 P1-2**           | **Unblocked and absorbed** — the prescription snapshot _is_ `entries.prescription_id`'s job.                                        |
-| **CSV-1 / V1-13**        | The export's "reads TODAY's program" caveat is resolved by decision 5.                                                              |
-| **SCHED-1**              | Untouched; its "unify scheduling, not content shape" warning is honoured by decision 2.                                             |
-| **ONB-2, MOT-1, PROF-1** | Unchanged; they wait on scheduling and TEN-1 as before.                                                                             |
-| **TEST-1**               | Precondition for this milestone.                                                                                                    |
-| **V1-26 / V1-30b**       | Must not regress; decision 4 is written to leave `null` semantics intact.                                                           |
-| **ADR 0002**             | Untouched, because the metric retirement is deferred.                                                                               |
-| **OSS-2**                | A dependency of any route change, not independent of it.                                                                            |
+| Row                      | Impact                                                                                                                                                                                                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V1-22**                | **This is it.** A2/A3 are the milestone; its plan's BOLA route reasoning and its A-slice split survive and are the strongest parts.                                                                                                                                                     |
+| **V1-25 §1**             | The editor half lands here; the scaffold-time half waits on the form work.                                                                                                                                                                                                              |
+| **GAP-1 P1-2**           | **Superseded in design, not implemented.** An `entries.prescription_id` does not freeze history — the per-athlete `load` and `reps` stay editable behind it — so the snapshot is the rendered string instead. An FK for _identity_ is a second, optional column with no read-path role. |
+| **CSV-1 / V1-13**        | Resolved by decision 5 **for entries logged after the snapshot**, plus the one-time backfill in item 1. Entries predating it keep the legacy `(day_role, movement)` match permanently, so the export carries two code paths.                                                            |
+| **SCHED-1**              | Untouched; its "unify scheduling, not content shape" warning is honoured by decision 2.                                                                                                                                                                                                 |
+| **ONB-2, MOT-1, PROF-1** | Unchanged; they wait on scheduling and TEN-1 as before.                                                                                                                                                                                                                                 |
+| **TEST-1**               | Precondition for this milestone.                                                                                                                                                                                                                                                        |
+| **V1-26 / V1-30b**       | Must not regress; decision 4 is written to leave `null` semantics intact.                                                                                                                                                                                                               |
+| **ADR 0002**             | Untouched, because the metric retirement is deferred.                                                                                                                                                                                                                                   |
+| **OSS-2**                | A dependency of any route change, not independent of it.                                                                                                                                                                                                                                |
 
 ## Open questions
 
@@ -374,6 +374,15 @@ findings, all accepted; every one was verified in the code before being acted on
 | —   | Architecture                                              | Several decisions are decided-now-but-landing-later, and the plan author cannot tell which bind them.                                                                                                                                                                                           | **Accepted** — the deferral list now names each, and the milestone section is explicitly the only scoped work.                                                                                                                  |
 | —   | Architecture                                              | Title describes the deferred half.                                                                                                                                                                                                                                                              | **Rejected.** "Workouts become data" is the decision the document settles; which milestone executes it is the milestone's business, and renaming per-slice is how an ADR stops being citable.                                   |
 | —   | DB-safety                                                 | The deferred rollback runbooks are "recorded there", but there is no scheduling ADR yet to record them in.                                                                                                                                                                                      | **Accepted as a gap, not fixed here.** Noted against the first backfill in that milestone; the stubs at `docs/runbooks.md` remain open.                                                                                         |
+
+### Round 3 — self-review before the PR
+
+Two of round 2's accepted fixes were recorded in the log above but never applied to the text: the
+backlog table still carried the `entries.prescription_id` framing that decision 5 contradicts twenty
+lines earlier, and CSV-1 was still marked resolved without the backfill qualification. Both are fixed.
+
+Recorded rather than quietly corrected, because a review-response log asserting a change that did not
+land is worse than no log: it is the one artifact a later reader trusts without re-checking.
 
 **No blocking concern survives round 2 in the text.** Item 0 is new work this ADR did not previously
 know about, and the first plan written against this document is the one that proves it.
