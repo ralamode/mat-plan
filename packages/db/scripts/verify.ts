@@ -59,7 +59,11 @@ import { schema } from '../src/client';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { programDayRows } from '../src/queries/program-day';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
-import { findAmendableBodyweight, updateBodyweightEntryById } from '../src/writers/bodyweight';
+import {
+  findAmendableBodyweight,
+  insertBodyweightEntry,
+  updateBodyweightEntryById,
+} from '../src/writers/bodyweight';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 import {
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -3150,6 +3154,182 @@ console.log(
 }
 console.log(
   '✓ V1-24 1d: one live weigh-in per (profile, day, slot) — a duplicate and a NULL-beside-morning are refused; soft-deleted, another slot, another metric and another profile are allowed; the migration pre-check refuses an existing duplicate',
+);
+
+// ── V1-24 1e: the create path's arbiter is target-less DO NOTHING (writers/bodyweight.ts) ─────────────
+// Driven through `insertBodyweightEntry` — the IDENTICAL drizzle statement the app runs, parameters and
+// all — so an inference failure ("no unique or exclusion constraint matching") would surface here.
+{
+  const weighInTypeId = await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  let n1e = 0;
+  const ids1e = () => {
+    n1e += 1;
+    const h = n1e.toString(16).padStart(3, '0');
+    return {
+      publicId: `019826b4-0000-7000-8000-00000001e${h}`,
+      clientId: `019826b4-0000-7000-8000-00000002e${h}`,
+    };
+  };
+  const base = {
+    profileId: bwOwnerRow.id,
+    unit: 'lb',
+    notes: null,
+    activityTypeId: weighInTypeId,
+    kind: ENTRY_KIND.bodyweight,
+  };
+  const liveOn = async (day: string) =>
+    db
+      .select({ value: schema.entries.valueNum, clientId: schema.entries.clientId })
+      .from(schema.entries)
+      .where(
+        and(
+          eq(schema.entries.profileId, bwOwnerRow.id),
+          eq(schema.entries.activityDate, day),
+          eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+          isNull(schema.entries.deletedAt),
+        ),
+      );
+
+  // A first weigh-in inserts.
+  const first = ids1e();
+  const wrote = await insertBodyweightEntry(db, {
+    ...base,
+    ...first,
+    day: '2026-11-01',
+    value: 80,
+  });
+  assert.deepEqual(wrote, { id: first.publicId }, 'V1-24 1e: a first weigh-in inserts');
+
+  // A replay of THAT submit (same client_id; the app mints a fresh public id each call) → its own id.
+  const replay = await insertBodyweightEntry(db, {
+    ...base,
+    publicId: ids1e().publicId,
+    clientId: first.clientId,
+    day: '2026-11-01',
+    value: 80,
+  });
+  assert.deepEqual(replay, { id: first.publicId }, 'V1-24 1e: a replay answers the SAME entry');
+
+  // ANOTHER device's different weight on the same day → dayTaken, never a silent success.
+  const other = await insertBodyweightEntry(db, {
+    ...base,
+    ...ids1e(),
+    day: '2026-11-01',
+    value: 91,
+  });
+  assert.deepEqual(other, { dayTaken: true }, 'V1-24 1e: a second device is told the day is taken');
+  const nov1 = await liveOn('2026-11-01');
+  assert.equal(nov1.length, 1, 'V1-24 1e: still exactly one live weigh-in');
+  assert.equal(Number(nov1[0].value), 80, "V1-24 1e: the first weigh-in's value is untouched");
+
+  // Another day inserts; a soft-deleted day frees its slot.
+  const nov2 = await insertBodyweightEntry(db, {
+    ...base,
+    ...ids1e(),
+    day: '2026-11-02',
+    value: 81,
+  });
+  assert.ok('id' in nov2, 'V1-24 1e: another day inserts');
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.publicId, first.publicId));
+  const after = await insertBodyweightEntry(db, {
+    ...base,
+    ...ids1e(),
+    day: '2026-11-01',
+    value: 82,
+  });
+  assert.ok('id' in after, 'V1-24 1e: a soft-deleted weigh-in frees the day');
+
+  // Cost (c), and the ownership seam: a client_id that belongs to ANOTHER profile's live entry conflicts
+  // on uq_entries_client_id. It is neither this profile's replay nor its day slot → throws, and never
+  // hands back the other profile's public id (the pre-1e fallback looked up client_id alone).
+  const [foreign] = await db
+    .select({ clientId: schema.entries.clientId, publicId: schema.entries.publicId })
+    .from(schema.entries)
+    .where(
+      and(isNull(schema.entries.deletedAt), sql`${schema.entries.profileId} <> ${bwOwnerRow.id}`),
+    )
+    .limit(1);
+  assert.ok(foreign, 'V1-24 1e: fixture — another profile owns a live entry');
+  await assert.rejects(
+    insertBodyweightEntry(db, {
+      ...base,
+      publicId: ids1e().publicId,
+      clientId: foreign.clientId,
+      day: '2026-11-03',
+      value: 83,
+    }),
+    /neither a replay of this submit nor the day's weigh-in/,
+    'V1-24 1e: an unexplained no-op throws instead of answering plausibly',
+  );
+  assert.equal((await liveOn('2026-11-03')).length, 0, 'V1-24 1e: and nothing was written');
+
+  // A replay of a SOFT-DELETED submit (a still-mounted form resubmitting after a correction removed its
+  // row) on a day another weigh-in now holds → dayTaken. The replay lookup must skip deleted rows, or
+  // it would answer the dead row's id: success reported, nothing saved.
+  const resubmit = await insertBodyweightEntry(db, {
+    ...base,
+    publicId: ids1e().publicId,
+    clientId: first.clientId, // `first` was soft-deleted above; `after` holds 2026-11-01
+    day: '2026-11-01',
+    value: 80,
+  });
+  assert.deepEqual(
+    resubmit,
+    { dayTaken: true },
+    "V1-24 1e: a soft-deleted submit's replay is not answered with the dead row",
+  );
+
+  // The replay lookup is pinned to WEIGH-INS: a POST reusing the client_id of the same profile's
+  // non-bodyweight entry conflicts on uq_entries_client_id, and must never be answered with that row's id.
+  const bout = await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 20,
+    metricKey: METRIC_KEYS.pushups,
+    activityDate: '2026-11-05',
+  });
+  const [boutRow] = await db
+    .select({ clientId: schema.entries.clientId })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, bout.publicId));
+  await assert.rejects(
+    insertBodyweightEntry(db, {
+      ...base,
+      publicId: ids1e().publicId,
+      clientId: boutRow.clientId,
+      day: '2026-11-05',
+      value: 84,
+    }),
+    /neither a replay of this submit nor the day's weigh-in/,
+    "V1-24 1e: another metric's client_id is not a replay of this weigh-in",
+  );
+  assert.equal((await liveOn('2026-11-05')).length, 0, 'V1-24 1e: and no weigh-in was written');
+
+  // The day-taken lookup keys on the SAME slot as the index (coalesce(context,'morning')): an EVENING
+  // weigh-in does not take the default slot. Reached via an unexplained conflict on a day that holds
+  // only an evening row → the throw in (c), not a false dayTaken.
+  await insertBodyweightProbe({
+    profileId: bwOwnerRow.id,
+    value: 79,
+    activityDate: '2026-11-06',
+    context: 'evening',
+  });
+  await assert.rejects(
+    insertBodyweightEntry(db, {
+      ...base,
+      publicId: ids1e().publicId,
+      clientId: foreign.clientId,
+      day: '2026-11-06',
+      value: 85,
+    }),
+    /neither a replay of this submit nor the day's weigh-in/,
+    'V1-24 1e: an evening weigh-in does not read as the default slot taken',
+  );
+}
+console.log(
+  "✓ V1-24 1e: target-less DO NOTHING through the app's own statement — insert, replay → same id, other device → dayTaken (value untouched), soft-delete frees the day, a foreign client_id throws without leaking; a dead row's replay, another metric's client_id and an evening slot are not misread",
 );
 
 // Constraint rejections (via the reused helper): natural-key UNIQUE, metric_key FK, profile_id FK,

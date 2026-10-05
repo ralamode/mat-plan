@@ -940,11 +940,13 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   correction: the prod read is committed in the plan — one group, Liam 2026-09-30, keeper named by
   Ray) · **PR 1d ✅ #210** (migration 0012, the bodyweight-scoped unique index, slot-ready for V1-32 —
   it keys on `(profile, day, coalesce(context, 'morning'))`; `context` already existed and nothing
-  writes it before 1e, so NULL and `morning` must be one slot). **Next: 1e** (the arbiter, plus the
-  `context` values CHECK), then **3a** (strength, ahead of 2 by Ray's call 2026-10-02; split into
-  **3a-i** ✅ the per-set amend → **3a-ii** ✅ the section receipt → **3a-iii** the fill skips logged
-  movements, a dependency of 3a-ii; 📋 [plan](./plans/v1-24-3a-strength-receipt.md)), 2 (check-ins),
-  3b (demote the list, plus session-less strength entries and the `Strength` heading rename).
+  writes it, so NULL and `morning` must be one slot) · **PR 1e #214** (the create path's arbiter is
+  target-less `ON CONFLICT DO NOTHING` in `insertBodyweightEntry` — replay → same id, another device →
+  typed "already logged"; the `context` stamp and CHECK moved to V1-32). Then **3a** (strength, ahead
+  of 2 by Ray's call 2026-10-02; split into **3a-i** ✅ the per-set amend → **3a-ii** ✅ the section
+  receipt → **3a-iii** the fill skips logged movements, a dependency of 3a-ii; 📋
+  [plan](./plans/v1-24-3a-strength-receipt.md)), 2 (check-ins), 3b (demote the list, plus session-less
+  strength entries and the `Strength` heading rename).
   - ⚠️ **1d is gated on 1c being `--apply`'d, not merely merged**, and on the duplicate query being
     re-run just before 1d merges. `migrate.yml` runs on every push to main with no gate, so a 1d that
     lands before the data is clean fails the index build and then **re-fails on every later push**,

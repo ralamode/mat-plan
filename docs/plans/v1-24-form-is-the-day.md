@@ -1035,6 +1035,51 @@ amendment's first bullet:
 - **Tooling:** the `bodyweight-duplicates` screenshot state seeded two live same-day rows and now hits
   the index; it was removed (the multi-row receipt returns with V1-32's real slots).
 
+**1e as built (2026-10-03).** The create path's arbiter moved; three choices differ from the text above.
+
+- **Target-less `ON CONFLICT DO NOTHING`, not a hand-written clause** (write-path invariant 6). It cannot
+  fail inference (no spec to mis-match, no literal-vs-parameter trap), and with every unique index as an
+  arbiter a concurrent re-POST waits and does nothing — so Decision 4's "catch `23505` on
+  `uq_entries_client_id`" is unnecessary, and 1d's interim `isBodyweightDayConflict` catch is
+  **removed** (subsumed, not kept as dead defence). Its costs are paid in `insertBodyweightEntry`:
+  re-select on an empty `RETURNING` (a), branch replay vs another submit's row (b), and THROW on a no-op
+  that is neither (c).
+- **The writer moved to `packages/db/src/writers/bodyweight.ts`** (Decision 6's doctrine), so
+  `db:verify` drives the app's own drizzle statement. Its replay lookup is scoped to the PROFILE as well
+  as the `client_id`: the pre-1e fallback looked up `client_id` alone, so a crafted `client_id` equal to
+  another profile's entry returned that entry's public id.
+- **`context` is not stamped yet, and its values CHECK is not added.** The index already treats NULL as
+  `'morning'`, so stamping buys nothing until V1-32 adds real slots; stamping only NEW rows would export
+  `morning` beside `''` for every older row in the same month's CSV; and a CHECK is a `NOT VALID` →
+  `VALIDATE` pair across two PRs, which does not belong in an app-code PR whose deploy order is gated.
+  The slot write, its CHECK and the CSV `context` column land together with **V1-32**.
+- **The user-facing copy is unchanged** ("A weight is already logged for this day."), so no e2e moves.
+- **Proofs** (`db:verify`, "V1-24 1e"): insert; replay → the same id; another device → `dayTaken` with
+  the first value untouched; soft-delete frees the day; a foreign `client_id` throws and writes nothing.
+  Mutation-checked: no replay branch, an unscoped replay lookup, no `dayTaken` branch, (c) answering
+  plausibly, and the old `client_id` arbiter each fail `db:verify`.
+- **Review round (2026-10-03, DB-safety + correctness, both READY):** the replay lookup is also pinned
+  to `metric_key = 'bodyweight'` (a POST reusing the same profile's check-in `client_id` was answered
+  with THAT row's id — a weigh-in silently not saved). Three more proofs: a soft-deleted submit's replay
+  → `dayTaken` (not the dead row's id), another metric's `client_id` → throws, an evening slot is not
+  read as the default slot taken. Each of the three filters was removed in turn and `db:verify` failed.
+  `logBodyweight` (now a pass-through) has a unit test of its argument mapping and its unknown-profile
+  guard, mutation-checked. Caveats recorded in write-path invariant 6: keep the insert at READ
+  COMMITTED, and never add a DEFERRABLE unique to `entries`.
+- **Concurrency, proven against real Postgres** (PGlite has one connection, so `db:verify` runs the
+  cases in sequence). A one-off probe, not committed, run 2026-10-03 on embedded Postgres migrated
+  through 0012 (index present), two connections. A opens a transaction and inserts a weigh-in for day D;
+  B calls `insertBodyweightEntry` for D while A is open:
+
+  | Scenario                                   | B while A open | B's result after A ends | Live rows on D |
+  | ------------------------------------------ | -------------- | ----------------------- | -------------- |
+  | A commits, B a different `client_id`       | blocked        | `{ dayTaken: true }`    | 1              |
+  | A commits, B the SAME `client_id` (replay) | blocked        | `{ id: A's public id }` | 1              |
+  | A rolls back, B a different `client_id`    | blocked        | `{ id: B's public id }` | 1              |
+
+  No `23505` in any case: speculative insertion waits on the in-flight conflicting tuple, then does
+  nothing (or inserts after a rollback), and the re-select's fresh READ COMMITTED snapshot sees the winner.
+
 ## Open questions
 
 0. **Does the weigh-in amend outrank the incident that opened this row?** V1-24 exists because Liam's
