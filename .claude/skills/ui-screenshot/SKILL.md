@@ -22,14 +22,21 @@ migrates + seeds it via the `packages/db` scripts, runs `next start` against it,
 and tears everything down. It manages the server + DB itself — no manual build/start, no `.env.local`.
 
 ```bash
-pnpm --filter web screenshot:ephemeral /                          # empty home / picker
-pnpm --filter web screenshot:ephemeral /p --state empty           # seeded profile's Today (empty)
-pnpm --filter web screenshot:ephemeral /p --state already-logged  # Today with a habit + a
-                                                                  #   brush-teeth metric pre-logged
+pnpm --filter web screenshot:ephemeral /                          # the PUBLIC landing (captured un-gated)
+pnpm --filter web screenshot:ephemeral /p                         # the profile picker (also the default)
+pnpm --filter web screenshot:ephemeral /p/<seed-id> --state empty           # a seeded profile's Today
+pnpm --filter web screenshot:ephemeral /p/<seed-id> --state already-logged  # Today with a habit + a
+                                                                            #   brush-teeth metric pre-logged
 ```
 
-- `/p` (no id) is shorthand for the **seeded profile's Today page** (`/p/<seed-profile-uuid>`), where
-  the check-ins/bodyweight/strength forms live. Any explicit route also works.
+- `<seed-id>` is `SEED_PROFILE_PUBLIC_ID` from `@mat-plan/db` (`e2e/steps.ts` builds
+  `SEED_PROFILE_ROUTE` from it); that's where the check-ins/bodyweight/strength forms live. A Today
+  capture is named `today`. **There is no `/p` shorthand any more** (OSS-2): `/p` is the real picker
+  route, and the shorthand would have silently captured the wrong screen.
+- A route in `PUBLIC_PATHS`, and `/gate` itself (`isUngatedPath`), is captured **without** the gate login — a logged-in
+  capture of `/` would show the picker the proxy redirects to.
+- **Always pass `--build`** after changing UI: the script reuses an existing `.next`, so without it
+  you capture whatever was last built (often `main`'s UI).
 
 ### ⚠️ If the state only exists after a TAP, capture it anyway — do not write it off
 

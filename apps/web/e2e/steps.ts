@@ -56,7 +56,7 @@ export const WARMUP_BODYWEIGHT = '61.5';
 export const isoDaysAgo = (n: number) => addDays(localDayIso(DEFAULT_TIME_ZONE), -n);
 
 /**
- * From the profile picker (`/`), tap a profile tile and land on its scoped Today
+ * From the profile picker (`APP_HOME_PATH`), tap a profile tile and land on its scoped Today
  * (`/p/[profileId]`). Asserts the scoped Today shows the profile's name as the
  * page heading. Shared by the smoke test and the one-time warmup (DRY).
  */

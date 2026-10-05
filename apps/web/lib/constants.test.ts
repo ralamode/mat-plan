@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  APP_HOME_PATH,
   blockedSummary,
   missingQuantityMessage,
   PARTIAL_SETS_COPY,
@@ -42,5 +43,11 @@ describe('missingQuantityMessage', () => {
       expect(msg).not.toMatch(/BW|band/);
       expect(msg).toMatch(/^Enter the .+\.$/);
     }
+  });
+});
+
+describe('APP_HOME_PATH', () => {
+  it('is the profile picker — a contract the proxy, the gate action and the specs share', () => {
+    expect(APP_HOME_PATH).toBe('/p');
   });
 });

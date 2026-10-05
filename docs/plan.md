@@ -371,10 +371,14 @@ going public, not just on V1-13.
 
   **Three PRs, in this order:**
 
-  1. **§A — the public route** (this one): `/` public, picker → `/p`, copy + one link into the README's
+  1. ✅ **§A — the public route** (#216): `/` public, picker → `/p`, copy + one link into the README's
      own "what's interesting here", `app/loading.tsx` → `app/p/loading.tsx`, the gate matcher's
      unanchored lookahead fixed, a `pages-are-gated` test, `/` and `/gate` axe-scanned un-gated for the
      first time, and every `'/'`-means-the-app-home literal routed through `APP_HOME_PATH`.
+     **Built from mockups, with Ray's copy cuts:** the landing is the mark + name, one lead sentence,
+     the origin line and the two stacked CTAs. Ray removed the README hook and the gate-explanation
+     line after reviewing the UX-panel mockups; `/gate` loses "Private preview."; the CTA reads "See
+     how it's built on GitHub". Deviations from the plan are listed in the PR.
   2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
      are already published in `seed.ts`, `global.setup.ts` and `steps.ts`; renaming them closes the real
      exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.

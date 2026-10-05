@@ -26,6 +26,61 @@ export const TZ_COOKIE_NAME = 'tz';
  */
 export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
 
+/**
+ * The app's home: the profile picker (OSS-2). `/` is the PUBLIC landing, so every "back to the app"
+ * link, post-login default and spec that means "the picker" uses this, never a bare `'/'`.
+ *
+ * ⚠️ Branch-specific under HH-1. If household addressing lands in the path, home becomes
+ * `/<household-id>`, which the proxy cannot compute (it has env and a cookie, no DB and no session).
+ * The next author must then DELETE the proxy's `/` → home rule and resolve home in a page that can check
+ * membership — not teach the proxy, which is the proxy-as-authorization mistake (CVE-2025-29927).
+ */
+export const APP_HOME_PATH = '/p';
+
+/** The profile picker's copy — one source for the page and the specs that land on it. */
+export const PICKER_COPY = {
+  heading: 'Who’s logging today?',
+  subhead: 'Pick a profile to start logging.',
+} as const;
+
+/** The product name: the tab title, the landing's `<h1>` and the gate's. */
+export const APP_NAME = 'mat-plan';
+
+/** The public source repository: `owner/name`, as the GitHub API wants it (screenshot publishing). */
+export const GITHUB_REPO = 'ralamode/mat-plan';
+/** …and as a page, linked from the landing. */
+export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
+
+/**
+ * The public landing's copy (OSS-2 §A). Rule from the plan: no claim whose truth depends on repo state
+ * (no counts, dates, "currently", "next", "until", roadmap) and no security adjective.
+ */
+export const LANDING_COPY = {
+  lead: 'Strength-and-conditioning logging for a parent coaching their own kids.',
+  origin: 'I built it to replace the trainer I was paying to write my kids’ programming.',
+  sourceCta: 'See how it’s built on GitHub',
+  /** The README's own curated section, so a phone reader skips GitHub's file tree. */
+  sourceAnchor: '#whats-interesting-here',
+  gateCta: 'Household sign-in',
+} as const;
+
+/** The gate page's copy. "Private preview." was dropped at OSS-2: the gate is now screen two of a
+ *  public flow, and "preview" promised a timeline the landing deliberately doesn't. */
+export const GATE_COPY = {
+  subhead: 'Enter the household access code to continue.',
+  /** The way back out — the one room a stranger can walk into needs an exit. The page draws a
+   *  decorative `←` before it, hidden from screen readers so the link isn't "leftwards arrow, About…". */
+  back: `About ${APP_NAME}`,
+  /** A wrong code. */
+  incorrect: 'Incorrect access code.',
+} as const;
+
+/** The routine editor's copy — the e2e replays its Save, so the label has one home. */
+export const ROUTINE_COPY = {
+  orderHeading: 'Routine order',
+  save: 'Save routine',
+} as const;
+
 /** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 

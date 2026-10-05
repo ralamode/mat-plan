@@ -1,3 +1,4 @@
+import { APP_HOME_PATH } from '../lib/constants';
 import { captureScreenshot } from './capture';
 
 /**
@@ -21,7 +22,7 @@ import { captureScreenshot } from './capture';
  * package, and tsx transforms this to CJS where top-level await is unsupported.
  */
 async function main(): Promise<void> {
-  const route = process.argv[2] ?? '/';
+  const route = process.argv[2] ?? APP_HOME_PATH;
   const baseUrl = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
   await captureScreenshot({ route, baseUrl });
 }

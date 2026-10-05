@@ -1,6 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
+import { GITHUB_REPO } from '../lib/constants';
+
 /**
  * Publish `.screenshots/*.png` so they RENDER inside a GitHub PR (chore/screenshot-publishing).
  *
@@ -56,7 +58,7 @@ import { basename, join } from 'node:path';
  */
 
 const BRANCH = 'screenshots';
-const REPO = 'ralamode/mat-plan';
+const REPO = GITHUB_REPO;
 const SCREENSHOT_DIR = '.screenshots';
 
 /** Hidden marker identifying a comment this script wrote — used to number rounds. Invisible in the

@@ -187,7 +187,8 @@ evidence that an unprogrammed day exists.
   read as persisted. Don't replace it with an effect or a boolean.
 - **Every gated page calls `requireGatedPage()` first** (SEC-1), the routine editor included: the
   proxy is not the auth boundary, and before SEC-1 a prefetch-flagged request skipped it. A new page
-  under `/p/` needs the same line.
+  under `/p/` needs the same line — `app/pages-are-gated.test.ts` fails CI without it. The only
+  exemptions are `isUngatedPath`'s: the public landing (`PUBLIC_PATHS`) and `/gate`.
 
 ## Changing it
 

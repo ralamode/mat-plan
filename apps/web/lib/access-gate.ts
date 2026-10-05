@@ -65,6 +65,11 @@ export function safeInternalPath(path: string | null | undefined): string {
   return url.pathname + url.search + url.hash;
 }
 
+/** The pathname of a path `safeInternalPath` returned (`/?x=1` → `/`), parsed the same way it was. */
+export function internalPathname(path: string): string {
+  return new URL(path, PROBE_ORIGIN).pathname;
+}
+
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -102,15 +107,34 @@ export async function isValidGateCookie(
 }
 
 // ---------------------------------------------------------------------------
-// Public routes (DUALS-1, decision D4)
+// Public routes (OSS-2)
 // ---------------------------------------------------------------------------
 
 /**
- * ⚠️ **There is no public path.** The `/duals` exemption was removed with DUALS-1 (2026-09-30) —
- * the tournament day sheets carried 986 named minors' rosters, which cannot ship in a repo that is
- * going public. Every route is gated again.
+ * Routes served WITHOUT the gate. Exactly one: the public landing at `/` (OSS-2), which reads no cookie
+ * and queries nothing. DUALS-1 removed the last public path (`/duals`, whose day sheets carried named
+ * minors' rosters); this list is the only way back in, and `access-gate.test.ts` pins its contents so
+ * adding an entry is a deliberate, visible test edit.
  *
- * If a public route is ever needed, the removed helper's lesson is the part worth keeping: match the
- * SEGMENT exactly (`p === '/x' || p.startsWith('/x/')`), never `startsWith('/x')`, which would also
- * open `/xsecret`. And pin both the positive and negative cases.
+ * EXACT membership, deliberately — no prefix matching. DUALS-1's lesson is that a public path must
+ * match the SEGMENT exactly (`p === '/x' || p.startsWith('/x/')`), never `startsWith('/x')`, which
+ * would also open `/xsecret`. Rather than ship a prefix arm no entry can reach, this matches exactly;
+ * when a path with children arrives (`/sign-in/callback` at AUTH-1) the arm is added together with the
+ * negative test that proves `/sign-inevil` stays gated.
+ *
+ * AUTH-1 inherits this list as "routes that need no session".
  */
+export const PUBLIC_PATHS = ['/'] as const;
+
+export function isPublicPath(pathname: string): boolean {
+  return (PUBLIC_PATHS as readonly string[]).includes(pathname);
+}
+
+/**
+ * Served without the gate cookie: the public paths plus the gate itself (how a caller GETS the cookie).
+ * ONE definition for the three places that must agree — the proxy's bounce, the screenshot capture's
+ * "skip the login" and the pages-are-gated test — so AUTH-1's edit to the exemptions happens once.
+ */
+export function isUngatedPath(pathname: string): boolean {
+  return pathname === GATE_PATH || isPublicPath(pathname);
+}

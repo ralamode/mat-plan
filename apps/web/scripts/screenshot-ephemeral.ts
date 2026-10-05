@@ -25,7 +25,7 @@ import {
 } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
-import { DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
+import { APP_HOME_PATH, DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
 import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
@@ -838,8 +838,9 @@ async function main(): Promise<void> {
   // First non-flag token is the route (skip the values consumed by --state / --tz).
   const consumed = new Set([stateFlagIdx + 1, tzFlagIdx + 1].filter((i) => i > 0));
   const positionals = argv.filter((a, i) => !a.startsWith('-') && !consumed.has(i));
-  let route = positionals[0] ?? '/';
-  if (route === '/p') route = SEED_PROFILE_ROUTE; // shorthand → seeded profile's Today page
+  // No `/p` → Today shorthand any more (OSS-2): `/p` is the real picker route, and the shorthand would
+  // silently capture the wrong screen. Pass `/` for the public landing.
+  const route = positionals[0] ?? APP_HOME_PATH;
   const base = route === SEED_PROFILE_ROUTE ? 'today' : routeSlug(route);
   const name = state === 'empty' ? base : `${base}-${state}`;
 

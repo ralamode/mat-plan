@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { GATE_COOKIE_NAME, gateTokenFor, isValidGateCookie, safeInternalPath } from './access-gate';
+import {
+  GATE_COOKIE_NAME,
+  gateTokenFor,
+  isPublicPath,
+  isUngatedPath,
+  isValidGateCookie,
+  PUBLIC_PATHS,
+  safeInternalPath,
+} from './access-gate';
 
 // First tests on the harness (pulled forward ahead of V0-8). The access-gate
 // helpers are pure and security-relevant, so they make a good first target:
@@ -47,6 +55,31 @@ describe('isValidGateCookie', () => {
 describe('GATE_COOKIE_NAME', () => {
   it('is a stable contract shared by the proxy and the Server Action', () => {
     expect(GATE_COOKIE_NAME).toBe('mp_gate');
+  });
+});
+
+describe('PUBLIC_PATHS / isPublicPath (OSS-2)', () => {
+  it('is exactly the landing — adding a public route is a deliberate edit of this line', () => {
+    expect(PUBLIC_PATHS).toEqual(['/']);
+  });
+
+  it('treats the landing as public', () => {
+    expect(isPublicPath('/')).toBe(true);
+  });
+
+  // Exact membership: each of these would slip through a careless prefix or normalising match.
+  it.each(['/p', '/gate', '/profile', '//', '/%2F', '/ ', ''])('keeps %j gated', (path) => {
+    expect(isPublicPath(path)).toBe(false);
+  });
+});
+
+describe('isUngatedPath', () => {
+  it.each(['/', '/gate'])('serves %s without the cookie', (path) => {
+    expect(isUngatedPath(path)).toBe(true);
+  });
+
+  it.each(['/p', '/gatex', '/gate/x', '/p/x'])('gates %s', (path) => {
+    expect(isUngatedPath(path)).toBe(false);
   });
 });
 

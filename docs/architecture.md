@@ -92,9 +92,15 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-## 2b. Profile routing — picker → scoped Today (V1-3)
+## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2)
 
-`/` is the profile picker; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
+`/` is the **public landing** (OSS-2): no cookie read, no DB query, the only route in `PUBLIC_PATHS`.
+A caller who already holds the gate cookie never sees it — the proxy sends `/` (and `/gate`) to the
+picker at **`/p`** (`APP_HOME_PATH`). That redirect is convenience routing, not authorization: every
+gated page still calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails CI if one
+doesn't.
+
+The picker at `/p` lists profiles; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
 selection lives entirely in the URL — no client state. The `profileId` rides the log forms as a hidden
 field, and every Server Action **re-validates it server-side** via `getProfileByPublicId` (the seam
 v1.5's Clerk household scoping tightens). Profile tiles are a **UX switch, not a security boundary**;
@@ -102,11 +108,16 @@ an unknown/malformed id resolves to `notFound()` (404), never a 500.
 
 ```mermaid
 flowchart LR
-  PICKER["/ — profile picker<br/>listProfiles() → tiles"]
+  LANDING["/ — public landing<br/>(no cookie, no DB)"]
+  GATE["/gate — access code"]
+  PICKER["/p — profile picker<br/>listProfiles() → tiles"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
   ACT["Server Action<br/>log bodyweight / strength"]
   DAL["DAL (server-only)<br/>getProfileByPublicId(id)"]
 
+  LANDING -->|"Household sign-in"| GATE
+  GATE -->|"code OK → APP_HOME_PATH"| PICKER
+  LANDING -.->|"proxy: already has the cookie"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
   TODAY -->|"hidden field profileId"| ACT

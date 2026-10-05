@@ -4,6 +4,9 @@ import { expect, type Page } from '@playwright/test';
 // tsconfig-path tooling. `GATE_PATH` is the single source of truth for the
 // route — never hardcode '/gate' or re-derive the gate token here.
 import { GATE_PATH } from '../lib/access-gate';
+import { APP_HOME_PATH } from '../lib/constants';
+
+import { pickerHeading } from './contexts';
 
 /**
  * Drive the real access-gate form to authenticate a page. Used by the Playwright
@@ -21,9 +24,8 @@ export async function gateLogin(page: Page): Promise<void> {
   await page.getByLabel('Access code').fill(password);
   await page.getByRole('button', { name: 'Enter' }).click();
 
-  // The Server Action redirects to the safe internal target ('/' by default)
-  // once the cookie is set. '/' is the profile picker (V1-3); the apostrophe in the
-  // heading is a curly ’ (U+2019), so match loosely.
-  await page.waitForURL('/');
-  await expect(page.getByRole('heading', { name: /Who.s logging today/, level: 1 })).toBeVisible();
+  // With no `from`, the Server Action redirects straight to the app home — the picker, in one hop
+  // (OSS-2: `/` is the public landing now).
+  await page.waitForURL(APP_HOME_PATH);
+  await expect(pickerHeading(page)).toBeVisible();
 }

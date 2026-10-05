@@ -7,6 +7,10 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🌐 **OSS-2 §A — `/` is a public landing page** (#216). The resume link now shows what mat-plan is
+and links the source; the app moved behind it to `/p`, still gated. Next on this track: the OSS-1 seed
+rename, then §B (the hero image) ([plan](./plans/oss-2-public-landing.md)).
+
 🔧 **V1-24 PR 1c — Liam's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
 A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
 and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a

@@ -39,6 +39,11 @@ Tailwind via `@theme inline`. Colors are **OKLCH**.
 | `destructive`                        | destructive actions/errors               |
 | `border` · `input` · `ring`          | hairlines · field borders · focus ring   |
 | `chart-1..5`                         | data-viz series (grayscale ramp for now) |
+| `brand`                              | the mark's orange — **the mark ONLY**    |
+
+`brand` (OSS-2) is 3.5:1 on white: enough for a graphic, not for text. Never use it as a text or button
+colour; a brand-coloured control would need its own, darker token. It needs no `.dark` value (about 6:1
+on the dark background).
 
 ### Scales
 
