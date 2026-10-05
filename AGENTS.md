@@ -171,6 +171,16 @@ Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation
 Security baseline lives in [.github/SECURITY.md](./.github/SECURITY.md) (BOLA-first,
 bodyweight-privileged, scoped MCP token, headers, supply-chain). Follow it.
 
+**Privacy is reviewed as its own lens, not folded into security.** Security asks whether an attacker
+can reach the data; privacy asks whether we should hold it at all, and whether the person it belongs
+to can get it back or get rid of it. This app holds **minors' health data** in a **public repo**, which
+is the least forgiving combination there is, so every PR that touches the schema, the DAL, an export,
+logging, a new dependency or a third-party call gets the `privacy-reviewer` lens
+([review-pr](./.claude/skills/review-pr/SKILL.md), rubric dimension 10). The standing questions: what
+personal data does this start holding, who can now read it, where does it leave to, and can it still be
+exported and deleted. A real value committed anywhere in the tree is a P0, and deleting it from `HEAD`
+is not removing it.
+
 ## Git & branch workflow
 
 - **Trunk-based.** `main` is always deployable. All work goes via PR, **by convention**: the "Protect
@@ -313,6 +323,13 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   step-level (never a job-level `if:`/`paths-ignore`), so a required check never stalls "pending".
 - **Commits:** Conventional Commits (commitlint hook); `BREAKING CHANGE:` footer for breaking
   API/DB changes.
+- **No personal names in PRs, plans, ADRs, changelog fragments or commit messages.** Write the role —
+  _the maintainer_, _the household operator_, _the athlete_, _a reviewer_. A decision still gets
+  attribution, by role and date (`_(maintainer, 2026-10-05)_`), so provenance survives without the
+  name. The repo is public and a name is personal data like any other. ⚠️ **This is a
+  going-forward rule, not a cleanup claim:** the commit author and email are in every commit, and
+  `git log -S` finds anything a working-tree sweep removes — the same limit `docs/plan.md` already
+  records for the seeded fixture names.
 
 ## UI PR rules
 

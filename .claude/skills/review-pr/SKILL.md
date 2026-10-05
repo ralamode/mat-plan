@@ -37,15 +37,16 @@ the main-checkout guard denies `--force`, and the `*.pr-data` renames make a pla
 fan out to the named agents in [`.claude/agents/`](../../agents/) in one message, each following the
 [reporting contract](./reporting-contract.md):
 
-| Rubric dimension (§3)                                                               | Agent                                                                                           |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| 1 correctness · 6 tests                                                             | `correctness-reviewer`                                                                          |
-| 2 reuse / DRY                                                                       | `reuse-reviewer`                                                                                |
-| 3 architecture                                                                      | `architecture-reviewer` (+ `scope-reviewer` when the PR looks oversized)                        |
-| 4 schema / migration                                                                | `db-safety-reviewer`, when `packages/db` or a migration changed                                 |
-| 5 a11y and responsive                                                               | `ux-reviewer`, for any `.tsx`                                                                   |
-| 9 security                                                                          | `security-reviewer`, when anything is reachable unauthenticated, or secrets or workflows change |
-| 7 docs · 8 process · 10 perf, **and the secrets / personal-data check on every PR** | **you**, the orchestrator; no agent owns these                                                  |
+| Rubric dimension (§3)                                                               | Agent                                                                                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1 correctness · 6 tests                                                             | `correctness-reviewer`                                                                                                    |
+| 2 reuse / DRY                                                                       | `reuse-reviewer`                                                                                                          |
+| 3 architecture                                                                      | `architecture-reviewer` (+ `scope-reviewer` when the PR looks oversized)                                                  |
+| 4 schema / migration                                                                | `db-safety-reviewer`, when `packages/db` or a migration changed                                                           |
+| 5 a11y and responsive                                                               | `ux-reviewer`, for any `.tsx`                                                                                             |
+| 9 security                                                                          | `security-reviewer`, when anything is reachable unauthenticated, or secrets or workflows change                           |
+| 10 privacy / data protection                                                        | `privacy-reviewer`, when the diff touches the schema, the DAL, an export, logging, a new dependency or a third-party call |
+| 7 docs · 8 process · 11 perf, **and the secrets / personal-data check on every PR** | **you**, the orchestrator; no agent owns these                                                                            |
 
 The prompt only names the PR, the worktree and the base, e.g. _"Review PR #171, worktree `<path>`,
 diff `git diff <base>...HEAD`."_ Step 5 (verify before reporting) still applies to everything they
@@ -128,7 +129,15 @@ with no rule citation is taste. Mark it P2, or drop it.
    screenshots. Ownership is **existence-only** today (no Clerk until v1.5), so anything that widens
    what an unauthenticated caller can reach is at least P1. `/api/*` sits outside the gate matcher
    (tech-debt.md). New workflow steps must not expose secrets to fork PRs.
-10. **Performance / CWV.** Nothing measures the budget (LCP < 2.5s, INP < 200ms, CLS < 0.1), so look
+10. **Privacy / data protection.** A different question from 9: not "can an attacker reach it" but
+    "should we hold it, and can the person get it back or get rid of it". Check what personal data the
+    diff starts holding, whether an existing value becomes readable somewhere new, whether anything
+    personal reaches a log or a new third party, and whether new data has an export and a deletion
+    path. The app holds **minors' health data** in a **public repo**, so a committed real value is P0.
+    Also enforce the naming convention: no personal names in PRs, plans, ADRs or commit messages —
+    use the role (_the maintainer_, _the household operator_, _the athlete_).
+
+11. **Performance / CWV.** Nothing measures the budget (LCP < 2.5s, INP < 200ms, CLS < 0.1), so look
     for the causes: client JS where RSC works, unbounded queries on a hot path (`profile_id, date`),
     layout shift from late content, images without `next/image`.
 
