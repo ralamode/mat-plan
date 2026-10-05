@@ -6,6 +6,7 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-brand: var(--brand);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
@@ -49,6 +50,9 @@
 }
 
 :root {
+  /* The mark's orange, from public/brand/mat-plan-mark.svg (OSS-2). For the mark ONLY: it is 3.5:1 on
+     white, enough for a graphic but not for text, so it must not become a text or button colour. */
+  --brand: #f64d24;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

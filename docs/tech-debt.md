@@ -91,8 +91,11 @@ success.` Harmless there — nothing referenced the files yet.
   (`apps/web/lib/access-gate.ts`). **Fix:** `(?!api(?:/|$)|_next/static/|_next/image|favicon\.ico$)`,
   with the four negatives pinned. Scheduled in OSS-2 §A
   ([plan](./plans/oss-2-public-landing.md)), since that PR's thesis is segment-exact matching.
-- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5; the prefix fix lands
-  sooner, with OSS-2 §A.
+- ✅ **The prefix half is fixed (OSS-2 §A).** The lookahead is now
+  `(?!api(?:/|$)|_next/static/|_next/image(?:/|$)|favicon\.ico$)`, and `apps/web/proxy.test.ts` pins
+  all four negatives against the regex Next itself compiles. **The `/api` half stands:** `/api` and
+  `/api/x` are still excluded by design.
+- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5.
 
 ### Test-time path overrides are ad-hoc, so gates quietly go vacuous (audit, 2026-09-24)
 

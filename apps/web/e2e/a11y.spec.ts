@@ -8,8 +8,10 @@ import {
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
 } from '@mat-plan/shared';
 
+import { GATE_PATH } from '../lib/access-gate';
 import {
   AMEND_COPY,
+  APP_HOME_PATH,
   BODYWEIGHT_COPY,
   changeLabel,
   STRENGTH_COPY,
@@ -64,11 +66,10 @@ const MOBILE = { width: 390, height: 844 };
  */
 const NARROW = { width: 360, height: 780 };
 
-/** The routes the household actually uses. `/gate` is deliberately excluded — the project's
- *  `storageState` lands every test past it, and scanning it needs a storage-state-free context
- *  (see the plan's Out of scope). */
+/** The routes the household actually uses. The PUBLIC routes (`/`, `/gate`) are scanned separately
+ *  below, in a storage-state-free context: the project's cookie would redirect past both. */
 const ROUTES = [
-  { name: 'profile picker', path: '/' },
+  { name: 'profile picker', path: APP_HOME_PATH },
   { name: 'Today', path: SEED_PROFILE_ROUTE },
   { name: 'routine editor', path: `${SEED_PROFILE_ROUTE}/routine` },
 ] as const;
@@ -180,7 +181,7 @@ for (const route of ROUTES) {
   }) => {
     await page.goto(route.path, { waitUntil: 'networkidle' });
     await expectNoAxeViolations(page, route.name);
-    await expectTapTargets(page, route.name, { expectControls: route.path !== '/' });
+    await expectTapTargets(page, route.name, { expectControls: route.path !== APP_HOME_PATH });
   });
 }
 
@@ -634,11 +635,49 @@ test('profile tiles are large touch targets (the link-card exception to the inli
 }) => {
   // Links are excluded from INTERACTIVE because of the SC 2.5.8 inline exception — but a profile tile
   // is a CARD acting as a button, so it is opted back in explicitly.
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   for (const tile of await page.getByRole('main').getByRole('link').all()) {
     const box = await tile.boundingBox();
     expect(box?.height ?? 0, `profile tile "${await describe(tile)}"`).toBeGreaterThanOrEqual(
       MIN_TAP_TARGET_PX,
     );
+  }
+});
+
+/**
+ * OSS-2 — the public routes, scanned with NO gate cookie (with one, `/` and `/gate` both redirect to the
+ * picker). The landing's CTAs are LINKS, which `INTERACTIVE` excludes (SC 2.5.8's inline-link
+ * exception), and `Button asChild` adds no role — so `expectTapTargets` cannot see them and would pass
+ * vacuously. They are measured explicitly, like the profile tiles, with a non-empty guard.
+ */
+test.describe('public routes', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const viewport of [MOBILE, NARROW]) {
+    test(`the landing at ${viewport.width}px: axe, no overflow, CTA links ≥ the tap-target bar`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto('/', { waitUntil: 'networkidle' });
+      await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
+      await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
+
+      const ctas = await page.getByRole('main').getByRole('link').all();
+      expect(ctas.length, 'landing: found no CTA links').toBeGreaterThan(0);
+      for (const cta of ctas) {
+        const box = await cta.boundingBox();
+        expect(box?.height ?? 0, `landing CTA "${await describe(cta)}"`).toBeGreaterThanOrEqual(
+          MIN_TAP_TARGET_PX,
+        );
+      }
+    });
+
+    test(`the gate at ${viewport.width}px: axe, no overflow, tap targets`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto(GATE_PATH, { waitUntil: 'networkidle' });
+      await expectNoAxeViolations(page, `gate (${viewport.width}px)`);
+      await expectNoHorizontalOverflow(page, `gate (${viewport.width}px)`);
+      await expectTapTargets(page, `gate (${viewport.width}px)`);
+    });
   }
 });

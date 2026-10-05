@@ -27,7 +27,7 @@ import {
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-import { CLOSED_DAY_NOTICE } from '@/lib/constants';
+import { APP_HOME_PATH, CLOSED_DAY_NOTICE } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { LifeForm } from './life-form';
@@ -130,7 +130,7 @@ export default async function TodayPage({
       <TimeZoneSync serverTimeZone={timeZone} />
       <header className="flex flex-col gap-2">
         <Link
-          href="/"
+          href={APP_HOME_PATH}
           className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-fit rounded-sm text-sm outline-none focus-visible:ring-3"
         >
           ← All profiles

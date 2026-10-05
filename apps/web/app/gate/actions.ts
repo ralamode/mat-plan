@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { GATE_COOKIE_NAME, gateTokenFor, safeInternalPath } from '@/lib/access-gate';
-import { COOKIE_MAX_AGE } from '@/lib/constants';
+import { APP_HOME_PATH, COOKIE_MAX_AGE } from '@/lib/constants';
 import { env } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -76,5 +76,9 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
     maxAge: COOKIE_MAX_AGE,
   });
 
-  redirect(safeInternalPath(parsed.data.from));
+  // No usable `from` → the app home (OSS-2), in ONE hop. `safeInternalPath`'s `'/'` fallback is now the
+  // public landing, which the proxy would bounce to the picker anyway — a second redirect. Resolved
+  // here rather than inside `safeInternalPath`, the hostile-input sink SEC-4 hardened.
+  const to = safeInternalPath(parsed.data.from);
+  redirect(to === '/' ? APP_HOME_PATH : to);
 }

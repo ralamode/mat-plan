@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { GATE_COOKIE_NAME, GATE_PATH, isValidGateCookie } from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, GATE_PATH, isPublicPath, isValidGateCookie } from '@/lib/access-gate';
+import { APP_HOME_PATH } from '@/lib/constants';
 import { env } from '@/lib/env';
 
 /**
@@ -60,19 +61,23 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     env.ACCESS_GATE_PASSWORD,
   );
 
-  // Un-gated → send everything to the gate (except the gate route itself).
-  if (!authed && pathname !== GATE_PATH) {
+  // Un-gated → send everything to the gate, except the gate itself and the public paths (OSS-2).
+  // `from` is always set: `/` is public now, so the old "no `from` for `/`" guard became unreachable.
+  if (!authed && pathname !== GATE_PATH && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = GATE_PATH;
     url.search = '';
-    if (pathname !== '/') url.searchParams.set('from', pathname);
+    url.searchParams.set('from', pathname);
     return withSecurityHeaders(NextResponse.redirect(url), csp);
   }
 
-  // Already gated but sitting on /gate → send home.
-  if (authed && pathname === GATE_PATH) {
+  // Already gated, on the gate or the public landing → straight to the app. Convenience routing
+  // between two pages the caller may already see, NOT authorization: it lives here rather than in
+  // `app/page.tsx` so the public page stays branchless, and because a page-level `redirect()` under
+  // the root layout's `force-dynamic` streams a 200 (landing HTML) before the redirect lands.
+  if (authed && (pathname === GATE_PATH || pathname === '/')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = APP_HOME_PATH;
     url.search = '';
     return withSecurityHeaders(NextResponse.redirect(url), csp);
   }
@@ -100,6 +105,10 @@ export const config = {
     // AT ALL, and any client can send a prefetch header, so excluding prefetches let every request
     // that carried one skip the gate. Gating prefetches costs nothing: a gated user's prefetches
     // carry the cookie and pass. Pages and actions re-check the gate too (lib/dal/gate.ts).
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    //
+    // The lookahead is ANCHORED (OSS-2): each exclusion must end at a segment boundary or the end, so
+    // `/apiary`, `/favicon.icon` and `/_next/imagex` are gated. Unanchored, it skipped any path that
+    // merely STARTED with an excluded string — the `startsWith('/x')` mistake DUALS-1 warned about.
+    '/((?!api(?:/|$)|_next/static/|_next/image(?:/|$)|favicon\\.ico$).*)',
   ],
 };

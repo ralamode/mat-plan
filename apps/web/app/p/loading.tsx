@@ -1,6 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-/** Suspense fallback for the Today route while it fetches from the DB (V0-10). */
+/** Suspense fallback for the picker and Today while they fetch from the DB (V0-10). Lives under `p/`
+ *  (OSS-2), not the root: at the root it would front the public landing, which awaits nothing. */
 export default function Loading() {
   return (
     <main

@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium, type Page } from '@playwright/test';
 
 import { gateLogin } from '../e2e/gate-login';
+import { isPublicPath } from '../lib/access-gate';
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
@@ -75,8 +76,8 @@ export async function captureScreenshot(opts: {
       });
       if (opts.timeZone) {
         // Seed the `tz` cookie DIRECTLY, don't rely on `TimeZoneSync` writing it. `timezoneId` only
-        // changes what the BROWSER reports; the RSC reads the cookie. The gate login lands on `/`,
-        // which doesn't render TimeZoneSync, so without this the first paint uses DEFAULT_TIME_ZONE and
+        // changes what the BROWSER reports; the RSC reads the cookie. The gate login lands on the
+        // picker (`APP_HOME_PATH`), which doesn't render TimeZoneSync, so without this the first paint uses DEFAULT_TIME_ZONE and
         // the correct day arrives only via a post-hydration `router.refresh()` — a race against
         // `networkidle` that, when lost, silently yields a screenshot of the WRONG WEEKDAY. That is the
         // one failure this flag exists to prevent, on the artifact a reviewer approves from.
@@ -91,7 +92,8 @@ export async function captureScreenshot(opts: {
         ]);
       }
       const page = await context.newPage();
-      await gateLogin(page);
+      // A public route is captured as a stranger sees it: logged in, the proxy would send `/` to the picker.
+      if (!isPublicPath(opts.route)) await gateLogin(page);
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;

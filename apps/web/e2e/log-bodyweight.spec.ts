@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { BODYWEIGHT_COPY, DEFAULT_TIME_ZONE } from '../lib/constants';
+import { APP_HOME_PATH, BODYWEIGHT_COPY, DEFAULT_TIME_ZONE, PICKER_COPY } from '../lib/constants';
 import { formatDayLong, localDayIso } from '../lib/date';
 import {
   logBodyweight,
@@ -21,10 +21,12 @@ import {
 // (idempotency, zod, ownership) is covered by fast Vitest integration tests.
 // E2E is the slow tier — keep it to critical wiring smokes only.
 test('picks a profile then logs a bodyweight in its scoped Today', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(APP_HOME_PATH);
 
   // V1-3: `/` is the profile picker. Tap a tile → land on the scoped Today.
-  await expect(page.getByRole('heading', { name: /Who.s logging today/, level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: PICKER_COPY.heading, exact: true, level: 1 }),
+  ).toBeVisible();
   await selectProfile(page, 'Liam');
 
   // V1-24 PR 1a: one heading in every state. Liam's TODAY is this spec's alone (the e2e rule — see
@@ -57,7 +59,7 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 test('re-submitting check-ins never duplicates a logged habit; calisthenics bouts group into one row', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto(APP_HOME_PATH);
   await selectProfile(page, 'Scarlett');
   await expect(page.getByRole('heading', { name: 'Check-ins' })).toBeVisible();
 
@@ -86,7 +88,7 @@ test('re-submitting check-ins never duplicates a logged habit; calisthenics bout
 test('the Today header shows the active local calendar date, stable across reload', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto(APP_HOME_PATH);
   await selectProfile(page, 'Liam');
 
   const localDate = formatDayLong(localDayIso(DEFAULT_TIME_ZONE));
