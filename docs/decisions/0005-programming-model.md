@@ -210,7 +210,7 @@ WHERE deleted_at IS NULL`. A human removal soft-deletes a row, which frees the s
    indexes and the seed refills the freed top slot with a _different_ movement. `migrate.yml` justifies
    always seeding on the grounds that the seed "is idempotent" — idempotent against itself, never
    against a human writer, and nothing has ever written these tables before.
-   (`PROGRAM_SEED` is **not** empty — 14 prescriptions. The comment in `seed.ts` claiming it ships empty
+   (`PROGRAM_SEED` is **not** empty — 13 prescriptions, 11 of them `open()`. The comment in `seed.ts` claiming it ships empty
    is stale, and is exactly what someone would cite to wave this away.)
    **This is a schema change**, so "additive only" does not survive: a marker on `program_blocks`
    (authored/seeded), or `PROGRAM_SEED` moving behind OPS-2's `seedFixtures` split. **Nothing in items

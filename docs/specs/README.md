@@ -15,5 +15,11 @@ model. Same singular/plural split the backlog already uses: [`docs/plan.md`](../
 | `specs/`                      | work spanning several PRs    | what is true when it is done, and what the PRs must agree on |
 | [`plans/`](../plans/)         | one PR                       | which files change, and how                                  |
 
+## The specs
+
+| Spec                                                                      | Covers                                                                    |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [`v1-22-authoring-program-editing`](./v1-22-authoring-program-editing.md) | Authoring — the program gets a write path (beta-1 §3b, ADR 0005, V1-22 A) |
+
 A spec that is really about one PR belongs in `plans/`. If you cannot name what the PRs have to agree
 on, there is nothing for a spec to hold.
