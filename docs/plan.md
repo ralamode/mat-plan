@@ -521,6 +521,23 @@ going public, not just on V1-13.
   consent dialog sitting in the middle of the funnel being measured. Exhaust that before reaching for a
   library. See [OBS-1](#obs-1) for the system-health half, which is a separate concern.
 
+- **SEC-5 — `pnpm audit --prod` runs in no workflow, and an advisory has now reached `main` twice.** 🔴
+  _(maintainer, 2026-10-06.)_ `audit --prod --audit-level high` lives inside `pnpm verify`, and **no CI
+  job runs `pnpm verify`** ([tech-debt](./tech-debt.md)). Both escapes were found by accident:
+
+  | Advisory                                  | Severity | How it was caught                                         |
+  | ----------------------------------------- | -------- | --------------------------------------------------------- |
+  | GHSA-vcvr-r3jv-pc5j (`next` RCE)          | critical | a local `verify` during unrelated work, 2026-09-30 (#182) |
+  | GHSA-68fv-2mgg-jv7q (`source-map-js` DoS) | high     | a local `verify` during unrelated docs work, 2026-10-06   |
+
+  Twice is a pattern, and the second one proves the first fix was to the advisory rather than to the
+  gate. **The job is small** — `pnpm audit --prod --audit-level high` as a step in `ci.yml`'s `quality`
+  job, which already runs `pnpm install`. The design questions are what makes it a plan rather than a
+  one-liner: a new advisory against an unchanged dependency turns **every** PR red through no fault of
+  its author, so it needs an agreed escape hatch (a label, or an allowlist with an expiry date and a
+  reason, the way `.squawk.toml` handles its exclusions) and a decision on whether it blocks or
+  annotates. Offline by default like `actions:check`, so a registry outage is not a merge outage.
+
 ## Later — ideas captured, not scoped
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
