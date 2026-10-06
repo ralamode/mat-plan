@@ -63,6 +63,9 @@ CodeQL (which never runs on PRs).
   from the diff, not from memory; #156 exists because the old changelog drifted.
 - [docs/status.md](../../../docs/status.md): update the **Where we are** pointer if this moves it, and
   the backlog row. No changelog entry goes here any more. Nothing checks these, so it's on you.
+- [docs/roadmap.md](../../../docs/roadmap.md): move the item — **In flight**, the active milestone's
+  chunk row, **Next per pillar**, **Recently landed**. It is forward-looking, so it is the one a new
+  session reads first and the one nobody notices has gone stale. Ids only; never copy a `plan.md` row.
 - [docs/plan.md](../../../docs/plan.md): tick or annotate the row, and link the plan if one exists.
 - Then confirm: `pnpm status:check` (a feat/fix/db/perf/refactor/revert branch must add a correctly
   named fragment; `STATUS_SKIP="<why>"` to override, and paste the reason into the PR. It also fails
@@ -145,6 +148,7 @@ Then **sweep the other approved PRs**: this merge probably just put them in conf
 
 ## Red flags
 
+- A backlog item merged, but `docs/roadmap.md` still shows it as next, or in flight, or absent.
 - A backlog item merged, but its `docs/status.md` row or "Where we are" pointer unchanged. The guard
   only checks the fragment.
 - The PR claims a CI gate that isn't in `.github/workflows/`. AGENTS.md carries an explicit warning
