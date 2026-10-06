@@ -472,3 +472,25 @@ success.` Harmless there — nothing referenced the files yet.
   to sessions/day, or filter by conditional/day. Expand→backfill(from JSONB)→contract; keep the default as
   the seed. Until then JSONB + zod-on-read stays.
 - **Severity:** low.
+
+## Two dev-only advisories with no fix available (2026-10-06)
+
+- **What & why:** a sweep cleared 11 of 13 `pnpm audit` findings — `fast-uri` (the only one `audit --prod`
+  saw, reached through `@sentry/nextjs > @sentry/webpack-plugin > … > ajv`), plus a **critical**
+  `proxy-addr` and 8 highs, all dev-only. Nine moved by lockfile bump alone; `ip-address` needed an
+  in-range `overrides` pin. **Two resist:**
+  - **`braces@3.0.3` (high, GHSA-v6h2-p8h4-qcjw)** — stack-exhaustion DoS on a crafted brace pattern, via
+    `eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch`. ⚠️ **The advisory names
+    `>=3.0.4` as patched and that version does not exist** — `braces`' latest release is 3.0.3, and pinning
+    it makes the whole install unresolvable. There is nothing to upgrade to; this one waits on upstream.
+  - **`esbuild@0.18.20` (moderate, GHSA-67mh-4wv8-2f99)** — the dev-server CORS issue, pinned by the
+    **deprecated** `@esbuild-kit/esm-loader` inside `drizzle-kit@0.31.11`. Forcing esbuild across that
+    range inside a deprecated loader is how `drizzle-kit` breaks; the fix is a `drizzle-kit` bump that
+    drops `@esbuild-kit/*`, not a grandchild pin.
+- **Impact:** low. Both are devDependencies — `pnpm audit --prod` is clean. `braces` is reached only by
+  ESLint's own globbing over this repo's files, and the esbuild advisory needs `esbuild serve`, which
+  `drizzle-kit` never starts.
+- **Promotion trigger:** re-run `pnpm audit` when `braces` publishes >=3.0.4 or `drizzle-kit` drops
+  `@esbuild-kit/*`; both then clear with a lockfile bump and the `ip-address` override can go too.
+- **Severity:** low — but note this was found by a local `pnpm verify` during unrelated work, which is the
+  same accident that found the two advisories in **SEC-5**. The gap is the gate, not the advisories.
