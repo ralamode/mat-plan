@@ -521,6 +521,29 @@ going public, not just on V1-13.
   consent dialog sitting in the middle of the funnel being measured. Exhaust that before reaching for a
   library. See [OBS-1](#obs-1) for the system-health half, which is a separate concern.
 
+- **UX-1 — a non-mass movement is labelled "weight", for sighted and screen-reader users alike.** 🔴
+  _(maintainer, 2026-10-06, found while prototyping [UI-1](#ui-1).)_
+  `apps/web/app/p/[profileId]/set-fields.tsx` hardcodes `placeholder="weight"`, and
+  `weightInputLabel()` in `apps/web/lib/constants.ts` returns `` `${subject} weight in ${unitLabel}` ``.
+  So a **box jump logged in inches** renders a field placeholdered _weight_ with _in_ beside it, and
+  announces to a screen reader as **"Box Jump weight in in"**.
+
+  The file's own docblock shows the ambiguity was spotted and **only half fixed**: _"Since PR 4a a
+  movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled 'weight' is ambiguous to a sighted
+  user and meaningless to a screen reader."_ The unit was appended to the accessible name; the word
+  "weight" stayed in both the placeholder and that name.
+
+  **Fix:** derive the label from the unit's **dimension**, never a literal — mass → Weight, length →
+  Height, time → Hold. `LOGGABLE_DIMENSION_LABELS` and `LOGGABLE_DIMENSION_NOUNS` already exist in
+  `packages/shared/src/units.ts` for exactly this, so it is a reuse, not a new const.
+
+  **Scope:** every movement whose primary quantity is not a mass — which GAP-3 PR 4a made possible and
+  which the seeded box jump already is. Small enough to fix alone (one helper, one placeholder, the
+  specs asserting the accessible name), and also squarely inside UI-1's rewrite of that form, so it can
+  ride along instead. ⚠️ **Renaming the field is not the whole answer:** a weighted box jump is a height
+  in the `primary` slot **plus** a load in the `vest` slot, so the model is one labelled control per
+  slot — which is what GAP-3 built slots for.
+
 ## Later — ideas captured, not scoped
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
