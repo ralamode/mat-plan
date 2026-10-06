@@ -10,6 +10,19 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🎯 **Logging & Measurement's next item is `PICK-1` — the movement picker — and `AI-1` is parked
+behind it** (2026-10-06). Measured against prod that day: of 49 live entries, the 19 movement-arm ones
+name 8 distinct movements and **all 8 are movements the program prescribes** — zero ad-hoc entries,
+which is zero instances of the case AI-1 exists for. `entries.notes` / `context` / `scheme` are 0, 0, 0
+non-empty out of 49. ⚠️ **And the data cannot settle the question**: movement-arm logging spans two
+days, and the only path to an unprescribed movement is the form's free-text **Movement** box
+(`strength-form.tsx:812`, upserted by slug through `findOrCreateMovementId`), so "ad-hoc never
+happens" and "nobody will type it" are the same measurement — which is why the picker goes first and
+the parser waits on what it produces. AI-1's
+engineering + security panels returned **eleven blocking findings across three lenses**; the plan stays
+on file, parked ([plan](./plans/ai-1-nl-logging.md) → § "Parked 2026-10-06"). Row:
+[plan.md → PICK-1](./plan.md#pick-1).
+
 📏 **V1-30b is complete** — the log form offers only what the server keeps (30b-i, #234) and the
 stored-value ceiling is **per unit** (30b-ii). A real 2-mile run in metres and a 40-minute hold in
 seconds are loggable; the same number typed into the wrong unit is still refused. History spells the
@@ -221,18 +234,18 @@ field IS the human confirmation) and is now pinned by a structural unit test. Sc
 
 ## Phases
 
-| Phase     | Goal                                                                     | Status                                                                                      |
-| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                     |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                     |
-| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🟡 MVP rows merged (V1-14b #169); exit needs a real logged day                              |
-| DUALS     | Parent-facing tournament day sheets                                      | 🔵 DUALS-1 live (#152–#155); DUALS-2 next                                                   |
-| AI-1      | NL logging via structured outputs + eval                                 | 📋 plan decision-complete; **UNBLOCKED** — GAP-3 shipped ([S5](./plans/ai-1-nl-logging.md)) |
-| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                              |
-| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                              |
-| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                              |
+| Phase     | Goal                                                                     | Status                                                                                                       |
+| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                                      |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                                      |
+| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🟡 MVP rows merged (V1-14b #169); exit needs a real logged day                                               |
+| DUALS     | Parent-facing tournament day sheets                                      | 🔵 DUALS-1 live (#152–#155); DUALS-2 next                                                                    |
+| AI-1      | NL logging via structured outputs + eval                                 | ⏸ **parked 2026-10-06**, pending [`PICK-1`](./plan.md#pick-1) usage data ([why](./plans/ai-1-nl-logging.md)) |
+| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                                               |
+| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                                               |
+| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                                               |
 
-Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 in progress · ✅ done
+Legend: ⚪ not started · 📋 planned (not started) · ⏸ parked · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 

@@ -149,7 +149,78 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
 | DUALS-1 | **Day sheet + weight-by-weight matchups** ([plan](./plans/duals-1-public-day-sheet.md)) — _(Ray, 2026-09-25.)_ `/duals/[event]` and `/duals/[event]/[team]`: a team's pool, its round-by-round opponent order and mat, each round expanding to the weight-by-weight roster pairing. Ships the **2026 Tyrant Columbus Day Duals** (9 Assassins + Wrestling Chix squads, 55 teams, 836 wrestlers). Static JSON, no DB, no DAL, **no migration** — tournament data is public and household-less, so it must not enter the household-scoped schema (D1). Stays **behind the existing access gate** (D4 option 2): a club share for Assassins families, not a publication — the data-rights question for a public launch is deferred and recorded. Teams join on **source UUID, never display name** (the bracket truncates "All I See Is Gold Academy Stripes ES6" to a name shared with another team). | A parent opens a link, sees their squad's round order and mats, and taps a round for the matchups | Parent-facing surface / reusable event data |
 | DUALS-2 | _(Next.)_ Live results during the event; a public route (reopens D4); a second event JSON to prove the drop-in contract against a differently-shaped tournament.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |                                                                                                   |                                             |
 
+<a id="pick-1"></a>
+
+## PICK-1 — the movement picker
+
+- **PICK-1 — the only way to name a movement is to type it, and a near-miss mints a catalog row
+  nothing can remove.** _(the maintainer, 2026-10-06.)_ V1-19's `fillFromProgram` builds the strength
+  form from the day's prescriptions in one tap, and that is the whole of the help: for anything the
+  program did **not** prescribe — a substitution ("the rack was busy, so Bulgarians"), an extra
+  movement, a thing a kid did that nobody planned — **Add movement**
+  (`apps/web/app/p/[profileId]/strength-form.tsx:579`) gives a blank card whose **Movement** field is
+  a plain `<input type="text">` with `autoComplete="off"` and no catalog behind it (`:812`–`:823`).
+  Whatever is typed goes to `findOrCreateMovementId` (`apps/web/lib/dal/catalog.ts:76`), an
+  `INSERT … ON CONFLICT DO NOTHING` keyed on `movementSlug(name)` — so "Bulgarian Split Squats"
+  against a catalog holding "Bulgarian Split Squat" is a **second row**, that movement's history is
+  split across both, and with no delete action in the app the fix is a `db:correct` correction. **This
+  is Logging & Measurement's next item**, and it is deliberately **not a P0**: the hazard is latent,
+  not live — what is missing is a capability.
+
+  ⚠️ **One correction to the framing that opened this row**, recorded because the rest of it depends
+  on the distinction: the ad-hoc case is **not** unreachable. It is reachable only by typing, on a
+  phone, between sets, over a silent and unrecoverable catalog hazard. There is no **picker**; there
+  has always been a text box.
+
+  **Acceptance, stated so a test can fail it.** On a day whose program does not prescribe it, an
+  athlete selects a movement and submits a set for it, and (1) the stored row resolves to the
+  **existing** catalog movement rather than a near-duplicate minted by `findOrCreateMovementId`
+  (`apps/web/lib/dal/catalog.ts:76`, unrecoverable through the UI — there is no delete action), and
+  (2) **no magnitude arrives prefilled**, the same boundary V1-19's structural test already pins for
+  the scaffold.
+
+  **The evidence, measured against the production database 2026-10-06.** 49 live entries — **23
+  metric, 19 movement-arm, 7 neither-arm**. The 19 movement-arm entries name **8 distinct movements,
+  and all 8 are movements the program prescribes**: **zero ad-hoc entries**, which is zero instances of
+  the case AI-1 exists for — _"everything NOT in the program"_, its own Goal
+  ([plan](./plans/ai-1-nl-logging.md)). Catalog reach: **35 movements in the live `movements` table, 25
+  prescribed, 8 ever logged** (the AI-1 plan's "36" counts `slug:` lines in
+  `packages/shared/src/catalog-movements.ts`, a different source). And `entries.notes`,
+  `entries.context`, `entries.scheme` are **0, 0 and 0 non-empty out of 49** — entirely unused, and
+  they are exactly the fields that would carry the context a sentence expresses and a picker cannot
+  ("did Bulgarians instead, the rack was busy").
+
+  ⚠️ **The honest limit, because it is the first thing a reader should test.** Movement-arm logging
+  spans **two days**, 2026-09-28 → 2026-09-29, 19 entries. The data cannot distinguish _"ad-hoc never
+  happens"_ from _"the only path to it is the text box, so it goes unlogged"_ — and zero ad-hoc entries
+  against a catalog that is 35 rows wide while 25 are prescribed is consistent with both. That limit
+  argues **for** this row, not for the parser: the picker is what makes the ad-hoc case cheap enough to
+  observe at all, and only after it ships can anyone say whether typing a sentence still beats tapping.
+
+  **Why it comes before the parser, on the parser's own terms.** AI-1's safety rule — correctly —
+  forbids the model from emitting any magnitude: `extractedSessionSchema` has no numeric field but
+  `reps`. So once the safety design has done its work, the model's entire output is _which movements_
+  plus _how many sets of how many reps_ — a selection from a closed catalog, plus two small integers.
+  The AI-1 plan already accepts the consequence (_"a 30-second plank extracts as one set of one rep and
+  the human types the 30"_), which means a sentence saves taps on movement **identity**, not on the
+  data entry that actually hurts. A picker plus a set-count control and a reps shorthand produces the
+  same prefilled form with no API key, no vendor, no spend bound, no Sentry scrubbing, no
+  prompt-injection surface through the movement catalog, and no eval harness as a prerequisite.
+
+  **A plan comes later, in its own PR.** This row is the _what_ and the _why it is next_; it does not
+  design the control. Read first:
+  [strength-logging](./features/strength-logging.md) · [write-path](./features/write-path.md).
+
 ## AI-1 — NL logging ([plan](./plans/ai-1-nl-logging.md))
+
+⏸ **PARKED 2026-10-06 — off P0, pending `PICK-1` usage data.** _(the maintainer.)_ 49 live entries
+carry **zero** ad-hoc movements, so the case this row exists for has not been observed once;
+[PICK-1](#pick-1) is next instead, and it is the only thing that can produce the evidence, because
+while the only path to an ad-hoc movement is a free-text box, "ad-hoc never happens" and "nobody will
+type it" are the same measurement. **The plan and its panel findings stay on file** — eleven
+blocking findings across three lenses (correctness, scope, security), recorded in the plan's
+§ "Parked 2026-10-06" ([plan](./plans/ai-1-nl-logging.md)) — because the re-grounding work remains
+valid and the findings are the reason parking beat fixing.
 
 NL logging via Anthropic structured outputs → human-confirm chip → write, with a 15-case golden eval
 
@@ -363,6 +434,9 @@ publishing; publishing before it lands ships the artifact without its headline.
 **Amended (AI-1 plan S5):** AI-1 still precedes OSS-1, but it is no longer the _next_ thing — it sits
 behind GAP-3, which sits behind the four legacy CSV samples. The samples are therefore the gate on
 going public, not just on V1-13.
+
+**Amended again (2026-10-06):** moot, both ways. OSS-1 landed and the repo is public, and **AI-1 is
+parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
 ## OSS-2 — a public landing screen at `/`
 
