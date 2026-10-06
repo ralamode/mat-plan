@@ -6,6 +6,73 @@
 > Owning feature guides, both of which this work edits:
 > [strength-logging](../features/strength-logging.md) · [write-path](../features/write-path.md).
 > **Not yet panelled.** The engineering panel (≥3 lenses) and the UX panel are owed before any code.
+> ⏸ **Superseded 2026-10-06:** the engineering + security panels have since run and this plan is
+> **parked**. Read § "Parked 2026-10-06" first; everything below it stands as written.
+
+## Parked 2026-10-06 — panel outcome and why this is not next
+
+**Status: parked, pending [`PICK-1`](../plan.md#pick-1) usage data.** _(the maintainer, 2026-10-06.)_
+Off P0 and out of the pillar's "next" slot. **This plan is kept on file, unrewritten**, because the
+re-grounding below remains valid — the target schema is still a fact, S1–S9 are still the decisions,
+and EVAL-0 is still the gate. It is not wasted; it is not next.
+
+**The engineering + security panels returned eleven blocking findings across three lenses**
+(correctness, scope, security). Five are recorded here because each was **verified against pinned
+sources in-session**, not reasoned about, and each would have had to be answered before any code:
+
+1. **The fail-closed rate limit cannot work as specified.** `@upstash/ratelimit@2.2.0` resolves
+   `{success: true}` on its internal timeout (`dist/index.mjs:908`–`:912`), and
+   `apps/web/lib/rate-limit.ts:84`–`:90` maps that to `{allowed: true, reason: 'ok'}` —
+   **indistinguishable from a genuine under-limit allow**. The `catch` only fires on a throw, so
+   **S9**'s fail-closed limiter fails **open** on exactly the outage it exists for, and
+   `rate-limit.test.ts` has no timeout case.
+2. **Sentry auto-instruments the Anthropic SDK.** `anthropicAIIntegration()` is a **default**
+   integration in `@sentry/node` (`build/esm/integrations/tracing/index.js:58`), so adding the SDK
+   wires it with **no opt-in**. Prompt and response capture are off only because
+   `sendDefaultPii: false`. And `x-api-key` — what the Anthropic SDK sends — is **not** in the
+   scrubber's denylist (`apps/web/lib/sentry-scrub.ts:33`: `cookie`, `set-cookie`, `authorization`,
+   `proxy-authorization`), in a file whose own comment calls scrubbing "the security-critical part of
+   the Sentry wiring".
+3. **The spend bound is not a bound.** § "Cost, the key, and the bound" prices the worst case as
+   per-IP × window × $0.04, calling the Vercel IP "the only one an attacker cannot rotate"; a proxy
+   pool makes that unbounded. A **global** daily cap keyed on a constant needs no identity at all, so
+   the plan's deferral of bounding to AUTH-1/TEN-1 does not apply to it — and it was never considered.
+   An Anthropic-side **workspace spend limit** (free, outside the code path) was never considered
+   either.
+4. **S7's "closed vocabulary" is absent from the contract it writes.** The emit schema's
+   `movementSlug: z.string().max(120).nullable()` (§ "`packages/shared/src/nl-extraction.ts`") is
+   **free text**, and the confirm chip's warning keys on `null` rather than on **membership failure** —
+   so a hallucinated-but-plausible slug gets **no warning** and silently mints an unrecoverable catalog
+   row, which is the precise hazard S7 exists to close.
+5. **No boundary tests** on what would be the app's first metered endpoint, and `hasGateAccess()`
+   — the gate check every shipped Server Action performs (`apps/web/app/p/[profileId]/actions.ts:84`)
+   — is **never named in this plan**, despite **S8** resting on the handler re-checking the gate.
+
+**Why parked rather than fixed — the scope lens, and the probe that settled it.** Every finding above
+is answerable. The scope lens' conclusion was that answering them buys the wrong thing first: after
+**S1**/**S6** do their work, the model's entire output is _which movements_ plus _how many sets of how
+many reps_ — a selection from a closed catalog plus two small integers — and this plan already accepts
+that _"a 30-second plank extracts as one set of one rep and the human types the 30"_. So a sentence
+saves taps on movement **identity**, not on the data entry that actually hurts, and identity is what a
+picker gives for no key, no vendor, no spend bound, no scrubbing, no prompt-injection surface through
+the catalog and no eval harness as a prerequisite.
+
+**The probe, measured against the production database 2026-10-06**, agreed: 49 live entries (**23
+metric, 19 movement-arm, 7 neither-arm**); the 19 movement-arm entries name **8 distinct movements,
+all 8 prescribed by the program** — **zero** instances of the ad-hoc case this plan's own Goal names
+(_"everything NOT in the program"_). `entries.notes`, `entries.context` and `entries.scheme` are **0,
+0, 0 non-empty out of 49**, and those are the fields carrying the context a sentence expresses and a
+picker cannot. Catalog reach: **35 movements in the live `movements` table, 25 prescribed, 8 ever
+logged**.
+
+⚠️ **The limit of that probe, stated plainly, because it is what un-parks this plan.** Movement-arm
+logging spans **two days** (2026-09-28 → 2026-09-29, 19 entries), and the data cannot distinguish
+_"ad-hoc never happens"_ from _"the only path to it is a free-text box, so it goes unlogged"_ — today
+the ad-hoc movement is reachable **only** by typing its name into `strength-form.tsx:812`, which
+`findOrCreateMovementId` then upserts by slug, the hazard **S7** was written to close. That argues
+**for** [`PICK-1`](../plan.md#pick-1) first: the picker makes the ad-hoc case cheap enough to observe,
+and only then can anyone say whether typing a sentence still beats tapping. **Un-park on that
+observation**, and answer the eleven findings before any code.
 
 ## Re-grounded 2026-10-06 — what changed and why
 
@@ -492,6 +559,11 @@ unavailable rather than broken when the key is absent, which is the cheapest kil
 [write-spec skill](../../.claude/skills/write-spec/SKILL.md).
 
 ## Review-response log (adversarial panel)
+
+⏸ **Superseded 2026-10-06.** The engineering + security panels have since run; their eleven blocking
+findings — five of them transcribed with their pinned sources — are in § "Parked 2026-10-06", which is
+also why this plan is parked. The **UX panel and the privacy lens are still owed**, along with a full
+reconciliation log, before any implementation code. The paragraph below stands as written.
 
 _Empty — the panels have not run._ Owed before any implementation code
 ([AGENTS.md](../../AGENTS.md), [plans/README.md](./README.md)): the **engineering panel** (≥3 lenses —
