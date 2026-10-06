@@ -8,29 +8,31 @@ It is also the project I use to work in the open. Real users (my family), real c
 design rule that makes the engineering interesting: **in this system a bad number doesn't degrade a
 metric, it tells a child to lift something.**
 
-🔗 **[mat-plan.dev](https://mat-plan.dev)** — currently behind an access gate while v1 finishes.
+🔗 **[mat-plan.dev](https://mat-plan.dev)** — a public landing page; the logger itself sits behind an access gate.
 
 ## What's interesting here
 
 If you're reading this to see how I build, start with these:
 
-|                                                                                                                                                                                                                                                                                                     | Where                                                                                                           |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **An AI feature with a hard authority boundary — designed in full, not yet built.** Natural-language logging via Anthropic structured outputs → human-confirm chip → write. The model extracts what was _performed_; it can never emit a prescribed load. A deterministic engine owns every number. | [plans/ai-1-nl-logging.md](./docs/plans/ai-1-nl-logging.md)                                                     |
-| **An eval design where three cases test a safety property, not accuracy** — and therefore get their own 100% gate, separate from the accuracy gate. A threshold may only average over measurements that fail the same way.                                                                          | same doc, S4                                                                                                    |
-| **Decisions argued, not asserted.** Every ADR states the rule, applies it, and names the alternative it rejects and why that alternative was tempting.                                                                                                                                              | [docs/decisions/](./docs/decisions/)                                                                            |
-| **A schema decision made from evidence.** Before designing typed measurement columns I censused two years of my own handwritten logs: 12 apparent shapes, 68% of which weren't numbers, a quarter of which turned out to need no column at all.                                                     | [ADR 0004](./docs/decisions/0004-typed-measurements.md) · [the census](./docs/plans/gap3-typed-measurements.md) |
-| **Adversarial review before implementation.** UI and schema changes get multi-lens critique panels — written up, findings answered — before code exists.                                                                                                                                            | [AGENTS.md](./AGENTS.md) · [plans/](./docs/plans/)                                                              |
-| **Migration discipline.** Expand → backfill → contract, never in one step. Drift guards and `db:verify` proofs run the real insert path in CI.                                                                                                                                                      | [docs/spec.md](./docs/spec.md)                                                                                  |
+|                                                                                                                                                                                                                                                                                                            | Where                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **An AI feature with a hard authority boundary — designed in full, not yet built.** Natural-language logging via Anthropic structured outputs → human-confirm chip → write. The model extracts what was _performed_; it can never emit a prescribed load: confirm fills the form with the load left blank. | [plans/ai-1-nl-logging.md](./docs/plans/ai-1-nl-logging.md)                                                     |
+| **An eval design, also not yet run, where three cases test a safety property, not accuracy** — and therefore get their own 100% gate, separate from the accuracy gate. A threshold may only average over measurements that fail the same way.                                                              | same doc, S4                                                                                                    |
+| **Decisions argued, not asserted.** Every ADR states the rule, applies it, and names the alternative it rejects and why that alternative was tempting.                                                                                                                                                     | [docs/decisions/](./docs/decisions/)                                                                            |
+| **A schema decision made from evidence.** Before designing typed measurement columns I censused two years of my own handwritten logs: 12 apparent shapes, 68% of which weren't numbers, a quarter of which turned out to need no column at all.                                                            | [ADR 0004](./docs/decisions/0004-typed-measurements.md) · [the census](./docs/plans/gap3-typed-measurements.md) |
+| **Adversarial review before implementation.** UI and schema changes get multi-lens critique panels — written up, findings answered — before code exists.                                                                                                                                                   | [How I work with agents](./docs/working-with-agents.md) · [plans/](./docs/plans/)                               |
+| **Migration discipline.** Expand → backfill → contract, never in one step. Drift guards and `db:verify` proofs run the real insert path in CI.                                                                                                                                                             | [docs/spec.md](./docs/spec.md)                                                                                  |
 
-Accessibility is enforced in CI, not aspired to. Tests are Playwright E2E + Vitest, and CodeQL runs
-on every push.
+Accessibility is checked, not aspired to: a Playwright spec runs axe (WCAG 2.1 AA) plus a 44px
+tap-target measurement on every PR that touches code. Tests are Playwright E2E + Vitest, and CodeQL scans every push to
+`main` and runs weekly. No CI check is a _required_ status check yet; that is recorded in
+[AGENTS.md](./AGENTS.md), not hidden.
 
 ## Status
 
-**v1 is mid-build, and in daily use by the household it was written for.** The data model, the logging
-surfaces, per-kid routines, supersets, timezone-correct day boundaries and the strength write path are
-in.
+**The v1 backlog is merged, and the app is in daily use by the household it was written for.** The
+data model, the logging surfaces, per-kid routines, supersets, timezone-correct day boundaries, the
+strength write path and CSV export (the MVP's defining feature) are in.
 
 Deliberately not in it yet: authentication, offline sync, the progression engine, and natural-language
 logging. Each of those has a reviewed plan before it has code, which is the part worth reading.
@@ -59,20 +61,21 @@ downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.
 
 ## Docs
 
-| File                                                       | What                                                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [AGENTS.md](./AGENTS.md)                                   | Rules for AI coding agents: stack, conventions, file hierarchy, PR/CI gates, git/branch workflow |
-| [docs/product-spec.md](./docs/product-spec.md)             | **The product** — who it's for, why it exists, what it simplifies, target market, what's shipped |
-| [docs/spec.md](./docs/spec.md)                             | Architecture, entity/data model, coexistence, offline, server & DB standards                     |
-| [docs/architecture.md](./docs/architecture.md)             | System diagrams (containers, write path, offline sync, ERD, CI, roadmap)                         |
-| [docs/design.md](./docs/design.md)                         | Design language + tokens (shadcn/ui + Tailwind, adult-first)                                     |
-| [docs/deploy.md](./docs/deploy.md)                         | Deployment + one-time setup (Neon, Vercel env, GitHub secret, first migration, local dev)        |
-| [docs/plan.md](./docs/plan.md)                             | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3)                                |
-| [docs/status.md](./docs/status.md)                         | Living progress tracker toward the MVP                                                           |
-| [docs/changelog/](./docs/changelog/README.md)              | One file per merged change (since DX-2)                                                          |
-| [docs/definition-of-done.md](./docs/definition-of-done.md) | Per-PR Definition of Done                                                                        |
-| [docs/decisions/](./docs/decisions/)                       | Architecture Decision Records (ADRs) — e.g. observability & Core Web Vitals                      |
-| [.github/SECURITY.md](./.github/SECURITY.md)               | Security baseline + threat model                                                                 |
+| File                                                         | What                                                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| [AGENTS.md](./AGENTS.md)                                     | Rules for AI coding agents: stack, conventions, file hierarchy, PR/CI gates, git/branch workflow |
+| [docs/working-with-agents.md](./docs/working-with-agents.md) | How the agent workflow is governed: who decides what, and five cases from the record             |
+| [docs/product-spec.md](./docs/product-spec.md)               | **The product** — who it's for, why it exists, what it simplifies, target market, what's shipped |
+| [docs/spec.md](./docs/spec.md)                               | Architecture, entity/data model, coexistence, offline, server & DB standards                     |
+| [docs/architecture.md](./docs/architecture.md)               | System diagrams (containers, write path, offline sync, ERD, CI, roadmap)                         |
+| [docs/design.md](./docs/design.md)                           | Design language + tokens (shadcn/ui + Tailwind, adult-first)                                     |
+| [docs/deploy.md](./docs/deploy.md)                           | Deployment + one-time setup (Neon, Vercel env, GitHub secret, first migration, local dev)        |
+| [docs/plan.md](./docs/plan.md)                               | Phased roadmap + per-PR backlog (v0 / v1 / AI-1 / v1.5 / v2 / v3)                                |
+| [docs/status.md](./docs/status.md)                           | Living progress tracker toward the MVP                                                           |
+| [docs/changelog/](./docs/changelog/README.md)                | One file per merged change (since DX-2)                                                          |
+| [docs/definition-of-done.md](./docs/definition-of-done.md)   | Per-PR Definition of Done                                                                        |
+| [docs/decisions/](./docs/decisions/)                         | Architecture Decision Records (ADRs) — e.g. observability & Core Web Vitals                      |
+| [.github/SECURITY.md](./.github/SECURITY.md)                 | Security baseline + threat model                                                                 |
 
 **Repo layout:** root holds only `README.md`, `AGENTS.md`, `.gitignore`; project docs live in
 `docs/`; GitHub meta (security policy, PR template, workflows) in `.github/`; app code in `apps/web`
@@ -81,9 +84,10 @@ and `packages/*`. See the file-organization rules in [AGENTS.md](./AGENTS.md).
 ## Stack
 
 Next.js (App Router / RSC) · TypeScript · Tailwind + shadcn/ui · Drizzle ORM · Postgres (Neon) ·
-Clerk · Vercel · GitHub Actions · Playwright.
+Vercel · GitHub Actions · Playwright. Clerk (household login) is planned for the first beta; until
+then an access gate stands in.
 
 ## Workflow
 
-Trunk-based. `main` is protected; all work goes via a short-lived feature branch → PR → green CI →
-squash-merge. See [AGENTS.md](./AGENTS.md).
+Trunk-based: a short-lived feature branch → PR → green CI → squash-merge. That is a convention, not
+an enforcement: `main`'s ruleset blocks only force-pushes and deletion. See [AGENTS.md](./AGENTS.md).
