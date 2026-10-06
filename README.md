@@ -14,27 +14,30 @@ metric, it tells a child to lift something.**
 
 If you're reading this to see how I build, start with these:
 
-|                                                                                                                                                                                                                                                                   | Where                                                                                                           |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **An AI feature with a hard authority boundary.** Natural-language logging via Anthropic structured outputs → human-confirm chip → write. The model extracts what was _performed_; it can never emit a prescribed load. A deterministic engine owns every number. | [plans/ai-1-nl-logging.md](./docs/plans/ai-1-nl-logging.md)                                                     |
-| **An eval design where three cases test a safety property, not accuracy** — and therefore get their own 100% gate, separate from the accuracy gate. A threshold may only average over measurements that fail the same way.                                        | same doc, S4                                                                                                    |
-| **Decisions argued, not asserted.** Every ADR states the rule, applies it, and names the alternative it rejects and why that alternative was tempting.                                                                                                            | [docs/decisions/](./docs/decisions/)                                                                            |
-| **A schema decision made from evidence.** Before designing typed measurement columns I censused two years of my own handwritten logs: 12 apparent shapes, 68% of which weren't numbers, a quarter of which turned out to need no column at all.                   | [ADR 0004](./docs/decisions/0004-typed-measurements.md) · [the census](./docs/plans/gap3-typed-measurements.md) |
-| **Adversarial review before implementation.** UI and schema changes get multi-lens critique panels — written up, findings answered — before code exists.                                                                                                          | [AGENTS.md](./AGENTS.md) · [plans/](./docs/plans/)                                                              |
-| **Migration discipline.** Expand → backfill → contract, never in one step. Drift guards and `db:verify` proofs run the real insert path in CI.                                                                                                                    | [docs/spec.md](./docs/spec.md)                                                                                  |
+|                                                                                                                                                                                                                                                                                                     | Where                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **An AI feature with a hard authority boundary — designed in full, not yet built.** Natural-language logging via Anthropic structured outputs → human-confirm chip → write. The model extracts what was _performed_; it can never emit a prescribed load. A deterministic engine owns every number. | [plans/ai-1-nl-logging.md](./docs/plans/ai-1-nl-logging.md)                                                     |
+| **An eval design where three cases test a safety property, not accuracy** — and therefore get their own 100% gate, separate from the accuracy gate. A threshold may only average over measurements that fail the same way.                                                                          | same doc, S4                                                                                                    |
+| **Decisions argued, not asserted.** Every ADR states the rule, applies it, and names the alternative it rejects and why that alternative was tempting.                                                                                                                                              | [docs/decisions/](./docs/decisions/)                                                                            |
+| **A schema decision made from evidence.** Before designing typed measurement columns I censused two years of my own handwritten logs: 12 apparent shapes, 68% of which weren't numbers, a quarter of which turned out to need no column at all.                                                     | [ADR 0004](./docs/decisions/0004-typed-measurements.md) · [the census](./docs/plans/gap3-typed-measurements.md) |
+| **Adversarial review before implementation.** UI and schema changes get multi-lens critique panels — written up, findings answered — before code exists.                                                                                                                                            | [AGENTS.md](./AGENTS.md) · [plans/](./docs/plans/)                                                              |
+| **Migration discipline.** Expand → backfill → contract, never in one step. Drift guards and `db:verify` proofs run the real insert path in CI.                                                                                                                                                      | [docs/spec.md](./docs/spec.md)                                                                                  |
 
 Accessibility is enforced in CI, not aspired to. Tests are Playwright E2E + Vitest, and CodeQL runs
 on every push.
 
 ## Status
 
-**v1 (the MVP) — mid-build**, ~155 merged PRs. The data model, the logging surfaces, per-kid
-routines, supersets, timezone-correct day boundaries and the strength write path are in. The MVP
-finish line is: the kids log a full day online, and CSV export keeps the existing Claude workflow
-alive.
+**v1 is mid-build, and in daily use by the household it was written for.** The data model, the logging
+surfaces, per-kid routines, supersets, timezone-correct day boundaries and the strength write path are
+in.
 
-**Next:** typed measurements (GAP-3) — the schema work that unblocks CSV export and the AI feature,
-in that order. See [docs/status.md](./docs/status.md) and [docs/plan.md](./docs/plan.md).
+Deliberately not in it yet: authentication, offline sync, the progression engine, and natural-language
+logging. Each of those has a reviewed plan before it has code, which is the part worth reading.
+
+**The roadmap moves; this file tries not to.** [docs/status.md](./docs/status.md) is the living
+progress record, [docs/plan.md](./docs/plan.md) the per-PR backlog, and
+[docs/decisions/](./docs/decisions/) the decisions that outlive both.
 
 ## Local development
 
