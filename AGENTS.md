@@ -64,6 +64,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   sit at root (`package.json`, `pnpm-workspace.yaml`, `tsconfig*.json`, `.prettierrc`, `eslint`,
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
 - **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `milestones/` (cross-PR milestones: order + exit criteria), `design.md`,
+  `roadmap.md` (the forward-looking cross-program view, by pillar),
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
   (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
@@ -227,6 +228,13 @@ is not removing it.
   rebase then needs a force-push, and the squash merge keeps `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
+- **The roadmap rides with the work too.** [docs/roadmap.md](./docs/roadmap.md) is the only
+  **forward-looking** cross-program view — pillars, what's in flight, what's next, what each thing
+  waits on. `status.md` looks backwards; `plan.md` is the backlog. Move the item between columns in the
+  **same PR**, and if a PR doesn't move one, say so in the description. It is a **pointer** document:
+  ids only, never a second copy of a `plan.md` row. A **pillar is a set of owned file globs, not a
+  theme**, because "can this run in parallel" is a file question — where a glob already belongs to a
+  [feature guide](./docs/features/), the guide's `owns:` is the authority and the pillar points at it.
 - **Status rides with the work.** In the **same PR** as the change it tracks, add a changelog
   fragment ([docs/changelog/](./docs/changelog/README.md), one file per change, so PRs never conflict
   on it) and update `docs/status.md`'s "where we are" pointer and backlog row if the change moves

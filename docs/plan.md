@@ -1,7 +1,9 @@
 # mat-plan — Phased Plan & PR Backlog
 
 Each phase is small, shippable, and dogfoods CI + Playwright. **v0 and v1 are broken into
-individually-reviewable PRs** (reviewed PR-by-PR to learn the codebase). Architecture + standards are
+individually-reviewable PRs** (reviewed PR-by-PR to learn the codebase). **This file is the backlog — the full scope and acceptance of every
+row.** For the forward-looking view of what is in flight and what is next, by pillar, see
+[roadmap.md](./roadmap.md); it points back at these ids. Architecture + standards are
 in [spec.md](./spec.md); agent/PR/CI rules in [../AGENTS.md](../AGENTS.md); per-PR checklist in
 [definition-of-done.md](./definition-of-done.md). Each PR is one branch → one PR → squash-merge; reference the id (e.g. `V0-1`).
 

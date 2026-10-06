@@ -5,6 +5,9 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 **Last updated:** 2026-09-30
 
+> Looking **forward** — what's in flight, what's next, by pillar? That's
+> [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
+
 ## Where we are right now
 
 🌐 **OSS-2 §A — `/` is a public landing page** (#216). The resume link now shows what mat-plan is
