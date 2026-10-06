@@ -101,6 +101,24 @@ else every track must append to — an index, a registry — wants the same shap
 [roadmap.md](./roadmap.md) is the deliberate exception: it is small, pointer-only, and tracks move
 single rows, so a conflict there is a one-line merge.
 
+## How many lanes? — the constraint is review, not agents
+
+The six gates answer _may these two run at once_. They do not answer _how many lanes to open_, and
+that is a different limit with a different bottleneck: **every lane produces a plan to review and a PR
+to approve, and at ~4h/week the human is the scarce resource, not the agent.**
+
+So the count is set by what is already **panelled**, not by what is disjoint:
+
+- **A lane whose plan is already reviewed costs almost nothing to open.** Implementation runs, the
+  reviewer sees one PR.
+- **A lane that needs a plan first costs a full panel** — eight lens-passes and a reconciliation on the
+  Authoring chunk-1 plan, all of it needing a human read before any code.
+- So: **open as many lanes as there are panelled plans, plus at most one that still needs planning.**
+  Beyond that the lanes finish and queue up behind the review, and the parallelism bought nothing.
+
+The corollary is that **planning is the thing to run in parallel early**, because its output is what
+unblocks lanes later. A pillar with no panelled plan is not a lane yet; it is a planning task.
+
 ## When a gate fails
 
 **Do not parallelize.** Pick an order, write down why, and put it where the next session will see it —
