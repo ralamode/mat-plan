@@ -694,6 +694,26 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
   (SEC-2's `check-action-pins.mjs` already runs in `quality`; its self-test, in `guards:test`, does not.)
   Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-8 — every root `pnpm` script passes when its filter matches nothing.** 🔴 Found 2026-10-06
+  while reviewing DX-7 (#244). `pnpm --filter <name> <script>` prints _"No projects matched the
+  filters"_ and exits **0**, so a root script whose package is renamed, moved or mistyped reports
+  success without running. Measured on the pinned pnpm (`package.json:5`, 11.13.1):
+  `pnpm --filter @mat-plan/nope typecheck` → exit 0.
+  **Blast radius is every gate that runs through the root scripts**: `lint` (`package.json:15`),
+  `typecheck` (`:16`, now two filters after #244), `test` (`:17`), `db:verify` (`:22`) and `build`
+  (`:13`). Four of those are `pnpm verify` steps and `ci.yml`'s `quality` gates, so **`pnpm verify`
+  would print a green run for a check that executed against nothing** — exactly
+  [tech-debt](./tech-debt.md)'s _"a green check that proves nothing, which is strictly worse than no
+  check, because it is trusted."_ Nothing in the repo asserts a filter matched.
+  ⚠️ **Not hypothetical for long:** #244 widened `typecheck` to a second `--filter` on
+  `@mat-plan/db`, so a rename of that package now silently drops the DB half of the typecheck gate
+  while the step stays green.
+  **Fix (measured, one line):** `failIfNoMatch: true` in `pnpm-workspace.yaml` — a missing filter
+  then exits 1 and a real filter still resolves normally. `--fail-if-no-match` is the per-invocation
+  form. Prefer the config key so a new root script inherits it instead of having to remember the flag.
+  **Acceptance:** a root script whose `--filter` matches no project exits non-zero, proved by a case
+  that exercises a deliberately wrong filter — the gate has to be seen red before it is trusted.
+
 - **DX-7 — `packages/db/scripts/**` is typechecked by nothing.** 🔴 Found 2026-09-30 while writing
   V1-24 PR 1c. `pnpm typecheck` is `pnpm --filter web exec tsc --noEmit`, and `apps/web/tsconfig.json`
   is the **only** tsconfig in the repo — its `include` is relative to `apps/web`, so `verify.ts`
