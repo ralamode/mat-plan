@@ -894,7 +894,8 @@ function denyReason(inv) {
     `\`git branch -d|-D <branch>\` (not main); \`git reset [HEAD] [-- <paths>]\` (unstage only); ` +
     `\`git pull --ff-only [--prune] origin main\` and \`git merge --ff-only origin/main\` on main; ` +
     `\`git checkout main\` / \`git switch main\` with a clean tree. ` +
-    `Do this in a worktree: git fetch origin && git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main. ` +
+    `Do this in a worktree: git fetch origin && git worktree add .claude/worktrees/<slug> -b <type>/<id>-<slug> origin/main ` +
+    `(or ~/workspace/tmp<n>/mat-plan for a parallel lane you will open in an editor). ` +
     `If a person explicitly asked for it here, prefix the command with ${ESCAPE}.`
   );
 }

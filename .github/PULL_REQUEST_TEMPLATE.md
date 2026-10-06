@@ -4,6 +4,16 @@
 
 <!-- What and why. Reference the backlog id (e.g. V0-1). -->
 
+## Where this sits
+
+<!-- So a reviewer sees where we are and where this goes next, without reconstructing it from the diff.
+     Outside a milestone, write "none" and why — e.g. "Milestone: none — standing debt, SEC-5". -->
+
+- **Pillar:** <!-- docs/roadmap.md → The pillars -->
+- **Milestone:** <!-- e.g. beta-1 §3b Authoring — link the milestone doc or its spec -->
+- **This PR:** <!-- e.g. chunk 1 of 6, the snapshot column -->
+- **Next:** <!-- what this unblocks, and what that is gated on -->
+
 ## Type of Change
 
 <!-- bug fix | new feature | breaking change | perf | refactor | docs -->
