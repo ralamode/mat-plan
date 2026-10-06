@@ -96,7 +96,15 @@ V1-14b can assert a clean diff; **P2** is real but rare.
 - **Hard part:** matching needs `(day_role, movement_id)` — and `day_role` isn't persisted (P0-1). Even
   then, a movement prescribed **twice in one day** (warm-up + working) is ambiguous, a case
   `uq_prescriptions_block_day_role_idx` explicitly anticipates.
-- **Fix:** P0-1 first; then either match on `movement_id` within the day (accepting the double-prescribed
+- **Fix (chosen, V1-22 chunks 1-3):** a **third** answer — persist the _rendered_ `prescribed` string
+  on the entry at log time (`entries.prescribed_snapshot`, migration `0013`), so the export stops
+  reconstructing it and a later prescription edit cannot rewrite a past month. ADR 0005 decision 5.
+  ⚠️ **What this does NOT close:** a rendered string cannot say _which_ prescription a set fulfilled, so
+  the double-prescribed ambiguity survives — it is simply frozen as empty rather than recomputed.
+  `PROGRAM_SEED` has no duplicate `(day_role, movement_slug)` today, so the ambiguity is unreachable
+  until V1-22 chunk 6 adds an item. **The PR that first makes a duplicate reachable owes the identity
+  column** (a second, optional FK — ADR 0005 `:306`), or this row closes as "never".
+- **Fix (original options, superseded):** P0-1 first; then either match on `movement_id` within the day (accepting the double-prescribed
   ambiguity) or persist a `prescription_id` on the entry at log time — which P0-1 + the V1-19
   "Start today's program" button would make natural, since that button already knows which prescription
   each form row came from.

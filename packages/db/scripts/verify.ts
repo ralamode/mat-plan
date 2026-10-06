@@ -4035,4 +4035,98 @@ const typoBlocks = (
 assert.equal(typoBlocks, 0, 'V1-10: a resolver throw leaves no partial block written');
 console.log('✓ V1-10: seedProgram fails loudly (+ writes nothing) on an unresolved ref');
 
+// ── V1-22 chunk 1: the prescribed snapshot ────────────────────────────────────────────────────────
+// NINE cases: {NULL, '', a real rendered string} × {movement arm, metric arm, NEITHER arm}.
+//
+// Why nine and not one reject case. The NEITHER arm is LEGAL — entries_value_source_check is
+// at-most-one, not XOR (0002:79), and a boolean habit check-in writes exactly that shape. It is the
+// row that kills the adjacent-column mutant `prescribed_snapshot IS NULL OR metric_key IS NULL`
+// (those columns are declared consecutively, and the existing guard is written in terms of that
+// pair), which a metric-arm-only proof passes while permitting a snapshot on the rows it forbids.
+// The '' rows kill three more, including `coalesce(prescribed_snapshot,'') = '' OR …` — the exact
+// form the spec forbids by name — and `= '' OR …`, which slips through on NULL.
+// Plan: docs/plans/v1-22-1-prescribed-snapshot.md → "The state table".
+const SNAP_CHECK = 'entries_prescribed_snapshot_movement_check';
+const SNAP_RENDERED = '4x3 @ 145'; // what export.ts's composer actually emits
+const SNAP_COMMA = '3 (top triple, then 2 back-offs)'; // a real seeded prescription (csv/row.ts)
+
+const snapMovementId = (
+  await db.select({ id: schema.movements.id }).from(schema.movements).limit(1)
+)[0].id;
+const snapTypeId = await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+
+/** One entry on a chosen arm, carrying a chosen snapshot. Ids come from a LOCAL COUNTER (the
+ *  insertBodyweightProbe idiom) — this file hand-assigns ids in 23 other places, and a
+ *  uq_entries_client_id collision would make expectRejectedBy report the WRONG constraint name and
+ *  the proof would stop proving anything while staying green. Every row sets kind + value_num (so
+ *  entries_shape_check is definitively TRUE, not NULL) and activity_type_id (so
+ *  entries_activity_type_id_not_null cannot arbitrate first), and takes its own day. */
+let snapProbe = 0;
+function snapshotRow(arm: 'movement' | 'metric' | 'neither', snapshot: string | null) {
+  snapProbe += 1;
+  const n = snapProbe.toString(16).padStart(3, '0');
+  return {
+    publicId: `019826b4-0000-7000-8000-00000000d${n}`,
+    clientId: `019826b4-0000-7000-8000-00000000e${n}`,
+    profileId: profiles[0].id,
+    activityDate: new Date(Date.UTC(2026, 10, 1) + snapProbe * 86_400_000)
+      .toISOString()
+      .slice(0, 10),
+    kind: ENTRY_KIND.bodyweight,
+    unit: arm === 'metric' ? 'bool' : 'lb',
+    valueNum: '1',
+    activityTypeId: snapTypeId,
+    ...(arm === 'movement' ? { movementId: snapMovementId } : {}),
+    ...(arm === 'metric' ? { metricKey: 'stance' } : {}),
+    prescribedSnapshot: snapshot,
+  };
+}
+const insertSnapshot = (arm: 'movement' | 'metric' | 'neither', snapshot: string | null) =>
+  db.insert(schema.entries).values(snapshotRow(arm, snapshot));
+
+// --- the five ACCEPTS -----------------------------------------------------------------------------
+await insertSnapshot('movement', null);
+await insertSnapshot('metric', null);
+await insertSnapshot('neither', null); // 100% of pre-chunk-1 rows are in one of these three states
+const readbackRow = snapshotRow('movement', '');
+await db.insert(schema.entries).values(readbackRow);
+await insertSnapshot('movement', SNAP_RENDERED);
+
+// --- the four REJECTS. The two NEITHER rows are the discriminating ones. --------------------------
+await expectRejectedBy(SNAP_CHECK, () => insertSnapshot('metric', ''));
+await expectRejectedBy(SNAP_CHECK, () => insertSnapshot('neither', ''));
+await expectRejectedBy(SNAP_CHECK, () => insertSnapshot('metric', SNAP_RENDERED));
+await expectRejectedBy(SNAP_CHECK, () => insertSnapshot('neither', SNAP_RENDERED));
+console.log(
+  '✓ V1-22 chunk 1: the movement-arm guard rejects a snapshot on the metric AND neither arms',
+);
+
+// --- '' is STORED, not collapsed to NULL ----------------------------------------------------------
+// This is what acceptance 10 rests on: `''` is the frozen rendering of a movement-only prescription
+// (11 of 13 live prescriptions render empty) and NULL means "never snapshotted". Only NULL falls back
+// to the live (day_role, movement) match, so the read predicate is `IS NULL` and never
+// `coalesce(…,'') = ''`.
+const readback = (
+  await db
+    .select({ snap: schema.entries.prescribedSnapshot })
+    .from(schema.entries)
+    .where(eq(schema.entries.publicId, readbackRow.publicId))
+)[0];
+assert.equal(readback.snap, '', "V1-22 chunk 1: '' reads back as '', not NULL");
+assert.equal(readback.snap === null, false, "V1-22 chunk 1: '' is not NULL");
+const emptyNotNull = (
+  (
+    await db.execute(
+      sql`select count(*)::int as count from entries
+           where public_id = ${readbackRow.publicId} and prescribed_snapshot is null`,
+    )
+  ).rows as unknown as { count: number }[]
+)[0].count;
+assert.equal(emptyNotNull, 0, "V1-22 chunk 1: an '' snapshot must not satisfy IS NULL");
+console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
+
+// --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
+await insertSnapshot('movement', SNAP_COMMA);
+console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
+
 console.log('✓ verify passed');

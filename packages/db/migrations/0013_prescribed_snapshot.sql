@@ -1,0 +1,48 @@
+-- V1-22 chunk 1 — the prescribed snapshot: what was ASKED, frozen on the logged entry.
+--
+-- WHY: `prescribed` is reconstructed LIVE at export time from today's program
+-- (apps/web/lib/dal/export.ts), so the first prescription edit would rewrite the bytes of every
+-- historical month. Prescriptions are seed-immutable only until that first edit, which is why this
+-- closes a window rather than adding a feature. Plan: docs/plans/v1-22-1-prescribed-snapshot.md.
+-- Spec: docs/specs/v1-22-authoring-program-editing.md (chunk 1). Model: ADR 0005 decision 5.
+--
+-- SHIPS DARK (the 0006 idiom): nothing reads or writes the column here. The renderer, the log-time
+-- writer and the export fallback are chunk 2, which also touches the log form, so it is a separate
+-- concern regardless of deploy order. Metadata-only ADD COLUMN — nullable, no default, no index — so
+-- no table rewrite at any size. IF NOT EXISTS makes the ADD re-run-safe (0006:9, 0008:8, 0009:19).
+-- ⚠️ The FILE is NOT re-runnable as a whole: Postgres has no ADD CONSTRAINT IF NOT EXISTS, so a
+-- re-run aborts at the second statement with 42710. What guarantees one application is _journal.json.
+--
+-- NO INDEX, deliberately: the column's only reader is its own row during export, and leaving it
+-- unindexed is what keeps chunk 3's backfill UPDATEs HOT-eligible — `entries` already carries 10
+-- declared indexes plus the PK and the public_id unique.
+--
+-- `''` ≠ NULL, and both are meaningful. `''` is the frozen rendering of a movement-only prescription
+-- (11 of 13 live prescriptions render empty); NULL means "never snapshotted" and is the only state
+-- that falls back to the live (day_role, movement) match. There is deliberately NO
+-- CHECK (prescribed_snapshot <> '').
+--
+-- CHUNK 2 MERGES ONLY AFTER THIS IS OBSERVED APPLIED — the run being green is not enough
+-- (migrate.yml exit 0s with a warning when DATABASE_URL_UNPOOLED is absent). Check both:
+-- docs/runbooks.md → "Before chunk 2 of V1-22 (the snapshot writer)".
+--
+-- Bound lock acquisition + statement runtime before the DDL (AGENTS.md DB rules). drizzle-kit migrate
+-- wraps each file in a transaction, so these apply to it.
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "entries" ADD COLUMN IF NOT EXISTS "prescribed_snapshot" text;--> statement-breakpoint
+-- The movement-arm guard. Structural twin of entries_superset_movement_check (0005:47) — same table,
+-- same `X is null or movement_id is not null` shape, same reasoning. Named for the RULE, not the
+-- column, per this table's convention (value-domain checks are entries_<col>_check; cross-column
+-- guards are entries_shape_check / entries_value_source_check / entries_superset_movement_check).
+-- Provably right: prescriptions.movement_id is NOT NULL, so no prescription exists that a metric or
+-- boolean entry could ever snapshot.
+--
+-- Every existing row has prescribed_snapshot = NULL (the column is created in the statement above)
+-- and `NULL IS NULL` is TRUE, so the validating scan reads rows that cannot fail — on a table of
+-- 51 rows (49 live), measured in prod 2026-10-06. NOT VALID → VALIDATE buys nothing here and Squawk
+-- rejects it anyway: in one file it is one transaction, and the gate answers "will block all reads
+-- while the constraint is validated". AGENTS.md carries the carve-out; 0009/0010 reached it
+-- independently. 0002/0005 did split it in-file and predate the Squawk gate.
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "entries" ADD CONSTRAINT "entries_prescribed_snapshot_movement_check" CHECK ("prescribed_snapshot" IS NULL OR "movement_id" IS NOT NULL);
