@@ -2,11 +2,22 @@ import { z } from 'zod';
 
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
-import { QUANTITY_DECIMALS } from './units';
+import { MASS_QUANTITY_CEILING, MAX_STORABLE_QUANTITY, QUANTITY_DECIMALS } from './units';
 
-/** Over the per-set ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
+/** Over the ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
  *  real 3200 m or 2400 s is usually a unit slip, and the copy must not imply the athlete is wrong. */
 export const NUMBER_TOO_HIGH_MESSAGE = 'That number looks too high — check the unit.';
+
+/**
+ * The same refusal, naming the unit the set is currently in (V1-30b-ii). Per-unit ceilings fire on two
+ * different mistakes and the old copy only named one: `3219 in` IS a wrong unit, but `2001 lb` is
+ * almost certainly a typo for 200 — and the Unit select there only offers Pounds and Kilograms, so
+ * "check the unit" sent a kid to a control where nothing was wrong. The refine knows the unit; this
+ * stops throwing it away, and saves scrolling back up to see what the field is set to.
+ */
+export function numberTooHighMessage(unitLabel: string): string {
+  return `That number looks too high for ${unitLabel} — check the number and the unit.`;
+}
 
 /**
  * A NUMERIC set — reps × a number. This is the original `strengthSetSchema`, preserved **unchanged**
@@ -28,7 +39,14 @@ export const numericSetSchema = z.object({
   // trust boundary. The browser form marks the input `required`, so this only guards a crafted body.
   weight: z.preprocess(
     (v) => (typeof v === 'string' && v.trim() === '' ? NaN : v),
-    z.coerce.number().min(0, 'Weight can’t be negative.').max(2000),
+    // The EDIT path's bound. Mass-only until V1-33 (`isEditableSet` refuses a non-mass set), so it is
+    // the same ceiling as `MAX_QUANTITY_BY_UNIT.lb/.kg` and reads it from the one source rather than
+    // re-typing it — otherwise lowering the map would leave the edit path accepting what the log path
+    // refuses, with nothing red. V1-33 switches this to `quantityCeiling(unit)`.
+    z.coerce
+      .number()
+      .min(0, 'Weight can’t be negative.')
+      .max(MASS_QUANTITY_CEILING, NUMBER_TOO_HIGH_MESSAGE),
   ),
 });
 
@@ -79,7 +97,13 @@ export const strengthSetSchema = z
               });
               return;
             }
-            if (Number(v) > 2000) {
+            // STRUCTURAL, not plausibility. V1-30b-ii moved the per-unit ceiling to the session
+            // refine, where the unit is known — but the regex above allows unbounded digits, so
+            // without this the set schema would hand the writer a number `numeric(8,3)` cannot
+            // store, and Postgres would raise `numeric field overflow` instead of a typed envelope.
+            // Today the session refine catches it first for every loggable unit; this is the bound
+            // that holds when a future consumer (the v1.5 /api/sync flush) validates a set alone.
+            if (Number(v) > MAX_STORABLE_QUANTITY) {
               ctx.addIssue({ code: z.ZodIssueCode.custom, message: NUMBER_TOO_HIGH_MESSAGE });
             }
           }),

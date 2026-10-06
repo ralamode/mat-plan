@@ -168,6 +168,19 @@ all derived from the one unit, so none can disagree with it:
   both the field's `step` and the server's format-check regex, so the browser refuses exactly where
   the server would. It replaced a `step="0.5"` sized for barbell plates that blocked `6.25 ft`,
   `1.25 min` and `61.25 kg`.
+- **V1-30b-ii — the stored-value ceiling is PER UNIT, and it lives in the SESSION refine.** A set
+  schema cannot judge a magnitude: `3219` is a real distance in metres and an absurd one in inches, so
+  only the unit tells them apart. The shared `> 2000` on `strengthSetSchema` is **deleted**;
+  `MAX_QUANTITY_BY_UNIT` / `quantityCeiling` live in `units.ts` and are enforced once, in
+  `strength-session.ts`, in **its own loop** — the mode refine above it `continue`s on mass units, so
+  the cap cannot share that pass. Two things there are load-bearing: `typeof set.weight === 'number'`
+  (the refine still runs after a format failure, when `weight` is the raw string, and an unguarded
+  compare stacks "too high" onto "Enter a plain number"), and a missing cap **refusing** rather than
+  reading as "no cap" (`n > undefined` is false). ⚠️ That second branch is unreachable by
+  construction — `loggableUnitSchema` and the completeness test in `units.test.ts` both stand in
+  front of it — which a mutation test proved: swapping it for `?? Infinity` kills nothing, while
+  deleting one unit's cap kills two tests. It stays as defence in depth, and the test says so rather
+  than claiming a proof it does not have.
 
 5. **A quantity's unit is guarded by TWO composite FKs sharing its `dimension` column.** `lb` in a
    box-jump height is rejected by the database. The writer must therefore derive `dimension` from the

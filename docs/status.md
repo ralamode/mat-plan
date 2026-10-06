@@ -10,6 +10,12 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+📏 **V1-30b is complete** — the log form offers only what the server keeps (30b-i, #234) and the
+stored-value ceiling is **per unit** (30b-ii). A real 2-mile run in metres and a 40-minute hold in
+seconds are loggable; the same number typed into the wrong unit is still refused. History spells the
+five length codes (`30 inches`, `1 foot`). ⚠️ **V1-30 was an open P0 on beta-1's strength-logging exit
+criteria** — all seven filed items are now closed.
+
 🗄️ **V1-22 chunk 1 — `entries.prescribed_snapshot` is live, shipping dark.** Migration `0013`: one
 nullable column plus `entries_prescribed_snapshot_movement_check`, proven by nine `db:verify` cases and
 **mutation-tested** (three mutants killed, including `coalesce(…,'') = ''`). Prod is 51 rows, so the

@@ -4,13 +4,15 @@ import { ENTRY_STATUS, movementStatusSchema } from './enums';
 import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
-import { strengthSetSchema } from './strength';
+import { numberTooHighMessage, strengthSetSchema } from './strength';
 import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
 import {
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   loggableUnitSchema,
+  UNIT_LABELS,
   UNIT_DIMENSION_BY_CODE,
+  quantityCeiling,
 } from './units';
 
 /** The copy when BW / band is tapped on a time or a distance (V1-30). Exported so tests assert
@@ -255,6 +257,39 @@ export const logStrengthSessionSchema = z
               set.weight === null
                 ? modeNotApplicableBlankMessage(noun)
                 : modeNotApplicableMessage(noun),
+          });
+        }
+      }
+    }
+
+    /**
+     * V1-30b-ii — the stored-value ceiling, PER UNIT, enforced here because this is where the unit is
+     * known. It replaces a shared `> 2000` on the set schema, which refused a real `3219 m` run and a
+     * `2400 sec` hold while letting a 2-mile run typed into Inches through.
+     *
+     * ITS OWN LOOP, deliberately: the mode refine above `continue`s on mass units, and this one must
+     * see every unit, so it cannot share that pass.
+     *
+     * ⚠️ `typeof === 'number'` is load-bearing. The session refine still runs when a set's FORMAT
+     * check failed, and then `set.weight` is the raw string — an unguarded compare would stack
+     * "too high" on top of "Enter a plain number", two messages for one fault.
+     *
+     * ⚠️ A unit with no declared cap is REFUSED, never "no cap": `n > undefined` is false, so a
+     * missing entry would silently disable the bound for exactly the unit nobody thought about.
+     * `units.test.ts` also requires a cap for every loggable unit, so this is the second line.
+     *
+     * The path matches the per-set issue it replaces, so the action keeps labelling it
+     * "<Movement>, set N".
+     */
+    for (const [i, m] of val.movements.entries()) {
+      const ceiling = quantityCeiling(m.unit);
+      for (const [j, set] of m.sets.entries()) {
+        if (typeof set.weight !== 'number') continue;
+        if (ceiling === undefined || set.weight > ceiling) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['movements', i, 'sets', j, 'weight'],
+            message: numberTooHighMessage(UNIT_LABELS[m.unit].toLowerCase()),
           });
         }
       }
