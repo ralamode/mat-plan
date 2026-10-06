@@ -629,7 +629,16 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   (`:1882,:1883,:1947` — `weight` missing from a set literal) plus 1c's own tautological `assert`,
   which is how the gap was noticed. **Fix:** a `packages/db/tsconfig.json` and a root `typecheck` that
   runs both projects, then fix what it finds. Small, but it is a gate that does not exist where the
-  DB proofs live.
+  DB proofs live. ✅ **Implemented in #244:** `packages/db/tsconfig.json` covers `src/**` and
+  `scripts/**`, and the root `typecheck` now chains a `typecheck` script in each project — so the
+  `pre-push` hook and CI's one `pnpm typecheck` step both widened with it, no workflow edit needed. The
+  gate found **12** errors on its first run, not 3: the 3 missing `weight` keys (drifted to
+  `:1908,:1909,:1991`) plus **9** `insertBodyweightEntry(db, …)` calls handing a `PgliteDatabase` to a
+  parameter typed `Executor` (a node-postgres handle) — every other call in the file already used the
+  `asPg` cast declared at `verify.ts:83` for exactly that. Both fixes are shape-only; `db:verify`
+  passes unchanged. ⚠️ **Still open, deliberately out of scope:** `packages/shared` and
+  `packages/engine` have no tsconfig (checked only transitively, via the app's imports), and **linting
+  still stops at `apps/web`** — the other half of the 2026-09-30 baseline's seed #4.
 
 - **DX-6 — recent changelog fragments in the SessionStart briefing.** Agents used to see recent work by
   reading the top of the status.md changelog, which DX-2 froze. The hook

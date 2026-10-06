@@ -1,0 +1,31 @@
+{
+  // `pnpm typecheck` was `pnpm --filter web exec tsc --noEmit`, and apps/web's `include` is relative
+  // to apps/web — so `scripts/` (verify.ts, migrate.ts, seed.ts, corrections/) was typechecked by
+  // NOTHING, and `tsx` strips types without checking them. A type error there surfaced as a runtime
+  // failure against a real database. This project is the missing gate (DX-7); the root `typecheck`
+  // script runs it alongside apps/web's.
+  //
+  // Options mirror apps/web/tsconfig.json; the three divergences are deliberate:
+  //   - target/lib ES2022, not ES2017 + dom: this is Node 20+ code run by tsx, never a browser.
+  //   - types: ["node"] explicit — `process`/`node:fs` were resolving only by accident, via the
+  //     `/// <reference types="node" />` inside @types/pg.
+  //   - no `incremental`: nothing here emits, and a stray .tsbuildinfo buys nothing on a 20-file project.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    // `bundler`, as apps/web uses: every relative import in this package is extensionless
+    // (`./schema`, `../src/client`), which `nodenext` resolution rejects outright.
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "drizzle.config.ts"],
+  "exclude": ["node_modules"]
+}

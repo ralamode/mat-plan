@@ -1905,8 +1905,8 @@ await writeStrengthSession(asPg, {
       // The three shapes that matter: a bodyweight MODE, a second one, and a DURATION — which used to
       // need `entry_sets.seconds` and now rides the same mechanism as every other magnitude.
       sets: [
-        { reps: 5, isBodyweight: true },
-        { reps: 3, isBodyweight: true }, // the vest itself is a slot the NEXT PR's form writes
+        { reps: 5, weight: null, isBodyweight: true },
+        { reps: 3, weight: null, isBodyweight: true }, // the vest itself is a slot the NEXT PR's form writes
         {
           reps: 1,
           weight: 30, // a HOLD: the movement's unit is `sec`, so this is 30 seconds
@@ -1988,7 +1988,7 @@ await writeStrengthSession(asPg, {
       unit: 'lb',
       movementId: movX.id,
       clientId: LABELED_SS_A,
-      sets: [{ reps: 5, isBodyweight: true }],
+      sets: [{ reps: 5, weight: null, isBodyweight: true }],
       supersetClientId: LABELED_SS_GROUP,
       supersetOrder: 1,
     },
@@ -3192,7 +3192,7 @@ console.log(
 
   // A first weigh-in inserts.
   const first = ids1e();
-  const wrote = await insertBodyweightEntry(db, {
+  const wrote = await insertBodyweightEntry(asPg, {
     ...base,
     ...first,
     day: '2026-11-01',
@@ -3201,7 +3201,7 @@ console.log(
   assert.deepEqual(wrote, { id: first.publicId }, 'V1-24 1e: a first weigh-in inserts');
 
   // A replay of THAT submit (same client_id; the app mints a fresh public id each call) → its own id.
-  const replay = await insertBodyweightEntry(db, {
+  const replay = await insertBodyweightEntry(asPg, {
     ...base,
     publicId: ids1e().publicId,
     clientId: first.clientId,
@@ -3211,7 +3211,7 @@ console.log(
   assert.deepEqual(replay, { id: first.publicId }, 'V1-24 1e: a replay answers the SAME entry');
 
   // ANOTHER device's different weight on the same day → dayTaken, never a silent success.
-  const other = await insertBodyweightEntry(db, {
+  const other = await insertBodyweightEntry(asPg, {
     ...base,
     ...ids1e(),
     day: '2026-11-01',
@@ -3223,7 +3223,7 @@ console.log(
   assert.equal(Number(nov1[0].value), 80, "V1-24 1e: the first weigh-in's value is untouched");
 
   // Another day inserts; a soft-deleted day frees its slot.
-  const nov2 = await insertBodyweightEntry(db, {
+  const nov2 = await insertBodyweightEntry(asPg, {
     ...base,
     ...ids1e(),
     day: '2026-11-02',
@@ -3234,7 +3234,7 @@ console.log(
     .update(schema.entries)
     .set({ deletedAt: new Date() })
     .where(eq(schema.entries.publicId, first.publicId));
-  const after = await insertBodyweightEntry(db, {
+  const after = await insertBodyweightEntry(asPg, {
     ...base,
     ...ids1e(),
     day: '2026-11-01',
@@ -3254,7 +3254,7 @@ console.log(
     .limit(1);
   assert.ok(foreign, 'V1-24 1e: fixture — another profile owns a live entry');
   await assert.rejects(
-    insertBodyweightEntry(db, {
+    insertBodyweightEntry(asPg, {
       ...base,
       publicId: ids1e().publicId,
       clientId: foreign.clientId,
@@ -3269,7 +3269,7 @@ console.log(
   // A replay of a SOFT-DELETED submit (a still-mounted form resubmitting after a correction removed its
   // row) on a day another weigh-in now holds → dayTaken. The replay lookup must skip deleted rows, or
   // it would answer the dead row's id: success reported, nothing saved.
-  const resubmit = await insertBodyweightEntry(db, {
+  const resubmit = await insertBodyweightEntry(asPg, {
     ...base,
     publicId: ids1e().publicId,
     clientId: first.clientId, // `first` was soft-deleted above; `after` holds 2026-11-01
@@ -3295,7 +3295,7 @@ console.log(
     .from(schema.entries)
     .where(eq(schema.entries.publicId, bout.publicId));
   await assert.rejects(
-    insertBodyweightEntry(db, {
+    insertBodyweightEntry(asPg, {
       ...base,
       publicId: ids1e().publicId,
       clientId: boutRow.clientId,
@@ -3317,7 +3317,7 @@ console.log(
     context: 'evening',
   });
   await assert.rejects(
-    insertBodyweightEntry(db, {
+    insertBodyweightEntry(asPg, {
       ...base,
       publicId: ids1e().publicId,
       clientId: foreign.clientId,

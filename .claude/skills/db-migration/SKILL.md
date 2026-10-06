@@ -78,7 +78,9 @@ before the final log:
 - each new constraint **rejects** bad data (`expectRejectedBy('<constraint_name>', fn)`)
 - the happy path round-trips through the real writer or DAL query
 
-Nothing typechecks `verify.ts`, so its errors only appear at runtime. Run it.
+`verify.ts` is typechecked since DX-7 (`packages/db/tsconfig.json`, wired into `pnpm typecheck`), so a
+stale column reference is now a compile error. A **tautological** assertion still is not — only running
+it proves anything. Run it.
 
 ## 5. Local gates
 
