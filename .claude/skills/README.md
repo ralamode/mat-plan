@@ -8,7 +8,7 @@ the guards and the backlog; the skills are their own index** (below). Record a s
 
 ```
                      once per MILESTONE
-spec-milestone ──►  context → acceptance criteria → data contract → chunks → panel → commit
+write-spec ──►    context → acceptance criteria → data contract → chunks → panel → commit
       │
       ▼              once per PR
 start-task ──► plan-with-panel ──► (implement) ──► ship-pr ──► review-pr ──► merged

@@ -9,7 +9,7 @@ See also: [docs/spec.md](./docs/spec.md) (architecture + data model), [docs/plan
 [docs/lessons.md](./docs/lessons.md) (recurring gotchas + fixes),
 [docs/features/](./docs/features/) (per-feature guides — **read before changing a feature**),
 [.claude/skills/](./.claude/skills/README.md) (agent skills — the task lifecycle as procedures:
-`spec-milestone` once per milestone, then `start-task` → `plan-with-panel` → `ship-pr` → `review-pr`
+`write-spec` for work spanning several PRs, then `start-task` → `plan-with-panel` → `ship-pr` → `review-pr`
 per PR, plus task skills for migrations, Server Actions, data corrections and CI failures; each
 skill's `description` is its index entry).
 
