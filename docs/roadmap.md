@@ -64,14 +64,14 @@ The order and the reason each chunk cannot move live in
 **[specs/v1-22-authoring-program-editing.md](./specs/v1-22-authoring-program-editing.md)**. This is
 the progress view only.
 
-| #     | Chunk                                                   | State                                                                                                    |
-| ----- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **1** | `entries.prescribed_snapshot`, shipping dark            | 📋 **planned** (#230) — blocked only on the prod `count(*)`; `packages/db` only, so parallel to `v1-30b` |
-| **2** | One shared renderer + log-time writer + export fallback | ☐                                                                                                        |
-| **3** | The backfill, as a `db:correct` correction              | ☐                                                                                                        |
-| **4** | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐                                                                                                        |
-| **5** | The day-scoped seed guard                               | ☐                                                                                                        |
-| **6** | Add / remove / reorder                                  | ☐ cuttable                                                                                               |
+| #        | Chunk                                                   | State                                                                               |
+| -------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **1** ✅ | `entries.prescribed_snapshot`, shipped dark             | **Done** — `0013`, mutation-tested. Chunk 2 gated on it being **observed applied**. |
+| **2**    | One shared renderer + log-time writer + export fallback | ☐                                                                                   |
+| **3**    | The backfill, as a `db:correct` correction              | ☐                                                                                   |
+| **4**    | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐                                                                                   |
+| **5**    | The day-scoped seed guard                               | ☐                                                                                   |
+| **6**    | Add / remove / reorder                                  | ☐ cuttable                                                                          |
 
 ## Next per pillar
 

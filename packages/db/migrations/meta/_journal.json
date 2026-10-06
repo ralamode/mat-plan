@@ -92,6 +92,13 @@
       "when": 1790882404117,
       "tag": "0012_bodyweight_one_per_day",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791295241913,
+      "tag": "0013_prescribed_snapshot",
+      "breakpoints": true
     }
   ]
 }

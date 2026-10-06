@@ -10,6 +10,12 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🗄️ **V1-22 chunk 1 — `entries.prescribed_snapshot` is live, shipping dark.** Migration `0013`: one
+nullable column plus `entries_prescribed_snapshot_movement_check`, proven by nine `db:verify` cases and
+**mutation-tested** (three mutants killed, including `coalesce(…,'') = ''`). Prod is 51 rows, so the
+validating scan is trivial. ⚠️ **Chunk 2 merges only after `0013` is observed applied** — the catalog
+query in [runbooks.md](./runbooks.md), not the green tick.
+
 🌐 **OSS-2 §A — `/` is a public landing page** (#216). The resume link now shows what mat-plan is
 and links the source; the app moved behind it to `/p`, still gated. Next on this track: the OSS-1 seed
 rename, then §B (the hero image) ([plan](./plans/oss-2-public-landing.md)).

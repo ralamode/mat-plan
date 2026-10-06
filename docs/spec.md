@@ -96,6 +96,12 @@ CHECK. All rows household-scoped for DAL authz.
   client_id. CHECK: **at-most-one-of** {movement_id, metric_key} — a movement entry, a metric entry,
   or **neither** (a boolean habit check-in names only its activity_type; V1-5 is the first writer of
   that shape). Implemented in `0002` as `movement_id IS NULL OR metric_key IS NULL`.
+  **`prescribed_snapshot`** (V1-22 chunk 1) is the PLAN as asked, rendered to one string and frozen at
+  log time so a prescription edit cannot rewrite a past month's export. Nullable text, no index, and
+  `''` ≠ NULL: `''` is a movement-only prescription's real rendering, NULL means "never snapshotted"
+  and is the only state that falls back to the live `(day_role, movement)` match. Implemented in `0013`
+  with `entries_prescribed_snapshot_movement_check` as
+  `prescribed_snapshot IS NULL OR movement_id IS NOT NULL`.
 - `entry_set` — entry_id, idx, reps?, **is_bodyweight, is_band**, status, client_id. _(Derived/queryable
   layer; `raw_*` on entry is the export source of truth.)_ **GAP-3 (migration `0011`) removed
   `weight_num`, `weight_label` and `seconds`**: one free-text column was encoding three different

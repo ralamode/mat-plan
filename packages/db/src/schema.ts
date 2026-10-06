@@ -182,6 +182,20 @@ export const entries = pgTable(
     valueNum: numeric('value_num', { precision: 8, scale: 3 }), // bodyweight value
     rawLoad: text('raw_load'), // verbatim legacy strings → lossless CSV export
     rawReps: text('raw_reps'),
+    // V1-22 chunk 1: the PLAN as asked, rendered to one string and frozen at log time, so a later
+    // prescription edit cannot rewrite a past month's `prescribed` CSV column (ADR 0005 decision 5).
+    // Deliberately NOT named `raw_prescribed`: `raw_*` on this table is what the athlete PERFORMED;
+    // this is what was ASKED. The authored side already names by meaning, not prefix — compare
+    // `prescriptions.target_reps` and `prescription_targets.load`, whose docblocks say "like
+    // entries.raw_reps/raw_load" and still take meaning-names.
+    // `''` and NULL are DISTINCT and both meaningful: `''` is the frozen rendering of a movement-only
+    // prescription (11 of 13 live prescriptions render empty), NULL means "never snapshotted" and is
+    // the only state that falls back to the live (day_role, movement) match. So the read predicate is
+    // `IS NULL`, never `coalesce(…,'') = ''`, and the DAL fallback is `snapshot ?? live`, never `||`.
+    // The movement-arm guard (`entries_prescribed_snapshot_movement_check`) is HAND-ADDED in migration
+    // 0013, not declared here — the same idiom as entries_value_source_check and the superset pair,
+    // which keeps the drizzle drift snapshot trivially clean.
+    prescribedSnapshot: text('prescribed_snapshot'),
     // ── V1-1b generalized columns (additive; legacy kind/movement_name dropped in V1-1d) ──
     // All NULLABLE at the column level. The at-most-one tagged-union guard
     // (`movement_id IS NULL OR metric_key IS NULL`) is a HAND-ADDED CHECK in the migration,

@@ -61,6 +61,23 @@ deleted_at IS NOT NULL;` (the original `updated_at` tokens are gone, so key on `
 correction refuses those rows as drifted — expected: their `updated_at` is now `now()`, so re-reading
 is the next step. After 1d lands, un-deleting a row would violate its index.
 
+**Before chunk 2 of V1-22 (the snapshot writer) merges, `0013` must be live in prod.** Same shape as
+1e below, and the same "check both": `gh run list --workflow migrate.yml --branch main -L 3` shows
+**success on chunk 1's merge SHA** — the run being green is not enough on its own, because the migrate
+step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is absent — **and** in prod
+
+```sql
+SELECT pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conname = 'entries_prescribed_snapshot_movement_check';
+```
+
+returns the predicate in `packages/db/migrations/0013_prescribed_snapshot.sql`, **and**
+`prescribed_snapshot` appears in `information_schema.columns`. Until all three hold, chunk 2's code
+names a column that may not exist, on the strength write.
+
+**The wedge below applies to ANY pending migration, `0013` included** — a failed run re-fails on every
+later push and takes `db:seed` with it, and the `lock_timeout` carve-out is the same.
+
 **1e (the create path's arbiter) merges only after 1d's index is live in prod.** Check both, don't
 assume:
 
