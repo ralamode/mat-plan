@@ -629,7 +629,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   (`:1882,:1883,:1947` — `weight` missing from a set literal) plus 1c's own tautological `assert`,
   which is how the gap was noticed. **Fix:** a `packages/db/tsconfig.json` and a root `typecheck` that
   runs both projects, then fix what it finds. Small, but it is a gate that does not exist where the
-  DB proofs live. ✅ **Implemented in #PR:** `packages/db/tsconfig.json` covers `src/**` and
+  DB proofs live. ✅ **Implemented in #244:** `packages/db/tsconfig.json` covers `src/**` and
   `scripts/**`, and the root `typecheck` now chains a `typecheck` script in each project — so the
   `pre-push` hook and CI's one `pnpm typecheck` step both widened with it, no workflow edit needed. The
   gate found **12** errors on its first run, not 3: the 3 missing `weight` keys (drifted to
