@@ -2,7 +2,10 @@ import {
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   type Unit,
+  UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
+  type UnitDimension,
+  UNIT_LABELS,
 } from '@mat-plan/shared';
 
 /**
@@ -219,9 +222,52 @@ export const AMEND_COPY = {
   lockedRecovery: 'Wrong? Don’t log it again — tell a parent so they can fix it.',
 } as const;
 
-/** A set's weight input accessible name — one source for the field and the specs that find it. */
-export function weightInputLabel(subject: string, unitLabel?: string): string {
-  return unitLabel ? `${subject} weight in ${unitLabel}` : `${subject} weight`;
+/**
+ * The word a dimension's primary number goes by IN THE FIELD — the placeholder and the accessible
+ * name. A third per-dimension map beside `LOGGABLE_DIMENSION_LABELS` (the Measuring option) and
+ * `LOGGABLE_DIMENSION_NOUNS` (running copy), because each serves a different surface and respelling
+ * one must not garble the others.
+ *
+ * `length`, not `distance` or `height`: the dimension covers a box-jump HEIGHT and a broad-jump
+ * DISTANCE, so either alone mislabels the main length movement, and it must not contradict the blank
+ * copy "Enter the height or distance." It also has to fit the `w-24` field (~52px) — the row is
+ * ≈ 275 of ≈ 294px at 360px.
+ *
+ * `constants.test.ts` requires a word for every loggable dimension, so adding one without a word
+ * fails rather than silently falling back.
+ */
+export const QUANTITY_FIELD_WORD: Partial<Record<UnitDimension, string>> = {
+  mass: 'weight',
+  length: 'length',
+  time: 'time',
+};
+
+/**
+ * A set's number-input accessible name — one source for the field and every spec that finds it.
+ *
+ * MASS IS BYTE-IDENTICAL to the old `weightInputLabel` ("… weight in lb"), so every existing mass
+ * locator holds; a missed one fails loudly rather than drifting. Non-mass spells the unit out
+ * ("time in seconds", "length in inches") because `sec` and `in` read as nothing aloud.
+ */
+export function quantityInputLabel(subject: string, unit?: Unit): string {
+  if (!unit) return `${subject} weight`;
+  const word = QUANTITY_FIELD_WORD[UNIT_DIMENSION_BY_CODE[unit]] ?? 'weight';
+  if (UNIT_DIMENSION_BY_CODE[unit] === UNIT_DIMENSION.mass) return `${subject} weight in ${unit}`;
+  return `${subject} ${word} in ${UNIT_LABELS[unit].toLowerCase()}`;
+}
+
+/**
+ * The advisory sentence when the catalog's declared dimension differs from the chosen Measuring, and
+ * (V1-26 PR-A) when a declared-loaded movement is logged BW. ONE function, so the two surfaces cannot
+ * word the same warning two ways — V1-26's sentence is the `mass` branch, verbatim.
+ *
+ * A WARNING, never a lockout: the catalog's declaration is a normal case, not a rule, and an athlete
+ * doing bodyweight KB swings is allowed to be right.
+ */
+export function usuallyLoggedAs(movementName: string, dimension: UnitDimension): string {
+  const noun = LOGGABLE_DIMENSION_NOUNS[dimension];
+  if (dimension === UNIT_DIMENSION.mass) return `${movementName} is usually logged with a weight.`;
+  return `${movementName} is usually logged as a ${noun ?? 'number'}.`;
 }
 
 /**

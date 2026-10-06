@@ -47,10 +47,10 @@ Two deliberate departures from the obvious cut, both argued rather than assumed:
 
 ## In flight
 
-| Item                                 | Pillar                 | State                                                           |
-| ------------------------------------ | ---------------------- | --------------------------------------------------------------- |
-| **V1-22 Authoring** — chunks 1–6     | Authoring & Scheduling | **Spec landed** (#226). Chunk 1 next. See the table below.      |
-| **V1-30b** — the form stops inviting | Logging & Measurement  | Planned (#215), not started. **Goes before Authoring chunk 2.** |
+| Item                                 | Pillar                 | State                                                                                                              |
+| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **V1-22 Authoring** — chunks 1–6     | Authoring & Scheduling | **Spec landed** (#226). Chunk 1 next. See the table below.                                                         |
+| **V1-30b** — the form stops inviting | Logging & Measurement  | **30b-i shipped**; 30b-ii (per-unit caps + history wording) next. Authoring chunk 2 is released once 30b-i merges. |
 
 **Sequencing decision (2026-10-06, [parallel-work](./parallel-work.md) gate 1):** chunk 2 threads a
 prescription public id through the log form, and `v1-30b` edits `strength-form.tsx` and
@@ -81,7 +81,7 @@ Each is the item that would start if that pillar got the next session.
 | ---------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                                                                                        |
 | Profiles & Tenancy     | `TEN-1`                  | Nothing — but it is a **seam change**, so it lands before the pillars that consume it, not beside them. Unblocks `AUTH-1`. |
-| Logging & Measurement  | `V1-30b`                 | Nothing — and it now precedes Authoring chunk 2.                                                                           |
+| Logging & Measurement  | `V1-30b-ii`              | Nothing — 30b-i is shipped, so Authoring chunk 2 is released.                                                              |
 | Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.                                                                            |
 | Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).                                                                      |
 | Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.                                                                 |

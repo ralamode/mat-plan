@@ -147,6 +147,28 @@ addendum, V1-30). **Offerable ⊆ accepted ⊆ exportable** is enforced by the c
 ([V1-30 plan](../plans/v1-30-loggable-units.md)). On a non-mass movement BW / band are refused: they
 are modes of a weight (see invariant 2 for where each half of that lives).
 
+**V1-30b-i — and the FORM now offers only what the server keeps.** Three things follow the dimension,
+all derived from the one unit, so none can disagree with it:
+
+- **The load-mode chips are UNMOUNTED on a non-mass card** (`strength-form.tsx`, guarded by
+  `isMassUnit`) — not CSS-hidden, because a hidden checkbox left in the tab order is the
+  "form appears dead" trap this guide records twice. The server's refine 6 stays the backstop for a
+  crafted body.
+- **A MEASURING change clears every set's load modes in the SAME state update that changes the unit**
+  (`setDimensionUnit`). That is where the guarantee lives: no state can ever pair `isBodyweight` with
+  a non-mass unit. Changing the unit WITHIN mass (lb → kg) clears nothing — it never crosses a
+  dimension, so it keeps `patchMovement`.
+- **The field word is per dimension** — `QUANTITY_FIELD_WORD` in `apps/web/lib/constants.ts`, feeding
+  both the placeholder and `quantityInputLabel`. Mass output is **byte-identical** to V1-30
+  ("… weight in lb"), so every existing mass locator holds. ⚠️ `QUANTITY_FIELD_WORD` is the **third**
+  per-dimension word map, beside `LOGGABLE_DIMENSION_LABELS` (the Measuring option) and
+  `LOGGABLE_DIMENSION_NOUNS` (running copy). Each serves a different surface on purpose; respelling
+  one must not garble the others.
+- **One precision for every unit.** `QUANTITY_DECIMALS = 3` in `packages/shared/src/units.ts` feeds
+  both the field's `step` and the server's format-check regex, so the browser refuses exactly where
+  the server would. It replaced a `step="0.5"` sized for barbell plates that blocked `6.25 ft`,
+  `1.25 min` and `61.25 kg`.
+
 5. **A quantity's unit is guarded by TWO composite FKs sharing its `dimension` column.** `lb` in a
    box-jump height is rejected by the database. The writer must therefore derive `dimension` from the
    unit it is actually writing — the movement's unit for the primary, the row's own for anything else.
@@ -186,6 +208,21 @@ are modes of a weight (see invariant 2 for where each half of that lives).
 ## Traps
 
 Real ones, each with the file to look at.
+
+- **⚠️ Clearing a load mode can UN-TOUCH a set, and that is correct.** V1-30b-i's Measuring change
+  drops `isBodyweight`, and a BW-only set is _touched_ precisely because of that flag. So switching a
+  BW-only scaffolded card to Time makes every row untouched → the card becomes **droppable**
+  (`isUntouchedScaffold`) and the summary loses a movement; if it was in a superset, serialization
+  also dissolves it (`dissolveSmallSupersets`). On a **named** hand-added card the typed name keeps it
+  undroppable, so every row is required and the form blocks instead. Neither is a bug: no typed number
+  is ever lost, the chips visibly vanish, and the cleared rows are visibly blank on an open card. Each
+  shape is pinned by a case-table test in `strength-form.test.tsx` running through
+  `expectSummaryAgrees`.
+- **⚠️ Filtering the load modes at SERIALIZATION instead of clearing them in state was tried and
+  rejected.** State would still count a BW-only set as touched while the wire carried a blank set the
+  server refuses — invisible "touched" state, the V1-19 collapsed-card wedge — and the V1-27 summary
+  would disagree with what was sent. Clearing in state keeps every V1-27 predicate correct by
+  construction. Do not "optimise" it back.
 
 - **⚠️ A BODYWEIGHT set cannot be corrected, by anyone, ever.** `isEditableSet` opens with
   `!set.isBodyweight` and `updateStrengthSetById`'s WHERE mirrors it — and there is **no delete action

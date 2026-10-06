@@ -77,7 +77,7 @@ export function EditableSet({
 
   const error = state !== stateAtOpen ? state.error : null;
   const errorId = setAmendErrorId(set.publicId);
-  const unitLabel = primary?.unit; // the CODE, as the read line and the log form show it
+  const unit = primary?.unit; // the CODE, as the read line and the log form show it
   const line = formatSetLine(set);
 
   // Mounted in both states, before the save it announces (a region that mounts with its text is not
@@ -130,7 +130,7 @@ export function EditableSet({
             ariaLabel={subject}
             nameReps="reps"
             nameWeight="weight"
-            unitLabel={unitLabel}
+            unit={unit}
             autoFocusReps
             repsDescribedBy={error ? errorId : undefined}
             weightDescribedBy={error ? errorId : undefined}

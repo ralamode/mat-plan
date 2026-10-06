@@ -13,7 +13,7 @@ import {
   AMEND_ERROR_COPY,
   changeLabel,
   setAmendErrorId,
-  weightInputLabel,
+  quantityInputLabel,
 } from '@/lib/constants';
 import type { SetDTO } from '@/lib/dal/entries';
 
@@ -36,7 +36,8 @@ const set = (o: Partial<SetDTO> = {}): SetDTO => ({
   ...o,
 });
 const SUBJECT = 'Back squat set 2';
-const WEIGHT = weightInputLabel(SUBJECT, 'lb');
+// Mass output is byte-identical to the old `weightInputLabel`, so this locator is unchanged text.
+const WEIGHT = quantityInputLabel(SUBJECT, 'lb');
 const island = (s = set(), subject = SUBJECT) => (
   <ul>
     <EditableSet set={s} profileId="p-1" subject={subject} />

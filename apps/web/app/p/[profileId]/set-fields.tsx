@@ -2,7 +2,12 @@
 
 import { type RefObject, useEffect, useRef } from 'react';
 
-import { INPUT_CLASS, weightInputLabel } from '@/lib/constants';
+import { QUANTITY_DECIMALS, type Unit, UNIT_DIMENSION_BY_CODE } from '@mat-plan/shared';
+
+import { INPUT_CLASS, QUANTITY_FIELD_WORD, quantityInputLabel } from '@/lib/constants';
+
+/** One precision for every unit, as the attribute value: `0.001`. */
+const QUANTITY_STEP = (10 ** -QUANTITY_DECIMALS).toFixed(QUANTITY_DECIMALS);
 
 /**
  * V1-27 decision 6 — the custom "missing" message, set DECLARATIVELY from state, never by an
@@ -44,7 +49,7 @@ export function SetRepsWeightFields({
   weightMissingMessage,
   repsDescribedBy,
   weightDescribedBy,
-  unitLabel,
+  unit,
   autoFocusReps = false,
 }: {
   reps: string;
@@ -84,13 +89,16 @@ export function SetRepsWeightFields({
    *  phone this also raises the keypad). The log form leaves it off. */
   autoFocusReps?: boolean;
   /**
-   * The movement's unit, rendered as static text after the field and folded into the accessible name.
-   * Since PR 4a a movement may be logged in `in` or `sec`, so a bare `[ 30 ]` labeled "weight" is
-   * ambiguous to a sighted user and meaningless to a screen reader. Both forms pass the unit CODE
-   * (`lb`, `kg`), matching the read line; a long name ("Kilograms") overflows a 280px superset member
-   * in the edit form (V1-24 3a-i UX review).
+   * The movement's unit. Rendered as the static CODE after the field (matching the read line; a long
+   * name like "Kilograms" overflows a 280px superset member in the edit form, V1-24 3a-i UX review)
+   * and folded into the accessible name and the PLACEHOLDER via the field word.
+   *
+   * V1-30b: typed `Unit` rather than a loose label, because the dimension is derived from it — a
+   * time card must not offer a field called "weight". Since PR 4a a movement may be logged in `in` or
+   * `sec`, so a bare `[ 30 ]` labelled "weight" is ambiguous to a sighted user and meaningless to a
+   * screen reader.
    */
-  unitLabel?: string;
+  unit?: Unit;
   // When the fields submit via a native <form> (the V1-9 edit form), pass field names so FormData
   // captures them. The log form omits them — its set values ride the hidden `movements` JSON instead.
   nameReps?: string;
@@ -127,18 +135,24 @@ export function SetRepsWeightFields({
         type="number"
         inputMode="decimal"
         min="0"
-        step="0.5"
+        // V1-30b: one precision for every unit, from the same const the server's format check reads,
+        // so the browser refuses exactly where the server would. `step="0.5"` was sized for barbell
+        // plates and blocked `6.25 ft`, `1.25 min` and `61.25 kg`. The decimal keypad comes from
+        // `inputMode`, not from `step`.
+        step={QUANTITY_STEP}
         required={weightRequired}
         aria-describedby={weightDescribedBy}
         name={nameWeight}
-        placeholder="weight"
-        aria-label={weightInputLabel(ariaLabel, unitLabel)}
+        placeholder={
+          unit ? (QUANTITY_FIELD_WORD[UNIT_DIMENSION_BY_CODE[unit]] ?? 'weight') : 'weight'
+        }
+        aria-label={quantityInputLabel(ariaLabel, unit)}
         value={weight}
         onChange={(e) => onWeight(e.target.value)}
         className={`${INPUT_CLASS} w-24`}
       />
-      {unitLabel ? (
-        <span className="text-muted-foreground text-sm whitespace-nowrap">{unitLabel}</span>
+      {unit ? (
+        <span className="text-muted-foreground text-sm whitespace-nowrap">{unit}</span>
       ) : null}
     </>
   );

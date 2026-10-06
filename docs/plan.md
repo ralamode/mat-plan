@@ -932,7 +932,7 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   Reproduced by #201's red-first commit; filed from #176's review.
 
 - **V1-30b — the form stops inviting the shapes V1-30a refuses.** 🟡 Filed 2026-10-01 from the V1-30
-  UX lens. 📋 [**plan**](./plans/v1-30b-form-stops-inviting.md) (draft, split 30b-i form → 30b-ii caps + history; per-dimension blank copy already done by V1-27). Filed from ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
+  UX lens. 📋 [**plan**](./plans/v1-30b-form-stops-inviting.md) — **30b-i ✅ shipped** (the form offers only what the server keeps: chips mass-only, Measuring clears the load modes in one update, per-dimension field word, one precision for every unit); **30b-ii** (per-unit caps + history wording) open. Per-dimension blank copy was already done by V1-27. Filed from ([plan § V1-30b](./plans/v1-30-loggable-units.md#v1-30b-filed-not-in-this-pr-the-form-stops-inviting-the-bad-shapes)).
   Hide BW / band on a time or distance movement and clear them when Measuring changes; label the field
   `time` / `distance` instead of `weight` (placeholder and aria-label); per-dimension blank copy
   ("Enter the time."); a hint when Measuring differs from the catalog's dimension; `step="0.5"` blocks
