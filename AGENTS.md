@@ -469,8 +469,8 @@ Workflow: edit schema → drizzle-kit generate → COMMIT the generated .sql (th
 Where it runs: GitHub Actions is the SINGLE migrator, on merge to main, against the DIRECT/unpooled
   Neon string. NEVER in the Vercel build (concurrent preview builds would race / DDL the wrong DB).
 CI gates (ACTUAL, 2026-09-23): drizzle-kit check + `generate` leaves a clean tree (drift guard) + `db:verify`
-        on PGlite. NOT WIRED despite being claimed below: Squawk lint;
-  migration applies on (a) empty Docker PG AND (b) a Neon branch cut from main (prod-shaped); seeds
+        on PGlite, plus Squawk on new migrations (since GAP-3 PR 1b, #135). NOT WIRED despite being
+  claimed below: migration applies on (a) empty Docker PG AND (b) a Neon branch cut from main (prod-shaped); seeds
   run twice → idempotent.
 Safety (Squawk-enforced on NEW migrations since GAP-3 PR 1b; `.squawk.toml`): no DROP COLUMN/TABLE, TRUNCATE CASCADE, or column/table RENAME alongside
   app code — use expand→backfill→contract across separate deploys. Indexes CONCURRENTLY. New NOT NULL
