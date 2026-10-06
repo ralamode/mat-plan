@@ -1,7 +1,8 @@
 import { type Unit, UNIT_LABELS, UNIT_SINGULAR_LABELS } from '@mat-plan/shared';
 
 /**
- * A measured value with its unit, for DISPLAY — `84.5 lb`, `20 lb`, `30 in` (V1-24 PR 1a).
+ * A measured value with its unit, for DISPLAY — `84.5 lb`, `20 lb`, `30 inches` (V1-24 PR 1a;
+ * V1-30b-ii spelled the length codes).
  *
  * Pure and route-agnostic (type-only import), the `entry-label.ts` / `activity-totals.ts` precedent.
  *
@@ -20,6 +21,7 @@ import { type Unit, UNIT_LABELS, UNIT_SINGULAR_LABELS } from '@mat-plan/shared';
  * | --- | --- | --- |
  * | pounds | `84.5 lb` | `84.5` — **bare**, the corpus writes no unit |
  * | seconds | `20 sec` | `20s` |
+ * | inches | `30 inches` — **spelled** | `30in` — suffixed, no space |
  * | kilograms | `5 kg` | `5kg` — suffixed, never bare (V1-30) |
  *
  * Those are contract bytes a downstream workflow diffs, not prose. Reusing it here would drop the

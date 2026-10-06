@@ -4,12 +4,13 @@ import { ENTRY_STATUS, movementStatusSchema } from './enums';
 import { uuidSchema } from './id';
 import { DAY_ROLE_TO_SESSION_TYPE, optionalDayRoleSchema } from './programming';
 import { DEFAULT_SESSION_TYPE, sessionTypeSchema } from './sessions';
-import { NUMBER_TOO_HIGH_MESSAGE, strengthSetSchema } from './strength';
+import { numberTooHighMessage, strengthSetSchema } from './strength';
 import { freeTextNoteSchema, hasCommaOrLineBreak } from './text';
 import {
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   loggableUnitSchema,
+  UNIT_LABELS,
   UNIT_DIMENSION_BY_CODE,
   quantityCeiling,
 } from './units';
@@ -288,7 +289,7 @@ export const logStrengthSessionSchema = z
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['movements', i, 'sets', j, 'weight'],
-            message: NUMBER_TOO_HIGH_MESSAGE,
+            message: numberTooHighMessage(UNIT_LABELS[m.unit].toLowerCase()),
           });
         }
       }

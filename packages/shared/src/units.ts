@@ -184,33 +184,63 @@ export const QUANTITY_DECIMALS = 3;
 
 /**
  * The SINGULAR of the units whose history line is spelled out, for `value === 1` (V1-30b-ii).
+ *
+ * A TOTAL `Record` with explicit `null`, not a `Partial` — "deliberately a code" becomes a declared
+ * fact, and a new unit code is a **compile error** here, the cheapest place to catch it (the same
+ * reason `UNIT_DIMENSION_BY_CODE` and `CSV_UNIT_SUFFIX` are exhaustive). With a `Partial`, adding a
+ * sixth length code would render a bare `30 mm` — re-creating the exact bug this map fixes, silently.
  * Only the five length codes are spelled: `lb`, `kg`, `sec` and `min` stay codes, because that is how
  * a lifter reads them. The plural is `UNIT_LABELS[u].toLowerCase()` — only the singular is new data,
  * so there is no second map to keep in sync with the labels.
  */
-export const UNIT_SINGULAR_LABELS: Partial<Record<Unit, string>> = {
-  m: 'metre',
-  yd: 'yard',
-  ft: 'foot',
+export const UNIT_SINGULAR_LABELS: Record<Unit, string | null> = {
+  lb: null,
+  kg: null,
+  count: null,
+  sec: null,
+  min: null,
+  bool: null,
+  timing: null,
   in: 'inch',
   cm: 'centimetre',
+  ft: 'foot',
+  m: 'metre',
+  yd: 'yard',
 };
 
 /**
  * A sanity bound on what a person TYPED — never a prescription. Nothing reads these to suggest a
  * load, so the "LLM never authors loads" rule is untouched.
  *
- * Roughly 2× the largest real use, so a 2-mile run typed into Inches (`3219 in`) is caught while a
- * real `3219 m` is not — the shared 2000 cap refused both. `kg` stays 2000 for log/edit consistency
- * rather than the 2× rationale: the edit path's `numericSetSchema.max(2000)` is mass-only until
- * V1-33, so the two paths agree today.
+ * It catches the mistake the shared 2000 cap could not see: the same number in the WRONG UNIT. A
+ * 2-mile run typed into Inches (`3219 in`) is refused while a real `3219 m` is not.
+ *
+ * ⚠️ **It is a STORAGE-SANITY bound, not a plausibility one, and the two are not the same.** `lb`/`kg`
+ * are close to real use (2000 ≈ 2× the largest plausible lift) and `kg` is pinned there for log/edit
+ * consistency — the edit path's ceiling is mass-only until V1-33. But `sec: 86400` is 24 hours against
+ * a largest real use of ~2400, and `min`, `in` and `cm` are similarly loose. So a mis-typed `3000` for
+ * a 30-second hold SAVES, and `isEditableSet` refuses a non-mass set, so the only recovery is a
+ * `db:correct` run. Tightening them is a product decision, not a code one — the table is the
+ * maintainer's (v1-30b plan, decision 2). Do not quietly narrow it here; raise it there.
  *
  * Every value is ≤ `numeric(8,3)`'s 99999.999, and `units.test.ts` requires a cap for every loggable
  * unit — a missing entry must REFUSE, never read as "no cap" (see `quantityCeiling`).
  */
+/**
+ * The largest value `entry_sets.value_num numeric(8,3)` can STORE. A structural bound, not a
+ * plausibility one: past it the database raises `numeric field overflow` instead of the typed
+ * envelope a human can act on.
+ *
+ * Distinct from `MAX_QUANTITY_BY_UNIT` on purpose — two bounds, two jobs. This one says "the column
+ * can hold it"; that one says "a person plausibly did it". Every cap must be ≤ this.
+ */
+export const MAX_STORABLE_QUANTITY = 99_999.999;
+
+export const MASS_QUANTITY_CEILING = 2000;
+
 export const MAX_QUANTITY_BY_UNIT: Partial<Record<Unit, number>> = {
-  lb: 2000,
-  kg: 2000,
+  lb: MASS_QUANTITY_CEILING,
+  kg: MASS_QUANTITY_CEILING,
   sec: 86_400,
   min: 1_440,
   in: 1_200,

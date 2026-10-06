@@ -3,7 +3,6 @@ import {
   ENTRY_STATUS,
   ENTRY_STATUSES,
   LOGGABLE_DIMENSION_NOUNS,
-  LOGGABLE_UNITS,
   logStrengthSessionSchema,
   modeNotApplicableBlankMessage,
   modeNotApplicableMessage,
@@ -13,7 +12,9 @@ import {
   type Unit,
   UNIT_CODES,
   UNIT_DIMENSION_BY_CODE,
-  NUMBER_TOO_HIGH_MESSAGE,
+  LOGGABLE_UNITS,
+  numberTooHighMessage,
+  UNIT_LABELS,
   quantityCeiling,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
@@ -363,18 +364,22 @@ describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => 
   it('refuses what the shared cap could not catch — the same number in the wrong unit', () => {
     // 3219 is a real distance in metres and an absurd one in inches. Only the unit tells them apart.
     expect(withSet('in', 3219).success).toBe(false);
-    expect(messages(withSet('in', 3219))).toContain(NUMBER_TOO_HIGH_MESSAGE);
-    expect(withSet('m', 10_001).success).toBe(false);
-    expect(withSet('sec', 86_401).success).toBe(false);
-    expect(withSet('kg', 2001).success).toBe(false);
-    expect(withSet('lb', 2001).success).toBe(false);
+    // The copy now NAMES the unit, so a `2001 lb` typo is not sent to a Unit select where nothing
+    // is wrong. Asserted through the exported function, not a re-typed sentence.
+    expect(messages(withSet('in', 3219))).toContain(numberTooHighMessage('inches'));
+    // Derived, not re-typed: a hand-written `10_001` would still assert `false` if the map were
+    // RAISED, and would pass while the boundary moved if it were lowered.
+    for (const u of ['m', 'sec', 'kg', 'lb'] as const) {
+      expect(withSet(u, quantityCeiling(u)! + 1).success, `${u} over its ceiling`).toBe(false);
+      expect(withSet(u, quantityCeiling(u)!).success, `${u} AT its ceiling`).toBe(true);
+    }
   });
 
   it('reports ONE fault when the format check also failed', () => {
     // The session refine runs even after a set's format check fails, and then `weight` is the raw
     // STRING. Without the typeof guard this would stack "too high" on "Enter a plain number".
     const msgs = messages(withSet('lb', '99999.1234'));
-    expect(msgs.filter((m) => m === NUMBER_TOO_HIGH_MESSAGE)).toHaveLength(0);
+    expect(msgs.filter((m) => m === numberTooHighMessage('pounds'))).toHaveLength(0);
     expect(msgs.some((m) => /plain number/.test(m))).toBe(true);
   });
 
@@ -382,8 +387,19 @@ describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => 
     const r = withSet('lb', 2001);
     const issue = r.success
       ? undefined
-      : r.error.issues.find((i) => i.message === NUMBER_TOO_HIGH_MESSAGE);
+      : r.error.issues.find((i) => i.message === numberTooHighMessage('pounds'));
     expect(issue?.path).toEqual(['movements', 0, 'sets', 0, 'weight']);
+  });
+
+  // ⚠️ The boundary. Without this, `>` → `>=` survives the ENTIRE suite: every accept case sits far
+  // below its cap, so nothing pins the edge, and four of the nine units had no ceiling case at all.
+  // Proved by mutation: the off-by-one refuses every unit's legitimate maximum, silently.
+  it.each([...LOGGABLE_UNITS])('%s accepts exactly its cap and refuses one step more', (u) => {
+    const cap = quantityCeiling(u)!;
+    expect(withSet(u, cap).success, `${u} AT its cap`).toBe(true);
+    expect(messages(withSet(u, cap + 0.001))).toContain(
+      numberTooHighMessage(UNIT_LABELS[u].toLowerCase()),
+    );
   });
 
   it('a unit with no declared cap cannot reach the ceiling at all — TWO independent guards', () => {
@@ -401,11 +417,5 @@ describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => 
     // past the completeness test.
   });
 
-  it('every LOGGABLE unit has a cap that fits numeric(8,3)', () => {
-    for (const u of LOGGABLE_UNITS) {
-      const cap = quantityCeiling(u);
-      expect(cap, `no ceiling declared for ${u}`).toBeDefined();
-      expect(cap!).toBeLessThanOrEqual(99_999.999);
-    }
-  });
+  // The completeness guard lives in `packages/shared/src/units.test.ts`, beside the map.
 });

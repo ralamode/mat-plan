@@ -23,6 +23,9 @@ describe('formatValueUnit', () => {
     expect(formatValueUnit(1, 'ft')).toBe('1 foot');
     expect(formatValueUnit(40, 'yd')).toBe('40 yards');
     expect(formatValueUnit(75, 'cm')).toBe('75 centimetres');
+    // All FIVE singulars, not three — a typo in `yd`/`cm` used to ship green.
+    expect(formatValueUnit(1, 'yd')).toBe('1 yard');
+    expect(formatValueUnit(1, 'cm')).toBe('1 centimetre');
   });
 
   /**
