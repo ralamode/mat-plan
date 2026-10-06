@@ -732,6 +732,13 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
   `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
   Three PRs. _(Beta 0 if TEN-1 can't prove the catalog stays per household; else Beta 1.)_
+- **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
+  The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
+  **Row added 2026-10-06:** EVAL-0 had a merged plan and a line in [roadmap.md](./roadmap.md) but **no
+  backlog row at all** — the inverse of the AI-1/PRIV-1/DX-1 omission in the same PR, and the reason
+  the roadmap's pillar table is now the stated membership test. **AI-1 depends on it**; see
+  [ai-1-nl-logging](./plans/ai-1-nl-logging.md) → EVAL-0.
+
 - **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires
   (multiple families + third-party processors). A notice listing data and processors, consent at
   sign-up, a written retention policy, a defined deletion (hard delete + Clerk users, residuals stated),
