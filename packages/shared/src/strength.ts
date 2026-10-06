@@ -79,9 +79,6 @@ export const strengthSetSchema = z
               });
               return;
             }
-            if (Number(v) > 2000) {
-              ctx.addIssue({ code: z.ZodIssueCode.custom, message: NUMBER_TOO_HIGH_MESSAGE });
-            }
           }),
       )
       .transform((v) => (v === null ? null : Number(v))),

@@ -5,9 +5,24 @@ import { formatValueUnit } from './format-value-unit';
 
 describe('formatValueUnit', () => {
   it('renders the value with its unit', () => {
+    // Codes stay codes for the units a lifter reads as codes.
     expect(formatValueUnit(84.5, DEFAULT_BODYWEIGHT_UNIT)).toBe('84.5 lb');
-    expect(formatValueUnit(30, 'in')).toBe('30 in');
     expect(formatValueUnit(20, 'sec')).toBe('20 sec');
+    expect(formatValueUnit(40, 'min')).toBe('40 min');
+    expect(formatValueUnit(5, 'kg')).toBe('5 kg');
+  });
+
+  it('spells the five LENGTH codes, singular at 1 (V1-30b-ii)', () => {
+    // `20 m` and `30 in` read as nothing aloud, and `in` is also an English word — a history line
+    // said "30 in" with no noun at all.
+    expect(formatValueUnit(30, 'in')).toBe('30 inches');
+    expect(formatValueUnit(1, 'in')).toBe('1 inch');
+    expect(formatValueUnit(20, 'm')).toBe('20 metres');
+    expect(formatValueUnit(1, 'm')).toBe('1 metre');
+    expect(formatValueUnit(6, 'ft')).toBe('6 feet');
+    expect(formatValueUnit(1, 'ft')).toBe('1 foot');
+    expect(formatValueUnit(40, 'yd')).toBe('40 yards');
+    expect(formatValueUnit(75, 'cm')).toBe('75 centimetres');
   });
 
   /**

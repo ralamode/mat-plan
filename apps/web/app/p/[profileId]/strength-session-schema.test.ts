@@ -13,6 +13,8 @@ import {
   type Unit,
   UNIT_CODES,
   UNIT_DIMENSION_BY_CODE,
+  NUMBER_TOO_HIGH_MESSAGE,
+  quantityCeiling,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -332,5 +334,78 @@ describe('logStrengthSessionSchema — a time or distance set carries its number
 
   it('BW alone is still a valid MASS set', () => {
     expect(issuesFor('lb', { reps: 10, isBodyweight: true })).toEqual([]);
+  });
+});
+
+/**
+ * V1-30b-ii — the stored-value ceiling is PER UNIT and lives here, because this is the only place the
+ * unit is known. The shared `> 2000` it replaces refused a real `3219 m` run and a `2400 sec` hold,
+ * while letting a 2-mile run typed into Inches straight through.
+ */
+describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => {
+  const withSet = (unit: Unit, weight: unknown) =>
+    logStrengthSessionSchema.safeParse(
+      base({
+        movements: [
+          { movementName: 'Thing', unit, clientId: newId(), sets: [{ reps: 1, weight }] },
+        ],
+      }),
+    );
+  const messages = (r: ReturnType<typeof withSet>) =>
+    r.success ? [] : r.error.issues.map((i) => i.message);
+
+  it('accepts the real numbers the shared 2000 cap used to refuse', () => {
+    expect(withSet('m', 3219).success).toBe(true); // a 2-mile run, in metres
+    expect(withSet('sec', 2400).success).toBe(true); // a 40-minute hold
+    expect(withSet('in', 100).success).toBe(true);
+  });
+
+  it('refuses what the shared cap could not catch — the same number in the wrong unit', () => {
+    // 3219 is a real distance in metres and an absurd one in inches. Only the unit tells them apart.
+    expect(withSet('in', 3219).success).toBe(false);
+    expect(messages(withSet('in', 3219))).toContain(NUMBER_TOO_HIGH_MESSAGE);
+    expect(withSet('m', 10_001).success).toBe(false);
+    expect(withSet('sec', 86_401).success).toBe(false);
+    expect(withSet('kg', 2001).success).toBe(false);
+    expect(withSet('lb', 2001).success).toBe(false);
+  });
+
+  it('reports ONE fault when the format check also failed', () => {
+    // The session refine runs even after a set's format check fails, and then `weight` is the raw
+    // STRING. Without the typeof guard this would stack "too high" on "Enter a plain number".
+    const msgs = messages(withSet('lb', '99999.1234'));
+    expect(msgs.filter((m) => m === NUMBER_TOO_HIGH_MESSAGE)).toHaveLength(0);
+    expect(msgs.some((m) => /plain number/.test(m))).toBe(true);
+  });
+
+  it('puts the issue on the set’s weight path, so the action can name the movement and set', () => {
+    const r = withSet('lb', 2001);
+    const issue = r.success
+      ? undefined
+      : r.error.issues.find((i) => i.message === NUMBER_TOO_HIGH_MESSAGE);
+    expect(issue?.path).toEqual(['movements', 0, 'sets', 0, 'weight']);
+  });
+
+  it('a unit with no declared cap cannot reach the ceiling at all — TWO independent guards', () => {
+    // ⚠️ Mutation-tested and corrected: an earlier version of this case asserted that a `count` set
+    // is refused and called that proof of the `ceiling === undefined` branch. It is not — `count` is
+    // not a LOGGABLE unit, so `loggableUnitSchema` refuses it long before the ceiling loop runs, and
+    // the test passed for the wrong reason (swapping the guard for `?? Infinity` left it green).
+    //
+    // So the branch is unreachable by construction, behind two guards that ARE tested:
+    expect(quantityCeiling('count' as Unit)).toBeUndefined(); // 1. no cap is declared for it
+    expect(withSet('count' as Unit, 5).success).toBe(false); // 2. and the unit never parses anyway
+    // …plus the completeness test below, which is what actually keeps the branch unreachable. The
+    // `ceiling === undefined` check stays as defence in depth: `n > undefined` is false, so the
+    // tempting `?? Infinity` spelling would silently disable the bound for a future unit that slips
+    // past the completeness test.
+  });
+
+  it('every LOGGABLE unit has a cap that fits numeric(8,3)', () => {
+    for (const u of LOGGABLE_UNITS) {
+      const cap = quantityCeiling(u);
+      expect(cap, `no ceiling declared for ${u}`).toBeDefined();
+      expect(cap!).toBeLessThanOrEqual(99_999.999);
+    }
   });
 });

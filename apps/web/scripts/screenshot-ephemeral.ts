@@ -90,6 +90,64 @@ const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
  * shows exactly what the app produces rather than a hand-built fixture. This is the read side, which
  * no amount of form interaction can reach.
  */
+/**
+ * V1-30b-ii — one logged session using LENGTH units, so the capture shows the spelled history line.
+ * The existing `strength-session` seeder is lb-only, where nothing changed.
+ */
+async function seedLengthSession(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [scLift] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift));
+    const movementRows = await db
+      .select({ id: schema.movements.id, name: schema.movements.name })
+      .from(schema.movements)
+      .where(isNull(schema.movements.deletedAt))
+      .limit(3);
+    if (!scLift || movementRows.length < 3) throw new Error('seed missing — did db:seed run?');
+    await writeStrengthSession(db, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      day: localDayIso(DEFAULT_TIME_ZONE),
+      sessionType: DEFAULT_SESSION_TYPE,
+      sessionClientId: newId(),
+      activityTypeId: scLift.id,
+      movements: [
+        // Plural, singular, and a second length unit — the three cases the wording changes.
+        {
+          movementName: movementRows[0].name,
+          unit: 'in',
+          movementId: movementRows[0].id,
+          clientId: newId(),
+          sets: [{ reps: 3, weight: 30 }],
+        },
+        {
+          movementName: movementRows[1].name,
+          unit: 'ft',
+          movementId: movementRows[1].id,
+          clientId: newId(),
+          sets: [
+            { reps: 1, weight: 6 },
+            { reps: 1, weight: 1 },
+          ],
+        },
+        // A mass movement beside them, unchanged — `lb` stays a code.
+        {
+          movementName: movementRows[2].name,
+          unit: 'lb',
+          movementId: movementRows[2].id,
+          clientId: newId(),
+          sets: [{ reps: 5, weight: 135 }],
+        },
+      ],
+    });
+  } finally {
+    await pool.end();
+  }
+}
+
 async function seedStatusBadges(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);
@@ -265,6 +323,9 @@ const STATES = {
   // field reads "time". Interaction-only — the state exists only after the Measuring select changes,
   // and it is the ONLY place this change is visible.
   'form-time-card': null,
+  // V1-30b-ii — the history line with LENGTH units, which are now spelled out (`30 inches`,
+  // `1 foot`). The lb/kg/sec/min codes are unchanged, so a lb-only session shows nothing.
+  'history-spelled-units': seedLengthSession,
 } as const;
 type StateName = keyof typeof STATES;
 

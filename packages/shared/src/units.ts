@@ -182,6 +182,54 @@ export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = 
  */
 export const QUANTITY_DECIMALS = 3;
 
+/**
+ * The SINGULAR of the units whose history line is spelled out, for `value === 1` (V1-30b-ii).
+ * Only the five length codes are spelled: `lb`, `kg`, `sec` and `min` stay codes, because that is how
+ * a lifter reads them. The plural is `UNIT_LABELS[u].toLowerCase()` — only the singular is new data,
+ * so there is no second map to keep in sync with the labels.
+ */
+export const UNIT_SINGULAR_LABELS: Partial<Record<Unit, string>> = {
+  m: 'metre',
+  yd: 'yard',
+  ft: 'foot',
+  in: 'inch',
+  cm: 'centimetre',
+};
+
+/**
+ * A sanity bound on what a person TYPED — never a prescription. Nothing reads these to suggest a
+ * load, so the "LLM never authors loads" rule is untouched.
+ *
+ * Roughly 2× the largest real use, so a 2-mile run typed into Inches (`3219 in`) is caught while a
+ * real `3219 m` is not — the shared 2000 cap refused both. `kg` stays 2000 for log/edit consistency
+ * rather than the 2× rationale: the edit path's `numericSetSchema.max(2000)` is mass-only until
+ * V1-33, so the two paths agree today.
+ *
+ * Every value is ≤ `numeric(8,3)`'s 99999.999, and `units.test.ts` requires a cap for every loggable
+ * unit — a missing entry must REFUSE, never read as "no cap" (see `quantityCeiling`).
+ */
+export const MAX_QUANTITY_BY_UNIT: Partial<Record<Unit, number>> = {
+  lb: 2000,
+  kg: 2000,
+  sec: 86_400,
+  min: 1_440,
+  in: 1_200,
+  cm: 3_000,
+  ft: 5_280,
+  yd: 5_280,
+  m: 10_000,
+};
+
+/**
+ * The ceiling for a unit, or `undefined` when none is declared.
+ *
+ * ⚠️ Callers must treat `undefined` as REFUSE, not as "no cap". `n > undefined` is `false` in JS, so
+ * an unguarded comparison would silently disable the bound for exactly the unit nobody thought about.
+ */
+export function quantityCeiling(unit: Unit): number | undefined {
+  return MAX_QUANTITY_BY_UNIT[unit];
+}
+
 /** Is this unit a weight? The one spelling of the check for a UNIT (`set-display.ts` checks a stored
  *  dimension instead, so it has no unit to pass). */
 export function isMassUnit(unit: Unit): boolean {
