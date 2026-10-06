@@ -155,6 +155,34 @@ known profile id writes to that profile"). Accepted with one family; a breach wi
   the middleware matcher is not relied on (SEC-1's lesson).
 - The per-user rate limit: the existing Upstash limiter re-keyed from IP to user id.
 
+### 3b · Authoring — the program gets a write path
+
+**Added 2026-10-06, [ADR 0005](../decisions/0005-programming-model.md).** Beta 0 previously scoped
+self-serve as ONB-0 + PROF-1 + ONB-2 + V1-9b. That understated it: a household cannot be productive on
+programming it cannot change, and today **changing one prescribed load means editing TypeScript and
+deploying**. The model is settled; the milestone is V1-22's own smallest slice.
+
+Ordered, because two of these close windows that do not reopen:
+
+0. **Stop `db:seed` fighting the editor.** It runs on every push to `main` and re-inserts a removed
+   prescription, because its `ON CONFLICT` arbiter repeats the partial `deleted_at IS NULL` predicate.
+   A schema change, and the reason this milestone is not additive-only.
+1. **The prescription snapshot + a one-time backfill**, before any edit ships — prescriptions are
+   seed-immutable only until the first edit, so the pre-edit program is exactly reconstructible now and
+   never again.
+2. **Edit values on existing prescriptions** (V1-22 A2) — what removes the reported pain.
+3. **Add / remove / reorder items** (V1-22 A3). Cuttable; rep-shaped items only until GAP-3's target
+   shapes land.
+4. **The routine picker's offer list** — the pull-ups collision, fixed where it is seen. ⚠️ Filter the
+   offer list only; `ROUTINE_CATALOG` is also the membership set and drops non-members silently.
+5. **The wrestling drills as movements**, gated on the movement-list review.
+
+Alongside, independently shippable: **[UI-1](../plan.md)** (the form becomes the day) and
+**[SET-1](../plan.md)** (preferred units). **One spec of TEST-1** — the routine editor — lands first.
+
+**Deferred to a scheduling ADR, after beta:** RRULE recurrence, rotation as data, `day_role` becoming
+rows, workout creation, and the planned-occurrence row.
+
 ### 4 · Just enough self-serve, and privacy
 
 - **ONB-0** — an explained empty state; a new household no longer inherits Ray's routine.
