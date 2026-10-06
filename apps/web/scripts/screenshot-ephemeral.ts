@@ -24,7 +24,7 @@ import {
   SEED_METRIC_KEYS,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { APP_HOME_PATH, DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
 import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -265,6 +265,9 @@ const STATES = {
   // field reads "time". Interaction-only — the state exists only after the Measuring select changes,
   // and it is the ONLY place this change is visible.
   'form-time-card': null,
+  // V1-30b-ii — the history line with LENGTH units, which are now spelled out (`30 inches`,
+  // `1 foot`). The lb/kg/sec/min codes are unchanged, so a lb-only session shows nothing.
+  'history-spelled-units': seedLengthSession,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -279,6 +282,77 @@ async function scaffoldOpenCard(page: Page) {
   const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
   await strength.getByRole('button', { name: /Fill in today.s movements/i }).click();
   return { reps: strength.getByPlaceholder('reps'), weight: strength.getByPlaceholder('weight') };
+}
+
+/**
+ * V1-30b-ii — one logged session using LENGTH units, so the capture shows the spelled history line.
+ * The existing `strength-session` seeder is lb-only, where nothing changed.
+ */
+async function seedLengthSession(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [scLift] = await db
+      .select({ id: schema.activityTypes.id })
+      .from(schema.activityTypes)
+      .where(eq(schema.activityTypes.key, SEED_ACTIVITY_TYPE_KEYS.scLift));
+    // Named, not positional-with-no-orderBy: an unordered `.limit(3)` is non-deterministic across
+    // runs (so two screenshot rounds are not comparable), and in practice it paired `ft` with Front
+    // Squat — a movement the form itself would warn you off measuring in feet (`usuallyLoggedAs`).
+    // A reviewer judging the WORDING should not be distracted by a nonsense pairing.
+    const bySlug = async (slug: string) => {
+      const [row] = await db
+        .select({ id: schema.movements.id, name: schema.movements.name })
+        .from(schema.movements)
+        .where(and(eq(schema.movements.slug, slug), isNull(schema.movements.deletedAt)))
+        .limit(1);
+      if (!row) throw new Error(`movement '${slug}' not seeded — did db:seed run?`);
+      return row;
+    };
+    if (!scLift) throw new Error('sc_lift activity type not seeded — did db:seed run?');
+    const movementRows = [
+      await bySlug('box_jump'), // a height, in inches
+      await bySlug('broad_jump'), // a distance, in feet
+      await bySlug('back_squat'), // a weight, unchanged
+    ];
+    await writeStrengthSession(db, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      day: localDayIso(DEFAULT_TIME_ZONE),
+      sessionType: DEFAULT_SESSION_TYPE,
+      sessionClientId: newId(),
+      activityTypeId: scLift.id,
+      movements: [
+        // Plural, singular, and a second length unit — the three cases the wording changes.
+        {
+          movementName: movementRows[0].name,
+          unit: 'in',
+          movementId: movementRows[0].id,
+          clientId: newId(),
+          sets: [{ reps: 3, weight: 30 }],
+        },
+        {
+          movementName: movementRows[1].name,
+          unit: 'ft',
+          movementId: movementRows[1].id,
+          clientId: newId(),
+          sets: [
+            { reps: 1, weight: 6 },
+            { reps: 1, weight: 1 },
+          ],
+        },
+        // A mass movement beside them, unchanged — `lb` stays a code.
+        {
+          movementName: movementRows[2].name,
+          unit: 'lb',
+          movementId: movementRows[2].id,
+          clientId: newId(),
+          sets: [{ reps: 5, weight: 135 }],
+        },
+      ],
+    });
+  } finally {
+    await pool.end();
+  }
 }
 
 const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = {
