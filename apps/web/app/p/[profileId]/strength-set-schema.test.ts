@@ -5,7 +5,6 @@ import {
   ENTRY_STATUSES,
   LOGGABLE_DIMENSIONS,
   LOGGABLE_UNITS,
-  NUMBER_TOO_HIGH_MESSAGE,
   numericSetSchema,
   QUANTITY_SLOT,
   QUANTITY_SLOT_DIMENSIONS_BY_CODE,
@@ -180,9 +179,15 @@ describe('strengthSetSchema — free text is gone, not merely discouraged', () =
     },
   );
 
-  it('still rejects a negative and an absurd weight', () => {
+  it('still rejects a negative', () => {
     expect(strengthSetSchema.safeParse({ reps: '5', weight: '-5' }).success).toBe(false);
-    expect(strengthSetSchema.safeParse({ reps: '5', weight: '99999' }).success).toBe(false);
+  });
+
+  // V1-30b-ii — the CEILING moved to the session refine, where the unit is known. A set schema cannot
+  // judge `3219`: it is an absurd `lb` and a real 2-mile run in metres. `99999` now passes HERE and is
+  // refused there; see strength-session-schema.test.ts.
+  it('no longer judges the magnitude — that needs the unit (V1-30b-ii)', () => {
+    expect(strengthSetSchema.safeParse({ reps: '5', weight: '99999' }).success).toBe(true);
   });
 
   it('keeps the AUTHORED per-field message on the weight path', () => {
@@ -218,12 +223,5 @@ describe('LOGGABLE_UNITS is DERIVED, so it cannot drift from the slot vocabulary
   });
 });
 
-describe('strengthSetSchema — the ceiling names the likely cause (V1-30 review)', () => {
-  it('refuses a number over the ceiling with the check-the-unit copy', () => {
-    const res = strengthSetSchema.safeParse({ reps: '1', weight: '3200' });
-    expect(res.success).toBe(false);
-    expect(res.success ? [] : res.error.issues.map((i) => i.message)).toContain(
-      NUMBER_TOO_HIGH_MESSAGE,
-    );
-  });
-});
+// V1-30b-ii — the ceiling is PER UNIT and lives in the session refine now; the copy itself is still
+// NUMBER_TOO_HIGH_MESSAGE. See strength-session-schema.test.ts for the per-unit cases.

@@ -79,7 +79,7 @@ describe('formatSetLine', () => {
           quantities: [qty({ dimension: UNIT_DIMENSION.length, value: 30, unit: 'in' })],
         }),
       ),
-    ).toBe('3 × 30 in');
+    ).toBe('3 × 30 inches');
   });
 
   it('renders a sled push — two dimensions on one set (`123 (50ft)`)', () => {
@@ -98,7 +98,7 @@ describe('formatSetLine', () => {
           ],
         }),
       ),
-    ).toBe('1 × 123 lb +50 ft distance');
+    ).toBe('1 × 123 lb +50 feet distance');
   });
 
   it('degrades nulls to ? rather than rendering "null"', () => {

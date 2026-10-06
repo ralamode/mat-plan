@@ -8,9 +8,17 @@ import {
   isLoggableUnit,
   LOGGABLE_DIMENSION_NOUNS,
   LOGGABLE_DIMENSIONS,
+  LOGGABLE_UNITS,
   loggableUnitsOf,
   UNIT_CODES,
   unitsOfDimension,
+  MASS_QUANTITY_CEILING,
+  MAX_STORABLE_QUANTITY,
+  UNIT_LABELS,
+  quantityCeiling,
+  UNIT_DIMENSION,
+  UNIT_DIMENSION_BY_CODE,
+  UNIT_SINGULAR_LABELS,
 } from './units';
 
 /**
@@ -81,5 +89,50 @@ describe('the units no form offers', () => {
 describe('copy for every loggable dimension', () => {
   it.each(LOGGABLE_DIMENSIONS)('%s has a noun for error messages', (d) => {
     expect(LOGGABLE_DIMENSION_NOUNS[d]).toBeTruthy();
+  });
+});
+
+/**
+ * V1-30b-ii — the per-unit stored-value ceiling. This is the guard `units.ts` and
+ * `strength-session.ts` both cite: the refine treats a MISSING cap as "refuse", and this is what keeps
+ * that branch unreachable rather than load-bearing.
+ */
+describe('MAX_QUANTITY_BY_UNIT / quantityCeiling', () => {
+  it.each([...LOGGABLE_UNITS])('%s has a ceiling that fits numeric(8,3)', (u) => {
+    const cap = quantityCeiling(u);
+    expect(cap, `no ceiling declared for ${u}`).toBeDefined();
+    expect(cap!).toBeLessThanOrEqual(MAX_STORABLE_QUANTITY);
+    expect(cap!).toBeGreaterThan(0);
+  });
+
+  it('the two mass units share ONE ceiling, so the log and edit paths cannot drift', () => {
+    // `numericSetSchema.max()` (the edit path) reads the same const; re-typing it there is how the
+    // two paths would disagree with nothing red.
+    expect(quantityCeiling('lb')).toBe(MASS_QUANTITY_CEILING);
+    expect(quantityCeiling('kg')).toBe(MASS_QUANTITY_CEILING);
+  });
+});
+
+/**
+ * V1-30b-ii — the history line spells the LENGTH codes. The map's key set IS
+ * `unitsOfDimension(length)`: `formatValueUnit` uses PRESENCE here as the "spell this out" predicate,
+ * so a sixth length code without an entry would render `3 mi` beside `30 inches` with nothing red.
+ */
+describe('UNIT_SINGULAR_LABELS', () => {
+  it.each([...unitsOfDimension(UNIT_DIMENSION.length)])('%s has a singular', (u) => {
+    expect(UNIT_SINGULAR_LABELS[u]).toBeTruthy();
+  });
+
+  it('spells NO unit outside the length dimension — mass and time stay codes', () => {
+    for (const u of UNIT_CODES) {
+      if (UNIT_DIMENSION_BY_CODE[u] === UNIT_DIMENSION.length) continue;
+      expect(UNIT_SINGULAR_LABELS[u], `${u} must stay a code`).toBeNull();
+    }
+  });
+
+  it('the plural is UNIT_LABELS, not a second hand-typed list', () => {
+    // Only the irregular singular is new data; English cannot derive `foot` from `feet`.
+    expect(UNIT_LABELS.ft.toLowerCase()).toBe('feet');
+    expect(UNIT_LABELS.in.toLowerCase()).toBe('inches');
   });
 });

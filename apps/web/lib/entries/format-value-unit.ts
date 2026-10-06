@@ -1,7 +1,8 @@
-import type { Unit } from '@mat-plan/shared';
+import { type Unit, UNIT_LABELS, UNIT_SINGULAR_LABELS } from '@mat-plan/shared';
 
 /**
- * A measured value with its unit, for DISPLAY — `84.5 lb`, `20 lb`, `30 in` (V1-24 PR 1a).
+ * A measured value with its unit, for DISPLAY — `84.5 lb`, `20 lb`, `30 inches` (V1-24 PR 1a;
+ * V1-30b-ii spelled the length codes).
  *
  * Pure and route-agnostic (type-only import), the `entry-label.ts` / `activity-totals.ts` precedent.
  *
@@ -20,6 +21,7 @@ import type { Unit } from '@mat-plan/shared';
  * | --- | --- | --- |
  * | pounds | `84.5 lb` | `84.5` — **bare**, the corpus writes no unit |
  * | seconds | `20 sec` | `20s` |
+ * | inches | `30 inches` — **spelled** | `30in` — suffixed, no space |
  * | kilograms | `5 kg` | `5kg` — suffixed, never bare (V1-30) |
  *
  * Those are contract bytes a downstream workflow diffs, not prose. Reusing it here would drop the
@@ -34,5 +36,11 @@ import type { Unit } from '@mat-plan/shared';
  * here. Do not add it "for safety" — it would make `92` render as `92.0` on screen.
  */
 export function formatValueUnit(value: number, unit: Unit): string {
-  return `${value} ${unit}`;
+  // V1-30b-ii — the five LENGTH codes are spelled out: `20 m` and `30 in` read as nothing, and `in`
+  // is also an English word, so a history line said "30 in" with no noun. `lb`, `kg`, `sec` and `min`
+  // stay codes, because that is how a lifter reads them. The CSV keeps its own spellings in
+  // `csv/value.ts` — those are contract bytes, and they are deliberately different.
+  const singular = UNIT_SINGULAR_LABELS[unit];
+  if (!singular) return `${value} ${unit}`;
+  return `${value} ${value === 1 ? singular : UNIT_LABELS[unit].toLowerCase()}`;
 }
