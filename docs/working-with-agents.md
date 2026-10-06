@@ -50,7 +50,7 @@ found **five gates AGENTS.md had claimed for months and never wired**: Squawk, t
 CodeQL, `pnpm audit` and a Neon-branch apply. The two migration gates, forward-only (#133) and Squawk
 (#135), were wired before the arc's first migration landed; CodeQL followed (#138). The other two are
 still unwired. The lesson I took: rules written as the intended end state are claims, and claims need
-re-verifying. That is why AGENTS.md says "⚠️ NOT WIRED" next to the two that still aren't.
+re-verifying. That is why AGENTS.md now flags the two that still aren't with a ⚠️.
 
 **2. I overrode the spec, knowingly, and wrote down why.**
 The youth program alternates Day A and Day B, and its spec insists the letter comes from the count of
