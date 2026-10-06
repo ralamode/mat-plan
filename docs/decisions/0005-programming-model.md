@@ -314,9 +314,16 @@ Deferred outright, each needing its own row and plan:
 
 ## Open questions
 
-1. **Authoring routes** — profile-scoped (`/p/<id>/program`, V1-22's panelled answer) or household-level
-   (`/workouts`, the maintainer's `/home` structure)? The second is the better product and the first is safer until
-   TEN-1. the maintainer's call.
+1. ✅ **DECIDED (maintainer, 2026-10-06) — profile-scoped `/p/<id>/program`; the household library
+   waits for TEN-1.** This is V1-22's panelled answer, chosen for the reason that panel gave: **every
+   BOLA guarantee derives from a profile public id.** A top-level `/workouts/<id>` has no profile to
+   scope by, and before TEN-1 there is no `getHouseholdScope()` either, so its only authorization would
+   be that the id exists — the shape `.github/SECURITY.md` lists first.
+
+   The household-level library is not cancelled, only sequenced. Once TEN-1 provides a scope seam that
+   can express ownership, lifting the library up is a route change against a working surface instead of
+   a guess. Decision 13's deferred route table is where it lands.
+
 2. ✅ **Closed by the repo, not by the maintainer.** The dimension is **a new nullable column** with a CHECK over a
    derived subset of `UNIT_DIMENSIONS`. Adding `count` to the `primary` quantity slot is **not
    available**: `LOGGABLE_DIMENSIONS` is derived from that slot, so it would make a `count` primary
