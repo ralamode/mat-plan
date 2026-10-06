@@ -30,3 +30,7 @@ overrides:
   # Reached production through next > postcss > source-map-js and @sentry/nextjs > next > ... .
   # postcss's range still admits <1.2.2; drop this once it doesn't.
   source-map-js: '>=1.2.2'
+  # GHSA-2w6q-fjjm-54f4 + GHSA-9jm3-4fm8-q4qc (moderate) — isInSubnet() and a parse diagnostic.
+  # Dev-only, via the `shadcn` CLI > @modelcontextprotocol/sdk > express-rate-limit, which declares
+  # `^10.2.0`. The real fix is the SDK bump upstream; this is in-range until then.
+  ip-address: '>=10.7.1'
