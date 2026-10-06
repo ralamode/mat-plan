@@ -200,9 +200,15 @@ is not removing it.
     (`git pull --ff-only origin main`) and to read. Never switch it to a feature branch. Several
     agent sessions run here concurrently, and a checkout or rebase in a shared directory moves another
     session's files out from under it.
-  - **Location: `.claude/worktrees/<slug>`** (gitignored). Not `/tmp`, which is wiped on reboot and
-    invisible to other sessions, and not a sibling directory. `git worktree list` is the registry of
-    work in flight.
+  - **Location — two sanctioned forms, and the requirement is that `git worktree list` registers it**,
+    because that listing is the registry of work in flight and what
+    [parallel-work.md](./docs/parallel-work.md) gate 1 is run against.
+    - **`.claude/worktrees/<slug>`** — the default. Gitignored, nested, invisible in an editor.
+    - **`~/workspace/tmp<n>/mat-plan`** — for a **parallel lane you will open in an editor**, which the
+      nested gitignored path makes awkward (a guide in one is invisible from another checkout's
+      window). Numbered, one lane per `n`, and **removed once its PR has shipped**, which frees the
+      number for the next lane. _(Maintainer, 2026-10-06.)_
+    - **Never `/tmp`** — wiped on reboot, and invisible to other sessions.
   - One worktree = one branch = one PR. **Remove it after the PR merges** (`git worktree remove
 .claude/worktrees/<slug> && git branch -D <branch>`; `-D` because a squash merge leaves the branch's
     commits off `main`, so `-d` refuses), not when the PR opens, because review fixes land there.
@@ -259,6 +265,17 @@ is not removing it.
   implementation: the author agent reconciles each critique (incorporate or push back with
   justification), records a **review-response log** in the plan, and re-reviews until blocking concerns
   are resolved. See [docs/plans/README.md](./docs/plans/README.md) → "Adversarial plan review".
+- **A PR that advances something larger says where it sits.** A reviewer should not have to
+  reconstruct the plan from the diff: with chunks running across lanes, the diff cannot say whether a
+  PR is _the gate_ or _the payoff_. So the description opens with a **Where this sits** block —
+  **pillar** ([roadmap.md](./docs/roadmap.md)), **milestone** (linked, so the overall plan is one click
+  away), **what this PR is** within it, and **what comes next**, including anything that next step is
+  gated on. Four lines; the PR template carries them.
+  **The test:** can you name the milestone, spec or multi-PR track this advances? A plan or spec PR
+  counts, even though its type is `docs`. **Exempt — omit the section entirely:** a dependency bump, a
+  one-off bug, a typo or copy change, a config one-liner, a standalone chore. `Milestone: none` is
+  **not** the answer; a field that is empty half the time trains reviewers to skip it, which costs the
+  signal on the half that matters.
 - **Diagrams in the PR description.** A PR that introduces or changes a **pivotal flow, data model, or
   schema** embeds a **Mermaid diagram in the PR description** (GitHub renders it) so the reviewer sees
   the _shape_ of the change without reading every file — an ERD for a schema/migration, a
