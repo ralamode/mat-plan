@@ -7,6 +7,10 @@ the guards and the backlog; the skills are their own index** (below). Record a s
 ## The lifecycle they cover
 
 ```
+                     once per MILESTONE
+write-spec ──►    context → acceptance criteria → data contract → chunks → panel → commit
+      │
+      ▼              once per PR
 start-task ──► plan-with-panel ──► (implement) ──► ship-pr ──► review-pr ──► merged
  sync+branch    plan + eng/UX        │                │ hold-the-bar   on request: P0/P1/P2
  obligations    panels, log          │                │ ui-screenshot  (+ fix mode)
