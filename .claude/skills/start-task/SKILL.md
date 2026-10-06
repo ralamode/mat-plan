@@ -70,7 +70,15 @@ Tell the user, in one short block, what this task owes before it can ship:
 If a plan is owed, **no implementation code is committed before the plan is reviewed**. Go to
 `plan-with-panel` next.
 
-## 4. Scope check
+## 4. Will this run alongside something else?
+
+`git worktree list` is what is in flight. If any of it overlaps, run the rubric in
+[docs/parallel-work.md](../../../docs/parallel-work.md) **before** cutting code — gate 1 (disjoint file
+globs, **feature guides included**) is the one that actually fails, and a shared roadmap, an agreed
+contract and an approved prototype all pass it without noticing. When a gate fails, pick an order and
+write the reason into the roadmap's "In flight", rather than discovering it in a merge.
+
+## 5. Scope check
 
 At ~4h/wk, the one-concern / <400-line target is a real constraint. If the task clearly exceeds it,
 propose the split (1a/1b/1c, as in `gap1-p1-*`, `v1-18-*`) before starting, not after.
@@ -81,3 +89,5 @@ propose the split (1a/1b/1c, as in `gap1-p1-*`, `v1-18-*`) before starting, not 
 - Starting work with no backlog id and no conversation about whether it needs one.
 - "It's small, it doesn't need the UX panel." Every UI change needs one; only the depth scales.
 - Reading the whole codebase when a feature guide exists for the area.
+- Starting alongside another worktree without intersecting the file lists — _and_ their guides, since
+  `guides:check` makes two tracks under one guide collide even when the code files differ.

@@ -65,6 +65,7 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   `next.config`, `drizzle.config`, etc.). No stray docs, notes, or scratch files.
 - **`docs/`** — all project documentation (`spec.md`, `plan.md`, `status.md`, `changelog/` (one file per change), `milestones/` (cross-PR milestones: order + exit criteria), `design.md`,
   `roadmap.md` (the forward-looking cross-program view, by pillar),
+  `parallel-work.md` (the rubric for when two tracks may run at once),
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
   (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
@@ -218,6 +219,13 @@ is not removing it.
     worktree command to run instead. A `SessionStart` hook prints the status headline, open PRs, and
     worktrees flagged stale or off-main. Both hooks do nothing under CI. The rule held for less than a
     day as prose.
+- **Before running two tracks at once, run the rubric** in
+  [docs/parallel-work.md](./docs/parallel-work.md). Six gates, each earned by a failure that happened
+  here. **Gate 1 is disjoint file globs, feature guides included** — and it is the one that actually
+  fails, because a shared roadmap, an agreed data contract, landed infra and an approved prototype all
+  pass while two tracks edit the same file. `guides:check` also makes two tracks under **one guide**
+  collide even when their code files differ. When a gate fails, don't parallelize: pick an order and
+  write the reason into [roadmap.md](./docs/roadmap.md)'s "In flight".
 - **Branch naming:** `<type>/<id>-<slug>`, type ∈ feat|fix|chore|docs|refactor|perf|test|db.
   e.g. `feat/v0-1-scaffold`, `db/v0-5-initial-schema`.
 - Keep the branch up to date with `main` before merge. ⚠️ **By convention only:** branch protection is

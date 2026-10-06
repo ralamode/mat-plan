@@ -47,10 +47,16 @@ Two deliberate departures from the obvious cut, both argued rather than assumed:
 
 ## In flight
 
-| Item                                 | Pillar                 | State                                                                    |
-| ------------------------------------ | ---------------------- | ------------------------------------------------------------------------ |
-| **V1-22 Authoring** — chunks 1–6     | Authoring & Scheduling | **Spec landed** (#226). Chunk 1 next. See the table below.               |
-| **V1-30b** — the form stops inviting | Logging & Measurement  | Planned (#215), not started. ⚠️ Shares `strength-form.tsx` with chunk 2. |
+| Item                                 | Pillar                 | State                                                           |
+| ------------------------------------ | ---------------------- | --------------------------------------------------------------- |
+| **V1-22 Authoring** — chunks 1–6     | Authoring & Scheduling | **Spec landed** (#226). Chunk 1 next. See the table below.      |
+| **V1-30b** — the form stops inviting | Logging & Measurement  | Planned (#215), not started. **Goes before Authoring chunk 2.** |
+
+**Sequencing decision (2026-10-06, [parallel-work](./parallel-work.md) gate 1):** chunk 2 threads a
+prescription public id through the log form, and `v1-30b` edits `strength-form.tsx` and
+`set-fields.tsx` — same files, same owning guide. `v1-30b` is already planned and panelled and chunk 2
+is not, so **`v1-30b` goes first** and chunk 2 rebases onto the form it leaves. Every other gate is
+green for this pair, which is why gate 1 is checked first.
 
 ## Active milestone — Authoring (beta-1 §3b)
 
@@ -58,14 +64,14 @@ The order and the reason each chunk cannot move live in
 **[specs/v1-22-authoring-program-editing.md](./specs/v1-22-authoring-program-editing.md)**. This is
 the progress view only.
 
-| #     | Chunk                                                   | State       |
-| ----- | ------------------------------------------------------- | ----------- |
-| **1** | `entries.prescribed_snapshot`, shipping dark            | ⏭️ **next** |
-| **2** | One shared renderer + log-time writer + export fallback | ☐           |
-| **3** | The backfill, as a `db:correct` correction              | ☐           |
-| **4** | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐           |
-| **5** | The day-scoped seed guard                               | ☐           |
-| **6** | Add / remove / reorder                                  | ☐ cuttable  |
+| #     | Chunk                                                   | State                                                           |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| **1** | `entries.prescribed_snapshot`, shipping dark            | ⏭️ **next** — backend-only, so it runs **parallel to `v1-30b`** |
+| **2** | One shared renderer + log-time writer + export fallback | ☐                                                               |
+| **3** | The backfill, as a `db:correct` correction              | ☐                                                               |
+| **4** | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐                                                               |
+| **5** | The day-scoped seed guard                               | ☐                                                               |
+| **6** | Add / remove / reorder                                  | ☐ cuttable                                                      |
 
 ## Next per pillar
 
@@ -75,7 +81,7 @@ Each is the item that would start if that pillar got the next session.
 | ---------------------- | ------------------------ | ------------------------------------------------------------- |
 | Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                           |
 | Profiles & Tenancy     | `TEN-1`                  | Nothing — and it unblocks `AUTH-1` and the household library. |
-| Logging & Measurement  | `V1-30b`                 | Nothing, but sequence against Authoring chunk 2.              |
+| Logging & Measurement  | `V1-30b`                 | Nothing — and it now precedes Authoring chunk 2.              |
 | Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.               |
 | Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).         |
 | Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.    |

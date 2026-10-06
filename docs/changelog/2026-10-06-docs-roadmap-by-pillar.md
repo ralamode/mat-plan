@@ -15,3 +15,19 @@
   theme**, because the question a session actually needs answered is "can this run in parallel", and
   that is a file question — the Authoring milestone's chunk 2 and `v1-30b` both touch
   `strength-form.tsx`, and any theme grouping would have called them independent.
+- **2026-10-06** — **A rubric for when two tracks may run at once, and the first thing it caught was
+  this milestone.** [`docs/parallel-work.md`](../parallel-work.md) is the per-**track** sibling of the
+  per-PR definition of done: six gates, each earned by a failure that actually happened here. The one
+  that matters is **gate 1, disjoint file globs with the feature guides included** — because a shared
+  roadmap, an agreed data contract, landed infra and an approved prototype are all **green** for
+  Authoring chunk 2 and `v1-30b`, and both edit `strength-form.tsx` under one owning guide.
+  `pnpm guides:check` makes that worse in a non-obvious way: two tracks editing _different_ code under
+  _one_ guide still collide, on the guide. The other five sharpen the obvious gates into checkable
+  ones — a contract must be **sufficient** (the Authoring panel found `ProgramEditDTO` unbuildable
+  despite existing), blocking work must be **observed landed** rather than merged (`migrate.yml:52-54`
+  `exit 0`s when the secret is absent, so a green migrate job can mean nothing applied), the closed
+  questions must be written down (ADR 0005's item 0 drifted to three different ranges across three
+  documents), the prototype's **omissions** must be enumerated and decided, and shared append-only
+  files must be sharded (which is why `docs/changelog/` is one file per change). Applied immediately:
+  **`v1-30b` now goes before Authoring chunk 2**, recorded in the roadmap with its reason, while
+  chunk 1 stays parallel because it is backend-only.
