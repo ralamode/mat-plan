@@ -22,3 +22,11 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+
+# Transitive advisories we pin ahead of the upstream bump. Each entry names the advisory and the
+# path, so it can be removed the moment the parent ships a fixed range (check with `pnpm why <pkg>`).
+overrides:
+  # GHSA-68fv-2mgg-jv7q (high) — event-loop DoS via indexed source-map section offsets.
+  # Reached production through next > postcss > source-map-js and @sentry/nextjs > next > ... .
+  # postcss's range still admits <1.2.2; drop this once it doesn't.
+  source-map-js: '>=1.2.2'
