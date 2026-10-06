@@ -521,6 +521,40 @@ going public, not just on V1-13.
   consent dialog sitting in the middle of the funnel being measured. Exhaust that before reaching for a
   library. See [OBS-1](#obs-1) for the system-health half, which is a separate concern.
 
+## Later — ideas captured, not scoped
+
+- **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
+  club coach is granted access to outcomes for athletes in other households, and gets notified of
+  streaks and who did or did not train yesterday. The simpler case is the same mechanism with one
+  household: the account owner watching their own athletes.
+
+  🔴 **This is the sharpest consent question in the project, and it should not be designed casually.**
+  Everything else here keeps minors' health data inside one household. This deliberately moves it
+  across a household boundary, to an adult who is not the parent. Before any plan: who consents, how it
+  is revoked, what the coach sees (outcomes only, or the underlying weigh-ins), whether the athlete is
+  told, and what happens to the grant when the athlete leaves the club. It depends on TEN-1 (a scope
+  seam that can express "not mine, but shared with me") and AUTH-1 (identity to grant it to), and it
+  gets the `privacy-reviewer` lens on every PR.
+
+  Notifications are a second system with their own consent and retention questions, and they are the
+  first thing in this app that would reach a person who is not holding the phone.
+
+- **DASH-1 — dashboard metrics.** _(maintainer, 2026-10-06.)_ Streaks; week-over-week, month-over-month
+  and year-over-year on reps, bodyweight and total load; PRs and PRs-with-streaks; leaderboards within a
+  household, or across athletes a coach has been given access to.
+
+  **Everything here is answerable from rows this app already stores** — `entries`, `entry_sets`,
+  `entry_set_quantities` — which is the argument [OBS-3](#obs-3) makes for not reaching for an analytics
+  vendor. Two dependencies worth stating now rather than discovering later: a **streak** needs to know
+  which days were scheduled, so it waits on the scheduling ADR and on the skip/complete facts
+  ([ADR 0005](./decisions/0005-programming-model.md) §6); and a **PR** is only comparable across rows
+  whose unit is known, which is why GAP-3 stores the resolved unit on the row.
+
+  ⚠️ **Leaderboards between children are a product decision, not a feature.** Ranking siblings by
+  bodyweight or load has obvious failure modes in a house with two kids of different ages. Worth
+  deciding deliberately whether comparison is opt-in, household-only, and which metrics are ever
+  rankable.
+
 ## DX — agent & developer tooling ([skills index](../.claude/skills/README.md))
 
 Tooling that makes each PR cheaper and safer to produce. It sits outside the product priority order
