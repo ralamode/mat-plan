@@ -203,12 +203,16 @@ flowchart LR
   functions with Clerk's `auth()` and Drizzle mocked. Async Server Components need Playwright, not
   Vitest. This is why logic belongs in the (synchronous, testable) DAL.
 
-- **`packages/**` is typechecked by nothing** — `pnpm typecheck` is `--filter web`. A stale column in a
-  writer surfaces as a runtime crash in `db:verify`, not a compile error. This bites in a specific
-  way: a writer's `sets` parameter type can say a field is REQUIRED while `db:verify`'s fixtures omit
-  it, and nothing objects until Postgres reports `invalid input syntax for type numeric: "undefined"`.
-  A writer taking values from both zod output and hand-written fixtures should check
-  `=== null || === undefined`, not just one.
+- **`packages/db` is typechecked since DX-7 — `verify.ts` included.** `pnpm typecheck` runs
+  `apps/web` **and** `packages/db` (`packages/db/tsconfig.json`), so `scripts/**` — unreachable from any
+  app import, and where the `db:verify` proofs live — is finally covered. Before that a writer's `sets`
+  parameter type could say a field was REQUIRED while `db:verify`'s fixtures omitted it, and nothing
+  objected until Postgres reported `invalid input syntax for type numeric: "undefined"`; DX-7 found
+  exactly that, three times. **Still handle both** (`=== null || === undefined`) in a writer taking
+  values from both zod output and hand-written fixtures — the writer's inner signature deliberately
+  permits omission, and the type only covers callers the compiler can see.
+  ⚠️ **`packages/shared` and `packages/engine` have no tsconfig of their own**: they are checked only
+  _transitively_, via the app's imports, so a file nothing imports is still checked by nothing.
 
 - **A derived column must be derived from the value actually being written.** `entry_set_quantities`
   stores `dimension` alongside `unit` and a composite FK checks the pair. Hard-coding `'mass'` there
