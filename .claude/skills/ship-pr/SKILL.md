@@ -63,10 +63,11 @@ CodeQL (which never runs on PRs).
   from the diff, not from memory; #156 exists because the old changelog drifted.
 - [docs/status.md](../../../docs/status.md): update the **Where we are** pointer if this moves it, and
   the backlog row. No changelog entry goes here any more. Nothing checks these, so it's on you.
-- **The PR description's "Where this sits" block** — pillar, milestone (linked), what this PR is
-  within it, what comes next and what that is gated on. The template carries the four lines; fill them
-  from [roadmap.md](../../../docs/roadmap.md) and the milestone's spec, not from memory. "Milestone:
-  none" is a valid answer and blank is not.
+- **The PR description's "Where this sits" block, _if_ this PR advances something larger** — pillar,
+  milestone (linked), what this PR is within it, what comes next and what that is gated on. Fill it
+  from [roadmap.md](../../../docs/roadmap.md) and the milestone's spec, not from memory. **Delete the
+  section** for a standalone PR (dependency bump, one-off bug, typo, config one-liner): `Milestone:
+none` is noise. A plan or spec PR is not standalone — it advances its milestone.
 - [docs/roadmap.md](../../../docs/roadmap.md): move the item — **In flight**, the active milestone's
   chunk row, **Next per pillar**, **Recently landed**. It is forward-looking, so it is the one a new
   session reads first and the one nobody notices has gone stale. Ids only; never copy a `plan.md` row.

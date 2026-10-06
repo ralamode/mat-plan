@@ -4,10 +4,12 @@
 
 <!-- What and why. Reference the backlog id (e.g. V0-1). -->
 
-## Where this sits
+## Where this sits (milestone or multi-PR work)
 
-<!-- So a reviewer sees where we are and where this goes next, without reconstructing it from the diff.
-     Outside a milestone, write "none" and why — e.g. "Milestone: none — standing debt, SEC-5". -->
+<!-- DELETE THIS WHOLE SECTION for a standalone PR — a dependency bump, a one-off bug, a typo, a
+     config one-liner. "Milestone: none" is noise, and a field that is empty half the time trains
+     reviewers to skip it. Keep it when you can name the milestone, spec or multi-PR track this
+     advances — a plan or spec PR counts, even though it is `docs`. -->
 
 - **Pillar:** <!-- docs/roadmap.md → The pillars -->
 - **Milestone:** <!-- e.g. beta-1 §3b Authoring — link the milestone doc or its spec -->

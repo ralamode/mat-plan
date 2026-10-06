@@ -265,13 +265,17 @@ is not removing it.
   implementation: the author agent reconciles each critique (incorporate or push back with
   justification), records a **review-response log** in the plan, and re-reviews until blocking concerns
   are resolved. See [docs/plans/README.md](./docs/plans/README.md) → "Adversarial plan review".
-- **Every PR says where it sits.** A reviewer should not have to reconstruct the plan from the diff.
-  The description opens with a **Where this sits** block — **pillar**
-  ([roadmap.md](./docs/roadmap.md)), **milestone** (linked, so the overall plan is one click away),
-  **what this PR is** within it, and **what comes next**, including anything the next step is gated on.
-  Four lines; the PR template carries them. For work outside a milestone, say so rather than leaving it
-  blank (`Pillar: Platform · Milestone: none — standing debt, SEC-5`) — a blank field reads as an
-  oversight, and "none" is information.
+- **A PR that advances something larger says where it sits.** A reviewer should not have to
+  reconstruct the plan from the diff: with chunks running across lanes, the diff cannot say whether a
+  PR is _the gate_ or _the payoff_. So the description opens with a **Where this sits** block —
+  **pillar** ([roadmap.md](./docs/roadmap.md)), **milestone** (linked, so the overall plan is one click
+  away), **what this PR is** within it, and **what comes next**, including anything that next step is
+  gated on. Four lines; the PR template carries them.
+  **The test:** can you name the milestone, spec or multi-PR track this advances? A plan or spec PR
+  counts, even though its type is `docs`. **Exempt — omit the section entirely:** a dependency bump, a
+  one-off bug, a typo or copy change, a config one-liner, a standalone chore. `Milestone: none` is
+  **not** the answer; a field that is empty half the time trains reviewers to skip it, which costs the
+  signal on the half that matters.
 - **Diagrams in the PR description.** A PR that introduces or changes a **pivotal flow, data model, or
   schema** embeds a **Mermaid diagram in the PR description** (GitHub renders it) so the reviewer sees
   the _shape_ of the change without reading every file — an ERD for a schema/migration, a
