@@ -11,6 +11,11 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 and links the source; the app moved behind it to `/p`, still gated. Next on this track: the OSS-1 seed
 rename, then §B (the hero image) ([plan](./plans/oss-2-public-landing.md)).
 
+📐 **The Authoring milestone is specified** —
+[docs/specs/v1-22-authoring-program-editing.md](./specs/v1-22-authoring-program-editing.md), the first
+file in `docs/specs/`. Its five-lens panel moved the gate, removed the only schema change, and cut
+three PRs out of the milestone. Next: `plan-with-panel` on chunk 1 (the snapshot column, shipping dark).
+
 🔧 **V1-24 PR 1c — Liam's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
 A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
 and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a

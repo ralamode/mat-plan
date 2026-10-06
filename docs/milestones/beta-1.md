@@ -162,23 +162,24 @@ self-serve as ONB-0 + PROF-1 + ONB-2 + V1-9b. That understated it: a household c
 programming it cannot change, and today **changing one prescribed load means editing TypeScript and
 deploying**. The model is settled; the milestone is V1-22's own smallest slice.
 
-Ordered, because two of these close windows that do not reopen:
+**The spec is the contract:
+[docs/specs/v1-22-authoring-program-editing.md](../specs/v1-22-authoring-program-editing.md)** — 17
+acceptance criteria, the `ProgramEditDTO` contract, and six chunks in an order its panel corrected. It
+is the single home for that ordering; this section deliberately does not restate it.
 
-0. **Stop `db:seed` fighting the editor.** It runs on every push to `main` and re-inserts a removed
-   prescription, because its `ON CONFLICT` arbiter repeats the partial `deleted_at IS NULL` predicate.
-   A schema change, and the reason this milestone is not additive-only.
-1. **The prescription snapshot + a one-time backfill**, before any edit ships — prescriptions are
-   seed-immutable only until the first edit, so the pre-edit program is exactly reconstructible now and
-   never again.
-2. **Edit values on existing prescriptions** (V1-22 A2) — what removes the reported pain.
-3. **Add / remove / reorder items** (V1-22 A3). Cuttable; rep-shaped items only until GAP-3's target
-   shapes land.
-4. **The routine picker's offer list** — the pull-ups collision, fixed where it is seen. ⚠️ Filter the
-   offer list only; `ROUTINE_CATALOG` is also the membership set and drops non-members silently.
-5. **The wrestling drills as movements**, gated on the movement-list review.
+Two things the panel changed about the shape of this milestone, worth recording here because they
+reverse what this doc previously said:
+
+- **It is additive-only after all.** The seed guard needs no column — a day-scoped existence check in
+  `seedProgram` beats a marker and is the only option that survives a reorder that compacts.
+- **The seed was never a gate for editing values.** `onConflictDoNothing` is insert-only, so a value
+  `UPDATE` already survives a re-seed. The guard gates add/remove/reorder only, which puts three PRs
+  rather than six between here and the pain being gone.
 
 Alongside, independently shippable: **[UI-1](../plan.md)** (the form becomes the day) and
-**[SET-1](../plan.md)** (preferred units). **One spec of TEST-1** — the routine editor — lands first.
+**[SET-1](../plan.md)** (preferred units). The routine picker's offer list and the wrestling drills
+**left this milestone** as backlog rows — independent PRs sharing nothing with the write path — and
+TEST-1's routine-editor spec left with them.
 
 **Deferred to a scheduling ADR, after beta:** RRULE recurrence, rotation as data, `day_role` becoming
 rows, workout creation, and the planned-occurrence row.
