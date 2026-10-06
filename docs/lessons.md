@@ -47,6 +47,11 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   first, then the ignore) is exactly the broken order. Verified: ignore + one comment + statement = rule
   fires; comment + ignore + statement = suppressed. → **Put the reasoning above, the `squawk-ignore`
   last, touching the statement.** (migration 0010)
+  → **The subtle way to trip it: `--> statement-breakpoint` is itself a `--` comment.** On its own line
+  between the ignore and the statement it voids the ignore and the rule fires again. Keep it a TRAILING
+  token on the preceding statement's line (the `0009`/`0012` style). Found by _running_
+  `squawk-cli@2.66.0` against a candidate file — the only way to tell a suppressed rule from a rule
+  that never fired. (V1-22 chunk 1 panel)
 
 - **`drizzle-kit generate` emits `ADD COLUMN … NOT NULL` with no default, which FAILS on a populated
   table.** → Drizzle writes the column as the schema declares it and does not know the table has rows.
