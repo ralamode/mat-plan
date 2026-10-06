@@ -12,16 +12,17 @@
 Make the production audit a thing that **fails a build** instead of a thing that happens to be
 running on someone's laptop. `audit --prod --audit-level high` lives inside `pnpm verify`
 (`package.json:25`) and **no workflow runs `pnpm verify`**, so a critical advisory reaches `main` with
-CI fully green. That is not a theory: it has happened three times and all three were found by
+CI fully green. That is not a theory: it has happened **four times** and all four were found by
 accident.
 
-| Advisory                                                       | Severity            | In `--prod`?                          | How it was actually caught                                                                                                                     |
-| -------------------------------------------------------------- | ------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| GHSA-vcvr-r3jv-pc5j (`next` RCE)                               | critical            | yes                                   | a local `verify` during unrelated work, 2026-09-30 (#182) — `plan.md:534`                                                                      |
-| GHSA-68fv-2mgg-jv7q (`source-map-js` DoS)                      | high                | yes                                   | a local `verify` during unrelated **docs** work, 2026-10-06, #222 — [fragment](../changelog/2026-10-06-fix-deps-source-map-js-advisory.md):5-7 |
-| GHSA-hrr3-gc8f-f4qj (`fast-uri`) + a **critical** `proxy-addr` | moderate / critical | `fast-uri` yes; `proxy-addr` dev-only | a sweep during unrelated work, 2026-10-06, #227 — [fragment](../changelog/2026-10-06-fix-deps-audit-sweep.md):1-6                              |
+| Advisory                                                       | Severity            | In `--prod`?                                     | How it was actually caught                                                                                                                     |
+| -------------------------------------------------------------- | ------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| GHSA-vcvr-r3jv-pc5j (`next` RCE)                               | critical            | yes                                              | a local `verify` during unrelated work, 2026-09-30 (#182) — `plan.md:534`                                                                      |
+| GHSA-68fv-2mgg-jv7q (`source-map-js` DoS)                      | high                | yes                                              | a local `verify` during unrelated **docs** work, 2026-10-06, #222 — [fragment](../changelog/2026-10-06-fix-deps-source-map-js-advisory.md):5-7 |
+| GHSA-hrr3-gc8f-f4qj (`fast-uri`) + a **critical** `proxy-addr` | moderate / critical | `fast-uri` yes; `proxy-addr` dev-only            | a sweep during unrelated work, 2026-10-06, #227 — [fragment](../changelog/2026-10-06-fix-deps-audit-sweep.md):1-6                              |
+| GHSA-wq5f-xc86-pv6w (`sharp` → librsvg)                        | high                | yes (`next > sharp`, and under `@sentry/nextjs`) | unrelated **feature** work, 2026-10-06, #235 — [fragment](../changelog/2026-10-06-fix-deps-sharp-librsvg.md):1-8                               |
 
-Three accidents in five weeks. `roadmap.md:115-116` states the consequence plainly, and
+Four accidents in five weeks. `roadmap.md:115-116` states the consequence plainly, and
 `tech-debt.md:496` draws the right conclusion: **"the gap is the gate, not the advisories."** Each
 previous fix patched the advisory. This one patches the gate.
 
@@ -186,7 +187,7 @@ looks for it there. Prettier already formats `*.json` (`package.json:40-43`).
 ```json
 [
   {
-    "ghsa": "GHSA-v6h2-p8h4-qcjw",
+    "ghsa": "GHSA-vfj7-8cjw-p6xm",
     "package": "braces",
     "severity": "high",
     "reason": "The advisory names >=3.0.4 as patched and that version has never been released; 3.0.3 is latest, and pinning >=3.0.4 makes the install unresolvable. Nothing to upgrade to.",
@@ -197,7 +198,16 @@ looks for it there. Prettier already formats `*.json` (`package.json:40-43`).
 ```
 
 (Illustrative — this entry is **not** shipped; `braces` is out of `--prod` scope. It is the worked
-example of what an entry must say, drawn from `tech-debt.md:482-485`.)
+example of what an entry must say.)
+
+⚠️ **`tech-debt.md:482` carries the wrong GHSA for `braces` and the implementing PR must fix it.** It
+says `GHSA-v6h2-p8h4-qcjw`; the live advisory is **`GHSA-vfj7-8cjw-p6xm`** — confirmed by
+`pnpm audit` today and by [the fragment](../changelog/2026-10-03-fix-braces-3.0.4-ghsa-vfj7.md):2.
+The first draft of this plan copied the wrong id into the example above, which means **V9 would have
+rejected this plan's own worked example as stale**: the single illustration of the mechanism failed
+the mechanism. A hand-copied GHSA that matches nothing is also the most likely real mistake someone
+makes writing an entry mid-incident, so **V9's failure message must print the GHSA ids it did see**,
+making the repair one copy-paste.
 
 ### Why JSON with a required `reason` field, and not a YAML comment
 
@@ -224,6 +234,14 @@ required `reason` field with a minimum length is a comment the build checks. If 
 | V8  | the file part of `debt` exists on disk                                | a dead pointer is worse than none                                              |
 | V9  | the entry matches a **live** high+ advisory in this report            | **self-invalidating:** once upstream fixes it, the suppression must be deleted |
 | V10 | the matched advisory's `module_name` and `severity` equal the entry's | a re-score (high → critical) forces re-triage, not silent inheritance          |
+| V11 | `severity` is `high` — **`critical` is not suppressible**             | see below                                                                      |
+
+**V11 — a `critical` cannot be allowlisted.** The first draft let any unfixable `--prod` advisory
+become an entry, and V10 only required the severity to _match_, so `"severity": "critical"` was a
+valid 90-day suppression — of exactly the class the motivating incident belongs to (a critical `next`
+RCE, the first row of the table above). A critical must be fixed, or the maintainer merges red, which
+`AGENTS.md:331-333` already permits and which is **louder** than a committed suppression nobody
+re-reads. This holds the line `AGENTS.md` draws for minors' health data in a public repo.
 
 **V9 is the property that makes this different from every suppression mechanism in the repo.** A
 `squawk-ignore` survives forever once the statement it annotates is committed; an allowlist entry
@@ -313,39 +331,75 @@ Header comment carries the rule and the entry shape, following `check-action-pin
 Usage:
   node .github/scripts/check-audit.mjs [--report <file>|-] [--allowlist <file>]
 Exit: 0 ok (allowlisted advisories warned) · 1 a blocking advisory, or a bad/expired/stale
-      allowlist entry · 2 could not check — registry unreachable, unparseable or incoherent
-      report, missing allowlist
+      allowlist entry · 2 could not check, RETRYABLE — the registry was unreachable · 3 could
+      not check, NOT retryable — unparseable or incoherent report, missing allowlist, or a
+      local config that disarms the audit
 ```
 
-The 0/1/2 contract is `check-action-pins.mjs:24` verbatim, and so is its principle: _"a check that
-couldn't check never passes"_ (`:12-13`).
+The principle is `check-action-pins.mjs:12-13` verbatim: _"a check that couldn't check never
+passes"_. The **exit codes deliberately extend** `check-action-pins.mjs:24`'s 0/1/2 with a third,
+because this guard has two unrelated could-not-check causes and `ci.yml` must treat them opposite
+ways. **Exit 2 is the only lenient code** (§ "the two new steps"), so every could-not-check that is
+_not_ a transient network fault must be distinguishable from one that is — otherwise the leniency
+path swallows the anti-vacuity verdict, which is the one verdict that must never be advisory.
+⚠️ **This is the panel's BLOCKING 1 and it was a live bypass in the first draft**, where coherence
+failures returned exit 2 and were downgraded to a warning on any PR touching no dependency input:
+one line of committed config made the gate green forever while looking wired. Demonstrated against
+the real tree, § "Preconditions".
 
 1. **Get the report.** Without `--report`, spawn `pnpm audit --prod --json`.
    ⚠️ **Do not read the exit code.** `pnpm audit` exits non-zero whenever it finds anything, so
    "non-zero" is the normal case; the verdict is the JSON on stdout. Use `execFileSync` with
    `encoding: 'utf8'`, a 120s `timeout`, a generous `maxBuffer`, and read `e.stdout` from the thrown
-   error. No `--audit-level` is passed — the guard owns the threshold, and the full report is needed
-   for the counts line and for the coherence check below.
-2. **Refuse an incoherent report (exit 2).** This is the anti-vacuity gate.
+   error. **Pass `--audit-level info` explicitly.** The guard owns the threshold, and it needs the
+   full report for the counts line and the coherence check — but `audit-level` is also a pnpm
+   **config-file key** (verified in pnpm 11.13.1's own bundle: it is the second-to-last entry of
+   `pnpmConfigFileKeys`), so omitting the flag lets `auditLevel:` in `pnpm-workspace.yaml` decide the
+   threshold instead. The CLI flag beats the config file, which is why it is passed rather than
+   assumed.
+2. **Refuse a config that disarms the audit (exit 3).** Read `pnpm-workspace.yaml` and, if present,
+   `.npmrc`. Exit 3 when `auditConfig.ignoreGhsas` is non-empty — this plan rejects `ignoreGhsas` as
+   the exception mechanism (§ "Rejected: ..."), and leaving it readable means the rejected mechanism
+   still works _and_ silently empties the advisory list. Print the registry the report was fetched
+   from and exit 3 if it is not the public npm registry, since `.npmrc`'s `registry=` decides which
+   server renders the verdict.
+3. **Refuse an incoherent report (exit 3).** This is the anti-vacuity gate.
    - no `metadata.vulnerabilities` object → _"a report without severity counts is not a verdict"_;
-   - `metadata.vulnerabilities.high + .critical > 0` but **zero** high+ advisories parsed, or the
-     reverse → _"the report's own counts disagree with its advisory list"_.
-     ⚠️ **Compare zero-ness, not counts.** `metadata` counts findings and `advisories` counts
-     advisories, so one advisory with three paths legitimately gives 3 vs 1; strict equality would fire
-     spuriously. Zero-ness is the property that matters and it is the one a future pnpm output-shape
-     change would break — without this check, such a change yields "0 advisories, green forever," which
-     is `tech-debt.md:116-118`'s _"a green check that proves nothing, which is strictly worse than no
-     check, because it is trusted."_ Directly answers `tech-debt.md:123`: _can this go vacuous, and
-     would anyone notice?_
-3. **Normalise.** Per advisory: `github_advisory_id ?? cves[0] ?? String(id)`, `module_name`,
+   - **the severity vocabulary is not exactly `info/low/moderate/high/critical`** with finite numeric
+     values, or any advisory's `severity` is outside it → _"this report uses severities this guard
+     does not know"_. Not optional: pnpm's own reader does `if (!isKnownSeverity(adv.severity))
+continue;`, dropping such an advisory from the list **and** the counts, so a vocabulary change is
+     invisible to any check that sums known buckets.
+   - **per-severity exact equality** between `metadata.vulnerabilities` and the counts derived from
+     the advisory list → _"the report's own counts disagree with its advisory list"_.
+     ⚠️ **Exact equality, not zero-ness.** The first draft compared only zero-ness, reasoning that
+     _"`metadata` counts findings and `advisories` counts advisories, so one advisory with three paths
+     legitimately gives 3 vs 1."_ **That is false** — pnpm increments `vulnerabilities[adv.severity]`
+     once per advisory, inside the per-advisory loop; paths never enter it. Measured on this tree with
+     a 3-path advisory present: metadata and derived counts are byte-identical (§ "Preconditions").
+     So the stronger invariant was available for free, and zero-ness leaves a silent green: if a
+     severity bucket is renamed, `…high + .critical` is `undefined + undefined` → `NaN > 0` → false,
+     nothing parses as high+, both sides read zero, and the gate passes. That is
+     `tech-debt.md:116-118`'s _"a green check that proves nothing, which is strictly worse than no
+     check, because it is trusted."_
+   - **the audit audited nothing** → _"a guard that checked nothing must not pass"_
+     (`check-action-pins.mjs:56-60`, whose **input** assertion the first draft omitted while copying
+     its output coherence). An all-zero `metadata.vulnerabilities` cannot otherwise be told apart from
+     a lockfile walk that returned no packages. Exit 3 unless `metadata.totalDependencies` is finite
+     and ≥ 50 and `metadata.dependencies > 0`; and, on the `--prod` run, unless
+     `metadata.devDependencies === 0`, which is the one continuous proof that `--prod` still means what
+     Decision 2 depends on. Measured today: `dependencies: 297 · devDependencies: 0 ·
+optionalDependencies: 112 · totalDependencies: 409`.
+     Together these answer `tech-debt.md:123` — _can this go vacuous, and would anyone notice?_
+4. **Normalise.** Per advisory: `github_advisory_id ?? cves[0] ?? String(id)`, `module_name`,
    `severity`, `patched_versions`, `url`, `recommendation`, and the first few `findings[].paths` for
    the "how is it reached" line that every one of the three fragments found worth writing down.
-4. **Validate the allowlist** (V1-V10 above). Validation runs _before_ the verdict, so a malformed
+5. **Validate the allowlist** (V1-V10 above). Validation runs _before_ the verdict, so a malformed
    file can never read as "no exceptions".
-5. **Verdict.** High+ advisories minus unexpired matched entries. Empty → exit 0, printing the
+6. **Verdict.** High+ advisories minus unexpired matched entries. Empty → exit 0, printing the
    counts. Non-empty → exit 1 with one line per advisory (`severity  package  GHSA  patched: <range>
 via <path>`) and the `::error::` annotation form `ci.yml:173` uses.
-6. **Always print the counts line**, pass or fail, so a human reading a green log can see what was
+7. **Always print the counts line**, pass or fail, so a human reading a green log can see what was
    seen. A guard that reports nothing is indistinguishable from one that ran nothing —
    `check-action-pins.mjs:159-165`.
 
@@ -361,6 +415,7 @@ file exits 2 rather than passing, so it cannot be used to make the gate vacuous.
 - name: Production audit (high+, --prod; SEC-5)
   env:
     BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    ALLOWLIST_WITH_DEPS: ${{ contains(github.event.pull_request.labels.*.name, 'audit-allowlist-with-deps') }}
   run: |
     # A registry outage must not be a merge outage (plan.md:543) — but a PR that
     # CHANGES a dependency must never pass unchecked. So leniency applies only when
@@ -373,10 +428,30 @@ file exits 2 rather than passing, so it cannot be used to make the gate vacuous.
       # the trap documented at ci.yml:49-50 for the action-pin --resolve switch.
       changed="$(git diff --name-only "$BASE_SHA" HEAD -- \
         pnpm-lock.yaml pnpm-workspace.yaml '*package.json' \
+        .npmrc '**/.npmrc' .github/workflows/audit.yml \
         .github/audit-allowlist.json .github/scripts/check-audit.mjs)"
       [ -z "$changed" ] && deps=
+      # You may not ship the vulnerability and its excuse together. V1-V11 all pass
+      # for "add a dependency carrying a live high, add a matching 40-char entry with
+      # an 89-day expiry" — V9 even HELPS, since the advisory is live, so the entry is
+      # valid rather than stale. The only control the first draft named was
+      # hold-the-bar/check.sh, which runs in NO workflow (`guards:test` runs only its
+      # self-test, and is itself local-only per AGENTS.md:317-318).
+      if printf '%s\n' "$changed" | grep -qx '.github/audit-allowlist.json' \
+         && printf '%s\n' "$changed" | grep -qxE 'pnpm-lock.yaml|.*package.json'; then
+        echo "::error::This PR changes both the audit allowlist and the dependency
+    graph. An exception may not land in the same PR as the dependency it excuses —
+    split them, or apply the 'audit-allowlist-with-deps' label if this is deliberate."
+        [ "${ALLOWLIST_WITH_DEPS}" = "true" ] || exit 1
+      fi
     fi
     set +e; node .github/scripts/check-audit.mjs; code=$?; set -e
+    # ONLY exit 2 is lenient: it means the registry was unreachable, which is a
+    # merge outage we refuse to own (plan.md:543). Exit 3 — incoherent report,
+    # missing allowlist, a config that disarms the audit — is NEVER lenient, because
+    # that is precisely the "gate looks wired but checks nothing" case this ticket
+    # exists to end. The first draft collapsed both into 2 and downgraded them
+    # together; see BLOCKING 1 in the review-response log.
     if [ "$code" -eq 2 ] && [ -z "$deps" ]; then
       echo "::warning::pnpm audit could not reach the registry. This PR changes no
     dependency input, so the gate is advisory here; main's daily audit is the backstop."
@@ -386,7 +461,12 @@ file exits 2 rather than passing, so it cannot be used to make the gate vacuous.
 ```
 
 Notes: `'*package.json'` is a git pathspec, where `*` crosses `/`, so it covers every workspace
-package. It over-matches (`foo-package.json`), and over-matching only ever makes the gate **stricter** —
+package — verified: `git ls-files -- '*package.json'` returns all five manifests, the root one
+included. `.npmrc` is in the list although **no `.npmrc` exists in the repo today**, precisely
+because adding one is a dependency-input change the first draft's pathspec could not see: pnpm's
+`audit()` POSTs to `${registry}-/npm/v1/security/advisories/bulk`, so `.npmrc`'s `registry=` decides
+which server renders the verdict, and `.npmrc` carries `audit-level` too. `.github/workflows/audit.yml`
+is listed so a PR weakening the scheduled half cannot also grant itself leniency. It over-matches (`foo-package.json`), and over-matching only ever makes the gate **stricter** —
 the right direction for a default. `deps=1` is the default, so any path through the `if` that fails to
 decide leaves the gate strict. No step-level `if:`, so this runs on push to `main` too — the one place
 an advisory published since the PR's last run gets caught at merge time.
@@ -415,8 +495,12 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # FALSE, unlike most jobs. A manual workflow_dispatch would otherwise cancel the
+  # scheduled run, and a CANCELLED run notifies nobody — while P4 makes "the failed
+  # run" the only signal this job has. Cancelling the daily security audit to save a
+  # minute on a once-a-day job is the wrong trade.
   group: audit-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read # no security-events, no issues: the signal is the failed run
@@ -428,20 +512,29 @@ jobs:
     timeout-minutes: 10
     steps:
       # Pins copied from ci.yml:21, :242, :245 — no new SHA for actions:check --resolve
-      # to resolve, and one place to bump all four.
+      # to resolve, and one place to bump all three.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job uses git. claude-review.yml:55 and :141 set the
+          # precedent; leaving the token in .git/config is the Shai-Hulud shape
+          # SECURITY.md:86 names, and this job runs unattended every morning.
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: pnpm
 
-      # Only if precondition P1 says the audit needs a node_modules tree. If it reads
-      # the lockfile alone, this step is dropped — same trade codeql.yml:63-68 makes,
-      # for the same reason: it removes a minute and a lockfile-drift failure mode from
-      # a job whose job is to be trustworthy on a quiet morning.
-      - name: Install (frozen lockfile)
-        run: pnpm install --frozen-lockfile
+      # NO INSTALL STEP. P1 is resolved from pnpm 11.13.1's source, not its docs:
+      # `loadAuditContext` is `readWantedLockfile(lockfileDir)` + `readEnvLockfile`
+      # and touches no node_modules, so the audit reads the lockfile alone.
+      #
+      # The security argument is stronger than the cost one: `pnpm install` here would
+      # run the `allowBuilds` postinstalls (pnpm-workspace.yaml:11-23 — esbuild, sharp,
+      # @embedded-postgres/*) UNATTENDED, DAILY. Combined with a checkout that keeps a
+      # GITHUB_TOKEN in .git/config, that is exactly the supply-chain shape
+      # SECURITY.md:86 names — in the one job whose purpose is supply-chain safety.
+      # If an install ever becomes necessary, it runs with `--ignore-scripts`.
 
       # No leniency on exit 2 here (unlike ci.yml's step): nothing is blocked by this
       # job, so a silent no-op is the only way for it to fail, and that is the exact
@@ -452,6 +545,10 @@ jobs:
       # REPORT, NOT A GATE. The dev tree cannot pass at `high`: braces@3.0.3's advisory
       # names a >=3.0.4 that was never published (docs/tech-debt.md:482-485). Visible as
       # a yellow step rather than hidden behind `|| true`.
+      # NOTE for the implementing PR: the dev tree now holds THREE findings, not the two
+      # tech-debt.md:482-489 records — @modelcontextprotocol/sdk GHSA-6qxp-vccf-f47h
+      # (high) is new as of 2026-10-06. Update that debt entry in the same PR or this
+      # comment ships stale on day one.
       - name: Full-tree audit (dev included) — REPORT, NOT A GATE
         continue-on-error: true
         run: pnpm audit --audit-level high
@@ -474,8 +571,26 @@ Pass (exit 0):
 
 Fail (exit 1): 5. critical, no allowlist → names the GHSA, the package and the patched range 6. high, no allowlist 7. high + an entry for a _different_ GHSA 8. entry expired yesterday → `expired` 9. entry `expires` 120 days out → `at most 90 days` 10. entry matching nothing in the report → `stale` 11. entry `package` disagrees with the advisory 12. entry `severity` disagrees (advisory re-scored critical) 13. `reason` missing; `reason` of 10 chars 14. duplicate `ghsa` 15. `debt` pointing at a nonexistent file 16. unknown key in an entry
 
-Could-not-check (exit 2): 17. stdout is `ENOTFOUND registry.npmjs.org` → `not a verdict` 18. advisories present, `metadata` absent 19. **`metadata` says 1 high, advisory list empty** — the vacuity case, and the one that protects
-against a future pnpm output change 20. allowlist file missing
+17. entry with `severity: "critical"` → `critical is not suppressible` (V11)
+
+**Could-not-check, RETRYABLE (exit 2) — the only lenient code:** 18. stdout is
+`ENOTFOUND registry.npmjs.org` → `not a verdict`
+
+**Could-not-check, NOT retryable (exit 3) — never lenient:** 19. advisories present, `metadata`
+absent 20. **`metadata` says 1 high, advisory list empty** — the vacuity case, and the one
+`auditLevel: critical` in `pnpm-workspace.yaml` produces for real (§ "Preconditions") 21. allowlist
+file missing 22. **a severity renamed — `"HIGH"` instead of `"high"`** → `severities this guard does
+not know`; case 20 as the first draft wrote it would have **passed** this, since both sides read zero 23. **all-zero counts with `totalDependencies: 0`** → `a guard that checked nothing must not pass` 24. **`devDependencies: 3` on a `--prod` report** → `--prod did not exclude dev` 25.
+`auditConfig.ignoreGhsas` non-empty in `pnpm-workspace.yaml` → `this config disarms the audit` 26.
+per-severity counts disagree by one (`metadata` 2 high, list has 1) — the case exact equality catches
+and zero-ness does not
+
+⚠️ **Cases 4, 8 and 9 need dates computed at run time, not literals**, or they expire into false
+passes. Compute them with `node -e` inside the bash test — **not** with `date`: `date -d` (GNU) vs
+`date -v` (BSD) is precisely the portability split Decision 4 cites as the reason bash suites stay out
+of CI, and this carve-out puts a new bash suite **into** CI. Never add a `--today` flag to the guard
+for this; that is a revive-an-expired-entry bypass. No `docs/lessons.md` entry covers this yet — add
+one in the implementing PR.
 
 **Local:** `pnpm run audit:check`, and `pnpm verify` end-to-end (`AGENTS.md:316` budgets ~35s; the
 audit was already in it, so the number does not move).
@@ -495,19 +610,34 @@ runs the default branch's copy, so this is the first moment it can be proven.
 
 ## Preconditions to verify before coding
 
-Each is one command, and each has a cheap fallback. None is load-bearing on the design.
+**P1 and P2 are already resolved** — against pnpm 11.13.1's own bundle and the live tree, not its
+docs — and the measurements are recorded below rather than left as homework, because three of this
+plan's decisions now rest on them. The rest are one command each with a cheap fallback.
 
-| #   | Claim                                                                                                                                                                                         | How to check                                                                | If false                                                                                                                    |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| P1  | `pnpm audit --prod --json` works from the lockfile alone, no `node_modules`                                                                                                                   | in a fresh clone with no install: `pnpm audit --prod --json \| head -c 400` | `audit.yml` keeps its `Install` step (~1 min). `quality` is unaffected — `ci.yml:250-251` installs anyway.                  |
-| P2  | the report shape is `{ advisories: { <id>: { github_advisory_id, module_name, severity, findings[].paths, patched_versions, url } }, metadata: { vulnerabilities: {…} } }` under pnpm 11.13.1 | `pnpm audit --json \| jq 'keys, (.advisories \| to_entries[0])'`            | adapt the parser; the coherence check in step 2 exists precisely so a shape surprise fails loudly instead of passing        |
-| P3  | `pnpm audit:check` resolves to the script, not the built-in `audit` command                                                                                                                   | `pnpm audit:check` after adding it                                          | rename to `deps:audit`; document `pnpm run audit:check` either way                                                          |
-| P4  | a failed scheduled run actually reaches a human                                                                                                                                               | force one failure after merge and look for the email                        | fall back to checking the Actions tab in the weekly session, and file `issues: write` + an issue-filing step as a follow-up |
+### Measured 2026-10-06, on this worktree, pnpm 11.13.1
 
-Also worth a look while there: `pnpm audit --ignore-registry-errors` and `auditConfig.ignoreGhsas`.
-Neither is needed — the exit-2 contract is better than silently passing, and the allowlist carries
-metadata `ignoreGhsas` cannot — but if `ignoreGhsas` exists, the guard could emit it so a plain
-`pnpm audit` agrees with `audit:check`.
+| What                                                     | Result                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1 — does the audit need `node_modules`?**             | **No.** `loadAuditContext` = `readWantedLockfile(lockfileDir)` + `readEnvLockfile`; no `node_modules` path anywhere. `audit.yml` drops its install step.                                                                                                   |
+| **P2 — the `metadata` shape**                            | `{vulnerabilities:{info,low,moderate,high,critical}, dependencies:297, devDependencies:0, optionalDependencies:112, totalDependencies:409}` — the three count fields the first draft's shape claim omitted are what make the input-vacuity check possible. |
+| **Is `audit-level` a config-file key?**                  | **Yes** — second-to-last entry of `pnpmConfigFileKeys`. So the guard must pass `--audit-level info` explicitly.                                                                                                                                            |
+| **The bypass, end to end**                               | `auditLevel: critical` in `pnpm-workspace.yaml`, no CLI flag, full tree: `metadata` → `{moderate:1, high:2}`, **advisory list empty, exit 0.** Three live advisories, reported as none.                                                                    |
+| **Is per-severity exact equality available?**            | **Yes.** 3 advisories / 5 paths present; `metadata.vulnerabilities` and the list-derived counts are byte-identical. The first draft's "3 vs 1" justification is false.                                                                                     |
+| **`pnpm audit --prod` today**                            | clean — 0 advisories over 409 prod deps, so the allowlist ships as `[]`.                                                                                                                                                                                   |
+| **Does `ignoreGhsas` leave a trace a guard can key on?** | **No.** `metadata.vulnerabilities` is read _before_ the ignored ids are stripped from `advisories` and is never decremented, so it produces the same "counts say N, list is empty" shape as the bypass above.                                              |
+
+| #   | Claim                                                                                                                         | How to check                                         | If false                                                                                                                    |
+| --- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| P1  | ~~`pnpm audit --prod --json` works from the lockfile alone~~ **RESOLVED: yes**                                                | read `loadAuditContext` in pnpm's bundle             | n/a — `audit.yml` drops its install step                                                                                    |
+| P2  | ~~the report shape~~ **RESOLVED** — shape recorded above, including the three `metadata` count fields the first draft omitted | `pnpm audit --prod --json`                           | n/a                                                                                                                         |
+| P3  | `pnpm audit:check` resolves to the script, not the built-in `audit` command                                                   | `pnpm audit:check` after adding it                   | rename to `deps:audit`; document `pnpm run audit:check` either way                                                          |
+| P4  | a failed scheduled run actually reaches a human                                                                               | force one failure after merge and look for the email | fall back to checking the Actions tab in the weekly session, and file `issues: write` + an issue-filing step as a follow-up |
+
+`pnpm audit --ignore-registry-errors` is not needed: the exit-2 contract is better than silently
+passing. And `auditConfig.ignoreGhsas` is now **actively refused** (exit 3) rather than merely
+unused — measured above, it empties the advisory list while leaving the counts intact, which is
+indistinguishable from the bypass. A mechanism this plan rejects on the merits must not keep working
+as a side door, so the guard refuses to run beside it.
 
 ## Risks / rollback
 
@@ -582,7 +712,34 @@ SEC-5 is about, which is why the rollback is the _workflow_ edit and not the gua
 
 ## Review-response log (adversarial panel)
 
-_Empty — the panel has not run. Per [plans/README.md](./README.md), this plan gets the four standing
-lenses (correctness & data integrity · simplicity & scope · architecture & consistency · code reuse),
-plus a **security** lens as SEC-1 and SEC-2 both got. No UX panel: nothing user-facing. Each material
-critique is recorded here as **accepted** (what changed) or **rejected** (why) before implementation._
+Per [plans/README.md](./README.md) this plan gets the four standing lenses (correctness & data
+integrity · simplicity & scope · architecture & consistency · code reuse) plus a **security** lens, as
+SEC-1 and SEC-2 both got. No UX panel: nothing user-facing.
+
+### Round 1 — security / supply-chain lens (2026-10-06)
+
+Ran against the plan as merged in #237. Every BLOCKING finding was **independently re-verified against
+pnpm 11.13.1's own bundle and the live tree before being accepted** — the claims are measured in
+§ "Preconditions", not taken on the lens's word. One of its mechanism claims did not survive first
+contact and is recorded as such.
+
+| #   | Critique (short)                                                                                                 | Verdict                                  | Resolution                                                                                                                                                                                                                                                                                                                                                                        |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Exit-2 leniency swallows the anti-vacuity verdict; one line of committed config makes the gate permanently green | **accepted**                             | **The decisive finding.** Reproduced end to end: `auditLevel: critical` in `pnpm-workspace.yaml` → counts say 1 moderate + 2 high, advisory list empty, exit 0. Exit codes split: 2 = registry unreachable (lenient), 3 = incoherent/unparseable/missing allowlist/hostile config (never lenient). Guard now passes `--audit-level info` and refuses to run beside `ignoreGhsas`. |
+| B2  | The zero-ness comparison is weaker than needed and its justification is factually false                          | **accepted**                             | Measured: 3 advisories / 5 paths, `metadata` and derived counts byte-identical — pnpm increments per advisory, not per path. Switched to per-severity exact equality plus a severity-vocabulary assertion, since pnpm silently drops unknown severities from both the list and the counts.                                                                                        |
+| B3  | No input-vacuity check — the guard never asserts it audited anything                                             | **accepted**                             | `totalDependencies` ≥ 50, `dependencies > 0`, and `devDependencies === 0` on the `--prod` run, all printed on the counts line. The last one is the only continuous proof that `--prod` still means what Decision 2 depends on.                                                                                                                                                    |
+| S4  | An allowlist entry can land in the same PR as the dependency it excuses                                          | **accepted**                             | The step already computes `changed`; it now errors when the allowlist and the dependency graph move together, overridable only by a visible `audit-allowlist-with-deps` label. Confirmed the control the first draft named (`hold-the-bar/check.sh`) runs in **no** workflow.                                                                                                     |
+| S5  | `critical` is suppressible by a JSON edit, and the plan never discusses it                                       | **accepted**                             | **V11**: `severity` must be `high`. A critical is fixed or merged red — louder than a committed suppression, and the motivating incident was a critical.                                                                                                                                                                                                                          |
+| S6  | `.npmrc` is a dependency input the pathspec never looks at                                                       | **accepted**                             | `.npmrc`, `**/.npmrc` and `.github/workflows/audit.yml` added to the pathspec; the guard prints and asserts the registry it queried.                                                                                                                                                                                                                                              |
+| S7  | The one worked allowlist example carries a GHSA that matches nothing                                             | **accepted**                             | `GHSA-v6h2-p8h4-qcjw` → **`GHSA-vfj7-8cjw-p6xm`**. V9 would have rejected this plan's own example as stale. `tech-debt.md:482` carries the same wrong id and the implementing PR fixes it; V9's message now prints the ids it did see.                                                                                                                                            |
+| S8  | The evidence table is stale by one and would write a new wrong number into `plan.md`                             | **accepted**                             | Fourth row added (`sharp`, GHSA-wq5f-xc86-pv6w, high, prod path, #235); "three accidents" → **four**; `plan.md:528`'s "twice" → "four times". The dev tree's third finding is flagged for the same PR.                                                                                                                                                                            |
+| —   | Drop `audit.yml`'s install step; `persist-credentials: false`; `cancel-in-progress: false`                       | **accepted**                             | P1 resolved from source (`loadAuditContext` reads the lockfile only). The security argument is the stronger one: an install would run `allowBuilds` postinstalls unattended, daily, beside a token in `.git/config`.                                                                                                                                                              |
+| —   | `audit-level` is in `pnpmConfigFileKeys`                                                                         | **accepted, after a failed first check** | My own first extraction of that array reported `false`; a direct scan of the bundle showed the lens was right — the array ends `…"os","audit-level","yes"`. Recorded because the conclusion rests on it and the near-miss is the interesting part: the array is not sorted the way the extraction assumed.                                                                        |
+| —   | Self-test dates must be computed, not literal                                                                    | **accepted**                             | Cases 4/8/9 compute dates with `node -e`; `date -d`/`date -v` is the exact portability split Decision 4 cites, and this carve-out puts a bash suite into CI. No `--today` flag — that would be a revive-an-expired-entry bypass.                                                                                                                                                  |
+| —   | V8 only checks the file part of `debt`, so `#anything` passes                                                    | **rejected (deferred)**                  | True but a nit against the rest: a dead anchor with a live file still lands the reader on the right page. Filed as a follow-up rather than growing V-list scope in a PR already at eleven rules.                                                                                                                                                                                  |
+
+**Verified clean by the same lens, recorded so a later reader does not re-litigate it:** fork-PR
+exposure (`ci.yml` is `pull_request`, never `pull_request_target`; the new steps carry `BASE_SHA` and
+no secret), all three action pins resolve to the tags claimed, and the allowlist-over-`ignoreGhsas`
+choice is correct — `ignoreGhsas` leaves no trace a guard can key on, and V9's self-invalidation has
+no upstream equivalent.
