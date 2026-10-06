@@ -25,15 +25,15 @@ would have called them independent.
 Where a glob is already owned by a [feature guide](./features/), the guide's `owns:` frontmatter is
 the authority and `pnpm guides:check` enforces it. The pillar does not re-declare it; it points.
 
-| Pillar                      | Owns                                                                                               | Ids                                                          |
-| --------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Onboarding & Access**     | `app/(landing)/`, the gate, sign-in, empty states                                                  | `ONB-*` `AUTH-1` `OSS-*` `SEC-1`                             |
-| **Profiles & Tenancy**      | `lib/dal/profiles.ts`, household scoping, `app/p/` shell                                           | `PROF-1` `TEN-*` `DAL-*`                                     |
-| **Logging & Measurement**   | [strength-logging](./features/strength-logging.md) + [write-path](./features/write-path.md) guides | `V1-19` `V1-24` `V1-26..30` `GAP-*` `SET-1` `UI-1` `DUALS-*` |
-| **Authoring & Scheduling**  | [programming](./features/programming.md) guide, `prescriptions`, `routine_config`                  | `V1-18` `V1-20` `V1-22` `SCHED-*` `CAT-*`                    |
-| **Insight** (read & export) | `V1-16` charts, aggregation kernel, `lib/dal/export.ts`, the CSV contract                          | `V1-16` `CSV-1` `MOT-*` `DASH-1` `COACH-1`                   |
-| **Platform**                | `.github/workflows/`, `.claude/`, hooks, deps, the migrations runner                               | `OPS-*` `DX-*` `SEC-2..5` `TEST-*` `EVAL-0`                  |
-| **Product & Spec**          | `docs/decisions/`, `docs/specs/`, `docs/milestones/`, `AGENTS.md`                                  | — (ADRs and specs, not backlog rows)                         |
+| Pillar                      | Owns                                                                                               | Ids                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Onboarding & Access**     | `app/(landing)/`, the gate, sign-in, empty states                                                  | `ONB-*` `AUTH-1` `OSS-*` `SEC-1` `PRIV-1`                               |
+| **Profiles & Tenancy**      | `lib/dal/profiles.ts`, household scoping, `app/p/` shell                                           | `PROF-1` `TEN-*` `DAL-*`                                                |
+| **Logging & Measurement**   | [strength-logging](./features/strength-logging.md) + [write-path](./features/write-path.md) guides | `V1-19` `V1-24` `V1-26..30` `GAP-*` `SET-1` `UI-1` `DUALS-*` **`AI-1`** |
+| **Authoring & Scheduling**  | [programming](./features/programming.md) guide, `prescriptions`, `routine_config`                  | `V1-18` `V1-20` `V1-22` `SCHED-*` `CAT-*`                               |
+| **Insight** (read & export) | `V1-16` charts, aggregation kernel, `lib/dal/export.ts`, the CSV contract                          | `V1-16` `CSV-1` `MOT-*` `DASH-1` `COACH-1`                              |
+| **Platform**                | `.github/workflows/`, `.claude/`, hooks, deps, the migrations runner                               | `OPS-*` `DX-*` `SEC-2..5` `TEST-*` `EVAL-0` _(incl. `DX-1`)_            |
+| **Product & Spec**          | `docs/decisions/`, `docs/specs/`, `docs/milestones/`, `AGENTS.md`                                  | — (ADRs and specs, not backlog rows)                                    |
 
 Two deliberate departures from the obvious cut, both argued rather than assumed:
 
@@ -77,15 +77,21 @@ the progress view only.
 
 Each is the item that would start if that pillar got the next session.
 
-| Pillar                 | Next                     | Gated on                                                                                                                   |
-| ---------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                                                                                        |
-| Profiles & Tenancy     | `TEN-1`                  | Nothing — but it is a **seam change**, so it lands before the pillars that consume it, not beside them. Unblocks `AUTH-1`. |
-| Logging & Measurement  | `V1-30b-ii`              | Nothing — 30b-i is shipped, so Authoring chunk 2 is released.                                                              |
-| Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.                                                                            |
-| Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).                                                                      |
-| Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.                                                                 |
-| Product & Spec         | The scheduling ADR       | Wanted by `SCHED-1`, `CAT-2` and V1-22 A4.                                                                                 |
+| Pillar                 | Next                     | Gated on                                                                                                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                                                                                                                                                                                                                                                                                                  |
+| Profiles & Tenancy     | `TEN-1`                  | Nothing — but it is a **seam change**, so it lands before the pillars that consume it, not beside them. Unblocks `AUTH-1`.                                                                                                                                                                                                           |
+| Logging & Measurement  | **`AI-1` — P0**          | Gate **cleared**: GAP-3 (`entry_set_quantities`, `0011`) and V1-13 are on `main`, so the recorded chain _legacy samples → GAP-3 → V1-13 → AI-1_ is satisfied. The blocker is now the **plan** — it predates GAP-3 and was never panelled. Re-grounding started 2026-10-06. `V1-30b-ii` (#236) lands first; `V1-26` / `V1-33` follow. |
+| Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.                                                                                                                                                                                                                                                                                      |
+| Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).                                                                                                                                                                                                                                                                                |
+| Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.                                                                                                                                                                                                                                                                           |
+| Product & Spec         | The scheduling ADR       | Wanted by `SCHED-1`, `CAT-2` and V1-22 A4.                                                                                                                                                                                                                                                                                           |
+
+⚠️ **This table is the membership test, and it has already failed once.** `AI-1`, `PRIV-1` and `DX-1`
+sat in `plan.md` for weeks while belonging to **no** pillar — so this file claimed to be the
+cross-program view and silently was not. A backlog row in no pillar is invisible here, which is the
+one failure it cannot afford. Adding a row to `plan.md` means putting its id in a pillar above, or
+saying in the row why it has none.
 
 ## Seams — where two pillars must agree
 
