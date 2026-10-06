@@ -47,10 +47,10 @@ Two deliberate departures from the obvious cut, both argued rather than assumed:
 
 ## In flight
 
-| Item                                 | Pillar                 | State                                                                        |
-| ------------------------------------ | ---------------------- | ---------------------------------------------------------------------------- |
-| **V1-22 Authoring** — chunks 1–6     | Authoring & Scheduling | **Spec landed** (#226). Chunk 1 next. See the table below.                   |
-| **V1-30b** — the form stops inviting | Logging & Measurement  | **✅ complete** — 30b-i (#234) and 30b-ii. All seven filed items are closed. |
+| Item                             | Pillar                 | State                                                                                                                                                                              |
+| -------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V1-22 Authoring** — chunks 1–6 | Authoring & Scheduling | Spec #226 · **chunk 1 shipped** (#232, `0013` verified live in prod) · chunk 2 **planned** (#239) and unblocked — #236 cleared its `strength-form.tsx` collision. Chunk 2 is next. |
+| **AI-1** — NL logging            | Logging & Measurement  | **P0, started.** Gate cleared (GAP-3 + V1-13 on `main`); the plan is re-grounded and awaiting its panel. _(V1-30b completed and left this table: #234 + #236.)_                    |
 
 **Sequencing decision (2026-10-06, [parallel-work](./parallel-work.md) gate 1):** chunk 2 threads a
 prescription public id through the log form, and `v1-30b` edits `strength-form.tsx` and
