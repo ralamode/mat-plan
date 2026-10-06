@@ -26,9 +26,9 @@ engineer.**
   the schema conventions, the "don't" list, and what each kind of PR owes.
 - **Plans before code.** Anything that touches CI, a migration, auth or multi-file logic gets a
   committed plan in [docs/plans/](./plans/) first.
-- **Adversarial panels.** Nine reviewer agents in [.claude/agents/](../.claude/agents/), each with one
-  lens (correctness, scope, architecture, reuse, DB safety, security, privacy, UX, plus a fact-sheet
-  researcher that checks claims against the code). They are prompted to find flaws, not to approve.
+- **Adversarial panels.** Nine agents in [.claude/agents/](../.claude/agents/): eight reviewers,
+  each with one lens (correctness, scope, architecture, reuse, DB safety, security, privacy, UX), plus
+  a fact-sheet researcher that checks claims against the code. The reviewers are prompted to find flaws, not to approve.
   Every finding gets a written verdict in the plan's review-response log, and **the rejections stay
   committed**, because a rejected finding with a reason is the most useful thing a later reader can
   find.
@@ -37,8 +37,9 @@ engineer.**
   tasks (migrations, Server Actions, data corrections). `hold-the-bar` checks whether a red check went
   green by lowering the bar: a new `@ts-ignore`, a skipped test, an assertion quietly removed.
 - **Hooks for the rules prose couldn't hold.** "Every task in its own git worktree" lasted less than
-  a day as a sentence in AGENTS.md. It is now a `PreToolUse` hook that refuses the command and prints
-  the worktree command to run instead.
+  a day as a sentence in AGENTS.md. It is now a `PreToolUse` hook that refuses mutating git commands in
+  the main checkout and prints the worktree command to run instead. It is a best-effort guard against
+  the common forms, not a security boundary, and AGENTS.md says so.
 
 ## Five cases from the record
 
@@ -46,10 +47,10 @@ engineer.**
 GAP-3's plan argued that a dangerous migration couldn't land because Squawk would fail it. The
 DB-safety reviewer went to check and found no Squawk in CI at all. The audit that followed (#132)
 found **five gates AGENTS.md had claimed for months and never wired**: Squawk, the forward-only guard,
-CodeQL, `pnpm audit` and a Neon-branch apply. Three were wired before the migration arc that needed
-them (#133, #135, #138). The lesson I took: rules written as the intended end state are claims, and
-claims need re-verifying. That is why AGENTS.md now says "⚠️ NOT WIRED" next to the ones that still
-aren't.
+CodeQL, `pnpm audit` and a Neon-branch apply. The two migration gates, forward-only (#133) and Squawk
+(#135), were wired before the arc's first migration landed; CodeQL followed (#138). The other two are
+still unwired. The lesson I took: rules written as the intended end state are claims, and claims need
+re-verifying. That is why AGENTS.md says "⚠️ NOT WIRED" next to the two that still aren't.
 
 **2. I overrode the spec, knowingly, and wrote down why.**
 The youth program alternates Day A and Day B, and its spec insists the letter comes from the count of
@@ -61,7 +62,7 @@ or agent) will hit it, so nobody "fixes" it, and the proper version is a backlog
 **3. The agent pushed back on me, and was right.**
 In V1-24 I asked to delete a read-only list on the logging screen. The plan rejected that, quoting
 my phrasing: the list was the only mount point for the set editor and the sole renderer of four
-other things. It was demoted into a collapsed `<details>` instead. I'd rather work with a process
+other things. The plan demotes it into a collapsed `<details>` instead (PR 3b, not built yet). I'd rather work with a process
 that can tell me no with a file reference than one that does whatever I said last.
 
 **4. A panel finding was rejected, with the reasoning in the open.**
@@ -74,9 +75,10 @@ hard-coded script. The rejection and its reasoning are in the log. Panels are in
 **5. When the agent got something wrong, the fix was a guard, not a promise.**
 The DUALS-1 tournament sheet shipped with an 8-slot bracket mis-paired, which turned two real duals
 into byes. They looked plausible on screen. The fix added a schema assertion
-(`duals == poolTeamCount - 1`), so a lost dual now fails the build instead of rendering. When the
-status log was rebuilt from memory and drifted from the merge history (#156), the answer was
-`pnpm status:check` rather than a note to be more careful. The pattern holds across the repo: a
+(`duals == poolTeamCount - 1`, #154), so a lost dual failed the build instead of rendering. (The
+feature was later retired, in #167.) When the status log, hand-written from memory, had drifted from
+the merge history and had to be reconciled (#156), the answer was `pnpm status:check` (#177), a local
+check that a product branch touches the status record, rather than a note to be more careful. The pattern holds across the repo: a
 failure that costs more than one attempt becomes a [lessons](./lessons.md) entry or a check.
 
 ## What this costs, honestly
