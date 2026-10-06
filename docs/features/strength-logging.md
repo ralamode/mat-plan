@@ -369,8 +369,12 @@ Real ones, each with the file to look at.
   1px, so the actionability check fails. Click the **label** — which is what a person taps anyway, and
   what `targetOf` measures for the tap-target bar.
 
-- **`packages/**` is typechecked by nothing.** `pnpm typecheck` is `--filter web`. A stale reference in
-  `writers/` or `verify.ts` surfaces only as a runtime crash in `db:verify`. Run `pnpm verify`.
+- **`packages/db` is typechecked, but only since DX-7 — and `shared`/`engine` still are not directly.**
+  `pnpm typecheck` now runs `apps/web` **and** `packages/db` (its own `tsconfig.json`, covering
+  `scripts/**` where the `db:verify` proofs live). `packages/shared` is still checked only
+  _transitively_, through the app's imports, so a file in it that nothing imports is unchecked. A stale
+  reference in `writers/` or `verify.ts` used to surface only as a runtime crash in `db:verify`; it is
+  now a compile error. Run `pnpm verify`.
 
 - **Server Actions are public POSTs.** Page auth does not protect one. Re-validate every field at the
   boundary; a DB constraint reached by a crafted body is a 500 that discards the athlete's whole
