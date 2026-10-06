@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { setStatusSchema } from './enums';
 import { uuidSchema } from './id';
+import { QUANTITY_DECIMALS } from './units';
 
 /** Over the per-set ceiling. Names the likeliest cause now that metres and seconds save (V1-30): a
  *  real 3200 m or 2400 s is usually a unit slip, and the copy must not imply the athlete is wrong. */
@@ -70,7 +71,8 @@ export const strengthSetSchema = z
           .nullable()
           .superRefine((v, ctx) => {
             if (v === null) return;
-            if (!/^\d+(\.\d{1,3})?$/.test(v)) {
+            // Built from QUANTITY_DECIMALS so the field's `step` and this check cannot drift.
+            if (!new RegExp(`^\\d+(\\.\\d{1,${QUANTITY_DECIMALS}})?$`).test(v)) {
               ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 message: 'Enter a plain number like 62.5.',

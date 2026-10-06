@@ -6,6 +6,7 @@ import {
   MAX_SETS_PER_MOVEMENT,
   newId,
   type Unit,
+  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 
 import type { MovementVals } from './strength-form';
@@ -88,6 +89,15 @@ export function scaffoldMovements(
     // A MASS unit (AUDIT-1 P2-2): "loaded" means weighted. A declared `sec` hold is not loaded, and a
     // BW hint there would be noise.
     declaredLoaded: row.isBodyweight === false && declaredMass(row.unitDefault),
+    /**
+     * V1-30b — the DIMENSION the catalog declares, so a card measuring something else earns an
+     * advisory line. Derived from the same `declaredUnit` the `unit` above uses, so the hint can
+     * never disagree with the unit the card opened on. Presentation-only and never serialized; a
+     * typed name has no declaration, and rename clears it.
+     */
+    declaredDimension: ((u) => (u ? UNIT_DIMENSION_BY_CODE[u] : undefined))(
+      declaredUnit(row.unitDefault),
+    ),
     // Never 0 rows: a card with zero sets is the vacuous-truth shape BUG-2(b) had to fix
     // (`[].every(...)` is true), and a non-skipped movement with no sets fails the schema anyway.
     sets: Array.from({ length: clampSetCount(row.sets) }, () => ({

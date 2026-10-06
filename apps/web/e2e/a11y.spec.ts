@@ -19,7 +19,7 @@ import {
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PARTIAL_SETS_COPY,
-  weightInputLabel,
+  quantityInputLabel,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
 import { resolveDayRole } from '../lib/programming/day-role-schedule';
@@ -399,7 +399,7 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
   ).toHaveCount(1);
   await change.click();
   await expect(owner.getByLabel(`${subject} reps`, { exact: true })).toBeFocused(); // focus on open
-  await expect(owner.getByLabel(weightInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
+  await expect(owner.getByLabel(quantityInputLabel(subject, 'lb'), { exact: true })).toBeVisible();
   await expectNoAxeViolations(page, 'strength set (editing)');
   await expectTapTargets(page, 'strength set (editing)');
   await expectNoHorizontalOverflow(page, 'strength set (editing, 360px)');

@@ -1,3 +1,4 @@
+import { LOGGABLE_DIMENSIONS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,6 +7,9 @@ import {
   missingQuantityMessage,
   PARTIAL_SETS_COPY,
   SUMMARY_NAME_MAX,
+  QUANTITY_FIELD_WORD,
+  quantityInputLabel,
+  usuallyLoggedAs,
 } from './constants';
 
 describe('blockedSummary — the summary names the first blocker (V1-27)', () => {
@@ -49,5 +53,47 @@ describe('missingQuantityMessage', () => {
 describe('APP_HOME_PATH', () => {
   it('is the profile picker — a contract the proxy, the gate action and the specs share', () => {
     expect(APP_HOME_PATH).toBe('/p');
+  });
+});
+
+/**
+ * V1-30b-i — the form must offer only what the server keeps, and the number must read as what it is.
+ */
+describe('quantityInputLabel / QUANTITY_FIELD_WORD / usuallyLoggedAs (V1-30b)', () => {
+  it('mass output is BYTE-IDENTICAL to V1-30, so every existing locator holds', () => {
+    expect(quantityInputLabel('Movement 1 set 2', 'lb')).toBe('Movement 1 set 2 weight in lb');
+    expect(quantityInputLabel('Movement 1 set 2', 'kg')).toBe('Movement 1 set 2 weight in kg');
+    // No unit (the edit form before a primary resolves) keeps the bare noun.
+    expect(quantityInputLabel('Movement 1 set 2')).toBe('Movement 1 set 2 weight');
+  });
+
+  it('non-mass spells the unit out, because `sec` and `in` read as nothing aloud', () => {
+    expect(quantityInputLabel('Movement 1 set 1', 'sec')).toBe('Movement 1 set 1 time in seconds');
+    expect(quantityInputLabel('Movement 1 set 1', 'in')).toBe('Movement 1 set 1 length in inches');
+    expect(quantityInputLabel('Movement 1 set 1', 'm')).toBe('Movement 1 set 1 length in metres');
+  });
+
+  it('every loggable dimension has a field word — a new one without one must fail, not fall back', () => {
+    for (const d of LOGGABLE_DIMENSIONS) {
+      expect(QUANTITY_FIELD_WORD[d]).toBeTruthy();
+    }
+  });
+
+  it('the field word fits the w-24 field: never longer than "weight"', () => {
+    // The row is ~275 of ~294px at 360px, so a longer word overflows. `length`, not "height or
+    // distance" — and not `distance`, which would mislabel a box jump, the main length movement.
+    for (const d of LOGGABLE_DIMENSIONS) {
+      expect(QUANTITY_FIELD_WORD[d]!.length).toBeLessThanOrEqual('weight'.length);
+    }
+  });
+
+  it('usuallyLoggedAs keeps V1-26’s sentence verbatim for mass, and reads naturally otherwise', () => {
+    expect(usuallyLoggedAs('Trap-Bar Deadlift', 'mass')).toBe(
+      'Trap-Bar Deadlift is usually logged with a weight.',
+    );
+    expect(usuallyLoggedAs('Plank', 'time')).toBe('Plank is usually logged as a time.');
+    expect(usuallyLoggedAs('Box Jump', 'length')).toBe(
+      'Box Jump is usually logged as a height or distance.',
+    );
   });
 });

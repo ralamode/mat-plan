@@ -9,11 +9,13 @@ import {
   LOGGABLE_DIMENSION_LABELS,
   LOGGABLE_DIMENSIONS,
   loggableUnitsOf,
+  isMassUnit,
   type MovementStatus,
   newId,
   type SetStatus,
   STRENGTH_DAY_ROLES,
   type Unit,
+  UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
   UNIT_LABELS,
   type UnitDimension,
@@ -28,6 +30,7 @@ import {
   missingQuantityMessage,
   PARTIAL_SETS_COPY,
   STRENGTH_COPY,
+  usuallyLoggedAs,
   strengthReceiptId,
   strengthSummary,
 } from '@/lib/constants';
@@ -93,6 +96,10 @@ export type MovementVals = {
   // tap on it earns a word. The server has the catalog itself and does not need the form to tell it.
   // Cleared on rename: the declaration was derived from a name that is now gone.
   declaredLoaded?: boolean;
+  // V1-30b. TRANSIENT, like `scaffolded` and `declaredLoaded` — never serialized. The DIMENSION the
+  // catalog declares for this movement, so a card whose Measuring differs earns an advisory line.
+  // Set only by the scaffold (a typed name has no declaration, so no hint) and cleared on rename.
+  declaredDimension?: UnitDimension;
 };
 
 const emptySet = (): SetVals => ({ key: newId(), reps: '', weight: '' });
@@ -343,6 +350,41 @@ function StrengthFormBody({
     clientId: string,
     patch: Partial<Omit<MovementVals, 'clientId' | 'sets'>>,
   ) => setMovements((ms) => ms.map((m) => (m.clientId === clientId ? { ...m, ...patch } : m)));
+  /**
+   * V1-30b — a MEASURING change: set the unit and, when the new dimension is not mass, clear every
+   * set's load modes, in ONE updater.
+   *
+   * The guarantee comes from the clear living in the SAME update as the unit change: no state can ever
+   * pair `isBodyweight` with a non-mass unit, which is the shape the server's refine 6 refuses.
+   * `undefined`, never `false`, so "absent stays absent" on the wire.
+   *
+   * Rejected alternative: keep the flags and filter them at serialization. State would still count a
+   * BW-only set as TOUCHED while the wire carried a blank set the server refuses — invisible state,
+   * the V1-19 collapsed-card wedge — and the V1-27 summary would disagree with what was sent.
+   * Clearing in state keeps every V1-27 predicate correct by construction.
+   *
+   * The Unit select keeps `patchMovement`: it never crosses a dimension, so lb → kg clears nothing.
+   */
+  const setDimensionUnit = (clientId: string, unit: string) =>
+    setMovements((ms) =>
+      ms.map((m) =>
+        m.clientId !== clientId
+          ? m
+          : {
+              ...m,
+              unit,
+              ...(isMassUnit(unit as Unit)
+                ? {}
+                : {
+                    sets: m.sets.map((set) => ({
+                      ...set,
+                      isBodyweight: undefined,
+                      isBand: undefined,
+                    })),
+                  }),
+            },
+      ),
+    );
   const patchSets = (clientId: string, fn: (sets: SetVals[]) => SetVals[]) =>
     setMovements((ms) => ms.map((m) => (m.clientId === clientId ? { ...m, sets: fn(m.sets) } : m)));
 
@@ -510,10 +552,12 @@ function StrengthFormBody({
                 patchMovement(m.clientId, {
                   movementName: v,
                   declaredLoaded: undefined,
+                  declaredDimension: undefined,
                   scaffolded: undefined,
                 })
               }
               onUnit={(v) => patchMovement(m.clientId, { unit: v })}
+              onDimension={(v) => setDimensionUnit(m.clientId, v)}
               onRemove={() => removeMovement(m.clientId)}
               onAddSet={() => patchSets(m.clientId, (sets) => [...sets, emptySet()])}
               onRemoveSet={(sk) =>
@@ -636,6 +680,7 @@ function MovementCard({
   onUngroup,
   onName,
   onUnit,
+  onDimension,
   onRemove,
   onAddSet,
   onRemoveSet,
@@ -654,7 +699,11 @@ function MovementCard({
   onToggleSelect: () => void;
   onUngroup?: () => void; // present only when the movement is in a superset
   onName: (v: string) => void;
+  /** The UNIT select — within one dimension, so it never clears a load mode. */
   onUnit: (v: string) => void;
+  /** V1-30b — the MEASURING select. Takes the new dimension's first unit and clears the load modes
+   *  when that dimension is not mass, in one state update. */
+  onDimension: (v: string) => void;
   onRemove: () => void;
   onAddSet: () => void;
   onRemoveSet: (setKey: string) => void;
@@ -675,6 +724,17 @@ function MovementCard({
   const mixed = hasTrailingUntouched(movement);
   const trailingFrom = trailingStart(movement.sets);
   const hintId = `movement-${movement.clientId}-trailing-hint`;
+  // V1-30b — DISTINCT ids. Reusing `hintId` would give two elements one id: V1-27's trailing-sets
+  // hint renders at the same time as these.
+  const dimensionHintId = `movement-${movement.clientId}-dimension-hint`;
+  const loadedNoteId = `movement-${movement.clientId}-loaded-note`;
+  // The catalog declared a dimension and the athlete is measuring something else — an advisory line,
+  // never a lockout. A typed name has no declaration, so this is false on a hand-added card.
+  const dimensionMismatch =
+    movement.declaredDimension != null && movement.declaredDimension !== dimension;
+  // V1-26 PR-A — the note is about the MOVEMENT, so one checked BW chip anywhere shows it.
+  const showLoadedNote =
+    Boolean(movement.declaredLoaded) && movement.sets.some((s) => s.isBodyweight);
 
   // V1-19 — the collapsed summary. NOT a native <details>, and the set rows are UNMOUNTED rather than
   // CSS-hidden: `SetRepsWeightFields` marks its inputs `required`, and a hidden-but-present required
@@ -781,10 +841,14 @@ function MovementCard({
             onChange={(e) => {
               // Switching dimension re-homes the unit to that dimension's first code — the pair can
               // never be left inconsistent, which is what the composite FK would otherwise reject.
+              // V1-30b: `onDimension`, not `onUnit` — leaving mass must also clear the load modes, in
+              // the same state update, so no state ever pairs BW with a non-mass unit.
               const next = loggableUnitsOf(e.target.value as UnitDimension)[0];
-              if (next) onUnit(next);
+              if (next) onDimension(next);
             }}
             className={INPUT_CLASS}
+            // V1-30b — the mis-tap hint describes THIS control, the one that caused it.
+            aria-describedby={dimensionMismatch ? dimensionHintId : undefined}
             aria-label={`What movement ${index + 1} measures`}
           >
             {LOGGABLE_DIMENSIONS.map((d) => (
@@ -826,6 +890,18 @@ function MovementCard({
           </Button>
         ) : null}
       </div>
+      {/* V1-30b — the mis-tap hint, DIRECTLY under the name / Measuring / Unit row rather than ~350px
+          below it: the V1-30 U5 case is a weighted movement moved off Weight, which is unrecoverable
+          (no delete action, and `isEditableSet` refuses a non-mass set), so the warning has to be where
+          the eye already is. A description carried by `aria-describedby` on the Measuring select, NOT a
+          mount-with-text `role="status"` — a live region that already holds its text when it mounts may
+          never be announced at all. Reflow is acceptable: it happens as the picker sheet closes, and
+          the thumb is not on the rows that move. */}
+      {dimensionMismatch ? (
+        <p id={dimensionHintId} className="text-muted-foreground text-sm">
+          {usuallyLoggedAs(movement.movementName, movement.declaredDimension!)}
+        </p>
+      ) : null}
 
       {/* GAP-1 P1-1c — mark the whole movement skipped. A checkbox wrapped in its own label, matching
           the superset toggle above: `e2e/a11y.spec.ts` measures the BOUND label as the tap target and
@@ -891,7 +967,7 @@ function MovementCard({
                     }
                     weightMissingMessage={missingQuantityMessage(movement.unit as Unit)}
                     repsDescribedBy={describedBy}
-                    unitLabel={movement.unit}
+                    unit={movement.unit as Unit}
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pl-7">
@@ -899,12 +975,19 @@ function MovementCard({
                 would be the hardest thing to enter on a phone, because iOS's numeric keypad has no
                 letters. Since PR 4a they write BOOLEANS rather than text into the weight field, so
                 `BW` and a weight can now coexist (that pairing is `BW+8 (vest)`). */}
-                  <SetModeToggles
-                    isBodyweight={s.isBodyweight ?? false}
-                    isBand={s.isBand ?? false}
-                    onChange={(patch) => onSet(s.key, patch)}
-                    ariaLabel={`movement ${index + 1} set ${i + 1}`}
-                  />
+                  {/* V1-30b — REMOVED, not hidden, on a non-mass card. The server's refine 6 refuses
+                      BW on a time or distance set, so offering the chip invites a refusal the kid
+                      cannot act on. Unmounted rather than CSS-hidden: a hidden checkbox left in the
+                      tab order is the "form appears dead" trap this file documents twice. */}
+                  {isMassUnit(movement.unit as Unit) ? (
+                    <SetModeToggles
+                      isBodyweight={s.isBodyweight ?? false}
+                      isBand={s.isBand ?? false}
+                      onChange={(patch) => onSet(s.key, patch)}
+                      ariaLabel={`movement ${index + 1} set ${i + 1}`}
+                      bodyweightDescribedBy={showLoadedNote ? loadedNoteId : undefined}
+                    />
+                  ) : null}
                   {/* GAP-1 P1-1c — this ATTEMPT went to failure short of the prescribed reps. Same idiom as
                 the Skipped checkbox (one toggle pattern per card). The accessible name is unique per
                 set — five controls all named "Sub-failure" are indistinguishable in a screen-reader
@@ -949,12 +1032,18 @@ function MovementCard({
               note — three copies of one sentence on a three-set card is noise on a 360px screen —
               so it renders once per movement, for the whole card.
 
-              `role="status"` and not `alert`: this is advisory, and `alert` interrupts. It sits
-              BELOW the set rows deliberately, so appearing cannot reflow the row under the thumb
-              that just tapped the chip. */}
-          {movement.declaredLoaded && movement.sets.some((s) => s.isBodyweight) ? (
-            <p role="status" className="text-muted-foreground text-sm">
-              {movement.movementName} is usually logged with a weight.
+              It sits BELOW the set rows deliberately, so appearing cannot reflow the row under the
+              thumb that just tapped the chip.
+
+              V1-30b: no longer `role="status"`. It mounted WITH its text, and a live region that
+              already holds its text when it mounts may never be announced — so the announcement was
+              theatre. It is now a description carried by every checked BW chip on the card (the note
+              is about the movement, not one set), which is announced reliably. The sentence comes from
+              `usuallyLoggedAs`, shared with the mis-tap hint, so one warning cannot be worded two
+              ways. */}
+          {showLoadedNote ? (
+            <p id={loadedNoteId} className="text-muted-foreground text-sm">
+              {usuallyLoggedAs(movement.movementName, UNIT_DIMENSION.mass)}
             </p>
           ) : null}
           <div>

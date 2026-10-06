@@ -29,10 +29,18 @@ export function SetModeToggles({
   isBand,
   onChange,
   ariaLabel,
+  bodyweightDescribedBy,
 }: {
   isBodyweight: boolean;
   isBand: boolean;
   onChange: (patch: { isBodyweight?: boolean; isBand?: boolean }) => void;
+  /**
+   * V1-30b — the id of V1-26's "usually logged with a weight" note, carried by EVERY checked BW chip
+   * on the card while the note shows. The note is about the movement rather than one set, and it used
+   * to be a mount-with-text `role="status"`, which is unreliable: a live region that already contains
+   * its text when it mounts may never be announced. A description on the control that triggered it is.
+   */
+  bodyweightDescribedBy?: string;
   /** Context for the accessible name, e.g. "Movement 1 set 2" — unique per set, so a forms list
    *  does not show fifteen controls all called "BW". */
   ariaLabel: string;
@@ -44,6 +52,9 @@ export function SetModeToggles({
       title: 'Bodyweight',
       checked: isBodyweight,
       set: (v: boolean) => onChange({ isBodyweight: v }),
+      // Only the BW chip describes V1-26's note, and only while it is checked — that is what the
+      // note is about. The band chip never does.
+      describedBy: isBodyweight ? bodyweightDescribedBy : undefined,
     },
     {
       key: 'band',
@@ -51,6 +62,7 @@ export function SetModeToggles({
       title: 'Band',
       checked: isBand,
       set: (v: boolean) => onChange({ isBand: v }),
+      describedBy: undefined,
     },
   ];
 
@@ -76,6 +88,7 @@ export function SetModeToggles({
             className="sr-only"
             checked={m.checked}
             onChange={(e) => m.set(e.target.checked)}
+            aria-describedby={m.describedBy}
             // The visible text ("BW") is a SUBSTRING of the accessible name — WCAG 2.5.3 Label in
             // Name, the same rule the Sub-failure control follows.
             aria-label={`${m.label} — ${m.title} — ${ariaLabel}`}

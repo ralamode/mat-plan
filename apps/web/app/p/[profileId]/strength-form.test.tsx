@@ -235,7 +235,12 @@ describe('StrengthForm — the movement’s declaration (V1-26 PR-A)', () => {
     // A WARNING, not a lockout — the athlete may be right, and the chip stays on.
     expect(bwChip(2)).toHaveProperty('checked', true);
     // `status`, not `alert`: advisory copy must not interrupt.
-    expect(note.getAttribute('role')).toBe('status');
+    // V1-30b — no longer a live region. It mounted WITH its text, and such a region may never be
+    // announced, so the announcement was theatre. It is now a DESCRIPTION on every checked BW chip
+    // (the note is about the movement, not one set), which is announced reliably.
+    expect(note.getAttribute('role')).toBeNull();
+    expect(note.id).toMatch(/^movement-.+-loaded-note$/);
+    expect(bwChip(2).getAttribute('aria-describedby')).toBe(note.id);
   });
 
   it('says nothing when BW is tapped on a movement the catalog declares bodyweight', () => {
@@ -293,8 +298,12 @@ const renderWith3 = () => {
 };
 const repsOf = (card: number, set: number) =>
   screen.getByLabelText(`Movement ${card} set ${set} reps`) as HTMLInputElement;
+// V1-30b — the field word is per dimension, so the locator accepts any of the three. Mass output is
+// byte-identical to V1-30, so every assertion that pins the exact mass name still holds.
 const weightOf = (card: number, set: number) =>
-  screen.getByLabelText(new RegExp(`^Movement ${card} set ${set} weight`)) as HTMLInputElement;
+  screen.getByLabelText(
+    new RegExp(`^Movement ${card} set ${set} (weight|time|length)`),
+  ) as HTMLInputElement;
 const fill = (card: number, set: number, reps = '8', weight = '20') => {
   fireEvent.change(repsOf(card, set), { target: { value: reps } });
   fireEvent.change(weightOf(card, set), { target: { value: weight } });
@@ -571,5 +580,132 @@ describe('StrengthForm — the summary line and the hint (V1-27 UX)', () => {
     fill(1, 2);
     fill(1, 3);
     expect(screen.queryByText(PARTIAL_SETS_COPY.trailingHint)).toBeNull();
+  });
+});
+
+describe('StrengthForm — the form offers only what the server keeps (V1-30b-i)', () => {
+  const measuring = (n: number) => screen.getByLabelText(`What movement ${n} measures`);
+  const unitSelect = (n: number) => screen.getByLabelText(`Unit for movement ${n}`);
+  // V1-19 — a scaffolded card's set rows are UNMOUNTED while collapsed, so a card other than the
+  // first has to be opened before its controls exist.
+  const expand = (n: number, name: string) =>
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`${n}\\. ${name}`) }));
+  // The payload DROPS untouched scaffolded cards, so a card's position in it is not its card number.
+  // Look it up by name.
+  const sentSets = (name: string) =>
+    (payload().find((m) => m.movementName === name)!.sets as Array<Record<string, unknown>>) ?? [];
+  const chips = (n: number, set: number) => ({
+    bw: screen.queryByRole('checkbox', { name: `BW — Bodyweight — movement ${n} set ${set}` }),
+    band: screen.queryByRole('checkbox', { name: `band — Band — movement ${n} set ${set}` }),
+  });
+
+  it('a non-mass card renders NO load-mode chips; a mass card renders both', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Plank' } });
+    expect(chips(1, 1).bw).not.toBeNull();
+    expect(chips(1, 1).band).not.toBeNull();
+
+    fireEvent.change(measuring(1), { target: { value: UNIT_DIMENSION.time } });
+    // UNMOUNTED, not hidden: a hidden checkbox left in the tab order is the "form appears dead" trap.
+    expect(chips(1, 1).bw).toBeNull();
+    expect(chips(1, 1).band).toBeNull();
+  });
+
+  it('leaving mass clears every set’s load modes — in one update, so the wire never pairs them', () => {
+    renderWith3();
+    expand(2, 'Push-Ups');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'BW — Bodyweight — movement 2 set 1' }));
+    fireEvent.change(repsOf(2, 1), { target: { value: '10' } });
+
+    fireEvent.change(measuring(2), { target: { value: UNIT_DIMENSION.time } });
+    // `undefined`, never `false` — "absent stays absent" on the wire.
+    expect(sentSets('Push-Ups').every((set) => !('isBodyweight' in set))).toBe(true);
+  });
+
+  it('changing the unit WITHIN mass clears nothing (lb → kg keeps BW)', () => {
+    renderWith3();
+    expand(2, 'Push-Ups');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'BW — Bodyweight — movement 2 set 1' }));
+    fireEvent.change(repsOf(2, 1), { target: { value: '10' } });
+
+    fireEvent.change(measuring(2), { target: { value: UNIT_DIMENSION.mass } });
+    fireEvent.change(unitSelect(2), { target: { value: 'kg' } });
+    expect(sentSets('Push-Ups')[0]!.isBodyweight).toBe(true);
+  });
+
+  it('reps + BW switched to Time blocks with the RIGHT copy rather than dropping the set', () => {
+    renderWith3();
+    expand(2, 'Push-Ups');
+    fireEvent.change(repsOf(2, 1), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'BW — Bodyweight — movement 2 set 1' }));
+
+    fireEvent.change(measuring(2), { target: { value: UNIT_DIMENSION.time } });
+    // The reps survive, BW is gone, so the quantity is now required — a block, not a silent drop.
+    expect(repsOf(2, 1).value).toBe('10');
+    expect(weightOf(2, 1).validationMessage).toBe(missingQuantityMessage('sec'));
+    expectSummaryAgrees();
+  });
+
+  it('the accessible name is per dimension, and mass stays byte-identical', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Plank' } });
+    // Mass: the V1-30 text, unchanged, so every existing locator holds.
+    expect(screen.getByLabelText('Movement 1 set 1 weight in lb')).toBeTruthy();
+
+    fireEvent.change(measuring(1), { target: { value: UNIT_DIMENSION.time } });
+    expect(screen.getByLabelText('Movement 1 set 1 time in seconds')).toBeTruthy();
+    expect(weightOf(1, 1).placeholder).toBe('time');
+
+    fireEvent.change(measuring(1), { target: { value: UNIT_DIMENSION.length } });
+    expect(screen.getByLabelText('Movement 1 set 1 length in inches')).toBeTruthy();
+    expect(weightOf(1, 1).placeholder).toBe('length');
+  });
+
+  it('one precision for every unit: 61.25 kg and 6.25 ft are valid, 1.2345 is not', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Back Squat' } });
+    const field = weightOf(1, 1);
+    // step="0.5" used to refuse 61.25 kg (1.25 kg plates are real) and 6.25 ft.
+    expect(field.step).toBe('0.001');
+    fireEvent.change(field, { target: { value: '61.25' } });
+    expect(field.checkValidity()).toBe(true);
+    fireEvent.change(field, { target: { value: '1.2345' } });
+    expect(field.checkValidity()).toBe(false);
+  });
+
+  it('the mis-tap hint names the declared dimension, describes the Measuring select, and is its own id', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    expand(2, 'Trap-Bar Deadlift');
+    // Trap-Bar Deadlift declares `lb` (mass); no hint while Measuring agrees.
+    expect(screen.queryByText(/usually logged/)).toBeNull();
+
+    fireEvent.change(measuring(2), { target: { value: UNIT_DIMENSION.time } });
+    const hint = screen.getByText('Trap-Bar Deadlift is usually logged with a weight.');
+    expect(hint.id).toMatch(/^movement-.+-dimension-hint$/);
+    expect(measuring(2).getAttribute('aria-describedby')).toBe(hint.id);
+    // ⚠️ Distinct from V1-27's trailing hint, which can render at the same time.
+    expect(hint.id).not.toMatch(/trailing-hint$/);
+  });
+
+  it('a hand-added card has no declaration, so it never shows the hint', () => {
+    renderForm();
+    fireEvent.change(nameInput(), { target: { value: 'Something New' } });
+    fireEvent.change(measuring(1), { target: { value: UNIT_DIMENSION.time } });
+    expect(screen.queryByText(/usually logged/)).toBeNull();
+  });
+
+  it('renaming a scaffolded card clears the declaration, so the hint goes with it', () => {
+    renderWithProgram();
+    fireEvent.click(fillButton());
+    expand(2, 'Trap-Bar Deadlift');
+    fireEvent.change(measuring(2), { target: { value: UNIT_DIMENSION.time } });
+    expect(screen.getByText(/usually logged/)).toBeTruthy();
+
+    const name = screen.getByLabelText('Movement');
+    fireEvent.change(name, { target: { value: 'Something Else' } });
+    // The declaration was derived from a name that is now gone — a warning that outlived its subject
+    // would be worse than none.
+    expect(screen.queryByText(/usually logged/)).toBeNull();
   });
 });

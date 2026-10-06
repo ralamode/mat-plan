@@ -167,6 +167,21 @@ export const LOGGABLE_DIMENSION_NOUNS: Partial<Record<UnitDimension, string>> = 
   time: 'time',
 };
 
+/**
+ * Decimal places a logged quantity may carry — ONE precision for every unit, read by the server's
+ * format check (`strength.ts`) and by the number field's `step` (`set-fields.tsx`), so the browser
+ * refuses exactly where the server would.
+ *
+ * 3, matching `numeric(8,3)` on `entry_sets.value_num`. It replaces a `step="0.5"` that was sized for
+ * barbell plates and blocked `6.25 ft`, `1.25 min` and `61.25 kg` — 1.25 kg plates are real. A 0.5
+ * step caught no typo a human noticed, and it also closed a blind spot: a `1.25` carried from Time
+ * into Weight used to fail the step while the V1-27 summary said the card was ready.
+ *
+ * Cost, accepted: on desktop, ArrowUp on `135` now goes to `135.001` rather than `135.5`. Phones have
+ * no spinner, and typing is the path there.
+ */
+export const QUANTITY_DECIMALS = 3;
+
 /** Is this unit a weight? The one spelling of the check for a UNIT (`set-display.ts` checks a stored
  *  dimension instead, so it has no unit to pass). */
 export function isMassUnit(unit: Unit): boolean {

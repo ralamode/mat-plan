@@ -22,6 +22,7 @@ import {
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
+  UNIT_DIMENSION,
 } from '@mat-plan/shared';
 import { eq, isNull } from 'drizzle-orm';
 
@@ -260,6 +261,10 @@ const STATES = {
   // "empty sets at the end" hint and the summary line), and a half-entered row (the blocked summary).
   'form-partial-sets': null,
   'form-partial-blocked': null,
+  // V1-30b-i — a TIME card: the BW/band chips are gone (the server refuses them there) and the number
+  // field reads "time". Interaction-only — the state exists only after the Measuring select changes,
+  // and it is the ONLY place this change is visible.
+  'form-time-card': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -290,6 +295,12 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await reps.nth(0).fill('8');
     await weight.nth(0).fill('20');
     await weight.nth(1).fill('20'); // weight, no reps: touched, so its reps stay required
+  },
+  'form-time-card': async (page) => {
+    const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
+    await strength.getByLabel('Movement', { exact: true }).fill('Plank');
+    // The chips vanish and the field word changes in the same update as the unit.
+    await strength.getByLabel('What movement 1 measures').selectOption(UNIT_DIMENSION.time);
   },
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),

@@ -3,6 +3,8 @@ import {
   MAX_SESSION_MOVEMENTS,
   MAX_SETS_PER_MOVEMENT,
   sessionMovementSchema,
+  type Unit,
+  UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -240,5 +242,33 @@ describe('scaffoldMovements — the movement’s declaration (V1-26 PR-A)', () =
     // The V1-26 widening must not have opened the door `ScaffoldRow` closes by construction.
     const [card] = scaffoldMovements([row({ isBodyweight: false, unitDefault: 'lb' })], 'lb');
     expect(card.sets.every((s) => s.reps === '' && s.weight === '')).toBe(true);
+  });
+});
+
+/**
+ * V1-30b-i — the card also carries the catalog's DIMENSION, so measuring something else earns an
+ * advisory line. Derived from the same `declaredUnit` the `unit` uses, so the hint can never disagree
+ * with the unit the card opened on.
+ */
+describe('scaffoldMovements — the declared DIMENSION (V1-30b)', () => {
+  it.each([
+    { name: 'a declared mass unit', unitDefault: 'lb', declaredDimension: 'mass' },
+    { name: 'a declared time unit', unitDefault: 'sec', declaredDimension: 'time' },
+    { name: 'a declared length unit', unitDefault: 'in', declaredDimension: 'length' },
+    // Catalog-silent: no declaration, so no hint can ever fire on this card.
+    { name: 'catalog silent', unitDefault: null, declaredDimension: undefined },
+    // `count` is known but NOT loggable, so `declaredUnit` drops it — the dimension must go too,
+    // rather than seeding a hint for a dimension the Measuring select has no option for.
+    { name: 'a non-loggable unit', unitDefault: 'count', declaredDimension: undefined },
+  ])('$name → $declaredDimension', ({ unitDefault, declaredDimension }) => {
+    const [card] = scaffoldMovements([row({ unitDefault })], 'lb');
+    expect(card!.declaredDimension).toBe(declaredDimension);
+  });
+
+  it('never disagrees with the unit the card opened on', () => {
+    for (const unitDefault of ['lb', 'kg', 'sec', 'min', 'in', 'cm', 'ft', 'yd', 'm']) {
+      const [card] = scaffoldMovements([row({ unitDefault })], 'lb');
+      expect(card!.declaredDimension).toBe(UNIT_DIMENSION_BY_CODE[card!.unit as Unit]);
+    }
   });
 });
