@@ -64,28 +64,48 @@ The order and the reason each chunk cannot move live in
 **[specs/v1-22-authoring-program-editing.md](./specs/v1-22-authoring-program-editing.md)**. This is
 the progress view only.
 
-| #     | Chunk                                                   | State                                                           |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------- |
-| **1** | `entries.prescribed_snapshot`, shipping dark            | ⏭️ **next** — backend-only, so it runs **parallel to `v1-30b`** |
-| **2** | One shared renderer + log-time writer + export fallback | ☐                                                               |
-| **3** | The backfill, as a `db:correct` correction              | ☐                                                               |
-| **4** | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐                                                               |
-| **5** | The day-scoped seed guard                               | ☐                                                               |
-| **6** | Add / remove / reorder                                  | ☐ cuttable                                                      |
+| #     | Chunk                                                   | State                                                                                                    |
+| ----- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **1** | `entries.prescribed_snapshot`, shipping dark            | 📋 **planned** (#230) — blocked only on the prod `count(*)`; `packages/db` only, so parallel to `v1-30b` |
+| **2** | One shared renderer + log-time writer + export fallback | ☐                                                                                                        |
+| **3** | The backfill, as a `db:correct` correction              | ☐                                                                                                        |
+| **4** | Edit values at `/p/<id>/program` — _the pain goes away_ | ☐                                                                                                        |
+| **5** | The day-scoped seed guard                               | ☐                                                                                                        |
+| **6** | Add / remove / reorder                                  | ☐ cuttable                                                                                               |
 
 ## Next per pillar
 
 Each is the item that would start if that pillar got the next session.
 
-| Pillar                 | Next                     | Gated on                                                      |
-| ---------------------- | ------------------------ | ------------------------------------------------------------- |
-| Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                           |
-| Profiles & Tenancy     | `TEN-1`                  | Nothing — and it unblocks `AUTH-1` and the household library. |
-| Logging & Measurement  | `V1-30b`                 | Nothing — and it now precedes Authoring chunk 2.              |
-| Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.               |
-| Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).         |
-| Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.    |
-| Product & Spec         | The scheduling ADR       | Wanted by `SCHED-1`, `CAT-2` and V1-22 A4.                    |
+| Pillar                 | Next                     | Gated on                                                                                                                   |
+| ---------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Onboarding & Access    | `OSS-1`, then `OSS-2` §B | Nothing. `AUTH-1` waits on `TEN-1`.                                                                                        |
+| Profiles & Tenancy     | `TEN-1`                  | Nothing — but it is a **seam change**, so it lands before the pillars that consume it, not beside them. Unblocks `AUTH-1`. |
+| Logging & Measurement  | `V1-30b`                 | Nothing — and it now precedes Authoring chunk 2.                                                                           |
+| Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.                                                                            |
+| Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).                                                                      |
+| Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.                                                                 |
+| Product & Spec         | The scheduling ADR       | Wanted by `SCHED-1`, `CAT-2` and V1-22 A4.                                                                                 |
+
+## Seams — where two pillars must agree
+
+Pillars are disjoint **file globs**, which is what makes them parallel-safe. These are the places two
+of them nonetheless touch one contract, so a change on either side is a change to both. **Each seam
+has one owner**; the other pillar consumes it and does not redefine it.
+
+| Seam                                           | Pillars                        | Owner                                                        |
+| ---------------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| The log form's submit schema + `ScaffoldRow`   | Logging ∩ Authoring            | **Logging** — Authoring chunk 2 adds a prescription id to it |
+| `lib/dal/` household scoping                   | Tenancy ∩ Authoring ∩ Profiles | **Tenancy** (`TEN-1`'s single scope seam)                    |
+| `packages/shared/src/units.ts` dimension words | Logging ∩ Measurement          | **Logging** (`v1-30b`'s `QUANTITY_FIELD_WORD`)               |
+| `ROUTINE_CATALOG` — membership, default, offer | Authoring ∩ Insight            | **Authoring** (`CAT-1`); adherence counts consume it         |
+| The byte-faithful CSV contract                 | Authoring ∩ Insight            | **Insight** (`docs/csv-export-contract.md` + golden files)   |
+
+**A seam change does not parallelize.** When the owner changes the contract, the consuming pillar waits
+— that is a sequencing decision, recorded in **In flight** with its reason, exactly as the
+chunk-2/`v1-30b` collision was. `TEN-1` is the clearest live case: it introduces one household-scope
+seam that every pillar's DAL calls change through, so it wants to land **before** the pillars that
+consume it, not beside them.
 
 ## Standing debts worth seeing here
 

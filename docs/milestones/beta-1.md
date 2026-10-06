@@ -176,6 +176,11 @@ reverse what this doc previously said:
   `UPDATE` already survives a re-seed. The guard gates add/remove/reorder only, which puts three PRs
   rather than six between here and the pain being gone.
 
+**Integration and exit criteria are in the spec**, under
+[§Integration](../specs/v1-22-authoring-program-editing.md) — the six invariants that span chunks and
+so belong to no single PR, each with the chunk that closes it. This milestone is the first to run
+chunks in parallel across pillars, which is why it is the first to need them written down.
+
 Alongside, independently shippable: **[UI-1](../plan.md)** (the form becomes the day) and
 **[SET-1](../plan.md)** (preferred units). The routine picker's offer list and the wrestling drills
 **left this milestone** as backlog rows — independent PRs sharing nothing with the write path — and

@@ -170,6 +170,30 @@ authoring _"TypeScript, no UI yet"_. ⚠️ `docs/features/programming.md`'s `ow
 `app/p/[profileId]/program/`, and `guides:check` cannot see a **new unowned** file — so the frontmatter
 must grow in the same PR or the editor ships with no guide coverage, silently.
 
+## Integration — what no single chunk can prove
+
+Every criterion above is owned by one chunk. These are **not**: each one spans chunks, so no single
+PR's tests close it, and nothing else in this spec says who does. The column headed **Closed by** is
+the chunk whose PR must carry the proof.
+
+| Invariant                                                                                                                                        | Spans   | Closed by  | The proof                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Acceptance 11** — for an unedited prescription the snapshot path and the legacy path emit **identical bytes**                                  | 1, 2, 3 | **3**      | A golden-byte test over a real month, run with the snapshot populated and with it NULL. It is the only test that catches the renderer having been copied rather than hoisted. |
+| **Acceptance 8** — a prescription edit does not change any already-exported byte                                                                 | 1–4     | **4**      | Export a month, edit, re-export, diff. Must use a prescription whose pre-edit string is **non-empty** — 11 of 13 render `''`, so an equality-only test passes vacuously.      |
+| **`''` ≠ `NULL` end to end.** Chunk 1 creates the distinction, chunk 2's export reads it (`snapshot ?? live`, never `\|\|`), chunk 3 writes `''` | 1, 2, 3 | **3**      | One case per writer: a `''` row exports empty **without** consulting the live program; a NULL row does consult it.                                                            |
+| **Acceptance 12** — the snapshot reaches no input. Chunk 1 cannot prove it (no TypeScript); chunk 2 is what introduces the risk                  | 1, 2    | **2**      | The type-level assertion plus "exactly one query selects it, exactly one writer writes it".                                                                                   |
+| **Acceptance 17** — `db:seed` leaves a human's edits alone. Meaningless until something can remove or reorder                                    | 5, 6    | **6**      | The `db:verify` fixture: remove, reorder, re-seed, assert nothing returned and no vacated slot refilled.                                                                      |
+| **The deploy-order chain.** Chunk 1 **observed applied** before 2 merges; chunk 3's `--apply` recorded before 4 merges                           | 1–4     | each chunk | The runbook's catalog query, and the corrections **Applied** table. Not a test — a gate, and it is in `docs/runbooks.md`.                                                     |
+
+**Milestone exit criteria.** Authoring is done when every per-chunk criterion is green, **every row
+above is closed**, and one end-to-end pass holds: _edit a prescribed load, log against it, export the
+month, and confirm the edited value reaches Today while every previously-exported byte is unchanged._
+That last sentence is the whole milestone in one sentence, and no chunk owns it alone.
+
+⚠️ **After any fan-in of parallel work, the first PR runs `pnpm e2e:local`, not just `pnpm verify`** —
+the smoke is the only thing that exercises the composed app, and `verify` passing on each lane
+separately says nothing about them together.
+
 ## Out of scope
 
 - **Creating a workout** (V1-22 A4). A new block would hijack Today for any day role it answers. Needs
