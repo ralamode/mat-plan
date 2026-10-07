@@ -44,7 +44,7 @@ can't tell a good reason from a bad one, but the PR reviewer can.
 - **Don't cite a gate that isn't wired.** AGENTS.md carries an explicit warning. Before claiming a
   check protects something, confirm it exists in `.github/workflows/`.
 - **At least one external opinion.** axe (`apps/web/e2e/a11y.spec.ts`), gitleaks, Squawk and
-  `audit --prod` are the checks an agent can't talk its way past. Keep them in the loop; don't route
+  `audit:check` are the checks an agent can't talk its way past. Keep them in the loop; don't route
   around them.
 
 ## Red flags

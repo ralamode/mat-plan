@@ -599,22 +599,58 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   consent dialog sitting in the middle of the funnel being measured. Exhaust that before reaching for a
   library. See [OBS-1](#obs-1) for the system-health half, which is a separate concern.
 
-- **SEC-5 — `pnpm audit --prod` runs in no workflow, and an advisory has now reached `main` twice.** 🔴
-  _(maintainer, 2026-10-06.)_ `audit --prod --audit-level high` lives inside `pnpm verify`, and **no CI
-  job runs `pnpm verify`** ([tech-debt](./tech-debt.md)). Both escapes were found by accident:
+- ✅ **SEC-5 — the production audit is a CI gate.**
+  _(maintainer, 2026-10-06.)_ `audit --prod --audit-level high` lived inside `pnpm verify`, and **no CI
+  job ran `pnpm verify`** ([tech-debt](./tech-debt.md)), so an advisory reached `main` with CI fully
+  green **four times** — and all four were found by accident:
 
-  | Advisory                                  | Severity | How it was caught                                         |
-  | ----------------------------------------- | -------- | --------------------------------------------------------- |
-  | GHSA-vcvr-r3jv-pc5j (`next` RCE)          | critical | a local `verify` during unrelated work, 2026-09-30 (#182) |
-  | GHSA-68fv-2mgg-jv7q (`source-map-js` DoS) | high     | a local `verify` during unrelated docs work, 2026-10-06   |
+  | Advisory                                                       | Severity            | How it was caught                                                  |
+  | -------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------ |
+  | GHSA-vcvr-r3jv-pc5j (`next` RCE)                               | critical            | a local `verify` during unrelated work, 2026-09-30 (#182)          |
+  | GHSA-68fv-2mgg-jv7q (`source-map-js` DoS)                      | high                | a local `verify` during unrelated **docs** work, 2026-10-06 (#222) |
+  | GHSA-hrr3-gc8f-f4qj (`fast-uri`) + a **critical** `proxy-addr` | moderate / critical | a sweep during unrelated work, 2026-10-06 (#227)                   |
+  | GHSA-wq5f-xc86-pv6w (`sharp` → librsvg)                        | high                | unrelated **feature** work, 2026-10-06 (#235)                      |
 
-  Twice is a pattern, and the second one proves the first fix was to the advisory rather than to the
-  gate. **The job is small** — `pnpm audit --prod --audit-level high` as a step in `ci.yml`'s `quality`
-  job, which already runs `pnpm install`. The design questions are what makes it a plan rather than a
-  one-liner: a new advisory against an unchanged dependency turns **every** PR red through no fault of
-  its author, so it needs an agreed escape hatch (a label, or an allowlist with an expiry date and a
-  reason, the way `.squawk.toml` handles its exclusions) and a decision on whether it blocks or
-  annotates. Offline by default like `actions:check`, so a registry outage is not a merge outage.
+  Four accidents, and each earlier fix patched the advisory rather than the gate.
+  ✅ **Implemented:** `pnpm audit:check` (`.github/scripts/check-audit.mjs`) is the single definition,
+  run identically by `pnpm verify` and by `ci.yml`'s `quality` job, failing on any `high` or `critical`
+  in the `--prod` tree; its 19-case self-test runs before the install so a broken guard fails in
+  seconds. The rule is stated once, in [SECURITY.md](../.github/SECURITY.md) → Supply chain.
+  **PLAN: [sec-5-verify-in-ci.md](./plans/sec-5-verify-in-ci.md)** — five adversarial lenses cut it
+  from ~450 implementation lines to ~120. They found a permanent-green bypass (one line of committed
+  config emptied the advisory list while leaving the counts intact), killed the leniency branch the
+  first fix had made dead code, and moved two whole sub-features out to their own rows below. What
+  survived: **could-not-check is two exit codes**, because only one of them may ever be advisory — a
+  registry outage warns on a PR that changes no dependency input, and an unparseable, incoherent or
+  disarmed report never does. **No escape hatch** shipped: the answer to an unfixable production
+  advisory is fix it, re-classify it as dev if that is honest, or merge red (SEC-5c when that stops
+  being enough).
+
+- **SEC-5b — the daily scheduled audit.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
+  lens.)_ SEC-5's gate only fires when something is pushed, so an advisory published against a
+  dependency nobody touches is caught by nothing in this repo except `dependabot.yml`'s security PRs.
+  A `schedule:`d workflow auditing the **full** tree closes that. **Gated on one unanswered question:**
+  nobody has confirmed that a failed scheduled run reaches a human — force a failure and watch for the
+  notification **before** wiring it, or it is a gate whose output nobody reads. When built:
+  **no install step** (measured — `pnpm audit` reads the lockfile, not `node_modules`),
+  `persist-credentials: false` (a daily unattended checkout should not sit beside a token),
+  `cancel-in-progress: false` (a cancelled run notifies nobody), and the full-tree report must route
+  **through the guard** in a report-only mode rather than a bare `pnpm audit` — a second bare audit
+  re-states the threshold and is subject to every config bypass SEC-5 just closed. Note the full tree
+  cannot pass at `high` today ([tech-debt](./tech-debt.md)), so this reports, it does not gate.
+
+- **SEC-5c — the expiring audit allowlist.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
+  lens.)_ **Build it the first time an unfixable `high` actually lands in the `--prod` tree** — not
+  before. SEC-5 shipped without it on purpose: `audit --prod` is clean, so the file would ship empty,
+  and in the draft it was 60% of the guard and 17 of its 26 test cases. The reviewed design is
+  preserved in the plan's history (#237) and is worth re-reading then — in particular that **V10 is
+  load-bearing for V11**: without a check that an entry's severity still matches the advisory's, an
+  advisory later re-scored to `critical` is still silently suppressed by a `high` entry. Carried over
+  with it: an expiry needs a stated timezone basis (reuse `check-status-touched.mjs`'s local-date
+  convention, which this repo already got wrong once), the `90`/`14` day numbers need names, and V8
+  should reuse the exported `cleanPath` rather than re-implement it. The precedent that makes this row
+  real rather than theoretical: `braces@3.0.3` was a `high` **in the production tree** until
+  2026-10-03, and its advisory names a patched version that has never been published.
 
 ## Later — ideas captured, not scoped
 
@@ -686,12 +722,16 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
 - **DX-5 — nothing enforces the merge gates.** Verified via the API (2026-09-30): classic branch
   protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
   **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
-  `clean`), and a direct push to `main` is possible. Separately, `audit --prod`, `skills:check` and
-  `guards:test` run only in local `pnpm verify`, never in CI (GHSA-vcvr reached every branch with CI
-  green). Today the `review-pr` shipit bar is the only gate. **Fix:** (a) a repo-admin settings change
+  `clean`), and a direct push to `main` is possible. Separately, `skills:check`, `guards:test` and
+  `status:check` run only in local `pnpm verify`, never in CI. Today the `review-pr` shipit bar is the
+  only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
-  `pull_request` rule on `main`); (b) a CI change to run audit, `skills:check` and `guards:test`, which
-  needs its own plan and panel; `status:check` (DX-2's guard, also local-only) belongs on that list.
+  `pull_request` rule on `main`); (b) a CI change to run `skills:check`, `guards:test` and
+  `status:check` (DX-2's guard), which needs its own plan and panel. **The audit third of (b) is
+  done** — SEC-5 wired `audit:check` into `quality` and carved its own self-test out of `guards:test`
+  as a standalone step; **(b) deletes that step** when it wires `guards:test` properly, and could
+  reasonably take `check-action-pins.test.sh` with it (offline, fixture-only, ~1s), which SEC-5
+  deliberately left alone to keep to one concern.
   (SEC-2's `check-action-pins.mjs` already runs in `quality`; its self-test, in `guards:test`, does not.)
   Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
 - **DX-8 — every root `pnpm` script passes when its filter matches nothing.** 🔴 Found 2026-10-06
@@ -854,18 +894,18 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
 `review-pr` in audit mode over the whole repo at `78ec41a` (2026-09-30): **2 P0 · 5 P1 · 7 P2**, plus
 verdicts on the 10 doc-vs-code seeds. One concern per PR, in this order. Each row says what it owes.
 
-| #   | Branch                           | What                                                                                                                                                                                   | Owes                                                      |
-| --- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 1   | `fix/v1-30-loggable-units`       | ✅ **V1-30a**: every offered unit saves and exports; boundary tests, `db:verify`, guide invariant 4b                                                                                   | plan + engineering panel, one UX reviewer                 |
-| 2   | `fix/v1-27-partial-sets`         | ✅ **V1-27**: partial sets on a scaffolded movement can be submitted (#207)                                                                                                            | its existing plan                                         |
-| 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md)) | expedited; security lens post-implementation              |
-| 4   | `chore/sec-2-pin-actions`        | ✅ **SEC-2:** every action in all 5 workflows SHA-pinned; `check-action-pins.mjs` guards it in `verify` + `quality`                                                                    | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
-| 5   | `chore/ci-1-audit-in-ci`         | P1: `pnpm audit --prod` in the `quality` job                                                                                                                                           | plan-exempt one-liner (say so)                            |
-| 6   | `docs/status-headline`           | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                                                                                      | exempt                                                    |
-| 7   | `fix/v1-26-bw-live-region`       | P1: the BW warning's live region mounts with its text; tie it to the chip                                                                                                              | one UX reviewer                                           |
-| 8   | `docs/agents-md-truth`           | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                                                                                          | exempt                                                    |
-| 9   | `chore/ci-2-typecheck-packages`  | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                                                                                    | short plan (CI config)                                    |
-| 10  | `test/v1-26-test-hardening`      | #171's test leftovers                                                                                                                                                                  | exempt                                                    |
+| #   | Branch                           | What                                                                                                                                                                                                  | Owes                                                      |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | `fix/v1-30-loggable-units`       | ✅ **V1-30a**: every offered unit saves and exports; boundary tests, `db:verify`, guide invariant 4b                                                                                                  | plan + engineering panel, one UX reviewer                 |
+| 2   | `fix/v1-27-partial-sets`         | ✅ **V1-27**: partial sets on a scaffolded movement can be submitted (#207)                                                                                                                           | its existing plan                                         |
+| 3   | `fix/sec-1-gate-prefetch-bypass` | ✅ **SEC-1, raised to P0:** a live bypass on Vercel (2026-09-30). Matcher fixed, gate re-checked in every action and page, e2e pins it ([plan](./plans/sec-1-gate-prefetch-bypass.md))                | expedited; security lens post-implementation              |
+| 4   | `chore/sec-2-pin-actions`        | ✅ **SEC-2:** every action in all 5 workflows SHA-pinned; `check-action-pins.mjs` guards it in `verify` + `quality`                                                                                   | [plan](./plans/sec-2-pin-actions.md) (CI) + security lens |
+| 5   | `chore/sec-5-audit-in-ci`        | ✅ **SEC-5** (this row's `pnpm audit --prod` in the `quality` job; the duplicate **SEC-5** row above is the same work): `audit:check` gates the `--prod` tree ([plan](./plans/sec-5-verify-in-ci.md)) | **not** a one-liner — a 5-lens panel reshaped it          |
+| 6   | `docs/status-headline`           | P1: "Where we are" still headlines removed DUALS-1 routes; it's the first line every session sees                                                                                                     | exempt                                                    |
+| 7   | `fix/v1-26-bw-live-region`       | P1: the BW warning's live region mounts with its text; tie it to the chip                                                                                                                             | one UX reviewer                                           |
+| 8   | `docs/agents-md-truth`           | seeds 1, 2, 7, 8 and doc P2s; seeds 3 and 9 as tech-debt rows                                                                                                                                         | exempt                                                    |
+| 9   | `chore/ci-2-typecheck-packages`  | seed 4: typecheck `packages/db` (incl. `verify.ts`)                                                                                                                                                   | short plan (CI config)                                    |
+| 10  | `test/v1-26-test-hardening`      | #171's test leftovers                                                                                                                                                                                 | exempt                                                    |
 
 ## i18n — externalize strings (post-MVP, near the bottom)
 

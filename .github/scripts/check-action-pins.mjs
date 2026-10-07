@@ -22,6 +22,12 @@
  * Usage:
  *   node .github/scripts/check-action-pins.mjs [--resolve] [dir]   # default: <repo>/.github/workflows
  * Exit: 0 ok · 1 a bad pin · 2 usage/IO error, nothing scanned, or the GitHub API unreachable
+ *
+ * ⚠️ That 2 is a UNION of a RETRYABLE cause (the API is unreachable) and NOT-retryable ones
+ * (nothing scanned, usage error). It is safe only because ci.yml's step treats 2 as a hard
+ * failure. If you ever add leniency there — 'an API outage must not red unrelated PRs' — split
+ * the code first, as check-audit.mjs does (0/1/2/3), or 'no workflow files' and 'no uses: found'
+ * silently become advisory. SEC-5 shipped exactly that bypass in its first draft.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';

@@ -84,7 +84,22 @@ machine token.
 ## Supply chain
 
 - Commit the lockfile; CI uses `--frozen-lockfile`; Dependabot with a cooldown / min-age
-  (post-Shai-Hulud); `pnpm audit` gate; minimize dependencies.
+  (post-Shai-Hulud); minimize dependencies.
+- **A `high` or `critical` advisory in the PRODUCTION dependency tree fails the build** (SEC-5,
+  [plan](../docs/plans/sec-5-verify-in-ci.md)); this is the one statement of the rule. **Scope** is
+  the `--prod` tree only, the **threshold** is `high`, and the **trigger** is every pull request and
+  every push to `main` — `pnpm audit:check` in `ci.yml`'s `quality` job, the same command local
+  `pnpm verify` runs, so there is one definition and not two. The dev tree is deliberately **not**
+  gated: it holds a `high` whose patched version was never published, so gating it would wedge `main`
+  with no edit that unwedges it ([tech-debt](../docs/tech-debt.md)).
+  - **Enforced** by `check-audit.mjs`, which also fails when it **could not check** — an unparseable
+    or incoherent report, or a committed setting that disarmed the audit. The only lenient case is an
+    unreachable registry on a PR that changes no dependency input, which warns: a registry outage must
+    not be a merge outage. It is never lenient on `main`. The guard's header has the mechanics.
+  - **There is no suppression mechanism** (deferred to SEC-5c). Until one exists, the escape from a
+    production advisory is to fix it, re-classify the dependency as dev if that is honest, or merge
+    red. And an advisory's `patched_versions` is never evidence that a fix exists — pnpm infers that
+    field, and this repo's own `braces` high names a version that was never released.
 - **Every GitHub Action is pinned to a full commit SHA with a bare `# vX.Y.Z` comment** (SEC-2,
   [plan](../docs/plans/sec-2-pin-actions.md)); this is the one statement of the rule. A tag can be
   moved by whoever controls it, and `migrate.yml` holds the prod DB credential. Nothing may follow the
