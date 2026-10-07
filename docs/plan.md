@@ -984,7 +984,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the roadmap's pillar table is now the stated membership test. **AI-1 depends on it**; see
   [ai-1-nl-logging](./plans/ai-1-nl-logging.md) → EVAL-0.
 
-- **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires
+- **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires 🚀 **Pulled forward to start now (2026-10-07):** it is a **hidden gate on `AUTH-1`** — the Clerk/Google consent screen needs the privacy-policy URL — so it is upstream of auth rather than a sibling of onboarding, and it is the row this repo says should not be designed casually ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
   (multiple families + third-party processors). A notice listing data and processors, consent at
   sign-up, a written retention policy, a defined deletion (hard delete + Clerk users, residuals stated),
   run as a guarded correction for Beta 0 and self-serve with step-up in Beta 1, and SECURITY.md's
@@ -1833,7 +1833,7 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     genuinely attributable before seeding — a misattributed quote to a HOFer is embarrassing in exactly
     the community this targets.
 
-- **ONB-0 — first run is broken TODAY (P0, independent of everything below)** — a brand-new household has
+- **ONB-0 — first run is broken TODAY (P0, independent of everything below)** — a brand-new household has 🚀 **Pulled forward to start now (2026-10-07):** it was bundled into Beta 0 step 4 behind `AUTH-1`, which bought no safety — first run is **broken today**, this is a P0, and it blocks nothing. Work that is already broken and blocks nothing is pure throughput ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
   `routine_config = null`, which `resolveRoutine` maps to `buildDefaultRoutine` over the seeded catalog,
   so **a stranger's first screen is Ray's family's routine** in Ray's family's shorthand — Rice bucket ·
   Brain rep · Splits · **Brush teeth** (a wrestling drill block with stance/ladder/bridge sub-metrics,
