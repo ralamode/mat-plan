@@ -52,14 +52,21 @@ household can come from the **session** instead, and the two answers have differ
 
 |                                        | Path (`HH-1` as decided) | Session (what OAuth enables) |
 | -------------------------------------- | ------------------------ | ---------------------------- |
-| Shareable link between two parents     | ✅                       | ❌ — each sees their own     |
-| Wrong-account-wrong-kids fails         | loudly                   | **silently**                 |
+| Shareable link between two parents     | ✅                       | ✅ — same household¹         |
+| Wrong-account-wrong-kids fails         | loudly                   | loudly on a deep link¹       |
 | Touches every route + `revalidatePath` | ✅                       | ❌                           |
 | Works before auth lands                | ✅                       | ❌                           |
+
+¹ **Corrected by [ADR 0006](./decisions/0006-household-addressing.md).** Rows 1 and 2 originally read
+❌ / **silently**; both were wrong for the case they are about. See the ADR's "shared-link question"
+and "what fails loudly, and what does not" for the mechanism and the residual.
 
 **They are not exclusive** — the path can be the address and the session the authorization, which is
 the combination HH-1 actually described. But **#6 should not be built assuming session-scoping**
 without revisiting HH-1, or the two will disagree about what a URL means.
+
+⚠️ **This question is now owned by [ADR 0006](./decisions/0006-household-addressing.md)** (proposed
+2026-10-07), which measures the path option's blast radius rather than asserting it.
 
 **3. Public repo ⇒ the access gate is now the only thing between the internet and two kids' data,
 and it is one shared password.** The code being public does not weaken it (the secret is in env, not
@@ -760,6 +767,24 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   advisory is fix it, re-classify it as dev if that is honest, or merge red (SEC-5c when that stops
   being enough).
 
+- **SEC-6 — the seed `public_id`s have no entropy, and a shipped comment relies on the opposite.** 🔴
+  _(found 2026-10-07 while writing [ADR 0006](./decisions/0006-household-addressing.md); filed as its
+  own row rather than folded into AUTH-1, because it is live today and independent of addressing.)_
+  `packages/shared/src/seed-ids.ts` defines `019826b4-0000-7000-8000-000000000001` / `…0002` / `…0010`
+  and the seed upserts them into **production**, so `…0003` is a guess rather than a search.
+  ⚠️ **`apps/web/lib/rate-limit.ts` declines to rate-limit the six mutating Server Actions on exactly
+  the premise those ids falsify** — _"real ids are non-enumerable UUIDv7 … and therefore unreachable by
+  guess."_ **Scope of the exposure today, stated honestly:** the actions still re-verify the gate and
+  the gate itself is rate-limited, so this needs the shared code first; and households created through
+  the app get real UUIDv7s from `newId()`, so only the seeded rows are guessable. The defect is the
+  **false premise**, because it is load-bearing for a decision that gets revisited the moment the gate
+  is retired for sessions (AUTH-1).
+  **Fix:** rotate the seeded `public_id`s to real UUIDv7s (a guarded, idempotent `db:correct`
+  correction — the ids are referenced by `PROGRAM_SEED`, both screenshot scripts and the e2e
+  constants, so this is a sweep, not a column edit), and correct or remove the premise in
+  `rate-limit.ts`'s docblock either way. **Acceptance:** no committed constant equals a live
+  production `public_id`, and the rate-limit rationale states only what is true.
+
 - **SEC-5b — the daily scheduled audit.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
   lens.)_ SEC-5's gate only fires when something is pushed, so an advisory published against a
   dependency nobody touches is caught by nothing in this repo except `dependabot.yml`'s security PRs.
@@ -787,6 +812,45 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   2026-10-03, and its advisory names a patched version that has never been published.
 
 ## Later — ideas captured, not scoped
+
+- **PUB-1 — a public household page, with per-field visibility.** _(captured 2026-10-07, not scoped.)_
+  Visit a household at a public, human-meaningful address and see only what it chose to publish —
+  a streak, or the movements of a workout without the logged values, or more. Needs its **own
+  deliberately-unauthenticated namespace** (`/h/<handle>`), not the private `/p/<profileId>` address;
+  [ADR 0006](./decisions/0006-household-addressing.md) records why that is true under either addressing
+  option.
+  **What it needs settled before any plan**, recorded now so it is not rediscovered late: a public page
+  is **indexed and cached by third parties**, which collides with PRIV-1's promise of a _defined
+  deletion_ — a retraction cannot reach Google's cache or archive.org. The tiers are not equally
+  sensitive: a streak is a behavioural signal about a child, movements-without-values is close to a
+  program share, and a full log publishes a minor's training history. Default off, per field, parent
+  controlled. A handle is **chosen, never derived from a family name** — a surname would be a
+  permanent, guessable public identifier for a household with children, and it cuts against this
+  repo's own naming rule. Gets the `privacy-reviewer` lens on every PR. Depends on PRIV-1 and AUTH-1.
+
+- **SHARE-1 — share a program, and copy one into your own household.** _(captured 2026-10-07, not
+  scoped.)_ Hand a program to another household, who can copy it and then edit their copy.
+  ⚠️ **It makes `TEN-2` a prerequisite rather than an option.** `movements.slug` is globally unique
+  (`packages/db/src/schema.ts:422`) while `program_blocks` is household-scoped, so a copied program's
+  movement references are **shared rows** — the recipient silently inherits the source household's
+  unit and bodyweight flags, which is the `findOrCreateMovementId` defect TEN-2 exists to fix.
+  **The product rule to write down first: copy the structure, drop the loads.** The inviolable rule in
+  this repo is that the model never authors loads, because a bad load is an injury risk. A copy feature
+  puts one household's prescribed loads onto another household's athlete — the same risk with a
+  different author. `5×5 Back Squat` is safe to copy; `5×5 @ 135lb` is a coaching decision someone has
+  to make for _that_ athlete.
+
+- **SOCIAL-1 — follow an athlete, and compare streaks.** _(captured 2026-10-07, not scoped.)_ Follow
+  athletes in other households, get notified of their streaks, and optionally compete on them. The
+  cross-household grant and the notification system are **the same mechanism `COACH-1` needs** (below)
+  and should be designed once, not twice.
+  **What it needs settled before any plan:** a streak becomes **a scoreboard rule people can game** the
+  moment it is comparable, which makes [ADR 0007](./decisions/0007-scheduling-model.md)'s nothing-due-day
+  rule load-bearing — and that rule has to be settled before the first verdict row is written, because
+  retrofitting it rewrites history. Following also creates an **adult-follows-child** path: who may
+  follow, whether approval is required, and whether a notification reveals a schedule pattern
+  (_"trained at 3pm every weekday"_ is a time-and-place pattern about a minor). Same privacy posture as
+  `COACH-1`: the `privacy-reviewer` lens on every PR.
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
   club coach is granted access to outcomes for athletes in other households, and gets notified of
@@ -1004,7 +1068,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to Ray's household;
   AUTH-1 swaps its implementation. `db:verify` proves a second household cannot read, write, correct or
   export the first's data, at every entry point, including `findOrCreateMovementId`. Needs the
-  household-addressing ADR first. _(Beta 0.)_
+  household-addressing ADR first — **[ADR 0006](./decisions/0006-household-addressing.md), proposed
+  2026-10-07, awaiting the maintainer's signature**; it is chunk 0 of
+  [TEN-1's plan](./plans/ten-1-household-scope.md). _(Beta 0.)_
 - **TEN-2 — custom movements per household.** `movements.slug` is globally unique and
   `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
   `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
@@ -1564,6 +1630,13 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 <a id="hh-1"></a>
 
 - **HH-1 — the household is a PATH SEGMENT, and it comes before the athletes.** _(Ray, 2026-09-28.)_
+
+  ⏳ **Under review by [ADR 0006](./decisions/0006-household-addressing.md)** (proposed 2026-10-07),
+  which recommends **session-only** addressing for beta and would supersede **this row's URL clause
+  only** — the club question and the matcher / two-ids-ownership warnings below survive it either way.
+  The ADR's decision box is unsigned: it reverses this row, so it is the maintainer's call, and TEN-1
+  does not start until it is signed.
+
   Today every route is `/p/<profileId>` with **no household segment at all**, even though the data
   model has been multi-tenant since V1-1a (`households` + `profiles.household_id`). Ray's shape:
 
@@ -1618,6 +1691,9 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   **Sequencing: HH-1 → PROF-1 → MOT-1's picker badge.** The path shape is the thing everything else
   authors into. HH-1 can land the routing _before_ Clerk — the household id in the path is useful with
   the access gate alone, and it decouples the URL decision from v1.5's auth work.
+  ⏳ **This sequencing holds only under the path option.** If
+  [ADR 0006](./decisions/0006-household-addressing.md) is signed as session-only there is no new path
+  shape to author into, so PROF-1 and MOT-1 are gated by **TEN-1**, not by this row.
 
 - **AUTH-1 — OAuth login (Google / Facebook).** _(Ray, 2026-09-30, P0 — new.)_ **Narrowed the same day for
   [Beta 0](./milestones/beta-1.md): Google only, via Clerk, sign-up invitation-only; Ray's existing
@@ -1636,12 +1712,12 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   retired. v1.5 planned **Clerk**, which does both providers out of the box and already has a
   `pin_hash` column reserved — so this is likely "pull Clerk forward", not a new decision.
 
-  ⚠️ **Revisit [HH-1](#hh-1) first.** HH-1 put the household in the PATH, decided before OAuth was a
-  priority. Session-scoping is what OAuth makes possible and it is cheaper — but it loses the
-  shareable link between two parents, and makes "logged in as the wrong account, seeing the wrong
-  kids" fail **silently** instead of loudly. The combination HH-1 actually described — path as the
-  address, session as the authorization — is probably right, but it must be settled before either is
-  built or they will disagree about what a URL means.
+  ⚠️ **Revisit [HH-1](#hh-1) first — now owned by
+  [ADR 0006](./decisions/0006-household-addressing.md)** (proposed 2026-10-07, unsigned). It
+  recommends session-only, and it corrects the two costs this row used to assert: a `/p/<profileId>`
+  link **is** shareable between two parents of one household once membership authorizes, and a
+  wrong-account deep link still 404s. Read the ADR rather than this paragraph; it must be settled
+  before either is built or they will disagree about what a URL means.
 
   ⚠️ **It is one story with PROF-1 and ONB-2, not three rows.** OAuth with no athlete editor means you
   log in and still cannot add yourself; an editor with no auth means anyone can add a child to your
@@ -1667,10 +1743,14 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 
   `kind` is `kid | adult`, so **Ray adding himself is this row**, not a separate one.
 
-  ⚠️ **Sequenced AFTER [HH-1](#hh-1)**, and that is not a preference. Ray's own framing is
+  ⚠️ **Sequenced AFTER [HH-1](#hh-1)**, and that is not a preference. The maintainer's framing is
   `mat-plan.dev/<household-id>/edit-athletes` — a path that does not exist yet. Building the editor
   first means building it at `/edit-athletes` and moving every route, link and `revalidatePath` when
   the household segment lands. Decide the URL shape, then author into it.
+
+  ⏳ **That dependency dissolves if [ADR 0006](./decisions/0006-household-addressing.md) is signed as
+  session-only** (proposed 2026-10-07): there is no household segment to author into, so PROF-1 is
+  gated only by **TEN-1**. Under the path option the warning above stands as written.
 
   **Pulled forward** from "after the MVP" (2026-09-28): Ray is using the app and cannot add himself,
   which makes this the first real onboarding gap rather than a nicety.

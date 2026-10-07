@@ -10,6 +10,16 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🚦 **The whole Beta 0 critical path is waiting on one signature.**
+[ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is written and
+**proposed** (2026-10-07): does a household appear in the URL, or only in the session? It recommends
+**session-only**, keeps `/p/<profileId>` as the address, settles **404 (never 403)** on a wrong
+household, and states the rule that holds under every option — **a URL segment is an input, never a
+credential**. Its decision box is deliberately **unsigned**, because it reverses
+[HH-1](./plan.md#hh-1)'s path clause, and it is **chunk 0 of
+[TEN-1](./plans/ten-1-household-scope.md)** — so `TEN-1` → `AUTH-1` is parked on the decision, not on
+a session. Next on this track: the maintainer signs the box, then TEN-1's panel runs.
+
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
 tree. It had lived only inside `verify`, which no workflow runs, so **four** advisories reached `main`
