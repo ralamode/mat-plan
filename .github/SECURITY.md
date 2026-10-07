@@ -2,12 +2,44 @@
 
 ## Threat model
 
-Single adult operator (Clerk) + in-app profiles for the adult + 2 kids (**no child accounts**).
-**BOLA/IDOR is the #1 risk** given the multi-profile household. **Kid bodyweight is the one
-sensitive field.** The future MCP/REST API is consumed by an LLM (a Claude skill) via a scoped
-machine token.
+**Rewritten for many households (PRIV-1, 2026-10-07).** It previously described a single adult
+operator and one family, which stopped being what is being built the moment Beta 0 meant "invite
+other people's children".
+
+**Actors.** Several **adult operators**, each owning a household (Clerk, after AUTH-1). **No child
+accounts** — but **children use an adult's session on a shared phone**, so a kid tapping a tile is a
+real user of this system, and the in-app profile tiles are a **UX switch, never a security boundary**.
+A **coach** is a future cross-household grant (`COACH-1`, captured, not scoped). Two actors this file
+previously left unstated and should not: the **operator/maintainer**, who has direct database access,
+runs SQL by hand and leaves no audit trail — the most privileged actor here, and not a hypothetical
+one; and the **unauthenticated internet caller**, which is why the `/api` matcher hole
+([tech-debt](../docs/tech-debt.md)) is a live concern and not a tidy-up.
+
+**BOLA/IDOR is still the #1 risk**, and it is now **between families**, not only between profiles
+inside one household. **Kid bodyweight is still the one privileged field.** The future MCP/REST API is
+consumed by an LLM (a Claude skill) via a **scoped machine token** — that clause is load-bearing for
+"Tokens / secrets" and for the 403 carve-out under "API shape", so it stays.
+
+> ⛔ **The control that holds today is operational, not code.** The only thing preventing a
+> cross-household leak right now is that **production holds exactly one household**
+> ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_), and
+> [ADR 0006](../docs/decisions/0006-household-addressing.md) makes that a sequencing constraint rather
+> than a hope. **No second household may exist in production before TEN-1 and AUTH-1 have both
+> landed.** What is and is not enforced in code is recorded once, in
+> [docs/privacy/data-inventory.md](../docs/privacy/data-inventory.md) §4 — so this file does not carry
+> a status that goes false the day TEN-1 merges.
 
 ## Authorization (the top priority)
+
+**These rules are MANDATORY for all new code.** They are not aspirations, and a new query that skips
+them is a defect today, not a thing `TEN-1` will tidy up.
+
+⚠️ **Two existing call sites violate the first rule and are being brought into line by `TEN-1`:**
+`listProfiles()` and the export route both lack a `household_id` predicate. Separately the seeded
+public ids are fixed and zero-entropy, which `SEC-6` owns — so no code may ever treat a seed id as
+proof of anything. **The violation list lives in exactly one place**,
+[data-inventory.md](../docs/privacy/data-inventory.md) §4, so this file does not carry a status that
+goes false the day `TEN-1` merges. Do not read those exceptions as permission to add a third.
 
 - All data access goes through the **server-only DAL** with ownership checks; every query is scoped
   by `household_id`. Never trust a `householdId` / `profileId` from the request body/params.
@@ -76,9 +108,31 @@ machine token.
 
 ## Privacy (minors)
 
-- Data-minimization + a defined retention/delete path. **No child accounts, no third-party sharing**
-  — this is what keeps COPPA deferred; changing either triggers a privacy review. (2025 FTC COPPA
-  amendments: compliance by 2026-04-22.)
+**The review this section used to defer has been done: [docs/privacy/](../docs/privacy/) (PRIV-1,
+2026-10-07).** This section states the rule; it does not restate the findings.
+
+- **The deferral's own trigger fired.** This section previously read "**No child accounts, no
+  third-party sharing** — this is what keeps COPPA deferred; changing either triggers a privacy
+  review." Child accounts are still out. **"No third-party sharing" was never true of the running
+  system** — Neon, Vercel, GitHub Actions, Sentry and Upstash each receive a slice today, and Clerk
+  and Google join at AUTH-1. So the trigger had fired, and the review is what discharges it rather
+  than the sentence. (2025 FTC COPPA amendments: compliance by 2026-04-22.)
+- **Data minimisation and a defined retention/delete path remain the rule.** The path now exists:
+  [runbooks.md](../docs/runbooks.md) → "Delete a household and everyone in it".
+- **Pointers, not copies** — one owner each, because this list had already drifted:
+  - what is stored, every processor, retention, residuals →
+    [data-inventory.md](../docs/privacy/data-inventory.md)
+  - what we tell people → [notice.md](../docs/privacy/notice.md)
+  - **"not legal advice"** → `notice.md` → About this notice. **One copy, there.** Bodily
+    measurements of minors may be treated as health data under some laws; that question needs a
+    lawyer and is not settled anywhere in this repository.
+- **Re-review when** a new processor appears, a retention window changes, a new kind of personal data
+  is stored, sign-in goes live, or anything becomes publicly visible. The standing engineering trigger
+  is `AGENTS.md`'s privacy lens + `review-pr` rubric dimension 10; the deltas specific to this app are
+  in `data-inventory.md`'s header.
+- 🔴 **Personal data is committed to this public repository** — two minors' given names across ~50
+  files, and log-row identifiers with weigh-in timestamps. Inventoried in `data-inventory.md` §9;
+  the fix is `OSS-1`, a **Beta 0 blocker**. A rename is not a removal: `git log -S` still finds it.
 
 ## Logging
 

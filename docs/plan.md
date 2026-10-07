@@ -296,6 +296,25 @@ personal data performed 2026-08-11** and the (small) work that audit actually ju
 
 ### Audit findings — what is and isn't in the repo
 
+> 🔴 **Superseded 2026-10-07 by [privacy/data-inventory.md](./privacy/data-inventory.md) §9, which is
+> now the live inventory of committed personal data.** `PRIV-1` re-walked the tree and the picture is
+> broader than this audit, which was already flagged stale in its own blocker box above — **and its
+> Assessment is now factually wrong.** Two things changed:
+>
+> - **~50 files, not 29**, in five classes this audit does not separate: names bound to per-child
+>   prescribed loads in shipped source, a whole per-minor program table in `docs/programs/`, real log
+>   rows quoted verbatim as documentation examples, dated incidents about a named minor in an
+>   **applied migration** and a **shipped component**, and names as **exported API symbols** (so a
+>   rename is an API change across a workspace boundary, not a string edit).
+> - **"No log data" is no longer true.** A correction merged 2026-10-01 — **after** this audit —
+>   committed three live `entries.public_id` values with exact weigh-in timestamps for one named
+>   minor (`packages/db/scripts/corrections/registry.ts`). No bodyweight _value_, deliberately. But
+>   weigh-in dates and clock times for a named child are log data.
+>
+> **PRIV-1 raised this to P0 and moved the rename from a follow-up to a Beta 0 blocker.** The tables
+> below are kept as the historical record of what was believed on 2026-08-11; **do not cite them as
+> current.**
+
 Audited across all 221 commits, not just the working tree.
 
 **Present:**
@@ -319,10 +338,20 @@ Audited across all 221 commits, not just the working tree.
 
 ### Assessment
 
-**The exposure is two first names plus a youth strength program.** There is no measurement history, no
-date of birth, no health record, and no log data. Earlier planning notes described this as "minors'
-health data" — that was **inferred from the schema's capability rather than from what is actually
-committed**, and the audit does not support it.
+> ⚠️ **This Assessment is wrong as of 2026-10-07 and is kept only as the record of what was believed.**
+> Read [privacy/data-inventory.md](./privacy/data-inventory.md) §9 instead. The specific sentence that
+> failed is the one about log data, and it failed because a correction landed _after_ this was
+> written — which is the argument for the inventory being a live document with a staleness command
+> rather than a dated audit.
+
+**The exposure is two first names plus a youth strength program.** ~~There is no measurement history, no
+date of birth, no health record, and no log data.~~ There is **no date of birth** (still true) — but
+there _is_ committed log data: weigh-in dates and clock times for a named minor, in
+`packages/db/scripts/corrections/registry.ts`, plus per-child prescribed loads bound to names in
+shipped source and in `docs/programs/`. Earlier planning notes described this as "minors'
+health data"; this audit dismissed that as **inferred from the schema's capability rather than from
+what is actually committed**, and on the narrow question of bodyweight _values_ that dismissal still
+holds. On the broader question it does not.
 
 The one real (and modest) consideration: the repo will be linked from a resume and LinkedIn under
 Ray's real name, so publishing creates a permanent, searchable association of the form _"Ray Baker's
@@ -464,9 +493,17 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
      the origin line and the two stacked CTAs. Ray removed the README hook and the gate-explanation
      line after reviewing the UX-panel mockups; `/gate` loses "Private preview."; the CTA reads "See
      how it's built on GitHub". Deviations from the plan are listed in the PR.
-  2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
-     are already published in `seed.ts`, `global.setup.ts` and `steps.ts`; renaming them closes the real
-     exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.
+  2. 🔴 **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. Decided by
+     the maintainer 2026-10-01. **Re-scoped and raised to a Beta 0 blocker by PRIV-1 (2026-10-07).**
+     This said three files — `seed.ts`, `global.setup.ts`, `steps.ts`. It is **~50**, across five
+     classes that need different fixes, inventoried with cites in
+     [privacy/data-inventory.md](./privacy/data-inventory.md) §9. Two of them are not string edits:
+     the names are **exported API symbols** (`packages/db/src/index.ts`), so a rename crosses a
+     workspace boundary; and a **per-child load/rep table** in `docs/programs/` plus **real log rows
+     quoted as examples** in the CSV contract are not neutralised by a rename at all — they need their
+     own scrub decision. ⚠️ **A rename is not a removal:** `git log -S` finds it, and the commit author
+     is in every commit. Renaming still closes the forward exposure and makes every PR screenshot safe
+     by construction, which is why it is worth doing anyway.
   3. **§B — the hero image.** Deliberately last: 🔴 **`next/image` on a `public/` asset is broken in
      this app today** — measured, 400 for every caller, gated or not, because the optimizer's internal
      fetch re-enters the proxy with no cookie. §B un-gates `public/landing/`, scopes
@@ -1064,6 +1101,20 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
   drill branch. _(Beta 0.)_
+
+  **The deletion ledger is now defined** — `PRIV-1` was its first writer, so it specified it rather
+  than naming an artifact that did not exist:
+  [runbooks.md](./runbooks.md) → "The deletion ledger" has the location (**outside git and outside the
+  restorable database**), the field list, and its own retention. **Inherit that shape; do not invent a
+  second.** The invariant `OPS-3` owes it: **a per-household restore replays the ledger before the
+  data is served**, or a restore silently resurrects a household that asked to be deleted.
+
+  ⛔ **`OPS-3` is now a precondition of the first real household deletion**, not just an exit
+  criterion. Until a per-household extract exists and has been rehearsed once, a mistaken or
+  fraudulent deletion is **not practically recoverable** — the restore branch `PRIV-1`'s procedure
+  holds is a whole-database copy, so using it would roll back every other family
+  ([priv-1 plan](./plans/priv-1-privacy-review.md) → review log S-N1).
+
 - **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
   every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to Ray's household;
   AUTH-1 swaps its implementation. `db:verify` proves a second household cannot read, write, correct or
@@ -1082,12 +1133,42 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the roadmap's pillar table is now the stated membership test. **AI-1 depends on it**; see
   [ai-1-nl-logging](./plans/ai-1-nl-logging.md) → EVAL-0.
 
-- **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires 🚀 **Pulled forward to start now (2026-10-07):** it is a **hidden gate on `AUTH-1`** — the Clerk/Google consent screen needs the privacy-policy URL — so it is upstream of auth rather than a sibling of onboarding, and it is the row this repo says should not be designed casually ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
-  (multiple families + third-party processors). A notice listing data and processors, consent at
-  sign-up, a written retention policy, a defined deletion (hard delete + Clerk users, residuals stated),
-  run as a guarded correction for Beta 0 and self-serve with step-up in Beta 1, and SECURITY.md's
-  threat model rewritten for many households. Signed off by a named reviewer; not legal advice.
-  _(Beta 0.)_
+- **PRIV-1 — privacy review, notice, consent, retention, deletion.** ✅ **The documents are written**
+  ([plan](./plans/priv-1-privacy-review.md), [docs/privacy/](./privacy/)): a plain-language
+  [notice](./privacy/notice.md) listing what is stored and every processor, a retention policy, a
+  defined household deletion ([runbooks.md](./runbooks.md)) with the residuals stated, the consent
+  requirements `AUTH-1` must wire, and SECURITY.md's threat model rewritten for many households. The
+  evidence it is derived from — all 18 tables, the processors, the committed-data inventory — is
+  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date**
+  (amended from "a named reviewer": `AGENTS.md` forbids personal names in docs, so the exit criterion
+  was unsatisfiable as written). **Not legal advice.**
+  **Two code follow-ons remain — `PRIV-2` is the actual `AUTH-1` gate.** _(Beta 0.)_
+
+  🔴 **PRIV-1's sharpest finding is not in PRIV-1's scope:** committed personal data about minors is
+  far broader than `OSS-1`'s audit records — ~50 files, raised to **P0**, and `OSS-1`'s audit
+  conclusion is now wrong. See `OSS-1` and [data-inventory.md](./privacy/data-inventory.md) §9.
+
+- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.** The real `AUTH-1` gate: the
+  Clerk and Google consent screens need a reachable privacy-policy URL. A page, one entry in
+  `PUBLIC_PATHS` (`apps/web/lib/access-gate.ts` — the single definition), a footer link, one UX
+  reviewer. ⚠️ **Not a one-file PR:** there is **no markdown pipeline in the tree**, so it must
+  generate the page from [notice.md](./privacy/notice.md) with a drift test, or hand-transcribe it and
+  keep two copies of a privacy notice — the recommendation is the former, and it is the maintainer's
+  call ([plan](./plans/priv-1-privacy-review.md) → Alternatives). Static or generated only — never a
+  file read keyed on a request param. **Its acceptance also carries PRIV-1's four unfilled blanks:**
+  the Neon / Sentry / Vercel retention windows and the contact route. _(Beta 0.)_
+
+- **PRIV-3 — the household deletion as a guarded script, with a `db:verify` proof.** Wraps
+  [runbooks.md](./runbooks.md)'s procedure so the dry run, the target-host print and the
+  one-transaction wrapper come from a runner rather than an operator's care. ⚠️ **Not a drop-in
+  correction:** `Correction.run` takes no target and the runner ignores positional args, so it needs a
+  `--household <public_id>` flag — **a runner change, which needs its own plan** — and **no household
+  id may be committed** (that plus the public `Applied` table would publish a register of who asked to
+  be erased). The deletion correction inverts corrections rules 2 and 5, declared in
+  [that README](../packages/db/scripts/corrections/README.md). **The `db:verify` proof is the point,
+  not the polish:** it is the only thing that catches a 19th per-household table escaping the
+  runbook's hand-maintained delete order, and the panel found exactly that class of defect by
+  reading. _(Beta 0.)_
 
 ## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
 

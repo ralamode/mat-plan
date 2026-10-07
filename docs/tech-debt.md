@@ -15,6 +15,26 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
+
+- **What & why:** `profiles.birthdate` has **no writer, no reader, no UI and no seed value** anywhere
+  outside the migration that created it. A personal-data column about a minor that collects nothing is
+  pure liability: the app never asks for a date of birth, but the public schema says it could, and the
+  privacy notice has to account for it ([data-inventory.md](./privacy/data-inventory.md) §2).
+  Data minimisation says drop it.
+- **Not the same as its two neighbours**, which is why this entry names only one column:
+  `profiles.pin_hash` is **reserved and owned** — `PROF-1`, under
+  [ADR 0006](./decisions/0006-household-addressing.md) — so dropping it would contradict an accepted
+  decision. `profiles.avatar` has no writer **but does have a live read path** (it is in the profile
+  DTO and rendered by `profile-tile.tsx`), so it is a watch item rather than debt: a column already
+  being read acquires a writer quietly, and what it would then hold is a picture of a child. The
+  inventory's re-review triggers cover that case.
+- **Why it is debt and not a quick fix:** dropping a column is a **contract migration** under
+  expand→contract, and `docs/spec.md` §2 deliberately reserved it. So this is a **product decision
+  against the spec**, not just a migration — the spec changes first, or the column stays and the notice
+  keeps explaining it.
+- **Severity:** low. It holds nothing today; the cost is the explaining.
+
 ### Four copies of "announce in a status region, then move focus" (added 2026-10-02, V1-24 3a-ii)
 
 - **What & why:** `saved-announcer.tsx`, `bodyweight-amend.tsx`, `editable-set.tsx` and the
@@ -214,8 +234,10 @@ success.` Harmless there — nothing referenced the files yet.
 
 ### Mutating Server Actions are not rate-limited (V1-14a)
 
-- **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The six mutating Server Actions
-  in `app/p/[profileId]/actions.ts` are deliberately unlimited, because there is nothing meaningful to
+- **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
+  Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
+  download is unthrottled too** (both counted by PRIV-1, 2026-10-07; this entry said "six" and omitted
+  the export until then) — are deliberately unlimited, because there is nothing meaningful to
   key a limit on yet. Their only identifier is `profileId`, read from `formData.get('profileId')` —
   caller-supplied and unauthenticated. An attacker rotates a fresh UUID per request for a fresh bucket;
   worse, real ids are non-enumerable UUIDv7 (SECURITY.md's anti-IDOR design), so an attacker cannot land
