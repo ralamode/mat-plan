@@ -56,8 +56,17 @@ machine token.
 
 ## API shape
 
-- `/v1` prefix; RFC 9457 Problem Details error shape; cursor pagination with a max limit; 403 on
-  wrong household.
+- `/v1` prefix; RFC 9457 Problem Details error shape; cursor pagination with a max limit.
+- **Wrong household is a 404, not a 403 — and that is a rule about the id, not about the surface.**
+  **403 only for an id inside the caller's own household that its scope does not permit; 404 for
+  everything else**, on every surface. A least-privilege household-scoped token knows nothing about
+  ids outside its household, so a 403 there is the same existence oracle as on a page — on the one
+  surface whose output reaches an LLM. RFC 9457 wants a precise status, and that is the only case
+  where precision leaks nothing. Human-facing surfaces (page, Route Handler, Server Action) must make
+  "wrong household" and "no such id" the same answer, because an id an attacker holds came from a
+  leak and 403 confirms the leak is live. Reasoning:
+  [ADR 0006](../docs/decisions/0006-household-addressing.md) → "What a wrong-household request
+  returns" (⚠️ **proposed, unsigned** — but this clause holds under either of its options).
 
 ## Transport / headers
 
