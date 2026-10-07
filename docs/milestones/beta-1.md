@@ -76,13 +76,34 @@ login, child accounts, kid PINs.
 
 ```mermaid
 flowchart LR
-  A[0 · now: PII purge, P0s, merge gates] --> AU
-  B[1 · ops: previews, seed split, restore] --> AU
-  C[ADR: household addressing] --> T[2 · TEN-1 scope seam + proofs]
-  T --> AU[3 · AUTH-1: Clerk, invite-only, claim Ray's household]
-  AU --> S[4 · ONB-0, PROF-1, ONB-2, V1-9b, PRIV-1]
+  N[0 · now: PII purge, merge gates] --> AU
+  O[1 · ops: previews, seed split, restore] --> AU
+  ONB[ONB-0 · first run, broken today] --> S
+  PRIV[PRIV-1 · notice, consent, deletion] --> AU
+  C[ADR 0006 · household addressing] --> T[2 · TEN-1 scope seam + proofs]
+  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
+  AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
 ```
+
+**This is the canonical chart.** Every PR in this milestone embeds it with its own step marked
+(`AGENTS.md` → "Milestone PRs also embed a progress chart"), so a reviewer sees what is still between
+that PR and the finish. If a PR's position disagrees with this chart, the chart is what gets fixed.
+
+⚠️ **Two rows moved out of step 4 on 2026-10-07, and the reason generalises.** Step 4 previously
+bundled `ONB-0` and `PRIV-1` behind `AUTH-1`, which cost schedule for nothing:
+
+- **`ONB-0` starts now.** First run is **broken today**, it is a P0, and it blocks nothing — so holding
+  it behind the auth chain buys no safety and delays a live defect. It feeds step 4; it does not wait
+  for it. **Work that is already broken and blocks nothing is pure throughput.**
+- **`PRIV-1` starts now, because it gates `AUTH-1`.** The Google consent screen needs a
+  privacy-policy URL (§3), so privacy is **upstream** of auth, not a sibling of onboarding. It is also
+  the row this file says "should not be designed casually", which is the other reason not to reach it
+  late. **A hidden gate — work that blocks the critical path without appearing on it — is the cheapest
+  schedule win available and the most commonly missed, because the dependency graph does not draw it.**
+
+Both patterns are now recorded in [parallel-work.md](../parallel-work.md) → "How many lanes?", because
+they are how to schedule any milestone, not facts about this one.
 
 ### 0 · Now, independent
 
@@ -189,9 +210,14 @@ TEST-1's routine-editor spec left with them.
 **Deferred to a scheduling ADR, after beta:** RRULE recurrence, rotation as data, `day_role` becoming
 rows, workout creation, and the planned-occurrence row.
 
-### 4 · Just enough self-serve, and privacy
+### 4 · Just enough self-serve
 
-- **ONB-0** — an explained empty state; a new household no longer inherits Ray's routine.
+⚠️ **`ONB-0` and `PRIV-1` moved out of this step on 2026-10-07** (see the chart above). `ONB-0` runs
+**now** — it is a live P0 that blocks nothing — and `PRIV-1` runs **now** because it gates `AUTH-1`.
+Their deliverables are unchanged and still written below; only when they start has moved.
+
+- **ONB-0 — starts now, not here.** An explained empty state; a new household no longer inherits the
+  maintainer's routine. **First run is broken today**, so this is a live P0 and it waits on nothing.
 - **PROF-1 (create)** — add an athlete. The first profile-creating endpoint: both panels, the full
   boundary-test set.
 - **ONB-2** — a new **household** starts on [The Daily Five](../programs/daily-five-default.md)
@@ -204,7 +230,8 @@ rows, workout creation, and the planned-occurrence row.
   (post-beta). The rows are written at household creation, never via `PROGRAM_SEED` under Ray's
   household (that would replace YDP).
 - **V1-9b** — delete a logged item and clear a day.
-- **PRIV-1 — privacy, done as a review, not a checkbox.** SECURITY.md defers COPPA only while there is
+- **PRIV-1 — starts now, because it gates `AUTH-1`. Privacy done as a review, not a checkbox.**
+  §3's Clerk consent screen needs the privacy-policy URL, so this is upstream of auth. SECURITY.md defers COPPA only while there is
   "no third-party sharing"; multiple families plus Clerk, Google, Sentry, Vercel, Neon and Upstash is
   that change, so its own trigger fires. Deliverables: a plain-language notice listing what is stored and
   every processor; consent at sign-up; a **written retention policy**; a **defined deletion** — hard
