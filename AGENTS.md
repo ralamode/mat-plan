@@ -43,7 +43,7 @@ never live prescriptions.
   TanStack Query is introduced at **v1.5** (offline), not before.
 - **Design:** adult-first, clean — NOT a kid aesthetic. Kid ergonomics (≥44px tap targets,
   `inputmode="numeric"`, high contrast, clear labels) come from good general design. Tokens as CSS
-  variables; see `DESIGN.md`. Charts via Recharts (shadcn charts).
+  variables; see [docs/design.md](./docs/design.md). Charts via Recharts (shadcn charts).
 - **Backend:** Next.js Route Handlers (reads) + Server Actions (mutations). All TypeScript through
   v2. The progression engine is **pure TS** (`packages/engine`, no DB/IO). Python/FastAPI only at v3.
 - **DB:** Postgres on **Neon** + **Drizzle**. Runtime = pooled string + `pg`/node-postgres through
