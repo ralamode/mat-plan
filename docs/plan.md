@@ -518,9 +518,18 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   production and its rows must be excluded from every aggregate — adherence, streaks, export,
   dashboards — or the monitor quietly pollutes the numbers it exists to protect. Retrofitting that is a
   `WHERE` clause added to every query, which is the kind of thing that gets missed in exactly one
-  place. The clean form is a flag on the household honoured at **one seam**, which is
-  [TEN-1](#ten-1)'s `getHouseholdScope()`. **So TEN-1 should carry the synthetic flag when it is
-  built**, even though nothing reads it until OBS-2.
+  place. **TEN-1 carries the flag as a column** — `households.synthetic`, shipped dark in its chunk
+  1a (migration 0014) — so OBS-2 does not pay for a migration.
+
+  ⚠️ **Two corrections from TEN-1's panel, 2026-10-07, that OBS-2 must not re-derive.** (a) The flag
+  is **not** a field on TEN-1's `HouseholdScope`, and "honoured at one seam" does not work as written:
+  `getHouseholdScope()` resolves _the household of this request_, so a per-request single-tenant scope
+  cannot exclude a household from a **cross-household** aggregate — which is what adherence, streaks,
+  export and dashboards are. OBS-2 reads the column where it needs it. (b) **A synthetic household
+  must not exist in production before AUTH-1:** until then `getHouseholdScope()` resolves THE single
+  live household and throws on ≥2, so creating one takes the app down. OBS-2 is therefore strictly
+  post-AUTH-1. The seed must also never name the column — on a fresh or restored database it inserts
+  the real household's row, so a seeded value would label a real family's data a test fixture.
 
   The first-run persona writes real rows on every run, so it either targets a non-production
   environment or is self-cleaning by construction. Decide that in the OBS-2 plan, not in the runner.
@@ -1065,12 +1074,16 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
   drill branch. _(Beta 0.)_
 - **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
-  every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to Ray's household;
-  AUTH-1 swaps its implementation. `db:verify` proves a second household cannot read, write, correct or
-  export the first's data, at every entry point, including `findOrCreateMovementId`. Needs the
-  household-addressing ADR first — **[ADR 0006](./decisions/0006-household-addressing.md), proposed
-  2026-10-07, awaiting the maintainer's signature**; it is chunk 0 of
-  [TEN-1's plan](./plans/ten-1-household-scope.md). _(Beta 0.)_
+  every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to the
+  maintainer's household; AUTH-1 swaps its implementation. `db:verify` proves a second household
+  cannot read, write, correct or export the first's data, at every entry point, including
+  `findOrCreateMovementId`. **Unblocked:** the household-addressing ADR it needed —
+  **[ADR 0006](./decisions/0006-household-addressing.md) — is ✅ Accepted (option A, session-only)**
+  _(the maintainer, 2026-10-07; #252)_, which was chunk 0 of
+  [TEN-1's plan](./plans/ten-1-household-scope.md). The plan's six-lens panel ran 2026-10-07 and its
+  review-response log is committed. **Chunk 1a (`households.synthetic`, shipped dark) is in flight;**
+  1b (the seam and the gate), 1c (DAL-2's tail) and 1d (guards, the catalog verdict, docs) follow in
+  that order. _(Beta 0.)_
 - **TEN-2 — custom movements per household.** `movements.slug` is globally unique and
   `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
   `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
@@ -1631,11 +1644,12 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 
 - **HH-1 — the household is a PATH SEGMENT, and it comes before the athletes.** _(Ray, 2026-09-28.)_
 
-  ⏳ **Under review by [ADR 0006](./decisions/0006-household-addressing.md)** (proposed 2026-10-07),
-  which recommends **session-only** addressing for beta and would supersede **this row's URL clause
-  only** — the club question and the matcher / two-ids-ownership warnings below survive it either way.
-  The ADR's decision box is unsigned: it reverses this row, so it is the maintainer's call, and TEN-1
-  does not start until it is signed.
+  ✅ **Superseded in part by [ADR 0006](./decisions/0006-household-addressing.md)** — **Accepted:
+  option A (session-only)** _(the maintainer, 2026-10-07; #252)_. **This row's URL clause is
+  superseded and nothing else is:** the club question and the matcher / two-ids-ownership warnings
+  below survive and still apply. `/p/<profileId>` stays the address, the household comes from the
+  session through TEN-1's single seam, and a wrong household is a 404. **TEN-1 is unblocked and in
+  flight.**
 
   Today every route is `/p/<profileId>` with **no household segment at all**, even though the data
   model has been multi-tenant since V1-1a (`households` + `profiles.household_id`). Ray's shape:
