@@ -1089,6 +1089,24 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   threat model rewritten for many households. Signed off by a named reviewer; not legal advice.
   _(Beta 0.)_
 
+  **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
+  long as the household is active.** There is no rolling window and no summarize-then-discard step:
+  - Summaries would break the byte-faithful CSV export, the v2 engine's per-set history, and
+    [CLONE-1](#clone-1)'s "who ran which version" record.
+  - A summary of a child's bodyweight is still a child's health data, so summarizing does not reduce
+    the privacy exposure.
+  - The volume is trivial (about 51 rows in prod after several weeks).
+
+  The written policy spends its effort on **deletion** instead. Three items:
+  1. A **hard delete on request**, per athlete and per household, that includes soft-deleted rows.
+     Today nothing is ever hard-deleted, so a "deleted" row is kept forever.
+  2. A **purge window** after which soft-deleted rows are hard-deleted. This row's plan sets N.
+  3. **What a departed household's data becomes**, including the residual copies in backups and Neon
+     branches, which the per-household restore runbook must respect through its deletion ledger.
+
+  Until this ships, `SECURITY.md`'s "defined retention/delete path" is unmet, and this paragraph is the
+  record that the gap is known.
+
 ## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
 
 `review-pr` in audit mode over the whole repo at `78ec41a` (2026-09-30): **2 P0 · 5 P1 · 7 P2**, plus
@@ -1243,6 +1261,43 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
+
+<a id="clone-1"></a>
+
+- **CLONE-1 — clone a workout, edit the copy, choose which athletes move to it.** _(Maintainer,
+  2026-10-07.)_ The need is to **replace** a workout, not to edit the one in use: copy Strength A, change
+  its movements, sets and reps, then move an athlete onto the copy. Editing in place (V1-22 chunk 4)
+  is a different need.
+
+  **Decided: per athlete, not household-wide** _(maintainer, 2026-10-07)_. Saving the copy asks which
+  athletes move to it; the default is none. Moving one closes their current
+  [`program_assignments`](./decisions/0007-scheduling-model.md) row (`active_to`) and opens one on the
+  copy (`active_from` = today). Nothing is deleted, so the old program, each entry's snapshotted
+  prescription ([ADR 0005](./decisions/0005-programming-model.md) decision 5), and the assignment dates
+  together say who ran which version, when. That is most of what versioning would buy, without a version
+  subsystem.
+
+  - **Rejected: household-wide replacement.** "The newest block per day role wins" (programming guide,
+    invariant 3) would make a copy replace Strength A for **every** athlete at once, including the
+    maintainer's own training, with no way to keep one athlete on the old version. It needs no new
+    table, which is what made it tempting, but `program_assignments` would supersede it.
+  - **Grain:** the clone is a **block** (`program_blocks` + its `prescriptions` + `prescription_targets`),
+    because an assignment points at a block. Cloning a single day inside a block is the `workouts` arc,
+    which [ADR 0007](./decisions/0007-scheduling-model.md) records but does not authorize.
+
+  **Gated on, in order:**
+  1. V1-22 chunks 2 and 3 (the log-time snapshot writer and the backfill). Until both land, switching
+     an athlete's program rewrites the `prescribed` column of their past exports.
+  2. SCHED-1's `program_assignments`, plus Today reading the athlete's **assignment** instead of
+     `programDayRows`' newest block. ADR 0007 decision 4 prices that read change as **byte-affecting**
+     for the CSV export, so CLONE-1 is the first row that needs it decided.
+  3. The V1-22 editor (chunks 4 and 6), which edits the copy rather than the original.
+
+  **Out of scope:** comparing two versions, and a version history screen. ADR 0005 keeps versioning
+  additive "whenever it earns a screen"; whether the copy records a `cloned_from` link is a question for
+  this row's plan. **Owes** a plan, the engineering panel with the DB-safety lens (block creation and a
+  copy across three tables), and a UX panel (the "who moves to this version?" step). Milestone: not yet
+  assigned; Beta 1 ("program editing, schedules") is the natural fit.
 
 - **V1-25 — the logging loop, from four sessions of real use.** _(Ray, 2026-09-29.)_ Four requests
   that arrived together and are **one theme**: the form should know what the athlete already told it —
