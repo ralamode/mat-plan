@@ -24,7 +24,7 @@ import {
   SEED_METRIC_KEYS,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { APP_HOME_PATH, DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
 import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
@@ -91,6 +91,38 @@ const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
  * shows exactly what the app produces rather than a hand-built fixture. This is the read side, which
  * no amount of form interaction can reach.
  */
+/**
+ * ONB-0 — the picker with NO athletes, i.e. the explained first-run empty state.
+ *
+ * This is the one state in the app that NOTHING could render before: `embedded-pg.ts` seeds
+ * unconditionally for both the e2e and this harness, and every other `--state` only ever seeds MORE
+ * rows. So the screen ONB-0 is about could not be screenshotted, which would have meant a reviewer
+ * approving an all-copy change nobody had seen rendered.
+ *
+ * SOFT delete, not `DELETE FROM profiles`: `listProfiles` filters on `deleted_at`
+ * (`lib/dal/profiles.ts`), so hiding the rows is enough — and a hard delete would hit the FKs from
+ * `entries` and `ramp_targets` that the seed has already written.
+ *
+ * ⚠️ Do NOT copy this into an e2e spec. `playwright.config.ts` is `fullyParallel: true` and the
+ * `a11y` and `chromium` projects share one database, so emptying `profiles` mid-run breaks
+ * `selectProfile` in every other spec. The axe/360px coverage for this block comes from the
+ * `/design/tokens` inventory cell instead.
+ */
+async function seedNoProfiles(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const hidden = await db
+      .update(schema.profiles)
+      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(isNull(schema.profiles.deletedAt))
+      .returning({ publicId: schema.profiles.publicId });
+    console.log(`✓ hid ${hidden.length} seeded profile(s) → the picker renders its empty state`);
+  } finally {
+    await pool.end();
+  }
+}
+
 async function seedStatusBadges(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);
@@ -222,6 +254,8 @@ const gotoDaysAgo = (n: number) => async (page: Page) => {
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
   empty: null,
+  // ONB-0 — the explained first-run empty state. The ONLY way to render it (see `seedNoProfiles`).
+  'no-profiles': seedNoProfiles,
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
   calisthenics: seedCalisthenics,

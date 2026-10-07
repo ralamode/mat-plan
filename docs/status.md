@@ -10,6 +10,17 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+✅ **ONB-0 — first run is honest (2026-10-07).** A brand-new household no longer inherits the
+maintainer's household's routine, and the picker no longer tells a human to seed a database.
+`routine_config = NULL` fell back to the **whole** catalog — ~17 unexplained controls, seven of them
+wrestling drills grouped under the label "Brush teeth" — and now falls back to `['strength']`.
+Membership and the fallback are two lists now, paired in exactly one place, so an authored item is
+never silently stripped. The seeded profile **was** NULL, so it gets an explicit config and a guarded,
+household-scoped correction does the same for the live row — run it **before** the deploy
+([plan](./plans/onb-0-first-run.md)). `PROF-1` owns the "add an athlete" control the empty state only
+explains; `ONB-2` owns `shot`'s neutral home, which ONB-0 did **not** ship despite ONB-2's old
+dependency note.
+
 🚦 **The whole Beta 0 critical path is waiting on one signature.**
 [ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is written and
 **proposed** (2026-10-07): does a household appear in the URL, or only in the session? It recommends

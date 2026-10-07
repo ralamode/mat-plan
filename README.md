@@ -60,6 +60,25 @@ want to hit live data (prefer a Neon **branch**, not production). This mirrors t
 downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.example` first (see
 [docs/deploy.md](./docs/deploy.md) §5).
 
+## Adding an athlete
+
+**There is no way to add an athlete from inside the app yet.** The profile picker says so, and links
+here. `packages/db/src/seed.ts` is still the only writer of the `profiles` table, so today an athlete
+arrives by changing that file and re-seeding:
+
+1. Edit the profile rows in `packages/db/src/seed.ts`. ⚠️ **The committed rows are the maintainer's own
+   fixtures** — two kids, one of them carrying this household's routine. Replace them with your own
+   athletes rather than seeding somebody else's family into your deployment.
+2. Re-run the seed (it is idempotent and inserts on conflict do nothing — so an existing row keeps its
+   name, and a renamed fixture only lands on a fresh database). See
+   [Local development](#local-development) for the local sandbox, and [docs/deploy.md](./docs/deploy.md)
+   for a deployed one.
+3. A new profile's `routine_config` stays **NULL**, which is how it asks for the neutral first-run
+   routine. Everything else is opt-in from that athlete's routine editor.
+
+**`PROF-1`** ([backlog](./docs/plan.md)) replaces all of this with an "Add athlete" control on the
+picker, and deletes this section with it.
+
 ## Docs
 
 | File                                                         | What                                                                                             |

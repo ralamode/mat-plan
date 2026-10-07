@@ -66,6 +66,7 @@ import {
 } from '../src/writers/bodyweight';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 import {
+  SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
@@ -209,8 +210,19 @@ assert.equal(
 );
 const liam = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
 const scarlett = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
-// A≠B on a fresh DB: Liam is NULL (→ the app's default routine, ships-dark), Scarlett is explicit.
-assert.equal(liam.routineConfig, null, 'V1-18: Liam has no routine_config (resolves to default)');
+// A≠B on a fresh DB, and since ONB-0 BOTH are explicit.
+//
+// Liam used to be NULL here, deliberately, to demonstrate "NULL → the default routine". ONB-0 narrowed
+// that default to `['strength']`, so NULL now means the NEUTRAL first-run routine — and a fixture that
+// rode it would lose the habits and the brush-teeth metrics that `e2e/global.setup.ts` and the V0-11
+// smoke both drive on this profile. So the seed writes the full catalog explicitly, and what gets proved
+// here is the stronger property: no seeded fixture depends on a read-time default at all.
+assert.ok(liam.routineConfig != null, 'ONB-0: profile 1 has an explicit routine_config (was NULL)');
+assert.deepEqual(
+  liam.routineConfig,
+  SEED_FULL_ROUTINE,
+  'ONB-0: profile 1 is seeded with the explicit pre-ONB-0 full-catalog routine',
+);
 assert.ok(scarlett.routineConfig != null, 'V1-18: Scarlett has an explicit routine_config');
 assert.notDeepEqual(
   liam.routineConfig,
@@ -227,7 +239,24 @@ console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored 
 // V1-18 (PR 2): the coach-editor WRITE path — prove a routine config round-trips through the jsonb column
 // (drizzle UPDATE → reread → byte-identical), the DB half of `updateProfileRoutine`. The pure strict
 // validation (`validateRoutineForWrite`) is unit-tested app-side; here we prove the column stores + returns
-// the config unchanged. Writes to Liam (was NULL) so it also exercises the NULL → set transition.
+// the config unchanged.
+//
+// ONB-0: this used to get the NULL → set transition for free, because the seed left this profile NULL.
+// It no longer does, so the NULL is set up EXPLICITLY rather than quietly dropping that coverage.
+await db
+  .update(schema.profiles)
+  .set({ routineConfig: null })
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+const [cleared] = await db
+  .select({ routineConfig: schema.profiles.routineConfig })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+assert.equal(
+  cleared?.routineConfig,
+  null,
+  'ONB-0: routine_config is nullable (NULL → set is reachable)',
+);
+
 const writeRoutine = {
   version: ROUTINE_VERSION,
   order: [{ key: 'strength' }, { key: 'checkin:rice_bucket' }],

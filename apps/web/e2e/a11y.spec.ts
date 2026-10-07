@@ -741,6 +741,27 @@ test('profile tiles are large touch targets (the link-card exception to the inli
 });
 
 /**
+ * ONB-0 — the picker at 360px.
+ *
+ * The `ROUTES` loop above runs axe + tap targets only, at 390px, and `expectNoHorizontalOverflow` is
+ * opt-in per test (see the comment on the token-preview test) — so until this, the app's front door had
+ * NO 360px coverage and no overflow coverage at all, seeded or empty. ONB-0's plan initially claimed it
+ * did, which is the kind of gate-that-isn't this file exists to stop.
+ *
+ * ⚠️ This measures the SEEDED picker. The EMPTY picker — ONB-0's actual subject — cannot be reached from
+ * any spec: `playwright.config.ts` is `fullyParallel: true` and the `a11y` and `chromium` projects share
+ * one database, so hiding the seeded profiles here would break `selectProfile` in every other spec. Its
+ * axe + overflow coverage comes from `/design/tokens`, where `PickerEmptyState` renders as an inventory
+ * cell (both themes, per-cell 360px overflow); `--state no-profiles` renders it for screenshots.
+ */
+test('the profile picker does not overflow at 360px', async ({ page }) => {
+  await page.setViewportSize(NARROW);
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expectNoAxeViolations(page, 'profile picker (360px)');
+  await expectNoHorizontalOverflow(page, 'profile picker (360px)');
+});
+
+/**
  * OSS-2 — the public routes, scanned with NO gate cookie (with one, `/` and `/gate` both redirect to the
  * picker). The landing's CTAs and the gate's way back are LINKS, which `expectTapTargets` cannot see
  * (`Button asChild` adds no role), so they are counted and measured by `expectLinkTapTargets`.

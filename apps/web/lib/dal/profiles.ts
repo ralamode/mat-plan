@@ -1,10 +1,10 @@
 import 'server-only';
 
 import { schema } from '@mat-plan/db';
-import { type ProfileKind, resolveRoutine, type RoutineConfig, uuidSchema } from '@mat-plan/shared';
+import { type ProfileKind, type RoutineConfig, uuidSchema } from '@mat-plan/shared';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
-import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
+import { resolveProfileRoutine } from '@/lib/routine/catalog';
 
 import { db } from './db';
 
@@ -52,8 +52,9 @@ export async function listProfiles(): Promise<ProfileDTO[]> {
 /**
  * The Today page's profile DTO — the tile fields PLUS the resolved per-kid routine (V1-18). Its own type
  * rather than a wider `ProfileDTO` so the picker tiles (`listProfiles`) don't have to carry a routine.
- * `routine` is ALWAYS resolved (never null/raw): `resolveRoutine` maps a null/stale `routine_config` to the
- * default routine, so the page renders a real ordered routine unconditionally.
+ * `routine` is ALWAYS resolved (never null/raw): `resolveProfileRoutine` maps a null/stale `routine_config`
+ * to the NEUTRAL first-run routine (ONB-0) while still accepting every catalog key an existing household
+ * has authored, so the page renders a real ordered routine unconditionally.
  */
 export type ProfileWithRoutineDTO = ProfileDTO & {
   routine: RoutineConfig;
@@ -91,7 +92,7 @@ export async function getProfileByPublicId(
         name: row.name,
         kind: row.kind as ProfileKind,
         avatar: row.avatar,
-        routine: resolveRoutine(row.routineConfig, ROUTINE_CATALOG),
+        routine: resolveProfileRoutine(row.routineConfig),
         // The calendar DATE the profile was created, in UTC. Exact enough for a navigation floor —
         // a boundary off by one in a distant zone costs one unreachable empty day, not correctness.
         firstDay: row.createdAt.toISOString().slice(0, 10),
