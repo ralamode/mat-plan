@@ -38,7 +38,7 @@ table (it is the one source for which shapes auto-resolve), then `git add <files
 ## 2. Local gates, cheapest first
 
 ```bash
-pnpm verify              # format:check → lint → typecheck → test → db:verify → audit --prod (~25s)
+pnpm verify              # format:check → lint → typecheck → test → db:verify → … → audit:check (~35s)
 pnpm guides:check        # feature guide touched with every owned file it covers
 bash .claude/skills/hold-the-bar/check.sh   # the diff did not quietly lower the bar
 ```

@@ -309,13 +309,15 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only** — fast, blocks the
   commit. Never put whole-project checks here.
 - **pre-push:** `tsc --noEmit` (whole project) + affected tests.
-- **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job does,
-  plus the production audit: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
+- **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job
+  does: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
   `skills:check` (every path and `pnpm` script a skill cites exists) → `actions:check` (every action
   SHA-pinned) → `guards:test` (the hook and
-  guard self-tests) → `audit --prod`. **~35s** on a warm cache, so there is no excuse to skip it.
+  guard self-tests) → `audit:check` (the production audit). **~35s** on a warm cache, so there is no
+  excuse to skip it.
   `skills:check` and `guards:test` run **only here, not in CI** (`ci.yml` doesn't run them; wiring them
-  in is a CI change that needs its own plan). `actions:check` (offline) runs in both. `db:verify` runs on
+  in is a CI change that needs its own plan — SEC-5 did the audit third of it). `actions:check`
+  (offline) and `audit:check` run in both, from the same single definition. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (its own command —
   see the next bullet), gitleaks, and the forward-only guard (inherently a diff-against-base check).
@@ -330,12 +332,16 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", is what holds the line; verified via the API, 2026-09-30):
   typecheck · lint · `prettier --check` · full test suite ·
-  `next build` · gitleaks · (DB) drift check + `db:verify`. CI re-runs everything regardless of hooks.
+  `next build` · gitleaks · (DB) drift check + `db:verify` · **the production audit** (`audit:check`,
+  plus its own self-test before the install). CI re-runs everything regardless of hooks.
   Plus **forward-only** + **Squawk** on new migrations, and **action pins** (offline on every run,
   `--resolve` when a workflow changes; the rule is in [SECURITY.md](./.github/SECURITY.md) → Supply
-  chain). ⚠️ **`audit --prod` is NOT a CI gate:** it runs only inside local `pnpm verify`, which no
-  workflow runs, so a critical advisory reaches `main` with CI
-  green (GHSA-vcvr, 2026-09-30; [tech-debt](./docs/tech-debt.md)).
+  chain). The audit's rule lives in the same place — scope, threshold and trigger — and the guard
+  points at it ([plan](./docs/plans/sec-5-verify-in-ci.md)). It separates **could not check,
+  retryable** (the registry was unreachable; advisory only on a PR that changes no dependency input,
+  never on `main`) from **could not check, not retryable** (an unparseable or incoherent report, a
+  committed setting that disarmed the audit), which is never downgraded: collapsing the two is how a
+  gate looks wired and checks nothing.
   **`@claude review` is NOT a gate either:** a writer's comment runs the `review-pr` skill in CI
   (`.github/workflows/claude-review.yml`, which defines the trigger) and posts one advisory comment.
   **CodeQL is wired, but deliberately NOT as one of these.** It runs on **push to `main`, weekly, and on

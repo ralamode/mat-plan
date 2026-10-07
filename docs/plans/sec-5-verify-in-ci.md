@@ -350,6 +350,12 @@ the replacements. Probes ran against a copy of the lockfile + manifests outside 
   (`AGENTS.md:331-333`) and fix the guard — the same answer Decision 2 gives for a wedged tree. Named
   here because the draft's Risks table only recorded the opposite direction.
 - **An unfixable `--prod` high before SEC-5c** reds every PR. See Decision 3's residual.
+- **The step's own shell policy has no regression test.** It was verified by hand across all eight
+  combinations of guard exit code (0/1/2/3) × dependency-change (yes/no/push-to-main), and all eight
+  are correct — exit 3 never lenient, exit 2 lenient only without a dependency change, no leniency on
+  `main`. But nothing guards it against a later edit, and it **fails open** if the `grep`/pathspec is
+  broken. Accepted for now rather than papered over: the fix is to move the decision behind guard
+  flags so the self-test reaches it, which is the filed follow-up from round 4 (A2) and round 5 (R3).
 - **Rollback** is deleting two steps from `ci.yml`; nothing persists and no data is touched.
 
 ## Alternatives considered and rejected

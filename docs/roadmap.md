@@ -32,7 +32,7 @@ the authority and `pnpm guides:check` enforces it. The pillar does not re-declar
 | **Logging & Measurement**   | [strength-logging](./features/strength-logging.md) + [write-path](./features/write-path.md) guides | `V1-19` `V1-24` `V1-26..30` `GAP-*` `SET-1` `UI-1` `DUALS-*` **`AI-1`** |
 | **Authoring & Scheduling**  | [programming](./features/programming.md) guide, `prescriptions`, `routine_config`                  | `V1-18` `V1-20` `V1-22` `SCHED-*` `CAT-*`                               |
 | **Insight** (read & export) | `V1-16` charts, aggregation kernel, `lib/dal/export.ts`, the CSV contract                          | `V1-16` `CSV-1` `MOT-*` `DASH-1` `COACH-1`                              |
-| **Platform**                | `.github/workflows/`, `.claude/`, hooks, deps, the migrations runner                               | `OPS-*` `DX-*` `SEC-2..5` `TEST-*` `EVAL-0` _(incl. `DX-1`)_            |
+| **Platform**                | `.github/workflows/`, `.claude/`, hooks, deps, the migrations runner                               | `OPS-*` `DX-*` `SEC-2..5c` `TEST-*` `EVAL-0` _(incl. `DX-1`)_           |
 | **Product & Spec**          | `docs/decisions/`, `docs/specs/`, `docs/milestones/`, `AGENTS.md`                                  | — (ADRs and specs, not backlog rows)                                    |
 
 Two deliberate departures from the obvious cut, both argued rather than assumed:
@@ -84,7 +84,7 @@ Each is the item that would start if that pillar got the next session.
 | Logging & Measurement  | **`AI-1` — P0**          | Gate **cleared**: GAP-3 (`entry_set_quantities`, `0011`) and V1-13 are on `main`, so the recorded chain _legacy samples → GAP-3 → V1-13 → AI-1_ is satisfied. The blocker is now the **plan** — it predates GAP-3 and was never panelled. Re-grounding started 2026-10-06. `V1-30b` is **complete** (#234 + #236), so this lane is free; `V1-26` / `V1-33` follow AI-1. |
 | Authoring & Scheduling | Chunk 1                  | Nothing. `SCHED-1` waits on the scheduling ADR.                                                                                                                                                                                                                                                                                                                         |
 | Insight                | `V1-16`                  | Nothing. `DASH-1` / `COACH-1` are later ideas (#221).                                                                                                                                                                                                                                                                                                                   |
-| Platform               | `SEC-5`                  | Nothing — and it is the gate that missed three advisories.                                                                                                                                                                                                                                                                                                              |
+| Platform               | `DX-5(b)`                | Nothing. `SEC-5` ✅ shipped the audit third of `DX-5(b)`, leaving `skills:check`, `guards:test` and `status:check`, which need their own plan and panel. `SEC-5b` (the daily full-tree audit) is gated on confirming a failed scheduled run reaches a human; `SEC-5c` (the allowlist) is built on first need.                                                           |
 | Product & Spec         | The scheduling ADR       | Wanted by `SCHED-1`, `CAT-2` and V1-22 A4.                                                                                                                                                                                                                                                                                                                              |
 
 ⚠️ **This table is the membership test, and it has already failed once.** `AI-1`, `PRIV-1` and `DX-1`
@@ -118,8 +118,11 @@ consume it, not beside them.
 Not a duplicate of [tech-debt.md](./tech-debt.md) — only the items that change what a session should
 do next.
 
-- **`SEC-5` — no workflow runs `pnpm verify`,** so `audit --prod` is not a gate. Three advisories have
-  now been found by a local run during unrelated work rather than by CI (#222, #227).
+- ✅ **`SEC-5` — the production audit is now a CI gate** (`audit:check` in `quality`). Four advisories
+  had reached `main` with CI green, every one found by a local run during unrelated work rather than
+  by CI (#182, #222, #227, #235). **Still a debt:** nothing audits the **full** tree automatically —
+  that is `SEC-5b` — and there is no suppression mechanism, so an unfixable production `high` reds
+  every PR until `SEC-5c` exists.
 - **The Neon-branch migration apply is still not wired.** Do not cite it as a safety argument.
 - **`e2e` is not a required check** and branch protection is off, so "CI green" is held by review, not
   by GitHub.

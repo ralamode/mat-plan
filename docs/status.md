@@ -10,6 +10,15 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
+and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
+tree. It had lived only inside `verify`, which no workflow runs, so **four** advisories reached `main`
+with CI fully green, every one found by accident during unrelated work. Could-not-check is split into
+two exit codes because only one of them may ever be advisory: a registry outage warns on a PR that
+changes no dependency input; an unparseable, incoherent or disarmed report never does. The daily
+full-tree audit (**SEC-5b**) and the expiring allowlist (**SEC-5c**) were cut out to their own backlog
+rows ([plan](./plans/sec-5-verify-in-ci.md)).
+
 📏 **V1-30b is complete** — the log form offers only what the server keeps (30b-i, #234) and the
 stored-value ceiling is **per unit** (30b-ii). A real 2-mile run in metres and a 40-minute hold in
 seconds are loggable; the same number typed into the wrong unit is still refused. History spells the

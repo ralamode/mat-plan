@@ -48,9 +48,16 @@ GAP-3's plan argued that a dangerous migration couldn't land because Squawk woul
 DB-safety reviewer went to check and found no Squawk in CI at all. The audit that followed (#132)
 found **five gates AGENTS.md had claimed for months and never wired**: Squawk, the forward-only guard,
 CodeQL, `pnpm audit` and a Neon-branch apply. The two migration gates, forward-only (#133) and Squawk
-(#135), were wired before the arc's first migration landed; CodeQL followed (#138). The other two are
-still unwired. The lesson I took: rules written as the intended end state are claims, and claims need
-re-verifying. That is why AGENTS.md says "⚠️ NOT WIRED" next to the two that still aren't.
+(#135), were wired before the arc's first migration landed; CodeQL followed (#138). `pnpm audit` took
+longest — and the lesson arrived in the gap. In the two weeks it stayed a claim, **four** advisories
+reached `main` with CI fully green, every one of them found by a local `pnpm verify` that happened to
+run during unrelated work; the second one is what proved the first fix had patched the advisory and not
+the gate. SEC-5 wired it on 2026-10-06, so **one is left**: the Neon-branch apply. The lesson I took:
+rules written as the intended end state are claims, claims need re-verifying, and the re-verifying has
+to repeat — a claim that was true when written is simply the next one to rot. This paragraph is an
+instance: it read "the other two are still unwired", which SEC-5's own merge would have made false, so
+the sentence was rewritten in the same PR as the gate. That is why AGENTS.md says "⚠️ NOT WIRED" next
+to the one that still isn't.
 
 **2. I overrode the spec, knowingly, and wrote down why.**
 The youth program alternates Day A and Day B, and its spec insists the letter comes from the count of
