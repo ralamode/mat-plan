@@ -1,8 +1,8 @@
 # ADR 0006 — Household addressing: the URL, or the session?
 
-**Status:** **Proposed — the maintainer's call, unsigned.** · **Date:** 2026-10-07 ·
+**Status:** **Accepted — option A (session-only).** _(the maintainer, 2026-10-07.)_ · **Date:** 2026-10-07 ·
 **Scope:** Beta 0's critical path ([TEN-1](../plan.md), [AUTH-1](../plan.md)) ·
-**Supersedes, if accepted:** [HH-1](../plan.md#hh-1)'s path clause — **only** that clause.
+**Supersedes:** [HH-1](../plan.md#hh-1)'s path clause — **only** that clause.
 
 > **This reverses a decision the maintainer already made.** HH-1 (2026-09-28) put the household id in
 > the **path**, decided before OAuth was a P0 and before the repo was public. So this is written to be
@@ -415,6 +415,31 @@ express a grant: it needs the seam's **return type** to widen from a tenant to a
 relation (viewer × profile → permission). That is a different shape, not an inverted argument, so
 "costed above" does **not** cover it.
 
+### Forward compatibility: three requirements, cheap now and expensive later
+
+Recorded 2026-10-07 alongside the decision. Several enhancements captured in
+[plan.md](../plan.md) → "Later — ideas captured, not scoped" (`PUB-1`, `SHARE-1`, `SOCIAL-1`, and the
+existing `COACH-1`) turn out to exert **one** pressure, not several: each needs the seam to express
+_"not mine, but I may see this much of it."_ None of them changes this ADR's decision — a public or
+shared surface needs its own deliberately-unauthenticated namespace, which option A and option B
+accommodate equally, so none of them is an argument for a household path segment. But three things
+are nearly free to get right in TEN-1 and costly to retrofit across ~11 DAL call sites and every proof:
+
+1. **`HouseholdScope` stays a capability, never a naked tenant id.** The COACH-1 analysis below already
+   requires this; the other rows are four more drivers of the same requirement, which is why it is
+   stated here as a constraint on TEN-1 rather than as one feature's problem.
+2. **TEN-1's isolation proofs are phrased to allow an explicitly published projection.** As drafted they
+   prove _"B can never see or touch A"_, which a published or shared surface deliberately violates —
+   so the proof would have to be rewritten rather than extended. The phrasing that survives is **no
+   cross-household access except through an explicitly published projection**, with the unpublished
+   case proved exactly as strictly as before.
+3. **The 404 rule (§ "What a wrong-household request returns") carries an explicit exception clause.**
+   A published resource answers 200 to a caller with no session. That is not a hole in the rule; it is
+   a different rule for a different resource, and saying so now avoids amending a security rule later.
+
+⚠️ **This is forward compatibility, not scope.** Nothing here authorizes any of those rows, and none of
+them is in Beta 0. They are written down so TEN-1's shape does not foreclose them by accident.
+
 **What this ADR therefore asks of TEN-1, and does not decide:** `HouseholdScope` must not become a
 naked `household_id`. TEN-1's design already has it right — a branded object
 (`{ householdId, synthetic, brand }`), whose only constructors are the request-derived resolver and a
@@ -547,21 +572,25 @@ The first draft asked five. Four were author decisions dressed as homework, and 
 B's sweep would get **its own PR**, and the picker-naming row is **not filed**. All four are decided in
 the text above. Two remain:
 
-1. 🔴 **The decision itself: option A or option B?** Unsigned. Everything in TEN-1's plan rests on it.
-2. **The seed-id rotation** (Consequences, last bullet) — file it as a P1 now, or fold it into AUTH-1's
-   household-claim correction, which already touches those rows? It is live either way and it is not an
-   addressing question.
+**Both are now resolved, so this section is closed.**
+
+1. ✅ **The decision: option A** _(the maintainer, 2026-10-07)_ — see § Decision.
+2. ✅ **The seed-id rotation is filed as its own row (`SEC-6`), not folded into AUTH-1.** It is live
+   today and independent of addressing, so attaching it to AUTH-1 would gate a current exposure on the
+   longest item in Beta 0. It is not an addressing question and this ADR does not own it.
 
 ## Decision
 
-> **Chosen option:** ☐ A (session-only) ☐ B (path segment) ☐ other
+> **Chosen option:** ☒ **A — session-only; `/p/<profileId>` stays the address.**
 >
-> **Decided by:** _(the maintainer, date)_
+> **Decided by:** _(the maintainer, 2026-10-07.)_
 >
-> **Notes / amendments:**
+> **Notes / amendments:** none. The recommendation is taken as written, including the two obligations
+> it hands TEN-1 (`listProfiles()` as a boundary, and the miss-path probe signal) and the
+> forward-compatibility requirements in § "Does this foreclose anything?".
 >
-> _Unsigned. Status stays **Proposed** until this box is filled, and TEN-1 does not start until it is
-> (TEN-1's plan makes this ADR its chunk 0)._
+> **HH-1's path clause is superseded** — only that clause; its club-naming question and both of its
+> warnings survive. **TEN-1 is unblocked** and this ADR is its chunk 0.
 
 ## Review-response log (adversarial panel)
 

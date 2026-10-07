@@ -735,6 +735,24 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   advisory is fix it, re-classify it as dev if that is honest, or merge red (SEC-5c when that stops
   being enough).
 
+- **SEC-6 — the seed `public_id`s have no entropy, and a shipped comment relies on the opposite.** 🔴
+  _(found 2026-10-07 while writing [ADR 0006](./decisions/0006-household-addressing.md); filed as its
+  own row rather than folded into AUTH-1, because it is live today and independent of addressing.)_
+  `packages/shared/src/seed-ids.ts` defines `019826b4-0000-7000-8000-000000000001` / `…0002` / `…0010`
+  and the seed upserts them into **production**, so `…0003` is a guess rather than a search.
+  ⚠️ **`apps/web/lib/rate-limit.ts` declines to rate-limit the six mutating Server Actions on exactly
+  the premise those ids falsify** — _"real ids are non-enumerable UUIDv7 … and therefore unreachable by
+  guess."_ **Scope of the exposure today, stated honestly:** the actions still re-verify the gate and
+  the gate itself is rate-limited, so this needs the shared code first; and households created through
+  the app get real UUIDv7s from `newId()`, so only the seeded rows are guessable. The defect is the
+  **false premise**, because it is load-bearing for a decision that gets revisited the moment the gate
+  is retired for sessions (AUTH-1).
+  **Fix:** rotate the seeded `public_id`s to real UUIDv7s (a guarded, idempotent `db:correct`
+  correction — the ids are referenced by `PROGRAM_SEED`, both screenshot scripts and the e2e
+  constants, so this is a sweep, not a column edit), and correct or remove the premise in
+  `rate-limit.ts`'s docblock either way. **Acceptance:** no committed constant equals a live
+  production `public_id`, and the rate-limit rationale states only what is true.
+
 - **SEC-5b — the daily scheduled audit.** _(maintainer, 2026-10-06; cut out of SEC-5 by its scope
   lens.)_ SEC-5's gate only fires when something is pushed, so an advisory published against a
   dependency nobody touches is caught by nothing in this repo except `dependabot.yml`'s security PRs.
@@ -762,6 +780,45 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   2026-10-03, and its advisory names a patched version that has never been published.
 
 ## Later — ideas captured, not scoped
+
+- **PUB-1 — a public household page, with per-field visibility.** _(captured 2026-10-07, not scoped.)_
+  Visit a household at a public, human-meaningful address and see only what it chose to publish —
+  a streak, or the movements of a workout without the logged values, or more. Needs its **own
+  deliberately-unauthenticated namespace** (`/h/<handle>`), not the private `/p/<profileId>` address;
+  [ADR 0006](./decisions/0006-household-addressing.md) records why that is true under either addressing
+  option.
+  **What it needs settled before any plan**, recorded now so it is not rediscovered late: a public page
+  is **indexed and cached by third parties**, which collides with PRIV-1's promise of a _defined
+  deletion_ — a retraction cannot reach Google's cache or archive.org. The tiers are not equally
+  sensitive: a streak is a behavioural signal about a child, movements-without-values is close to a
+  program share, and a full log publishes a minor's training history. Default off, per field, parent
+  controlled. A handle is **chosen, never derived from a family name** — a surname would be a
+  permanent, guessable public identifier for a household with children, and it cuts against this
+  repo's own naming rule. Gets the `privacy-reviewer` lens on every PR. Depends on PRIV-1 and AUTH-1.
+
+- **SHARE-1 — share a program, and copy one into your own household.** _(captured 2026-10-07, not
+  scoped.)_ Hand a program to another household, who can copy it and then edit their copy.
+  ⚠️ **It makes `TEN-2` a prerequisite rather than an option.** `movements.slug` is globally unique
+  (`packages/db/src/schema.ts:422`) while `program_blocks` is household-scoped, so a copied program's
+  movement references are **shared rows** — the recipient silently inherits the source household's
+  unit and bodyweight flags, which is the `findOrCreateMovementId` defect TEN-2 exists to fix.
+  **The product rule to write down first: copy the structure, drop the loads.** The inviolable rule in
+  this repo is that the model never authors loads, because a bad load is an injury risk. A copy feature
+  puts one household's prescribed loads onto another household's athlete — the same risk with a
+  different author. `5×5 Back Squat` is safe to copy; `5×5 @ 135lb` is a coaching decision someone has
+  to make for _that_ athlete.
+
+- **SOCIAL-1 — follow an athlete, and compare streaks.** _(captured 2026-10-07, not scoped.)_ Follow
+  athletes in other households, get notified of their streaks, and optionally compete on them. The
+  cross-household grant and the notification system are **the same mechanism `COACH-1` needs** (below)
+  and should be designed once, not twice.
+  **What it needs settled before any plan:** a streak becomes **a scoreboard rule people can game** the
+  moment it is comparable, which makes [ADR 0007](./decisions/0007-scheduling-model.md)'s nothing-due-day
+  rule load-bearing — and that rule has to be settled before the first verdict row is written, because
+  retrofitting it rewrites history. Following also creates an **adult-follows-child** path: who may
+  follow, whether approval is required, and whether a notification reveals a schedule pattern
+  (_"trained at 3pm every weekday"_ is a time-and-place pattern about a minor). Same privacy posture as
+  `COACH-1`: the `privacy-reviewer` lens on every PR.
 
 - **COACH-1 — a coach sees athletes across households, by permission.** _(maintainer, 2026-10-06.)_ A
   club coach is granted access to outcomes for athletes in other households, and gets notified of
