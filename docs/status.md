@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-09-30
+**Last updated:** 2026-10-06
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
@@ -18,6 +18,19 @@ two exit codes because only one of them may ever be advisory: a registry outage 
 changes no dependency input; an unparseable, incoherent or disarmed report never does. The daily
 full-tree audit (**SEC-5b**) and the expiring allowlist (**SEC-5c**) were cut out to their own backlog
 rows ([plan](./plans/sec-5-verify-in-ci.md)).
+
+🎯 **Logging & Measurement's next item is `PICK-1` — the movement picker — and `AI-1` is parked
+behind it** (2026-10-06). Measured against prod that day: of 49 live entries, the 19 movement-arm ones
+name 8 distinct movements and **all 8 are movements the program prescribes** — zero ad-hoc entries,
+which is zero instances of the case AI-1 exists for. `entries.notes` / `context` / `scheme` are 0, 0, 0
+non-empty out of 49. ⚠️ **And the data cannot settle the question**: movement-arm logging spans two
+days, and the only path to an unprescribed movement is the form's free-text **Movement** box
+(`strength-form.tsx:812`, upserted by slug through `findOrCreateMovementId`), so "ad-hoc never
+happens" and "nobody will type it" are the same measurement — which is why the picker goes first and
+the parser waits on what it produces. AI-1's
+engineering + security panels returned **eleven blocking findings across three lenses**; the plan stays
+on file, parked ([plan](./plans/ai-1-nl-logging.md) → § "Parked 2026-10-06"). Row:
+[plan.md → PICK-1](./plan.md#pick-1).
 
 📏 **V1-30b is complete** — the log form offers only what the server keeps (30b-i, #234) and the
 stored-value ceiling is **per unit** (30b-ii). A real 2-mile run in metres and a 40-minute hold in
@@ -73,7 +86,7 @@ excludes `/api`, so a handler there would have left every athlete's whole traini
 downloadable by anyone with the URL. That exclusion is now recorded in
 [tech-debt](./tech-debt.md) as a live hazard for the `/api/sync` design.
 
-📍 **v1 — every backlog row is merged except V1-14b.** Logging surfaces: per-kid routines, weigh-ins,
+📍 **v1 — the MVP's backlog is merged; V1-14b, the last row, landed in #169.** Logging surfaces: per-kid routines, weigh-ins,
 check-ins, calisthenics + weekly adherence, life activities, strength sessions with supersets,
 edit-a-set, skipped/sub-failure, the Today's-program card, and **one-tap scaffolding of the day's
 program into the form** (V1-19, #125 — structure only; every reps and weight field arrives blank, and
@@ -223,25 +236,25 @@ field IS the human confirmation) and is now pinned by a structural unit test. Sc
 - **The v1 backlog is closed.** **V1-14b** (full-day E2E + CSV diff) was the last row, and it is
   merged — the day the app itself logs now round-trips through the real export and back out again. **V1-11 is deferred past the
   MVP** by its panel ([why](./plans/v1-11-copy-movement-to-sibling.md)); **V1-13a-fu** (the
-  `calisthenics-log` CSV) was cut from V1-13 by Ray as a deliberate fast-follow, and **V1-15** and
-  **V1-22** are planned-and-panelled but unbuilt.
+  `calisthenics-log` CSV) was cut from V1-13 by the maintainer as a deliberate fast-follow. **V1-15** shipped
+  (#166), and **V1-22** is being built in chunks (the snapshot column, #232).
 - **The exit criterion is not a PR.** _"Kids log a real full day online; CSV keeps the Claude `/retro`
   workflow alive."_ The CSV half is done and downloadable. The first half needs an athlete, not a commit.
 
 ## Phases
 
-| Phase     | Goal                                                                     | Status                                                                                      |
-| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                     |
-| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                     |
-| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🟡 all rows merged but **V1-14b**; exit needs a real logged day                             |
-| DUALS     | Parent-facing tournament day sheets                                      | 🔵 DUALS-1 live (#152–#155); DUALS-2 next                                                   |
-| AI-1      | NL logging via structured outputs + eval                                 | 📋 plan decision-complete; **UNBLOCKED** — GAP-3 shipped ([S5](./plans/ai-1-nl-logging.md)) |
-| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                              |
-| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                              |
-| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                              |
+| Phase     | Goal                                                                     | Status                                                                                                       |
+| --------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| Bootstrap | Repo + planning docs                                                     | ✅ done                                                                                                      |
+| **v0**    | Thin vertical slice (one feature UI→ServerAction→Drizzle→Neon, CI-gated) | ✅ done                                                                                                      |
+| **v1**    | Online kids logger (all data types, CSV export) — **MVP**                | 🟡 MVP rows merged (V1-14b #169); exit needs a real logged day                                               |
+| DUALS     | Parent-facing tournament day sheets                                      | 🔵 DUALS-1 live (#152–#155); DUALS-2 next                                                                    |
+| AI-1      | NL logging via structured outputs + eval                                 | ⏸ **parked 2026-10-06**, pending [`PICK-1`](./plan.md#pick-1) usage data ([why](./plans/ai-1-nl-logging.md)) |
+| v1.5      | Offline PWA + sync + Clerk auth                                          | ⚪ not started                                                                                               |
+| v2        | Ray's PPL + progression engine                                           | ⚪ not started                                                                                               |
+| v3        | AI depth + MCP/REST API                                                  | ⚪ not started                                                                                               |
 
-Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 in progress · ✅ done
+Legend: ⚪ not started · 📋 planned (not started) · ⏸ parked · 🔵 in review · 🟡 in progress · ✅ done
 
 ## v0 backlog (13 PRs)
 
@@ -263,8 +276,9 @@ Legend: ⚪ not started · 📋 planned (not started) · 🔵 in review · 🟡 
 
 ## v1 backlog — completes the MVP
 
-Every row below is merged except **V1-14b**. Rows added after the original 14 are listed in id order,
-not merge order.
+The MVP's rows are merged; V1-14b, the last, landed in #169. The open rows below were deferred,
+cut as fast-follows, or added after the finish line. Rows added after the original 14 are listed in id
+order, not merge order.
 
 | PR        | Scope                                                                                                                           | Status |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -292,12 +306,12 @@ not merge order.
 | V1-13b    | CSV export **delivery** — reads, zip, working download at `/p/[id]/export` (#150)                                               | ✅     |
 | V1-13a-fu | `calisthenics-log` CSV — **the one schema the app DEFINES**; cut from V1-13 as a fast-follow, 2 open decisions                  | ⚪     |
 | V1-14a    | hardening — gate rate limit + Sentry w/ PII scrubber + Dependabot cooldown (#71) ([plan](./plans/v1-14a-hardening.md))          | ✅     |
-| V1-14b    | **full-day E2E + CSV diff** — _the only unmerged v1 row_; unblocked by V1-13 on 2026-09-24                                      | ⚪     |
-| V1-15     | day navigation — [plan](./plans/v1-15-day-navigation.md) merged (#142/#143), **unbuilt**                                        | 📋     |
+| V1-14b    | **full-day E2E + CSV diff** — the day the app logs round-trips the real export (#169)                                           | ✅     |
+| V1-15     | day navigation — [plan](./plans/v1-15-day-navigation.md) (#142/#143), shipped (#166)                                            | ✅     |
 | V1-17     | logged entries in performed order ([plan](./plans/v1-17-performed-order.md))                                                    | ✅     |
 | V1-18     | per-kid routine builder ([eng plan](./plans/v1-18-eng-plan.md))                                                                 | ✅     |
 | V1-19     | "start today's program" scaffolds the form — **structure only** (#125) ([plan](./plans/v1-19-start-todays-program.md))          | ✅     |
-| V1-22     | program editor — [plan](./plans/v1-22-program-editor.md) merged (#127/#129), **unbuilt**                                        | 📋     |
+| V1-22     | program editor — [plan](./plans/v1-22-program-editor.md) (#127/#129); building in chunks, 1 of n merged (#232)                  | 🟡     |
 | GAP-1     | close the CSV recording gaps (P0-1/P0-2 · P1-1a/b/c)                                                                            | ✅     |
 | GAP-3     | **typed measurements** — CI gates (#133/#135/#138) · `units.dimension` (#137) · migration `0011` (#139) · the typed form (#141) | ✅     |
 | YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |

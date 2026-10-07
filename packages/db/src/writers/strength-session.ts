@@ -240,10 +240,12 @@ async function writeSessionStrengthEntry(
     // measurement, and a row with a NULL value would be the EAV smell the child table avoids.
     const quantityRows: (typeof schema.entrySetQuantities.$inferInsert)[] = [];
     args.sets.forEach((s, i) => {
-      // `=== null` is not enough: the SCHEMA always emits `weight: null`, but a direct caller
-      // (db:verify's fixtures, a future importer) legitimately omits the key entirely. packages/db is
-      // typechecked by nothing (`pnpm typecheck` is --filter web), so that difference surfaces as
-      // `numeric: "undefined"` at runtime rather than as a compile error. Handle both.
+      // `=== null` is not enough: the SCHEMA always emits `weight: null`, but the relaxed inner
+      // signature above lets a direct caller (a future importer) omit the key entirely, so handle
+      // both. Until DX-7 this was the ONLY thing standing between an omission and
+      // `numeric: "undefined"` from Postgres, because `packages/db` was typechecked by nothing; the
+      // package now has its own `tsconfig.json` in `pnpm typecheck`, so an omission through the
+      // public `writeStrengthSession` is a compile error. This stays as the inner guard.
       if (s.weight === null || s.weight === undefined) return;
       quantityRows.push({
         clientId: newId(),

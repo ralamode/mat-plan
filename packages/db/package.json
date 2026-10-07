@@ -14,7 +14,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:verify": "tsx scripts/verify.ts",
-    "db:correct": "tsx scripts/correct.ts"
+    "db:correct": "tsx scripts/correct.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@mat-plan/shared": "workspace:*",
@@ -23,8 +24,11 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^26",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
   }
 }

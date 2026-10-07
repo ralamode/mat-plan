@@ -308,7 +308,10 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 
 - **pre-commit (husky + lint-staged):** ESLint + Prettier on **staged files only** — fast, blocks the
   commit. Never put whole-project checks here.
-- **pre-push:** `tsc --noEmit` (whole project) + affected tests.
+- **pre-push:** `pnpm typecheck` + affected tests. Since DX-7 that is **two** `tsc --noEmit` projects —
+  `apps/web` and `packages/db` (`src/**` + `scripts/**`, so the `db:verify` proofs and the corrections
+  are covered). ⚠️ **Not the whole repo:** `packages/shared` and `packages/engine` have no tsconfig of
+  their own and are checked only _transitively_, through the app's imports.
 - **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job
   does: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
   `skills:check` (every path and `pnpm` script a skill cites exists) → `actions:check` (every action

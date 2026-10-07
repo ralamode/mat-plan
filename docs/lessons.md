@@ -36,10 +36,17 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   → **Now CI-enforced**: the forward-only guard checks the whole chain on every PR, so this cannot
   recur. If you hit the collision error, the guard's output names the file and the expected id.
 
-- **`pnpm typecheck` is green while `packages/**` is broken.** → It is `pnpm --filter web exec tsc
---noEmit`, so it only covers `apps/web`. `packages/db/scripts/verify.ts` and the seed are typechecked
-  by **nothing**; a stale column reference there surfaces only as a runtime crash in `db:verify`. →
-  Run `pnpm verify` (which runs `db:verify`) before believing a package-level refactor is done.
+- **`pnpm typecheck` is green while `packages/**` is broken.** → It was `pnpm --filter web exec tsc
+--noEmit`, and `apps/web/tsconfig.json` was the repo's ONLY tsconfig, with an `include` relative to
+  `apps/web`. `packages/db/scripts/` — `verify.ts`, `migrate.ts`, `seed.ts`, `corrections/` — is
+  reachable from no app import, so it was typechecked by **nothing**, and `tsx` strips types without
+  checking them: a stale column reference surfaced only as a runtime crash in `db:verify`. →
+  **Fixed in DX-7**: `packages/db/tsconfig.json` exists and `pnpm typecheck` runs both projects
+  (`pnpm --filter web typecheck && pnpm --filter @mat-plan/db typecheck`), so this is a compile error
+  now. It found 12 real ones on the first run. ⚠️ **Still true for `packages/shared` and
+  `packages/engine`**: they have no tsconfig and are checked only _transitively_ through the app's
+  imports, so a file nothing imports is checked by nothing. Linting still stops at `apps/web`
+  entirely. Keep running `pnpm verify` before believing a package-level refactor is done.
 
 - **A `-- squawk-ignore <rule>` comment has NO effect and Squawk still fails the build.** → The ignore
   must be the line **immediately above** the statement. Any other comment between them silently voids it
