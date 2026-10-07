@@ -137,6 +137,31 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A Playwright `addInitScript` silently does nothing from one line onward, and the symptom is a
+  later assertion reading `null` ("the theme never applied at all").** → The script runs at
+  **document-start**, where `document.documentElement` can still be null, so
+  `new MutationObserver(...).observe(document.documentElement, …)` **throws** — and everything after
+  it in the same init script never runs, with no error surfaced to the test. Anything registered
+  _before_ the throw (a `document.addEventListener`) keeps working, which makes it look like the
+  script ran fine. → **Observe `document` with `{ subtree: true }` and filter on
+  `r.target === document.documentElement`**, or wrap each step in its own try/catch. (UI-4)
+
+- **`locator.check()` times out on a radio/checkbox that is plainly on screen.** → The input is
+  `sr-only`, so Playwright's actionability check hit-tests its 1px centre point, finds the label text
+  over it, and waits forever for the "element intercepts pointer events" condition to clear. → **Click
+  the `<label>`** (`page.locator('label').filter({ has: radio }).click()`) — which is what a thumb
+  does and what the browser treats as activating the control. Same trap `e2e/a11y.spec.ts` already
+  records for the BW/band chips. (UI-4)
+
+- **An "assert zero `securitypolicyviolation` events" test fails on a page with no inline-script
+  problem at all: `script-src eval` from `_next/static/chunks/*`.** → **zod v4 probes for JIT support
+  with `try { Function(""); return true } catch { return false }`.** Under this app's production CSP
+  (no `unsafe-eval`) that raises a violation _report_ on every page load; zod catches the exception
+  and falls back to its non-JIT parsers, so nothing is broken. → Assert on the violations that mean
+  something — a missing nonce reports **`blockedURI: 'inline'`** — and print the full list in the
+  failure message. `zod.config({ jitless: true })` would silence the report, if the noise ever
+  matters. (UI-4)
+
 - **`screenshot:ephemeral` reuses `.next`, so you can screenshot your UI change and get a picture of
   `main`.** → The script only builds when `.next/BUILD_ID` is absent (or `--build` is passed), so with a
   warm build the capture silently shows the PREVIOUS UI. Nothing errors — the shot just looks subtly
