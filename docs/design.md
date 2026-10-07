@@ -3,7 +3,9 @@
 The visual system for the app. **Adult-first and clean — not a kid aesthetic.** The kid ergonomics
 (large tap targets, high contrast, numeric keypads, clear labels) come from good general design, not
 cartoon styling. Built on **shadcn/ui (Radix primitives) + Tailwind v4**, themed entirely with
-CSS-variable tokens so components adapt to light/dark automatically.
+CSS-variable tokens, so a reskin is a token change and both themes are already defined. ⚠️ **The
+dark set is not yet reachable** — nothing sets the `.dark` class and there is no
+`prefers-color-scheme` fallback, so every viewer sees light today. **UI-4** is the switch.
 
 ## Principles
 

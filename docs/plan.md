@@ -551,6 +551,12 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   that, one level up.
 
 - **UI-2 — restyle the UI with a motion component framework (Aceternity UI / Magic UI / similar).**
+  ✅ **DECIDED 2026-10-07: take the token path, not the framework path.** _(maintainer.)_ The reskin
+  happens in the OKLCH tokens (**UI-3**) and the theme switch is its own row (**UI-4**). No
+  `framer-motion`, no copy-paste component library, on the logging path. The **landing page**
+  (`app/(landing)/`, OSS-2) is the one surface where the question stays open — if it is revisited there
+  it needs its own prototype and panel, and nothing from it leaks into `app/p/`. The rest of this row
+  is kept as the reasoning behind that decision, because the costs it records are the reason.
   _(maintainer, 2026-10-07.)_ Requested as a backlog item, not a decision. Both are Tailwind +
   **Framer Motion** component collections distributed copy-paste in the shadcn-registry style, so
   adopting one is not a dependency swap — the components become **our** code, and `framer-motion`
@@ -594,6 +600,57 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     that consume it. The _decision_ belongs in `docs/decisions/` as an ADR; the _implementation_ is
     cross-pillar. It is **not** a P0: nothing is broken, and PICK-1 and the Beta 0 milestone are ahead
     of it.
+
+- **UI-3 — reskin in the tokens, with real options instead of the default.** 🎨 _(maintainer,
+  2026-10-07.)_ The chosen half of **UI-2**. The ask in the maintainer's words: make it _"feel less out
+  of the box and cookie cutter."_
+  ⚠️ **That is literally accurate, and measurably so: every colour token is `oklch(L 0 0)` — chroma
+  exactly zero — in both `:root` and `.dark`.** Even `--primary` is a dark grey
+  (`oklch(0.205 0 0)`). This is shadcn's stock neutral theme, unmodified, which is exactly why it reads
+  as a template. [design.md](./design.md) describes the zero-chroma base as a deliberate choice
+  ("calm and grown-up"), and it was — but "restrained" and "uncustomised" have been the same thing so
+  far, and they do not have to be.
+  **The levers, all token-level, no new runtime:**
+  - **Give the neutrals a hue bias.** A grey with a slight chroma pull toward the accent reads as
+    chosen; `chroma 0` reads as a default. This alone is most of the effect.
+  - **Commit to a type pairing.** Currently the stack default. A display/body pairing via `next/font`
+    (no FOUT, no layout shift) is the single biggest change to how a page _feels_.
+  - **Pick a density and radius signature** — spacing scale and `--radius` — so the app looks like one
+    product rather than assembled parts.
+  - **An accent that carries meaning**, kept separate from semantic good/warn/destructive.
+    **Acceptance: more than one option, reviewed side by side.** Produce **three** distinct token sets,
+    each applied to the same two real screens (Today and the strength form, the two that matter),
+    captured at **mobile / tablet / desktop** and in **both themes** — which is why **UI-4 lands
+    first**. A UX panel picks one or sends them all back (`AGENTS.md` → UI PR rules). Not a single
+    take-it-or-leave-it proposal, and not a mood board — real screens with real data.
+    **Constraints that do not move:** contrast ratios stay AA, `MIN_TAP_TARGET_PX` stays, the 360px
+    layout stays, and the kid-ergonomics defaults in [design.md](./design.md) stay. A reskin that breaks
+    `e2e/a11y.spec.ts` is not a candidate. **Reversible in one file** — that is the whole appeal of the
+    token path, and the reason it beats UI-2's framework path on risk as well as cost.
+    **Not a P0.** It is a **seam** (every screen), so it does not parallelize. PICK-1 and Beta 0 are
+    ahead of it.
+
+- **UI-4 — a light/dark theme switch, which the tokens are already paid up for.** 🌓 _(maintainer,
+  2026-10-07.)_ Requested alongside UI-3, and it should land **first**, because reskin options have to
+  be reviewable in both themes.
+  ⚠️ **Dark mode is fully defined and completely unreachable today.** `globals.css` carries a
+  **33-line `.dark` OKLCH palette**, and: nothing ever sets `.dark` (no `next-themes`, no provider, no
+  toggle — zero matches in `app/`, `components/`, `lib/`), and there is **no `prefers-color-scheme`
+  fallback either**. So the dark palette has never rendered for anyone. [design.md](./design.md):64
+  says this honestly — _"A theme toggle lands in a later PR; the tokens already support both"_ — but
+  its opening line claims components _"adapt to light/dark **automatically**"_, which is not true while
+  nothing sets the class. **Fixed in this PR**; the row is what makes it true.
+  **What it takes:** a provider that sets the class on `<html>`, a toggle, persistence, and
+  **`suppressHydrationWarning` plus a pre-paint script so there is no flash of the wrong theme** — the
+  one genuinely fiddly part, and the reason this is a row and not a one-liner.
+  **Decisions the row owes:** three states or two (system / light / dark — **system should be the
+  default**, so a viewer's OS preference is honoured before anyone touches anything); where the toggle
+  lives on a phone, where header space is scarce; and whether it is per-device (`localStorage`) or per
+  profile (a DB column). ⚠️ **Per-device is the right default** — a theme is a property of the room you
+  are in, and the gym is lit differently from the kitchen.
+  **Acceptance:** both themes pass `e2e/a11y.spec.ts` (axe AA contrast is checked, so the dark palette
+  gets its first real audit), no flash on load, the choice survives a reload, and screenshots at three
+  widths in both themes. Small, self-contained, genuinely useful, and it unblocks UI-3's review.
 
 - **UI-1 — the form is the day: the program card becomes the rendered form.** _(maintainer,
   2026-10-06.)_ Today shows a read-only program card listing the day's movements, then a button that
