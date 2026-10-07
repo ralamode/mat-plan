@@ -22,7 +22,7 @@
   "dependencies": {
     "@mat-plan/db": "workspace:*",
     "@mat-plan/shared": "workspace:*",
-    "@sentry/nextjs": "^10.75.3",
+    "@sentry/nextjs": "^11.0.0",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",

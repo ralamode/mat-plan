@@ -6,6 +6,7 @@ import {
   beforeSendLogScrubbed,
   beforeSendScrubbed,
   beforeSendTransactionScrubbed,
+  SENTRY_DATA_COLLECTION,
 } from '@/lib/sentry-scrub';
 
 /**
@@ -21,11 +22,11 @@ import {
 Sentry.init({
   dsn: env.SENTRY_DSN,
 
-  // PII: the SDK's `sendDefaultPii: false` is NOT sufficient here — its non-PII cookie default is a
-  // deny-OBJECT, and `mp_gate` matches none of its sensitive-name snippets. The real guarantee is the
-  // scrubber below (unit-tested in lib/sentry-scrub.test.ts) plus never passing `headers`/`formData`
+  // PII: Sentry 11's `dataCollection` defaults every field to ON (request bodies, headers, cookies,
+  // DB query data, frame locals), so it is set explicitly, field by field. The scrubber below is the
+  // second line (both unit-tested in lib/sentry-scrub.test.ts), plus never passing `headers`/`formData`
   // to `withServerActionInstrumentation`.
-  sendDefaultPii: false,
+  dataCollection: SENTRY_DATA_COLLECTION,
   beforeSend: beforeSendScrubbed,
   beforeSendTransaction: beforeSendTransactionScrubbed,
   beforeBreadcrumb: beforeBreadcrumbScrubbed,

@@ -9,6 +9,7 @@ import {
   beforeSendScrubbed,
   beforeSendTransactionScrubbed,
   scrubSentryEvent,
+  SENTRY_DATA_COLLECTION,
 } from './sentry-scrub';
 
 /**
@@ -258,5 +259,45 @@ describe('scrubSentryEvent — query params never leave the server (SEC-3)', () 
     const clean = Object.freeze({ note: 'nothing to strip' });
     const kept = beforeBreadcrumbScrubbed({ category: 'app', data: { clean } });
     expect(kept?.data?.clean).toBe(clean);
+  });
+});
+
+describe('SENTRY_DATA_COLLECTION — what the SDK may collect on its own (Sentry 11)', () => {
+  it('turns off every field that defaults to ON — the contract, pinned literally', () => {
+    expect(SENTRY_DATA_COLLECTION).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      graphQL: { document: false, variables: false },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      stackFrameVariables: false,
+    });
+  });
+});
+
+describe('scrubSentryEvent — Sentry 11 collection paths, stripped as a second line', () => {
+  it('drops the request body (a Server Action body is its form: a weight, the access code)', () => {
+    const event = { request: { data: 'weight=999.9' } } as Event;
+    expect(scrubSentryEvent(event).request).not.toHaveProperty('data');
+  });
+
+  it('drops local variables from every stack frame', () => {
+    const event = {
+      exception: {
+        values: [
+          {
+            value: 'boom',
+            stacktrace: { frames: [{ function: 'write', vars: { weight: '999.9' } }] },
+          },
+        ],
+      },
+    } as Event;
+    const frame = scrubSentryEvent(event).exception?.values?.[0]?.stacktrace?.frames?.[0];
+    expect(frame).not.toHaveProperty('vars');
+    expect(frame).toMatchObject({ function: 'write' });
   });
 });

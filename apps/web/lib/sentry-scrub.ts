@@ -1,4 +1,4 @@
-import type { Breadcrumb, ErrorEvent, Event, Log } from '@sentry/nextjs';
+import type { Breadcrumb, ErrorEvent, Event, init, Log } from '@sentry/nextjs';
 
 /**
  * PII scrubbing for Sentry events (V1-14a) — **the security-critical part of the Sentry wiring.**
@@ -7,10 +7,11 @@ import type { Breadcrumb, ErrorEvent, Event, Log } from '@sentry/nextjs';
  * all verified against the SDK source rather than assumed:
  *
  *  1. **The `mp_gate` cookie — the app's entire credential.** `withServerActionInstrumentation(name,
- *     { headers }, cb)` copies EVERY header into the isolation scope. With `sendDefaultPii: false`,
- *     `requestDataIntegration`'s non-PII default is `cookies: { deny: PII_HEADER_SNIPPETS }` — a deny
- *     *object*, NOT `false` — so cookies are still included, and `mp_gate` matches none of the SDK's
- *     sensitive-name snippets. (We also never pass `headers`; this is the second line of defence.)
+ *     { headers }, cb)` copies EVERY header into the isolation scope. Sentry 10's
+ *     `sendDefaultPii: false` still collected cookies (a deny-list `mp_gate` matched nothing in), and
+ *     Sentry 11 replaced that switch with `dataCollection`, whose every field defaults to ON. So
+ *     `SENTRY_DATA_COLLECTION` below turns each one off, and this scrubber is the second line. (We
+ *     also never pass `headers`.)
  *  2. **A kid's bodyweight.** `withServerActionInstrumentation`'s `formData` option does
  *     `setExtra('server_action_form_data.' + key, value)`. `.github/SECURITY.md`: "Kid bodyweight is
  *     privileged … never logged." (We never pass `formData`; again, defence in depth.)
@@ -22,12 +23,42 @@ import type { Breadcrumb, ErrorEvent, Event, Log } from '@sentry/nextjs';
  *     goes. `extraErrorDataIntegration` (if ever enabled) would also copy the error's own `params`
  *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
+ * Sentry 11's defaults also collect REQUEST BODIES (a Server Action's body is its form: a weight, the
+ * access code) and STACK-FRAME LOCAL VARIABLES (a writer's locals hold the row it was writing). Both
+ * are off in `SENTRY_DATA_COLLECTION`, and both are stripped here too, so a future SDK default or a
+ * config edit cannot reopen either on its own.
+ *
  * So this runs on every error event and every transaction (spans included), and — through
  * `beforeBreadcrumbScrubbed` and `beforeSendLogScrubbed` — on every breadcrumb and every Sentry log. Its
  * test is the assertion that matters most in V1-14a. Not covered: spans sent standalone (span streaming,
  * `beforeSendSpan`), which this app does not enable (`tracesSampleRate: 0`). It strips rather than redacts: none of this is diagnostically useful, and a redacted marker
  * would only tempt someone to "temporarily" turn it off.
  */
+
+/** The `dataCollection` option's type, read off `Sentry.init` (the SDK does not export it by name). */
+type DataCollection = NonNullable<NonNullable<Parameters<typeof init>[0]>['dataCollection']>;
+
+/**
+ * What the Sentry SDK may collect on its own, set field by field (Sentry 11). Every field defaults to
+ * ON, so an omitted field is a field that collects. The `Required<…>` type makes that a compile
+ * error: a Sentry release that adds a field fails the typecheck here until someone decides it.
+ * Both `sentry.server.config.ts` and `sentry.edge.config.ts` pass this one object.
+ *
+ * Left at its default: `frameContextLines` (source-code lines around a frame — code, not user data,
+ * and minified anyway while source maps are off).
+ */
+export const SENTRY_DATA_COLLECTION: Required<Omit<DataCollection, 'frameContextLines'>> = {
+  userInfo: false,
+  cookies: false,
+  httpHeaders: false,
+  httpBodies: [],
+  urlQueryParams: false,
+  graphQL: { document: false, variables: false },
+  genAI: { inputs: false, outputs: false },
+  databaseQueryData: false,
+  queues: false,
+  stackFrameVariables: false,
+};
 
 /** Request headers that must never leave the server, lower-cased for comparison. */
 const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authorization'];
@@ -93,6 +124,8 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     }
     // A query string could carry a `from` redirect or future token; not worth the risk.
     delete event.request.query_string;
+    // The request body: for a Server Action, its form fields (a weight, the access code).
+    delete event.request.data;
   }
 
   if (event.extra) {
@@ -104,6 +137,8 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   // SEC-3: query params, wherever the message or an integration put them.
   for (const exception of event.exception?.values ?? []) {
     exception.value = stripQueryParams(exception.value);
+    // Local variables captured per frame: a writer's locals hold the values it was writing.
+    for (const frame of exception.stacktrace?.frames ?? []) delete frame.vars;
   }
   event.message = stripQueryParams(event.message);
   if (event.logentry) {
