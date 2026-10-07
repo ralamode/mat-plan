@@ -56,6 +56,15 @@ export async function captureScreenshot(opts: {
    * viewport (each gets a fresh context), so it must be idempotent from a clean page.
    */
   interact?: (page: Page) => Promise<void>;
+  /**
+   * Which theme to capture (UI-4). Emulates `prefers-color-scheme`, which is what the app's DEFAULT
+   * `system` theme follows — so no storage seeding and no clicking the toggle is needed, and the shot
+   * is of the theme a viewer with that device setting actually gets.
+   *
+   * Needed because every UI-3 candidate has to be reviewed in BOTH themes at three widths, and until
+   * this existed there was no way to produce the dark half of that evidence at all.
+   */
+  colorScheme?: 'light' | 'dark';
 }): Promise<string[]> {
   const name = opts.name ?? routeSlug(opts.route);
   await mkdir('.screenshots', { recursive: true });
@@ -73,6 +82,7 @@ export async function captureScreenshot(opts: {
         isMobile: vp.touch,
         hasTouch: vp.touch,
         ...(opts.timeZone ? { timezoneId: opts.timeZone } : {}),
+        ...(opts.colorScheme ? { colorScheme: opts.colorScheme } : {}),
       });
       if (opts.timeZone) {
         // Seed the `tz` cookie DIRECTLY, don't rely on `TimeZoneSync` writing it. `timezoneId` only
