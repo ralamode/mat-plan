@@ -18,6 +18,8 @@ import {
   STRENGTH_RECEIPT_ID_PREFIX,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
+  THEME_STORAGE_KEY,
+  TOKEN_SETS_PATH,
   PARTIAL_SETS_COPY,
   quantityInputLabel,
 } from '../lib/constants';
@@ -70,6 +72,10 @@ const ROUTES = [
   { name: 'profile picker', path: APP_HOME_PATH },
   { name: 'Today', path: SEED_PROFILE_ROUTE },
   { name: 'routine editor', path: `${SEED_PROFILE_ROUTE}/routine` },
+  // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
+  // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
+  // leaves with the harness when UI-3 picks a set.
+  { name: 'token sets', path: TOKEN_SETS_PATH },
 ] as const;
 
 /**
@@ -179,9 +185,87 @@ for (const route of ROUTES) {
   }) => {
     await page.goto(route.path, { waitUntil: 'networkidle' });
     await expectNoAxeViolations(page, route.name);
-    await expectTapTargets(page, route.name, { expectControls: route.path !== APP_HOME_PATH });
+    // Every route now has at least one real control: UI-4 put the theme switch on the picker, which
+    // used to be the one page with only link-cards. Keeping the opt-out would have left the
+    // "selector matched nothing" guard switched off on a page that can now trip it.
+    await expectTapTargets(page, route.name);
   });
 }
+
+/**
+ * The same scan in DARK MODE (UI-4) — the dark palette's first real audit. It has been defined in
+ * `globals.css` since the scaffold and, until this PR, unreachable: nothing set `.dark`, so axe has
+ * only ever measured the light theme.
+ *
+ * AXE ONLY, no tap targets: control HEIGHT does not vary with the theme, which is the same argument
+ * this file already makes for not running a tri-viewport matrix. Doubling the cheap half is worth it;
+ * doubling the expensive half is not.
+ *
+ * ⚠️ The guard on the first line is the point. `colorScheme` emulation only matters while nothing is
+ * STORED — a `mp_theme` value in the project's `storageState` would win, and the scan would audit
+ * light while reporting green on "dark". This file has shipped that exact failure before (the
+ * weekday-conditional scaffold check that was silently dead four days in seven), so the theme is
+ * asserted before anything is measured.
+ */
+test.describe('dark theme', () => {
+  test.use({ colorScheme: 'dark' });
+
+  for (const route of ROUTES) {
+    test(`${route.name} has no WCAG A/AA violations in dark mode`, async ({ page }) => {
+      await page.addInitScript((key) => {
+        try {
+          window.localStorage.removeItem(key as string);
+        } catch {
+          /* ignore */
+        }
+      }, THEME_STORAGE_KEY);
+      await page.goto(route.path, { waitUntil: 'networkidle' });
+      await expect(
+        page.locator('html'),
+        `${route.name}: not actually rendering dark — this scan would have audited the LIGHT palette`,
+      ).toHaveClass(/\bdark\b/);
+      await expectNoAxeViolations(page, `${route.name} (dark)`);
+    });
+  }
+});
+
+/**
+ * UI-4 — the token preview at 360px, measured PER SET.
+ *
+ * The `ROUTES` loop above runs axe and tap targets only; `expectNoHorizontalOverflow` is opt-in per
+ * test, so adding a route to that list buys no overflow coverage at all — and this is the one new
+ * page whose whole purpose is to vary `--spacing` and `--radius`. Tatami is 1.12× density, and the
+ * strength set row it renders budgets against ~294px of the 328px a 360px phone has, so overflow is
+ * the plausible failure, not a theoretical one.
+ *
+ * Measured per `[data-tokens]` section rather than page-wide, because `documentElement.scrollWidth`
+ * would tell UI-3 that "the page overflows" without naming which candidate is disqualified.
+ */
+test('the token preview does not overflow at 360px, in any set', async ({ page }) => {
+  await page.setViewportSize(NARROW);
+  await page.goto(TOKEN_SETS_PATH, { waitUntil: 'networkidle' });
+
+  await expectNoHorizontalOverflow(page, 'token sets');
+
+  const cells = await page.locator('[data-tokens]').all();
+  // Not vacuous: the scoped sets must actually be on the page for this to measure anything.
+  expect(cells.length, 'no [data-tokens] sections found — the selector is wrong').toBeGreaterThan(
+    2,
+  );
+  const overflowing: string[] = [];
+  for (const cell of cells) {
+    const result = await cell.evaluate((el) => ({
+      id: el.getAttribute('data-tokens') ?? '(control)',
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    // 1px of tolerance: sub-pixel layout rounding, not a layout defect.
+    if (result.scrollWidth > result.clientWidth + 1) {
+      overflowing.push(`${result.id} (${result.scrollWidth} > ${result.clientWidth})`);
+    }
+  }
+  expect(overflowing, `token sets overflowing at ${NARROW.width}px`).toEqual([]);
+});
 
 test('the strength form meets the tap-target bar in its EXPANDED state', async ({ page }) => {
   // THE most important case in this file. "Remove movement" renders only with ≥2 movements and
