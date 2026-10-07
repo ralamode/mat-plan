@@ -6,6 +6,7 @@ import {
   beforeSendLogScrubbed,
   beforeSendScrubbed,
   beforeSendTransactionScrubbed,
+  SENTRY_DATA_COLLECTION,
 } from '@/lib/sentry-scrub';
 
 /**
@@ -18,7 +19,7 @@ import {
  */
 Sentry.init({
   dsn: env.SENTRY_DSN,
-  sendDefaultPii: false,
+  dataCollection: SENTRY_DATA_COLLECTION,
   beforeSend: beforeSendScrubbed,
   beforeSendTransaction: beforeSendTransactionScrubbed,
   beforeBreadcrumb: beforeBreadcrumbScrubbed,
