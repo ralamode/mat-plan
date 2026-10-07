@@ -12,6 +12,9 @@ name: Migrate + seed (production)
 # a no-op when nothing is pending, and `db:seed` is idempotent (ON CONFLICT DO
 # NOTHING). A brittle per-file `paths` allowlist would silently miss seed-only PRs
 # (which is exactly how prod drifted after V1-2/V1-3 shipped no migration).
+#
+# The PREVIEW estate has its own migrator, `migrate-preview.yml` — a separate FILE, not a second job
+# here, so that a branch dispatch cannot reach the production credential below (OPS-1).
 
 on:
   push:
@@ -30,6 +33,12 @@ jobs:
   migrate:
     name: apply migrations
     runs-on: ubuntu-latest
+    # OPS-1: `workflow_dispatch` lets a caller pick ANY ref, and a dispatched run executes that
+    # ref's code — so without this, dispatching from a feature branch would apply that branch's
+    # unmerged, unreviewed migration files to PRODUCTION. runbooks.md has always said to dispatch
+    # from `main`; this makes the instruction unnecessary rather than merely written down. A push to
+    # `main` and a dispatch from `main` both satisfy it, so the documented procedure is unchanged.
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -48,6 +57,11 @@ jobs:
       - name: Apply migrations + idempotent seed (direct/unpooled Neon string)
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          # OPS-1: there are now TWO migrator secrets, so a mis-paste is live in both directions —
+          # and this is the QUIET direction: the preview string here would leave this job GREEN
+          # while production stopped being migrated and drifted. Both scripts refuse a target whose
+          # database name disagrees. See packages/shared/src/db-environment.ts.
+          EXPECTED_DB_ENV: production
         run: |
           if [ -z "$DATABASE_URL_UNPOOLED" ]; then
             echo "::warning::DATABASE_URL_UNPOOLED secret not set — skipping (Neon not wired yet)."

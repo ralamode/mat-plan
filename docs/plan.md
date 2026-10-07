@@ -465,8 +465,13 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
      line after reviewing the UX-panel mockups; `/gate` loses "Private preview."; the CTA reads "See
      how it's built on GitHub". Deviations from the plan are listed in the PR.
   2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
-     are already published in `seed.ts`, `global.setup.ts` and `steps.ts`; renaming them closes the real
+     are already published in `seed.ts`, `global.setup.ts`, `steps.ts` **and `docs/runbooks.md`** (its
+     "Rename / correct a seeded profile" entry embeds one in committed SQL — added to this list by
+     OPS-1's privacy panel, which found the file list incomplete). Renaming them closes the real
      exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.
+     **Note the seed's shape:** `onConflictDoNothing` on `public_id` means a rename is **fresh-DB
+     only**, so each live database needs the `runbooks.md` correction — except the OPS-1 preview
+     project, which is disposable and takes the rename by being reset, not corrected.
   3. **§B — the hero image.** Deliberately last: 🔴 **`next/image` on a `public/` asset is broken in
      this app today** — measured, 400 for every caller, gated or not, because the optimizer's internal
      fetch re-enters the proxy with no cookie. §B un-gates `public/landing/`, scopes
@@ -1051,11 +1056,26 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   The finisher is stored as the routine's `shot` check-in but reaches **no CSV** until the
   exporter writes check-in rows (the checkins export is header-only today).
 
-- **OPS-1 — previews hold neither production data nor production credentials.** Today every Vercel
-  preview gets the prod `DATABASE_URL` ([deploy.md](./deploy.md)). Previews get a seed-only database
-  (never a branch of prod, which would clone every family's data), the Preview scope holds no
-  production secret (separate Clerk dev instance, Upstash, Sentry DSN), and Vercel's fork-PR protection
-  is verified on. _(Beta 0.)_
+- **OPS-1 — previews hold neither production data nor production credentials.**
+  [Plan](./plans/ops-1-preview-isolation.md). Every Vercel preview got the prod `DATABASE_URL`
+  ([deploy.md](./deploy.md)) — and in fact every _other_ production credential too, including the
+  access-gate code. Previews get a seed-only database (never a branch of prod, which would clone every
+  family's data), the Preview scope holds no production secret (separate Clerk dev instance, Upstash,
+  Sentry DSN), and Vercel's fork-PR protection is verified on. _(Beta 0.)_
+
+  🟡 **Repo half merged; the dashboard half is OUTSTANDING and OPS-1 is not done until it is run.**
+  The repo now refuses to boot or migrate against a database that disagrees with its environment
+  (`packages/shared/src/db-environment.ts`), ships `pnpm preview:check` to verify the Vercel scopes,
+  and migrates a preview estate (`migrate-preview.yml`). Creating the Neon project, splitting the
+  Vercel scopes and the Upstash database are dashboard work: **[runbooks.md](./runbooks.md) → OPS-1**,
+  nine steps, ordered to run _before_ the merge. Tick this row in that runbook's closeout commit.
+
+  ⚠️ **The row's own wording missed the biggest part, found by the PR's security panel.** Vercel
+  injects env values at **build time**, so re-scoping the project does nothing for previews that
+  already shipped: **100 publicly-listed preview URLs were live, each holding the production database
+  string and the production gate code.** Runbook step 7 purges them and rotates both credentials.
+  **Rotation is not retroactive** — a credential that was ever in a build stays in that build.
+
 - **OPS-2 — split the seed: reference data for prod, fixtures for dev/CI.** `migrate.yml` seeds prod on
   every push; the seed writes Ray's family with public fixed UUIDs and re-creates them if deleted, and
   expands ramp targets over every kid in the database. Split into `seedReference` and `seedFixtures`;
@@ -1064,6 +1084,13 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   Per-household restore (branch → extract → copy) plus a deletion ledger, because a whole-database
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
   drill branch. _(Beta 0.)_
+
+  **Two locations, not one, since OPS-1.** The deletion ledger must walk the production Neon project
+  **and** `mat-plan-preview`, which holds the seed's fixture profiles plus whatever any preview wrote
+  ([service-setup.md](./service-setup.md) → "Where personal data lives"). The preview copy's deletion
+  path is cheap and complete — delete the project; it rebuilds from `db:migrate` + `db:seed` in
+  minutes — but it has to be _in_ the ledger, or it is the copy a request misses.
+
 - **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
   every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to Ray's household;
   AUTH-1 swaps its implementation. `db:verify` proves a second household cannot read, write, correct or
@@ -2017,7 +2044,11 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 
 ## Resolved decisions (for provenance)
 
-- DB-in-CI → Docker Postgres (CI tests) + Neon branch-per-PR (previews).
+- DB-in-CI → Docker Postgres (CI tests) + Neon branch-per-PR (previews). ⚠️ **The previews half was
+  SUPERSEDED by [OPS-1](./plans/ops-1-preview-isolation.md) (2026-10-07) and was never built.** A
+  branch of production is a copy-on-write clone, so it would put every family's data in every preview;
+  previews use a separate, seed-only Neon project. Kept here as provenance, annotated rather than
+  rewritten.
 - PIN → deferred; `pin_hash` column only.
 - Habits CSV → app-only until the v3 API.
 - Auth provider → Clerk (COPPA stays deferred; kids have no accounts).

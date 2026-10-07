@@ -17,18 +17,39 @@ Related: [deploy.md](./deploy.md) (the deployment topology), [.github/SECURITY.m
 
 ## Status at a glance
 
-| Service           | Purpose                       | Required?                        | Blocks                       |
-| ----------------- | ----------------------------- | -------------------------------- | ---------------------------- |
-| **Neon**          | Postgres                      | ✅ **Required** — app won't boot | everything                   |
-| **Vercel**        | Hosting + preview deploys     | ✅ **Required**                  | deploys                      |
-| **GitHub**        | Repo, CI, the single migrator | ✅ **Required**                  | CI, migrations               |
-| **Upstash Redis** | Rate-limits the access gate   | ⬜ Optional                      | nothing — no-ops when absent |
-| **Sentry**        | Server error reporting        | ⬜ Optional                      | nothing — no-ops when absent |
+| Service           | Purpose                       | Required?                                      | Blocks                       |
+| ----------------- | ----------------------------- | ---------------------------------------------- | ---------------------------- |
+| **Neon**          | Postgres                      | ✅ **Required** — app won't boot               | everything                   |
+| **Vercel**        | Hosting + preview deploys     | ✅ **Required**                                | deploys                      |
+| **GitHub**        | Repo, CI, the single migrator | ✅ **Required**                                | CI, migrations               |
+| **Upstash Redis** | Rate-limits the access gate   | ⬜ Optional for prod, **required for Preview** | nothing in prod; see OPS-1   |
+| **Sentry**        | Server error reporting        | ⬜ Optional                                    | nothing — no-ops when absent |
+
+### Where personal data lives
+
+Two places, since OPS-1 — written down here because an unrecorded copy is the one a deletion request
+misses, and OPS-3's deletion ledger has to walk both:
+
+| Location                     | Holds                                                                                                                                       | Who can read it                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Neon, production project** | the real thing — profiles, bodyweight, every logged entry                                                                                   | the household operator, through the app           |
+| **Neon, `mat-plan-preview`** | `db:seed`'s fixture profiles (**two minors' first names**, already public in `packages/db/src/seed.ts`) **plus whatever any preview wrote** | anyone with the preview gate code; the maintainer |
+
+The preview project holds **no real family's logged data** and must never be allowed to: a preview is
+publicly listed and internet-reachable. It is **disposable** — [runbooks.md](./runbooks.md) → OPS-1
+has the reset recipe, and deleting the project is the complete deletion path for that copy. The
+fixture names themselves are **OSS-1 follow-up #2**'s row, not OPS-1's; reference-only seeding, which
+would remove them from this table entirely, is **OPS-2**'s.
 
 **The two optional ones are genuinely optional.** V1-14a was deliberately built so that an absent
 credential means the feature no-ops and the app behaves exactly as it did before. That is not a
-convenience — local dev, CI, and previews all legitimately run without them, and requiring them would
-have broken `pnpm dev` and CI the day it merged.
+convenience — local dev and CI legitimately run without them, and requiring them would have broken
+`pnpm dev` and CI the day it merged.
+
+⚠️ **One exception since OPS-1: Upstash is effectively required for the Preview scope.** A preview URL
+is publicly listed (the GitHub deployments API exposes `environment_url` on a public repo), and
+without Upstash the rate limiter fails open — so previews would be a publicly-listed URL in front of
+an **unlimited** password oracle on the only control they have.
 
 ---
 
@@ -109,25 +130,51 @@ or a bodyweight ever appears in a Sentry event, treat it as an incident: revoke 
 
 ### Vercel — Project → Settings → Environment Variables
 
-| Variable                         | Production | Preview | Development |
-| -------------------------------- | :--------: | :-----: | :---------: |
-| `ACCESS_GATE_PASSWORD`           |     ✅     |   ✅    |     ✅      |
-| `DATABASE_URL` (Neon **pooled**) |     ✅     |   ✅    |     ✅      |
-| `UPSTASH_REDIS_REST_URL`         |     ✅     |   ✅    |     ✅      |
-| `UPSTASH_REDIS_REST_TOKEN`       |     ✅     |   ✅    |     ✅      |
-| `SENTRY_DSN`                     |     ✅     |   ✅    |     ✅      |
+⚠️ **This table used to be ✅/✅/✅ on every row — one value per variable across all three scopes.**
+That is what OPS-1 fixed: it meant a preview deployment of any pull request read and wrote
+**production**, with the production gate code. **No variable may target more than one scope.** Give
+each scope its own record, even where the value is identical.
+
+| Variable                   | Production                  | Preview                    | Development            |
+| -------------------------- | --------------------------- | -------------------------- | ---------------------- |
+| `ACCESS_GATE_PASSWORD`     | its own long random code    | a **different** one        | same as Preview        |
+| `DATABASE_URL` (pooled)    | the production Neon project | **`mat-plan-preview`**     | **`mat-plan-preview`** |
+| `UPSTASH_REDIS_REST_URL`   | the production Redis DB     | a **second**, preview-only | same as Preview        |
+| `UPSTASH_REDIS_REST_TOKEN` | the production Redis DB     | the same second DB         | same as Preview        |
+| `SENTRY_DSN`               | ✅                          | ⬜ **unset**               | ⬜ **unset**           |
+| `SKIP_ENV_VALIDATION`      | ⛔ never                    | ⛔ never                   | ⛔ never               |
+| `ALLOW_LIVE_DB`            | ⛔ never                    | ⛔ never                   | ⛔ never               |
 
 `DATABASE_URL_UNPOOLED` does **not** go in Vercel — Vercel never migrates.
 
+**Development gets the preview string**, not production's: `vercel env pull` would otherwise hand a
+laptop read-write production credentials, and `pnpm dev` uses an embedded Postgres and never reads
+it. The two ⛔ rows are not style: `SKIP_ENV_VALIDATION` turns off env validation including OPS-1's
+database guard, and `ALLOW_LIVE_DB` is the deliberate off-Vercel opt-in for `pnpm dev:prod`.
+
+Verify it mechanically with `pnpm preview:check`. The ordered procedure —including the **purge of
+historical previews** and the credential **rotation** they force— is
+[runbooks.md](./runbooks.md) → OPS-1.
+
 ### GitHub — Settings → Secrets and variables → Actions
 
-| Secret                                    | Why                                   |
-| ----------------------------------------- | ------------------------------------- |
-| `DATABASE_URL_UNPOOLED` (Neon **direct**) | GitHub Actions is the single migrator |
+| Secret                                            | Why                                                   |
+| ------------------------------------------------- | ----------------------------------------------------- |
+| `DATABASE_URL_UNPOOLED` (Neon **direct**)         | `migrate.yml` — GitHub Actions is the single migrator |
+| `PREVIEW_DATABASE_URL_UNPOOLED` (preview project) | `migrate-preview.yml` — the preview estate's migrator |
 
-**Nothing else.** CI deliberately has no Upstash or Sentry credentials, so that no external service
-outage can redden a build. If a CI failure ever mentions either, something was added here that
-shouldn't have been.
+**Those two, and nothing else.** CI deliberately has no Upstash or Sentry credentials, so that no
+external service outage can redden a build. If a CI failure ever mentions either, something was added
+here that shouldn't have been.
+
+**No Vercel token, either** — deliberately. `pnpm preview:check` needs one, and a Vercel token is
+account- or team-scoped with **no read-only scope**: it can decrypt every production environment
+variable and create deployments. On a public repo that is a worse risk than the one it verifies, so
+the check is a local command the runbook invokes and then revokes.
+
+Both database secrets are reachable only from `push: [main]` and `workflow_dispatch`, so **a fork PR
+never sees either**. _(Optional hardening: move them into a GitHub Environment with a `main`-only
+deployment-branch policy, so a future workflow cannot reference them by accident.)_
 
 ### Local — `apps/web/.env.local` (gitignored)
 
@@ -160,9 +207,9 @@ these actually work, because neither can be verified without live credentials. I
 
 ## 5. Not needed yet
 
-| Service                   | When                                      | For                                                                                                   |
-| ------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Clerk**                 | v1.5                                      | household login; replaces the access-gate stopgap and finally makes per-user rate limiting meaningful |
-| **Anthropic API**         | AI-1                                      | natural-language logging                                                                              |
-| **Vercel Speed Insights** | later                                     | Core Web Vitals RUM ([ADR-0001](./decisions/0001-observability-and-web-vitals.md))                    |
-| **Axiom / Better Stack**  | later, only if Sentry proves insufficient | log drain                                                                                             |
+| Service                   | When                                      | For                                                                                                                                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Clerk**                 | Beta 0 (AUTH-1)                           | household login; replaces the access-gate stopgap and finally makes per-user rate limiting meaningful. **Two instances:** a production one, and a **development** instance (`pk_test_`/`sk_test_`) for the Preview scope — OPS-1's rule is that the Preview scope holds no production secret |
+| **Anthropic API**         | AI-1                                      | natural-language logging                                                                                                                                                                                                                                                                     |
+| **Vercel Speed Insights** | later                                     | Core Web Vitals RUM ([ADR-0001](./decisions/0001-observability-and-web-vitals.md))                                                                                                                                                                                                           |
+| **Axiom / Better Stack**  | later, only if Sentry proves insufficient | log drain                                                                                                                                                                                                                                                                                    |

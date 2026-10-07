@@ -270,18 +270,27 @@ flowchart TB
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>auto-skips docs-only PRs · ci-skip-e2e label override"]
     G["<b>gitleaks</b> (required)"]
   end
-  CI --> PREV["Vercel preview + Neon branch (prod-shaped)"]
+  CI --> PREV["Vercel preview<br/>(preview scope: seed-only Neon project,<br/>own gate code + Upstash, no prod secret)"]
   DEV -. "a writer comments @claude review<br/>(on request only)" .-> CR["<b>claude-review</b> (advisory, never required)<br/>review: model, read-only token, PR head as data<br/>→ post: no model; scans, then one comment"]
   CR -. "one review comment" .-> REV
   PREV --> REV["review + squash-merge to main"]
-  REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>(direct/unpooled Neon)"]
+  REV --> MIG["migrate-on-deploy<br/>GH Actions single migrator<br/>migrate.yml (prod) + migrate-preview.yml"]
   REV --> PROD["Vercel prod (pooled Neon, Node runtime)"]
-  MIG --> NEON[("Neon Postgres")]
+  MIG --> NEON[("Neon: production")]
+  MIG --> NEONP[("Neon: mat-plan-preview<br/>seed-only, separate project")]
   PROD --> NEON
+  PREV --> NEONP
 ```
 
 > `e2e` soaks as non-blocking until **PR 28**, then becomes a required check. Squawk (migration lint)
 > and a Neon-branch apply are documented gates not yet wired into `ci.yml` (a follow-up).
+>
+> ⚠️ **Previews do NOT get a Neon branch of production, and never did.** This diagram said
+> "Neon branch (prod-shaped)" in the present tense for months. A preview reads a **separate,
+> seed-only Neon project** — a branch is a copy-on-write clone, so it would put every family's
+> bodyweight in every preview ([OPS-1](./plans/ops-1-preview-isolation.md)). The unwired
+> prod-shaped rehearsal is a different thing, and when it is built it must branch the **preview**
+> project or use an anonymized snapshot, for the same reason.
 
 ## 6. Roadmap to MVP and beyond
 
