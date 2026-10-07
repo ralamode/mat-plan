@@ -199,8 +199,20 @@ separately says nothing about them together.
 ## Out of scope
 
 - **Creating a workout** (V1-22 A4). A new block would hijack Today for any day role it answers. Needs
-  the scheduling ADR. That ADR also needs an **active-block marker** on `program_blocks`; chunk 5
-  deliberately adds **no column**, so it inherits a clean table.
+  the scheduling ADR — now written: **[ADR 0007](../decisions/0007-scheduling-model.md) decision 4
+  splits A4 in two.** "**Create a block**" stays blocked until Today reads the athlete's **set** of
+  active assignments instead of `programDayRows`' one block by `id DESC LIMIT 1` — and that read change
+  is byte-affecting, because `prescribedFor` blanks a `prescribed` cell on any duplicate
+  `(day_role, movement)` and two concurrent blocks collide. "**Create a day inside a block the household
+  already has**" has an **interim that needs no schema at all**: `DAY_ROLES` has ten members and
+  `PROGRAM_SEED` uses two, so eight more day codes are already legal under both CHECKs, at the cost of
+  fixed labels. ADR 0007 records the `workouts` shape but **does not authorize** its migration — that arc
+  is six PRs and carries the only `DROP COLUMN`.
+  ⚠️ **The active-block marker this line used to promise is WITHDRAWN.** ADR 0007 decision 4 replaces it
+  with the schedule-carrying assignment row plus its nullable `active_from`/`active_to`, on the grounds
+  that a boolean marker beside a date range is a second, drifting answer to one question. Chunk 5 still
+  deliberately adds **no column**, so it still inherits a clean table — the reason is now that no column
+  is coming, not that one is coming later.
 - **The household-level library** (`/workouts`). Decided 2026-10-05: authoring is profile-scoped at
   `/p/<id>/program` because every BOLA guarantee derives from a profile public id. Waits for TEN-1.
 - **Workout versioning.** Chunk 1 delivers the guarantee versioning was proposed for.

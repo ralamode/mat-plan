@@ -207,3 +207,11 @@ regression that tests will not.
 - [plan.md](../plan.md) rows V1-10, V1-18, V1-19, V1-22, SCHED-1
 - [V1-22 plan](../plans/v1-22-program-editor.md) — panelled, scope A/B split
 - [ADR 0002](../decisions/) — `ramp_target` is a coach-authored calendar, not a progression engine
+- [ADR 0005](../decisions/0005-programming-model.md) — workouts become data; the prescription is
+  snapshotted on the logged record, not versioned
+- **[ADR 0007](../decisions/0007-scheduling-model.md) — the scheduling model.** Read it before touching
+  invariants 3, 3b or 3c: it decides that the one-block-by-design rule (invariant 3) becomes conditional
+  on an assignment row, that invariant 3b's calendar anchor moves into data **without** changing to
+  session-indexing, and that invariant 3c's "temporary" `strength_a`/`strength_b` reuse resolves by
+  **naming** (they become the authored workouts' slugs) rather than by a CHECK migration. Nothing in it
+  has shipped — it is a decision, and `SCHED-1` implements it.

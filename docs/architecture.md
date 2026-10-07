@@ -127,10 +127,16 @@ flowchart LR
 
 ## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
 
-The programming tables (§4) surface on Today as a **read-only** card. The weekday comes from the
-active-tz local day (V1-6c), maps through a hardcoded app-config schedule (`DAY_ROLE_BY_WEEKDAY` —
-a documented stopgap, see [tech-debt.md](./tech-debt.md)) to a `day_role`, and one single-sourced
-query resolves that day's prescriptions **plus this kid's own suggested loads**.
+The programming tables (§4) surface on Today as a **read-only** card. The calendar date comes from the
+active-tz local day (V1-6c) and maps through a hardcoded app-config schedule — a documented stopgap,
+see [tech-debt.md](./tech-debt.md) — to a `day_role`, and one single-sourced query resolves that day's
+prescriptions **plus this kid's own suggested loads**.
+
+⚠️ **The schedule is epoch-day PARITY, not a weekday map.** `resolveDayRole` alternates
+`strength_a`/`strength_b` on every calendar day with no rest day
+(`apps/web/lib/programming/day-role-schedule.ts:41-43`); the `DAY_ROLE_BY_WEEKDAY` Mon/Wed/Fri map this
+section described was **deleted in #151**. Where it goes next is
+[ADR 0007](./decisions/0007-scheduling-model.md).
 
 Two properties are load-bearing. **Ownership**: the household is resolved INSIDE the query
 (`profiles.public_id → household_id → program_blocks`), so no caller can name a household and read
@@ -141,7 +147,7 @@ logged, performed value. A prescription and a log entry stay strictly separate r
 ```mermaid
 flowchart LR
   RSC["/p/[profileId] RSC<br/>day = localDayIso(activeTz)"]
-  SCHED["resolveDayRole(day)<br/>localWeekday → DAY_ROLE_BY_WEEKDAY<br/>(Mon/Wed/Fri → strength_a/b/c)"]
+  SCHED["resolveDayRole(day)<br/>epoch-day parity, every day<br/>(even → strength_b, odd → strength_a)"]
   DAL["DAL getProgramDay(publicId, dayRole)<br/>server-only · uuid guard · → DTO"]
   Q["packages/db programDayRows<br/>(single-sourced, db:verify-proven)"]
   DB[("program_blocks → prescriptions<br/>⟕ prescription_targets (this profile)")]

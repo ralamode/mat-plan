@@ -53,6 +53,24 @@ rename, then §B (the hero image) ([plan](./plans/oss-2-public-landing.md)).
 file in `docs/specs/`. Its five-lens panel moved the gate, removed the only schema change, and cut
 three PRs out of the milestone. Next: `plan-with-panel` on chunk 1 (the snapshot column, shipping dark).
 
+🗓️ **The scheduling model is decided — [ADR 0007](./decisions/0007-scheduling-model.md)**, the five
+questions `beta-1.md` §3b deferred, hardened by a five-lens panel that returned **fourteen blocking
+findings** and withdrew the first draft. Recurrence is a **weekday set as rows**, not RRULE (the repo
+owns zero date dependencies, and RRULE would not answer the live program's question anyway, which is
+_which_ variant rather than whether). Rotation becomes **an anchor plus an ordered list on the block**
+and stays **calendar-indexed** — the maintainer's override is preserved, not revisited. `day_role`
+**splits**: a row on the authored side, frozen slug text on the logged side, because an FK to an
+editable name would rewrite the CSV's `session_type` for every past session. Dueness is **derived**;
+the day's verdict is **recorded and snapshots what it judged**, at a boundary derived from
+`WRITABLE_DAY_RADIUS` — which closes both of SCHED-1's open questions.
+
+⚠️ **The headline is what it does NOT authorize.** Shape decided ≠ migration authorized: of five
+tables the first draft licensed, **two** are authorized (the assignment row, the weekday rows) and
+three need their own backlog row — because the `workouts` arc is six PRs whose first two make the
+feature it claims to unblock unexecutable, and eight unused `DAY_ROLES` codes already give a household
+a new day with zero schema change. **After beta, not on the Beta 0 path.** `MOT-1` ships **with** the
+verdict table, V1-22 **A4 splits in two**, and the active-block marker its spec promised is withdrawn.
+
 🔧 **V1-24 PR 1c — Liam's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
 A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
 and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a

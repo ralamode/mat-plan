@@ -332,11 +332,20 @@ success.` Harmless there — nothing referenced the files yet.
 - **Severity:** medium — the highest-value DB gates now exist; this is the remaining one, and it is the one
   that costs money and a token rather than a workflow step.
 
-### The weekday → `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
+### The `day_role` schedule is a hardcoded app const, not data (V1-10 slice 2)
 
-- **What & why (V1-10 slice 2):** which `day_role` a weekday programs lives in
-  `apps/web/lib/programming/day-role-schedule.ts` as `DAY_ROLE_BY_WEEKDAY` — Ray's split hardcoded
-  (Mon/Wed/Fri → Strength A/B/C, everything else → nothing). The schedule genuinely belongs on the
+> 📐 **Shape decided: [ADR 0007](./decisions/0007-scheduling-model.md).** The weekday set becomes rows
+> on a block↔athlete assignment; the rotation anchor and ordered list go on `program_blocks`. Promoting
+> the resolver to `packages/shared` **retires this row's "nothing in the DB or engine may depend on it"
+> clause**, because `db:verify` will run the identical function the app does.
+
+- **What & why (V1-10 slice 2):** which `day_role` a calendar day programs lives in
+  `apps/web/lib/programming/day-role-schedule.ts`. ⚠️ **Corrected 2026-10-07:** this row described it as
+  a Mon/Wed/Fri weekday map named `DAY_ROLE_BY_WEEKDAY`; that const was **deleted in #151** and the live
+  mechanism is `resolveDayRole`, **epoch-day parity** over every calendar day with no rest day
+  (`:41-43`). The debt is unchanged — it is still one hardcoded const for the whole installation — but
+  the shape was wrong, and ADR 0005's panel finding R1 corrected the same stale name elsewhere. The
+  schedule genuinely belongs on the
   `program_block` (a block _is_ a weekly plan), but a `block_schedule` table would ship a migration plus an
   authoring UI for data exactly one household can author, in a slice whose whole point was "no migration".
   So it is app **policy**, deliberately in `apps/web` and not `packages/shared` — it is not part of the
