@@ -70,6 +70,7 @@ import {
  * Usage:
  *   pnpm --filter web screenshot:ephemeral /                     # empty home
  *   pnpm --filter web screenshot:ephemeral /p --state already-logged   # seeded Today
+ *   pnpm --filter web screenshot:ephemeral /design/tokens --theme dark # the dark half (UI-4)
  *   pnpm --filter web screenshot:ephemeral / --use-live-db       # old behavior (opt-in)
  *
  * tsx/CJS caveat (docs/lessons.md): apps/web has no `"type":"module"`, so the body is
@@ -836,6 +837,7 @@ async function runEphemeral(
   state: StateName,
   name: string,
   timeZone?: string,
+  colorScheme?: 'light' | 'dark',
 ): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-screenshot-pg-'));
   const pgPort = await freePort();
@@ -886,7 +888,14 @@ async function runEphemeral(
 
     // gateLogin reads ACCESS_GATE_PASSWORD from our env — match the server's gate code.
     process.env.ACCESS_GATE_PASSWORD = SCREENSHOT_GATE_PASSWORD;
-    await captureScreenshot({ route, baseUrl, name, timeZone, interact: INTERACTIONS[state] });
+    await captureScreenshot({
+      route,
+      baseUrl,
+      name,
+      timeZone,
+      colorScheme,
+      interact: INTERACTIONS[state],
+    });
   } finally {
     if (server) await stopChildProcess(server);
     await pg.stop().catch(() => {});
@@ -912,6 +921,20 @@ async function main(): Promise<void> {
   // (V1-6c). E.g. `--tz Pacific/Kiritimati` (UTC+14) renders tomorrow's local day.
   const tzFlagIdx = argv.indexOf('--tz');
   const timeZone = tzFlagIdx >= 0 ? argv[tzFlagIdx + 1] : undefined;
+
+  // `--theme light|dark` (UI-4) emulates `prefers-color-scheme`, which the app's default `system`
+  // theme follows — so the dark capture needs no storage seeding and no toggle click. Required
+  // because every UI PR now owes screenshots in BOTH themes, and a reskin candidate cannot be
+  // reviewed in one.
+  const themeFlagIdx = argv.indexOf('--theme');
+  const rawTheme = themeFlagIdx >= 0 ? argv[themeFlagIdx + 1] : undefined;
+  // Validated like `--tz`, and for the same reason: `--theme --state calisthenics` swallows the value
+  // into the next flag, and an unvalidated value would silently capture the wrong theme onto the
+  // artifact a reviewer approves from.
+  if (themeFlagIdx >= 0 && rawTheme !== 'light' && rawTheme !== 'dark') {
+    throw new Error(`--theme requires light|dark, got: ${rawTheme ?? ''}`);
+  }
+  const colorScheme = rawTheme as 'light' | 'dark' | undefined;
   // Validated with the SAME helper the app uses on the `tz` cookie — so `--tz --state calisthenics`
   // (value swallowed by the next flag) fails here with a clear message instead of deep inside Playwright.
   if (tzFlagIdx >= 0 && !isIanaTimeZone(timeZone)) {
@@ -920,14 +943,20 @@ async function main(): Promise<void> {
     );
   }
 
-  // First non-flag token is the route (skip the values consumed by --state / --tz).
-  const consumed = new Set([stateFlagIdx + 1, tzFlagIdx + 1].filter((i) => i > 0));
+  // First non-flag token is the route (skip the values consumed by --state / --tz / --theme). Miss
+  // one of these and `screenshot:ephemeral --theme dark /p` captures the route "dark".
+  const consumed = new Set(
+    [stateFlagIdx + 1, tzFlagIdx + 1, themeFlagIdx + 1].filter((i) => i > 0),
+  );
   const positionals = argv.filter((a, i) => !a.startsWith('-') && !consumed.has(i));
   // No `/p` → Today shorthand any more (OSS-2): `/p` is the real picker route, and the shorthand would
   // silently capture the wrong screen. Pass `/` for the public landing.
   const route = positionals[0] ?? APP_HOME_PATH;
   const base = route === SEED_PROFILE_ROUTE ? 'today' : routeSlug(route);
-  const name = state === 'empty' ? base : `${base}-${state}`;
+  // The theme rides the STEM, not the viewport suffix `capture.ts` appends — so a pair of runs yields
+  // `<name>-mobile.png` and `<name>-dark-mobile.png` side by side in `.screenshots/`.
+  const stem = state === 'empty' ? base : `${base}-${state}`;
+  const name = colorScheme === 'dark' ? `${stem}-dark` : stem;
 
   if (allowLive) {
     // OPT-IN: the OLD behavior — capture against a server the caller has already started
@@ -937,11 +966,11 @@ async function main(): Promise<void> {
     console.warn(
       '⚠️  --use-live-db: capturing against the already-running server (no embedded DB).',
     );
-    await captureScreenshot({ route, baseUrl, name, timeZone });
+    await captureScreenshot({ route, baseUrl, name, timeZone, colorScheme });
     return;
   }
 
-  await runEphemeral(route, state, name, timeZone);
+  await runEphemeral(route, state, name, timeZone, colorScheme);
 }
 
 main().catch((err) => {

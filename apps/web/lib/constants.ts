@@ -40,6 +40,17 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
  */
 export const APP_HOME_PATH = '/p';
 
+/**
+ * The token-set preview harness (UI-4, built to serve UI-3). Named here because the a11y spec and the
+ * screenshot flow both land on it, and a route path re-typed in two places is how one of them ends up
+ * pointing at nothing.
+ *
+ * ⚠️ **Temporary by design.** The UI-3 PR that picks a token set deletes `app/design/tokens/` and
+ * this constant with it. A harness kept past its decision is a CI cost paid forever for a choice made
+ * once.
+ */
+export const TOKEN_SETS_PATH = '/design/tokens';
+
 /** The profile picker's copy — one source for the page and the specs that land on it. */
 export const PICKER_COPY = {
   heading: 'Who’s logging today?',
@@ -86,6 +97,52 @@ export const ROUTINE_COPY = {
 
 /** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+/**
+ * The theme choice (UI-4). `system` FIRST because it is the default: a viewer's OS preference is
+ * honoured before anyone touches anything, which is the only setting that is right for a household
+ * nobody has configured.
+ *
+ * The values are `next-themes`' own (`setTheme('system' | 'light' | 'dark')`), so this array is the
+ * app's single source for them and the specs assert through it rather than re-typing a string.
+ */
+export const THEME_CHOICES = ['system', 'light', 'dark'] as const;
+export type ThemeChoice = (typeof THEME_CHOICES)[number];
+
+/**
+ * The `localStorage` key the choice is stored under — **the app's first-ever stored key**; nothing in
+ * `apps/web` used `localStorage` before this.
+ *
+ * ⚠️ **Set EXPLICITLY, not inherited.** `next-themes` defaults to `'theme'`, and the e2e proves the
+ * no-flash behaviour by seeding this key before navigation. If the library's default ever moved, a
+ * seeded `'theme'` would simply be ignored, the pre-paint script would read nothing, and the test
+ * would fall through to the post-hydration path — passing while the flash was back. Owning the key
+ * removes that failure mode entirely. `mp_` prefixed like `mp_gate`, so a shared browser's storage
+ * says which app it belongs to.
+ */
+export const THEME_STORAGE_KEY = 'mp_theme';
+
+/**
+ * The toggle's copy. `system` is labelled **"Auto"**, not "System": the primary users are kids
+ * between sets, and "System" is OS-vendor vocabulary that a nine-year-old does not map to "match my
+ * phone" (UX panel, lens 1). The visible word stays a SUBSTRING of the accessible name, so WCAG
+ * 2.5.3 Label in Name holds — the same rule the BW/band chips follow.
+ */
+export const THEME_COPY = {
+  /** The group's visible label. Visible, not `sr-only`: three bare words at the top of a screen,
+   *  the first of which used to be "System", read as a setting that might change something real
+   *  (UX panel, lens 3). The word "Theme" is what makes a mis-tap obviously harmless. */
+  legend: 'Theme',
+  labels: { system: 'Auto', light: 'Light', dark: 'Dark' } satisfies Record<ThemeChoice, string>,
+  /** The accessible name of one option. */
+  option: (choice: ThemeChoice) =>
+    choice === 'system'
+      ? `${THEME_COPY.labels.system} theme — match this device`
+      : `${THEME_COPY.labels[choice]} theme`,
+  /** The one static line under the control, so "Auto" is not a word the reader has to guess at.
+   *  Static text, deliberately NOT a live region: a native radio group announces its own change. */
+  hint: 'Auto follows this device. Saved on this device only.',
+} as const;
 
 /**
  * The project's minimum tap-target size in CSS px (AGENTS.md: "≥44px tap targets" — the kids log on a

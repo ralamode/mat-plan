@@ -3,9 +3,8 @@
 The visual system for the app. **Adult-first and clean — not a kid aesthetic.** The kid ergonomics
 (large tap targets, high contrast, numeric keypads, clear labels) come from good general design, not
 cartoon styling. Built on **shadcn/ui (Radix primitives) + Tailwind v4**, themed entirely with
-CSS-variable tokens, so a reskin is a token change and both themes are already defined. ⚠️ **The
-dark set is not yet reachable** — nothing sets the `.dark` class and there is no
-`prefers-color-scheme` fallback, so every viewer sees light today. **UI-4** is the switch.
+CSS-variable tokens, so a reskin is a token change and both themes are already defined — and since
+**UI-4** both of them actually render.
 
 ## Principles
 
@@ -63,10 +62,42 @@ on the dark background).
 
 ## Dark mode
 
-`.dark` class on the root toggles the dark token set (`@custom-variant dark`). A theme toggle lands
-in a later PR; the tokens already support both.
+`.dark` on `<html>` selects the dark token set (`@custom-variant dark`). Since **UI-4** a provider
+sets it: three states (**Auto / Light / Dark**) with **Auto as the default**, so a viewer's device
+preference is honoured before anyone touches anything. Full reasoning — the placement, the nonce,
+and why the no-flash test asserts a mechanism rather than an end state — is in
+[plans/ui-4-theme-switch.md](./plans/ui-4-theme-switch.md); the three things worth knowing here:
+
+- **The control lives on the profile picker, and only there.** A theme is a settings-grade preference
+  set once per device, and the logging screens cannot spare the vertical space.
+- **Per device, not per profile.** One phone, one theme, whichever profile is open — a theme is a
+  property of the room, and the gym is lit differently from the kitchen. It is stored in
+  `localStorage` (`THEME_STORAGE_KEY`), so it never leaves the device and **it clears with site
+  data**.
+- **No flash, and it is tested as such.** A nonced pre-paint script sets the class before first
+  paint; `e2e/theme.spec.ts` asserts the nonce matches the response's CSP header and that the first
+  class mutation lands while `readyState === 'loading'`.
+
+Both themes are scanned by `e2e/a11y.spec.ts` on every route.
 
 ## Reskinning
 
 Change the OKLCH values in `globals.css` (`:root` / `.dark`) — every component follows. Keep contrast
 ratios AA+ for text; verify with an a11y check (axe) as part of the a11y DoD.
+
+**Candidates are reviewed at `/design/tokens`** (gated, `noindex`), which renders the app's real
+components under four token sets × both themes, with **measured** WCAG ratios printed beside them.
+A set is a scoped block of CSS variables — `@theme inline` resolves every colour, radius and spacing
+utility at its use site, so re-declaring the variables on an ancestor re-themes the subtree and no
+component changes. Two constraints that came out of building it:
+
+- **Density only goes up.** Tailwind derives the spacing scale from `--spacing`, and `min-h-11` — the
+  44px tap-target bar — is `calc(var(--spacing) * 11)`. Below `0.25rem` every control drops under the
+  bar.
+- **Three pairs in the current palette are already under AA** (`muted-foreground` on `muted` 4.34:1,
+  the unused `destructive` button variant 4.39:1 light / 3.04:1 dark) and the hairlines miss SC
+  1.4.11 (1.26:1 light, 2.69:1 dark). None is rendered by a route today, which is why CI is green.
+  They are pinned with their measured values in `app/design/tokens/token-sets.test.ts` and are inputs
+  to the reskin, not background noise.
+
+⚠️ The harness is temporary: the PR that picks a set deletes `app/design/tokens/`.

@@ -623,6 +623,30 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     captured at **mobile / tablet / desktop** and in **both themes** — which is why **UI-4 lands
     first**. A UX panel picks one or sends them all back (`AGENTS.md` → UI PR rules). Not a single
     take-it-or-leave-it proposal, and not a mood board — real screens with real data.
+    ✅ **UI-4 built most of the apparatus** ([plan](./plans/ui-4-theme-switch.md)): the switch, plus
+    **`/design/tokens`** — gated, `noindex` — rendering **four candidate sets** (a control that
+    declares nothing, plus Forge / Tatami / Clinch, each with a hue-biased ramp, a committed accent
+    and a radius + density signature) against the app's real components, with **measured** WCAG
+    ratios on the page and asserted in the fast test tier. `screenshot:ephemeral --theme light|dark`
+    now exists, so the both-themes × three-widths capture is one flag.
+    **What this row still owes, stated so it is not lost:** the harness renders the **real**
+    `ProgramReference` and the **real** `SetRepsWeightFields`, but not Today and the strength form
+    _as pages with seeded data_ — that mechanism (a validated `?tokens=<id>` on `app/p/`, plus
+    `--tokens` on the capture script) is UI-3's first step, deliberately not built in UI-4 because it
+    would have put candidate CSS on the hottest route in the app.
+    **Two acceptance lines added by the UX panel:** (1) before choosing, open the preview on the
+    phone the logging actually happens on, in gym light **and** daylight, in both themes, and record
+    the device and lighting in the decision — three of the four rationales appeal to a physical
+    environment that is unfalsifiable from a desk; (2) **this row's PR deletes `app/design/tokens/`**
+    and its entry in `e2e/a11y.spec.ts`'s `ROUTES`. A harness kept past its decision is a CI cost
+    paid forever for a choice made once.
+    ⚠️ **Three inputs UI-4 measured and could not fix** (fixing them means changing `:root`, i.e.
+    changing the live app's look, which UI-4 ruled out): `muted-foreground` on `muted` is **4.34:1**
+    in light; the `destructive` button variant is **4.39:1** light and **3.04:1** dark on a card (it
+    has zero call sites, which is the only reason CI is green); and hairlines miss SC 1.4.11's 3:1 in
+    both themes (**1.26:1** light, **2.69:1** dark). All four candidate sets clear AA on every text
+    pair in both themes, and Clinch clears 3:1 on hairlines too. Pinned in
+    `app/design/tokens/token-sets.test.ts`, so fixing one tells you to delete its row.
     **Constraints that do not move:** contrast ratios stay AA, `MIN_TAP_TARGET_PX` stays, the 360px
     layout stays, and the kid-ergonomics defaults in [design.md](./design.md) stay. A reskin that breaks
     `e2e/a11y.spec.ts` is not a candidate. **Reversible in one file** — that is the whole appeal of the
@@ -630,9 +654,9 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
     **Not a P0.** It is a **seam** (every screen), so it does not parallelize. PICK-1 and Beta 0 are
     ahead of it.
 
-- **UI-4 — a light/dark theme switch, which the tokens are already paid up for.** 🌓 _(maintainer,
-  2026-10-07.)_ Requested alongside UI-3, and it should land **first**, because reskin options have to
-  be reviewable in both themes.
+- **UI-4 — a light/dark theme switch, which the tokens are already paid up for.** ✅ **SHIPPED**
+  ([plan](./plans/ui-4-theme-switch.md)). 🌓 _(maintainer, 2026-10-07.)_ Requested alongside UI-3, and
+  it landed **first**, because reskin options have to be reviewable in both themes.
   ⚠️ **Dark mode is fully defined and completely unreachable today.** `globals.css` carries a
   **33-line `.dark` OKLCH palette**, and: nothing ever sets `.dark` (no `next-themes`, no provider, no
   toggle — zero matches in `app/`, `components/`, `lib/`), and there is **no `prefers-color-scheme`
@@ -651,6 +675,14 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   **Acceptance:** both themes pass `e2e/a11y.spec.ts` (axe AA contrast is checked, so the dark palette
   gets its first real audit), no flash on load, the choice survives a reload, and screenshots at three
   widths in both themes. Small, self-contained, genuinely useful, and it unblocks UI-3's review.
+  **What shipped, against that:** three states with **Auto** as the default, per-device
+  `localStorage`, the control on the **profile picker only** (the panel priced a root-layout bar at
+  ~52px on every screen — Today already spends ~300px above the first logging surface at 390px), and
+  **both themes pass the a11y scan on all four routes**: the dark palette's first audit is clean.
+  "No flash" is asserted by mechanism, not end state — the nonce on the rendered script must match
+  the response's CSP header and the first class mutation must land at `readyState === 'loading'` —
+  and a negative control (nonce removed) was run to prove both go red. Three sub-AA pairs in the
+  **light** palette were found on the way and are recorded below.
 
 - **UI-1 — the form is the day: the program card becomes the rendered form.** _(maintainer,
   2026-10-06.)_ Today shows a read-only program card listing the day's movements, then a button that
