@@ -27,6 +27,7 @@ pnpm --filter web screenshot:ephemeral /p                         # the profile 
 pnpm --filter web screenshot:ephemeral /p/<seed-id> --state empty           # a seeded profile's Today
 pnpm --filter web screenshot:ephemeral /p/<seed-id> --state already-logged  # Today with a habit + a
                                                                             #   brush-teeth metric pre-logged
+pnpm --filter web screenshot:ephemeral /p --theme dark            # the DARK half of the pair (UI-4)
 ```
 
 - `<seed-id>` is `SEED_PROFILE_PUBLIC_ID` from `@mat-plan/db` (`e2e/steps.ts` builds
@@ -35,6 +36,12 @@ pnpm --filter web screenshot:ephemeral /p/<seed-id> --state already-logged  # To
   route, and the shorthand would have silently captured the wrong screen.
 - A route in `PUBLIC_PATHS`, and `/gate` itself (`isUngatedPath`), is captured **without** the gate login — a logged-in
   capture of `/` would show the picker the proxy redirects to.
+- **`--theme light|dark`** (UI-4) emulates `prefers-color-scheme`, which the app's default `Auto`
+  theme follows — so the dark capture needs no storage seeding and no clicking the toggle. The theme
+  rides the filename **stem** (`design-tokens-dark-mobile.png`), so a light/dark pair sits side by
+  side in `.screenshots/`. **Capture both themes whenever the change is visible in both** — i.e. any
+  token, palette or surface change. Six files (3 widths × 2 themes); attach at least mobile + desktop
+  of each.
 - **Always pass `--build`** after changing UI: the script reuses an existing `.next`, so without it
   you capture whatever was last built (often `main`'s UI).
 

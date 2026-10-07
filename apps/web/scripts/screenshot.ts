@@ -1,5 +1,5 @@
 import { APP_HOME_PATH } from '../lib/constants';
-import { captureScreenshot } from './capture';
+import { captureScreenshot, routeSlug } from './capture';
 
 /**
  * Capture a full-page screenshot of a mat-plan route for a PR, using the SAME
@@ -22,9 +22,25 @@ import { captureScreenshot } from './capture';
  * package, and tsx transforms this to CJS where top-level await is unsupported.
  */
 async function main(): Promise<void> {
-  const route = process.argv[2] ?? APP_HOME_PATH;
+  const argv = process.argv.slice(2);
+  // `--theme light|dark` (UI-4), threaded through here too: `capture.ts` is deliberately ONE capture
+  // path with two callers, and a flag only the other caller can reach makes that claim false.
+  const themeIdx = argv.indexOf('--theme');
+  const rawTheme = themeIdx >= 0 ? argv[themeIdx + 1] : undefined;
+  if (themeIdx >= 0 && rawTheme !== 'light' && rawTheme !== 'dark') {
+    throw new Error(`--theme requires light|dark, got: ${rawTheme ?? ''}`);
+  }
+  const colorScheme = rawTheme as 'light' | 'dark' | undefined;
+  const route = argv.filter((a, i) => !a.startsWith('-') && i !== themeIdx + 1)[0] ?? APP_HOME_PATH;
   const baseUrl = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
-  await captureScreenshot({ route, baseUrl });
+  // The theme rides the stem, so a light/dark pair sits side by side in `.screenshots/`. `routeSlug`
+  // is imported rather than re-derived — it is already the one definition of this filename rule.
+  await captureScreenshot({
+    route,
+    baseUrl,
+    colorScheme,
+    ...(colorScheme === 'dark' ? { name: `${routeSlug(route)}-dark` } : {}),
+  });
 }
 
 main().catch((err) => {
