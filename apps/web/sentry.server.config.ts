@@ -23,7 +23,7 @@ Sentry.init({
   dsn: env.SENTRY_DSN,
 
   // PII: Sentry 11's `dataCollection` defaults every field to ON (request bodies, headers, cookies,
-  // DB query data, frame locals), so it is set explicitly, field by field. The scrubber below is the
+  // DB query data, user info), so it is set explicitly, field by field. The scrubber below is the
   // second line (both unit-tested in lib/sentry-scrub.test.ts), plus never passing `headers`/`formData`
   // to `withServerActionInstrumentation`.
   dataCollection: SENTRY_DATA_COLLECTION,

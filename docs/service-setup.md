@@ -97,9 +97,11 @@ cost on a three-user app, and it's reversible: flip `sourcemaps.disable` in `nex
 The DSN is embeddable by design. What matters is what gets **sent**: the naive Sentry wiring would have
 shipped the `mp_gate` cookie, a kid's bodyweight, and the plaintext access code to Sentry.
 Since Sentry 11 the SDK's `dataCollection` option decides what it gathers, and **every field defaults
-to on** (request bodies, headers, cookies, DB query data, stack-frame locals, AI prompts).
-`SENTRY_DATA_COLLECTION` in `lib/sentry-scrub.ts` turns each one off, and the scrubber in the same file
-strips the same things again as a second line. Both are unit-tested. **Run the verification pass in [runbooks.md](./runbooks.md) after wiring** — if a cookie
+to on** (request bodies, headers, cookies, DB query data, AI prompts; stack-frame locals too, if
+`includeLocalVariables` is ever enabled). `SENTRY_DATA_COLLECTION` in `lib/sentry-scrub.ts` turns each
+one off. The scrubber in the same file is a second line for the dangerous subset: request bodies and
+Server Action results, frame locals, cookies, credential headers and query strings. Both are
+unit-tested. **Run the verification pass in [runbooks.md](./runbooks.md) after wiring** — if a cookie
 or a bodyweight ever appears in a Sentry event, treat it as an incident: revoke the DSN and rotate
 `ACCESS_GATE_PASSWORD`.
 

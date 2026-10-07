@@ -24,9 +24,10 @@ import type { Breadcrumb, ErrorEvent, Event, init, Log } from '@sentry/nextjs';
  *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
  * Sentry 11's defaults also collect REQUEST BODIES (a Server Action's body is its form: a weight, the
- * access code) and STACK-FRAME LOCAL VARIABLES (a writer's locals hold the row it was writing). Both
- * are off in `SENTRY_DATA_COLLECTION`, and both are stripped here too, so a future SDK default or a
- * config edit cannot reopen either on its own.
+ * access code) and a Server Action's RESULT, and would collect STACK-FRAME LOCAL VARIABLES (a writer's
+ * locals hold the row it was writing) if `includeLocalVariables` were ever turned on. All three are off
+ * in `SENTRY_DATA_COLLECTION` and stripped here too, so a changed SDK default or a config edit cannot
+ * reopen one on its own. The request path is kept, but its query string is cut wherever it lands.
  *
  * So this runs on every error event and every transaction (spans included), and — through
  * `beforeBreadcrumbScrubbed` and `beforeSendLogScrubbed` — on every breadcrumb and every Sentry log. Its
@@ -65,6 +66,9 @@ const DENIED_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy-authoriz
 
 /** The `extra` key prefix Sentry uses for Server Action form fields (`formData` option). */
 const FORM_DATA_EXTRA_PREFIX = 'server_action_form_data.';
+
+/** The `extra` key the SDK records a Server Action's return value under (when bodies are collected). */
+const ACTION_RESULT_EXTRA_KEY = 'server_action_result';
 
 /**
  * A line starting `params:` and everything after it — drizzle's `DrizzleQueryError` tail (SEC-3).
@@ -130,7 +134,9 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
 
   if (event.extra) {
     for (const key of Object.keys(event.extra)) {
-      if (key.startsWith(FORM_DATA_EXTRA_PREFIX)) delete event.extra[key];
+      if (key.startsWith(FORM_DATA_EXTRA_PREFIX) || key === ACTION_RESULT_EXTRA_KEY) {
+        delete event.extra[key];
+      }
     }
   }
 
@@ -155,6 +161,7 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   const requestContext = event.contexts?.request;
   if (requestContext) {
     delete requestContext.cookies;
+    delete requestContext.data;
     const headers = requestContext.headers;
     if (headers && typeof headers === 'object') {
       for (const name of Object.keys(headers as Record<string, unknown>)) {
@@ -163,6 +170,12 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
         }
       }
     }
+  }
+
+  // Next's `captureRequestError` records `request.path`, query string included (a `from` redirect).
+  const nextContext = event.contexts?.nextjs;
+  if (nextContext && typeof nextContext.request_path === 'string') {
+    nextContext.request_path = nextContext.request_path.split('?')[0];
   }
 
   return event;

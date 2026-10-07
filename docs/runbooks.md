@@ -226,8 +226,9 @@ it did pre-V1-14a — that absence path is what CI and local dev exercise.
    - it arrived at all (the DSN is wired);
    - **no `mp_gate` cookie** anywhere in the event — check Request → Headers and Request → Cookies;
    - **no `server_action_form_data.*`** entries under Additional Data;
-   - **no request body** (Request → Data) and **no local variables** on any stack frame (Sentry 11
-     collects both by default; `SENTRY_DATA_COLLECTION` turns them off);
+   - **no request body** (Request → Data), no `server_action_result` under Additional Data, and no
+     query string in the `nextjs` context's `request_path` (Sentry 11 collects bodies and results by
+     default; `SENTRY_DATA_COLLECTION` turns them off and the scrubber strips them again);
    - no bodyweight value anywhere in the payload.
      If any of those appear, `lib/sentry-scrub.ts` is not running — treat it as a **security incident**,
      revoke the DSN, and rotate `ACCESS_GATE_PASSWORD`.

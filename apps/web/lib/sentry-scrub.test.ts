@@ -301,3 +301,20 @@ describe('scrubSentryEvent — Sentry 11 collection paths, stripped as a second 
     expect(frame).toMatchObject({ function: 'write' });
   });
 });
+
+describe('scrubSentryEvent — the remaining second-line paths (privacy review of #257)', () => {
+  it("drops a Server Action's recorded result", () => {
+    const event = { extra: { server_action_result: { ok: true }, actionName: 'x' } } as Event;
+    expect(scrubSentryEvent(event).extra).toEqual({ actionName: 'x' });
+  });
+
+  it('drops the request body duplicated under contexts.request', () => {
+    const event = { contexts: { request: { data: 'weight=999.9', url: '/p' } } } as Event;
+    expect(scrubSentryEvent(event).contexts?.request).toEqual({ url: '/p' });
+  });
+
+  it("cuts the query string off Next's recorded request_path, keeping the path", () => {
+    const event = { contexts: { nextjs: { request_path: '/gate?from=/p/abc' } } } as Event;
+    expect(scrubSentryEvent(event).contexts?.nextjs).toEqual({ request_path: '/gate' });
+  });
+});
