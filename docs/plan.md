@@ -550,6 +550,51 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   opt-in guard that makes touching real data a deliberate act rather than a default. Personas extend
   that, one level up.
 
+- **UI-2 — restyle the UI with a motion component framework (Aceternity UI / Magic UI / similar).**
+  _(maintainer, 2026-10-07.)_ Requested as a backlog item, not a decision. Both are Tailwind +
+  **Framer Motion** component collections distributed copy-paste in the shadcn-registry style, so
+  adopting one is not a dependency swap — the components become **our** code, and `framer-motion`
+  becomes a runtime we did not have (today `apps/web` carries only `tw-animate-css`, which is CSS, not
+  JS).
+  **First, split the question, because "restyle" has two very different answers here.**
+  [design.md](./design.md) is explicitly token-driven and already answers one of them: _"Components
+  never hardcode colors; they use the semantic tokens below. **To reskin, change the tokens, not the
+  components.**"_ So:
+  - **A reskin** — palette, typography, spacing, radius, density — is a change to the OKLCH tokens in
+    `apps/web/app/globals.css` plus the type scale. No new runtime, no new client components, no a11y
+    risk, and it is reversible in one file. If what is wanted is "it should feel different", this is
+    the cheap path and it should be tried **first**.
+  - **New component archetypes** — animated beams, spotlight/aurora backgrounds, marquees, meteors —
+    is what these libraries actually sell, and it is a different proposition with real costs below.
+    **Where it is plausibly a yes:** the **public landing page** (`app/(landing)/`, OSS-2). That is a
+    marketing surface, it is the one screen whose job is to impress rather than to be used between sets,
+    and it carries none of the logging app's constraints. A showcase aesthetic belongs there.
+    **Where the default answer is no, and why — each of these is a standing rule, not a preference:**
+  - **`AGENTS.md` → Design: "adult-first, clean — NOT a kid aesthetic."** These libraries' signature
+    components are glow/aurora/meteor effects built for landing pages. On a logging form they read as
+    decoration, and decoration is the thing that rule excludes.
+  - **RSC-first, minimize `'use client'`** (`AGENTS.md` → Architecture rules). Framer Motion
+    components are client components by necessity, so a broad adoption pushes the logging path
+    client-side — the opposite direction from the stated architecture.
+  - **The CWV budget is first-class**: LCP < 2.5s · INP < 200ms · CLS < 0.1, **p75 mobile**
+    ([ADR 0001](./decisions/0001-observability-and-web-vitals.md)). Framer Motion is ~100KB+ gzipped
+    before tree-shaking, and INP is the budget animation spends first. ⚠️ **Nothing measures this
+    budget today**, so "it still feels fine" would not be evidence.
+  - **The actual use context.** Kids log on a **phone, on a gym floor, between sets**. Motion that
+    delays a tap is a direct cost there, and `prefers-reduced-motion` has to be honoured throughout.
+  - **A11y regression risk.** Animated and absolutely-positioned components routinely break
+    focus-visible, ≥44px targets and the 360px layout. `e2e/a11y.spec.ts` gates tap targets and 360px
+    overflow on three routes only, so most of the surface has no automated guard — the reviewer is it.
+    **Acceptance (what would make this decidable, rather than arguable):** a prototype on **one** real
+    screen at all three widths, with a measured before/after bundle delta and an INP figure on a
+    mid-range phone, reviewed by a **UX panel before any broad adoption** (`AGENTS.md` → UI PR rules).
+    If the token-only reskin satisfies the want, this row closes as "answered more cheaply".
+    **Sequencing:** this is a **seam** — it touches every pillar's UI — so per
+    [roadmap.md](./roadmap.md) it does not parallelize and must land before, not beside, the pillars
+    that consume it. The _decision_ belongs in `docs/decisions/` as an ADR; the _implementation_ is
+    cross-pillar. It is **not** a P0: nothing is broken, and PICK-1 and the Beta 0 milestone are ahead
+    of it.
+
 - **UI-1 — the form is the day: the program card becomes the rendered form.** _(maintainer,
   2026-10-06.)_ Today shows a read-only program card listing the day's movements, then a button that
   scaffolds those same movements into the form below — **the same list twice**, and `PROGRAM_SEED` is
