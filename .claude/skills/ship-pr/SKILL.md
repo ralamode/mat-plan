@@ -68,6 +68,11 @@ CodeQL (which never runs on PRs).
   from [roadmap.md](../../../docs/roadmap.md) and the milestone's spec, not from memory. **Delete the
   section** for a standalone PR (dependency bump, one-off bug, typo, config one-liner): `Milestone:
 none` is noise. A plan or spec PR is not standalone — it advances its milestone.
+- **A milestone PR also embeds the milestone's Mermaid progress chart with this PR's step marked**
+  (`AGENTS.md` → "Milestone PRs also embed a progress chart"), so the reviewer sees what is still
+  between here and the finish. Copy the canonical chart from the milestone file — do not redraw it from
+  memory — mark done steps ✅ and the current one with a `style` line. If the ordering has drifted, fix
+  the milestone in this PR so the two agree.
 - [docs/roadmap.md](../../../docs/roadmap.md): move the item — **In flight**, the active milestone's
   chunk row, **Next per pillar**, **Recently landed**. It is forward-looking, so it is the one a new
   session reads first and the one nobody notices has gone stale. Ids only; never copy a `plan.md` row.
@@ -121,6 +126,9 @@ tested (with boundary cases for endpoints), Test configuration, Screenshots, Dia
 
 - **Mermaid** for any schema, flow or model change: an ERD or flowchart that matches
   `docs/architecture.md`. **No backticks inside node labels**, which breaks the Mermaid lexer.
+- **Mermaid progress chart** on a milestone PR, copied from the milestone file with this step marked
+  (above). The two diagrams answer different questions — one is the shape of the change, the other is
+  how much milestone is left — so a PR can owe both.
 - The **first** screenshots go in the description (`screenshots:publish --pr <n>`). Later rounds go
   in a comment with `--note`.
 - Plan-exempt UI change: paste the UX review-response log into the description.

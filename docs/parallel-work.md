@@ -101,23 +101,44 @@ else every track must append to — an index, a registry — wants the same shap
 [roadmap.md](./roadmap.md) is the deliberate exception: it is small, pointer-only, and tracks move
 single rows, so a conflict there is a one-line merge.
 
-## How many lanes? — the constraint is review, not agents
+## How many lanes? — the constraint is seam collisions and the serial path
 
-The six gates answer _may these two run at once_. They do not answer _how many lanes to open_, and
-that is a different limit with a different bottleneck: **every lane produces a plan to review and a PR
-to approve, and at ~4h/week the human is the scarce resource, not the agent.**
+⚠️ **This section said the opposite until 2026-10-07, and it was wrong.** It claimed _"the constraint
+is review, not agents… at ~4h/week the human is the scarce resource"_, and derived a lane count from
+how many plans were already panelled. The maintainer corrected it from experience: **review throughput
+has not been the bottleneck.** The reasoning was plausible and untested, which is the failure mode this
+whole document exists to catch — so the correction is recorded here rather than quietly swapped, and
+the old rule's conclusion (open roughly as many lanes as there are panelled plans) should not be cited.
 
-So the count is set by what is already **panelled**, not by what is disjoint:
+The six gates answer _may these two run at once_. The count of lanes is limited by two different
+things, and neither is the reviewer:
 
-- **A lane whose plan is already reviewed costs almost nothing to open.** Implementation runs, the
-  reviewer sees one PR.
-- **A lane that needs a plan first costs a full panel** — eight lens-passes and a reconciliation on the
-  Authoring chunk-1 plan, all of it needing a human read before any code.
-- So: **open as many lanes as there are panelled plans, plus at most one that still needs planning.**
-  Beyond that the lanes finish and queue up behind the review, and the parallelism bought nothing.
+1. **Seam collisions.** A seam is a contract two pillars share, and
+   [roadmap.md](./roadmap.md) → Seams names them with one owner each. **A seam change does not
+   parallelize**: while the owner is changing it, the consuming pillars wait. `TEN-1`'s household
+   scope and the design tokens are the live examples — each touches every pillar that has a DAL call
+   or a screen, so neither can run beside the work it reshapes. Two lanes are safe when their file
+   globs are disjoint _and_ neither is moving a seam the other reads.
+2. **The serial critical path.** Some work cannot be parallelized at all, because each step decides
+   the shape of the next. Beta 0's is **the household-addressing ADR → `TEN-1` → `AUTH-1`**: the ADR
+   decides where authorization comes from, `TEN-1` builds the one scoping seam, `AUTH-1` swaps that
+   seam's implementation. Adding lanes to that chain does not shorten it. **The milestone ships when
+   the chain ships**, so everything else is scheduled _around_ it, and the chain gets the best
+   attention rather than the most agents.
 
-The corollary is that **planning is the thing to run in parallel early**, because its output is what
-unblocks lanes later. A pillar with no panelled plan is not a lane yet; it is a planning task.
+So the practical rule: **run the critical path as one focused lane, and fill the remaining capacity
+with work that is disjoint from it and from every seam it moves.** Two further heuristics that do hold:
+
+- **Prefer work that blocks nothing and is already broken.** It is pure throughput and it cannot
+  collide with a decision that has not been made yet. `ONB-0` (first run is broken today) is the
+  pattern.
+- **Start the hidden gates early.** Some work gates the critical path without appearing on it —
+  `PRIV-1` gates `AUTH-1`, because the Google consent screen needs a privacy-policy URL. Those are the
+  cheapest schedule wins available, and the most commonly missed, because nothing in the dependency
+  graph draws them.
+
+Planning in parallel early is still right, for a different reason than the old rule gave: its output
+is what lets a lane start at all. A pillar with no plan is not a lane yet; it is a planning task.
 
 ## When a gate fails
 
