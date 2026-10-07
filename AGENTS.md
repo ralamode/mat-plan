@@ -283,6 +283,27 @@ is not removing it.
   change. Reuse and update [docs/architecture.md](./docs/architecture.md) (the diagram home) and embed
   the relevant view; the description diagram and the committed one should agree. Same placement rule as
   screenshots: the first goes in the description, later revisions as PR comments.
+- **Milestone PRs also embed a progress chart.** A PR that is part of a cross-PR milestone
+  ([docs/milestones/](./docs/milestones/)) embeds that milestone's **Mermaid step chart with this PR's
+  step marked**, so a reviewer sees where the work sits and **what is still between here and the
+  finish** without opening the milestone file. The milestone doc owns the canonical chart; a PR copies
+  it and marks its own position — the two must agree, so if the ordering has changed, fix the
+  milestone in the same PR. Mark done steps with ✅ and the current one with a `style` line:
+
+  ```mermaid
+  flowchart LR
+    N[0 · now ✅] --> AU
+    O[1 · ops] --> AU
+    C[ADR 0006 ✅] --> T[2 · TEN-1]
+    T --> AU[3 · AUTH-1]
+    AU --> S[4 · self-serve]
+    S --> I[invite family #1]
+    style T fill:#2563eb,color:#fff
+  ```
+
+  Not for a standalone PR (a dependency bump, a one-off bug) — those belong to no milestone and the
+  "Where this sits" section is deleted for them too.
+
 - Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
   CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
 
