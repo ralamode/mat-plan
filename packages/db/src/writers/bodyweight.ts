@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { Executor } from './executor';
+import type { HouseholdScope } from '../scope';
 import { ownedEntryIds } from './ownership';
 
 /**
@@ -65,6 +66,8 @@ export async function updateBodyweightEntryById(
   args: {
     profilePublicId: string;
     entryId: string;
+    /** TEN-1: the household this request is authorized for. Rides into `ownedEntryIds`. */
+    scope: HouseholdScope;
     /** The corrected weight. Bounded by `editBodyweightSchema` before it reaches here. */
     value: number;
     /** GUARD ONLY — never written. See the note above. */
@@ -73,7 +76,7 @@ export async function updateBodyweightEntryById(
     seenValue: number;
   },
 ): Promise<{ publicId: string } | null> {
-  const owned = ownedEntryIds(exec, args.profilePublicId);
+  const owned = ownedEntryIds(exec, args.profilePublicId, args.scope);
 
   const rows = await exec
     .update(schema.entries)
@@ -106,7 +109,7 @@ export async function updateBodyweightEntryById(
  */
 export async function findAmendableBodyweight(
   exec: Executor,
-  args: { profilePublicId: string; entryId: string },
+  args: { profilePublicId: string; entryId: string; scope: HouseholdScope },
 ): Promise<{ value: number; unit: string } | null> {
   const [row] = await exec
     .select({ value: schema.entries.valueNum, unit: schema.entries.unit })
@@ -114,7 +117,7 @@ export async function findAmendableBodyweight(
     .where(
       and(
         amendableBodyweight(args.entryId),
-        inArray(schema.entries.id, ownedEntryIds(exec, args.profilePublicId)),
+        inArray(schema.entries.id, ownedEntryIds(exec, args.profilePublicId, args.scope)),
       ),
     )
     .limit(1);
