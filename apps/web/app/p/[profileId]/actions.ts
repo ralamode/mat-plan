@@ -17,7 +17,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { getActiveTimeZone } from '@/lib/active-timezone';
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
+import {
+  AMEND_ERROR_COPY,
+  BODYWEIGHT_COPY,
+  NO_PROFILE_LOG,
+  NO_PROFILE_SAVE,
+} from '@/lib/constants';
 import {
   CHECKIN_FIELDS,
   clientIdInputName,
@@ -66,15 +71,11 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
  * Action is a PUBLIC POST, so it validates its own input (zod) and re-checks the
  * profile inside — never trusting the form. The tile-supplied `profileId` (a
  * hidden field) is re-validated server-side via `getProfileByPublicId` — the
- * ownership seam v1.5's Clerk household scoping plugs into (profile tiles are a
- * UX switch, not a security boundary). Returns a typed envelope for
+ * ownership seam — since TEN-1 1b `getProfileByPublicId` scopes by the request's household too, so
+ * a known id belonging to ANOTHER household returns the same `NO_PROFILE_LOG` envelope as an unknown
+ * one (profile tiles are a UX switch, not a security boundary). Returns a typed envelope for
  * `useActionState` (expected errors don't throw).
  */
-// The not-found copy. An un-gated caller gets exactly this too (SEC-1), so it learns nothing about
-// whether the gate or the profile turned it away.
-const NO_PROFILE_LOG = 'No profile found to log against.';
-const NO_PROFILE_SAVE = 'No profile found to save against.';
-
 export async function logBodyweightAction(
   _prev: ActionState,
   formData: FormData,
@@ -159,10 +160,11 @@ function valueSchemaFor(f: CheckinField): z.ZodType<number> {
  * inert, and neither `unit` nor `activity_type_id` is ever taken from the body (the DAL
  * resolves both from the seeded catalog).
  *
- * KNOWN GAP, inherited and recorded rather than papered over: `getProfileByPublicId` is an
- * EXISTENCE check (the access gate is re-checked first, SEC-1, but it is a shared code, not a
- * household) — it does not scope by household, so any known profile id writes to that profile.
- * Pre-existing since V1-3; closes at v1.5 with Clerk. Rate limiting and Sentry wrapping land at V1-14.
+ * OWNERSHIP: `getProfileByPublicId` resolves the profile inside the REQUEST'S HOUSEHOLD since
+ * TEN-1 1b — the existence-only check that used to sit here (*"any known profile id writes to that
+ * profile"*) is closed, and `db:verify`'s two-household matrix proves it in both directions. The
+ * access gate is still a shared code rather than an identity, so this buys **consistent scoping**;
+ * isolation is only *authorized* at AUTH-1. Rate limiting for the mutating actions is AUTH-1's too.
  */
 export async function logCheckinsAction(
   _prev: ActionState,

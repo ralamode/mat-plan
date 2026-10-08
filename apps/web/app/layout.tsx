@@ -25,6 +25,13 @@ export const metadata: Metadata = {
 // Nonce-based CSP (see proxy.ts) is applied during SSR, so every route must be
 // dynamically rendered. This is an inherently per-user app — nothing is
 // statically cacheable — so opting the whole tree in here is the right default.
+//
+// ⚠️ SINCE TEN-1, TENANCY DEPENDS ON THIS LINE. ADR 0006 chose session-only household addressing, so
+// `/p` and `/p/<profileId>` are byte-identical URLs for every household — NOTHING in any cache key
+// distinguishes tenants. Static rendering, a CDN rule on `/p`, `unstable_cache` or `'use cache'` on
+// a household-scoped read would serve one family's athletes to another. `app/tenancy-is-not-cached.test.ts`
+// pins this directive and that rule; a Route Handler does NOT inherit it (the export handler is
+// dynamic because it calls `cookies()`), which is why that gets its own assertion.
 export const dynamic = 'force-dynamic';
 
 /**
