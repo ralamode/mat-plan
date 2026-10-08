@@ -80,7 +80,7 @@ flowchart LR
   O[1 · ops: previews, seed split, restore] --> AU
   ONB[ONB-0 · first run, broken today] --> S
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
-  C[ADR 0006 · household addressing] --> T[2 · TEN-1 scope seam + proofs]
+  C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]

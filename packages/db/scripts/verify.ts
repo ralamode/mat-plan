@@ -103,10 +103,6 @@ async function expectRejectedBy(constraintName: string, fn: () => Promise<unknow
 }
 
 /**
- * The column set of a table, keyed by name → data_type — the `information_schema.columns` cast shape lives
- * ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
- */
-/**
  * A reference table must equal its shared-const source EXACTLY, in BOTH directions — a row the const
  * doesn't know about is drift just as much as a const member with no row.
  *
@@ -128,6 +124,14 @@ function assertRefTableMatches(
   );
 }
 
+/**
+ * The column set of a table, keyed by name → data_type — the `information_schema.columns` cast shape
+ * lives ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
+ *
+ * It carries `data_type` only. Nullability and the column default are catalog facts this shape
+ * cannot express, so a check that needs them queries `information_schema.columns` for itself (see
+ * the TEN-1 1a readback) rather than widening this Map and churning its four existing callers.
+ */
 async function columnsOf(tableName: string): Promise<Map<string, string>> {
   const res = await db.execute(
     sql`select column_name, data_type from information_schema.columns where table_name = ${tableName}`,
@@ -200,6 +204,73 @@ for (const p of profiles) {
   assert.ok(p.householdId != null, 'profile.household_id is non-null (CHECK-enforced)');
 }
 console.log('✓ profiles scoped to root household (household_id NOT NULL)');
+
+// ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
+// Deliberately NOT a bare `assert.equal(households[0].synthetic, false)`: that compares the column
+// default to itself and stays green even if the migration shipped the column nullable with no
+// default at all. These four assertions each catch something that can actually happen.
+//
+// (1) The declared type. Same idiom as the V1-18 routine_config check below.
+assert.equal(
+  (await columnsOf('households')).get('synthetic'),
+  'boolean',
+  'TEN-1 1a: households.synthetic is boolean',
+);
+// (2) NOT NULL + the catalog default. `columnsOf` carries data_type only, and `expectRejectedBy`
+// cannot reach this either (a NOT NULL violation is 23502, which carries a column, not a named
+// constraint). This is the half that guarantees prod's pre-existing household row acquired `false`
+// rather than NULL, and that the stored default has not drifted from drizzle's `.default(false)`.
+const [syntheticCol] = (
+  (await db.execute(
+    sql`select is_nullable, column_default from information_schema.columns
+        where table_name = 'households' and column_name = 'synthetic'`,
+  )) as unknown as { rows: { is_nullable: string; column_default: string | null }[] }
+).rows;
+assert.equal(syntheticCol?.is_nullable, 'NO', 'TEN-1 1a: households.synthetic is NOT NULL');
+assert.equal(
+  syntheticCol?.column_default,
+  'false',
+  'TEN-1 1a: households.synthetic DEFAULTs false in the catalog (not just in schema.ts)',
+);
+// (3) THE ASSERTION THAT IS NOT A TAUTOLOGY: a set flag survives a re-seed. migrate.yml runs
+// `db:seed` against PROD on every push to main, so if the households insert ever became
+// `onConflictDoUpdate`, every unrelated merge would silently reset a synthetic household's flag —
+// destroying the one property OBS-2 depends on. The seed ran twice above; flip the flag, seed a
+// THIRD time, and prove the value held.
+await db
+  .update(schema.households)
+  .set({ synthetic: true })
+  .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+await seed(asPg);
+const [afterReseed] = await db
+  .select({ synthetic: schema.households.synthetic })
+  .from(schema.households)
+  .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+assert.equal(
+  afterReseed?.synthetic,
+  true,
+  'TEN-1 1a: a set synthetic flag survives a re-seed (the households insert stays ON CONFLICT DO NOTHING)',
+);
+// (4) And the seed never flips it the other way either: restore, re-seed, still false. Together
+// with (3) this pins "the seed does not name this column" in both directions — the rule that keeps
+// a fresh/restored prod database from labelling the real family's household a test fixture.
+await db
+  .update(schema.households)
+  .set({ synthetic: false })
+  .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+await seed(asPg);
+const [afterRestore] = await db
+  .select({ synthetic: schema.households.synthetic })
+  .from(schema.households)
+  .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+assert.equal(
+  afterRestore?.synthetic,
+  false,
+  'TEN-1 1a: the seed never sets synthetic — a re-seed leaves a real household false',
+);
+console.log(
+  '✓ TEN-1 1a: households.synthetic — boolean NOT NULL DEFAULT false; the seed never names it (both directions)',
+);
 
 // V1-18 (PR 1a): the per-kid routine_config column + the two-kid A≠B seed.
 assert.equal(
@@ -3504,9 +3575,17 @@ await db
   .insert(schema.households)
   .values({ publicId: VERIFY_HH_PUBLIC_ID, name: 'Verify Programming HH' });
 const [verifyHh] = await db
-  .select({ id: schema.households.id })
+  .select({ id: schema.households.id, synthetic: schema.households.synthetic })
   .from(schema.households)
   .where(eq(schema.households.publicId, VERIFY_HH_PUBLIC_ID));
+// TEN-1 1a: the insert above never named `synthetic`, so a `false` here proves the DEFAULT is in the
+// CATALOG and applies to a real INSERT — the behavioural half of the readback near the seed checks,
+// which read the catalog text. A household is not synthetic unless its creator says so.
+assert.equal(
+  verifyHh.synthetic,
+  false,
+  'TEN-1 1a: an insert that does not name synthetic gets false from the column DEFAULT',
+);
 await db.insert(schema.profiles).values({
   publicId: VERIFY_PROFILE_PUBLIC_ID,
   name: 'Verify Kid',

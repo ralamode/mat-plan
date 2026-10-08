@@ -10,6 +10,21 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🚦 **Beta 0's critical path is moving: the signature landed and TEN-1 has started.**
+[ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is **Accepted — option A
+(session-only)** _(the maintainer, 2026-10-07; #252)_: `/p/<profileId>` stays the address, the
+household comes only from the session, a wrong household is a **404 (never 403)**, and **a URL segment
+is an input, never a credential**. It superseded [HH-1](./plan.md#hh-1)'s path clause and nothing else,
+and it was **chunk 0 of [TEN-1](./plans/ten-1-household-scope.md)** — so `TEN-1` → `AUTH-1` is no
+longer parked.
+
+TEN-1's **six-lens panel ran 2026-10-07** (the four standing lenses plus DB-safety and security) and
+its review-response log is committed. Its biggest change: `households.synthetic` is a **column only**,
+not a field on `HouseholdScope` — an authorization capability is the wrong carrier for an observability
+flag, and taking it off removes a cross-PR ordering hazard that would have made a chunk-1b deploy ahead
+of its migration a `42703` on every route. **Chunk 1a (the dark column) is in flight.** Next on this
+track: 1b, the seam and the gate — where ADR 0006's three named obligations land.
+
 🔒 **PRIV-1's documents are written, and the review found a P0 on the way out.** The privacy review
 has landed [docs/privacy/notice.md](./privacy/notice.md) (what people are told),
 [data-inventory.md](./privacy/data-inventory.md) (all 18 tables, every processor, retention, and what
@@ -28,16 +43,6 @@ records** — and `OSS-1`'s 2026-08-11 audit conclusion ("no measurement history
 minor. The audit is corrected in place and `OSS-1`'s rename is **raised to a Beta 0 blocker**,
 re-scoped from 3 files to ~50 across five classes — two of which a rename does not fix at all. The
 rename is its own PR. ⚠️ And a rename is not a removal: `git log -S` still finds it.
-
-🚦 **The rest of the Beta 0 critical path is waiting on one signature.**
-[ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is written and
-**proposed** (2026-10-07): does a household appear in the URL, or only in the session? It recommends
-**session-only**, keeps `/p/<profileId>` as the address, settles **404 (never 403)** on a wrong
-household, and states the rule that holds under every option — **a URL segment is an input, never a
-credential**. Its decision box is deliberately **unsigned**, because it reverses
-[HH-1](./plan.md#hh-1)'s path clause, and it is **chunk 0 of
-[TEN-1](./plans/ten-1-household-scope.md)** — so `TEN-1` → `AUTH-1` is parked on the decision, not on
-a session. Next on this track: the maintainer signs the box, then TEN-1's panel runs.
 
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
