@@ -34,12 +34,17 @@ and [csv-export-contract.md](../../csv-export-contract.md) are blocked on:
 
 ## What is here
 
-| Type                                   | Files                              | State                                    |
-| -------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| `strength-log/<athlete>/<YYYY-MM>.csv` | 4 (two athletes × June, July 2026) | **Real data**                            |
-| `bodyweight/<athlete>/<YYYY-MM>.csv`   | 2 (July 2026)                      | **Real data**                            |
-| `checkins/<athlete>/<YYYY-MM>.csv`     | 2                                  | **Header-only** — zero rows ever written |
-| `calisthenics-log/…`                   | —                                  | **Does not exist.** Proposed only        |
+| Type                                   | Files                              | State                                              |
+| -------------------------------------- | ---------------------------------- | -------------------------------------------------- |
+| `strength-log/<athlete>/<YYYY-MM>.csv` | 4 (two athletes × June, July 2026) | **Synthesised** — shapes verbatim, values replaced |
+| `bodyweight/<athlete>/<YYYY-MM>.csv`   | 2 (July 2026)                      | **Synthesised** — shapes verbatim, values replaced |
+| `checkins/<athlete>/<YYYY-MM>.csv`     | 2                                  | **Header-only** — zero rows ever written           |
+| `calisthenics-log/…`                   | —                                  | **Does not exist.** Proposed only                  |
+
+<sub>These two cells read **"Real data"** until PRIV-1 (2026-10-07), which contradicted the
+provenance paragraph at the top of this file and made it impossible to tell, from this README alone,
+whether the committed weigh-in rows are a child's actual measurements. They are not; the shapes are
+real and the values are replaced. The wording now agrees with the provenance.</sub>
 
 The fourth type is absent on purpose, and that absence is itself the finding the contract records:
 with no real rows to match, **calisthenics-log is the one schema the app gets to define rather than

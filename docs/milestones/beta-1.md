@@ -233,15 +233,21 @@ Their deliverables are unchanged and still written below; only when they start h
   household (that would replace YDP).
 - **V1-9b** — delete a logged item and clear a day.
 - **PRIV-1 — starts now, because it gates `AUTH-1`. Privacy done as a review, not a checkbox.**
-  §3's Clerk consent screen needs the privacy-policy URL, so this is upstream of auth. SECURITY.md defers COPPA only while there is
-  "no third-party sharing"; multiple families plus Clerk, Google, Sentry, Vercel, Neon and Upstash is
-  that change, so its own trigger fires. Deliverables: a plain-language notice listing what is stored and
-  every processor; consent at sign-up; a **written retention policy**; a **defined deletion** — hard
-  delete of the household's rows and its Clerk users, with the residuals stated in the notice (the
-  point-in-time window, Sentry retention) — run by Ray from a guarded correction for beta; and
-  SECURITY.md's threat model rewritten for many households, adults and coaches. ⚠️ Bodily measurements
-  of minors may count as health data under some state laws. **This file is not legal advice; get a
-  second opinion before inviting anyone.**
+  §3's Clerk consent screen needs the privacy-policy URL, so this is upstream of auth.
+  ✅ **The documents are written** ([plan](../plans/priv-1-privacy-review.md),
+  [docs/privacy/](../privacy/)): the [notice](../privacy/notice.md), the retention policy, the
+  deletion procedure ([runbooks.md](../runbooks.md)) with its residuals, the `AUTH-1` consent
+  checklist, and SECURITY.md's threat model rewritten for many households, adults and coaches. The
+  deliverables are not restated here — the documents own them.
+
+  **What is left, and it is the half that gates `AUTH-1`:** `PRIV-2` (serve the notice at `/privacy`,
+  which is where the consent-screen URL points) and `PRIV-3` (the deletion as a guarded script with a
+  `db:verify` proof). Plus four blanks the notice names rather than guesses: the Neon / Sentry /
+  Vercel retention windows and the contact route.
+
+  ⚠️ Bodily measurements of minors may count as health data under some state laws. **This file is not
+  legal advice; get a second opinion before inviting anyone** — the one open question PRIV-1 says
+  nobody in this repo can close.
 
 ### Beta 0 exit criteria — invite family #1 when
 
@@ -259,8 +265,19 @@ Their deliverables are unchanged and still written below; only when they start h
       he signs in, and only by him.
 - [ ] On iOS Safari and Android Chrome, with no help: sign in → add an athlete → log a day → delete a
       mis-logged entry.
-- [ ] Privacy notice, consent and retention policy are live; household deletion has been run once end to
-      end; the privacy review is signed off by a named person (PRIV-1).
+- [ ] Privacy notice, consent and retention policy are live; household deletion has been run once end
+      to end; the privacy review is **signed off by the accountable role, with a date** (PRIV-1).
+      _(Was "by a named person" — `AGENTS.md` forbids personal names in docs, which made this
+      unsatisfiable as written. Amended by PRIV-1; same accountability, the form this repo permits.)_
+      **Live** means `PRIV-2` has shipped `/privacy` on the app's own domain — a `docs/` file is not a
+      URL a consent screen can point at. **And the notice ships with no blanks:** the Neon, Sentry and
+      Vercel retention windows filled from their consoles, and a real contact route.
+- [ ] `OPS-3`'s per-household restore has been rehearsed **before** any real household is deleted —
+      until it exists, a mistaken deletion is not recoverable without rolling back every other family
+      (PRIV-1).
+- [ ] 🔴 No minor's name or log data in the tree: `OSS-1`'s rename is done, re-scoped to the ~50 files
+      PRIV-1 found rather than the 3 the row used to name
+      ([data-inventory.md](../privacy/data-inventory.md) §9).
 - [ ] SEC-3 merged: server-side errors carry no bodyweight to Sentry.
 
 ## Beta 1 — 3–5 families, all the major features

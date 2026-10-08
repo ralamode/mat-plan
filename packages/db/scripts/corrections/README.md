@@ -31,7 +31,18 @@ still needs its own PR. Each correction below names the row that fixes the cause
    to keep and they document the failure; a row in the **Applied** table below marks one as done.
 7. **All writes in one `db.transaction`.** The runner's refusal message tells the operator a failure
    rolled back; that is only true when every write is inside one transaction.
-8. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
+8. **A DELETION correction inverts rules 2 and 5, and that is the only sanctioned exception.** A
+   household deletion under
+   [PRIV-1](../../../../docs/runbooks.md) ("Delete a household and everyone in it") must remove
+   **soft-deleted rows too** — they are exactly what has to go — so `deleted_at` appears in no
+   `WHERE`, and **existence is the guard**: a second run finds nothing, which is what keeps it
+   idempotent. Rule 4 is meaningless for a delete, and rule 6's **Applied** table must **not** record
+   which household was deleted — that would publish a permanent register of who asked to be erased,
+   in a public repo. The exception is written here, next to the rules it excuses, for the same reason
+   a `-- squawk-ignore` sits above its statement. ⚠️ `PRIV-3` is the row that builds it, and it is
+   **not** a drop-in entry: `Correction.run` takes no target and the runner ignores positional args,
+   so it needs a `--household <public_id>` flag — a runner change, with its own plan.
+9. **Redact privileged values before pasting output.** This repo is public. A dry run may print a
    privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
    or commit — replace it with `…`.
 

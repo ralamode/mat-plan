@@ -71,6 +71,40 @@ A **green** migrate job can mean nothing was applied. So Authoring chunk 2 waits
 migrate **log**, not its tick. The general form: name the observation, not the event — AGENTS.md's
 "Do not cite an unwired gate as a safety argument" is the same rule pointed at CI.
 
+### 3b · Read the repo from `origin/main`, not from a working tree
+
+Same rule as gate 3, pointed at the other direction: **"merged" is not "what my checkout has."** A
+working tree is a claim about the repo; `origin/main` is the repo. When lanes are in flight, several
+checkouts exist at once and none of them is authoritative, so **read shared state with
+`git show origin/main:<path>`** rather than opening the file.
+
+**Evidence, 2026-10-07.** The main checkout was parked on a stale branch and then on a local `main`
+that had **diverged** — one local commit, sixty-five behind — so `git pull --ff-only` refused rather
+than fixing it, and the tree looked ordinary while being ~70 commits old. Reading it produced a
+**confidently wrong collision analysis**: `app/page.tsx` appeared to import `listProfiles` (making
+ONB-0 look like it collided with TEN-1's seam), when OSS-2 had long since moved the app behind a
+landing page and that import no longer existed. The lanes themselves were fine, because
+[AGENTS.md](../AGENTS.md) already requires a worktree to be cut from `origin/main` — only the _reads_
+were wrong, which is exactly why this is worth writing down separately.
+
+**The discipline, in three lines:**
+
+- `git fetch origin` first, then cite and read `origin/main:<path>`. A stale read is worse than no
+  read, because it is indistinguishable from a fresh one.
+- **A line number from a working tree is not evidence.** Prefer `path:symbol`, which survives drift —
+  the same rule [the `write-spec` skill](../.claude/skills/write-spec/SKILL.md) already records for
+  citations.
+- If a conclusion rests on a file's contents, **re-derive it against `origin/main` before acting**,
+  and say which ref you read. "I read this at `origin/main@<sha>`" is checkable; "I read this file"
+  is not.
+
+⚠️ **The guard does not cover this.** `.claude/hooks/guard-main-checkout.mjs` blocks _writes_ to the
+main checkout from a Claude session; it cannot stop a human committing there from their own terminal,
+and it says nothing about reads. Detection is the only real control, and it belongs in
+`session-context.mjs`: it already warns when the main checkout is on the wrong **branch**, which was
+not the failure — the failure was being on `main` and **ahead** of `origin/main`, where `--ff-only`
+cannot recover and nothing says so.
+
 ### 4 · The closed questions are written down
 
 Parallel tracks diverge when a settled question quietly reopens in one of them.

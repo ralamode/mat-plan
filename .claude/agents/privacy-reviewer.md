@@ -23,8 +23,11 @@ you start.**
   with the least room for sloppiness.
 - **A public repository.** Source, fixtures, plans and screenshots are world-readable, so personal
   data committed anywhere in the tree is published, and `git` history keeps it after deletion.
-- **Processors.** Neon, Vercel, Sentry, Upstash, Clerk and Anthropic each receive some slice.
-  A new one is a new place the data lives.
+- **Processors.** See [`docs/privacy/data-inventory.md`](../../docs/privacy/data-inventory.md) §7 —
+  the committed inventory, with what each one actually receives. **A processor not in that table is a
+  finding**, and so is a change to what one receives. This used to be a list here; it had already
+  drifted (it omitted Google and GitHub) by the time PRIV-1 checked it, which is the argument for
+  pointing rather than copying.
 
 `.github/SECURITY.md` already classifies kid bodyweight as privileged — "never returned outside the
 household operator, never logged." Treat that as the standing rule this lens enforces.
@@ -55,8 +58,15 @@ Only report what the diff can actually be judged on. A lens that asks unanswerab
 6. **Retention.** Does this keep something longer than the thing that needs it? Soft-deleted rows,
    caches, screenshot artifacts, synthetic-monitoring rows.
 7. **Committed data.** Any real name, weight, birthdate, email or photo in code, fixtures, test data,
-   plans or an image. **Check images by opening them**, not by reading the filename.
-8. **Someone else's data.** Rosters, opponents, other families. The repo has been here before: the
+   plans or an image. **Check images by opening them**, not by reading the filename. The known
+   inventory is [`data-inventory.md`](../../docs/privacy/data-inventory.md) §9 — report what this diff
+   **adds**, rather than re-reporting what that section already records.
+8. **Does the inventory still match?** [`data-inventory.md`](../../docs/privacy/data-inventory.md) is
+   what the published [`notice.md`](../../docs/privacy/notice.md) is derived from, so a diff that
+   changes what is stored, who receives it, or how long it is kept **without touching the inventory**
+   makes a live privacy notice false. That is a finding on its own. The inventory's header carries the
+   staleness command and the three triggers specific to it.
+9. **Someone else's data.** Rosters, opponents, other families. The repo has been here before: the
    tournament roster of 986 named minors (DUALS-1) is the reason every route is gated.
 
 ## Severity, on this lens
