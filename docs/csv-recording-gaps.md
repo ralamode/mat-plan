@@ -14,18 +14,18 @@ Every claim below was verified against the schema and the zod contracts.
 > CSV needs to be converted, we should convert it."
 
 **This removes the hardest constraint in the contract.** The plan had been to plumb the operator's raw
-keystrokes through `z.coerce.number()` so `71` and `71.0` could round-trip distinctly. That is no longer
+keystrokes through `z.coerce.number()` so `92` and `92.0` could round-trip distinctly. That is no longer
 needed: the app's canonical numeric form wins, and the legacy files get normalised **once** to match.
 
 Consequences:
 
 - **No `raw_load` plumbing for bodyweight.** `value_num` is the source of truth. (`raw_load`/`raw_reps`
   remain unused and available for the genuinely-lossy strength cases below.)
-- **The bodyweight golden fixture must be regenerated**, not copied verbatim — it currently mixes `71`,
-  `71.0`, `71.4`. Pick one canonical rendering and apply it everywhere.
+- **The bodyweight golden fixture must be regenerated**, not copied verbatim — it currently mixes `92`,
+  `92.0`, `91.7`. Pick one canonical rendering and apply it everywhere.
 - **RESOLVED (Ray, 2026-08-10): exactly ONE decimal place, always. No snapping.**
-  `71` → `71.0`, `71.4` → `71.4`, `71.5` → `71.5`. A 0.25 quantization was considered and **rejected**:
-  Ray's real file records to 0.1 lb (`71.4`, `71.2`), so snapping would have rewritten genuine scale
+  `92` → `92.0`, `92.3` → `92.3`, `92.5` → `92.5`. A 0.25 quantization was considered and **rejected**:
+  the legacy files record to 0.1 lb (`92.3`, `91.7`), so snapping would have rewritten genuine scale
   readings — a data change, not a formatting one. Plate-style 0.25 increments belong to strength LOADS,
   not to a bodyweight scale.
   Pleasingly, `bodyweight-form.tsx` already ships `step="0.1"`, so the input and the export now agree by

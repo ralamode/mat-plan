@@ -60,6 +60,20 @@ export const PICKER_COPY = {
 /** The product name: the tab title, the landing's `<h1>` and the gate's. */
 export const APP_NAME = 'mat-plan';
 
+/**
+ * The shared class for a full-width CTA that may WRAP — the landing's two buttons and the picker's
+ * first-run link (ONB-0).
+ *
+ * `buttonVariants`' base is `whitespace-nowrap`, and at 150–200% text size these labels are wider than
+ * a 328px phone column, so an unwrapped one scrolls the page sideways (SC 1.4.4). `whitespace-normal`
+ * lets the label wrap and `h-auto` lets the button grow with it — which does NOT cost the tap target,
+ * because `min-h-11` lives in the button base and `min-h-*` / `h-*` are different tailwind-merge groups.
+ *
+ * Extracted here at ONB-0: it was declared locally in `app/page.tsx`, and the picker's first-run link is
+ * the second screen needing the same escape hatch (AGENTS.md — the second occurrence is the trigger).
+ */
+export const CTA_CLASS = 'h-auto w-full py-2.5 text-center text-base whitespace-normal';
+
 /** The public source repository: `owner/name`, as the GitHub API wants it (screenshot publishing). */
 export const GITHUB_REPO = 'ralamode/mat-plan';
 /** …and as a page, linked from the landing. */
@@ -87,6 +101,41 @@ export const GATE_COPY = {
   back: `About ${APP_NAME}`,
   /** A wrong code. */
   incorrect: 'Incorrect access code.',
+} as const;
+
+/**
+ * The picker's FIRST-RUN copy (ONB-0) — the screen a brand-new deployment actually opens on, which
+ * until now read "No profiles found. Seed the database to get started."
+ *
+ * Who is reading it, because that decided every string: `/p` is gated and there is exactly one shared
+ * access code, so the reader either deployed this or was handed the code by whoever did — the committed
+ * UX panel's A5. `pnpm dev` re-seeds on every boot, so the state is unreachable locally. The copy
+ * addresses that person honestly instead of pretending to onboard a family who cannot yet exist.
+ *
+ * Checked against ONB-1 R20 ("the app's voice is a receipt, not a coach"): every line is phraseable as a
+ * statement of fact. `what` says what the app DOES and what it does NOT do — deliberately not a fourth
+ * paraphrase of `LANDING_COPY.lead`, which says who it is FOR and which this reader saw two screens ago.
+ * `next` keeps the SETTING as its subject, never "a day starts with…", which would be the app telling a
+ * parent what a wrestler's day consists of. One noun throughout: **athlete** (the human word), not
+ * "profile" (the schema's).
+ */
+export const PICKER_EMPTY_COPY = {
+  /** Replaces `PICKER_COPY.subhead` when there are no athletes: "Pick a profile to start logging." is an
+   *  imperative with no object here, and a screen reader hears it with nothing to supersede it. */
+  subhead: 'Nobody is set up to log yet.',
+  heading: 'No athletes yet',
+  what: `${APP_NAME} is a logbook: you write down what an athlete did — strength sets, rep counts, time at practice — one day at a time. It doesn’t write the plan.`,
+  next: 'When an athlete exists, their day starts with a weigh-in and strength, and you add the rest from their routine editor.',
+  /** Leads with the STATE, not an imperative: "Add an athlete…" sends the reader hunting for a button
+   *  that does not exist. Same phrasing family as `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked`. */
+  notYet:
+    'Adding an athlete isn’t in the app yet — it takes a change to this deployment’s seed data.',
+  /** Names its destination, like `LANDING_COPY.sourceCta`: this is the screen's only control and the
+   *  context carries nothing else to disambiguate it. Same tab, so Back is the recovery path. */
+  setupCta: 'How athletes get added — on GitHub',
+  /** Composed with `GITHUB_REPO_URL` at the use site, exactly like `LANDING_COPY.sourceAnchor`.
+   *  `constants.test.ts` pins that README.md really has the heading this points at. */
+  setupAnchor: '#adding-an-athlete',
 } as const;
 
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
@@ -373,6 +422,26 @@ export const CLOSED_DAY_NOTICE =
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
+
+/**
+ * The refusal every profile-addressed Server Action returns when it has no profile to act on —
+ * promoted out of `actions.ts`'s module scope by TEN-1 1b (ADR 0006's consequence 4).
+ *
+ * ⚠️ **ONE message for four states, on purpose: un-gated, unknown id, soft-deleted, and — since
+ * TEN-1 — ANOTHER HOUSEHOLD'S id.** A crafted cross-household id must learn nothing a stale id
+ * wouldn't, which is the same argument `AMEND_ERROR_COPY.notFound` makes for its three states and
+ * ADR 0006 → "What a wrong-household request returns" makes for 404-never-403. The security
+ * property *is* the byte-identity, so it lives in one place rather than being re-typed at each
+ * surface: `actions.test.ts` re-typed the literal seven times before this, and TEN-1's
+ * wrong-household suite would have made it fourteen.
+ *
+ * Two strings, not one, because the routine editor SAVES rather than logs and the sentence has to
+ * read correctly to a parent. They are `/^No profile found to (log|save) against\.$/` — deliberately
+ * close, so neither can hint at which check refused.
+ */
+export const NO_PROFILE_LOG = 'No profile found to log against.';
+/** @see NO_PROFILE_LOG — the routine editor's wording of the same refusal. */
+export const NO_PROFILE_SAVE = 'No profile found to save against.';
 
 /**
  * Typed-error copy shared by every amend path (V1-24 PR 1b).

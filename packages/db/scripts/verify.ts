@@ -57,15 +57,24 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { schema } from '../src/client';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import { householdProfileRows } from '../src/queries/household-profiles';
+import { liveHouseholdIds } from '../src/queries/household-scope';
 import { programDayRows } from '../src/queries/program-day';
+import type { HouseholdScope } from '../src/scope';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import {
   findAmendableBodyweight,
   insertBodyweightEntry,
   updateBodyweightEntryById,
 } from '../src/writers/bodyweight';
+// TEN-1 1b: imported by RELATIVE path on purpose — `src/index.ts` does not re-export it, so the app
+// cannot reach the constructor that takes a household id as an argument at all (module resolution
+// fails on a deep bare import). A script has no request to derive a scope from, so it NAMES one.
+import { householdScopeForScript } from '../src/writers/household-scope-script';
+import { ownedEntryIds } from '../src/writers/ownership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 import {
+  SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
@@ -169,7 +178,7 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
     'at least one length unit is seeded (GAP-3)',
   );
 }
-// V1-3: two kid profiles (Liam + Scarlett), stable by public_id across re-seeds.
+// V1-3: two kid profiles (Athlete One + Athlete Two), stable by public_id across re-seeds.
 assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
 const seededProfileIds = profiles.map((p) => p.publicId).sort();
 assert.deepEqual(
@@ -177,10 +186,13 @@ assert.deepEqual(
   [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID].sort(),
   'both seed profiles stable by public_id',
 );
+// The literal is deliberate and lives here exactly once (AGENTS.md -> constants: "a contract test that
+// pins the const's value"). This is the OSS-1 guard: it fails if anyone puts a real first name back into
+// SEED_PROFILE_NAME / SEED_PROFILE_2_NAME, which asserting against the consts could never catch.
 assert.deepEqual(
   profiles.map((p) => p.name).sort(),
-  ['Liam', 'Scarlett'],
-  'seed profiles are Liam + Scarlett',
+  ['Athlete One', 'Athlete Two'],
+  'OSS-1: the seeded profile names are role names, not real first names',
 );
 assert.equal(households.length, 1, 'exactly one household after two seed runs');
 assert.equal(
@@ -204,6 +216,19 @@ for (const p of profiles) {
   assert.ok(p.householdId != null, 'profile.household_id is non-null (CHECK-enforced)');
 }
 console.log('✓ profiles scoped to root household (household_id NOT NULL)');
+
+// ── TEN-1 1b: THE TWO SCOPES. Every scoped call in this file passes one of exactly these two ──────
+// `householdScopeForScript` appears in this file EXACTLY TWICE, here and at B_SCOPE below, and
+// `packages/db/src/scope.test.ts` fails the build if that ever grows. The reason is the plan's R5: with
+// ~22 mechanical call-site edits, one ad-hoc scope minted at a call site makes an assertion pass for
+// the wrong reason, and that is invisible in review. Two named constants mean a wrong scope is a
+// wrong NAME, which reads.
+//
+// A_SCOPE is the SEED household — Ray's. It is the scope every pre-TEN-1 assertion in this file was
+// implicitly written against, so threading it is what keeps those proofs proving what their messages
+// say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is inserted,
+// ~3400 lines down, which is also where the TEN-1 matrix lives.
+const A_SCOPE = householdScopeForScript(households[0].id);
 
 // ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
 // Deliberately NOT a bare `assert.equal(households[0].synthetic, false)`: that compares the column
@@ -278,27 +303,58 @@ assert.equal(
   'jsonb',
   'V1-18: profiles.routine_config is jsonb',
 );
-const liam = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
-const scarlett = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
-// A≠B on a fresh DB: Liam is NULL (→ the app's default routine, ships-dark), Scarlett is explicit.
-assert.equal(liam.routineConfig, null, 'V1-18: Liam has no routine_config (resolves to default)');
-assert.ok(scarlett.routineConfig != null, 'V1-18: Scarlett has an explicit routine_config');
+const athleteOne = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
+const athleteTwo = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
+// A≠B on a fresh DB, and since ONB-0 BOTH are explicit.
+//
+// Athlete One used to be NULL here, deliberately, to demonstrate "NULL → the default routine". ONB-0 narrowed
+// that default to `['strength']`, so NULL now means the NEUTRAL first-run routine — and a fixture that
+// rode it would lose the habits and the brush-teeth metrics that `e2e/global.setup.ts` and the V0-11
+// smoke both drive on this profile. So the seed writes the full catalog explicitly, and what gets proved
+// here is the stronger property: no seeded fixture depends on a read-time default at all.
+assert.ok(
+  athleteOne.routineConfig != null,
+  'ONB-0: profile 1 has an explicit routine_config (was NULL)',
+);
+assert.deepEqual(
+  athleteOne.routineConfig,
+  SEED_FULL_ROUTINE,
+  'ONB-0: profile 1 is seeded with the explicit pre-ONB-0 full-catalog routine',
+);
+assert.ok(athleteTwo.routineConfig != null, 'V1-18: Athlete Two has an explicit routine_config');
 assert.notDeepEqual(
-  liam.routineConfig,
-  scarlett.routineConfig,
+  athleteOne.routineConfig,
+  athleteTwo.routineConfig,
   'V1-18: the two seeded routines differ (A≠B, fresh DB)',
 );
 // Prove the stored config is GRAMMAR-VALID (a bad seed key fails loudly here, not silently on read).
 assert.ok(
-  routineConfigSchema.safeParse(scarlett.routineConfig).success,
-  'V1-18: Scarlett’s seeded routine_config parses against routineConfigSchema',
+  routineConfigSchema.safeParse(athleteTwo.routineConfig).success,
+  'V1-18: Athlete Two’s seeded routine_config parses against routineConfigSchema',
 );
 console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored config is valid');
 
 // V1-18 (PR 2): the coach-editor WRITE path — prove a routine config round-trips through the jsonb column
 // (drizzle UPDATE → reread → byte-identical), the DB half of `updateProfileRoutine`. The pure strict
 // validation (`validateRoutineForWrite`) is unit-tested app-side; here we prove the column stores + returns
-// the config unchanged. Writes to Liam (was NULL) so it also exercises the NULL → set transition.
+// the config unchanged.
+//
+// ONB-0: this used to get the NULL → set transition for free, because the seed left this profile NULL.
+// It no longer does, so the NULL is set up EXPLICITLY rather than quietly dropping that coverage.
+await db
+  .update(schema.profiles)
+  .set({ routineConfig: null })
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+const [cleared] = await db
+  .select({ routineConfig: schema.profiles.routineConfig })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+assert.equal(
+  cleared?.routineConfig,
+  null,
+  'ONB-0: routine_config is nullable (NULL → set is reachable)',
+);
+
 const writeRoutine = {
   version: ROUTINE_VERSION,
   order: [{ key: 'strength' }, { key: 'checkin:rice_bucket' }],
@@ -980,12 +1036,17 @@ async function insertCalisthenicsBout(args: {
   activityDate: string;
   status?: (typeof ENTRY_STATUS)[keyof typeof ENTRY_STATUS];
   softDeleted?: boolean;
+  /** TEN-1 1b: whose bout. Defaults to the ramp-test kid, which every V1-6b case below wants; the
+   *  TEN-1 matrix passes the OTHER household's profile so both sides of it have something to find.
+   *  Ids come from this builder's own counter, so a second caller can never collide with the
+   *  hand-assigned ids elsewhere in this file (the plan's R5(4)). */
+  profileId?: number;
 }): Promise<void> {
   const tag = (0x10 + entryProbe++).toString(16); // f-block probe ids
   await db.insert(schema.entries).values({
     publicId: `019826b4-0000-7000-8000-0000000001${tag}`,
     clientId: `019826b4-0000-7000-8000-0000000002${tag}`,
-    profileId: rampTestProfile.id,
+    profileId: args.profileId ?? rampTestProfile.id,
     activityDate: args.activityDate,
     unit: 'count',
     activityTypeId: calisthenicsId,
@@ -1144,6 +1205,7 @@ const dalRows = await weeklyAdherenceRows(asPg, {
   weekStart: RAMP_TEST_WEEK_START,
   activityTypeId: calisthenicsId,
   metricKeys: CALISTHENICS_METRIC_KEYS,
+  scope: A_SCOPE,
 });
 const dalByMetric = new Map(dalRows.map((r) => [r.metricKey, r]));
 // Targets DRIVE the rows: all four calisthenics metrics have a target this week → four rows.
@@ -1171,6 +1233,7 @@ const deadProfileAdherence = await weeklyAdherenceRows(asPg, {
   weekStart: RAMP_TEST_WEEK_START,
   activityTypeId: calisthenicsId,
   metricKeys: CALISTHENICS_METRIC_KEYS,
+  scope: A_SCOPE,
 });
 await db
   .update(schema.profiles)
@@ -1231,6 +1294,7 @@ const scoped = await weeklyAdherenceRows(asPg, {
   weekStart: RAMP_TEST_WEEK_START,
   activityTypeId: calisthenicsId,
   metricKeys: CALISTHENICS_METRIC_KEYS,
+  scope: A_SCOPE,
 });
 assert.equal(
   scoped.length,
@@ -2033,6 +2097,7 @@ const timedEdit = await updateStrengthSetById(asPg, {
   setId: durationSetRow.public_id,
   reps: 1,
   weight: 45,
+  scope: A_SCOPE,
 });
 assert.equal(timedEdit, null, 'V1-30: a time set is not editable (the edit path is mass-only)');
 // The two bodyweight sets carry no quantity at all — a MODE is not a magnitude.
@@ -2727,6 +2792,7 @@ const refused = await updateStrengthSetById(asPg, {
   setId: subFailureSet.publicId,
   reps: 99,
   weight: 999,
+  scope: A_SCOPE,
 });
 assert.equal(
   refused,
@@ -2750,6 +2816,7 @@ const stillEditable = await updateStrengthSetById(asPg, {
   setId: doneSet.publicId,
   reps: 6,
   weight: 65,
+  scope: A_SCOPE,
 });
 assert.ok(
   stillEditable,
@@ -2776,6 +2843,7 @@ const edited = await updateStrengthSetById(asPg, {
   setId: editTarget.publicId,
   reps: 7,
   weight: 142.5,
+  scope: A_SCOPE,
 });
 assert.ok(edited, 'V1-9: an owner edit returns the set public id');
 const [afterEdit] = await db
@@ -2809,6 +2877,7 @@ const foreignEdit = await updateStrengthSetById(asPg, {
   setId: editTarget.publicId,
   reps: 999,
   weight: 999,
+  scope: A_SCOPE,
 });
 assert.equal(foreignEdit, null, 'V1-9: a cross-profile edit matches no row');
 const [afterForeign] = await db
@@ -2829,6 +2898,7 @@ const labeledEdit = await updateStrengthSetById(asPg, {
   setId: editTarget.publicId,
   reps: 4,
   weight: 4,
+  scope: A_SCOPE,
 });
 assert.equal(
   labeledEdit,
@@ -2855,6 +2925,7 @@ const deletedEdit = await updateStrengthSetById(asPg, {
   setId: editTarget.publicId,
   reps: 3,
   weight: 3,
+  scope: A_SCOPE,
 });
 assert.equal(deletedEdit, null, 'V1-9: a soft-deleted set is not editable');
 console.log(
@@ -2941,6 +3012,7 @@ const amended = await updateBodyweightEntryById(asPg, {
   value: 85.2,
   unit: 'lb',
   seenValue: 84.5,
+  scope: A_SCOPE,
 });
 assert.ok(amended, 'V1-24 1b: an owner amend returns the entry public id');
 const [afterAmend] = await db
@@ -2957,6 +3029,7 @@ const foreignAmend = await updateBodyweightEntryById(asPg, {
   value: 999,
   unit: 'lb',
   seenValue: 85.2,
+  scope: A_SCOPE,
 });
 assert.equal(foreignAmend, null, 'V1-24 1b: a cross-profile amend matches no row');
 
@@ -2974,6 +3047,7 @@ const wrongMetric = await updateBodyweightEntryById(asPg, {
   value: 85,
   unit: 'count',
   seenValue: 20,
+  scope: A_SCOPE,
 });
 assert.equal(wrongMetric, null, 'V1-24 1b: a non-bodyweight metric is not amendable here');
 const [pushupAfter] = await db
@@ -2988,7 +3062,8 @@ const staleAmend = await updateBodyweightEntryById(asPg, {
   entryId: bwTarget.publicId,
   value: 70,
   unit: 'lb',
-  seenValue: 84.5, // the row is 85.2 now
+  seenValue: 84.5, // the row is 85.2 now,
+  scope: A_SCOPE,
 });
 assert.equal(staleAmend, null, 'V1-24 1b: a stale seenValue matches no row');
 
@@ -2999,6 +3074,7 @@ const wrongUnit = await updateBodyweightEntryById(asPg, {
   value: 200,
   unit: 'kg',
   seenValue: 85.2,
+  scope: A_SCOPE,
 });
 assert.equal(wrongUnit, null, 'V1-24 1b: a mismatched unit matches no row');
 
@@ -3014,6 +3090,7 @@ const deadAmend = await updateBodyweightEntryById(asPg, {
   value: 71,
   unit: 'lb',
   seenValue: 70,
+  scope: A_SCOPE,
 });
 assert.equal(deadAmend, null, 'V1-24 1b: a soft-deleted entry is not amendable');
 
@@ -3029,6 +3106,7 @@ const skippedAmend = await updateBodyweightEntryById(asPg, {
   value: 71,
   unit: 'lb',
   seenValue: 70,
+  scope: A_SCOPE,
 });
 assert.equal(skippedAmend, null, 'V1-24 1b: a non-done entry is not amendable');
 
@@ -3044,13 +3122,18 @@ const textAmend = await updateBodyweightEntryById(asPg, {
   value: 71,
   unit: 'lb',
   seenValue: 70,
+  scope: A_SCOPE,
 });
 assert.equal(textAmend, null, 'V1-24 1b: a text-valued entry is not amendable');
 
 // (i) The re-read the action branches on shares the UPDATE's shape and ownership: it sees the owner's
 // amendable row, and NOTHING the UPDATE could not have written.
 assert.deepEqual(
-  await findAmendableBodyweight(asPg, { profilePublicId: bwOwner, entryId: bwTarget.publicId }),
+  await findAmendableBodyweight(asPg, {
+    profilePublicId: bwOwner,
+    entryId: bwTarget.publicId,
+    scope: A_SCOPE,
+  }),
   { value: 85.2, unit: 'lb' },
   "V1-24 1b: the re-read returns the owner's current value",
 );
@@ -3062,7 +3145,7 @@ for (const [entryId, profilePublicId, why] of [
   [deadRow.publicId, bwOwner, 'soft-deleted'],
 ] as const) {
   assert.equal(
-    await findAmendableBodyweight(asPg, { profilePublicId, entryId }),
+    await findAmendableBodyweight(asPg, { profilePublicId, entryId, scope: A_SCOPE }),
     null,
     `V1-24 1b: the re-read refuses a ${why} row`,
   );
@@ -3080,12 +3163,14 @@ const deadProfileAmend = await updateBodyweightEntryById(asPg, {
   value: 90,
   unit: 'lb',
   seenValue: 85.2,
+  scope: A_SCOPE,
 });
 const deadProfileEdit = await updateStrengthSetById(asPg, {
   profilePublicId: bwOwner,
   setId: editTarget.publicId,
   reps: 99,
   weight: 99,
+  scope: A_SCOPE,
 });
 await db
   .update(schema.profiles)
@@ -3676,13 +3761,13 @@ console.log(
 // BOLA scoping and the per-kid LEFT JOIN — is what gets exercised (the `weeklyAdherenceRows` precedent).
 
 // (a) The YOUTH DAILY PROGRAM: Day A is 7 movements, in the coach's authored `idx` order.
-const liamA = await programDayRows(asPg, {
+const athleteOneDayA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-assert.equal(liamA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
+assert.equal(athleteOneDayA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
 assert.deepEqual(
-  liamA.map((r) => r.movementName),
+  athleteOneDayA.map((r) => r.movementName),
   [
     'Push-Ups',
     'Pull-Up',
@@ -3697,27 +3782,30 @@ assert.deepEqual(
 
 // Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
 // every day while each individual movement lands every other session.
-const liamB = await programDayRows(asPg, {
+const athleteOneDayB = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_b',
 });
-assert.equal(liamB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
+assert.equal(athleteOneDayB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
 assert.ok(
-  liamB.some((r) => r.movementName === 'KB Swings'),
+  athleteOneDayB.some((r) => r.movementName === 'KB Swings'),
   'YDP: Day B carries the swing',
 );
-assert.ok(!liamB.some((r) => r.movementName === 'Box Jump'), 'YDP: Day B does NOT carry the jump');
+assert.ok(
+  !athleteOneDayB.some((r) => r.movementName === 'Box Jump'),
+  'YDP: Day B does NOT carry the jump',
+);
 
 // (b) Per-kid isolation — the SAME prescription yields each kid their own row. The YDP prescribes no
 // loads at all, so what this proves is that BOTH kids get a row per movement (a WHERE-scoped join
 // would drop one), not that the loads differ.
-const scarlettA = await programDayRows(asPg, {
+const athleteTwoDayA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_2_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-assert.equal(scarlettA.length, 7, 'YDP: the sibling gets her own 7 Day-A rows');
+assert.equal(athleteTwoDayA.length, 7, 'YDP: the sibling gets their own 7 Day-A rows');
 assert.ok(
-  liamA.every((r) => r.load === null) && scarlettA.every((r) => r.load === null),
+  athleteOneDayA.every((r) => r.load === null) && athleteTwoDayA.every((r) => r.load === null),
   'YDP: no authored loads reach the card — the athlete logs what they did',
 );
 
@@ -3726,23 +3814,23 @@ assert.ok(
 // This is the column pair that feeds the log form's Unit select and its BW-tap warning, and the seed
 // is the real catalog, so this proves the actual movements the athletes log against — not a fixture.
 // `KB Swings` is the 2026-09-28 movement: declared loaded, in pounds, and logged `20 × BW`.
-const kbSwings = liamB.find((r) => r.movementName === 'KB Swings');
+const kbSwings = athleteOneDayB.find((r) => r.movementName === 'KB Swings');
 assert.equal(kbSwings?.movementUnitDefault, 'lb', 'V1-26: KB Swings declares a pound default');
 assert.equal(kbSwings?.movementIsBodyweight, false, 'V1-26: ...and is NOT a bodyweight movement');
 
-const pushUps = liamA.find((r) => r.movementName === 'Push-Ups');
+const pushUps = athleteOneDayA.find((r) => r.movementName === 'Push-Ups');
 assert.equal(pushUps?.movementIsBodyweight, true, 'V1-26: Push-Ups declares bodyweight');
 assert.equal(pushUps?.movementUnitDefault, null, 'V1-26: ...and declares no unit');
 
 // ⚠️ The declaration is the MOVEMENT's, never the coach's. `load` stays null on every YDP row (asserted
 // just above), so widening the query did not open a path for an authored magnitude to reach an input.
 assert.ok(
-  liamA.every((r) => r.load === null),
+  athleteOneDayA.every((r) => r.load === null),
   'V1-26: widening the select did not let a prescribed load through',
 );
 
 // The one fixed prescription in the program survives the read.
-const hipThrust = liamA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
+const hipThrust = athleteOneDayA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
 assert.equal(hipThrust?.sets, 3, 'YDP: hip thrusts keep their fixed 3 sets');
 assert.equal(hipThrust?.targetReps, '10 per side', 'YDP: ...and their per-side prescription');
 
@@ -4207,5 +4295,465 @@ console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 // --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
 await insertSnapshot('movement', SNAP_COMMA);
 console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// TEN-1 1b — ONE HOUSEHOLD CANNOT SEE ANOTHER. The matrix.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Everything above this line proves per-PROFILE ownership. This block proves per-HOUSEHOLD isolation,
+// which is a different claim: two profiles in ONE household are both legitimately reachable, and the
+// question is whether a request scoped to household A can reach household B at all.
+//
+// `.github/SECURITY.md` has said *"every query is scoped by `household_id`"* since V0-1 and the code
+// has never satisfied it — `listProfiles` returned every profile in the database and every write was
+// existence-scoped. This is the proof that closes it, phrased as ADR 0006's forward-compatibility
+// requirement 2 asks: **no cross-household access except through an explicitly published
+// projection**, a set that is EMPTY today, so every unpublished case is proved exactly as strictly
+// as an unconditional zero would be. A later published surface extends the matrix; it does not
+// invalidate it.
+//
+// ⚠️ **EVERY ROW ASSERTS BOTH DIRECTIONS.** `verify.ts` already learned why, 200 lines up at the
+// V1-10 BOLA probe: *"asking only one way would pass even with the household scoping deleted, since
+// the globally-newest block happens to be the verify one — the assertion would then be proving
+// fixture ordering, not ownership."* Generalised: a new zero-rows assertion ships with a matching
+// assertion that the SAME call returns rows for the right household. A one-directional leak test is
+// indistinguishable from a broken fixture.
+//
+// ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so what
+// this proves is CONSISTENT SCOPING: household B's data is unreachable from a request scoped to
+// household A. It does not prove the requester is who they claim. That is AUTH-1, and it is the most
+// likely thing for a reader of this block to over-claim.
+
+// ── THE SECOND SCOPE. `householdScopeForScript(` appears in this file EXACTLY TWICE — see A_SCOPE ──
+const B_SCOPE = householdScopeForScript(verifyHh.id);
+const [verifyProfileRow] = await db
+  .select({ id: schema.profiles.id })
+  .from(schema.profiles)
+  .where(eq(schema.profiles.publicId, VERIFY_PROFILE_PUBLIC_ID));
+
+// ── (0) The RESOLVER's own query (`liveHouseholdIds`, the one `getHouseholdScope()` runs) ─────────
+// Two live households exist by now, which is exactly the state `getHouseholdScope()` THROWS on —
+// it cannot tell whose data it holds, and "pick the first" is a silent cross-wire. The LIMIT 2 is
+// an ambiguity probe, so seeing 2 is the proof that the probe detects it.
+assert.equal(
+  (await liveHouseholdIds(asPg)).length,
+  2,
+  'TEN-1: the resolver probe SEES two live households (the state getHouseholdScope() throws on)',
+);
+
+// A SOFT-DELETED household stops resolving, so its profiles become unreachable even though
+// `profiles.household_id` still points at it. Both directions: exactly one row, and it is A's.
+const bProfileCount = (
+  await db
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.householdId, verifyHh.id))
+).length;
+assert.ok(bProfileCount >= 2, 'TEN-1 fixture: household B has at least two profiles');
+await db
+  .update(schema.households)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.households.id, verifyHh.id));
+const liveAfterDelete = await liveHouseholdIds(asPg);
+assert.equal(liveAfterDelete.length, 1, 'TEN-1: a soft-deleted household does not resolve');
+assert.equal(
+  liveAfterDelete[0].id,
+  households[0].id,
+  'TEN-1: …and the one that does resolve is the LIVE one, not whichever row came back first',
+);
+// Its profiles are still there — which is the point: unreachable, not deleted.
+assert.equal(
+  (
+    await db
+      .select({ id: schema.profiles.id })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.householdId, verifyHh.id))
+  ).length,
+  bProfileCount,
+  'TEN-1: the soft-deleted household still OWNS its profiles (unreachable, not deleted)',
+);
+await db
+  .update(schema.households)
+  .set({ deletedAt: null })
+  .where(eq(schema.households.id, verifyHh.id));
+console.log(
+  '✓ TEN-1 1b: the scope resolver — two live households are detected as ambiguous; a soft-deleted household stops resolving',
+);
+
+// ── (1) THE PICKER (ADR 0006's named obligation) ──────────────────────────────────────────────────
+// Under option A (session-only) `/p` is byte-identical for every household on earth, so there is no
+// id in the address to disagree with the session: `householdProfileRows` IS the isolation boundary
+// for the app's front door. The obligation is two households with two profiles each, and this runs
+// the SAME function `listProfiles` runs — an emitted-SQL assertion would only prove that a conjunct
+// was appended, never which rows come back.
+const pickerA = await householdProfileRows(asPg, { scope: A_SCOPE });
+const pickerB = await householdProfileRows(asPg, { scope: B_SCOPE });
+const pickerAIds = new Set(pickerA.map((r) => r.publicId));
+const pickerBIds = new Set(pickerB.map((r) => r.publicId));
+
+assert.ok(
+  pickerAIds.has(SEED_PROFILE_PUBLIC_ID) && pickerAIds.has(SEED_PROFILE_2_PUBLIC_ID),
+  "TEN-1: the picker returns BOTH of household A's seeded kids",
+);
+assert.ok(
+  pickerBIds.has(VERIFY_PROFILE_PUBLIC_ID) && pickerBIds.has(VERIFY_PROFILE_2_PUBLIC_ID),
+  "TEN-1: …and BOTH of household B's kids, from B's scope",
+);
+assert.ok(
+  !pickerAIds.has(VERIFY_PROFILE_PUBLIC_ID) && !pickerAIds.has(VERIFY_PROFILE_2_PUBLIC_ID),
+  "TEN-1: household A's picker does not list household B's kids",
+);
+assert.ok(
+  !pickerBIds.has(SEED_PROFILE_PUBLIC_ID) && !pickerBIds.has(SEED_PROFILE_2_PUBLIC_ID),
+  "TEN-1: …and household B's picker does not list household A's kids (reverse)",
+);
+// The two sets are DISJOINT and neither is the whole table — the shape a `WHERE 1=1` would break
+// (both scopes would then see every profile, and the four assertions above would start failing).
+const allLiveProfiles = (
+  await db
+    .select({ id: schema.profiles.publicId })
+    .from(schema.profiles)
+    .where(isNull(schema.profiles.deletedAt))
+).length;
+assert.ok(
+  pickerA.length < allLiveProfiles && pickerB.length < allLiveProfiles,
+  'TEN-1: neither picker returns the whole profiles table (the pre-TEN-1 behaviour)',
+);
+assert.equal(
+  pickerA.filter((r) => pickerBIds.has(r.publicId)).length,
+  0,
+  'TEN-1: the two households’ pickers are DISJOINT',
+);
+// A soft-deleted profile is still excluded — the household conjunct is in ADDITION to, not instead
+// of, the existing one. Restored straight after.
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: new Date() })
+  .where(eq(schema.profiles.publicId, VERIFY_PROFILE_2_PUBLIC_ID));
+assert.equal(
+  (await householdProfileRows(asPg, { scope: B_SCOPE })).length,
+  pickerB.length - 1,
+  'TEN-1: the picker still drops a soft-deleted profile (household scope ADDS a conjunct)',
+);
+await db
+  .update(schema.profiles)
+  .set({ deletedAt: null })
+  .where(eq(schema.profiles.publicId, VERIFY_PROFILE_2_PUBLIC_ID));
+console.log(
+  '✓ TEN-1 1b: the PICKER — two households × two profiles, disjoint in both directions, soft-delete still honoured (ADR 0006 obligation 1)',
+);
+
+// ── (2) HOUSEHOLD B's FIXTURE — so every call in the matrix has something to WRONGLY find ─────────
+// Reuses the builders already in this file rather than hand-rolling a fourth insert shape, and takes
+// its ids from `newId()` / those builders' own counters: a hand-assigned id that collided with
+// `uq_entries_client_id` would make an `onConflictDoNothing` builder silently hand back ANOTHER
+// profile's row, and the matrix would then be asserting about the wrong entry while staying green.
+const TEN1_WEEK_START = '2026-03-02'; // an ISO-week Monday, in no other fixture's week
+
+// (a) a weigh-in → the bodyweight amend + its re-read
+const bTarget = await insertBodyweightProbe({
+  profileId: verifyProfileRow.id,
+  value: 70.5,
+  activityDate: '2026-03-03',
+});
+
+// (b) a ramp target + an in-week bout → weeklyAdherenceRows
+await db.insert(schema.rampTargets).values({
+  publicId: newId(),
+  profileId: verifyProfileRow.id,
+  metricKey: METRIC_KEYS.pushups,
+  weekStart: TEN1_WEEK_START,
+  targetValue: '30',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 25,
+  activityDate: TEN1_WEEK_START,
+  profileId: verifyProfileRow.id,
+});
+// …and the SAME week for household A's ramp-test kid, so the adherence row of each direction exists
+// and a leak would show up as the OTHER household's numbers rather than as zero rows.
+await db.insert(schema.rampTargets).values({
+  publicId: newId(),
+  profileId: rampTestProfile.id,
+  metricKey: METRIC_KEYS.pushups,
+  weekStart: TEN1_WEEK_START,
+  targetValue: '45',
+});
+await insertCalisthenicsBout({
+  metricKey: METRIC_KEYS.pushups,
+  value: 40,
+  activityDate: TEN1_WEEK_START,
+  profileId: rampTestProfile.id,
+});
+
+// (c) a real strength session through the REAL writer → updateStrengthSetById
+const bSessionClientId = newId();
+const bMovementClientId = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+  day: '2026-03-03',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: bSessionClientId,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: 'Verify Lift',
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: bMovementClientId,
+      sets: [{ reps: 5, weight: 95 }],
+    },
+  ],
+});
+// …and the mirror for household A, through the same writer, so the matrix's positive directions
+// both exercise a set this block created rather than reaching for one an earlier proof may have
+// soft-deleted or made un-editable on its way past.
+const aSessionClientId = newId();
+const aMovementClientId = newId();
+await writeStrengthSession(asPg, {
+  profilePublicId: ssArgs.profilePublicId,
+  day: '2026-03-03',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: aSessionClientId,
+  activityTypeId: scLiftActivityId,
+  movements: [
+    {
+      movementName: 'Tenancy Lift',
+      unit: 'lb',
+      movementId: movX.id,
+      clientId: aMovementClientId,
+      sets: [{ reps: 5, weight: 135 }],
+    },
+  ],
+});
+
+/** The one live, numerically-editable set of the session this block just wrote. */
+async function ten1SetOf(movementClientId: string): Promise<{ publicId: string } | undefined> {
+  const [row] = await db
+    .select({ publicId: schema.entrySets.publicId })
+    .from(schema.entrySets)
+    .innerJoin(schema.entries, eq(schema.entrySets.entryId, schema.entries.id))
+    .where(and(eq(schema.entries.clientId, movementClientId), isNull(schema.entrySets.deletedAt)));
+  return row;
+}
+const bSet = await ten1SetOf(bMovementClientId);
+const aSet = await ten1SetOf(aMovementClientId);
+assert.ok(bSet, 'TEN-1 fixture: household B has an editable strength set');
+assert.ok(aSet, 'TEN-1 fixture: household A has an editable strength set');
+
+// ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
+// `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so this
+// row is the predicate's own proof. `weeklyAdherenceRows` is the scoped READ the Today page runs.
+const TEN1_READS: readonly [
+  string,
+  (profilePublicId: string, scope: HouseholdScope) => Promise<readonly unknown[]>,
+][] = [
+  [
+    'ownedEntryIds (THE live-profile predicate)',
+    (profilePublicId, scope) => ownedEntryIds(asPg, profilePublicId, scope),
+  ],
+  [
+    'weeklyAdherenceRows (the Today page’s adherence read)',
+    (profilePublicId, scope) =>
+      weeklyAdherenceRows(asPg, {
+        profilePublicId,
+        weekStart: TEN1_WEEK_START,
+        activityTypeId: calisthenicsId,
+        metricKeys: CALISTHENICS_METRIC_KEYS,
+        scope,
+      }),
+  ],
+];
+
+for (const [label, call] of TEN1_READS) {
+  assert.ok(
+    (await call(RAMP_TEST_PROFILE_PUBLIC_ID, A_SCOPE)).length > 0,
+    `TEN-1: ${label} returns household A's OWN rows`,
+  );
+  assert.equal(
+    (await call(RAMP_TEST_PROFILE_PUBLIC_ID, B_SCOPE)).length,
+    0,
+    `TEN-1: ${label} — household B cannot read A`,
+  );
+  assert.ok(
+    (await call(VERIFY_PROFILE_PUBLIC_ID, B_SCOPE)).length > 0,
+    `TEN-1: ${label} returns household B's OWN rows`,
+  );
+  assert.equal(
+    (await call(VERIFY_PROFILE_PUBLIC_ID, A_SCOPE)).length,
+    0,
+    `TEN-1: ${label} — household A cannot read B (reverse)`,
+  );
+}
+console.log(
+  '✓ TEN-1 1b: the READ matrix — ownedEntryIds + weeklyAdherenceRows, each proved in BOTH directions',
+);
+
+// ── (4) THE WRITE MATRIX — the refusal shape, both directions ─────────────────────────────────────
+// Writers answer `null`/throw rather than zero rows, so they use this file's refusal-matrix idiom
+// (`verify.ts`'s V1-24 1b block) rather than the loop above. Each is asserted FOUR ways, and the two
+// positive directions are what stop these passing with the scoping deleted.
+//
+// ⚠️ The amends are DESTRUCTIVE on their happy path, so each own-household case asserts the write
+// landed and then the cross-household case reuses the NEW seen-value. Ordering matters here.
+
+// (a) the bodyweight amend — A's row from A, refused from B, and the reverse
+const aBwTarget = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 80.1,
+  activityDate: '2026-03-04',
+});
+assert.ok(
+  await updateBodyweightEntryById(asPg, {
+    profilePublicId: bwOwner,
+    entryId: aBwTarget.publicId,
+    scope: A_SCOPE,
+    value: 80.6,
+    unit: 'lb',
+    seenValue: 80.1,
+  }),
+  "TEN-1: the bodyweight amend writes household A's own row",
+);
+assert.equal(
+  await updateBodyweightEntryById(asPg, {
+    profilePublicId: bwOwner,
+    entryId: aBwTarget.publicId,
+    scope: B_SCOPE,
+    value: 999,
+    unit: 'lb',
+    seenValue: 80.6,
+  }),
+  null,
+  'TEN-1: …and household B cannot amend it',
+);
+assert.ok(
+  await updateBodyweightEntryById(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    entryId: bTarget.publicId,
+    scope: B_SCOPE,
+    value: 71,
+    unit: 'lb',
+    seenValue: 70.5,
+  }),
+  "TEN-1: the bodyweight amend writes household B's own row",
+);
+assert.equal(
+  await updateBodyweightEntryById(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    entryId: bTarget.publicId,
+    scope: A_SCOPE,
+    value: 999,
+    unit: 'lb',
+    seenValue: 71,
+  }),
+  null,
+  'TEN-1: …and household A cannot amend it (reverse)',
+);
+// The REFUSED writes changed nothing — a refusal that still wrote would be the worst possible pass.
+const [aBwAfter] = await db
+  .select({ valueNum: schema.entries.valueNum })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, aBwTarget.publicId));
+const [bBwAfter] = await db
+  .select({ valueNum: schema.entries.valueNum })
+  .from(schema.entries)
+  .where(eq(schema.entries.publicId, bTarget.publicId));
+assert.equal(Number(aBwAfter.valueNum), 80.6, "TEN-1: B's refused amend left A's weight alone");
+assert.equal(Number(bBwAfter.valueNum), 71, "TEN-1: A's refused amend left B's weight alone");
+
+// (b) the amend's re-read — the action's three-way branch must not see across the seam either
+assert.ok(
+  await findAmendableBodyweight(asPg, {
+    profilePublicId: bwOwner,
+    entryId: aBwTarget.publicId,
+    scope: A_SCOPE,
+  }),
+  "TEN-1: the amend re-read sees household A's own row",
+);
+assert.equal(
+  await findAmendableBodyweight(asPg, {
+    profilePublicId: bwOwner,
+    entryId: aBwTarget.publicId,
+    scope: B_SCOPE,
+  }),
+  null,
+  'TEN-1: …and household B cannot re-read it',
+);
+assert.ok(
+  await findAmendableBodyweight(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    entryId: bTarget.publicId,
+    scope: B_SCOPE,
+  }),
+  "TEN-1: the amend re-read sees household B's own row",
+);
+assert.equal(
+  await findAmendableBodyweight(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    entryId: bTarget.publicId,
+    scope: A_SCOPE,
+  }),
+  null,
+  'TEN-1: …and household A cannot re-read it (reverse)',
+);
+
+// (c) the strength set-edit
+assert.ok(
+  await updateStrengthSetById(asPg, {
+    profilePublicId: ssArgs.profilePublicId,
+    setId: aSet.publicId,
+    reps: 9,
+    weight: 45,
+    scope: A_SCOPE,
+  }),
+  "TEN-1: the set-edit writes household A's own set",
+);
+assert.equal(
+  await updateStrengthSetById(asPg, {
+    profilePublicId: ssArgs.profilePublicId,
+    setId: aSet.publicId,
+    reps: 999,
+    weight: 999,
+    scope: B_SCOPE,
+  }),
+  null,
+  'TEN-1: …and household B cannot edit it',
+);
+assert.ok(
+  await updateStrengthSetById(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    setId: bSet.publicId,
+    reps: 6,
+    weight: 100,
+    scope: B_SCOPE,
+  }),
+  "TEN-1: the set-edit writes household B's own set",
+);
+assert.equal(
+  await updateStrengthSetById(asPg, {
+    profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+    setId: bSet.publicId,
+    reps: 999,
+    weight: 999,
+    scope: A_SCOPE,
+  }),
+  null,
+  'TEN-1: …and household A cannot edit it (reverse)',
+);
+const [aSetAfter] = await db
+  .select({ reps: schema.entrySets.reps })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, aSet.publicId));
+const [bSetAfter] = await db
+  .select({ reps: schema.entrySets.reps })
+  .from(schema.entrySets)
+  .where(eq(schema.entrySets.publicId, bSet.publicId));
+assert.equal(aSetAfter.reps, 9, "TEN-1: B's refused set-edit left A's set alone");
+assert.equal(bSetAfter.reps, 6, "TEN-1: A's refused set-edit left B's set alone");
+
+console.log(
+  '✓ TEN-1 1b: the WRITE matrix — bodyweight amend, amend re-read and set-edit, each refused across the household seam in BOTH directions, with no side effect',
+);
 
 console.log('✓ verify passed');

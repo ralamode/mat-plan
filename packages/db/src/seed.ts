@@ -12,7 +12,9 @@ import {
   type ProgramBlockSeedRow,
   type RoutineConfig,
   SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_2_NAME,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
 } from '@mat-plan/shared';
@@ -22,17 +24,62 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
 /**
- * V1-18: Scarlett's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
- * demonstrates A≠B vs Liam (NULL → the default routine). Exported so an app-side test can bind these keys
+ * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
+ * demonstrates A≠B vs Athlete One (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
+ * old whole-catalog default). Exported so an app-side test can bind these keys
  * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
  * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
  * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an EMPTY
  * target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
  */
-export const SEED_SCARLETT_ROUTINE = {
+/**
+ * The PRE-ONB-0 default routine, written out explicitly — the full `ROUTINE_CATALOG` order
+ * (strength → check-ins → life).
+ *
+ * ONB-0 narrowed what a NULL `routine_config` falls back to, from the whole catalog down to
+ * `['strength']`, so that a brand-new household no longer inherits this household's ~17 controls. Profile
+ * 1 was NULL and therefore rode that fallback, which means two things it is this literal's job to fix:
+ *
+ *  1. **Fixtures.** `e2e/global.setup.ts` warms the check-ins path by submitting `Splits` on profile 1,
+ *     and the V0-11 smoke drives `Rice bucket` + `Pressure` (a `brush_teeth` metric) there. Under the
+ *     neutral fallback those controls stop rendering and the setup project fails, taking the whole suite
+ *     with it. Writing the routine explicitly keeps every existing spec green with no spec edits.
+ *  2. **The live household.** A seed cannot fix the row that already exists (`onConflictDoNothing` below),
+ *     so the matching correction `null-routine-to-full-2026-10-07` writes this same config to any live
+ *     profile whose `routine_config` is NULL. Run it BEFORE the deploy: it writes what the app renders
+ *     today, so it is a no-op from the household's point of view.
+ *
+ * ⚠️ Hand-authored because `packages/db` cannot import the app-side `ROUTINE_CATALOG` (it is derived from
+ * `CHECKIN_FIELDS`/`LIFE_ACTIVITIES`, which are React-adjacent). `apps/web/lib/routine/catalog.test.ts`
+ * asserts this list EQUALS `ROUTINE_CATALOG` exactly, so the two cannot drift.
+ */
+export const SEED_FULL_ROUTINE = {
   version: 1,
   order: [
-    // Check-ins FIRST (before strength) — a genuine reorder vs Liam's default — and CONTIGUOUS (rice bucket
+    { key: 'strength' },
+    { key: 'checkin:rice_bucket' },
+    { key: 'checkin:brain_rep' },
+    { key: 'checkin:splits' },
+    { key: 'checkin:brush_teeth:stance' },
+    { key: 'checkin:brush_teeth:ladder' },
+    { key: 'checkin:brush_teeth:bridge' },
+    { key: 'checkin:brush_teeth:mobility' },
+    { key: 'checkin:brush_teeth:pressure' },
+    { key: 'checkin:brush_teeth:reaction' },
+    { key: 'checkin:brush_teeth:shot' },
+    { key: 'checkin:calisthenics:pushups' },
+    { key: 'checkin:calisthenics:pullups' },
+    { key: 'checkin:calisthenics:vsit_crunch' },
+    { key: 'checkin:calisthenics:vsit_skill_step' },
+    { key: 'life:wake' },
+    { key: 'life:wrestling_practice' },
+  ],
+} as const satisfies RoutineConfig;
+
+export const SEED_ATHLETE_TWO_ROUTINE = {
+  version: 1,
+  order: [
+    // Check-ins FIRST (before strength) — a genuine reorder vs Athlete One's default — and CONTIGUOUS (rice bucket
     // + the push-up count in ONE block), so the check-in-logging e2e has a single, full surface. Then
     // strength (cosmetic `conditional` marker), then a life SUBSET (wake only, not wrestling). Demonstrates
     // A≠B via order + selection without splitting the check-in form.
@@ -46,8 +93,8 @@ export const SEED_SCARLETT_ROUTINE = {
 /**
  * Idempotent seed (AGENTS.md: seed reference data ON CONFLICT DO NOTHING; runs
  * twice → identical result). Seeds the `units` + `activity_type_categories`
- * reference tables, the root household, two kid profiles scoped to it (V1-3: Liam +
- * Scarlett), and (V1-2) the FULL catalog — `activity_types`, `metric_definitions`, and
+ * reference tables, the root household, two kid profiles scoped to it (V1-3: Athlete One +
+ * Athlete Two), and (V1-2) the FULL catalog — `activity_types`, `metric_definitions`, and
  * `movements` — sourced from @mat-plan/shared as the single source of truth. Fixed
  * UUIDv7s let re-runs conflict on the natural key / public_id instead of inserting
  * duplicates. V1-1b's three minimal rows (weigh_in / sc_lift / bodyweight) are SPREAD
@@ -62,6 +109,8 @@ export {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_NAME,
+  SEED_PROFILE_2_NAME,
 } from '@mat-plan/shared';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
@@ -106,23 +155,28 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
 
   // V1-3: the two kid profiles the picker tiles render. Both scoped to the root
-  // household; idempotent by public_id (a re-seed of prod's existing "Athlete One"
-  // row conflicts on SEED_PROFILE_PUBLIC_ID and keeps its name — rename is fresh-DB only).
+  // household; idempotent by public_id. ⚠️ `onConflictDoNothing` means a re-seed CANNOT rename a row
+  // that already exists: a live household keeps whatever names it entered, which is its own data and
+  // not this seed's business (OSS-1 scrubbed the REPO, never the database). So these role names are a
+  // FRESH-DB fixture only — what a reviewer sees in a preview, a screenshot or `db:verify`.
   await db
     .insert(schema.profiles)
     .values([
       {
         publicId: SEED_PROFILE_PUBLIC_ID,
-        name: 'Liam',
+        name: SEED_PROFILE_NAME,
         kind: 'kid',
         householdId: household.id,
+        // ONB-0: EXPLICIT, where this row used to be NULL. NULL now means "the neutral first-run
+        // routine" (`['strength']`), and the check-in specs drive habits + a brush-teeth metric here.
+        routineConfig: SEED_FULL_ROUTINE,
       },
       {
         publicId: SEED_PROFILE_2_PUBLIC_ID,
-        name: 'Scarlett',
+        name: SEED_PROFILE_2_NAME,
         kind: 'kid',
         householdId: household.id,
-        routineConfig: SEED_SCARLETT_ROUTINE,
+        routineConfig: SEED_ATHLETE_TWO_ROUTINE,
       },
     ])
     .onConflictDoNothing({ target: schema.profiles.publicId });

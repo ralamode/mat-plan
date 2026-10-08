@@ -1,3 +1,4 @@
+import { SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
 import { expect, test } from '@playwright/test';
 
 import { APP_HOME_PATH, BODYWEIGHT_COPY, DEFAULT_TIME_ZONE } from '../lib/constants';
@@ -27,9 +28,9 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 
   // V1-3: the app home is the profile picker. Tap a tile → land on the scoped Today.
   await expect(pickerHeading(page)).toBeVisible();
-  await selectProfile(page, 'Liam');
+  await selectProfile(page, SEED_PROFILE_NAME);
 
-  // V1-24 PR 1a: one heading in every state. Liam's TODAY is this spec's alone (the e2e rule — see
+  // V1-24 PR 1a: one heading in every state. Athlete One's TODAY is this spec's alone (the e2e rule — see
   // `global.setup.ts`), so this takes the CREATE path, including the focus-on-receipt assertion.
   await expect(
     page.getByRole('heading', { name: BODYWEIGHT_COPY.heading, exact: true }),
@@ -53,14 +54,14 @@ test('picks a profile then logs a bodyweight in its scoped Today', async ({ page
 });
 
 // V1-6a: multi-submit correctness — the bugs the "duplicated data" screenshot surfaced.
-// Uses SCARLETT (the smoke uses Liam) so this test has its own clean surface. Assertions are
+// Uses ATHLETE_TWO (the smoke uses Athlete One) so this test has its own clean surface. Assertions are
 // row COUNTS, not exact bout values, so a CI retry (which reuses the ephemeral DB and adds
 // more bouts) stays green.
 test('re-submitting check-ins never duplicates a logged habit; calisthenics bouts group into one row', async ({
   page,
 }) => {
   await page.goto(APP_HOME_PATH);
-  await selectProfile(page, 'Scarlett');
+  await selectProfile(page, SEED_PROFILE_2_NAME);
   await expect(page.getByRole('heading', { name: 'Check-ins' })).toBeVisible();
 
   // Submit 1: a log-once habit + a first push-up bout.
@@ -89,7 +90,7 @@ test('the Today header shows the active local calendar date, stable across reloa
   page,
 }) => {
   await page.goto(APP_HOME_PATH);
-  await selectProfile(page, 'Liam');
+  await selectProfile(page, SEED_PROFILE_NAME);
 
   const localDate = formatDayLong(localDayIso(DEFAULT_TIME_ZONE));
   await expect(page.getByText(localDate)).toBeVisible();

@@ -3,12 +3,37 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
 
 ## Where we are right now
+
+✅ **TEN-1 1b — the household scoping seam, and the gate closes (2026-10-08).** One household's data
+is no longer reachable from another household's request. `getHouseholdScope()` (`lib/dal/household.ts`)
+is the single scope point; `isLiveProfile` takes a **required** `HouseholdScope`, so an unconverted
+call site is a build failure rather than a leak nobody noticed. The picker was the whole boundary under
+[ADR 0006](./decisions/0006-household-addressing.md)'s session-only addressing — `listProfiles()`
+returned every profile in the database — and it is now a single-sourced query `db:verify` runs against
+**two households × two profiles, in both directions**, alongside both scoped reads and all three amend
+writers. `pnpm db:mutations` breaks the predicate on purpose and asserts the proofs go red, because a
+boundary test that cannot fail is counted as coverage. ⚠️ This buys **consistent scoping**; isolation is
+only _authorized_ at **AUTH-1** — the gate is still one shared code. **1c** converts the remaining five
+predicate sites (`logCheckinEntries`, `writeStrengthSession`, `programDayRows`, `export-month` ×3,
+`seed.ts`); **1d** adds the structural guard, the corrections and the `findOrCreateMovementId` →
+**TEN-2** go/no-go ([plan](./plans/ten-1-household-scope.md)).
+
+✅ **ONB-0 — first run is honest (2026-10-07).** A brand-new household no longer inherits the
+maintainer's household's routine, and the picker no longer tells a human to seed a database.
+`routine_config = NULL` fell back to the **whole** catalog — ~17 unexplained controls, seven of them
+wrestling drills grouped under the label "Brush teeth" — and now falls back to `['strength']`.
+Membership and the fallback are two lists now, paired in exactly one place, so an authored item is
+never silently stripped. The seeded profile **was** NULL, so it gets an explicit config and a guarded,
+household-scoped correction does the same for the live row — run it **before** the deploy
+([plan](./plans/onb-0-first-run.md)). `PROF-1` owns the "add an athlete" control the empty state only
+explains; `ONB-2` owns `shot`'s neutral home, which ONB-0 did **not** ship despite ONB-2's old
+dependency note.
 
 🚦 **Beta 0's critical path is moving: the signature landed and TEN-1 has started.**
 [ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is **Accepted — option A
@@ -37,12 +62,23 @@ row of ([plan](./plans/priv-1-privacy-review.md) → review log).
 **Next on this track: `PRIV-2`** — serve the notice at `/privacy` on the app's own domain, which is
 what `AUTH-1`'s consent screen actually needs. A `docs/` file is not a URL.
 
-🔴 **The P0: minors' names and log data are committed across ~50 files, not the three `OSS-1`
-records** — and `OSS-1`'s 2026-08-11 audit conclusion ("no measurement history… no log data") is now
-**wrong**, because a correction merged 2026-10-01 committed weigh-in dates and clock times for a named
-minor. The audit is corrected in place and `OSS-1`'s rename is **raised to a Beta 0 blocker**,
-re-scoped from 3 files to ~50 across five classes — two of which a rename does not fix at all. The
-rename is its own PR. ⚠️ And a rename is not a removal: `git log -S` still finds it.
+✅ **The P0 is closed: the repository no longer carries the household's given names (2026-10-08).**
+PRIV-1 re-scoped this from 3 files to ~50 and raised it to a Beta 0 blocker; the real surface was
+**57 files / 309 occurrences** and is now **1** — a comment in an **applied** migration, which the
+forward-only guard allows nobody to edit and which is recorded as a residual rather than quietly fixed.
+Fixture identities are role names behind `SEED_PROFILE_NAME` / `SEED_PROFILE_2_NAME`, and `db:verify`
+pins the literal once so a real name cannot come back unnoticed. **Three classes needed more than a
+rename:** the second profile's exported seeded routine took a clean break (no alias — every consumer is
+in-workspace and an alias keeps the name in the API), the archived program's **per-athlete load/rep
+columns were deleted** rather than de-labelled, and the CSV contract's example rows now quote the
+already-cleared `docs/samples/legacy-csv/` corpus **verbatim** — checked first, because the vectors pin
+the inch marks and the unescaped comma, never the name or the date. **Two classes the inventory had
+missed** closed too: real **bodyweight values** quoted as contract examples, and two minors' **ages and
+bodyweights**. ⚠️ **A rename is not a removal:** `git log -S` finds every prior value and the commit
+author is in every commit. What it buys is the **forward** exposure — every future commit, preview and
+PR screenshot is clean by construction, which is what matters before another household is invited in.
+History rewriting was out of scope, and the **production database was deliberately untouched**: those
+names are the household's own data ([inventory](./privacy/data-inventory.md) §9).
 
 🟡 **OPS-1 — previews are isolated in code; the dashboard half is OUTSTANDING.** Every Vercel scope
 shared one set of environment variables, so a preview deployment of any PR read and wrote
@@ -118,9 +154,9 @@ feature it claims to unblock unexecutable, and eight unused `DAY_ROLES` codes al
 a new day with zero schema change. **After beta, not on the Beta 0 path.** `MOT-1` ships **with** the
 verdict table, V1-22 **A4 splits in two**, and the active-block marker its spec promised is withdrawn.
 
-🔧 **V1-24 PR 1c — Liam's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
-A read against prod found exactly one duplicate group (Liam, 2026-09-30, three live bodyweight rows)
-and Ray named the keeper. `liam-bodyweight-duplicates-2026-09-30` soft-deletes the other two under a
+🔧 **V1-24 PR 1c — an athlete's duplicate weigh-ins are gone from prod** (applied 2026-10-01).
+A read against prod found exactly one duplicate group (one athlete, 2026-09-30, three live bodyweight rows)
+and Ray named the keeper. `bodyweight-duplicates-2026-09-30` soft-deletes the other two under a
 token-pinned guard, re-checks the keeper under a row lock, and asserts the day ends with exactly one
 live weight before committing — rehearsed 20/20 on an ephemeral Postgres
 ([plan](./plans/v1-24-form-is-the-day.md) → "File-by-file — PR 1c"). **No bodyweight value is
@@ -218,7 +254,7 @@ superset and Ray's v2 PPL pairings. See [v1-8-3-remainder-feel-and-supersets.md]
 **In flight** — **V1-10 PR 2**: **the day's program on Today** — the payoff of the programming data. On a
 strength day a **read-only "Today's program" card** renders above the **UNCHANGED** strength form: that
 `day_role`'s movements in the coach's `idx` order, with each kid's `sets × target_reps · load` **verbatim**
-(Liam's "BW" vs Scarlett's "BW +5-10"). The weekday → `day_role` map (Mon/Wed/Fri → Strength A/B/C) is a
+(Athlete One's "BW" vs Athlete Two's "BW +5-10"). The weekday → `day_role` map (Mon/Wed/Fri → Strength A/B/C) is a
 documented app-config **stopgap** (tech-debt; Clerk/multi-household is the promotion trigger). The query
 (`programDayRows`) is single-sourced in `packages/db` and `db:verify`-proven — `idx` order, per-kid loads, a
 target-less kid → NULL load (never the sibling's), **BOLA** (another household's profile gets nothing), and a
@@ -239,7 +275,7 @@ See [v1-10-1b-seed-real-program.md](./plans/v1-10-1b-seed-real-program.md).
 
 **Merged (#65)** — **V1-18 PR 2**: **per-kid routine builder — coach editor** — a parent-facing `/p/[profileId]/routine` screen to AUTHOR a kid's routine: a checklist of the catalog activities + ▲▼ reorder + Save. One hidden JSON field → `editRoutineAction` → a strict `validateRoutineForWrite` (rejects empty / non-catalog / duplicate, reusing `resolveRoutine`'s rule) → a DAL-local `updateProfileRoutine`. Weigh-in stays pinned (a caption); URL-only entry. **PR 3 (check-in allowlist) folded in** — unchecking a `checkin:*` key IS the allowlist. Copy-from-kid deferred. See [v1-18-2-routine-editor.md](./plans/v1-18-2-routine-editor.md).
 
-**Merged (#63, #64)** — **V1-18 PR 1a + 1b**: **per-kid routine builder — data + render** — the nullable `routine_config` JSONB column + shared `routineConfigSchema` + A≠B seed (1a, #63), then Today renders each kid's OWN routine order (`profile.routine`, resolved by the DAL), reusing the existing forms via a contiguous-run collapse (1b, #64). Weigh-in pinned first; a NULL config = today's exact order (ships dark). Seeded Scarlett shows the reorder/split/life-subset; Liam (default) is byte-stable.
+**Merged (#63, #64)** — **V1-18 PR 1a + 1b**: **per-kid routine builder — data + render** — the nullable `routine_config` JSONB column + shared `routineConfigSchema` + A≠B seed (1a, #63), then Today renders each kid's OWN routine order (`profile.routine`, resolved by the DAL), reusing the existing forms via a contiguous-run collapse (1b, #64). Weigh-in pinned first; a NULL config = today's exact order (ships dark). Seeded Athlete Two shows the reorder/split/life-subset; Athlete One (default) is byte-stable.
 
 **Merged (#62)** — **V1-17**: **performed-order log** — the day's "Logged entries" list reads oldest-first
 (`listEntriesForDay` → `asc(created_at), asc(id)`) so it flows top-down in the order things were done (wake →
@@ -453,8 +489,8 @@ bodyweight — check the decimal point.`). It is what makes a no-amend receipt a
   - **The receipt renders on the SERVER, outside the `writable` gate**, so history days show their
     weight too, and a closed empty day says `No weight logged.` instead of a bare heading.
   - **The smoke is disjoint by construction**, not tolerant: no two specs log bodyweight for the same
-    `(profile, day)` (warm-up → Scarlett today, smoke → Liam today, export → Liam yesterday, a11y →
-    Scarlett yesterday), and `steps.ts:logBodyweight` asserts the value **it** logged.
+    `(profile, day)` (warm-up → Athlete Two today, smoke → Athlete One today, export → Athlete One yesterday, a11y →
+    Athlete Two yesterday), and `steps.ts:logBodyweight` asserts the value **it** logged.
     `isoDaysAgo` now uses the app's zone — it was UTC, so from 5 PM PT every `?d=yesterday` spec
     (including two on `main`) silently resolved to today.
   - One display renderer for `84.5 lb` (`formatValueUnit`), and the other saved-state strings
@@ -542,7 +578,7 @@ bodyweight — check the decimal point.`). It is what makes a no-amend receipt a
   - **The class, not the instance:** V1-15 changed how the page is entered, and nothing re-examined
     what holds state across that entry. `e2e/day-nav-form-state.spec.ts` now asserts it.
 - **2026-09-30** — **V1-26 PR-A: the form knows what the movement is**
-  ([plan](./plans/v1-26-form-knows-the-movement.md)). On 2026-09-28 Liam's KB swings were logged
+  ([plan](./plans/v1-26-form-knows-the-movement.md)). On 2026-09-28 an athlete's KB swings were logged
   `20 × BW` when the session was `10 × 20 lb`. The catalog knew — `KB Swings` is seeded
   `isBodyweight: false, unitDefault: 'lb'` — and the form had **zero references to either column**. It
   said nothing at the moment of the mistake and then could not fix it afterwards (the correction ran
@@ -1042,7 +1078,7 @@ bodyweight — check the decimal point.`). It is what makes a no-amend receipt a
   `profileId` in a hidden field that the Server Actions **re-validate server-side** via
   `getProfileByPublicId` (the ownership seam v1.5's Clerk plugs into — tiles are a UX switch, not a
   security boundary). A malformed/unknown id → `notFound()` (the not-found UI; the app is force-dynamic
-  so Next streams a 200, not a 500). Seed now provisions two kid profiles (**Liam + Scarlett**) under
+  so Next streams a 200, not a 500). Seed now provisions two kid profiles (**Athlete One + Athlete Two**) under
   the root household. First RTL/jsdom component test lands (`profile-tile`). No migration (`avatar`
   already existed from V1-1a).
 - **2026-07-21** — **V1-2** (in review): seed the FULL catalog + coverage test

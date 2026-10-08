@@ -74,32 +74,56 @@ export function makeRoutineKey(namespace: RoutineNamespace, catalogKey: string):
   return `${namespace}:${catalogKey}`;
 }
 
-/** Build the default routine from the app's ordered catalog keys (strength → check-ins → life). Pure: the
- *  CALLER (app-side, PR 1b) owns the ordered key list so the default can't drift from the live catalog. */
+/** Build a routine from an ordered key list (strength → check-ins → life, for the full catalog). Pure: the
+ *  CALLER (app-side, PR 1b) owns the ordered key list so what it builds can't drift from the live catalog. */
 export function buildDefaultRoutine(orderedCatalogKeys: readonly string[]): RoutineConfig {
   return { version: ROUTINE_VERSION, order: orderedCatalogKeys.map((key) => ({ key })) };
 }
 
 /**
- * Resolve a stored (possibly null / stale / crafted) `routine_config` into a usable routine, given the
- * app's ordered catalog keys (which are also the membership set + the default order — so `default ⊆
- * catalog` by construction). Forgiving, item-by-item:
- *   - null / non-object / wrong `version` → the default routine (the ships-dark path);
+ * Resolve a stored (possibly null / stale / crafted) `routine_config` into a usable routine. Forgiving,
+ * item-by-item:
+ *   - null / non-object / wrong `version` → the FALLBACK routine (the ships-dark path);
  *   - a valid config → keep only the items whose key is (a) grammar-valid, (b) a live catalog key, AND (c)
  *     not a DUPLICATE (first occurrence wins) — dropping any stale/invalid/repeat item WITHOUT discarding the
  *     rest (a single bad key never nukes the routine; a repeated key never renders duplicate controls);
- *   - a config whose items ALL drop out (fully stale) → the default too, so a kid never renders a blank Today.
+ *   - a config whose items ALL drop out (fully stale) → the fallback too, so a kid never renders a blank Today.
+ *
+ * ## Two lists, because membership and the fallback are different questions (ONB-0)
+ *
+ * `orderedCatalogKeys` is the MEMBERSHIP set — every key a stored config may legally name. It stays the
+ * whole live catalog, or an existing household's authored items would be silently stripped on read.
+ *
+ * `defaultOrderedKeys` is what a profile with NO usable config renders. Before ONB-0 these were one list,
+ * so a brand-new household inherited the ENTIRE catalog as its first screen — the maintainer's household's
+ * habits, and a wrestling drill block labelled "Brush teeth". It DEFAULTS to `orderedCatalogKeys`, so every
+ * existing caller keeps today's behaviour; the app passes the neutral first-run list from
+ * `apps/web/lib/routine/catalog.ts` → `resolveProfileRoutine`, the ONE place the two lists are paired.
+ *
+ * `default ⊆ catalog` is no longer true by construction, so it is ENFORCED below: the fallback is filtered
+ * through the membership set (a fallback key the catalog doesn't offer would render a block on Today that
+ * the editor never lists, so the next save would delete it), and an empty result falls back to the catalog,
+ * which preserves the never-a-blank-Today promise above.
  */
-export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string[]): RoutineConfig {
+export function resolveRoutine(
+  raw: unknown,
+  orderedCatalogKeys: readonly string[],
+  defaultOrderedKeys: readonly string[] = orderedCatalogKeys,
+): RoutineConfig {
   // Loose outer parse: `version` reused from `routineConfigSchema` (so the two can't drift), `order` an array
   // of opaque items filtered below. Deliberately NOT `.strict()` — a future additive top-level field (PR 3's
   // check-in allowlist) must not fail the parse and silently discard the kid's authored order.
+  const allow = new Set(orderedCatalogKeys);
+  // Resolved ONCE, so all three fallback paths below return the same routine.
+  const fallbackKeys = defaultOrderedKeys.filter((k) => allow.has(k));
+  const fallback = () =>
+    buildDefaultRoutine(fallbackKeys.length > 0 ? fallbackKeys : orderedCatalogKeys);
+
   const outer = z
     .object({ version: routineConfigSchema.shape.version, order: z.array(z.unknown()) })
     .safeParse(raw);
-  if (!outer.success) return buildDefaultRoutine(orderedCatalogKeys);
+  if (!outer.success) return fallback();
 
-  const allow = new Set(orderedCatalogKeys);
   const seen = new Set<string>();
   const order: RoutineItem[] = [];
   for (const rawItem of outer.data.order) {
@@ -111,10 +135,8 @@ export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string
       order.push(item.data);
     }
   }
-  // All items stale/invalid → fall back to the default (never a blank routine from a gone-stale config).
-  return order.length > 0
-    ? { version: ROUTINE_VERSION, order }
-    : buildDefaultRoutine(orderedCatalogKeys);
+  // All items stale/invalid → fall back (never a blank routine from a gone-stale config).
+  return order.length > 0 ? { version: ROUTINE_VERSION, order } : fallback();
 }
 
 /**
@@ -125,8 +147,8 @@ export function resolveRoutine(raw: unknown, orderedCatalogKeys: readonly string
  * submitted config is clean iff resolving it (grammar + catalog membership + first-wins dedupe) returns
  * the identical ordered items. Rejects (→ null):
  *   - not a valid `routineConfigSchema` object (wrong `version`, unknown field, malformed item);
- *   - an EMPTY `order` — an empty routine is NOT authorable, because `resolveRoutine` maps it back to the
- *     full default on read, so "save nothing" would silently render everything (a hidden write/read split);
+ *   - an EMPTY `order` — an empty routine is NOT authorable, because `resolveRoutine` maps it back to a
+ *     fallback on read, so "save nothing" would silently render something else (a hidden write/read split);
  *   - any non-catalog key, or a duplicate key (both things `resolveRoutine` would have dropped/deduped).
  * Returns the config to persist as-is (so the opaque `conditional` marker survives), or `null`.
  */
@@ -138,6 +160,9 @@ export function validateRoutineForWrite(
   if (!parsed.success) return null;
   if (parsed.data.order.length === 0) return null; // empty is not authorable (would revert to the default)
 
+  // TWO args on purpose (ONB-0): the write side has no first-run semantics, so its fallback stays the
+  // CATALOG. Do not thread the neutral first-run list through here — this contract rejects a config iff
+  // resolving it changed anything, and it compares against the catalog, not against first-run policy.
   const resolved = resolveRoutine(parsed.data, orderedCatalogKeys);
   // Clean iff resolving changed nothing. TODAY `resolveRoutine` is an order-preserving, non-transforming
   // filter, so equal length already implies item-identity — but we ALSO compare key + conditional per index

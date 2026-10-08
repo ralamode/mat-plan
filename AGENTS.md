@@ -349,11 +349,14 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   are covered). ⚠️ **Not the whole repo:** `packages/shared` and `packages/engine` have no tsconfig of
   their own and are checked only _transitively_, through the app's imports.
 - **`pnpm verify` — run this before opening a PR.** One command for everything CI's `quality` job
-  does: `format:check` → `lint` → `typecheck` → `test` → `db:verify` →
+  does: `format:check` → `lint` → `typecheck` → `test` → `db:verify` → `db:mutations` →
   `skills:check` (every path and `pnpm` script a skill cites exists) → `actions:check` (every action
   SHA-pinned) → `guards:test` (the hook and
-  guard self-tests) → `audit:check` (the production audit). **~35s** on a warm cache, so there is no
+  guard self-tests) → `audit:check` (the production audit). **~40s** on a warm cache, so there is no
   excuse to skip it.
+  `db:mutations` (TEN-1 1b, +~5s) applies each committed patch in `packages/db/scripts/mutations/`,
+  runs `db:verify`, and asserts it goes **RED** — a boundary test that cannot fail is counted as
+  coverage, which is worse than no test. Local-only, like `skills:check`.
   `skills:check` and `guards:test` run **only here, not in CI** (`ci.yml` doesn't run them; wiring them
   in is a CI change that needs its own plan — SEC-5 did the audit third of it). `actions:check`
   (offline) and `audit:check` run in both, from the same single definition. `db:verify` runs on

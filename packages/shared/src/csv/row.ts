@@ -6,9 +6,10 @@ import { hasLineBreak } from '../text';
  * The contract ([docs/csv-export-contract.md](../../../../docs/csv-export-contract.md)) is emphatic,
  * and it has two reasons that a general-purpose writer cannot be talked out of:
  *
- * 1. **Bare double-quotes are real data.** A live row reads `Liam at 30" box (Scarlett did 36")` —
+ * 1. **Bare double-quotes are real data.** A row in the legacy evidence set
+ *    (`docs/samples/legacy-csv/strength-log/athlete-a/2020-06.csv`) reads `Athlete A at 30" box (Athlete B did 36")` —
  *    those are INCH MARKS in an unquoted field. Any RFC-4180 writer re-emits them as
- *    `"Liam at 30"" box (Scarlett did 36"")"` and the diff fails.
+ *    `"Athlete One at 30"" box (Athlete Two did 36"")"` and the diff fails.
  * 2. **Zero quoted fields exist across all eight real files**, and one legacy row carries an
  *    unescaped comma that splits it into 9 fields against an 8-field header. The files are not valid
  *    CSV and are not trying to be.
@@ -46,7 +47,7 @@ function quoteIfNeeded(value: string, field: string): string {
  * One CSV row, terminated with LF.
  *
  * `fields` is ordered to match the header; `names` labels them so a comma violation names the column
- * rather than an index. Trailing empty fields are WRITTEN, not dropped — `2026-07-09,71.4,morning,`
+ * rather than an index. Trailing empty fields are WRITTEN, not dropped — `2020-07-09,92.3,morning,`
  * keeps its trailing comma, which falls out of joining rather than needing a rule.
  */
 export function csvRow(fields: readonly (string | null | undefined)[], names: readonly string[]) {

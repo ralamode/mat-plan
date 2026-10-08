@@ -18,7 +18,7 @@ test('the day-role select follows the day being viewed, not the day first loaded
   page,
 }) => {
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
-  // V1-24 3a-ii: the form is collapsed on a day that already has strength (other specs log Liam's).
+  // V1-24 3a-ii: the form is collapsed on a day that already has strength (other specs log Athlete One's).
   await openStrengthForm(page);
 
   const select = page.getByLabel('Which day is this?');

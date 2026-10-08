@@ -46,6 +46,12 @@ still needs its own PR. Each correction below names the row that fixes the cause
    privileged value (a child's bodyweight, on its own marked line); never paste that into a PR, issue
    or commit — replace it with `…`.
 
+10. **A correction's `name` describes the DEFECT, never the person.** `kb-swings-2026-09-28`, not a
+    child's first name — this repo is public and these rows belong to minors (AGENTS.md → "No personal
+    names"; `OSS-1`). Same for the identifiers and the prose: the target is "an athlete", resolved by
+    `public_id`. A `name` is only the `db:correct` selector — nothing persists it — so it is safe to fix
+    a bad one, and the **Applied** table below is the record that survives the change.
+
 ## Adding one
 
 Add an entry to `registry.ts`. A correction is a `name`, a one-line `what`, the `issue` row that
@@ -58,10 +64,18 @@ fixes the cause, and a `run(db, apply)` that returns what it changed. Nothing el
 applied flag and `--apply` leaves no artifact, so this column is the only record. A correction merges
 before it is run, so a row lands here as `pending` and is dated in a follow-up commit.
 
-| Name                                    | What                                                          | Cause fixed by | Applied        |
-| --------------------------------------- | ------------------------------------------------------------- | -------------- | -------------- |
-| `liam-kb-swings-2026-09-28`             | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb` | V1-24          | **2026-09-30** |
-| `liam-bodyweight-duplicates-2026-09-30` | 3 weigh-ins on one day; the 12:17 morning row is the keeper   | V1-24          | **2026-10-01** |
+| Name                               | What                                                                                   | Cause fixed by | Applied        |
+| ---------------------------------- | -------------------------------------------------------------------------------------- | -------------- | -------------- |
+| `kb-swings-2026-09-28`             | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                          | V1-24          | **2026-09-30** |
+| `bodyweight-duplicates-2026-09-30` | 3 weigh-ins on one day; the 12:17 morning row is the keeper                            | V1-24          | **2026-10-01** |
+| `null-routine-to-full-2026-10-07`  | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed | ONB-0          | `pending`      |
+
+<sub>⚠️ **The first two `Name`s changed under `OSS-1` (2026-10-08)** — they used to start with a child's
+first name, which this public repo should not carry (AGENTS.md → "No personal names"). Safe to rename:
+the `Correction` type has no applied flag and `--apply` leaves no artifact, so a `name` is only the
+`db:correct` selector, never a key stored in a database. Both were already applied, and both are guarded,
+so a re-run under either name would be a no-op anyway. A correction's name describes the DEFECT from now
+on, not the person it happened to.</sub>
 
 <sub>The KB-swings date is read off the rows themselves (`entry_sets.updated_at =
 2026-09-30 00:26:52+00`), not recalled — the column was added after that correction ran.</sub>

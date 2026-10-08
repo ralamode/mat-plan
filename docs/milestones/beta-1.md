@@ -62,7 +62,7 @@ stranger needs _around_ it.
 | Daily routine + editor     | ✅ (`/p/<id>/routine`)                            | —                                                                                                           | confirm-on-remove, restore default                   |
 | History / day paging       | ✅ V1-15                                          | —                                                                                                           | —                                                    |
 | **Delete / clear a day**   | ❌ only `db:correct`, which only Ray can run      | **V1-9b** — the only way a stranger undoes a mis-tap                                                        | —                                                    |
-| **Athletes**               | ❌ created by the seed only                       | **ONB-0** empty state, **PROF-1** create                                                                    | PROF-1 rename + archive                              |
+| **Athletes**               | ❌ created by the seed only                       | ~~**ONB-0** empty state~~ ✅ 2026-10-07; **PROF-1** create                                                  | PROF-1 rename + archive                              |
 | **Programs**               | ❌ seed-only (`PROGRAM_SEED`)                     | **ONB-2** — a new household starts on The Daily Five (seeded under both A/B days, so no SCHED-1 dependency) | **V1-22** edit, **SCHED-1** which days               |
 | **Sign-in + households**   | ❌ one shared access code, existence-only scoping | **TEN-1**, **AUTH-1**                                                                                       | invites, roles, step-up                              |
 | Streaks                    | ❌                                                | —                                                                                                           | **MOT-1** (needs SCHED-1 so a rest day isn't a miss) |
@@ -78,7 +78,7 @@ login, child accounts, kid PINs.
 flowchart LR
   N[0 · now: PII purge, merge gates] --> AU
   O[1 · ops: previews, seed split, restore] --> AU
-  ONB[ONB-0 · first run, broken today] --> S
+  ONB[ONB-0 · first run ✅] --> S
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
@@ -93,9 +93,11 @@ that PR and the finish. If a PR's position disagrees with this chart, the chart 
 ⚠️ **Two rows moved out of step 4 on 2026-10-07, and the reason generalises.** Step 4 previously
 bundled `ONB-0` and `PRIV-1` behind `AUTH-1`, which cost schedule for nothing:
 
-- **`ONB-0` starts now.** First run is **broken today**, it is a P0, and it blocks nothing — so holding
-  it behind the auth chain buys no safety and delays a live defect. It feeds step 4; it does not wait
-  for it. **Work that is already broken and blocks nothing is pure throughput.**
+- **`ONB-0` started now, and is ✅ done (2026-10-07).** First run was **broken today**, a P0, blocking
+  nothing — so holding it behind the auth chain bought no safety and delayed a live defect. It fed step 4;
+  it did not wait for it. **Work that is already broken and blocks nothing is pure throughput**, and this
+  row is the evidence: it shipped the same day it was pulled forward. Its two hand-offs into step 4 are
+  the "add an athlete" control (**PROF-1**) and `shot`'s neutral home (**ONB-2**).
 - **`PRIV-1` starts now, because it gates `AUTH-1`.** The Google consent screen needs a
   privacy-policy URL (§3), so privacy is **upstream** of auth, not a sibling of onboarding. It is also
   the row this file says "should not be designed casually", which is the other reason not to reach it
@@ -275,9 +277,16 @@ Their deliverables are unchanged and still written below; only when they start h
 - [ ] `OPS-3`'s per-household restore has been rehearsed **before** any real household is deleted —
       until it exists, a mistaken deletion is not recoverable without rolling back every other family
       (PRIV-1).
-- [ ] 🔴 No minor's name or log data in the tree: `OSS-1`'s rename is done, re-scoped to the ~50 files
-      PRIV-1 found rather than the 3 the row used to name
-      ([data-inventory.md](../privacy/data-inventory.md) §9).
+- [x] ✅ **No minor's name in the tree** (2026-10-08): `OSS-1`'s rename is done — 57 files / 309
+      occurrences down to **1**, a comment in an **applied** migration the forward-only guard forbids
+      editing, recorded as a residual. Two sites were **scrubbed rather than renamed** (a per-athlete
+      load table, and real rows quoted as CSV-contract examples), and two further classes the inventory
+      had missed are closed: real bodyweight values quoted as examples, and two minors' ages and
+      bodyweights ([data-inventory.md](../privacy/data-inventory.md) §9).
+      ⚠️ **Forward exposure only** — `git log -S` still finds every prior value and the commit author is
+      in every commit; history rewriting was out of scope and remains un-chosen. Log data in the tree is
+      bounded by the same §9: dated weigh-in times survive in a correction's committed evidence,
+      de-named.
 - [ ] SEC-3 merged: server-side errors carry no bodyweight to Sentry.
 
 ## Beta 1 — 3–5 families, all the major features
@@ -294,7 +303,7 @@ widen.** That check-in is a step, not an afterthought — it is the reason for t
   short expiry, single use, revocable, owner-only minting, a confirm screen naming the household, and
   never a token in a logged URL path. **Roles:** owner vs member — who invites, removes, deletes,
   exports.
-- **Step-up** (Clerk reverification) before delete-household, invite, member removal and export — on a
+- **Step-up** (Clerk reverification) before delete-household, delete-athlete (PROF-1), invite, member removal and export — on a
   shared phone, the kid holds the parent's session.
 - **In-place correction:** V1-24 2 (check-ins), 3a/3b (strength sets), 1c/1d (duplicates).
 - **Self-serve household deletion**, behind step-up, replacing the beta-0 runbook.

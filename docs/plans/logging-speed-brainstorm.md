@@ -134,7 +134,7 @@ A **"current set" view** — one movement, one set, log it, rest timer, next —
 activity. Everything in Tiers 1–2 optimizes the existing shape; **this asks whether the shape is
 right**, which is precisely V1-21's remit and should be answered before over-investing in the form.
 
-**I. Voice / NL entry (AI-1).** _"Liam did three sets of eight pull-ups."_ Genuinely the fastest input
+**I. Voice / NL entry (AI-1).** _"Athlete One did three sets of eight pull-ups."_ Genuinely the fastest input
 for the ad-hoc case with no prescription to scaffold from. Note it is **not** the fix for the
 programmed case — scaffolding already reduces that to taps, and taps beat talking in a loud room.
 

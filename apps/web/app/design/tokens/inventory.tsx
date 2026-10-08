@@ -1,3 +1,4 @@
+import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -174,7 +175,15 @@ export function FieldsCell({ setId }: { setId: string }) {
   );
 }
 
-/** Surfaces: a card, an empty state and a loading skeleton — the three the app really uses. */
+/**
+ * Surfaces: a card, an empty state, the picker's first-run block, and a loading skeleton.
+ *
+ * `PickerEmptyState` (ONB-0) is here for a reason beyond inventory completeness: the empty picker is
+ * unreachable from every Playwright spec (`fullyParallel: true` + one shared seeded DB), so this route is
+ * the ONLY place the block gets a real axe run — and it gets it in BOTH themes plus the per-cell 360px
+ * overflow measurement below. It needs no props and declares no `id`, so four copies are safe.
+ * ⚠️ When UI-3 deletes this harness, that coverage goes with it.
+ */
 export function SurfacesCell() {
   return (
     <div className="flex flex-col gap-3">
@@ -189,6 +198,7 @@ export function SurfacesCell() {
         </CardContent>
       </Card>
       <EmptyState>Nothing logged yet.</EmptyState>
+      <PickerEmptyState />
       <div className="flex flex-col gap-2" aria-hidden>
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/3" />

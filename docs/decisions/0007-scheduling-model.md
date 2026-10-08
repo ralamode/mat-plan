@@ -35,7 +35,7 @@ Everything a schedule would hang off is missing or hardcoded:
 
 - **`program_blocks` has no `profile_id`** (`packages/db/src/schema.ts:629-648`). The only per-athlete
   link is `prescription_targets.profile_id`, which carries loads. The model can say _"both kids do
-  this block, at different loads"_ and cannot say _"Liam does S&C, Scarlett doesn't."_
+  this block, at different loads"_ and cannot say _"Athlete One does S&C, Athlete Two doesn't."_
 - **No date range anywhere.** Grepped: no `active_from`, `starts_at`, `season` or `effective` column.
   A block is active forever until soft-deleted.
 - **Which block answers today is `id DESC LIMIT 1`** among blocks that program the requested

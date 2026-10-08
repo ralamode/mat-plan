@@ -1,4 +1,4 @@
-import { SEED_SCARLETT_ROUTINE } from '@mat-plan/db';
+import { SEED_ATHLETE_TWO_ROUTINE } from '@mat-plan/db';
 import {
   buildDefaultRoutine,
   parseRoutineKey,
@@ -112,7 +112,7 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
   });
 
   it('a valid authored config resolves DISTINCTLY from the default (A≠B holds at the resolved layer)', () => {
-    const scarlett: RoutineConfig = {
+    const athleteTwo: RoutineConfig = {
       version: 1,
       order: [
         { key: 'checkin:rice_bucket' },
@@ -120,7 +120,7 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
         { key: 'life:wake' },
       ],
     };
-    expect(resolveRoutine(scarlett, CATALOG)).not.toEqual(buildDefaultRoutine(CATALOG));
+    expect(resolveRoutine(athleteTwo, CATALOG)).not.toEqual(buildDefaultRoutine(CATALOG));
   });
 
   it('a fully-stale config (every item dropped) falls back to the default, never a blank routine', () => {
@@ -195,9 +195,52 @@ describe('parseRoutineKey — no-colon guard', () => {
 // which live app-side): a stale seed key is grammar-valid but silently DROPPED on render, weakening the
 // A≠B demo — this catches that drift at CI time.
 describe('the seeded routine binds to the live app catalog', () => {
-  it('every key in Scarlett’s seed resolves against ROUTINE_CATALOG (nothing dropped)', () => {
-    const resolved = resolveRoutine(SEED_SCARLETT_ROUTINE, ROUTINE_CATALOG);
-    expect(resolved.order.length).toBe(SEED_SCARLETT_ROUTINE.order.length);
+  it('every key in Athlete Two’s seed resolves against ROUTINE_CATALOG (nothing dropped)', () => {
+    const resolved = resolveRoutine(SEED_ATHLETE_TWO_ROUTINE, ROUTINE_CATALOG);
+    expect(resolved.order.length).toBe(SEED_ATHLETE_TWO_ROUTINE.order.length);
     expect(resolved).not.toEqual(buildDefaultRoutine(ROUTINE_CATALOG)); // A≠B holds against the live catalog
+  });
+});
+
+/**
+ * ONB-0 — `resolveRoutine`'s third parameter. MEMBERSHIP (arg 2) and the FALLBACK (arg 3) are different
+ * questions: membership must stay the whole catalog or an authored item is stripped on read, while the
+ * fallback is what a profile with no usable config renders.
+ */
+describe('resolveRoutine — membership vs the fallback (two lists)', () => {
+  const FALLBACK = ['strength'] as const;
+
+  it("omitting the third arg keeps TODAY's behaviour exactly (back-compat for every existing caller)", () => {
+    expect(resolveRoutine(null, CATALOG)).toEqual(buildDefaultRoutine(CATALOG));
+  });
+
+  it('uses the FALLBACK, not the catalog, on every no-usable-config path', () => {
+    const expected = buildDefaultRoutine(FALLBACK);
+    expect(resolveRoutine(null, CATALOG, FALLBACK)).toEqual(expected);
+    expect(resolveRoutine('nope', CATALOG, FALLBACK)).toEqual(expected);
+    expect(resolveRoutine({ version: 2, order: [] }, CATALOG, FALLBACK)).toEqual(expected);
+    // Fully-stale config → the fallback too (the second fallback site inside the function).
+    expect(
+      resolveRoutine({ version: 1, order: [{ key: 'life:gone' }] }, CATALOG, FALLBACK),
+    ).toEqual(expected);
+  });
+
+  it('keeps membership WIDE: a catalog key outside the fallback still resolves', () => {
+    const stored = { version: 1, order: [{ key: 'checkin:brush_teeth:stance' }] };
+    expect(resolveRoutine(stored, CATALOG, FALLBACK).order.map((i) => i.key)).toEqual([
+      'checkin:brush_teeth:stance',
+    ]);
+  });
+
+  it('filters the fallback through membership — `default ⊆ catalog` is enforced, not assumed', () => {
+    // A fallback key the catalog does not offer would render a block on Today that the editor never
+    // lists, so the next save would delete it.
+    const resolved = resolveRoutine(null, CATALOG, ['strength', 'life:not_in_catalog']);
+    expect(resolved.order.map((i) => i.key)).toEqual(['strength']);
+  });
+
+  it('never returns a BLANK routine: an empty or wholly-stale fallback falls back to the catalog', () => {
+    expect(resolveRoutine(null, CATALOG, [])).toEqual(buildDefaultRoutine(CATALOG));
+    expect(resolveRoutine(null, CATALOG, ['nothing:real'])).toEqual(buildDefaultRoutine(CATALOG));
   });
 });

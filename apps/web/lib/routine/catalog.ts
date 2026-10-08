@@ -1,4 +1,11 @@
-import { makeRoutineKey, parseRoutineKey, STRENGTH_KEY, STRENGTH_LABEL } from '@mat-plan/shared';
+import {
+  makeRoutineKey,
+  parseRoutineKey,
+  resolveRoutine,
+  type RoutineConfig,
+  STRENGTH_KEY,
+  STRENGTH_LABEL,
+} from '@mat-plan/shared';
 
 import { type CheckinField, CHECKIN_FIELDS } from '@/lib/checkins/checkin-fields';
 import { LIFE_ACTIVITIES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
@@ -18,6 +25,57 @@ export const ROUTINE_CATALOG: readonly string[] = [
   ...CHECKIN_FIELDS.map((f) => makeRoutineKey('checkin', f.key)),
   ...LIFE_ACTIVITY_KEYS.map((k) => makeRoutineKey('life', k)),
 ];
+
+/**
+ * The FIRST-RUN routine KEYS (ONB-0) — what a profile whose `routine_config` is NULL renders.
+ *
+ * A key LIST, like `ROUTINE_CATALOG`, not a `RoutineConfig` — `buildDefaultRoutine` is what turns one
+ * into the other, and the shared parameter it feeds is called `defaultOrderedKeys`.
+ *
+ * `strength` ALONE. With the pinned weigh-in that is exactly the UX panel's A2 candidate ("weigh-in +
+ * strength only, everything else opt-in via the editor"): `bodyweight` is deliberately not a legal
+ * `order` key, so the weigh-in is pinned by construction and this list is the whole of the rest.
+ *
+ * Before ONB-0 a new profile fell back to `ROUTINE_CATALOG` — all of it — so a stranger's first screen
+ * was ~17 unexplained controls belonging to the maintainer's household: 3 habits (Rice bucket · Brain
+ * rep · Splits), 7 numeric fields grouped under the label "Brush teeth" (a wrestling drill block a new
+ * coach reads as dental hygiene), 4 calisthenics counters and 2 life controls.
+ *
+ * Why each exclusion, since "why so small?" is the first question a reader has:
+ *  - the habits and the `brush_teeth` metrics are one household's choices, which IS the defect;
+ *  - the calisthenics counters twin the `push-ups` / `pull-up` / `v-sit_crunches` MOVEMENTS and
+ *    double-count adherence (CAT-1, whose trap (2) says "the default needs the criterion too") — and
+ *    ONB-2's Daily Five prescribes push-ups and pull-ups, so keeping them here would hand every new
+ *    household the same work loggable two ways on day one;
+ *  - `life:wrestling_practice`'s one tap writes `DEFAULT_PRACTICE_MINUTES = 90` — the maintainer's
+ *    club's session length — with no number on the button and no in-app undo. docs/plan.md's standing
+ *    ruling names THIS row as the owner of that distinction.
+ * Everything excluded stays fully authorable in the shipped editor, which Today links to.
+ *
+ * ⚠️ READ-TIME FALLBACK, NEVER WRITTEN. `routine_config = NULL` *is* the representation of "the neutral
+ * default", so a profile creator leaves it NULL. If PROF-1 / TEN-1 / ONB-2 ever needs to WRITE a starter
+ * routine from `packages/db`, this const and the two registries it derives from have to move to
+ * `packages/shared` first — `packages/db` cannot import `apps/web`.
+ */
+export const NEUTRAL_DEFAULT_KEYS: readonly string[] = [STRENGTH_KEY];
+
+/**
+ * Resolve a stored `routine_config` the way the APP means it: membership is the whole catalog (so an
+ * authored item is never silently stripped), the first-run fallback is the neutral default.
+ *
+ * The ONE place those two lists are paired, and the only module in `apps/web` that imports
+ * `resolveRoutine` at all. Its third parameter is defaulted for backward compatibility, which means
+ * `resolveRoutine(raw, ROUTINE_CATALOG)` still compiles and still means "inherit the whole catalog" —
+ * so every production READ goes through this wrapper instead, and no caller passes either list by hand.
+ *
+ * ⚠️ The WRITE path is asymmetric on purpose: `actions.ts` calls `validateRoutineForWrite(submitted,
+ * ROUTINE_CATALOG)` and pairs membership ALONE, because a default is meaningless when authoring (an
+ * empty order is rejected outright precisely so the read side can't re-expand it). Do not add a
+ * `validateProfileRoutineForWrite` that smuggles the first-run default into authoring.
+ */
+export function resolveProfileRoutine(raw: unknown): RoutineConfig {
+  return resolveRoutine(raw, ROUTINE_CATALOG, NEUTRAL_DEFAULT_KEYS);
+}
 
 /**
  * A render block: one existing form + the collapsed BARE catalog keys it covers. A CONTIGUOUS run of

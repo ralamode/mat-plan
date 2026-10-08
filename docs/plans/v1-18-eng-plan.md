@@ -38,7 +38,7 @@ per-activity key vocabulary now (no future migration), but the renderer **collap
 - **DAL:** extend `getProfileByPublicId` — add `routineConfig` to the existing select, resolve via the helper,
   widen `ProfileDTO` with `routine: RoutineConfig` (**always resolved, never null/raw**). One read, no second
   query (hot Today path). `listProfiles` unchanged.
-- **Seed:** two kids **different** — Liam `null` (exercises ships-dark `DEFAULT_ROUTINE`), Scarlett an explicit
+- **Seed:** two kids **different** — Athlete One `null` (exercises ships-dark `DEFAULT_ROUTINE`), Athlete Two an explicit
   reordered config (a check-in key before `strength`, `conditional:true` on strength). `as const satisfies
 RoutineConfig`. Caveat: `onConflictDoNothing` → re-seed won't update existing rows; A≠B proves on **fresh
   DBs** (db:verify PGlite + CI Docker PG + Neon branch), which is where the success test runs. Prod

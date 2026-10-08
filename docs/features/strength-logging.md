@@ -334,6 +334,15 @@ Real ones, each with the file to look at.
   bodyweight amend, extracted when the second caller arrived — which means V1-9's existing
   cross-profile `db:verify` proof now covers the shared helper too.
 
+  **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
+  which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
+  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()`, so nothing
+  in the form or the action changed. `db:verify`'s TEN-1 write matrix proves the refusal in **both**
+  directions with no side effect. ⚠️ `writeStrengthSession`'s own in-transaction profile resolution is
+  still the pre-TEN-1 hand-written predicate — **chunk 1c** converts it. Not a leak today
+  (`getProfileByPublicId` fails closed before the writer is reached), but do not read that line as
+  household-scoped yet. See [write-path](./write-path.md) invariant 2.
+
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be
@@ -379,6 +388,13 @@ Real ones, each with the file to look at.
 - **Server Actions are public POSTs.** Page auth does not protect one. Re-validate every field at the
   boundary; a DB constraint reached by a crafted body is a 500 that discards the athlete's whole
   session, because the action has no `try/catch` around the writer.
+
+- **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
+  `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never
+  re-type the literal and never put a real first name in a fixture, a comment or a test — this repo is
+  public and holds minors' data (AGENTS.md → "No personal names"; `OSS-1`). `db:verify` pins the
+  literal **once**, on the assertion side, so a real name cannot come back unnoticed. Prose about a
+  real logged incident says "an athlete", not a fixture name — the fixture is not the child.
 
 ## Changing it
 

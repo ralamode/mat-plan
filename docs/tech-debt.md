@@ -15,6 +15,24 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The light-mode focus ring misses SC 1.4.11, and the test that looks like it checks this skips the shipping palette (found 2026-10-07, ONB-0 UX panel)
+
+- **What & why:** `--ring: oklch(0.708 0 0)` on `--background: oklch(1 0 0)` (`apps/web/app/globals.css`)
+  measures **~2.59:1**, under the 3:1 non-text bar; the outer `ring-ring/50` against the white page is
+  ~1.44:1. Dark mode is fine (~4.2:1). `app/design/tokens/token-sets.test.ts` **does** assert
+  `ring` vs `background` ≥ 3:1 — but that `describe.each` iterates `SCOPED_SETS` only, and the control
+  set declares no tokens by design (`tokens: null`), so **the palette that actually ships is never
+  measured on this axis.** A gate that looks like it covers this and does not is the recurring shape in
+  this file.
+- **Impact:** affects every focusable control in light mode, including both landing CTAs and ONB-0's
+  first-run link. Pre-existing — introduced with the scaffold palette, not by any recent change.
+- **Proposed fix:** add a `ring` vs `background` row to the "known AA failures in the live palette
+  (UI-3 inputs)" block in `token-sets.test.ts`, which is that file's own stated pattern for exactly
+  this ("a finding recorded as a test cannot be quietly lost"); then it is an input to UI-3's reskin
+  rather than a surprise. Not fixed in ONB-0 because changing `--ring` changes the live app's
+  appearance, which is UI-3's call.
+- **Severity:** medium (a11y, every screen).
+
 ### `profiles.birthdate` holds nothing and has no owner (added 2026-10-07, PRIV-1)
 
 - **What & why:** `profiles.birthdate` has **no writer, no reader, no UI and no seed value** anywhere

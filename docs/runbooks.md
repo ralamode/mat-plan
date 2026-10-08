@@ -40,7 +40,7 @@ the cause. Adding one is a single entry in
 the [README](../packages/db/scripts/corrections/README.md) for the rules.
 
 **A correction merges before it runs, and `--apply` is manual — so mind what is queued behind it.**
-`liam-bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
+`bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
 `CREATE UNIQUE INDEX` cannot tolerate**, and the order is not optional:
 
 0. **dry run** — check the printed `target:` host is prod, and read the diff (the keeper's value
@@ -117,8 +117,10 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
 The seed is `ON CONFLICT (public_id) DO NOTHING`, so it **won't overwrite** an existing row — a
-one-off `UPDATE` is needed. (First occurrence: V1-3 renamed the seed profile "Athlete One" → "Liam",
-but prod kept "Athlete One".)
+one-off `UPDATE` is needed. (First occurrence: V1-3 changed the seed profile's name, and prod kept the
+name it already had. ⚠️ **`OSS-1` changed those seed names again** — to the role names
+`SEED_PROFILE_NAME` / `SEED_PROFILE_2_NAME` — and deliberately did **not** reconcile prod. A live
+household's profile names are its own data; the sweep was about the repository, not the database.)
 
 **Why manual:** deliberately not in the seed — an `ON CONFLICT DO UPDATE SET name` would clobber a
 name a user later edits. A targeted, guarded correction is safer as a one-off.
@@ -127,9 +129,9 @@ name a user later edits. A targeted, guarded correction is safer as a one-off.
 
 ```sql
 UPDATE profiles
-SET name = 'Liam', updated_at = now()
-WHERE public_id = '019826b4-0000-7000-8000-000000000001'  -- the target row's public_id
-  AND name = 'Athlete One'                                 -- guard → no-op if already renamed
+SET name = '<the new name>', updated_at = now()
+WHERE public_id = '<the target row''s public_id>'
+  AND name = '<the name it has now>'  -- guard → no-op if already renamed
   AND deleted_at IS NULL;
 ```
 
@@ -482,6 +484,53 @@ dormant, a `claude-code-action` bump doesn't need step 6's re-read; activation d
 7. **"failed or ran out of budget" right after a `.claude/settings.json` change** is the settings pin,
    not the budget: the prefetch refuses until `SETTINGS_SHA256` in `review-prefetch.sh` is updated.
    Re-read the threat model, then update the hash (the script's comment has the command).
+
+## A cross-household scope miss (the TEN-1 alert)
+
+**What fired.** A Sentry event `profile scope miss: cross_household`. The server was asked for a
+profile `public_id` that **exists**, but not in the household the request resolved to. The caller got
+a 404 (page / export handler) or the shared `No profile found…` envelope (a Server Action) — ADR 0006
+→ "What a wrong-household request returns". Nothing leaked; this is the signal that the refusal
+happened.
+
+**Why the event exists at all.** The scoped predicate (`public_id ∧ deleted_at IS NULL ∧
+household_id = scope`) returns "no row" for both _"unknown id"_ and _"exists elsewhere"_, so the
+server cannot tell them apart — which made the threat model's #1 risk the one event that produced no
+signal. On a miss only, `apps/web/lib/dal/household.ts` → `reportScopeMiss` re-resolves without the
+household conjunct and emits one structured event.
+
+**The alert rule** (Sentry → Alerts → new issue alert):
+
+| Field     | Value                                                                          |
+| --------- | ------------------------------------------------------------------------------ |
+| Filter    | `message` contains `profile scope miss: cross_household`                       |
+| Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
+| Action    | email the maintainer                                                           |
+
+**What the event carries, and what it deliberately does not.** `actor` (`gate_session` until AUTH-1 —
+the gate is a shared code, not an identity), `action`, `resource` (the `public_id` the caller already
+sent) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
+`DrizzleQueryError` message embeds query parameters and has shipped a kid's bodyweight to Sentry
+once) and **not the owning household's id** — a requester→owner mapping in a third-party store would
+be a cross-tenant linkage over minors' health data.
+
+**Triage.**
+
+1. **One event, one `resource`** → almost certainly a stale bookmark or a shared link. No action.
+2. **Many events, many distinct `resource` values** → id probing. UUIDv7 public ids are not
+   enumerable, so this means ids leaked (a screenshot, a log, a shared link). Rotate the access-gate
+   code (§ "Rotate a secret") and re-check who has it.
+3. **`outcome = no_scope` instead** → not an attack: the server could not resolve a household at all.
+   Zero live households means an empty or wrong database; see § "Manually re-seed / re-apply prod".
+4. **The app is down with `household scope is ambiguous`** → **two or more live households exist
+   before AUTH-1.** The resolver throws by design: it cannot tell whose data it holds and picking one
+   would be a silent cross-wire. Find the extra row
+   (`select id, public_id, name from households where deleted_at is null`) and soft-delete whichever
+   was created in error, or bring AUTH-1 forward. Do **not** "fix" the resolver by reading `rows[0]`.
+
+⚠️ **Rate limiting is not wired for this.** `apps/web/lib/rate-limit.ts` deliberately does not limit
+the mutating actions; AUTH-1 re-keys the limiter from IP to user id and is where probing gets
+throttled. Until then this alert is the consumer.
 
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 

@@ -17,7 +17,7 @@
 ## Schema deltas (migration 0008 — empty tables, so instant/clean)
 
 **S1 — `prescription_targets.reps` (text, nullable) — the per-kid REPS override.** Ray's kids differ in reps on
-some lifts, not just load (Pull-Up: Liam `4×4`, Scarlett `4×5` last-set AMRAP; Weighted Chin likewise). Slice 1
+some lifts, not just load (Pull-Up: Athlete One `4×4`, Athlete Two `4×5` last-set AMRAP; Weighted Chin likewise). Slice 1
 cut per-kid reps as speculative (panel simplicity #1 / correctness F7); the real data un-cuts it. Semantics:
 `null` → use the prescription's shared `target_reps` (the common case); non-null → this kid's override. TEXT
 (lossless: `"4"`, `"5, last AMRAP"`), mirroring `target_reps`. Sets stay shared (Ray's diffs are reps-only).
@@ -63,9 +63,9 @@ fails the seed loudly — the movement seed runs before `seedProgram`, so these 
 `strength_a` (Squat + Vertical Power), `strength_b` (Hinge + Explosive), `strength_c` (Posterior + Carries),
 each an ordered (`idx`) list of movements with shared `sets` + `target_reps`, and per-kid `targets`
 (`{ profilePublicId, load, reps? }`). **Loads transcribed VERBATIM from Ray's doc** (e.g. Front Squat →
-Liam `"60"`, Scarlett `"65"`; Back Squat → both `"~75-85"`; Pull-Up → Liam `{load:"BW"}`, Scarlett
+Athlete One `"60"`, Athlete Two `"65"`; Back Squat → both `"~75-85"`; Pull-Up → Athlete One `{load:"BW"}`, Athlete Two
 `{load:"BW +5", reps:"5, last AMRAP"}`; Pallof → both `"band"`). `reps` set only where a kid differs.
-Per-kid profiles: `SEED_PROFILE_PUBLIC_ID` (Liam), `SEED_PROFILE_2_PUBLIC_ID` (Scarlett) — both in the root
+Per-kid profiles: `SEED_PROFILE_PUBLIC_ID` (Athlete One), `SEED_PROFILE_2_PUBLIC_ID` (Athlete Two) — both in the root
 household (the same-household invariant holds).
 
 ## Verify + tests (now exercise REAL data)

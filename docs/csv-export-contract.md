@@ -45,7 +45,7 @@ Recording these because each would have shipped a broken export:
 - **Non-ASCII:** the em dash `—` (U+2014) is in active use (23 occurrences in `notes`/`prescribed`).
   **Do not transliterate to `--`.**
 - **Empty vs zero:** an absent value is an **empty cell** — never `-`, `NA`, or `null`. **Trailing empty
-  fields are written, not dropped**: `2026-07-09,71.4,morning,` keeps its trailing comma.
+  fields are written, not dropped**: `2020-07-09,92.3,morning,` keeps its trailing comma.
   **`0` is meaningful and distinct**: `sets=0,reps=0` means attempted-and-logged-at-zero (skipped), not
   "unknown".
 
@@ -53,11 +53,11 @@ Recording these because each would have shipped a broken export:
 
 **Zero quoted fields exist across all eight real files, and the files are not valid CSV:**
 
-- A real row contains **bare double-quotes** in an unquoted field — `Liam at 30" box (Scarlett did 36")`
+- A real row contains **bare double-quotes** in an unquoted field — `Athlete A at 30" box (Athlete B did 36")`
   — those are inch marks, not CSV quoting. Any RFC-4180 writer re-emits them as
-  `"Liam at 30"" box (Scarlett did 36"")"` and the diff fails.
+  `"Athlete A at 30"" box (Athlete B did 36"")"` and the diff fails.
 - One real row has an **unescaped comma** in `notes`, splitting it into 9 fields instead of 8
-  (`...,3x10,warmup — shyperextension`, present in both kids' `2026-06.csv`).
+  (`...,3x10,warmup — shyperextension`, present in both athletes' `2020-06.csv`).
 
 → **Join fields with `,` and write raw.** Going forward, quote a `notes` value containing a comma;
 leave the two legacy rows untouched.
@@ -68,12 +68,12 @@ leave the two legacy rows untouched.
 
 ```
 date,session_type,movement,sets,reps,load,prescribed,notes
-2026-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,ramped; top 80x5 clean
-2026-07-20,strength-a,pull-up,4,4/3/4/2,BW+8 (vest),4x4 last AMRAP,reps declined across sets
-2026-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Scarlett; heavy
-2026-06-02,trainer,bulgarian-split-squat,0,0,SKIPPED,2x6/leg,acceptable — drop-if-yellow item
-2026-06-02,trainer,pull-ups,2,sub-failure,BW (unassisted),2 sets sub-failure,max 4 clean unassisted
-2026-07-20,strength-a,back-squat,3,5,80/85/85,3x5 @ ~85-90,solid
+2020-07-20,strength-a,front-squat,5,5,70/75/75/75/80,5x5 @ ~70 target,ramped; top 80x5 clean
+2020-07-20,strength-a,pull-up,4,4/3/4/2,BW+8 (vest),4x4 last AMRAP,reps declined across sets
+2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Athlete B; heavy
+2020-06-02,trainer,bulgarian-split-squat,0,0,SKIPPED,2x6/leg,acceptable — drop-if-yellow item
+2020-06-02,trainer,pull-ups,2,sub-failure,BW (unassisted),2 sets sub-failure,max 4 clean unassisted
+2020-07-20,strength-a,back-squat,3,5,80/85/85,3x5 @ ~85-90,solid
 ```
 
 ### One row per MOVEMENT, never per set
@@ -140,13 +140,13 @@ extensions but have **never been written** — and must be emitted **hyphenated*
 
 ```
 date,weight_lb,context,notes
-2026-07-09,71.4,morning,
-2026-07-10,71,morning,
-2026-07-13,71.2,morning,after a big dinner
+2020-07-09,92.3,morning,
+2020-07-10,92,morning,
+2020-07-13,91.7,morning,after a big dinner
 ```
 
-> ⚠️ **`weight_lb` must be exported as TEXT, not a number.** The real file mixes `71`, `71.0` and `71.4`
-> in one column. A round-trip through a float normalises `71` → `71.0` and blows the golden diff. This
+> ⚠️ **`weight_lb` must be exported as TEXT, not a number.** The legacy files mix `92`, `92.0` and `91.7`
+> in one column. A round-trip through a float normalises `92` → `92.0` and blows the golden diff. This
 > is a **data-model consequence**, not just a formatting one — see Open questions.
 
 > ⚠️ **`weight_lb` holds pounds (CSV-1, Ray 2026-10-02).** An `lb` weigh-in is written as logged. A
@@ -193,7 +193,7 @@ is the silent break the golden file cannot catch.
 ## Open questions / consequences for the data model
 
 1. **Bodyweight precision.** `entries.value_num` is `numeric`; the CSV needs the operator's literal
-   keystrokes (`71` vs `71.0`). `entries.raw_load`/`raw_reps` exist for exactly this on strength — an
+   keystrokes (`92` vs `92.0`). `entries.raw_load`/`raw_reps` exist for exactly this on strength — an
    equivalent verbatim column (or reusing `raw_load`) is likely needed for bodyweight. **Decide in the
    V1-13 plan.**
 2. **`session_type` mapping.** `strength_a` → `strength-a` is a presentation mapping; it belongs in the

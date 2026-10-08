@@ -13,10 +13,13 @@ export const runtime = 'nodejs';
 
 /**
  * V1-18 PR 2: the coach routine editor. A parent authors which activities are in a kid's routine and their
- * order (the checklist + ▲▼ the panel settled on). Reachable by URL only — NOT linked from the kid's Today
- * (no kid-facing edit affordance; the access gate is UX-not-security, so discoverability isn't a security
- * concern, and the Clerk-era parent nav will place it properly). The profile is re-resolved server-side
- * (the ownership seam); its routine is already resolved by the DAL, so the editor seeds from a real order.
+ * order (the checklist + ▲▼ the panel settled on). **Linked from Today since V1-23 D3** (below the logged
+ * entries) — the Clerk-era parent nav will place it properly. The profile is re-resolved server-side (the
+ * ownership seam); its routine is already resolved by the DAL, so the editor seeds from a real order.
+ *
+ * ⚠️ This comment used to say "Reachable by URL only — NOT linked from the kid's Today", which #157
+ * falsified and did not update. It cost ONB-0's plan a false scope exclusion and a whole wasted panel
+ * question before anyone opened `../page.tsx`. `docs/features/programming.md` had it right the whole time.
  */
 export default async function RoutineEditorPage({
   params,

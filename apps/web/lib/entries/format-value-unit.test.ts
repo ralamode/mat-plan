@@ -43,6 +43,6 @@ describe('formatValueUnit', () => {
     // `92` must not render as `92.0`: that is the CSV path's `formatNumeric` problem (pg returns
     // `numeric` as a string), and it does not exist here.
     expect(formatValueUnit(92, DEFAULT_BODYWEIGHT_UNIT)).toBe('92 lb');
-    expect(formatValueUnit(71.4, DEFAULT_BODYWEIGHT_UNIT)).toBe('71.4 lb');
+    expect(formatValueUnit(92.3, DEFAULT_BODYWEIGHT_UNIT)).toBe('92.3 lb');
   });
 });

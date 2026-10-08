@@ -43,7 +43,7 @@ vi.mock('@/lib/dal/gate', () => ({ hasGateAccess: vi.fn(async () => true) }));
 vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
     id: PROFILE_ID,
-    name: 'Liam',
+    name: 'Athlete One',
     kind: 'kid',
     avatar: null,
     routine: { version: 1, order: [] },
@@ -79,7 +79,12 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
+import {
+  AMEND_ERROR_COPY,
+  BODYWEIGHT_COPY,
+  NO_PROFILE_LOG,
+  NO_PROFILE_SAVE,
+} from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -113,30 +118,43 @@ beforeEach(() => vi.clearAllMocks());
 // POST and the proxy is not the auth boundary: until SEC-1 its matcher let prefetch-flagged requests
 // skip the gate. Each action must refuse an un-gated caller BEFORE anything else runs, with the same
 // copy as not-found (so the refusal says nothing about the gate or the profile).
+/**
+ * ALL SEVEN ACTIONS and the refusal each returns, enumerated once and shared by the unauth suite and
+ * TEN-1's wrong-household suite below.
+ *
+ * The copy comes from `@/lib/constants` rather than a re-typed literal (it was typed out seven times
+ * here before TEN-1 1b, and the wrong-household suite would have made it fourteen). That matters
+ * beyond tidiness: the security argument for 404-never-403 is that the refusal is **byte-identical**
+ * across un-gated, unknown, soft-deleted and foreign-household — so a crafted cross-household id
+ * learns nothing a stale id wouldn't. Asserting through the const makes that identity structural;
+ * asserting through two copies of a string only makes it likely.
+ */
+const ALL_ACTIONS: [string, (s: ActionState, f: FormData) => Promise<ActionState>, string][] = [
+  ['logBodyweightAction', logBodyweightAction, NO_PROFILE_LOG],
+  ['logCheckinsAction', logCheckinsAction, NO_PROFILE_LOG],
+  ['logStrengthSessionAction', logStrengthSessionAction, NO_PROFILE_LOG],
+  ['logLifeActivitiesAction', logLifeActivitiesAction, NO_PROFILE_LOG],
+  ['editStrengthSetAction', editStrengthSetAction, NO_PROFILE_LOG],
+  ['editBodyweightAction', editBodyweightAction, NO_PROFILE_LOG],
+  ['editRoutineAction', editRoutineAction, NO_PROFILE_SAVE],
+];
+
+/** Every writer the DAL exposes — none may run when an action refuses. */
+const ALL_WRITERS = [
+  logBodyweight,
+  logCheckinEntries,
+  logStrengthSession,
+  editStrengthSet,
+  editBodyweight,
+];
+
 describe('every Server Action — unauth → reject before any DAL call (SEC-1)', () => {
-  const cases: [string, (s: ActionState, f: FormData) => Promise<ActionState>, string][] = [
-    ['logBodyweightAction', logBodyweightAction, 'No profile found to log against.'],
-    ['logCheckinsAction', logCheckinsAction, 'No profile found to log against.'],
-    ['logStrengthSessionAction', logStrengthSessionAction, 'No profile found to log against.'],
-    ['logLifeActivitiesAction', logLifeActivitiesAction, 'No profile found to log against.'],
-    ['editStrengthSetAction', editStrengthSetAction, 'No profile found to log against.'],
-    ['editBodyweightAction', editBodyweightAction, 'No profile found to log against.'],
-    ['editRoutineAction', editRoutineAction, 'No profile found to save against.'],
-  ];
-  it.each(cases)('%s refuses an un-gated caller', async (_name, action, notFound) => {
+  it.each(ALL_ACTIONS)('%s refuses an un-gated caller', async (_name, action, notFound) => {
     vi.mocked(hasGateAccess).mockResolvedValueOnce(false);
     const res = await action(initial, form({ profileId: PROFILE_ID }));
     expect(res).toEqual({ ok: false, error: notFound });
     expect(getProfileByPublicId).not.toHaveBeenCalled();
-    for (const write of [
-      logBodyweight,
-      logCheckinEntries,
-      logStrengthSession,
-      editStrengthSet,
-      editBodyweight,
-    ]) {
-      expect(write).not.toHaveBeenCalled();
-    }
+    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
     expect(updateProfileRoutine).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
   });
@@ -1480,5 +1498,96 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe(AMEND_ERROR_COPY.staleWrite);
     expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+  });
+});
+
+/**
+ * MANDATORY wrong-owner → forbid (AGENTS.md → Backend / API PR rules) — **satisfiable for the first
+ * time in this repo.** Until TEN-1 1b there was no notion of whose request this was, and `actions.ts`
+ * said so in as many words: *"any known profile id writes to that profile."*
+ *
+ * ⚠️ **What this suite proves, stated precisely, because the panel caught the first draft
+ * over-claiming it (A2 · S1 · C7).** `getProfileByPublicId` is mocked wholesale here, so a
+ * foreign-household id and an unknown id are byte-identical AT THIS BOUNDARY — and that is the point:
+ * this proves the **action layer's** half, that a `null` resolution refuses with the shared copy,
+ * calls no writer and revalidates nothing, for all seven actions. It would stay green with the
+ * household conjunct deleted, which is exactly why **the scoping itself is proved in `db:verify`'s
+ * two-household matrix**, in both directions, against a real database. Two vehicles, each honest
+ * about its own half.
+ *
+ * The `null` also covers the **no-scope** path: a zero-household database resolves no scope, so
+ * `getProfileByPublicId` returns `null` and every action takes this same route — dark, not leaky.
+ *
+ * ⚠️ Each case needs a body that would otherwise SUCCEED. An action that zod-rejects first never
+ * reaches the ownership check, and a suite built on `form({ profileId })` would have proved nothing
+ * while looking identical in the report.
+ */
+describe('every Server Action — wrong household → the same refusal as not-found (TEN-1)', () => {
+  /** A body that reaches the ownership check for each action, keyed by name. */
+  const VALID_BODY: Record<string, () => FormData> = {
+    logBodyweightAction: () =>
+      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+    logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
+    logStrengthSessionAction: () =>
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    logLifeActivitiesAction: () =>
+      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
+    editStrengthSetAction: () =>
+      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
+    editBodyweightAction: () => amendForm(),
+    editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+  };
+
+  it('every action has a body that reaches the ownership check (no vacuous case)', async () => {
+    // The guard on the guard: with the default mocks every one of these must SUCCEED, so a case that
+    // refuses below is refusing for the reason this suite is about.
+    for (const [name, action] of ALL_ACTIONS.map(([n, a]) => [n, a] as const)) {
+      vi.clearAllMocks();
+      const res = await action(initial, VALID_BODY[name]!());
+      expect(
+        res.ok,
+        `${name}: the valid body must succeed, or its refusal case proves nothing`,
+      ).toBe(true);
+    }
+  });
+
+  it.each(ALL_ACTIONS)(
+    '%s refuses a profile outside the request’s household',
+    async (name, action, notFound) => {
+      vi.mocked(getProfileByPublicId).mockResolvedValue(null);
+      const res = await action(initial, VALID_BODY[name]!());
+      expect(res).toEqual({ ok: false, error: notFound });
+      // The gate passed and the profile WAS looked up — this is the authZ refusal, not the authN one.
+      expect(hasGateAccess).toHaveBeenCalled();
+      expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
+      for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
+      expect(updateProfileRoutine).not.toHaveBeenCalled();
+      // No revalidate: a refusal must not even confirm which path exists.
+      expect(revalidatePath).not.toHaveBeenCalled();
+      vi.mocked(getProfileByPublicId).mockReset();
+    },
+  );
+
+  it('the refusal is byte-identical to the un-gated one, for every action', async () => {
+    // The whole 404-never-403 argument (ADR 0006). If these two ever diverge the envelope becomes an
+    // oracle for "that profile exists, just not for you".
+    for (const [name, action, notFound] of ALL_ACTIONS) {
+      vi.clearAllMocks();
+      vi.mocked(hasGateAccess).mockResolvedValueOnce(false);
+      const ungated = await action(initial, VALID_BODY[name]!());
+
+      vi.clearAllMocks();
+      vi.mocked(getProfileByPublicId).mockResolvedValue(null);
+      const foreign = await action(initial, VALID_BODY[name]!());
+      vi.mocked(getProfileByPublicId).mockReset();
+
+      expect(foreign, `${name}: foreign-household and un-gated must be indistinguishable`).toEqual(
+        ungated,
+      );
+      expect(foreign.error).toBe(notFound);
+    }
   });
 });

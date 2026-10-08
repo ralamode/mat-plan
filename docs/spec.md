@@ -11,7 +11,7 @@ Next.js server, API/security); findings are folded in. The phased PR backlog liv
 The kids' training data kept going unlogged, and the stopgap was a single-file `localStorage` HTML
 logger. This goes bigger for three reasons at once:
 
-1. **Real tool** — hand it to Liam & Scarlett to log everything they do in a day on a phone/iPad
+1. **Real tool** — hand it to Athlete One & Athlete Two to log everything they do in a day on a phone/iPad
    (wake, weigh-in, rice bucket, wrestling, calisthenics, brush-teeth, splits, S&C lifts, Brain Rep,
    shots), and log Ray's own PPL+core too.
 2. **Learning vehicle** — hands-on React + backend + DB reps mapped to senior/staff full-stack

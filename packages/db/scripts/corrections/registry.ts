@@ -4,8 +4,10 @@ import { ENTRY_STATUS, SEED_METRIC_KEYS, type Unit } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
+import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
 import type { Database } from '../../src/client';
 import * as schema from '../../src/schema';
+import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -26,7 +28,27 @@ export type Correction = {
 };
 
 /**
- * 2026-09-28 — Liam's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
+ * The internal id of a LIVE household named by its stable `public_id` — README rule 3 (never an
+ * internal id from outside this database). `null` when this database has no such household, so each
+ * caller decides what that means: a correction that cannot find its target must refuse, never guess.
+ *
+ * Extracted at its SECOND consumer, not speculatively (the `ownership.ts` rule): TEN-1 1b's scoped
+ * `isLiveProfile` needs a NAMED household for a correction, which has no request to derive one
+ * from, and `nullRoutineToFull` already resolved one this way. The lookup also gains
+ * `deleted_at IS NULL` here, which only makes it stricter — a soft-deleted household now reports
+ * "not in this database" instead of matching.
+ */
+async function liveHouseholdId(db: Database, publicId: string): Promise<number | null> {
+  const [row] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(and(eq(schema.households.publicId, publicId), isNull(schema.households.deletedAt)))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * 2026-09-28 — an athlete's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
  * five sets.
  *
  * Two app bugs produced it, both V1-24: the strength form offered a BW toggle on a movement the
@@ -38,12 +60,12 @@ export type Correction = {
  * 20 lb that should have been there. Note the quantity is an INSERT, not an update — a bodyweight set
  * has no quantity row at all, which is exactly why the read line said `20 × BW`.
  */
-const liamKbSwings: Correction = {
-  name: 'liam-kb-swings-2026-09-28',
+const kbSwingsLoadRepsSwap: Correction = {
+  name: 'kb-swings-2026-09-28',
   what: '5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`',
   issue: 'V1-24',
   async run(db, apply) {
-    const LIAM = '019826b4-0000-7000-8000-000000000001';
+    const TARGET_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
     const DAY = '2026-09-28';
 
     // Target by (profile public_id, day, movement slug) — never an internal id, which differs
@@ -62,7 +84,7 @@ const liamKbSwings: Correction = {
       .innerJoin(schema.movements, eq(schema.movements.id, schema.entries.movementId))
       .where(
         and(
-          eq(schema.profiles.publicId, LIAM),
+          eq(schema.profiles.publicId, TARGET_PROFILE_PUBLIC_ID),
           eq(schema.entries.activityDate, DAY),
           eq(schema.movements.slug, 'kb_swings'),
           eq(schema.entrySets.isBodyweight, true), // ← the guard: already-fixed rows don't match
@@ -103,7 +125,7 @@ const liamKbSwings: Correction = {
 };
 
 /**
- * 2026-09-30 — Liam's weigh-in was logged **three times** on one day, and nothing in the app can
+ * 2026-09-30 — an athlete's weigh-in was logged **three times** on one day, and nothing in the app can
  * remove the two extra rows.
  *
  * The bug is V1-24 S1: `bodyweight-form.tsx` resets *and rotates the `client_id`* on success, while
@@ -142,7 +164,7 @@ const liamKbSwings: Correction = {
 // The profile id is a **literal and not `SEED_PROFILE_PUBLIC_ID`** on purpose: that const means "the
 // profile the seed creates", while this is "the profile that owned these rows in prod on 2026-09-30".
 // A correction is a frozen record and must not follow a symbol that could be re-pointed (Decision 21).
-const LIAM_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
+const DUP_TARGET_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
 const DUP_DAY = '2026-09-30';
 const DUP_UNIT: Unit = 'lb';
 
@@ -210,8 +232,8 @@ const liveBodyweightOn = (profileId: number, day: string) =>
 const utc = (col: PgColumn, format: string) =>
   sql<string>`to_char(${col} at time zone 'UTC', ${format})`;
 
-const liamBodyweightDuplicates: Correction = {
-  name: 'liam-bodyweight-duplicates-2026-09-30',
+const bodyweightDuplicates: Correction = {
+  name: 'bodyweight-duplicates-2026-09-30',
   what: '3 weigh-ins logged on one day; the 12:17 morning row is the one to keep',
   issue: 'V1-24',
   async run(db, apply) {
@@ -219,14 +241,28 @@ const liamBodyweightDuplicates: Correction = {
     // `isLiveProfile` is THE live-profile predicate (V1-24 PR 1b, writers/ownership.ts), so this is
     // not a 12th hand-typed copy. The reuse lens asked for it when #192 was still open and the answer
     // was "not until it is on main"; #192 merged while this PR was in flight, so it is imported.
+    //
+    // TEN-1 1b: that predicate now REQUIRES a household scope, and a correction has no request to
+    // derive one from — so it NAMES the household, resolved by `public_id` beside the profile. A
+    // correction that matched a profile in some other household would be the worst possible version
+    // of this tool: an irreversible write to a family that never reported a problem. The scope is
+    // `householdScopeForScript`, which `packages/db/src/index.ts` deliberately does not re-export,
+    // so the app can never reach the constructor that takes an id as an argument.
+    const scopedHouseholdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
+    if (scopedHouseholdId === null) {
+      throw new Error(
+        `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
+      );
+    }
+    const scope = householdScopeForScript(scopedHouseholdId);
     const [profile] = await db
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
-      .where(isLiveProfile(LIAM_PUBLIC_ID));
+      .where(isLiveProfile(DUP_TARGET_PROFILE_PUBLIC_ID, scope));
 
     if (!profile) {
       throw new Error(
-        `profile ${LIAM_PUBLIC_ID} is missing or soft-deleted in this database — wrong target?`,
+        `profile ${DUP_TARGET_PROFILE_PUBLIC_ID} is missing or soft-deleted in this database — wrong target?`,
       );
     }
 
@@ -389,4 +425,110 @@ const liamBodyweightDuplicates: Correction = {
   },
 };
 
-export const CORRECTIONS: readonly Correction[] = [liamKbSwings, liamBodyweightDuplicates];
+/**
+ * 2026-10-07 (ONB-0) — every live profile whose `routine_config` is **NULL** was riding the old
+ * read-time default, which was the ENTIRE `ROUTINE_CATALOG`.
+ *
+ * ONB-0 narrowed that fallback to `['strength']`, so that a brand-new household stops inheriting this
+ * household's ~17 controls (3 habits, 7 `brush_teeth` drill metrics, 4 calisthenics counters, 2 life
+ * controls) as its first screen. For a NEW profile that is the fix. For a profile that already exists on
+ * NULL it would be a silent regression: its Today would quietly lose the habits and every brush-teeth
+ * control, with no data changed and nothing to point at. The app has no way to repair that — the routine
+ * editor can re-author it, but nobody would know they had to.
+ *
+ * So this writes the pre-ONB-0 default EXPLICITLY onto those rows: same rendering as today, now stated in
+ * the row instead of inherited from a default that is changing underneath it.
+ *
+ * **Run it BEFORE the deploy.** It writes the routine the current code already renders, so on today's
+ * build it is a no-op from the household's point of view, and after the deploy nothing has moved. Run it
+ * after and the household sees a narrowed Today in between.
+ *
+ * Idempotent by the guard rather than by a flag: `routine_config IS NULL` is the value being corrected
+ * FROM (README rule 2), so a second run matches nothing and reports 0. `updated_at = now()` (rule 4),
+ * `deleted_at IS NULL` (rule 5), one transaction (rule 7). Nothing it prints is privileged — a routine is
+ * a list of activity keys, not a measurement (rule 8).
+ *
+ * ⚠️ **SCOPED TO THE SEEDED HOUSEHOLD, and that scope is the whole safety argument.** `IS NULL` alone is
+ * idempotent per ROW but not per ERA. After ONB-0, leaving `routine_config` NULL is the *correct* thing
+ * for a profile creator to do — it is how a profile asks for the neutral default. So once PROF-1 ships
+ * athlete creation, an unscoped `IS NULL` would make any later `--apply` stamp this household's full
+ * routine, `brush_teeth` and all, onto somebody else's brand-new athlete: a write with no delete action
+ * and a URL-only editor behind it, i.e. exactly the unrecoverable class this system exists to repair
+ * rather than cause. The household predicate makes the correction expire on its own.
+ */
+const nullRoutineToFull: Correction = {
+  name: 'null-routine-to-full-2026-10-07',
+  what: "the seeded household's NULL `routine_config` rode the whole-catalog default ONB-0 narrowed",
+  issue: 'ONB-0 (which narrows what NULL MEANS; the NULL itself came from `seed.ts`)',
+  async run(db, apply) {
+    const changes: string[] = [];
+
+    // The seeded household, resolved by its stable public_id — never an internal id (README rule 3).
+    const householdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
+
+    if (householdId === null) {
+      return ['the seeded household is not in this database — nothing to do'];
+    }
+
+    // `IS NULL` is the per-row guard (once corrected, a row stops matching); the household predicate is
+    // the per-era guard (see the ⚠️ above — this must never reach a PROF-1-created athlete elsewhere).
+    const targets = await db
+      .select({ publicId: schema.profiles.publicId, name: schema.profiles.name })
+      .from(schema.profiles)
+      .where(
+        and(
+          eq(schema.profiles.householdId, householdId),
+          isNull(schema.profiles.routineConfig),
+          isNull(schema.profiles.deletedAt),
+        ),
+      );
+
+    if (targets.length === 0) {
+      return ['no live profile in the seeded household has routine_config = NULL — nothing to do'];
+    }
+
+    for (const t of targets) {
+      changes.push(
+        `profile ${t.publicId} (${t.name}): routine_config NULL → the explicit pre-ONB-0 default ` +
+          `(${SEED_FULL_ROUTINE.order.length} items)`,
+      );
+    }
+
+    if (!apply) return changes;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '5s'`);
+      await tx.execute(sql`set local statement_timeout = '30s'`);
+
+      for (const t of targets) {
+        const updated = await tx
+          .update(schema.profiles)
+          .set({ routineConfig: SEED_FULL_ROUTINE, updatedAt: sql`now()` }) // README rule 4
+          .where(
+            and(
+              eq(schema.profiles.publicId, t.publicId),
+              eq(schema.profiles.householdId, householdId), // the SAME guards the read used
+              isNull(schema.profiles.routineConfig),
+              isNull(schema.profiles.deletedAt),
+            ),
+          )
+          .returning({ publicId: schema.profiles.publicId });
+
+        if (updated.length !== 1) {
+          throw new Error(
+            `expected to update exactly 1 row for ${t.publicId}, matched ${updated.length} — ` +
+              `it was authored while this ran. Rolled back, nothing written; re-run the dry run.`,
+          );
+        }
+      }
+    });
+
+    return changes;
+  },
+};
+
+export const CORRECTIONS: readonly Correction[] = [
+  kbSwingsLoadRepsSwap,
+  bodyweightDuplicates,
+  nullRoutineToFull,
+];
