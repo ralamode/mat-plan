@@ -1023,7 +1023,7 @@ function MovementCard({
               </div>
             );
           })}
-          {/* V1-26 PR-A — the 2026-09-28 incident, said out loud. Liam's KB swings were logged
+          {/* V1-26 PR-A — the 2026-09-28 incident, said out loud. An athlete's KB swings were logged
               `20 × BW` when the session was `10 × 20 lb`, and the app said nothing at the moment of
               the mistake and then could not fix it afterwards.
 

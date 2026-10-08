@@ -17,13 +17,13 @@ import {
  * `client_id`, and the form used to mint a fresh key on every success); concurrent mounts can still
  * duplicate until PR 1d's index, which is why the receipt lists every row.
  *
- * Scarlett's TODAY: `global.setup.ts` logs `WARMUP_BODYWEIGHT` there before any spec runs, and THIS
+ * Athlete Two's TODAY: `global.setup.ts` logs `WARMUP_BODYWEIGHT` there before any spec runs, and THIS
  * test is the only one that writes to it, by amending it (PR 1b). A retry reuses the DB, so it reads
  * which of the two values is showing and corrects to the other one.
  *
  * Covered elsewhere, deliberately: the empty → receipt transition and its focus assertion
  * (`steps.ts:logBodyweight`, driven by the smoke, the export spec and the a11y spec), the receipt on
- * a non-today day (`a11y.spec.ts`, Scarlett's yesterday), and every copy state including duplicates
+ * a non-today day (`a11y.spec.ts`, Athlete Two's yesterday), and every copy state including duplicates
  * and a closed day (`bodyweight-section.test.tsx`). A CLOSED day is unreachable here: the e2e seeds
  * profiles today, so `resolveViewedDay` floors any `?d=` into the writable range
  * (`day-navigation.spec.ts` documents the same limit).
@@ -68,8 +68,8 @@ test('a logged day shows its weight and the one-per-day reason — and no create
 
   // ── V1-24 PR 1b: and now correct it ──────────────────────────────────────────────────────────
   // Folded into THIS test rather than given its own, because all four e2e-reachable profile-days
-  // are already claimed (Liam's today by the smoke, his yesterday by the export round-trip,
-  // Scarlett's yesterday by the a11y empty-form fixture).
+  // are already claimed (Athlete One's today by the smoke, their yesterday by the export round-trip,
+  // Athlete Two's yesterday by the a11y empty-form fixture).
   await change.click();
 
   const field = section.getByLabel(AMEND_COPY.valueLabel('lb'), { exact: true });

@@ -389,6 +389,13 @@ Real ones, each with the file to look at.
   boundary; a DB constraint reached by a crafted body is a 500 that discards the athlete's whole
   session, because the action has no `try/catch` around the writer.
 
+- **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
+  `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never
+  re-type the literal and never put a real first name in a fixture, a comment or a test — this repo is
+  public and holds minors' data (AGENTS.md → "No personal names"; `OSS-1`). `db:verify` pins the
+  literal **once**, on the assertion side, so a real name cannot come back unnoticed. Prose about a
+  real logged incident says "an athlete", not a fixture name — the fixture is not the child.
+
 ## Changing it
 
 | If you are…                 | Start here                                                                                                        |

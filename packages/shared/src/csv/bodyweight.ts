@@ -29,8 +29,8 @@ export type BodyweightRow = {
 /**
  * `data/bodyweight/<public_id>/<YYYY-MM>.csv`.
  *
- * ⚠️ **`weight_lb` is TEXT, not a number.** The real file mixes `71`, `71.0` and `71.4` in one
- * column, and a round-trip through a float normalises `71` → `71.0`. `formatNumeric` keeps it a
+ * ⚠️ **`weight_lb` is TEXT, not a number.** The legacy files mix `92`, `92.0` and `91.7` in one
+ * column, and a round-trip through a float normalises `92` → `92.0`. `formatNumeric` keeps it a
  * string end to end.
  *
  * Ray's ruling (2026-09-24): a typed `92.0` exports as `92`, and a bare integer is read as `.0`. The

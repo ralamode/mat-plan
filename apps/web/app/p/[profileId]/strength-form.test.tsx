@@ -206,7 +206,7 @@ describe('StrengthForm — program scaffold (V1-19)', () => {
 /**
  * V1-26 PR-A — the form carries the MOVEMENT's declaration.
  *
- * The 2026-09-28 incident: Liam's KB swings were logged `20 × BW` when the session was `10 × 20 lb`.
+ * The 2026-09-28 incident: an athlete's KB swings were logged `20 × BW` when the session was `10 × 20 lb`.
  * The app said nothing at the moment of the mistake, and then could not fix it afterwards. PR-A is
  * the first half — say something.
  */

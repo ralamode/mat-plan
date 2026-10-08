@@ -40,7 +40,7 @@ the cause. Adding one is a single entry in
 the [README](../packages/db/scripts/corrections/README.md) for the rules.
 
 **A correction merges before it runs, and `--apply` is manual — so mind what is queued behind it.**
-`liam-bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
+`bodyweight-duplicates-2026-09-30` (V1-24 PR 1c) clears the duplicate weigh-ins that **PR 1d's
 `CREATE UNIQUE INDEX` cannot tolerate**, and the order is not optional:
 
 0. **dry run** — check the printed `target:` host is prod, and read the diff (the keeper's value
@@ -117,8 +117,10 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
 The seed is `ON CONFLICT (public_id) DO NOTHING`, so it **won't overwrite** an existing row — a
-one-off `UPDATE` is needed. (First occurrence: V1-3 renamed the seed profile "Athlete One" → "Liam",
-but prod kept "Athlete One".)
+one-off `UPDATE` is needed. (First occurrence: V1-3 changed the seed profile's name, and prod kept the
+name it already had. ⚠️ **`OSS-1` changed those seed names again** — to the role names
+`SEED_PROFILE_NAME` / `SEED_PROFILE_2_NAME` — and deliberately did **not** reconcile prod. A live
+household's profile names are its own data; the sweep was about the repository, not the database.)
 
 **Why manual:** deliberately not in the seed — an `ON CONFLICT DO UPDATE SET name` would clobber a
 name a user later edits. A targeted, guarded correction is safer as a one-off.
@@ -127,9 +129,9 @@ name a user later edits. A targeted, guarded correction is safer as a one-off.
 
 ```sql
 UPDATE profiles
-SET name = 'Liam', updated_at = now()
-WHERE public_id = '019826b4-0000-7000-8000-000000000001'  -- the target row's public_id
-  AND name = 'Athlete One'                                 -- guard → no-op if already renamed
+SET name = '<the new name>', updated_at = now()
+WHERE public_id = '<the target row''s public_id>'
+  AND name = '<the name it has now>'  -- guard → no-op if already renamed
   AND deleted_at IS NULL;
 ```
 

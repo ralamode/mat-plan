@@ -43,7 +43,7 @@ vi.mock('@/lib/dal/gate', () => ({ hasGateAccess: vi.fn(async () => true) }));
 vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
     id: PROFILE_ID,
-    name: 'Liam',
+    name: 'Athlete One',
     kind: 'kid',
     avatar: null,
     routine: { version: 1, order: [] },

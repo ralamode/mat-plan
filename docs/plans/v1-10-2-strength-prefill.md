@@ -60,7 +60,7 @@ auto-submitted suggestion. The plan/PR make this explicit; the panel's correctne
 **E6 — Tests + screenshots.** Unit: the weekday→day-role resolution + the prefill→movements transform (pure,
 extracted). Integration: `getProgramDay` returns the right per-kid graph (or reuse `db:verify` for the read).
 Action boundary unchanged (the log action is untouched). Tri-viewport screenshots: a strength day prefilled
-(Scarlett vs Liam differ), a non-strength day (empty), the override selector.
+(Athlete Two vs Athlete One differ), a non-strength day (empty), the override selector.
 
 ## Out of scope (→ later)
 
@@ -194,9 +194,9 @@ renders as a sibling BEFORE `<StrengthForm>`, outside its `<form>`, emitting onl
 
 ### Proofs
 
-- **`db:verify`** (`packages/db/scripts/verify.ts`) runs the SHIPPED `programDayRows`: `idx` order over Ray's real Strength A; per-kid loads (Liam 60 / Scarlett 65 on the same prescription) and the per-kid reps override; an unprogrammed `day_role` → 0 rows; **BOLA both directions** across two households programming disjoint day roles; a kid with **no target** still sees the movement with a NULL load (never the sibling's); an unknown profile → 0 rows; a household with **two** blocks resolves to one (no fan-out) **and falls back past a newer block that doesn't program that day**; and all four `deleted_at` filters (block / prescription / target / movement). The three ownership- and staleness-critical probes are mutation-tested — each fails when its filter is removed.
+- **`db:verify`** (`packages/db/scripts/verify.ts`) runs the SHIPPED `programDayRows`: `idx` order over Ray's real Strength A; per-kid loads (Athlete One 60 / Athlete Two 65 on the same prescription) and the per-kid reps override; an unprogrammed `day_role` → 0 rows; **BOLA both directions** across two households programming disjoint day roles; a kid with **no target** still sees the movement with a NULL load (never the sibling's); an unknown profile → 0 rows; a household with **two** blocks resolves to one (no fan-out) **and falls back past a newer block that doesn't program that day**; and all four `deleted_at` filters (block / prescription / target / movement). The three ownership- and staleness-critical probes are mutation-tested — each fails when its filter is removed.
 - **Unit:** `localWeekday` across the week + an explicit west-of-UTC regression; `resolveDayRole` for all 7 days + a schedule-validity test (only real, only _strength_, day roles); `DAY_ROLE_LABELS` derivation + A/B/C distinctness.
-- **Screenshots** (tri-viewport): Liam's Strength C, Scarlett's Strength C (loads visibly differ), and a rest day (no card, form unchanged).
+- **Screenshots** (tri-viewport): Athlete One's Strength C, Athlete Two's Strength C (loads visibly differ), and a rest day (no card, form unchanged).
 
 ### Deliberately not in this slice
 

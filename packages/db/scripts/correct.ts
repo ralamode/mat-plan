@@ -58,7 +58,7 @@ console.log(`  cause: ${correction.issue}`);
 console.log(`  target: ${host}`);
 console.log(`  mode: ${apply ? 'APPLY — this writes' : 'dry run — nothing will be written'}\n`);
 
-// A correction may REFUSE. `liam-bodyweight-duplicates-2026-09-30` is the first one designed to:
+// A correction may REFUSE. `bodyweight-duplicates-2026-09-30` is the first one designed to:
 // its guard throws when a target row has moved since the read, and when the row it is keeping has
 // gone (deleting the others would leave the day with no weight — worse than the duplicate). So the
 // throw path needs a readable landing and the pool must close either way; without the `finally` a

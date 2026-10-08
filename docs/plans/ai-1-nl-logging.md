@@ -281,7 +281,7 @@ mis-parsed `65 → 165` is a number a child then lifts. The chip is the correctn
 2. **Boundary.** A crafted model response carrying `weight: 95` fails `z.strictObject` with an
    unknown-key issue. This is the test that distinguishes `strictObject` from `.object()`, which would
    silently strip the key and pass.
-3. **Eval, invariant class, 100%.** Inputs that state loads in prose ("Liam squatted 3×8 at 95") →
+3. **Eval, invariant class, 100%.** Inputs that state loads in prose ("Athlete One squatted 3×8 at 95") →
    the parse carries no magnitude, and the prefill + submit of that parse is refused by acceptance 3.
    This is the class EVAL-0 builds and the class that must fail with the boundary message, not the
    accuracy message.

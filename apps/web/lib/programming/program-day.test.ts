@@ -22,7 +22,7 @@ describe('toProgramDay — per-kid reps precedence', () => {
     expect(toProgramDay([row])[0].targetReps).toBe('5');
   });
 
-  it('prefers the kid’s own reps override (Scarlett deviates on the pull-up)', () => {
+  it('prefers the kid’s own reps override (Athlete Two deviates on the pull-up)', () => {
     const overridden = { ...row, targetReps: '4-5', reps: '5, last AMRAP' };
     expect(toProgramDay([overridden])[0].targetReps).toBe('5, last AMRAP');
   });

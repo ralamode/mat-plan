@@ -7,6 +7,8 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> **§9 re-derived 2026-10-08** when `OSS-1`'s sweep landed — the real surface was wider than §9 recorded
+> (two further classes), and §9 now says what is true after the sweep rather than what was owed before it.
 >
 > **Is it stale?** Run this; if it prints anything, re-read the sections those files feed:
 >
@@ -223,39 +225,115 @@ admitted gap. Filling them is on `PRIV-2`'s acceptance — the PR that publishes
 ## 9. Personal data committed to this public repository
 
 🔴 **This is the sharpest thing in this document.** It is not about the database; it is about the
-source tree, and it is not fixed yet.
+source tree.
 
-**The committed data is broader than [plan.md](../plan.md)'s `OSS-1` audit records.** That audit (dated
-2026-08-11, and flagged stale in its own blocker box) concluded there is _"no measurement history… no
-health record, and no log data"_. **That conclusion no longer holds**: a data correction landed in
-2026-10-01 carrying log-row identifiers and weigh-in clock times for a named minor. This file is the
-live inventory; `OSS-1` points here.
+**The committed data was broader than [plan.md](../plan.md)'s `OSS-1` audit recorded.** That audit
+(dated 2026-08-11, and flagged stale in its own blocker box) concluded there is _"no measurement
+history… no health record, and no log data"_. **That conclusion did not hold**: a data correction
+landed in 2026-10-01 carrying log-row identifiers and weigh-in clock times for a named minor.
 
-Two minors' given names appear across roughly fifty files, in five classes that need different fixes:
+> ### ✅ Swept 2026-10-08 — `OSS-1` follow-up
+>
+> **The two children's given names are out of the working tree**, along with their ages and the real
+> bodyweight values that were quoted as contract examples. **Before: 309 occurrences across 57 files.
+> After: 1**, listed under "What remains" below.
+>
+> ⚠️ **A rename is not a removal, and this document does not claim it is.** `git log -S` on either
+> removed name still finds every prior value across the repository's history, and the commit author and
+> email are in every commit regardless. What the sweep achieves is the **forward** exposure: every
+> future commit, preview deploy and PR screenshot is clean **by construction**, which is the property
+> that matters when another household is invited in (`TEN-1`). History rewriting was out of scope and
+> was not done.
 
-| Class                                | Where                                                                                                                                                        | What is actually there                                                   |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Names bound to prescribed loads      | `packages/shared/src/programming.ts`                                                                                                                         | A named minor wired to a per-child training load, in shipped source      |
-| A per-minor program table            | `docs/programs/kids-sc-foundation-archived.md`                                                                                                               | Per-child load and rep **columns** across a 37-line program              |
-| Real log rows quoted as doc examples | `packages/shared/src/csv/row.ts`, `docs/csv-export-contract.md`                                                                                              | Named minors with performance values                                     |
-| Dated incidents about a named minor  | `packages/db/migrations/0012_*.sql` (an **applied migration**), `strength-form.tsx` (a **shipped component**), `packages/db/scripts/corrections/registry.ts` | Weigh-in frequency, dates and clock times                                |
-| Names as exported API symbols        | `packages/db/src/index.ts`                                                                                                                                   | A rename is an API change across a workspace boundary, not a string edit |
+### The surface, and what each class got
 
-Also committed: the seed's **fixed, zero-entropy** household and profile `public_id`s
+The real surface was **57 files / 309 occurrences** — the five classes below plus **a sixth this
+section had missed**. Established with `git grep -il` and reconciled against this table (note git's
+POSIX regex has no `\b`, so the counts come from a token pattern, not a word-boundary one).
+
+| Class                                     | Where                                                                                                                                                                                           | Fix                                                                                                                                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fixture identities                        | `packages/db/src/seed.ts`, `packages/shared/src/seed-ids.ts`, `packages/db/scripts/verify.ts`, `apps/web/e2e/**`, unit tests                                                                    | **Renamed** to role names, hoisted to `SEED_PROFILE_NAME` / `SEED_PROFILE_2_NAME` so the next rename is two lines                                                                                                                                  |
+| Names as exported API symbols             | `packages/db/src/index.ts`, `packages/db/src/seed.ts`, `apps/web/lib/routine/contract.test.ts`                                                                                                  | **Renamed, clean break** — no deprecated alias. See the decision below                                                                                                                                                                             |
+| Names bound to prescribed loads           | `packages/shared/src/programming.ts`                                                                                                                                                            | **Renamed.** The claim "a named minor wired to a per-child load, in shipped source" was **stale**: `PROGRAM_SEED` ships every per-athlete load as `null` (`db:verify` asserts it). The names were identifier labels and one doc-comment example    |
+| A per-minor program table                 | `docs/programs/kids-sc-foundation-archived.md`                                                                                                                                                  | **Scrubbed, not renamed** — the per-athlete load/rep columns are deleted. See the decision below                                                                                                                                                   |
+| Real log rows quoted as doc examples      | `packages/shared/src/csv/row.ts`, `apps/web/lib/csv/strength-log.test.ts`, `docs/csv-export-contract.md`                                                                                        | **Scrubbed, not renamed** — the examples now quote the already-cleared `docs/samples/legacy-csv/` corpus verbatim. See the decision below                                                                                                          |
+| Dated incidents about a named minor       | `packages/db/scripts/corrections/registry.ts` + its `README.md`, `packages/db/scripts/correct.ts`, `strength-form.tsx`, `docs/status.md`, a changelog fragment                                  | **De-named** — the correction `name`s now describe the **defect**, not the person; prose reads "an athlete"                                                                                                                                        |
+| 🆕 **Real bodyweight VALUES as examples** | `docs/csv-export-contract.md`, `docs/csv-recording-gaps.md`, `packages/shared/src/csv/bodyweight.ts`, `apps/web/lib/csv/strength-log.test.ts`, `apps/web/lib/entries/format-value-unit.test.ts` | **A class this section missed.** `71` / `71.0` / `71.2` / `71.4` were a real weigh-in series, which is the one class [SECURITY.md](../../.github/SECURITY.md) singles out as privileged. Replaced with the sample corpus's already-replaced values |
+| 🆕 **Two minors' ages and bodyweights**   | `docs/plans/v1-10-two-week-program-source.md` frontmatter, and the `OSS-1` finding row in `docs/plan.md` that **restated** them                                                                 | **A class this section missed.** Removed from both                                                                                                                                                                                                 |
+
+**Still committed, deliberately:** the seed's **fixed, zero-entropy** household and profile `public_id`s
 (`packages/shared/src/seed-ids.ts`) — which is why `SEC-6` exists and why no code may ever treat a seed
-id as authorization.
+id as authorization. Unchanged by this sweep.
 
-**No bodyweight _value_ is committed** in the corrections registry — that was deliberately dropped when
-it was written. Separately, `docs/samples/legacy-csv/` holds weigh-in rows **with values**; that
-folder's provenance paragraph says they are synthesised from real files with the values replaced, and
-that reading is credible. Its summary table used to label them "Real data"; that contradiction is
-corrected rather than left for the next reader to re-litigate.
+`docs/samples/legacy-csv/` keeps its own `Athlete A` / `Athlete B` labels and its 2020 dates: a
+different corpus, deliberately **not** fixtures, scrubbed before it ever reached `main` and cleared for
+release in its own [README](../samples/legacy-csv/README.md). The fixtures use `One`/`Two` instead,
+because the program's day roles are already Day A / Day B.
 
-**A rename is not a removal.** `git log -S` finds what a working-tree edit takes out, and the commit
-author and email are in every commit regardless. Separately, the read-only PR refs #152–#167 still
-carry a third-party roster of minors that only GitHub Support can purge (`OSS-1`).
+### The three judgement calls, with reasoning
 
-**Status:** the rename is a **Beta 0 blocker** on `OSS-1`, not work this document does.
+**1. The exported symbol took a clean break, not an alias.** The second profile's seeded-routine export
+is now `SEED_ATHLETE_TWO_ROUTINE`. Every consumer was checked first: three in-workspace sites (the definition
+in `packages/db/src/seed.ts`, the re-export in `packages/db/src/index.ts`, and one import in
+`apps/web/lib/routine/contract.test.ts`), plus doc mentions. `@mat-plan/db` is `private: true` and has
+never been published, so there is no downstream consumer to deprecate for — and an alias would have
+**left the name in the public API surface**, which is the one thing the sweep exists to remove. The
+A≠B routine contrast the symbol carries is load-bearing and survives unchanged.
+
+**2. The archived program table was scrubbed, not renamed** —
+`docs/programs/kids-sc-foundation-archived.md`. It carried four columns (a load and a rep target per
+child) across 21 rows: a minor's prescribed training programme. **A rename only de-labels that; the
+numbers were the exposure.** Kept: the day split, the order, the movements and the shared prescription —
+the part a re-seed actually needs. Dropped: the per-athlete numbers, which that file's own note already
+said must be re-confirmed against logged working sets before use, so there was no forward value to trade
+against. The shipped `PROGRAM_SEED` already seeds every per-athlete load as `null`, so the scrubbed table
+matches how a program is seeded today.
+
+**3. The CSV contract's example rows now quote the cleared corpus verbatim** —
+`docs/csv-export-contract.md`, `packages/shared/src/csv/row.ts`,
+`apps/web/lib/csv/strength-log.test.ts`. These were **pre-scrub** copies of rows that already exist,
+scrubbed, in `docs/samples/legacy-csv/` — the doc was quoting a version of its own evidence file that
+the evidence file no longer contains. **Checked before changing them, because they are load-bearing for
+the byte-faithful contract**: the property each vector pins is the _bare inch marks in an unquoted field_
+(`30" box`), the unescaped comma, `SKIPPED`, `sub-failure` and the slash-list arity — **not** the name or
+the date. So aligning them to the committed sample rows preserves every tripwire byte-for-byte while
+removing the names, the real dates and the real bodyweight values. No real row is required to pin the
+contract; a real _shape_ is, and the shape is unchanged. This is strictly better than deleting the
+examples, and it makes the quoted rows checkable against a committed file instead of unverifiable prose.
+
+**Retained with reasons: `docs/plans/v1-10-two-week-program-source.md`.** Its ages and bodyweights are
+gone. Its **de-named per-athlete load splits stay**, because they are the evidence for a schema decision
+— that `prescription_targets` must be **per profile** rather than per block, since two athletes on one
+prescription genuinely carry different loads. Delete the split and the only record of _why_ that table
+exists goes with it. This follows the standard the repo already set and reviewed for
+`docs/samples/legacy-csv/`: names, dates and bodyweight **values** out, de-named strength loads in. The
+difference from decision 2 is that the archived doc is **packaged for re-seeding** (its numbers are an
+instruction), while this one is a dated **design record** (its numbers are testimony about shape), and the
+file now says so at the top. A stricter call remains available if the maintainer wants it.
+
+### What remains — residuals, not oversights
+
+1. 🔴 **Git history.** `git log -S` finds every removed value across the repository's history, and the
+   commit author and email are in every commit. Removing it means `git filter-repo` plus a force-push and
+   a re-clone, which was **not** in this sweep's scope and remains an open, un-chosen option
+   ([plan.md](../plan.md) → `OSS-1` → "The names question").
+2. ⚠️ **One occurrence in the working tree, and it stays.**
+   `packages/db/migrations/0012_bodyweight_one_per_day.sql` carries a given name in a **comment**. It is an
+   **applied** migration: the forward-only guard (`.github/workflows/ci.yml`) permits only **added** files
+   under `packages/db/migrations/`, because a migration's SQL is hashed in `__drizzle_migrations` and
+   editing it makes prod and the repo diverge. Changing a comment is not worth breaking the one DB rule
+   that has no exception. It goes only if history is rewritten, which is residual 1.
+3. ⚠️ **The `screenshots` branch.** `prune-screenshots.yml` deletes image files when a PR closes but does
+   not rewrite that branch, so earlier screenshots of the picker and Today remain reachable in its history.
+   Noted, not acted on.
+4. ⚠️ **PR refs #152–#167** still carry a third-party roster of minors that only GitHub Support can purge
+   (`OSS-1`).
+5. **The production database is untouched, on purpose.** The real names in `profiles.name` are the
+   household's own legitimate data, and the seed is `onConflictDoNothing` on `public_id`, so a re-seed
+   cannot and does not rename a live row. No correction was written and none is proposed.
+
+**Status:** `OSS-1`'s rename is **done**; the Beta 0 blocker it held is cleared.
 
 ---
 

@@ -10,7 +10,7 @@
 Page back through previous days to see what was logged — **and fix what you find.** Ray's ask, and
 the brainstorm's **N1**, which is two sentences and this plan originally shipped only the first:
 
-> _"did Scarlett log her weigh-in yesterday?"_ · _"I mistyped Tuesday's squat"_
+> _"did Athlete Two log their weigh-in yesterday?"_ · _"I mistyped Tuesday's squat"_
 
 Scope is that one need. N2 (what's coming) is inert until day-grained programming exists; N3
 (progress over time) is V1-16 and looks empty without accumulated data.
