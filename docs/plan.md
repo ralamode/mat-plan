@@ -1965,6 +1965,22 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   **Pulled forward** from "after the MVP" (2026-09-28): Ray is using the app and cannot add himself,
   which makes this the first real onboarding gap rather than a nicety.
 
+  **The shipped version is full athlete CRUD** _(maintainer, 2026-10-08)_. ONB-0's empty-state link
+  to GitHub ("How athletes get added") is interim, and PROF-1 removes it (ONB-0 plan, finding E23). No
+  household outside the maintainer's reaches that screen first, because Beta 0 ships PROF-1's create
+  alongside ONB-0.
+  - **Create, read and edit live on `/p`.** That means the dashed "+ Add athlete" tile above, plus
+    rename and `kind`.
+  - **Delete does not have to live on `/p`.** The maintainer's first idea: an **Edit** toggle on `/p`
+    reveals a delete control on each athlete tile, and the parent **types the athlete's name to
+    confirm**. A settings surface (SET-1) may be the more deliberate home. The UX panel
+    explores both; neither is decided.
+  - **Whatever the surface, delete is PRIV-1's hard delete**, not a new soft-delete button: the
+    athlete's rows go, soft-deleted ones included, and the deletion is recorded in the ledger. That
+    makes it irreversible, so the confirm step should offer **archive** (Beta 1), the reversible
+    alternative, before it offers delete. It sits behind Beta 1's step-up, which this row adds to that
+    list.
+
 - **YDP — run the youth daily program (the second real program).** _(Ray, 2026-09-23.)_ Everything the
   app needs before [Ray's daily A/B program](./samples/youth-daily-program/README.md) — the one his kids
   actually run, every day, on paper — can be logged in mat-plan. Grouped because they share one goal and
