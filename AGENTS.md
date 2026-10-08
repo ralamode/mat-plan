@@ -67,7 +67,8 @@ rather than adding to the mess. Moving files is cheap on a branch, expensive onc
   `roadmap.md` (the forward-looking cross-program view, by pillar),
   `parallel-work.md` (the rubric for when two tracks may run at once),
   `definition-of-done.md`, `runbooks.md` (manual ops), `lessons.md` (gotchas), `tech-debt.md`
-  (accepted shortcuts + payoff plan), `plans/`, future `decisions/` ADRs).
+  (accepted shortcuts + payoff plan), `privacy/` (the notice people read + the data inventory it is
+  derived from), `plans/`, future `decisions/` ADRs).
 - **`.github/`** — GitHub meta: `SECURITY.md`, `PULL_REQUEST_TEMPLATE.md`, `workflows/`, `ISSUE_TEMPLATE/`.
 - **`apps/web/`** — the Next.js app, grouped by responsibility (not a flat dump by file type):
   `app/` (routes + `layout`/`loading`/`error`), `components/` (`ui/` primitives vs feature folders),
@@ -183,6 +184,14 @@ logging, a new dependency or a third-party call gets the `privacy-reviewer` lens
 personal data does this start holding, who can now read it, where does it leave to, and can it still be
 exported and deleted. A real value committed anywhere in the tree is a P0, and deleting it from `HEAD`
 is not removing it.
+
+**The review was done (PRIV-1, 2026-10-07): [docs/privacy/](./docs/privacy/).**
+[`notice.md`](./docs/privacy/notice.md) is what people are told;
+[`data-inventory.md`](./docs/privacy/data-inventory.md) is the cited evidence it is derived from — all
+18 tables, every processor, retention, and what is committed to this public repo. **Check a diff
+against the inventory, and update it in the same PR**: a change to what is stored, who receives it, or
+how long it is kept, made without touching that file, silently makes a published privacy notice false.
+The deletion procedure is [runbooks.md](./docs/runbooks.md) → "Delete a household and everyone in it".
 
 ## Git & branch workflow
 

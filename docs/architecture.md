@@ -29,6 +29,9 @@ flowchart TB
   NEON[("Neon Postgres<br/>pooled = runtime · direct = migrations")]
   CLERK["Clerk<br/>household auth"]
   CLAUDE["Claude skills<br/>/retro · /daily-plan"]
+  SENTRY["Sentry<br/>server + edge errors only"]
+  UPSTASH["Upstash Redis<br/>gate rate limit"]
+  GHA["GitHub Actions<br/>migrate.yml"]
 
   UI -->|"Server Action"| ACT
   UI -->|"RSC render"| RSC
@@ -37,7 +40,17 @@ flowchart TB
   ACT -.->|"auth()"| CLERK
   RH -.->|"auth()"| CLERK
   RH -->|"CSV export v1 · MCP+REST v3"| CLAUDE
+  ACT -.->|"scrubbed errors"| SENTRY
+  RSC -.->|"scrubbed errors"| SENTRY
+  ACT -.->|"visitor IP, gate only"| UPSTASH
+  GHA ==>|"prod DDL + seed on every merge<br/>holds DATABASE_URL_UNPOOLED"| NEON
 ```
+
+⚠️ **This is the containers view, not the egress list.** Sentry, Upstash and GitHub Actions are drawn
+now because each receives something, and **GitHub Actions holding the production database credential**
+is the edge people miss. But **Vercel is where every value entered actually passes through**, and its
+platform logs hold IP + path. The complete, cited list of who receives what is
+[privacy/data-inventory.md](./privacy/data-inventory.md) §7, which owns it.
 
 ## 2. Write path — logging one entry
 
@@ -333,3 +346,51 @@ flowchart LR
 > Migrations serialize by rule (one per PR, drift-checked, forward-only), so schema-touching PRs stay
 > on the spine; the parallel band is app-layer (no new migrations). The **training-log day**
 > (`2026-07-20`) becomes fully loggable once V1-4 + V1-8 + V1-5 + V1-6 land, and V1-13 exports it.
+
+## 8. Household deletion — the only path that removes rows (PRIV-1)
+
+The procedure is [runbooks.md](./runbooks.md) → "Delete a household and everyone in it"; this is its
+shape. It spans three systems and is irreversible, which is why the ordering is drawn rather than
+left in prose. Two edges carry the non-obvious constraints: **Clerk ids are captured before the
+transaction** (after AUTH-1 the mapping lives in the rows the transaction destroys), and **`entries`
+is deleted before `sessions` and `supersets`** (it holds FKs to both).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor OP as Operator
+  participant CH as Household<br/>(verified channel)
+  participant LED as Deletion ledger<br/>(outside git + DB)
+  participant APP as App
+  participant PG as Neon Postgres
+  participant CLK as Clerk
+
+  CH->>OP: "please delete us"
+  OP->>CH: confirm on the INVITATION channel
+  Note over OP,CH: never the address that asked
+  OP->>CH: scheduled for T+7, here is how to cancel
+  OP->>LED: request date · household public_id · channel
+  OP->>CLK: read user ids
+  OP->>LED: Clerk user ids (BEFORE the transaction)
+  CH->>APP: household exports its own data
+  Note over OP,CH: export is PARTIAL — offer a full extract
+  OP->>PG: cut restore branch (whole DB — not a per-household net)
+  OP->>CH: re-confirm, immediately before applying
+  OP->>PG: dry run — counts + cross-household pre-flight
+  alt any pre-flight count non-zero
+    PG-->>OP: STOP
+  else clean
+    OP->>PG: BEGIN · re-check · 12 DELETEs · re-count · COMMIT
+    Note over PG: entries BEFORE sessions and supersets<br/>no deleted_at in any WHERE
+  end
+  OP->>CLK: delete the users
+  OP->>LED: apply date
+  OP->>PG: delete the restore branch (T+7 after apply)
+  OP->>LED: branch-deleted date, then clear the entry
+  OP->>CH: done + what remains (notice → Deleting your data)
+```
+
+⛔ **Two preconditions this diagram assumes**: the household is **not in the seed** (`db:seed` runs on
+every merge and would re-create it — `OPS-2`), and **`OPS-3`'s per-household restore has been
+rehearsed** (without it a mistaken deletion is not practically recoverable, because the branch above
+restores _everyone_).

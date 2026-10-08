@@ -218,6 +218,25 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   design the control. Read first:
   [strength-logging](./features/strength-logging.md) · [write-path](./features/write-path.md).
 
+<a id="pick-2"></a>
+
+- **PICK-2 — a type-ahead that suggests real words before a new movement is created.** _(Maintainer,
+  2026-10-08.)_ PICK-1 makes choosing an **existing** movement the easy path. This row covers the
+  path that remains: a name that is not in the catalog. Before `findOrCreateMovementId` creates a row,
+  the field suggests (1) the closest catalog movements, so "Bulgarian Split Squats" offers "Bulgarian
+  Split Squat", and (2) correct spellings for misspelled words, so "Bulgarain" offers "Bulgarian".
+  Suggestions never block: movement names are full of jargon a dictionary does not know ("Zercher",
+  "Copenhagen plank"), so the athlete can always keep what they typed.
+  - **English only.** Translating the word list waits on the [i18n](#i18n--externalize-strings-post-mvp-near-the-bottom)
+    work, and the maintainer judged it probably not needed.
+  - **Performance is a design constraint**, not polish: a full English word list shipped to the
+    browser would cost LCP on a phone. Whether matching runs server-side or against a trimmed list
+    is a question for this row's plan.
+  - **Not covered:** movements that are already misspelled. Those are still fixed with a `db:correct`
+    correction; this row only stops new ones.
+  - **Gated on PICK-1**, whose picker this extends. **Owes** a plan, the engineering panel, and a UX
+    panel (suggestions on a phone, mid-set, must not cost a tap when the name is right).
+
 ## AI-1 — NL logging ([plan](./plans/ai-1-nl-logging.md))
 
 ⏸ **PARKED 2026-10-06 — off P0, pending `PICK-1` usage data.** _(the maintainer.)_ 49 live entries
@@ -296,6 +315,25 @@ personal data performed 2026-08-11** and the (small) work that audit actually ju
 
 ### Audit findings — what is and isn't in the repo
 
+> 🔴 **Superseded 2026-10-07 by [privacy/data-inventory.md](./privacy/data-inventory.md) §9, which is
+> now the live inventory of committed personal data.** `PRIV-1` re-walked the tree and the picture is
+> broader than this audit, which was already flagged stale in its own blocker box above — **and its
+> Assessment is now factually wrong.** Two things changed:
+>
+> - **~50 files, not 29**, in five classes this audit does not separate: names bound to per-child
+>   prescribed loads in shipped source, a whole per-minor program table in `docs/programs/`, real log
+>   rows quoted verbatim as documentation examples, dated incidents about a named minor in an
+>   **applied migration** and a **shipped component**, and names as **exported API symbols** (so a
+>   rename is an API change across a workspace boundary, not a string edit).
+> - **"No log data" is no longer true.** A correction merged 2026-10-01 — **after** this audit —
+>   committed three live `entries.public_id` values with exact weigh-in timestamps for one named
+>   minor (`packages/db/scripts/corrections/registry.ts`). No bodyweight _value_, deliberately. But
+>   weigh-in dates and clock times for a named child are log data.
+>
+> **PRIV-1 raised this to P0 and moved the rename from a follow-up to a Beta 0 blocker.** The tables
+> below are kept as the historical record of what was believed on 2026-08-11; **do not cite them as
+> current.**
+
 Audited across all 221 commits, not just the working tree.
 
 **Present:**
@@ -319,10 +357,20 @@ Audited across all 221 commits, not just the working tree.
 
 ### Assessment
 
-**The exposure is two first names plus a youth strength program.** There is no measurement history, no
-date of birth, no health record, and no log data. Earlier planning notes described this as "minors'
-health data" — that was **inferred from the schema's capability rather than from what is actually
-committed**, and the audit does not support it.
+> ⚠️ **This Assessment is wrong as of 2026-10-07 and is kept only as the record of what was believed.**
+> Read [privacy/data-inventory.md](./privacy/data-inventory.md) §9 instead. The specific sentence that
+> failed is the one about log data, and it failed because a correction landed _after_ this was
+> written — which is the argument for the inventory being a live document with a staleness command
+> rather than a dated audit.
+
+**The exposure is two first names plus a youth strength program.** ~~There is no measurement history, no
+date of birth, no health record, and no log data.~~ There is **no date of birth** (still true) — but
+there _is_ committed log data: weigh-in dates and clock times for a named minor, in
+`packages/db/scripts/corrections/registry.ts`, plus per-child prescribed loads bound to names in
+shipped source and in `docs/programs/`. Earlier planning notes described this as "minors'
+health data"; this audit dismissed that as **inferred from the schema's capability rather than from
+what is actually committed**, and on the narrow question of bodyweight _values_ that dismissal still
+holds. On the broader question it does not.
 
 The one real (and modest) consideration: the repo will be linked from a resume and LinkedIn under
 Ray's real name, so publishing creates a permanent, searchable association of the form _"Ray Baker's
@@ -464,14 +512,22 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
      the origin line and the two stacked CTAs. Ray removed the README hook and the gate-explanation
      line after reviewing the UX-panel mockups; `/gate` loses "Private preview."; the CTA reads "See
      how it's built on GitHub". Deviations from the plan are listed in the PR.
-  2. **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. The kids' names
-     are already published in `seed.ts`, `global.setup.ts`, `steps.ts` **and `docs/runbooks.md`** (its
-     "Rename / correct a seeded profile" entry embeds one in committed SQL — added to this list by
-     OPS-1's privacy panel, which found the file list incomplete). Renaming them closes the real
-     exposure and makes every PR screenshot safe by construction. Decided by Ray 2026-10-01.
-     **Note the seed's shape:** `onConflictDoNothing` on `public_id` means a rename is **fresh-DB
-     only**, so each live database needs the `runbooks.md` correction — except the OPS-1 preview
-     project, which is disposable and takes the rename by being reset, not corrected.
+  2. 🔴 **OSS-1 follow-up — rename the seed fixtures' real first names** to neutral ones. Decided by
+     the maintainer 2026-10-01. **Re-scoped and raised to a Beta 0 blocker by PRIV-1 (2026-10-07).**
+     This said three files — `seed.ts`, `global.setup.ts`, `steps.ts`. It is **~50**, across five
+     classes that need different fixes, inventoried with cites in
+     [privacy/data-inventory.md](./privacy/data-inventory.md) §9. Two of them are not string edits:
+     the names are **exported API symbols** (`packages/db/src/index.ts`), so a rename crosses a
+     workspace boundary; and a **per-child load/rep table** in `docs/programs/` plus **real log rows
+     quoted as examples** in the CSV contract are not neutralised by a rename at all — they need their
+     own scrub decision. ⚠️ **A rename is not a removal:** `git log -S` finds it, and the commit author
+     is in every commit. Renaming still closes the forward exposure and makes every PR screenshot safe
+     by construction, which is why it is worth doing anyway.
+     **Also in the list, added by OPS-1's privacy panel:** `docs/runbooks.md`'s "Rename / correct a
+     seeded profile" entry embeds one name in committed SQL. **Note the seed's shape:**
+     `onConflictDoNothing` on `public_id` means a rename is **fresh-DB only**, so each live database
+     needs the `runbooks.md` correction — except the OPS-1 preview project, which is disposable and takes
+     the rename by being reset, not corrected.
   3. **§B — the hero image.** Deliberately last: 🔴 **`next/image` on a `public/` asset is broken in
      this app today** — measured, 400 for every caller, gated or not, because the optimizer's internal
      fetch re-enters the proxy with no cookie. §B un-gates `public/landing/`, scopes
@@ -1085,6 +1141,19 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   point-in-time restore rolls back other families and un-deletes deleted ones. One drill; delete the
   drill branch. _(Beta 0.)_
 
+  **The deletion ledger is now defined** — `PRIV-1` was its first writer, so it specified it rather
+  than naming an artifact that did not exist:
+  [runbooks.md](./runbooks.md) → "The deletion ledger" has the location (**outside git and outside the
+  restorable database**), the field list, and its own retention. **Inherit that shape; do not invent a
+  second.** The invariant `OPS-3` owes it: **a per-household restore replays the ledger before the
+  data is served**, or a restore silently resurrects a household that asked to be deleted.
+
+  ⛔ **`OPS-3` is now a precondition of the first real household deletion**, not just an exit
+  criterion. Until a per-household extract exists and has been rehearsed once, a mistaken or
+  fraudulent deletion is **not practically recoverable** — the restore branch `PRIV-1`'s procedure
+  holds is a whole-database copy, so using it would roll back every other family
+  ([priv-1 plan](./plans/priv-1-privacy-review.md) → review log S-N1).
+
   **Two locations, not one, since OPS-1.** The deletion ledger must walk the production Neon project
   **and** `mat-plan-preview`, which holds the seed's fixture profiles plus whatever any preview wrote
   ([service-setup.md](./service-setup.md) → "Where personal data lives"). The preview copy's deletion
@@ -1109,12 +1178,60 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the roadmap's pillar table is now the stated membership test. **AI-1 depends on it**; see
   [ai-1-nl-logging](./plans/ai-1-nl-logging.md) → EVAL-0.
 
-- **PRIV-1 — privacy review, notice, consent, retention, deletion.** SECURITY.md's own trigger fires 🚀 **Pulled forward to start now (2026-10-07):** it is a **hidden gate on `AUTH-1`** — the Clerk/Google consent screen needs the privacy-policy URL — so it is upstream of auth rather than a sibling of onboarding, and it is the row this repo says should not be designed casually ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
-  (multiple families + third-party processors). A notice listing data and processors, consent at
-  sign-up, a written retention policy, a defined deletion (hard delete + Clerk users, residuals stated),
-  run as a guarded correction for Beta 0 and self-serve with step-up in Beta 1, and SECURITY.md's
-  threat model rewritten for many households. Signed off by a named reviewer; not legal advice.
-  _(Beta 0.)_
+- **PRIV-1 — privacy review, notice, consent, retention, deletion.** ✅ **The documents are written**
+  ([plan](./plans/priv-1-privacy-review.md), [docs/privacy/](./privacy/)): a plain-language
+  [notice](./privacy/notice.md) listing what is stored and every processor, a retention policy, a
+  defined household deletion ([runbooks.md](./runbooks.md)) with the residuals stated, the consent
+  requirements `AUTH-1` must wire, and SECURITY.md's threat model rewritten for many households. The
+  evidence it is derived from — all 18 tables, the processors, the committed-data inventory — is
+  [data-inventory.md](./privacy/data-inventory.md). **Signed off by the accountable role, with a date**
+  (amended from "a named reviewer": `AGENTS.md` forbids personal names in docs, so the exit criterion
+  was unsatisfiable as written). **Not legal advice.**
+  **Two code follow-ons remain — `PRIV-2` is the actual `AUTH-1` gate.** _(Beta 0.)_
+
+  🔴 **PRIV-1's sharpest finding is not in PRIV-1's scope:** committed personal data about minors is
+  far broader than `OSS-1`'s audit records — ~50 files, raised to **P0**, and `OSS-1`'s audit
+  conclusion is now wrong. See `OSS-1` and [data-inventory.md](./privacy/data-inventory.md) §9.
+
+- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.** The real `AUTH-1` gate: the
+  Clerk and Google consent screens need a reachable privacy-policy URL. A page, one entry in
+  `PUBLIC_PATHS` (`apps/web/lib/access-gate.ts` — the single definition), a footer link, one UX
+  reviewer. ⚠️ **Not a one-file PR:** there is **no markdown pipeline in the tree**, so it must
+  generate the page from [notice.md](./privacy/notice.md) with a drift test, or hand-transcribe it and
+  keep two copies of a privacy notice — the recommendation is the former, and it is the maintainer's
+  call ([plan](./plans/priv-1-privacy-review.md) → Alternatives). Static or generated only — never a
+  file read keyed on a request param. **Its acceptance also carries PRIV-1's four unfilled blanks:**
+  the Neon / Sentry / Vercel retention windows and the contact route. _(Beta 0.)_
+
+- **PRIV-3 — the household deletion as a guarded script, with a `db:verify` proof.** Wraps
+  [runbooks.md](./runbooks.md)'s procedure so the dry run, the target-host print and the
+  one-transaction wrapper come from a runner rather than an operator's care. ⚠️ **Not a drop-in
+  correction:** `Correction.run` takes no target and the runner ignores positional args, so it needs a
+  `--household <public_id>` flag — **a runner change, which needs its own plan** — and **no household
+  id may be committed** (that plus the public `Applied` table would publish a register of who asked to
+  be erased). The deletion correction inverts corrections rules 2 and 5, declared in
+  [that README](../packages/db/scripts/corrections/README.md). **The `db:verify` proof is the point,
+  not the polish:** it is the only thing that catches a 19th per-household table escaping the
+  runbook's hand-maintained delete order, and the panel found exactly that class of defect by
+  reading. _(Beta 0.)_
+
+  **Retention: decided in principle** _(maintainer, 2026-10-07)_. **Raw training history is kept for as
+  long as the household is active.** There is no rolling window and no summarize-then-discard step:
+  - Summaries would break the byte-faithful CSV export, the v2 engine's per-set history, and
+    [CLONE-1](#clone-1)'s "who ran which version" record.
+  - A summary of a child's bodyweight is still a child's health data, so summarizing does not reduce
+    the privacy exposure.
+  - The volume is trivial (about 51 rows in prod after several weeks).
+
+  The written policy spends its effort on **deletion** instead. Three items:
+  1. A **hard delete on request**, per athlete and per household, that includes soft-deleted rows.
+     Today nothing is ever hard-deleted, so a "deleted" row is kept forever.
+  2. A **purge window** after which soft-deleted rows are hard-deleted. This row's plan sets N.
+  3. **What a departed household's data becomes**, including the residual copies in backups and Neon
+     branches, which the per-household restore runbook must respect through its deletion ledger.
+
+  Until this ships, `SECURITY.md`'s "defined retention/delete path" is unmet, and this paragraph is the
+  record that the gap is known.
 
 ## AUDIT-1 — baseline audit fix queue ([report](./audits/2026-09-30-baseline.md))
 
@@ -1270,6 +1387,73 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
   **Still open from before:** does a "program" subsume the daily routine or sit beside it? · **needs a UX
   panel** (it reshapes the coach editor) and an engineering panel (migration + a new subsystem).
+
+<a id="clone-1"></a>
+
+- **CLONE-1 — clone a workout, edit the copy, choose which athletes move to it.** _(Maintainer,
+  2026-10-07.)_ The need is to **replace** a workout, not to edit the one in use: copy Strength A, change
+  its movements, sets and reps, then move an athlete onto the copy. Editing in place (V1-22 chunk 4)
+  is a different need.
+
+  **Decided: per athlete, not household-wide** _(maintainer, 2026-10-07)_. Saving the copy asks which
+  athletes move to it; the default is none. Moving one closes their current
+  [`program_assignments`](./decisions/0007-scheduling-model.md) row (`active_to`) and opens one on the
+  copy (`active_from` = today). Nothing is deleted, so the old program, each entry's snapshotted
+  prescription ([ADR 0005](./decisions/0005-programming-model.md) decision 5), and the assignment dates
+  together say who ran which version, when. That is most of what versioning would buy, without a version
+  subsystem.
+
+  - **Rejected: household-wide replacement.** "The newest block per day role wins" (programming guide,
+    invariant 3) would make a copy replace Strength A for **every** athlete at once, including the
+    maintainer's own training, with no way to keep one athlete on the old version. It needs no new
+    table, which is what made it tempting, but `program_assignments` would supersede it.
+  - **Grain:** the clone is a **block** (`program_blocks` + its `prescriptions` + `prescription_targets`),
+    because an assignment points at a block. Cloning a single day inside a block is the `workouts` arc,
+    which [ADR 0007](./decisions/0007-scheduling-model.md) records but does not authorize.
+
+  **Gated on, in order:**
+  1. V1-22 chunks 2 and 3 (the log-time snapshot writer and the backfill). Until both land, switching
+     an athlete's program rewrites the `prescribed` column of their past exports.
+  2. SCHED-1's `program_assignments`, plus Today reading the athlete's **assignment** instead of
+     `programDayRows`' newest block. ADR 0007 decision 4 prices that read change as **byte-affecting**
+     for the CSV export, so CLONE-1 is the first row that needs it decided.
+  3. The V1-22 editor (chunks 4 and 6), which edits the copy rather than the original.
+
+  **Out of scope:** comparing two versions, and a version history screen. ADR 0005 keeps versioning
+  additive "whenever it earns a screen"; whether the copy records a `cloned_from` link is a question for
+  this row's plan. **Owes** a plan, the engineering panel with the DB-safety lens (block creation and a
+  copy across three tables), and a UX panel (the "who moves to this version?" step). Milestone: not yet
+  assigned; Beta 1 ("program editing, schedules") is the natural fit.
+
+<a id="retire-1"></a>
+
+- **RETIRE-1 — archive a program so it stops appearing, without losing its history.** _(Maintainer,
+  2026-10-08.)_ [CLONE-1](#clone-1) makes old versions pile up: every replacement leaves the previous
+  program behind. Archiving hides a program from the program editor, from the list of programs to clone,
+  and from new assignments. It changes nothing about the past: entries, their snapshotted
+  prescriptions, and the assignment dates still render and export exactly as before.
+  - **Archived is not deleted.** `deleted_at` means "this was removed", and soft-deleted parents drop
+    their children out of live reads (the soft-delete-through-live-parents rule). An archived program's
+    history must stay readable, so archiving needs its own marker, and the plan decides its shape.
+  - **Undo is required:** an archived program can be restored.
+  - **Open for the plan:** archiving a program that an athlete is still assigned to. Either it is
+    refused, or it closes the open assignments; both are defensible, and the UX panel should weigh
+    which one surprises a parent less.
+  - **Gated on CLONE-1** (which creates the pile) and SCHED-1's assignments. **Owes** a plan, the
+    engineering panel with the DB-safety lens, and a UX panel.
+
+<a id="hist-1"></a>
+
+- **HIST-1 — see what program an athlete was running on any past date.** _(Maintainer, 2026-10-08.)_
+  "What was this athlete doing in March, and how did it go?" The data will exist once CLONE-1 ships
+  (assignment rows with start and end dates, plus each entry's snapshotted prescription), but no screen
+  shows it. Two candidate surfaces, for the UX panel to choose between or combine:
+  - **a dashboard widget** (with [V1-16](#v1--online-kids-logger-generalized-model-still-no-offline-no-login)
+    / DASH-1): a timeline of the athlete's programs; or
+  - **a date selector on the program page:** pick a date and see that day's program as it was then.
+  - **Gated on CLONE-1** (no assignment history exists before it). Which surface wins decides the
+    roadmap pillar: Insight for the widget, Authoring & Scheduling for the program page. It is filed
+    under Insight until then. **Owes** a UX panel and a plan.
 
 - **V1-25 — the logging loop, from four sessions of real use.** _(Ray, 2026-09-29.)_ Four requests
   that arrived together and are **one theme**: the form should know what the athlete already told it —

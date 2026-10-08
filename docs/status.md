@@ -3,14 +3,33 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-07
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
 
 ## Where we are right now
 
-🚦 **The whole Beta 0 critical path is waiting on one signature.**
+🔒 **PRIV-1's documents are written, and the review found a P0 on the way out.** The privacy review
+has landed [docs/privacy/notice.md](./privacy/notice.md) (what people are told),
+[data-inventory.md](./privacy/data-inventory.md) (all 18 tables, every processor, retention, and what
+is committed to this public repo), the household deletion in [runbooks.md](./runbooks.md), the
+`AUTH-1` consent checklist, and `SECURITY.md`'s threat model rewritten for many households. Six
+lenses returned **five blocking findings on the first draft and one more on the rewrite** — including
+that the plan's own self-review understated committed personal data, and that its held restore branch
+was an unwired gate cited as a safety argument, the exact pattern the plan had just accused another
+row of ([plan](./plans/priv-1-privacy-review.md) → review log).
+**Next on this track: `PRIV-2`** — serve the notice at `/privacy` on the app's own domain, which is
+what `AUTH-1`'s consent screen actually needs. A `docs/` file is not a URL.
+
+🔴 **The P0: minors' names and log data are committed across ~50 files, not the three `OSS-1`
+records** — and `OSS-1`'s 2026-08-11 audit conclusion ("no measurement history… no log data") is now
+**wrong**, because a correction merged 2026-10-01 committed weigh-in dates and clock times for a named
+minor. The audit is corrected in place and `OSS-1`'s rename is **raised to a Beta 0 blocker**,
+re-scoped from 3 files to ~50 across five classes — two of which a rename does not fix at all. The
+rename is its own PR. ⚠️ And a rename is not a removal: `git log -S` still finds it.
+
+🚦 **The rest of the Beta 0 critical path is waiting on one signature.**
 [ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is written and
 **proposed** (2026-10-07): does a household appear in the URL, or only in the session? It recommends
 **session-only**, keeps `/p/<profileId>` as the address, settles **404 (never 403)** on a wrong
