@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
+import type { HouseholdScope } from '../scope';
 import { isLiveProfile } from '../writers/ownership';
 
 /**
@@ -27,6 +28,8 @@ export function weeklyAdherenceRows(
     weekStart: string;
     activityTypeId: number;
     metricKeys: readonly string[];
+    /** TEN-1: the household this request is authorized for. The third conjunct of `isLiveProfile`. */
+    scope: HouseholdScope;
   },
 ) {
   return (
@@ -41,7 +44,9 @@ export function weeklyAdherenceRows(
       })
       .from(schema.rampTargets)
       // Ownership seam: scope by the LIVE profile's public_id (`isLiveProfile`, the same predicate
-      // `listEntriesForDay` uses — DAL-1), never a raw internal id. Household scope plugs in here (TEN-1).
+      // `listEntriesForDay` uses — DAL-1), never a raw internal id. Since TEN-1 1b that predicate
+      // also carries `profiles.household_id = scope`, so this read is household-scoped by the same
+      // definition every other scoped read uses — there is no second rule here to drift.
       .innerJoin(schema.profiles, eq(schema.rampTargets.profileId, schema.profiles.id))
       // For the metric's display label AND its rollup aggregation.
       .innerJoin(
@@ -67,7 +72,7 @@ export function weeklyAdherenceRows(
       )
       .where(
         and(
-          isLiveProfile(args.profilePublicId),
+          isLiveProfile(args.profilePublicId, args.scope),
           eq(schema.rampTargets.weekStart, args.weekStart),
           isNull(schema.rampTargets.deletedAt),
           inArray(schema.rampTargets.metricKey, [...args.metricKeys]),

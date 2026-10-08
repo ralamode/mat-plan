@@ -15,7 +15,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:verify": "tsx scripts/verify.ts",
     "db:correct": "tsx scripts/correct.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:mutations": "node scripts/mutations.mjs"
   },
   "dependencies": {
     "@mat-plan/shared": "workspace:*",

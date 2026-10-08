@@ -424,6 +424,26 @@ export const CLOSED_DAY_NOTICE =
 export const SAVING_LABEL = 'Saving…';
 
 /**
+ * The refusal every profile-addressed Server Action returns when it has no profile to act on —
+ * promoted out of `actions.ts`'s module scope by TEN-1 1b (ADR 0006's consequence 4).
+ *
+ * ⚠️ **ONE message for four states, on purpose: un-gated, unknown id, soft-deleted, and — since
+ * TEN-1 — ANOTHER HOUSEHOLD'S id.** A crafted cross-household id must learn nothing a stale id
+ * wouldn't, which is the same argument `AMEND_ERROR_COPY.notFound` makes for its three states and
+ * ADR 0006 → "What a wrong-household request returns" makes for 404-never-403. The security
+ * property *is* the byte-identity, so it lives in one place rather than being re-typed at each
+ * surface: `actions.test.ts` re-typed the literal seven times before this, and TEN-1's
+ * wrong-household suite would have made it fourteen.
+ *
+ * Two strings, not one, because the routine editor SAVES rather than logs and the sentence has to
+ * read correctly to a parent. They are `/^No profile found to (log|save) against\.$/` — deliberately
+ * close, so neither can hint at which check refused.
+ */
+export const NO_PROFILE_LOG = 'No profile found to log against.';
+/** @see NO_PROFILE_LOG — the routine editor's wording of the same refusal. */
+export const NO_PROFILE_SAVE = 'No profile found to save against.';
+
+/**
  * Typed-error copy shared by every amend path (V1-24 PR 1b).
  *
  * `editStrengthSetAction` had `'That set could not be found.'` inline; a second amend surface would

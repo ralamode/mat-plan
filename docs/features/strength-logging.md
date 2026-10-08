@@ -334,6 +334,15 @@ Real ones, each with the file to look at.
   bodyweight amend, extracted when the second caller arrived — which means V1-9's existing
   cross-profile `db:verify` proof now covers the shared helper too.
 
+  **Since TEN-1 1b the set-edit also takes a `scope`** (`updateStrengthSetById(exec, { …, scope })`),
+  which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
+  guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()`, so nothing
+  in the form or the action changed. `db:verify`'s TEN-1 write matrix proves the refusal in **both**
+  directions with no side effect. ⚠️ `writeStrengthSession`'s own in-transaction profile resolution is
+  still the pre-TEN-1 hand-written predicate — **chunk 1c** converts it. Not a leak today
+  (`getProfileByPublicId` fails closed before the writer is reached), but do not read that line as
+  household-scoped yet. See [write-path](./write-path.md) invariant 2.
+
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the
   collapse branch and the Skipped branch, at a scale of 25 rows. Any `required` field that can be

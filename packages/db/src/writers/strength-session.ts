@@ -14,6 +14,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Schema } from '../client';
 import { schema } from '../client';
 import type { Executor } from './executor';
+import type { HouseholdScope } from '../scope';
 import { ownedEntryIds } from './ownership';
 
 /**
@@ -391,13 +392,20 @@ export async function writeStrengthSession(
  */
 export async function updateStrengthSetById(
   exec: Executor,
-  args: { profilePublicId: string; setId: string; reps: number; weight: number },
+  args: {
+    profilePublicId: string;
+    setId: string;
+    reps: number;
+    weight: number;
+    /** TEN-1: the household this request is authorized for. Rides into `ownedEntryIds`. */
+    scope: HouseholdScope;
+  },
 ): Promise<{ publicId: string } | null> {
   // The internal ids of entries owned by this live profile. Drizzle `update()` can't JOIN, so the
   // parent-ownership proof rides in the WHERE via `inArray(entry_id, <this select>)` (no sql.raw).
   // V1-24 PR 1b lifted this into `ownership.ts` when the bodyweight amend needed the identical
   // subselect — a security predicate with two callers is exactly what must not be copy-pasted.
-  const owned = ownedEntryIds(exec, args.profilePublicId);
+  const owned = ownedEntryIds(exec, args.profilePublicId, args.scope);
 
   // GAP-3: the editable shape is "carries exactly one live PRIMARY MASS quantity". This replaces the
   // old `weight_num IS NOT NULL` guard — a set whose primary quantity is a LENGTH (a box jump) or a

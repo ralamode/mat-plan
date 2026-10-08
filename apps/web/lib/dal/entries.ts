@@ -35,12 +35,17 @@ import {
   getMetricDefinition,
 } from './catalog';
 import { db } from './db';
+import { getHouseholdScope } from './household';
 
 /**
- * Entry reads for the Today view (V0-7). Scoped by the profile's `public_id`
- * (never a raw internal id from the request) and filtered to a single declared
- * day. Returns DTOs — never raw rows. Ownership/household scoping plugs in here
- * once Clerk lands (V1-1/v1.5).
+ * Entry reads and writes for the Today view (V0-7). Scoped by the profile's `public_id` — never a raw
+ * internal id from the request — and filtered to a single declared day. Returns DTOs, never raw rows.
+ *
+ * **Household scoping landed at TEN-1 1b.** Every function here that builds a profile predicate
+ * resolves `getHouseholdScope()` itself and passes the scope into `packages/db`, so the SQL carries
+ * `profiles.household_id = $n` beside the public-id and soft-delete conjuncts. The action and page
+ * signatures do not change: the scope is ambient at the request boundary and explicit at the SQL
+ * boundary, each in the layer allowed to hold it (`write-path.md` invariant 8).
  */
 /** One measured quantity of a set — the typed replacement for the free-text load (GAP-3). */
 export type SetQuantityDTO = {
@@ -113,6 +118,11 @@ export type EntryDTO = {
 };
 
 export async function listEntriesForDay(profilePublicId: string, day: string): Promise<EntryDTO[]> {
+  // TEN-1: no resolvable household → no rows. The page already renders an empty day; this never
+  // reports "your data does not exist" for the ambiguous case, which throws in the resolver.
+  const scope = await getHouseholdScope();
+  if (!scope) return [];
+
   const rows = await db
     .select({
       id: schema.entries.id, // internal — used only to join sets, never returned
@@ -166,8 +176,9 @@ export async function listEntriesForDay(profilePublicId: string, day: string): P
     .where(
       and(
         // DAL-1: THE live-profile predicate (writers/ownership.ts), not a re-typed `publicId =` — this
-        // read was one of two ownership sites that skipped `profiles.deleted_at IS NULL`.
-        isLiveProfile(profilePublicId),
+        // read was one of two ownership sites that skipped `profiles.deleted_at IS NULL`. Since
+        // TEN-1 1b it also carries the household conjunct, so a foreign profile's day is zero rows.
+        isLiveProfile(profilePublicId, scope),
         eq(schema.entries.activityDate, day),
         isNull(schema.entries.deletedAt),
       ),
@@ -302,10 +313,16 @@ export type LogBodyweightArgs = {
 export type LogBodyweightResult = { id: string } | { dayTaken: true };
 
 export async function logBodyweight(args: LogBodyweightArgs): Promise<LogBodyweightResult> {
+  // TEN-1: an unresolvable scope takes the SAME path as an unknown profile — the caller re-checks
+  // ownership through `getProfileByPublicId` first, so reaching here with no scope is already a
+  // caller bug, and the throw says the one true thing without naming a household.
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
-    .where(isLiveProfile(args.profilePublicId))
+    .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
   if (!profile) throw new Error('Profile not found');
 
@@ -495,7 +512,10 @@ export async function editBodyweight(args: {
   unit: string;
   seenValue: number;
 }): Promise<{ entryId: string } | null> {
-  const updated = await updateBodyweightEntryById(db, args);
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  const updated = await updateBodyweightEntryById(db, { ...args, scope });
   return updated ? { entryId: updated.publicId } : null;
 }
 
@@ -508,7 +528,10 @@ export async function ownedBodyweightValue(args: {
   profilePublicId: string;
   entryId: string;
 }): Promise<{ value: number; unit: string } | null> {
-  return findAmendableBodyweight(db, args);
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  return findAmendableBodyweight(db, { ...args, scope });
 }
 
 /**
@@ -524,6 +547,9 @@ export async function editStrengthSet(args: {
   reps: number;
   weight: number;
 }): Promise<{ setId: string } | null> {
-  const updated = await updateStrengthSetById(db, args);
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  const updated = await updateStrengthSetById(db, { ...args, scope });
   return updated ? { setId: updated.publicId } : null;
 }

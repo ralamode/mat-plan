@@ -195,6 +195,53 @@ dormant, a `claude-code-action` bump doesn't need step 6's re-read; activation d
    not the budget: the prefetch refuses until `SETTINGS_SHA256` in `review-prefetch.sh` is updated.
    Re-read the threat model, then update the hash (the script's comment has the command).
 
+## A cross-household scope miss (the TEN-1 alert)
+
+**What fired.** A Sentry event `profile scope miss: cross_household`. The server was asked for a
+profile `public_id` that **exists**, but not in the household the request resolved to. The caller got
+a 404 (page / export handler) or the shared `No profile found…` envelope (a Server Action) — ADR 0006
+→ "What a wrong-household request returns". Nothing leaked; this is the signal that the refusal
+happened.
+
+**Why the event exists at all.** The scoped predicate (`public_id ∧ deleted_at IS NULL ∧
+household_id = scope`) returns "no row" for both _"unknown id"_ and _"exists elsewhere"_, so the
+server cannot tell them apart — which made the threat model's #1 risk the one event that produced no
+signal. On a miss only, `apps/web/lib/dal/household.ts` → `reportScopeMiss` re-resolves without the
+household conjunct and emits one structured event.
+
+**The alert rule** (Sentry → Alerts → new issue alert):
+
+| Field     | Value                                                                          |
+| --------- | ------------------------------------------------------------------------------ |
+| Filter    | `message` contains `profile scope miss: cross_household`                       |
+| Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
+| Action    | email the maintainer                                                           |
+
+**What the event carries, and what it deliberately does not.** `actor` (`gate_session` until AUTH-1 —
+the gate is a shared code, not an identity), `action`, `resource` (the `public_id` the caller already
+sent) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
+`DrizzleQueryError` message embeds query parameters and has shipped a kid's bodyweight to Sentry
+once) and **not the owning household's id** — a requester→owner mapping in a third-party store would
+be a cross-tenant linkage over minors' health data.
+
+**Triage.**
+
+1. **One event, one `resource`** → almost certainly a stale bookmark or a shared link. No action.
+2. **Many events, many distinct `resource` values** → id probing. UUIDv7 public ids are not
+   enumerable, so this means ids leaked (a screenshot, a log, a shared link). Rotate the access-gate
+   code (§ "Rotate a secret") and re-check who has it.
+3. **`outcome = no_scope` instead** → not an attack: the server could not resolve a household at all.
+   Zero live households means an empty or wrong database; see § "Manually re-seed / re-apply prod".
+4. **The app is down with `household scope is ambiguous`** → **two or more live households exist
+   before AUTH-1.** The resolver throws by design: it cannot tell whose data it holds and picking one
+   would be a silent cross-wire. Find the extra row
+   (`select id, public_id, name from households where deleted_at is null`) and soft-delete whichever
+   was created in error, or bring AUTH-1 forward. Do **not** "fix" the resolver by reading `rows[0]`.
+
+⚠️ **Rate limiting is not wired for this.** `apps/web/lib/rate-limit.ts` deliberately does not limit
+the mutating actions; AUTH-1 re-keys the limiter from IP to user id and is where probing gets
+throttled. Until then this alert is the consumer.
+
 ## Cut a Neon RESTORE branch before a destructive/backfill migration (rollback prep)
 
 _TODO — document creating a pre-migration Neon restore point/branch (AGENTS.md "Rollback"), and how to
