@@ -1,0 +1,57 @@
+-- TEN-1 chunk 1a — `households.synthetic`: the OBS-2 flag, shipped dark.
+--
+-- WHY: a synthetic-monitoring household will live in PRODUCTION, and its rows must be excluded from
+-- every aggregate — adherence, streaks, export — or the monitor quietly pollutes the numbers it
+-- exists to protect. Retrofitting that is a WHERE added to every query, which is the kind of thing
+-- that gets missed in exactly one place, so docs/plan.md -> OBS-2 asks for the flag by name and asks
+-- for it to land with the tenancy work. Plan: docs/plans/ten-1-household-scope.md (chunk 1a).
+-- Addressing: docs/decisions/0006-household-addressing.md (Accepted, option A, 2026-10-07).
+--
+-- METADATA-ONLY, no table rewrite. ADD COLUMN with a NON-VOLATILE DEFAULT has not rewritten the
+-- table since Postgres 11 — the default is stored in pg_attribute.attmissingval and pre-existing
+-- rows are read through it — and `false` is an immutable constant, so it qualifies. The inline
+-- NOT NULL needs no validating scan because the column cannot hold NULL by construction. Exact
+-- precedent, already Squawk-linted on main: 0011:52 (`entry_sets.is_bodyweight boolean DEFAULT
+-- false NOT NULL`). The statement still takes ACCESS EXCLUSIVE on `households` for the catalog
+-- update, which is what lock_timeout bounds; the risk is queueing behind someone else's long
+-- transaction, not the ALTER itself. `households` holds ONE row and is touched only by the seed.
+--
+-- NO INDEX, deliberately: a boolean with one distinct value indexes nothing, and the only future
+-- reader is a one-row household lookup that already goes by id / public_id.
+--
+-- SHIPS DARK, END TO END (the 0006 / 0013 idiom, taken further). No code in this PR reads or writes
+-- the column, AND no later TEN-1 chunk does either: the flag is deliberately NOT carried on TEN-1's
+-- `HouseholdScope`, because an authorization capability is the wrong carrier for an observability
+-- flag. So unlike 0006 and 0013 there is no "chunk N is the reader" ordering clause to honour here
+-- — nothing names this column again until OBS-2, which adds the read and its reader together.
+-- That is the whole reason this is safe to land ahead of its consumer.
+--
+-- ⚠️ THE SEED MUST NEVER NAME THIS COLUMN. migrate.yml runs `db:seed` against prod on every push to
+-- main, and on a FRESH or restored database (OPS-3's per-household restore, a new Neon project) the
+-- seed INSERTs the real household's row rather than conflicting on it — so a seeded value would
+-- label a real family's data a test fixture, and the first thing to read the column would treat
+-- minors' health data as disposable. ON CONFLICT DO NOTHING is what protects an already-flagged
+-- row; db:verify proves both halves. `synthetic = true` is an assertion by whoever creates a
+-- fixture, never a property inherited from a seed that also runs in production.
+--
+-- ⚠️ A synthetic household must NOT be created in prod before AUTH-1: until then TEN-1's
+-- `getHouseholdScope()` resolves THE single live household and THROWS on >= 2 live rows, because it
+-- cannot tell whose data it holds. The column arriving does not make a second household safe to
+-- create; OBS-2 is strictly post-AUTH-1.
+--
+-- WHAT db:verify DOES NOT PROVE: it applies migrations to an EMPTY PGlite database, so the path
+-- that matters in prod — an EXISTING row acquiring the default through attmissingval — is never
+-- exercised, here or for any future ADD COLUMN ... DEFAULT. PGlite is also single-connection, so
+-- lock_timeout is never exercised. A green db:verify proves the column's shape, not the backfill.
+--
+-- IF IT FAILS: drizzle wraps each file in a transaction, so there is no partial state — but the
+-- migration stays PENDING, re-fails on every later push to main and takes db:seed with it
+-- (docs/runbooks.md -> the pending-migration wedge). The only realistic failure is lock_timeout
+-- expiry (55P03); recovery is a workflow_dispatch re-run.
+--
+-- Bound lock acquisition + statement runtime before the DDL (AGENTS.md DB rules). drizzle-kit
+-- migrate wraps each file in a transaction, so these apply to it. IF NOT EXISTS makes the ADD
+-- re-run-safe (0006:9, 0008:8, 0009:19, 0013:32).
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "households" ADD COLUMN IF NOT EXISTS "synthetic" boolean DEFAULT false NOT NULL;

@@ -121,6 +121,26 @@ export const households = pgTable('households', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
   publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
   name: text('name').notNull(),
+  // TEN-1 chunk 1a, for OBS-2 (docs/plan.md → OBS-2). A synthetic-monitoring household will live in
+  // PRODUCTION, and its rows must be excluded from every aggregate — adherence, streaks, export — or
+  // the monitor pollutes the numbers it exists to protect. OBS-2 asks for the flag by name, so the
+  // column lands while it is still a metadata-only ADD COLUMN.
+  //
+  // SHIPS DARK, END TO END: nothing in TEN-1 reads or writes it. It is deliberately NOT carried on
+  // TEN-1's `HouseholdScope` — an authorization capability is the wrong carrier for an observability
+  // flag — and keeping it off the scope means no PR between this one and OBS-2 names the column, so
+  // there is no deploy-order window at all. OBS-2 adds the read and whatever honours it. This is
+  // NEVER an authorization input.
+  //
+  // ⚠️ THE SEED MUST NEVER NAME THIS COLUMN. `migrate.yml` runs `db:seed` against prod on every push,
+  // and on a FRESH or restored database the seed inserts the real household's row — so a seeded value
+  // would label a real family's data a test fixture. `synthetic = true` is an assertion by whoever
+  // creates a fixture, never a property inherited from a seed that also runs in production.
+  //
+  // ⚠️ A synthetic household must NOT exist in prod before AUTH-1: until then TEN-1's
+  // `getHouseholdScope()` resolves THE single live household and THROWS on >= 2 live rows (it cannot
+  // tell whose data it holds), so creating a second household takes the app down.
+  synthetic: boolean('synthetic').notNull().default(false),
   ...timestamps,
 });
 

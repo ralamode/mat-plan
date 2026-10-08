@@ -3,7 +3,7 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-06
+**Last updated:** 2026-10-07
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
@@ -21,15 +21,39 @@ household-scoped correction does the same for the live row — run it **before**
 explains; `ONB-2` owns `shot`'s neutral home, which ONB-0 did **not** ship despite ONB-2's old
 dependency note.
 
-🚦 **The whole Beta 0 critical path is waiting on one signature.**
-[ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is written and
-**proposed** (2026-10-07): does a household appear in the URL, or only in the session? It recommends
-**session-only**, keeps `/p/<profileId>` as the address, settles **404 (never 403)** on a wrong
-household, and states the rule that holds under every option — **a URL segment is an input, never a
-credential**. Its decision box is deliberately **unsigned**, because it reverses
-[HH-1](./plan.md#hh-1)'s path clause, and it is **chunk 0 of
-[TEN-1](./plans/ten-1-household-scope.md)** — so `TEN-1` → `AUTH-1` is parked on the decision, not on
-a session. Next on this track: the maintainer signs the box, then TEN-1's panel runs.
+🚦 **Beta 0's critical path is moving: the signature landed and TEN-1 has started.**
+[ADR 0006 — household addressing](./decisions/0006-household-addressing.md) is **Accepted — option A
+(session-only)** _(the maintainer, 2026-10-07; #252)_: `/p/<profileId>` stays the address, the
+household comes only from the session, a wrong household is a **404 (never 403)**, and **a URL segment
+is an input, never a credential**. It superseded [HH-1](./plan.md#hh-1)'s path clause and nothing else,
+and it was **chunk 0 of [TEN-1](./plans/ten-1-household-scope.md)** — so `TEN-1` → `AUTH-1` is no
+longer parked.
+
+TEN-1's **six-lens panel ran 2026-10-07** (the four standing lenses plus DB-safety and security) and
+its review-response log is committed. Its biggest change: `households.synthetic` is a **column only**,
+not a field on `HouseholdScope` — an authorization capability is the wrong carrier for an observability
+flag, and taking it off removes a cross-PR ordering hazard that would have made a chunk-1b deploy ahead
+of its migration a `42703` on every route. **Chunk 1a (the dark column) is in flight.** Next on this
+track: 1b, the seam and the gate — where ADR 0006's three named obligations land.
+
+🔒 **PRIV-1's documents are written, and the review found a P0 on the way out.** The privacy review
+has landed [docs/privacy/notice.md](./privacy/notice.md) (what people are told),
+[data-inventory.md](./privacy/data-inventory.md) (all 18 tables, every processor, retention, and what
+is committed to this public repo), the household deletion in [runbooks.md](./runbooks.md), the
+`AUTH-1` consent checklist, and `SECURITY.md`'s threat model rewritten for many households. Six
+lenses returned **five blocking findings on the first draft and one more on the rewrite** — including
+that the plan's own self-review understated committed personal data, and that its held restore branch
+was an unwired gate cited as a safety argument, the exact pattern the plan had just accused another
+row of ([plan](./plans/priv-1-privacy-review.md) → review log).
+**Next on this track: `PRIV-2`** — serve the notice at `/privacy` on the app's own domain, which is
+what `AUTH-1`'s consent screen actually needs. A `docs/` file is not a URL.
+
+🔴 **The P0: minors' names and log data are committed across ~50 files, not the three `OSS-1`
+records** — and `OSS-1`'s 2026-08-11 audit conclusion ("no measurement history… no log data") is now
+**wrong**, because a correction merged 2026-10-01 committed weigh-in dates and clock times for a named
+minor. The audit is corrected in place and `OSS-1`'s rename is **raised to a Beta 0 blocker**,
+re-scoped from 3 files to ~50 across five classes — two of which a rename does not fix at all. The
+rename is its own PR. ⚠️ And a rename is not a removal: `git log -S` still finds it.
 
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
