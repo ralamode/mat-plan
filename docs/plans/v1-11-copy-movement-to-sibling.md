@@ -7,10 +7,10 @@
 ## Goal
 
 The kids train **together**, off the same programmed day (V1-10 just put that day on screen). Ray logs
-Liam's `Front Squat 5 × 5 @ 60`, then has to retype the identical movement and set structure for Scarlett
+Athlete One's `Front Squat 5 × 5 @ 60`, then has to retype the identical movement and set structure for Athlete Two
 — on a phone, on the gym floor, between sets. This PR adds a **Copy to <sibling>** affordance on a logged
 movement: one tap writes that movement and its sets into the sibling's **same-day** session, which the
-coach then corrects with the V1-9 inline set edit (Scarlett squats 65, not 60).
+coach then corrects with the V1-9 inline set edit (Athlete Two squats 65, not 60).
 
 It is the first **cross-profile** write in the app. That is the whole risk of this PR, and the reason it
 gets a plan: every other writer scopes to exactly one profile, and this one deliberately reads from A and
@@ -87,13 +87,13 @@ later copy that day ON-CONFLICTs onto it. No separate "find the sibling's sessio
 **D6 — UI: a server-rendered form per sibling, not a client island.** The day's log is RSC. The copy
 control is a `<form action={copyMovementAction}>` with hidden ids and a real `<button>` — no
 `'use client'`, no new client JS, consistent with the read-only session block. With 2 profiles that's ONE
-button per movement ("Copy to Scarlett"). **Open Q2:** at N profiles this becomes N-1 buttons per movement
+button per movement ("Copy to Athlete Two"). **Open Q2:** at N profiles this becomes N-1 buttons per movement
 — does it need a menu, or is "≤3 kids, render them all" right for the MVP?
 
 **D7 — Feedback.** The action `revalidatePath`s BOTH profiles' Today. The coach is on A's page and the
 write lands on B's, so success is otherwise invisible. **Open Q3:** is a `useActionState` message needed
 (→ a client island, contradicting D6), or does the button suffice with an `aria-live` region? Cheapest
-honest option: the source page renders "Copied to Scarlett" against the movement because the copy is now
+honest option: the source page renders "Copied to Athlete Two" against the movement because the copy is now
 discoverable from A's own row — but A's page has no knowledge of B's entries without another read.
 
 **D8 — Tests.** `db:verify`: `copyableMovementRow` returns the graph for the owner, `null` for a

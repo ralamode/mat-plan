@@ -27,7 +27,7 @@ export type Correction = {
 };
 
 /**
- * 2026-09-28 — Liam's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
+ * 2026-09-28 — an athlete's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
  * five sets.
  *
  * Two app bugs produced it, both V1-24: the strength form offered a BW toggle on a movement the
@@ -39,12 +39,12 @@ export type Correction = {
  * 20 lb that should have been there. Note the quantity is an INSERT, not an update — a bodyweight set
  * has no quantity row at all, which is exactly why the read line said `20 × BW`.
  */
-const liamKbSwings: Correction = {
-  name: 'liam-kb-swings-2026-09-28',
+const kbSwingsLoadRepsSwap: Correction = {
+  name: 'kb-swings-2026-09-28',
   what: '5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`',
   issue: 'V1-24',
   async run(db, apply) {
-    const LIAM = '019826b4-0000-7000-8000-000000000001';
+    const TARGET_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
     const DAY = '2026-09-28';
 
     // Target by (profile public_id, day, movement slug) — never an internal id, which differs
@@ -63,7 +63,7 @@ const liamKbSwings: Correction = {
       .innerJoin(schema.movements, eq(schema.movements.id, schema.entries.movementId))
       .where(
         and(
-          eq(schema.profiles.publicId, LIAM),
+          eq(schema.profiles.publicId, TARGET_PROFILE_PUBLIC_ID),
           eq(schema.entries.activityDate, DAY),
           eq(schema.movements.slug, 'kb_swings'),
           eq(schema.entrySets.isBodyweight, true), // ← the guard: already-fixed rows don't match
@@ -104,7 +104,7 @@ const liamKbSwings: Correction = {
 };
 
 /**
- * 2026-09-30 — Liam's weigh-in was logged **three times** on one day, and nothing in the app can
+ * 2026-09-30 — an athlete's weigh-in was logged **three times** on one day, and nothing in the app can
  * remove the two extra rows.
  *
  * The bug is V1-24 S1: `bodyweight-form.tsx` resets *and rotates the `client_id`* on success, while
@@ -143,7 +143,7 @@ const liamKbSwings: Correction = {
 // The profile id is a **literal and not `SEED_PROFILE_PUBLIC_ID`** on purpose: that const means "the
 // profile the seed creates", while this is "the profile that owned these rows in prod on 2026-09-30".
 // A correction is a frozen record and must not follow a symbol that could be re-pointed (Decision 21).
-const LIAM_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
+const DUP_TARGET_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
 const DUP_DAY = '2026-09-30';
 const DUP_UNIT: Unit = 'lb';
 
@@ -211,8 +211,8 @@ const liveBodyweightOn = (profileId: number, day: string) =>
 const utc = (col: PgColumn, format: string) =>
   sql<string>`to_char(${col} at time zone 'UTC', ${format})`;
 
-const liamBodyweightDuplicates: Correction = {
-  name: 'liam-bodyweight-duplicates-2026-09-30',
+const bodyweightDuplicates: Correction = {
+  name: 'bodyweight-duplicates-2026-09-30',
   what: '3 weigh-ins logged on one day; the 12:17 morning row is the one to keep',
   issue: 'V1-24',
   async run(db, apply) {
@@ -223,11 +223,11 @@ const liamBodyweightDuplicates: Correction = {
     const [profile] = await db
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
-      .where(isLiveProfile(LIAM_PUBLIC_ID));
+      .where(isLiveProfile(DUP_TARGET_PROFILE_PUBLIC_ID));
 
     if (!profile) {
       throw new Error(
-        `profile ${LIAM_PUBLIC_ID} is missing or soft-deleted in this database — wrong target?`,
+        `profile ${DUP_TARGET_PROFILE_PUBLIC_ID} is missing or soft-deleted in this database — wrong target?`,
       );
     }
 
@@ -495,7 +495,7 @@ const nullRoutineToFull: Correction = {
 };
 
 export const CORRECTIONS: readonly Correction[] = [
-  liamKbSwings,
-  liamBodyweightDuplicates,
+  kbSwingsLoadRepsSwap,
+  bodyweightDuplicates,
   nullRoutineToFull,
 ];

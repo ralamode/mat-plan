@@ -59,8 +59,8 @@ storage rationale); an index would be the smell that says "promote to a table".
 resolved — never null, never raw JSON**). `listProfiles` stays unchanged (tiles don't need the routine — don't
 widen the hot picker query). Keeps the Today read one round-trip.
 
-**D7 — Seed two kids differently** (additive edit to the existing Liam/Scarlett insert): Liam → `routineConfig`
-omitted/`null` (exercises the ships-dark `DEFAULT_ROUTINE` path); Scarlett → an explicit reordered
+**D7 — Seed two kids differently** (additive edit to the existing Athlete One/Athlete Two insert): Athlete One → `routineConfig`
+omitted/`null` (exercises the ships-dark `DEFAULT_ROUTINE` path); Athlete Two → an explicit reordered
 `RoutineConfig` (a `checkin:*` key before `strength`, `conditional:true` on the strength item). `as const
 satisfies RoutineConfig` so a bad seed fails typecheck. Caveat: the insert is `onConflictDoNothing(publicId)`
 → a re-seed of an EXISTING db won't update routines; A≠B proves on **fresh DBs** (db:verify PGlite + CI Docker
@@ -144,7 +144,7 @@ catalog-agnostic); the **concrete ordered catalog + `DEFAULT_ROUTINE` derivation
   can't satisfy the grammar, and the only reachable form (`checkin:weigh_in:*`) is moot (`weigh_in ∉
 CHECKIN_FIELDS` → catalog-filtered). Weigh-in is pinned by being rendered separately in PR 1b, never in `order`
   — document that; no refine needed.
-- **[DB-safety #2] Strike "Neon branch" from the A≠B proof (D7).** The Neon branch is prod-shaped (Liam/Scarlett
+- **[DB-safety #2] Strike "Neon branch" from the A≠B proof (D7).** The Neon branch is prod-shaped (Athlete One/Athlete Two
   exist → `onConflictDoNothing` leaves them NULL); A≠B proves on **empty** targets only (PGlite verify + Docker
   PG). The Neon branch proves apply + idempotency.
 - **[DB-safety #4] Migration is generated THEN hand-headered.** `drizzle-kit generate` emits a bare `ALTER TABLE
@@ -165,5 +165,5 @@ EXISTS` (like 0004/0005), and add `jsonb` to the `schema.ts` pg-core import (`.$
 PR 1a = `packages/shared/src/routine.ts` (NAMESPACES const · grammar · `routineConfigSchema` · `RoutineConfig`
 · `buildDefaultRoutine(catalog)` · `resolveRoutine(raw, catalog)` — item-by-item, colon-safe) + its unit tests
 (fixture catalog, two-colon round-trip) + the `0006` migration (generated + hand-headered) + the `schema.ts`
-column (+`jsonb` import) + the seed (Liam null / Scarlett explicit) + `verify.ts` (parse + distinct +
+column (+`jsonb` import) + the seed (Athlete One null / Athlete Two explicit) + `verify.ts` (parse + distinct +
 idempotent) + tech-debt + docs. **No app code, no DAL, no `ProfileDTO` change** — all of that is PR 1b.

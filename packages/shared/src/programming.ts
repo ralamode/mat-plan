@@ -96,7 +96,8 @@ export const prescriptionTargetSeedRowSchema = z.object({
   profilePublicId: z.string(),
   load: z.string().nullable(),
   // Per-kid REPS override (mirrors `load`'s nullability): null → use the prescription's shared `target_reps`;
-  // non-null → this kid deviates (e.g. Liam "4" vs Scarlett "5, last AMRAP" on the same Pull-Up). Verbatim text.
+  // non-null → this kid deviates (one sibling pulls strict reps where the other goes to failure on the same
+  // movement). Verbatim text, human-authored.
   reps: z.string().nullable(),
 });
 export type PrescriptionTargetSeedRow = z.infer<typeof prescriptionTargetSeedRowSchema>;
@@ -134,19 +135,19 @@ export type ProgramBlockSeedRow = z.infer<typeof programBlockSeedRowSchema>;
 // prescription's shared reps; `perKid` = explicit per-kid load, plus a per-kid `reps` override only where a
 // kid deviates from `target_reps`. Every value below is transcribed VERBATIM from Ray's program doc — the
 // human authored every load (the LLM never authors loads).
-const LIAM = SEED_PROFILE_PUBLIC_ID;
-const SCARLETT = SEED_PROFILE_2_PUBLIC_ID;
+const ATHLETE_ONE = SEED_PROFILE_PUBLIC_ID;
+const ATHLETE_TWO = SEED_PROFILE_2_PUBLIC_ID;
 function both(load: string | null): PrescriptionTargetSeedRow[] {
   // Both kids, same load, shared reps — just `perKid` with the same load and no override (one row shape).
   return perKid({ load }, { load });
 }
 function perKid(
-  liam: { load: string | null; reps?: string },
-  scarlett: { load: string | null; reps?: string },
+  athleteOne: { load: string | null; reps?: string },
+  athleteTwo: { load: string | null; reps?: string },
 ): PrescriptionTargetSeedRow[] {
   return [
-    { profilePublicId: LIAM, load: liam.load, reps: liam.reps ?? null },
-    { profilePublicId: SCARLETT, load: scarlett.load, reps: scarlett.reps ?? null },
+    { profilePublicId: ATHLETE_ONE, load: athleteOne.load, reps: athleteOne.reps ?? null },
+    { profilePublicId: ATHLETE_TWO, load: athleteTwo.load, reps: athleteTwo.reps ?? null },
   ];
 }
 

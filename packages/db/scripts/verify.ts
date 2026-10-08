@@ -170,7 +170,7 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
     'at least one length unit is seeded (GAP-3)',
   );
 }
-// V1-3: two kid profiles (Liam + Scarlett), stable by public_id across re-seeds.
+// V1-3: two kid profiles (Athlete One + Athlete Two), stable by public_id across re-seeds.
 assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
 const seededProfileIds = profiles.map((p) => p.publicId).sort();
 assert.deepEqual(
@@ -178,10 +178,13 @@ assert.deepEqual(
   [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID].sort(),
   'both seed profiles stable by public_id',
 );
+// The literal is deliberate and lives here exactly once (AGENTS.md -> constants: "a contract test that
+// pins the const's value"). This is the OSS-1 guard: it fails if anyone puts a real first name back into
+// SEED_PROFILE_NAME / SEED_PROFILE_2_NAME, which asserting against the consts could never catch.
 assert.deepEqual(
   profiles.map((p) => p.name).sort(),
-  ['Liam', 'Scarlett'],
-  'seed profiles are Liam + Scarlett',
+  ['Athlete One', 'Athlete Two'],
+  'OSS-1: the seeded profile names are role names, not real first names',
 );
 assert.equal(households.length, 1, 'exactly one household after two seed runs');
 assert.equal(
@@ -279,31 +282,34 @@ assert.equal(
   'jsonb',
   'V1-18: profiles.routine_config is jsonb',
 );
-const liam = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
-const scarlett = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
+const athleteOne = profiles.find((p) => p.publicId === SEED_PROFILE_PUBLIC_ID)!;
+const athleteTwo = profiles.find((p) => p.publicId === SEED_PROFILE_2_PUBLIC_ID)!;
 // A≠B on a fresh DB, and since ONB-0 BOTH are explicit.
 //
-// Liam used to be NULL here, deliberately, to demonstrate "NULL → the default routine". ONB-0 narrowed
+// Athlete One used to be NULL here, deliberately, to demonstrate "NULL → the default routine". ONB-0 narrowed
 // that default to `['strength']`, so NULL now means the NEUTRAL first-run routine — and a fixture that
 // rode it would lose the habits and the brush-teeth metrics that `e2e/global.setup.ts` and the V0-11
 // smoke both drive on this profile. So the seed writes the full catalog explicitly, and what gets proved
 // here is the stronger property: no seeded fixture depends on a read-time default at all.
-assert.ok(liam.routineConfig != null, 'ONB-0: profile 1 has an explicit routine_config (was NULL)');
+assert.ok(
+  athleteOne.routineConfig != null,
+  'ONB-0: profile 1 has an explicit routine_config (was NULL)',
+);
 assert.deepEqual(
-  liam.routineConfig,
+  athleteOne.routineConfig,
   SEED_FULL_ROUTINE,
   'ONB-0: profile 1 is seeded with the explicit pre-ONB-0 full-catalog routine',
 );
-assert.ok(scarlett.routineConfig != null, 'V1-18: Scarlett has an explicit routine_config');
+assert.ok(athleteTwo.routineConfig != null, 'V1-18: Athlete Two has an explicit routine_config');
 assert.notDeepEqual(
-  liam.routineConfig,
-  scarlett.routineConfig,
+  athleteOne.routineConfig,
+  athleteTwo.routineConfig,
   'V1-18: the two seeded routines differ (A≠B, fresh DB)',
 );
 // Prove the stored config is GRAMMAR-VALID (a bad seed key fails loudly here, not silently on read).
 assert.ok(
-  routineConfigSchema.safeParse(scarlett.routineConfig).success,
-  'V1-18: Scarlett’s seeded routine_config parses against routineConfigSchema',
+  routineConfigSchema.safeParse(athleteTwo.routineConfig).success,
+  'V1-18: Athlete Two’s seeded routine_config parses against routineConfigSchema',
 );
 console.log('✓ V1-18: routine_config jsonb column; two-kid A≠B seed; stored config is valid');
 
@@ -3705,13 +3711,13 @@ console.log(
 // BOLA scoping and the per-kid LEFT JOIN — is what gets exercised (the `weeklyAdherenceRows` precedent).
 
 // (a) The YOUTH DAILY PROGRAM: Day A is 7 movements, in the coach's authored `idx` order.
-const liamA = await programDayRows(asPg, {
+const athleteOneDayA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-assert.equal(liamA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
+assert.equal(athleteOneDayA.length, 7, 'YDP: programDayRows returns Day A’s 7 movements');
 assert.deepEqual(
-  liamA.map((r) => r.movementName),
+  athleteOneDayA.map((r) => r.movementName),
   [
     'Push-Ups',
     'Pull-Up',
@@ -3726,27 +3732,30 @@ assert.deepEqual(
 
 // Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
 // every day while each individual movement lands every other session.
-const liamB = await programDayRows(asPg, {
+const athleteOneDayB = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_b',
 });
-assert.equal(liamB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
+assert.equal(athleteOneDayB.length, 6, 'YDP: programDayRows returns Day B’s 6 movements');
 assert.ok(
-  liamB.some((r) => r.movementName === 'KB Swings'),
+  athleteOneDayB.some((r) => r.movementName === 'KB Swings'),
   'YDP: Day B carries the swing',
 );
-assert.ok(!liamB.some((r) => r.movementName === 'Box Jump'), 'YDP: Day B does NOT carry the jump');
+assert.ok(
+  !athleteOneDayB.some((r) => r.movementName === 'Box Jump'),
+  'YDP: Day B does NOT carry the jump',
+);
 
 // (b) Per-kid isolation — the SAME prescription yields each kid their own row. The YDP prescribes no
 // loads at all, so what this proves is that BOTH kids get a row per movement (a WHERE-scoped join
 // would drop one), not that the loads differ.
-const scarlettA = await programDayRows(asPg, {
+const athleteTwoDayA = await programDayRows(asPg, {
   profilePublicId: SEED_PROFILE_2_PUBLIC_ID,
   dayRole: 'strength_a',
 });
-assert.equal(scarlettA.length, 7, 'YDP: the sibling gets her own 7 Day-A rows');
+assert.equal(athleteTwoDayA.length, 7, 'YDP: the sibling gets their own 7 Day-A rows');
 assert.ok(
-  liamA.every((r) => r.load === null) && scarlettA.every((r) => r.load === null),
+  athleteOneDayA.every((r) => r.load === null) && athleteTwoDayA.every((r) => r.load === null),
   'YDP: no authored loads reach the card — the athlete logs what they did',
 );
 
@@ -3755,23 +3764,23 @@ assert.ok(
 // This is the column pair that feeds the log form's Unit select and its BW-tap warning, and the seed
 // is the real catalog, so this proves the actual movements the athletes log against — not a fixture.
 // `KB Swings` is the 2026-09-28 movement: declared loaded, in pounds, and logged `20 × BW`.
-const kbSwings = liamB.find((r) => r.movementName === 'KB Swings');
+const kbSwings = athleteOneDayB.find((r) => r.movementName === 'KB Swings');
 assert.equal(kbSwings?.movementUnitDefault, 'lb', 'V1-26: KB Swings declares a pound default');
 assert.equal(kbSwings?.movementIsBodyweight, false, 'V1-26: ...and is NOT a bodyweight movement');
 
-const pushUps = liamA.find((r) => r.movementName === 'Push-Ups');
+const pushUps = athleteOneDayA.find((r) => r.movementName === 'Push-Ups');
 assert.equal(pushUps?.movementIsBodyweight, true, 'V1-26: Push-Ups declares bodyweight');
 assert.equal(pushUps?.movementUnitDefault, null, 'V1-26: ...and declares no unit');
 
 // ⚠️ The declaration is the MOVEMENT's, never the coach's. `load` stays null on every YDP row (asserted
 // just above), so widening the query did not open a path for an authored magnitude to reach an input.
 assert.ok(
-  liamA.every((r) => r.load === null),
+  athleteOneDayA.every((r) => r.load === null),
   'V1-26: widening the select did not let a prescribed load through',
 );
 
 // The one fixed prescription in the program survives the read.
-const hipThrust = liamA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
+const hipThrust = athleteOneDayA.find((r) => r.movementName === 'Single-Leg Hip Thrusts');
 assert.equal(hipThrust?.sets, 3, 'YDP: hip thrusts keep their fixed 3 sets');
 assert.equal(hipThrust?.targetReps, '10 per side', 'YDP: ...and their per-side prescription');
 

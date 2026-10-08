@@ -1,13 +1,13 @@
 ---
 name: data-correction
-description: Fix wrong data in the live mat-plan database that the app cannot fix (no delete action, uneditable shapes) with a guarded, idempotent, dry-run-first correction in packages/db/scripts/corrections/registry.ts, run via db:correct — and make sure the underlying bug gets its own backlog row and PR. Use when the user says data is wrong in prod, "delete that entry", "fix Liam's sets", "I mis-tapped", or asks for a correction.
+description: Fix wrong data in the live mat-plan database that the app cannot fix (no delete action, uneditable shapes) with a guarded, idempotent, dry-run-first correction in packages/db/scripts/corrections/registry.ts, run via db:correct — and make sure the underlying bug gets its own backlog row and PR. Use when the user says data is wrong in prod, "delete that entry", "fix Athlete One's sets", "I mis-tapped", or asks for a correction.
 ---
 
 # Data correction
 
 Rules: [packages/db/scripts/corrections/README.md](../../../packages/db/scripts/corrections/README.md).
 Procedure: [docs/runbooks.md](../../../docs/runbooks.md) → "Correct wrong data in prod". The model to
-copy is `liamKbSwings` in `registry.ts`.
+copy is `kbSwingsLoadRepsSwap` in `registry.ts`.
 
 **This writes to real people's training history.** Nothing runs with `--apply` without the user
 reading the dry run and saying so.

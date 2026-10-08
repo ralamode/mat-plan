@@ -22,7 +22,7 @@ the form or URL.
 - Both log Server Actions require a valid `profileId` (zod `uuid`), re-resolve it via the DAL, and
   `revalidatePath('/p/<id>')`. Boundary tests: missing/malformed `profileId` → zod-reject (no DAL
   call); unknown profile → `{ ok:false }` (no write).
-- Seed: two kid profiles (Liam + Scarlett) under the root household, idempotent.
+- Seed: two kid profiles (Athlete One + Athlete Two) under the root household, idempotent.
 
 ## File-by-file changes
 
@@ -38,9 +38,9 @@ the form or URL.
 | `apps/web/app/p/[profileId]/actions.test.ts`                          | MOVE+EDIT | Mock `getProfileByPublicId`; thread `profileId`; assert scoped revalidate path; add missing/malformed/unknown boundary cases.                                                                |
 | `packages/shared/src/{bodyweight,strength}.ts`                        | EDIT      | Add `profileId: uuidSchema` to both input schemas.                                                                                                                                           |
 | `packages/shared/src/id.ts`                                           | EDIT      | Add `uuidSchema` (one UUID validator shared by the input schemas + the DAL id guard).                                                                                                        |
-| `packages/db/src/seed.ts`                                             | EDIT      | Rename "Athlete One" → Liam (keep `SEED_PROFILE_PUBLIC_ID`); add Scarlett (`SEED_PROFILE_2_PUBLIC_ID`); both kid, root household, `ON CONFLICT DO NOTHING`.                                  |
-| `packages/db/scripts/verify.ts`                                       | EDIT      | Assert 2 profiles (Liam + Scarlett), both scoped to the root household.                                                                                                                      |
-| `apps/web/e2e/{gate-login,steps,global.setup,log-bodyweight.spec}.ts` | EDIT      | Post-login lands on the picker; `selectProfile` step; smoke = picker → Liam tile → scoped Today → log; 404 check on `/p/does-not-exist`.                                                     |
+| `packages/db/src/seed.ts`                                             | EDIT      | Rename the single v0 profile (keep `SEED_PROFILE_PUBLIC_ID`); add a second (`SEED_PROFILE_2_PUBLIC_ID`); both kid, root household, `ON CONFLICT DO NOTHING`.                                 |
+| `packages/db/scripts/verify.ts`                                       | EDIT      | Assert 2 profiles (Athlete One + Athlete Two), both scoped to the root household.                                                                                                            |
+| `apps/web/e2e/{gate-login,steps,global.setup,log-bodyweight.spec}.ts` | EDIT      | Post-login lands on the picker; `selectProfile` step; smoke = picker → Athlete One tile → scoped Today → log; 404 check on `/p/does-not-exist`.                                              |
 | `apps/web/package.json`                                               | EDIT      | Add `@testing-library/react` + `@testing-library/dom` + `jsdom` (the component-test deps the vitest config anticipated).                                                                     |
 
 ## Test plan
@@ -51,7 +51,7 @@ the form or URL.
   with `href=/p/<publicId>` and shows name/kind. Uses a per-file `// @vitest-environment jsdom`
   docblock, so the default node env (all existing tests) is untouched.
 - **db:verify (PGlite):** idempotent seed now yields exactly 2 profiles, both household-scoped.
-- **Playwright smoke:** picker heading → tap Liam → scoped Today (name asserted) → log bodyweight →
+- **Playwright smoke:** picker heading → tap Athlete One → scoped Today (name asserted) → log bodyweight →
   renders; plus a 404 assertion for an unknown id. Local: `pnpm --filter web e2e` (needs real PG; runs
   in CI). Unit/verify: `pnpm --filter web test` · `pnpm --filter @mat-plan/db db:verify`.
 

@@ -362,9 +362,9 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
 /**
  * V1-24 PR 1a — the weigh-in in BOTH its states, deterministically.
  *
- * Scarlett's YESTERDAY is this test's alone (the e2e rule in `global.setup.ts`): the warm-up owns her
- * today and no other spec writes to her yesterday, so on a first attempt the form is guaranteed and
- * the receipt is the one this test creates. Scanning Liam's Today instead would audit form OR receipt
+ * Athlete Two's YESTERDAY is this test's alone (the e2e rule in `global.setup.ts`): the warm-up owns their
+ * today and no other spec writes to their yesterday, so on a first attempt the form is guaranteed and
+ * the receipt is the one this test creates. Scanning Athlete One's Today instead would audit form OR receipt
  * depending on which spec ran first.
  *
  * Logs the WIDEST legal value, so the 360px check measures the receipt at its longest line. `500 lb`
@@ -387,7 +387,7 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
   if (testInfo.retry === 0) {
     await expect(
       input,
-      'Scarlett’s yesterday should be empty before this test logs it',
+      'Athlete Two’s yesterday should be empty before this test logs it',
     ).toBeVisible();
   }
   if ((await input.count()) > 0) {
@@ -446,7 +446,7 @@ test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1
 /**
  * V1-24 3a-i — a logged strength set's Change, OPENED, at 360px. No test had ever opened this editor.
  *
- * Writes strength on **Scarlett's yesterday** (the a11y day: its other write is bodyweight, an
+ * Writes strength on **Athlete Two's yesterday** (the a11y day: its other write is bodyweight, an
  * independent surface). Logs only if the probe isn't there yet, so a retry measures the same state.
  * The 280px superset-member case is the unit test's structural assertion (Save/Cancel on their own
  * row) plus the plan's width math; logging a superset through the UI here would cost far more.
@@ -495,8 +495,8 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
 
 /**
  * V1-24 3a-ii — the strength SECTION as the day's record: receipts, the collapsed "Log more strength",
- * and the form opened from it. Writes strength on **Scarlett's today** (its other write is the warm-up
- * weigh-in, a different surface; Scarlett's yesterday holds 3a-i's probe). Logs only when no receipt
+ * and the form opened from it. Writes strength on **Athlete Two's today** (its other write is the warm-up
+ * weigh-in, a different surface; Athlete Two's yesterday holds 3a-i's probe). Logs only when no receipt
  * exists yet (gated on STATE, so a failed first attempt is healed by the retry); the focus assertions
  * run where that write happens, and the scans run every time.
  *
@@ -551,7 +551,9 @@ test('the strength section renders saved sessions as receipts, at 360px (V1-24 3
     const second = await receipts.nth(1).getAttribute('id');
     await expect(page.locator(`[id="${second}"]`)).toBeFocused();
   } else {
-    expect(testInfo.retry, 'receipts before any write: another spec logs Scarlett today').toBe(1);
+    expect(testInfo.retry, 'receipts before any write: another spec logs Athlete Two today').toBe(
+      1,
+    );
   }
 
   await expect(receipts.first()).toBeVisible();

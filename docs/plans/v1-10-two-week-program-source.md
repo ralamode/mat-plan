@@ -3,11 +3,29 @@ last_updated: 2026-07-30
 author: Ray Baker
 source: Bakers Wrestling Context — Block 2 "Kids S&C Foundation" (training-weeks/2026-07-06)
 purpose: Seed workouts for mat-plan. Self-contained; no dependency on the source repo.
-athletes: Liam (10, ~65 lb) · Scarlett (12, ~85 lb) — train together, share loads unless noted.
+athletes: two siblings — Athlete One and Athlete Two. Train together, share loads unless noted.
 assumption: Both kids GREEN (well-rested, good mood) and NO wrestling practice on these days → full sessions.
 ---
 
 # Two-Week S&C Program (green / no-practice baseline)
+
+> 🔴 **Scrubbed under `OSS-1` (2026-10-08), and partially retained on purpose.** Two things came out:
+> the siblings' **given names** (now the role names above) and their **ages and bodyweights**, which
+> were personal attributes with no engineering value in a design record.
+>
+> The **per-athlete load splits below were kept**, de-named. They are the evidence for a schema
+> decision — that `prescription_targets` has to be **per profile** rather than per block, because two
+> athletes on the same prescription genuinely carry different loads. Delete the split and the only
+> record of _why_ that table exists goes with it. This matches the standard the repo already set and
+> reviewed for [`docs/samples/legacy-csv/`](../samples/legacy-csv/README.md): names, dates and
+> bodyweight **values** out, de-named strength loads in.
+>
+> ⚠️ **This is a dated design record, not a current prescription.** Nothing re-seeds from it, and any
+> future use of this block authors its loads the way every load in this app is authored — by a human,
+> from what the athlete last lifted. The re-seedable copy of this block
+> ([docs/programs/kids-sc-foundation-archived.md](../programs/kids-sc-foundation-archived.md)) had its
+> per-athlete numbers **removed**, because there the numbers were an instruction rather than testimony.
+> Both decisions are recorded in [docs/privacy/data-inventory.md](../privacy/data-inventory.md) §9.
 
 This is two weeks of the **Kids S&C 5-day split** (3 strength + 2 conditioning, + optional Sat, rest Sun), written for the **best-case day: kids rested, good mood, no club practice** — so every session runs full and the hard conditioning lands where it belongs.
 
@@ -51,15 +69,15 @@ Full detail on every one of these is in the **appendices** at the bottom of this
 4. **Evening (optional)** — Nightly work, **lift-day type**: grease-the-groove + core battery + mobility flow · _Appendix D_
 5. **Lights-out** — Brain Rep · _Appendix A, Block 9_
 
-| Movement                        | Sets × reps                                            | Load                                       | Cue / youth-safe note                                                                      |
-| ------------------------------- | ------------------------------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Box Jump _(or low hurdle hops)_ | 4 × 3                                                  | BW — Liam ~30" / Scarlett ~36"             | **Capped** — 12 contacts, **fresh**, stick the landing. Throws-only on any knee/heel ache. |
-| Front Squat _(primary)_         | 5 × 5                                                  | Liam 60 · Scarlett 65                      | Top set **RIR 1–2**, bar speed fast; progress by load.                                     |
-| Back Squat _(secondary)_        | 3 × 5                                                  | ~75–85 both, RIR 2                         | 2nd squat pattern, heavier, controlled.                                                    |
-| Pull-Up                         | Liam 4×4 · Scarlett 4×5, **last set AMRAP to failure** | BW; Scarlett +5 lb                         | Failure OK (bodyweight = safe). Liam builds max, Scarlett loads.                           |
-| BB Bench                        | 4 × 6                                                  | ~60 lb, RIR 1                              | Drive bar speed.                                                                           |
-| Nordic Ham Curl                 | 4 × 5                                                  | BW slow eccentric, **last set to failure** | Hamstring brake; hands ready to catch.                                                     |
-| Pallof Press                    | 3 × 12/side                                            | band                                       | Anti-rotation.                                                                             |
+| Movement                        | Sets × reps                                                      | Load                                       | Cue / youth-safe note                                                                      |
+| ------------------------------- | ---------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| Box Jump _(or low hurdle hops)_ | 4 × 3                                                            | BW — Athlete One ~30" / Athlete Two ~36"   | **Capped** — 12 contacts, **fresh**, stick the landing. Throws-only on any knee/heel ache. |
+| Front Squat _(primary)_         | 5 × 5                                                            | Athlete One 60 · Athlete Two 65            | Top set **RIR 1–2**, bar speed fast; progress by load.                                     |
+| Back Squat _(secondary)_        | 3 × 5                                                            | ~75–85 both, RIR 2                         | 2nd squat pattern, heavier, controlled.                                                    |
+| Pull-Up                         | Athlete One 4×4 · Athlete Two 4×5, **last set AMRAP to failure** | BW; Athlete Two +5 lb                      | Failure OK (bodyweight = safe). Athlete One builds max, Athlete Two loads.                 |
+| BB Bench                        | 4 × 6                                                            | ~60 lb, RIR 1                              | Drive bar speed.                                                                           |
+| Nordic Ham Curl                 | 4 × 5                                                            | BW slow eccentric, **last set to failure** | Hamstring brake; hands ready to catch.                                                     |
+| Pallof Press                    | 3 × 12/side                                                      | band                                       | Anti-rotation.                                                                             |
 
 **If 2-hr evening practice instead:** This is the heaviest leg day — **do NOT run it before evening practice.** Best move: swap Day 1 to a non-practice day this week. If it must stay, do it in a **morning slot with ≥5–6 h before practice**, and: **cut Back Squat**, take Front Squat to **RIR 3 (3×3 primer, not 5×5)**, **cut Nordic**. Keep a few crisp box jumps as a CNS primer + Pull-Up + Pallof. Leave the legs fresh for the mat.
 
@@ -92,15 +110,15 @@ Full detail on every one of these is in the **appendices** at the bottom of this
 4. **Evening (optional)** — Nightly work, **lift-day type**: grease-the-groove + core battery + mobility flow · _Appendix D_
 5. **Lights-out** — Brain Rep · _Appendix A, Block 9_
 
-| Movement              | Sets × reps                               | Load                                  | Cue / youth-safe note                                   |
-| --------------------- | ----------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
-| Med-Ball Slam         | 4 × 5                                     | 15–20 lb ball                         | Throw with intent, zero ground impact.                  |
-| Trap-Bar Deadlift     | work to a top **4 × 3**, then 2 back-offs | top ~145–150 both                     | Heavy but **RIR 1–2, never a grind**; progress by load. |
-| DB OHP / Landmine     | 4 × 6                                     | Liam 15 · Scarlett 20 (per DB), RIR 1 | Go heavier — they press these + do HSPU.                |
-| 1-Arm DB Row          | 4 × 8/side                                | Liam 25 · Scarlett 30                 | Flat back, no torso english.                            |
-| Weighted Chin         | 3 × 5                                     | BW → Liam AMRAP · Scarlett +5–10 lb   | Pull volume; failure OK bodyweight.                     |
-| Bulgarian Split Squat | 3 × 8/leg                                 | DB 15–20                              | Single-leg strength + balance.                          |
-| Ab Rollout            | 3 × 8–10                                  | BW, **last set to failure**           | Anti-extension; no lumbar sag.                          |
+| Movement              | Sets × reps                               | Load                                            | Cue / youth-safe note                                   |
+| --------------------- | ----------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| Med-Ball Slam         | 4 × 5                                     | 15–20 lb ball                                   | Throw with intent, zero ground impact.                  |
+| Trap-Bar Deadlift     | work to a top **4 × 3**, then 2 back-offs | top ~145–150 both                               | Heavy but **RIR 1–2, never a grind**; progress by load. |
+| DB OHP / Landmine     | 4 × 6                                     | Athlete One 15 · Athlete Two 20 (per DB), RIR 1 | Go heavier — they press these + do HSPU.                |
+| 1-Arm DB Row          | 4 × 8/side                                | Athlete One 25 · Athlete Two 30                 | Flat back, no torso english.                            |
+| Weighted Chin         | 3 × 5                                     | BW → Athlete One AMRAP · Athlete Two +5–10 lb   | Pull volume; failure OK bodyweight.                     |
+| Bulgarian Split Squat | 3 × 8/leg                                 | DB 15–20                                        | Single-leg strength + balance.                          |
+| Ab Rollout            | 3 × 8–10                                  | BW, **last set to failure**                     | Anti-extension; no lumbar sag.                          |
 
 **If 2-hr evening practice instead:** Trap-bar + Bulgarians will fatigue legs/back before the mat. **Do it in a morning slot**, and if it's close to practice: **deload the trap-bar to RIR 3 (top 3×3)**, **cut Bulgarian Split Squat**, keep the **upper work (OHP, row, chin)** which barely touches mat readiness, keep Ab Rollout light. Or simplest: move the heavy hinge to a non-practice day and just do upper + core in the morning.
 
@@ -134,15 +152,15 @@ Full detail on every one of these is in the **appendices** at the bottom of this
 4. **Evening (optional)** — Nightly work, **lift-day type but skip GtG pulls** (today is already a hard pull day): core battery + mobility flow · _Appendix D_
 5. **Lights-out** — Brain Rep · _Appendix A, Block 9_
 
-| Movement                                  | Sets × reps                                   | Load                                        | Cue / youth-safe note                                             |
-| ----------------------------------------- | --------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
-| Broad Jump _(or low lateral hurdle hops)_ | 4 × 3                                         | BW                                          | **Capped** — horizontal power (penetration step); stick landings. |
-| Barbell Hip Thrust                        | 4 × 6                                         | ~135 lb, RIR 1                              | No spinal compression → push hard; full glute lockout.            |
-| Romanian Deadlift                         | 4 × 8                                         | ~95 lb BB or ~45 lb DBs, RIR 2              | Hip hinge, flat back, hamstring stretch.                          |
-| Weighted Dips                             | 3 × 6–8                                       | BW → add vest/belt, **last set to failure** | Full depth, controlled.                                           |
-| Weighted Chin / Rope Climb                | Liam 4×4 (last AMRAP) · Scarlett 4×5 +5–10 lb | Scarlett's weighted-pull slot               | Failure OK bodyweight.                                            |
-| Farmer Carry                              | 4 × 40 yd                                     | 35–45 lb/hand — **to grip failure**         | Tall posture, crush the grip.                                     |
-| Hollow-Body Hold                          | 3 × 30–40 s                                   | BW                                          | Body-line; no rib flare.                                          |
+| Movement                                  | Sets × reps                                             | Load                                        | Cue / youth-safe note                                             |
+| ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------- |
+| Broad Jump _(or low lateral hurdle hops)_ | 4 × 3                                                   | BW                                          | **Capped** — horizontal power (penetration step); stick landings. |
+| Barbell Hip Thrust                        | 4 × 6                                                   | ~135 lb, RIR 1                              | No spinal compression → push hard; full glute lockout.            |
+| Romanian Deadlift                         | 4 × 8                                                   | ~95 lb BB or ~45 lb DBs, RIR 2              | Hip hinge, flat back, hamstring stretch.                          |
+| Weighted Dips                             | 3 × 6–8                                                 | BW → add vest/belt, **last set to failure** | Full depth, controlled.                                           |
+| Weighted Chin / Rope Climb                | Athlete One 4×4 (last AMRAP) · Athlete Two 4×5 +5–10 lb | Athlete Two's weighted-pull slot            | Failure OK bodyweight.                                            |
+| Farmer Carry                              | 4 × 40 yd                                               | 35–45 lb/hand — **to grip failure**         | Tall posture, crush the grip.                                     |
+| Hollow-Body Hold                          | 3 × 30–40 s                                             | BW                                          | Body-line; no rib flare.                                          |
 
 **If 2-hr evening practice instead:** RDL + heavy carries will pre-fatigue hips + grip — and grip matters on the mat. **Morning slot**, and near practice: **cut RDL** (or take it to a light 2×8), **lighten the Farmer Carry** (don't take grip to failure before practice — leave grip for the mat), keep **Hip Thrust** (no spinal cost) at RIR 2, keep **Dips + Chin** (upper, safe). Or move the heavy posterior day off the practice day and do upper + hollow only.
 
@@ -243,8 +261,8 @@ Flexibility window matters most at this age and gains are durable. **PNF (contra
 
 **Per-kid emphasis:**
 
-- **Liam → hamstrings.** Spend the extra PNF cycles on the front-split front-leg hamstring + the pancake/forward-fold. Tight hamstrings are his limiter and they gate the Nordic curl + v-sit compression. If time's short, the hamstring holds are non-negotiable.
-- **Scarlett → front & side (middle) splits.** Prioritize the front split (both sides) + the middle/side split; the pancake feeds the middle. If time's short, the front + side holds are non-negotiable.
+- **Athlete One → hamstrings.** Spend the extra PNF cycles on the front-split front-leg hamstring + the pancake/forward-fold. Tight hamstrings are the limiter and they gate the Nordic curl + v-sit compression. If time's short, the hamstring holds are non-negotiable.
+- **Athlete Two → front & side (middle) splits.** Prioritize the front split (both sides) + the middle/side split; the pancake feeds the middle. If time's short, the front + side holds are non-negotiable.
 
 ### 9. The Brain Rep — bedtime mindset (~2–3 min, lights-out)
 

@@ -277,9 +277,16 @@ Their deliverables are unchanged and still written below; only when they start h
 - [ ] `OPS-3`'s per-household restore has been rehearsed **before** any real household is deleted —
       until it exists, a mistaken deletion is not recoverable without rolling back every other family
       (PRIV-1).
-- [ ] 🔴 No minor's name or log data in the tree: `OSS-1`'s rename is done, re-scoped to the ~50 files
-      PRIV-1 found rather than the 3 the row used to name
-      ([data-inventory.md](../privacy/data-inventory.md) §9).
+- [x] ✅ **No minor's name in the tree** (2026-10-08): `OSS-1`'s rename is done — 57 files / 309
+      occurrences down to **1**, a comment in an **applied** migration the forward-only guard forbids
+      editing, recorded as a residual. Two sites were **scrubbed rather than renamed** (a per-athlete
+      load table, and real rows quoted as CSV-contract examples), and two further classes the inventory
+      had missed are closed: real bodyweight values quoted as examples, and two minors' ages and
+      bodyweights ([data-inventory.md](../privacy/data-inventory.md) §9).
+      ⚠️ **Forward exposure only** — `git log -S` still finds every prior value and the commit author is
+      in every commit; history rewriting was out of scope and remains un-chosen. Log data in the tree is
+      bounded by the same §9: dated weigh-in times survive in a correction's committed evidence,
+      de-named.
 - [ ] SEC-3 merged: server-side errors carry no bodyweight to Sentry.
 
 ## Beta 1 — 3–5 families, all the major features
