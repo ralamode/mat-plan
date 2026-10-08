@@ -294,7 +294,7 @@ widen.** That check-in is a step, not an afterthought — it is the reason for t
   short expiry, single use, revocable, owner-only minting, a confirm screen naming the household, and
   never a token in a logged URL path. **Roles:** owner vs member — who invites, removes, deletes,
   exports.
-- **Step-up** (Clerk reverification) before delete-household, invite, member removal and export — on a
+- **Step-up** (Clerk reverification) before delete-household, delete-athlete (PROF-1), invite, member removal and export — on a
   shared phone, the kid holds the parent's session.
 - **In-place correction:** V1-24 2 (check-ins), 3a/3b (strength sets), 1c/1d (duplicates).
 - **Self-serve household deletion**, behind step-up, replacing the beta-0 runbook.
