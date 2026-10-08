@@ -161,9 +161,10 @@ dashboards. No credential for any of them exists in this repo, deliberately.
 > is no reason to pay for it.
 >
 > **The one exception is the OPS-1 PR's own preview.** It runs the guard before anything is merged,
-> so its Vercel check is red — `Refusing to boot: VERCEL_ENV=preview, but DATABASE_URL does not name
-a preview database` — until step 5 is done. That red is expected; redeploy the preview after step 5
-> and it should go green, which doubles as the end-to-end proof that the split worked.
+> so its Vercel check stays red until step 5 is done, failing with
+> `Refusing to boot: VERCEL_ENV=preview, but DATABASE_URL does not name a preview database`. That red
+> is expected. Redeploy the preview after step 5 and it should go green, which doubles as the
+> end-to-end proof that the split worked.
 
 > 🔑 **Token hygiene for step 8.** A Vercel API token is account- or team-scoped and has **no
 > read-only scope**: it can decrypt every production environment variable and create deployments.
