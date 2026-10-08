@@ -10,6 +10,20 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+✅ **TEN-1 1b — the household scoping seam, and the gate closes (2026-10-08).** One household's data
+is no longer reachable from another household's request. `getHouseholdScope()` (`lib/dal/household.ts`)
+is the single scope point; `isLiveProfile` takes a **required** `HouseholdScope`, so an unconverted
+call site is a build failure rather than a leak nobody noticed. The picker was the whole boundary under
+[ADR 0006](./decisions/0006-household-addressing.md)'s session-only addressing — `listProfiles()`
+returned every profile in the database — and it is now a single-sourced query `db:verify` runs against
+**two households × two profiles, in both directions**, alongside both scoped reads and all three amend
+writers. `pnpm db:mutations` breaks the predicate on purpose and asserts the proofs go red, because a
+boundary test that cannot fail is counted as coverage. ⚠️ This buys **consistent scoping**; isolation is
+only _authorized_ at **AUTH-1** — the gate is still one shared code. **1c** converts the remaining five
+predicate sites (`logCheckinEntries`, `writeStrengthSession`, `programDayRows`, `export-month` ×3,
+`seed.ts`); **1d** adds the structural guard, the corrections and the `findOrCreateMovementId` →
+**TEN-2** go/no-go ([plan](./plans/ten-1-household-scope.md)).
+
 ✅ **ONB-0 — first run is honest (2026-10-07).** A brand-new household no longer inherits the
 maintainer's household's routine, and the picker no longer tells a human to seed a database.
 `routine_config = NULL` fell back to the **whole** catalog — ~17 unexplained controls, seven of them
