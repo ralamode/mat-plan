@@ -62,7 +62,7 @@ stranger needs _around_ it.
 | Daily routine + editor     | ✅ (`/p/<id>/routine`)                            | —                                                                                                           | confirm-on-remove, restore default                   |
 | History / day paging       | ✅ V1-15                                          | —                                                                                                           | —                                                    |
 | **Delete / clear a day**   | ❌ only `db:correct`, which only Ray can run      | **V1-9b** — the only way a stranger undoes a mis-tap                                                        | —                                                    |
-| **Athletes**               | ❌ created by the seed only                       | **ONB-0** empty state, **PROF-1** create                                                                    | PROF-1 rename + archive                              |
+| **Athletes**               | ❌ created by the seed only                       | ~~**ONB-0** empty state~~ ✅ 2026-10-07; **PROF-1** create                                                  | PROF-1 rename + archive                              |
 | **Programs**               | ❌ seed-only (`PROGRAM_SEED`)                     | **ONB-2** — a new household starts on The Daily Five (seeded under both A/B days, so no SCHED-1 dependency) | **V1-22** edit, **SCHED-1** which days               |
 | **Sign-in + households**   | ❌ one shared access code, existence-only scoping | **TEN-1**, **AUTH-1**                                                                                       | invites, roles, step-up                              |
 | Streaks                    | ❌                                                | —                                                                                                           | **MOT-1** (needs SCHED-1 so a rest day isn't a miss) |
@@ -78,7 +78,7 @@ login, child accounts, kid PINs.
 flowchart LR
   N[0 · now: PII purge, merge gates] --> AU
   O[1 · ops: previews, seed split, restore] --> AU
-  ONB[ONB-0 · first run, broken today] --> S
+  ONB[ONB-0 · first run ✅] --> S
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
@@ -93,9 +93,11 @@ that PR and the finish. If a PR's position disagrees with this chart, the chart 
 ⚠️ **Two rows moved out of step 4 on 2026-10-07, and the reason generalises.** Step 4 previously
 bundled `ONB-0` and `PRIV-1` behind `AUTH-1`, which cost schedule for nothing:
 
-- **`ONB-0` starts now.** First run is **broken today**, it is a P0, and it blocks nothing — so holding
-  it behind the auth chain buys no safety and delays a live defect. It feeds step 4; it does not wait
-  for it. **Work that is already broken and blocks nothing is pure throughput.**
+- **`ONB-0` started now, and is ✅ done (2026-10-07).** First run was **broken today**, a P0, blocking
+  nothing — so holding it behind the auth chain bought no safety and delayed a live defect. It fed step 4;
+  it did not wait for it. **Work that is already broken and blocks nothing is pure throughput**, and this
+  row is the evidence: it shipped the same day it was pulled forward. Its two hand-offs into step 4 are
+  the "add an athlete" control (**PROF-1**) and `shot`'s neutral home (**ONB-2**).
 - **`PRIV-1` starts now, because it gates `AUTH-1`.** The Google consent screen needs a
   privacy-policy URL (§3), so privacy is **upstream** of auth, not a sibling of onboarding. It is also
   the row this file says "should not be designed casually", which is the other reason not to reach it

@@ -1104,8 +1104,14 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   rule, because Ray's household already writes `pull-up` to strength-log). Contract:
   [csv-export-contract.md](./csv-export-contract.md).
 
-  **Dependencies:** ONB-0 first (a first-run surface worth seeding into, and a neutral routine that
-  includes `shot`, where the finisher is logged); **V1-27** (every row prescribes `sets`, so with V1-27
+  **Dependencies:** ONB-0 is **done** and shipped the first-run surface — but ⚠️ **it did NOT ship "a
+  neutral routine that includes `shot`"**, which this line used to assume. ONB-0's neutral default is
+  `['strength']`; `shot` is reachable only as `checkin:brush_teeth:shot` (whose group label is the very
+  string ONB-0 existed to get off a stranger's screen), and the `shots` activity sits outside
+  `CHECKIN_FIELDS`' render scope on purpose. **So ONB-2 owns both halves:** the render-scope change that
+  gives `shot` a neutral home, and the one-line edit to `NEUTRAL_DEFAULT_KEYS` that admits it. ONB-2
+  must also decide whether its prescribed push-ups / pull-ups co-exist with the calisthenics check-in
+  counters — **CAT-1 says they must not**, which is why ONB-0 left them out of the default; **V1-27** (every row prescribes `sets`, so with V1-27
   open a partial set blocks submit on every movement); the catalog additions and the hollow-body
   change; the dose sign-off; a UX panel before implementation (the first-run copy). No GAP-3 unit work
   is needed: everything is `BW` or seconds.
@@ -1882,8 +1888,13 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   3. **Ownership.** Today `getProfileByPublicId` is the BOLA seam. With a household in the path there
      are **two** ids, and the new hole is a valid profile under the _wrong_ household — which looks
      authorized if only the profile id is checked. Boundary test: wrong-household → 404.
-  4. **ONB-0's empty state** currently lives at `/`, which becomes the sign-in page. First-run moves
-     to `/<household-id>` and the two rows have to agree about what a brand-new household sees.
+  4. **ONB-0's empty state.** ⚠️ This sub-bullet was stale in two ways and is corrected here: the empty
+     state moved to **`/p`** at OSS-2 (`/` is the public landing), and **ADR 0006 was accepted
+     session-only** (2026-10-07), so there is no `/<household-id>` segment for first-run to move to.
+     What remains true is the agreement: ONB-0 shipped "a brand-new household sees the explained empty
+     state, and `routine_config = NULL` means the neutral default" — so TEN-1 must leave a created
+     profile's `routine_config` NULL rather than writing a starter routine (see
+     [programming](./features/programming.md) invariant 5).
   5. **NOT the CSV export directory.** That is `public_id` on a _data_ path, not a URL, and is
      unaffected — stated because it looks adjacent.
 
@@ -2152,17 +2163,51 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     genuinely attributable before seeding — a misattributed quote to a HOFer is embarrassing in exactly
     the community this targets.
 
-- **ONB-0 — first run is broken TODAY (P0, independent of everything below)** — a brand-new household has 🚀 **Pulled forward to start now (2026-10-07):** it was bundled into Beta 0 step 4 behind `AUTH-1`, which bought no safety — first run is **broken today**, this is a P0, and it blocks nothing. Work that is already broken and blocks nothing is pure throughput ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
-  `routine_config = null`, which `resolveRoutine` maps to `buildDefaultRoutine` over the seeded catalog,
-  so **a stranger's first screen is Ray's family's routine** in Ray's family's shorthand — Rice bucket ·
-  Brain rep · Splits · **Brush teeth** (a wrestling drill block with stance/ladder/bridge sub-metrics,
-  which a new coach reads as dental hygiene). And before that, `apps/web/app/page.tsx:25` says, to a
-  human: **"No profiles found. Seed the database to get started."** Spec is
-  [ONB-1's R2](./plans/onb-1-self-serve-onboarding-prd.md): an **explained empty state** (what this app
-  is, what happens next) plus a control that routes to — or inlines — the movement/workout editor, and a
-  **neutral** default routine. **Not** a questionnaire. Cheapest item in the onboarding story, blocks any
-  stranger using the app, and depends on nothing else. UI change ⇒ **needs a UX panel before
-  implementation** (AGENTS.md).
+- **ONB-0 — first run was broken. ✅ DONE 2026-10-07** ([plan](./plans/onb-0-first-run.md) ·
+  [UX panel](./plans/onb-0-first-run-ux-panel.md)). Pulled forward out of Beta 0 step 4 on 2026-10-07:
+  it had been bundled behind `AUTH-1`, which bought no safety — first run was **broken today**, a P0,
+  blocking nothing. Work that is already broken and blocks nothing is pure throughput
+  ([milestone](./milestones/beta-1.md), [parallel-work](./parallel-work.md)).
+
+  **What was wrong.** A new profile has `routine_config = null`, which `resolveRoutine` mapped to
+  `buildDefaultRoutine` over the **whole** seeded catalog — so a stranger's first screen was **the
+  maintainer's household's routine**, in its shorthand: Rice bucket · Brain rep · Splits · **Brush
+  teeth** (a wrestling drill block with stance/ladder/bridge sub-metrics, which a new coach reads as
+  dental hygiene). The UX panel counted the real burden: **~17 controls, none explained.** And before
+  that, the picker said, to a human: **"No profiles found. Seed the database to get started."**
+  ⚠️ That string was cited here for months as `apps/web/app/page.tsx:25`; **OSS-2 moved the app behind
+  the public landing**, so it was `apps/web/app/p/page.tsx:37`. Citation corrected in the same PR.
+
+  **What shipped**, to [ONB-1's R2](./plans/onb-1-self-serve-onboarding-prd.md) (an explained empty
+  state + a control + a neutral default; **not** a questionnaire):
+  - The picker's empty state explains what the app is, what happens next, and that adding an athlete
+    isn't in the app yet — and the page **subhead branches** too, because "Pick a profile to start
+    logging." is an imperative with no object when the list is empty.
+  - The neutral default is **`['strength']`** — with the pinned weigh-in, exactly the UX panel's own A2
+    candidate ("weigh-in + strength only, everything else opt-in via the editor"). Membership stays the
+    full catalog, so an existing household's authored items still render; only the fallback narrowed.
+  - `routine_config = NULL` **is** the neutral default and is never written. Seeded profile 1 was NULL,
+    so it got an explicit full-catalog config, and a guarded correction
+    (`null-routine-to-full-2026-10-07`, scoped to the seeded household) did the same for the live row.
+
+  **What it deliberately left, and to whom:**
+  - **PROF-1** removes the "isn't in the app yet" line, the GitHub link and the README's
+    `## Adding an athlete` section when its dashed `+` tile lands. R2's "route to the editor" half is
+    unsatisfiable until then: at zero profiles there is no `profileId`.
+  - **ONB-2** owns `shot`. It is reachable today only as `checkin:brush_teeth:shot` — whose group label
+    is the offending string — and the `shots` activity is outside `CHECKIN_FIELDS`' render scope, so
+    giving it a neutral home is a render-scope change, plus the matching one-line edit to
+    `NEUTRAL_DEFAULT_KEYS`.
+  - **CAT-1** — the calisthenics counters are out of the default, consistent with its trap (2) ("the
+    default needs the criterion too"); its named exclusion const beside `CALISTHENICS_METRIC_KEYS` is
+    still CAT-1's to write.
+  - **OPS-2** — `migrate.yml` seeds prod on every push and the seed inserts two named fixture profiles,
+    so a stranger who forks and deploys by the documented route still lands on a picker holding _the
+    maintainer's_ two kids, not this empty state. OPS-2 is what makes the empty state the normal first
+    screen.
+  - **`life:wrestling_practice`** rejoins the default once its one tap states what it writes
+    (`DEFAULT_PRACTICE_MINUTES = 90`, the maintainer's club's number) or takes a duration.
+
 - **UNIT-1 — ABSORBED into GAP-3 (2026-08-26).** The finding stands and is unchanged: verified against the tree,
   `entry_sets.weight_num` is `numeric` with **no unit column** (`packages/db/src/schema.ts:191`),
   `prescription_targets.load` is verbatim text with no unit (`:544`), and `movements.unit_default` exists and FKs to

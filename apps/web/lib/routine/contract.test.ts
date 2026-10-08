@@ -201,3 +201,46 @@ describe('the seeded routine binds to the live app catalog', () => {
     expect(resolved).not.toEqual(buildDefaultRoutine(ROUTINE_CATALOG)); // A≠B holds against the live catalog
   });
 });
+
+/**
+ * ONB-0 — `resolveRoutine`'s third parameter. MEMBERSHIP (arg 2) and the FALLBACK (arg 3) are different
+ * questions: membership must stay the whole catalog or an authored item is stripped on read, while the
+ * fallback is what a profile with no usable config renders.
+ */
+describe('resolveRoutine — membership vs the fallback (two lists)', () => {
+  const FALLBACK = ['strength'] as const;
+
+  it("omitting the third arg keeps TODAY's behaviour exactly (back-compat for every existing caller)", () => {
+    expect(resolveRoutine(null, CATALOG)).toEqual(buildDefaultRoutine(CATALOG));
+  });
+
+  it('uses the FALLBACK, not the catalog, on every no-usable-config path', () => {
+    const expected = buildDefaultRoutine(FALLBACK);
+    expect(resolveRoutine(null, CATALOG, FALLBACK)).toEqual(expected);
+    expect(resolveRoutine('nope', CATALOG, FALLBACK)).toEqual(expected);
+    expect(resolveRoutine({ version: 2, order: [] }, CATALOG, FALLBACK)).toEqual(expected);
+    // Fully-stale config → the fallback too (the second fallback site inside the function).
+    expect(
+      resolveRoutine({ version: 1, order: [{ key: 'life:gone' }] }, CATALOG, FALLBACK),
+    ).toEqual(expected);
+  });
+
+  it('keeps membership WIDE: a catalog key outside the fallback still resolves', () => {
+    const stored = { version: 1, order: [{ key: 'checkin:brush_teeth:stance' }] };
+    expect(resolveRoutine(stored, CATALOG, FALLBACK).order.map((i) => i.key)).toEqual([
+      'checkin:brush_teeth:stance',
+    ]);
+  });
+
+  it('filters the fallback through membership — `default ⊆ catalog` is enforced, not assumed', () => {
+    // A fallback key the catalog does not offer would render a block on Today that the editor never
+    // lists, so the next save would delete it.
+    const resolved = resolveRoutine(null, CATALOG, ['strength', 'life:not_in_catalog']);
+    expect(resolved.order.map((i) => i.key)).toEqual(['strength']);
+  });
+
+  it('never returns a BLANK routine: an empty or wholly-stale fallback falls back to the catalog', () => {
+    expect(resolveRoutine(null, CATALOG, [])).toEqual(buildDefaultRoutine(CATALOG));
+    expect(resolveRoutine(null, CATALOG, ['nothing:real'])).toEqual(buildDefaultRoutine(CATALOG));
+  });
+});

@@ -23,12 +23,57 @@ import * as schema from './schema';
 
 /**
  * V1-18: Scarlett's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
- * demonstrates A≠B vs Liam (NULL → the default routine). Exported so an app-side test can bind these keys
+ * demonstrates A≠B vs Liam (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
+ * old whole-catalog default). Exported so an app-side test can bind these keys
  * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
  * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
  * (`db:verify` parses them); `conditional` is the opaque V1-10 marker. Only differentiates on an EMPTY
  * target (fresh PGlite / Docker PG) — a prod re-seed no-ops via onConflictDoNothing.
  */
+/**
+ * The PRE-ONB-0 default routine, written out explicitly — the full `ROUTINE_CATALOG` order
+ * (strength → check-ins → life).
+ *
+ * ONB-0 narrowed what a NULL `routine_config` falls back to, from the whole catalog down to
+ * `['strength']`, so that a brand-new household no longer inherits this household's ~17 controls. Profile
+ * 1 was NULL and therefore rode that fallback, which means two things it is this literal's job to fix:
+ *
+ *  1. **Fixtures.** `e2e/global.setup.ts` warms the check-ins path by submitting `Splits` on profile 1,
+ *     and the V0-11 smoke drives `Rice bucket` + `Pressure` (a `brush_teeth` metric) there. Under the
+ *     neutral fallback those controls stop rendering and the setup project fails, taking the whole suite
+ *     with it. Writing the routine explicitly keeps every existing spec green with no spec edits.
+ *  2. **The live household.** A seed cannot fix the row that already exists (`onConflictDoNothing` below),
+ *     so the matching correction `null-routine-to-full-2026-10-07` writes this same config to any live
+ *     profile whose `routine_config` is NULL. Run it BEFORE the deploy: it writes what the app renders
+ *     today, so it is a no-op from the household's point of view.
+ *
+ * ⚠️ Hand-authored because `packages/db` cannot import the app-side `ROUTINE_CATALOG` (it is derived from
+ * `CHECKIN_FIELDS`/`LIFE_ACTIVITIES`, which are React-adjacent). `apps/web/lib/routine/catalog.test.ts`
+ * asserts this list EQUALS `ROUTINE_CATALOG` exactly, so the two cannot drift.
+ */
+export const SEED_FULL_ROUTINE = {
+  version: 1,
+  order: [
+    { key: 'strength' },
+    { key: 'checkin:rice_bucket' },
+    { key: 'checkin:brain_rep' },
+    { key: 'checkin:splits' },
+    { key: 'checkin:brush_teeth:stance' },
+    { key: 'checkin:brush_teeth:ladder' },
+    { key: 'checkin:brush_teeth:bridge' },
+    { key: 'checkin:brush_teeth:mobility' },
+    { key: 'checkin:brush_teeth:pressure' },
+    { key: 'checkin:brush_teeth:reaction' },
+    { key: 'checkin:brush_teeth:shot' },
+    { key: 'checkin:calisthenics:pushups' },
+    { key: 'checkin:calisthenics:pullups' },
+    { key: 'checkin:calisthenics:vsit_crunch' },
+    { key: 'checkin:calisthenics:vsit_skill_step' },
+    { key: 'life:wake' },
+    { key: 'life:wrestling_practice' },
+  ],
+} as const satisfies RoutineConfig;
+
 export const SEED_SCARLETT_ROUTINE = {
   version: 1,
   order: [
@@ -116,6 +161,9 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
         name: 'Liam',
         kind: 'kid',
         householdId: household.id,
+        // ONB-0: EXPLICIT, where this row used to be NULL. NULL now means "the neutral first-run
+        // routine" (`['strength']`), and the check-in specs drive habits + a brush-teeth metric here.
+        routineConfig: SEED_FULL_ROUTINE,
       },
       {
         publicId: SEED_PROFILE_2_PUBLIC_ID,

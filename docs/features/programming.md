@@ -3,6 +3,7 @@ feature: Programming (blocks, prescriptions, per-athlete targets)
 owns:
   - packages/shared/src/programming.ts
   - packages/shared/src/routine.ts
+  - apps/web/lib/routine/
   - packages/db/src/queries/program-day.ts
   - apps/web/lib/programming/
   - apps/web/app/p/[profileId]/program-reference.tsx
@@ -47,7 +48,7 @@ flowchart TD
   subgraph read["read path"]
     QUERY["queries/program-day.ts<br/>programDayRows — ONE block by design"]
     DALP["lib/dal/programming.ts<br/>BOLA + day-aware scoping"]
-    ROUTINE["shared/routine.ts<br/>resolveRoutine — NULL → the default"]
+    ROUTINE["shared/routine.ts<br/>resolveRoutine(raw, membership, fallback)<br/>NULL → the NEUTRAL first-run routine"]
   end
 
   SEED --> SEEDFN --> BLOCK
@@ -58,15 +59,16 @@ flowchart TD
 
 ## Files
 
-| File                         | What it is for                                                                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `shared/programming.ts`      | `PROGRAM_SEED` — the authored program as data, and its types. The only author of prescriptions.                      |
-| `shared/routine.ts`          | `RoutineConfig` + `resolveRoutine`. Every read zod-parses — the JSONB value is untrusted.                            |
-| `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query. Also feeds V1-13's `prescribed` column. |
-| `lib/programming/`           | App-side contract + day tests.                                                                                       |
-| `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                       |
-| `program-reference.tsx`      | Today's "here's your day" card — a collapsible native `<details open>` (V1-23 PR 3).                                 |
-| `app/p/[profileId]/routine/` | The V1-18 routine editor. **Linked from Today since V1-23** (below the logged entries) — it was URL-only before.     |
+| File                         | What it is for                                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shared/programming.ts`      | `PROGRAM_SEED` — the authored program as data, and its types. The only author of prescriptions.                                                                            |
+| `shared/routine.ts`          | `RoutineConfig` + `resolveRoutine`. Every read zod-parses — the JSONB value is untrusted.                                                                                  |
+| `apps/web/lib/routine/`      | `ROUTINE_CATALOG` (membership + order), `NEUTRAL_DEFAULT_KEYS` (first-run), `resolveProfileRoutine` (the one pairing).                                                     |
+| `queries/program-day.ts`     | `programDayRows`, shared so the DAL and `db:verify` run the identical query. Also feeds V1-13's `prescribed` column.                                                       |
+| `lib/programming/`           | App-side contract + day tests.                                                                                                                                             |
+| `lib/dal/programming.ts`     | Ownership scoping and the DTO.                                                                                                                                             |
+| `program-reference.tsx`      | Today's "here's your day" card — a collapsible native `<details open>` (V1-23 PR 3).                                                                                       |
+| `app/p/[profileId]/routine/` | The V1-18 routine editor. **Linked from Today since V1-23** (below the logged entries) — it was URL-only before. Its own docstring claimed otherwise until ONB-0 fixed it. |
 
 ## Invariants
 
@@ -134,8 +136,28 @@ evidence that an unprogrammed day exists.
 4. **Every read is scoped by profile `public_id` and filters soft-deleted rows at every level** —
    block, prescription, target, movement. `db:verify` proves each one independently.
 
-5. **`routine_config` NULL means "the default routine", not "no routine".** It ships dark: a profile
-   with no config renders the default order, which is how V1-18 landed without a backfill.
+5. **`routine_config` NULL means "the NEUTRAL FIRST-RUN routine", not "no routine" and not "everything".**
+   It ships dark: a profile with no config renders a fallback order, which is how V1-18 landed without a
+   backfill. **ONB-0 split what used to be one list into two, and the split is the invariant:**
+
+   - **Membership** is `ROUTINE_CATALOG` — every key a stored config may legally name. It **never
+     narrows.** Narrowing it would silently strip an authored item (a household's `brush_teeth` fields)
+     on the next read, which is a data-visible regression rather than a fix.
+   - **The fallback** is `NEUTRAL_DEFAULT_KEYS` = `['strength']`, which with the pinned weigh-in is
+     "weigh-in + strength only". Before ONB-0 the fallback _was_ the membership set, so a brand-new
+     household inherited the entire catalog — ~17 controls belonging to the maintainer's household,
+     including seven wrestling-drill metrics grouped under the label "Brush teeth".
+   - They are paired in **exactly one place**: `resolveProfileRoutine` in `apps/web/lib/routine/catalog.ts`,
+     which is also the only module in `apps/web` that imports `resolveRoutine`. `resolveRoutine`'s third
+     parameter is _defaulted_ to the membership set, so a two-arg call still means "inherit the whole
+     catalog" — which is correct on the **write** side (`validateRoutineForWrite` pairs membership alone;
+     a default is meaningless when authoring) and wrong on the read side, hence the wrapper.
+   - **The neutral default is NEVER WRITTEN.** `routine_config = NULL` _is_ its representation, so a
+     profile creator leaves it NULL. ⚠️ If PROF-1 / TEN-1 / ONB-2 ever needs to WRITE a starter routine
+     from `packages/db`, `NEUTRAL_DEFAULT_KEYS` and the two registries it derives from have to move to
+     `packages/shared` first — `packages/db` cannot import `apps/web`. The counter-precedent that makes
+     this easy to break by accident is `SEED_FULL_ROUTINE` / `SEED_SCARLETT_ROUTINE`, which are routine
+     literals living in `packages/db/src/seed.ts`.
 
 6. **The seed resolves references and fails loudly, writing nothing on an unresolved ref.** A silent
    partial program is worse than a red deploy — `db:verify` pins this.

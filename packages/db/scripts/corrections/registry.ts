@@ -4,6 +4,7 @@ import { ENTRY_STATUS, SEED_METRIC_KEYS, type Unit } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
+import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
 import type { Database } from '../../src/client';
 import * as schema from '../../src/schema';
 import { isLiveProfile } from '../../src/writers/ownership';
@@ -389,4 +390,112 @@ const liamBodyweightDuplicates: Correction = {
   },
 };
 
-export const CORRECTIONS: readonly Correction[] = [liamKbSwings, liamBodyweightDuplicates];
+/**
+ * 2026-10-07 (ONB-0) — every live profile whose `routine_config` is **NULL** was riding the old
+ * read-time default, which was the ENTIRE `ROUTINE_CATALOG`.
+ *
+ * ONB-0 narrowed that fallback to `['strength']`, so that a brand-new household stops inheriting this
+ * household's ~17 controls (3 habits, 7 `brush_teeth` drill metrics, 4 calisthenics counters, 2 life
+ * controls) as its first screen. For a NEW profile that is the fix. For a profile that already exists on
+ * NULL it would be a silent regression: its Today would quietly lose the habits and every brush-teeth
+ * control, with no data changed and nothing to point at. The app has no way to repair that — the routine
+ * editor can re-author it, but nobody would know they had to.
+ *
+ * So this writes the pre-ONB-0 default EXPLICITLY onto those rows: same rendering as today, now stated in
+ * the row instead of inherited from a default that is changing underneath it.
+ *
+ * **Run it BEFORE the deploy.** It writes the routine the current code already renders, so on today's
+ * build it is a no-op from the household's point of view, and after the deploy nothing has moved. Run it
+ * after and the household sees a narrowed Today in between.
+ *
+ * Idempotent by the guard rather than by a flag: `routine_config IS NULL` is the value being corrected
+ * FROM (README rule 2), so a second run matches nothing and reports 0. `updated_at = now()` (rule 4),
+ * `deleted_at IS NULL` (rule 5), one transaction (rule 7). Nothing it prints is privileged — a routine is
+ * a list of activity keys, not a measurement (rule 8).
+ *
+ * ⚠️ **SCOPED TO THE SEEDED HOUSEHOLD, and that scope is the whole safety argument.** `IS NULL` alone is
+ * idempotent per ROW but not per ERA. After ONB-0, leaving `routine_config` NULL is the *correct* thing
+ * for a profile creator to do — it is how a profile asks for the neutral default. So once PROF-1 ships
+ * athlete creation, an unscoped `IS NULL` would make any later `--apply` stamp this household's full
+ * routine, `brush_teeth` and all, onto somebody else's brand-new athlete: a write with no delete action
+ * and a URL-only editor behind it, i.e. exactly the unrecoverable class this system exists to repair
+ * rather than cause. The household predicate makes the correction expire on its own.
+ */
+const nullRoutineToFull: Correction = {
+  name: 'null-routine-to-full-2026-10-07',
+  what: "the seeded household's NULL `routine_config` rode the whole-catalog default ONB-0 narrowed",
+  issue: 'ONB-0 (which narrows what NULL MEANS; the NULL itself came from `seed.ts`)',
+  async run(db, apply) {
+    const changes: string[] = [];
+
+    // The seeded household, resolved by its stable public_id — never an internal id (README rule 3).
+    const [household] = await db
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID))
+      .limit(1);
+
+    if (!household) return ['the seeded household is not in this database — nothing to do'];
+
+    // `IS NULL` is the per-row guard (once corrected, a row stops matching); the household predicate is
+    // the per-era guard (see the ⚠️ above — this must never reach a PROF-1-created athlete elsewhere).
+    const targets = await db
+      .select({ publicId: schema.profiles.publicId, name: schema.profiles.name })
+      .from(schema.profiles)
+      .where(
+        and(
+          eq(schema.profiles.householdId, household.id),
+          isNull(schema.profiles.routineConfig),
+          isNull(schema.profiles.deletedAt),
+        ),
+      );
+
+    if (targets.length === 0) {
+      return ['no live profile in the seeded household has routine_config = NULL — nothing to do'];
+    }
+
+    for (const t of targets) {
+      changes.push(
+        `profile ${t.publicId} (${t.name}): routine_config NULL → the explicit pre-ONB-0 default ` +
+          `(${SEED_FULL_ROUTINE.order.length} items)`,
+      );
+    }
+
+    if (!apply) return changes;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '5s'`);
+      await tx.execute(sql`set local statement_timeout = '30s'`);
+
+      for (const t of targets) {
+        const updated = await tx
+          .update(schema.profiles)
+          .set({ routineConfig: SEED_FULL_ROUTINE, updatedAt: sql`now()` }) // README rule 4
+          .where(
+            and(
+              eq(schema.profiles.publicId, t.publicId),
+              eq(schema.profiles.householdId, household.id), // the SAME guards the read used
+              isNull(schema.profiles.routineConfig),
+              isNull(schema.profiles.deletedAt),
+            ),
+          )
+          .returning({ publicId: schema.profiles.publicId });
+
+        if (updated.length !== 1) {
+          throw new Error(
+            `expected to update exactly 1 row for ${t.publicId}, matched ${updated.length} — ` +
+              `it was authored while this ran. Rolled back, nothing written; re-run the dry run.`,
+          );
+        }
+      }
+    });
+
+    return changes;
+  },
+};
+
+export const CORRECTIONS: readonly Correction[] = [
+  liamKbSwings,
+  liamBodyweightDuplicates,
+  nullRoutineToFull,
+];
