@@ -218,6 +218,25 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   design the control. Read first:
   [strength-logging](./features/strength-logging.md) · [write-path](./features/write-path.md).
 
+<a id="pick-2"></a>
+
+- **PICK-2 — a type-ahead that suggests real words before a new movement is created.** _(Maintainer,
+  2026-10-08.)_ PICK-1 makes choosing an **existing** movement the easy path. This row covers the
+  path that remains: a name that is not in the catalog. Before `findOrCreateMovementId` creates a row,
+  the field suggests (1) the closest catalog movements, so "Bulgarian Split Squats" offers "Bulgarian
+  Split Squat", and (2) correct spellings for misspelled words, so "Bulgarain" offers "Bulgarian".
+  Suggestions never block: movement names are full of jargon a dictionary does not know ("Zercher",
+  "Copenhagen plank"), so the athlete can always keep what they typed.
+  - **English only.** Translating the word list waits on the [i18n](#i18n--externalize-strings-post-mvp-near-the-bottom)
+    work, and the maintainer judged it probably not needed.
+  - **Performance is a design constraint**, not polish: a full English word list shipped to the
+    browser would cost LCP on a phone. Whether matching runs server-side or against a trimmed list
+    is a question for this row's plan.
+  - **Not covered:** movements that are already misspelled. Those are still fixed with a `db:correct`
+    correction; this row only stops new ones.
+  - **Gated on PICK-1**, whose picker this extends. **Owes** a plan, the engineering panel, and a UX
+    panel (suggestions on a phone, mid-set, must not cost a tap when the name is right).
+
 ## AI-1 — NL logging ([plan](./plans/ai-1-nl-logging.md))
 
 ⏸ **PARKED 2026-10-06 — off P0, pending `PICK-1` usage data.** _(the maintainer.)_ 49 live entries
@@ -1298,6 +1317,36 @@ Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
   this row's plan. **Owes** a plan, the engineering panel with the DB-safety lens (block creation and a
   copy across three tables), and a UX panel (the "who moves to this version?" step). Milestone: not yet
   assigned; Beta 1 ("program editing, schedules") is the natural fit.
+
+<a id="retire-1"></a>
+
+- **RETIRE-1 — archive a program so it stops appearing, without losing its history.** _(Maintainer,
+  2026-10-08.)_ [CLONE-1](#clone-1) makes old versions pile up: every replacement leaves the previous
+  program behind. Archiving hides a program from the program editor, from the list of programs to clone,
+  and from new assignments. It changes nothing about the past: entries, their snapshotted
+  prescriptions, and the assignment dates still render and export exactly as before.
+  - **Archived is not deleted.** `deleted_at` means "this was removed", and soft-deleted parents drop
+    their children out of live reads (the soft-delete-through-live-parents rule). An archived program's
+    history must stay readable, so archiving needs its own marker, and the plan decides its shape.
+  - **Undo is required:** an archived program can be restored.
+  - **Open for the plan:** archiving a program that an athlete is still assigned to. Either it is
+    refused, or it closes the open assignments; both are defensible, and the UX panel should weigh
+    which one surprises a parent less.
+  - **Gated on CLONE-1** (which creates the pile) and SCHED-1's assignments. **Owes** a plan, the
+    engineering panel with the DB-safety lens, and a UX panel.
+
+<a id="hist-1"></a>
+
+- **HIST-1 — see what program an athlete was running on any past date.** _(Maintainer, 2026-10-08.)_
+  "What was this athlete doing in March, and how did it go?" The data will exist once CLONE-1 ships
+  (assignment rows with start and end dates, plus each entry's snapshotted prescription), but no screen
+  shows it. Two candidate surfaces, for the UX panel to choose between or combine:
+  - **a dashboard widget** (with [V1-16](#v1--online-kids-logger-generalized-model-still-no-offline-no-login)
+    / DASH-1): a timeline of the athlete's programs; or
+  - **a date selector on the program page:** pick a date and see that day's program as it was then.
+  - **Gated on CLONE-1** (no assignment history exists before it). Which surface wins decides the
+    roadmap pillar: Insight for the widget, Authoring & Scheduling for the program page. It is filed
+    under Insight until then. **Owes** a UX panel and a plan.
 
 - **V1-25 — the logging loop, from four sessions of real use.** _(Ray, 2026-09-29.)_ Four requests
   that arrived together and are **one theme**: the form should know what the athlete already told it —
