@@ -37,10 +37,20 @@ import type { Executor } from './executor';
  * like"*). An optional or defaulted parameter is the single change that would make a missed site
  * invisible, which is why `packages/db/src/scope.test.ts` fails on one.
  *
- * **Five hand-written copies remain**, all of them chunk **1c**'s list: `logCheckinEntries`,
- * `writeStrengthSession`, `programDayRows`'s `isThisProfile`, `export-month`'s three reads and
- * `seed.ts`'s plural variant. After 1c the hand-written count is zero — which is what lets 1d's
- * structural guard be absolute rather than shipping with an allowlist that then has to shrink.
+ * ## TEN-1 1c — the hand-written count is ZERO
+ *
+ * 1c converted the tail: `logCheckinEntries`, `writeStrengthSession`'s in-transaction resolve,
+ * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
+ * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
+ * one function allowed to unwrap the scope). **There is no copy of this predicate left anywhere in
+ * the repo**, which is what lets 1d's structural guard be absolute rather than shipping with an
+ * allowlist that then has to shrink.
+ *
+ * Two reads deliberately do NOT use it, both documented where they live: `reportScopeMiss`'s
+ * existence-only probe (`apps/web/lib/dal/household.ts` — it is how the miss path distinguishes
+ * `cross_household` from `unknown_resource`, and it returns `void`), and `catalog.ts`'s three global
+ * reference reads. A NEW read or write that wants to be neither is a design question, not an edit:
+ * use this helper.
  *
  * ⚠️ **`profiles.household_id` is typed NULLABLE in drizzle and is NOT NULL in the database.**
  * `0001_loose_barracuda.sql` adds `profiles_household_id_not_null` as `CHECK … NOT VALID` and then

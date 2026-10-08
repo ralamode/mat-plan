@@ -22,6 +22,8 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
+import { householdScopeForScript } from './writers/household-scope-script';
+import { inHousehold } from './writers/ownership';
 
 /**
  * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
@@ -261,6 +263,18 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
  * INVARIANT (caller's responsibility, mirroring the supersets writer): a target's profile belongs to the
  * block's household — the seed authors profiles within the block's household; the slice-2 DAL scopes reads by
  * that household join (BOLA).
+ *
+ * **TEN-1 1c turns that invariant into a WHERE clause.** The profile resolution below already ran inside
+ * the block's household by construction, so this is symmetry rather than a fix — but it is the last
+ * hand-written copy of the live-profile predicate in `packages/db/src`, and leaving one behind is what
+ * would force 1d's structural guard to ship with an allowlist. A target naming a profile in **another**
+ * household now throws `unknown profile` with nothing written, instead of silently seeding a
+ * cross-household `prescription_targets` row that `programDayRows` would then have to refuse.
+ *
+ * The scope comes from `householdScopeForScript`, named for what it is: the seed has **no request** to
+ * derive one from, exactly like `db:verify` and `db:correct`. It is reached by relative path from inside
+ * `packages/db` — `src/index.ts` never re-exports it, so `apps/web` cannot name it at all
+ * (`packages/db/src/scope.test.ts` pins both halves).
  */
 export async function seedProgram(
   db: NodePgDatabase<typeof schema>,
@@ -301,6 +315,10 @@ export async function seedProgram(
     const profilePublicIds = [
       ...new Set(block.prescriptions.flatMap((p) => p.targets.map((t) => t.profilePublicId))),
     ];
+    // The plural variant of the live-profile predicate: `inArray` where `isLiveProfile` has `eq`, so it
+    // cannot use the helper directly — but the household conjunct is the SAME single-sourced
+    // `inHousehold`, which is the one function in the repo allowed to unwrap the scope (ADR 0006 fwd-1).
+    const blockScope = householdScopeForScript(household.id);
     const profileRows = profilePublicIds.length
       ? await db
           .select({ id: schema.profiles.id, publicId: schema.profiles.publicId })
@@ -309,13 +327,17 @@ export async function seedProgram(
             and(
               inArray(schema.profiles.publicId, profilePublicIds),
               isNull(schema.profiles.deletedAt),
+              inHousehold(blockScope),
             ),
           )
       : [];
     const profileIdByPublicId = new Map(profileRows.map((p) => [p.publicId, p.id]));
     for (const publicId of profilePublicIds) {
       if (!profileIdByPublicId.has(publicId)) {
-        throw new Error(`seedProgram: unknown profile "${publicId}" in block "${block.slug}"`);
+        throw new Error(
+          `seedProgram: unknown profile "${publicId}" in block "${block.slug}" ` +
+            `(not live, or not in household "${block.householdPublicId}")`,
+        );
       }
     }
 

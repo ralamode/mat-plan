@@ -9,6 +9,9 @@ import { join } from 'node:path';
 import {
   createDb,
   createDbPool,
+  type HouseholdScope,
+  householdScopeForRequest,
+  liveHouseholdIds,
   schema,
   SEED_PROFILE_PUBLIC_ID,
   writeStrengthSession,
@@ -108,6 +111,36 @@ const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
  * `selectProfile` in every other spec. The axe/360px coverage for this block comes from the
  * `/design/tokens` inventory cell instead.
  */
+/**
+ * The household scope the fixture writers pass into `packages/db`'s write cores (TEN-1 1c).
+ *
+ * ⚠️ **This is the ONE place in `apps/web` outside `lib/dal/household.ts` that names a scope
+ * constructor, and `packages/db/src/scope.test.ts` allowlists exactly this file with this reason.**
+ * Why it is legitimate, and why it is not a hole:
+ *
+ * - This script has a **database and no request**, which is the `db:verify` / `db:correct` case —
+ *   but `householdScopeForScript` lives in a module `packages/db`'s `exports` map makes unreachable
+ *   from `apps/web` **by module resolution**, deliberately. So a fixture script in `apps/web` has to
+ *   derive instead, and deriving is the stronger half of the rule: it **never names a household
+ *   id**, it asks the database which household is live, through the resolver's own single-sourced
+ *   probe (`liveHouseholdIds`) — the same query `getHouseholdScope()` runs.
+ * - It runs only under `pnpm --filter web screenshot:ephemeral`, against a **throwaway embedded
+ *   Postgres** this script created seconds earlier. It is never on a request path, and a scope it
+ *   mints can never reach one.
+ * - `≥2` throws rather than picking, exactly as `getHouseholdScope()` does: a fixture written into
+ *   the wrong household would produce a screenshot of a leak and call it a feature.
+ */
+async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdScope> {
+  const live = await liveHouseholdIds(db);
+  if (live.length !== 1) {
+    throw new Error(
+      `screenshot fixture: expected exactly one live household in the throwaway DB, found ${live.length} ` +
+        `— did db:seed run, or did a fixture create a second household?`,
+    );
+  }
+  return householdScopeForRequest(live[0].id);
+}
+
 async function seedNoProfiles(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);
@@ -141,6 +174,7 @@ async function seedStatusBadges(dbUrl: string): Promise<void> {
 
     await writeStrengthSession(db, {
       profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      scope: await fixtureScope(db),
       day: localDayIso(DEFAULT_TIME_ZONE),
       sessionType: DEFAULT_SESSION_TYPE,
       sessionClientId: newId(),
@@ -352,6 +386,7 @@ async function seedLengthSession(dbUrl: string): Promise<void> {
     ];
     await writeStrengthSession(db, {
       profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      scope: await fixtureScope(db),
       day: localDayIso(DEFAULT_TIME_ZONE),
       sessionType: DEFAULT_SESSION_TYPE,
       sessionClientId: newId(),
@@ -794,6 +829,7 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
     const supersetClientId = newId();
     await writeStrengthSession(db, {
       profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      scope: await fixtureScope(db),
       day: localDayIso(DEFAULT_TIME_ZONE),
       sessionType: DEFAULT_SESSION_TYPE,
       sessionClientId: newId(),

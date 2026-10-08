@@ -58,6 +58,25 @@ const UNWRAPS_SCOPE = 'packages/db/src/writers/ownership.ts';
 /** The ONE module allowed to derive a scope from a request. */
 const DERIVES_SCOPE = 'apps/web/lib/dal/household.ts';
 
+/**
+ * The ONE fixture script allowed to derive one, recorded here with its reason (TEN-1 1c).
+ *
+ * `screenshot-ephemeral.ts` writes fixtures into a throwaway embedded Postgres it created seconds
+ * earlier, through `packages/db`'s write cores — which since 1c require a scope. It is the
+ * *db:verify / db:correct* case (a database, no request), but `householdScopeForScript` lives in a
+ * module `packages/db`'s `exports` map makes unreachable from `apps/web` **by module resolution**,
+ * deliberately, so a script in `apps/web` has to derive instead.
+ *
+ * **Deriving is the stronger half of the rule**: it never names a household id, it asks the database
+ * which household is live through the resolver's own single-sourced probe. The exception is lexical
+ * (one file, under `scripts/`), and the request-serving tree is asserted absolutely clean below —
+ * which is a check this file did not have before.
+ */
+const FIXTURE_DERIVES_SCOPE = 'apps/web/scripts/screenshot-ephemeral.ts';
+
+/** The request-serving tree: routes, DAL, components. No fixture script lives here. */
+const WEB_REQUEST_TREE = /^apps\/web\/(app|lib|components)\//;
+
 describe('the scope seam is structurally contained (TEN-1 1b)', () => {
   it('finds the sources (an empty glob would pass everything below)', () => {
     expect(DB_SOURCES.length).toBeGreaterThan(10);
@@ -118,14 +137,30 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([UNWRAPS_SCOPE]);
   });
 
-  it('exactly one module derives a scope from a request', () => {
+  it('exactly one module derives a scope from a request (plus the one named fixture script)', () => {
     const derivers = WEB_SOURCES.filter((f) =>
       /\bhouseholdScopeForRequest\b/.test(code(join(REPO, f))),
     );
     expect(
       derivers.map((f) => relative('', f)).sort(),
-      'getHouseholdScope() is the ONE place that decides which household a request belongs to',
-    ).toEqual([DERIVES_SCOPE]);
+      'getHouseholdScope() is the ONE place that decides which household a request belongs to; the only other namer is the screenshot fixture script, which has a database and no request',
+    ).toEqual([DERIVES_SCOPE, FIXTURE_DERIVES_SCOPE].sort());
+  });
+
+  it('nothing in the REQUEST-SERVING tree mints a scope except getHouseholdScope()', () => {
+    // The assertion above allows a second file by name; this one says where a second file may NOT
+    // live. A fixture script under `scripts/` runs against a throwaway database; a constructor named
+    // in `app/`, `lib/` or `components/` is on a request path, which is the thing being contained.
+    const offenders = WEB_SOURCES.filter(
+      (f) =>
+        WEB_REQUEST_TREE.test(f) &&
+        relative('', f) !== DERIVES_SCOPE &&
+        /\bhouseholdScopeFor(?:Request|Script)\b|\bmakeHouseholdScope\b/.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders.map((f) => relative('', f)).sort(),
+      'a scope constructor on a request path bypasses getHouseholdScope() — the one place allowed to decide whose request this is',
+    ).toEqual([]);
   });
 
   it('db:verify mints exactly two named scopes (the plan’s R5(1))', () => {
