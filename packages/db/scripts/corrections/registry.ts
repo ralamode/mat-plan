@@ -7,6 +7,7 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
 import type { Database } from '../../src/client';
 import * as schema from '../../src/schema';
+import { householdScopeForScript } from '../../src/writers/household-scope-script';
 import { isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -25,6 +26,26 @@ export type Correction = {
   /** Returns a human-readable line per row it would change (dry run) or did change (`--apply`). */
   run: (db: Database, apply: boolean) => Promise<string[]>;
 };
+
+/**
+ * The internal id of a LIVE household named by its stable `public_id` — README rule 3 (never an
+ * internal id from outside this database). `null` when this database has no such household, so each
+ * caller decides what that means: a correction that cannot find its target must refuse, never guess.
+ *
+ * Extracted at its SECOND consumer, not speculatively (the `ownership.ts` rule): TEN-1 1b's scoped
+ * `isLiveProfile` needs a NAMED household for a correction, which has no request to derive one
+ * from, and `nullRoutineToFull` already resolved one this way. The lookup also gains
+ * `deleted_at IS NULL` here, which only makes it stricter — a soft-deleted household now reports
+ * "not in this database" instead of matching.
+ */
+async function liveHouseholdId(db: Database, publicId: string): Promise<number | null> {
+  const [row] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(and(eq(schema.households.publicId, publicId), isNull(schema.households.deletedAt)))
+    .limit(1);
+  return row?.id ?? null;
+}
 
 /**
  * 2026-09-28 — Liam's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
@@ -220,10 +241,24 @@ const liamBodyweightDuplicates: Correction = {
     // `isLiveProfile` is THE live-profile predicate (V1-24 PR 1b, writers/ownership.ts), so this is
     // not a 12th hand-typed copy. The reuse lens asked for it when #192 was still open and the answer
     // was "not until it is on main"; #192 merged while this PR was in flight, so it is imported.
+    //
+    // TEN-1 1b: that predicate now REQUIRES a household scope, and a correction has no request to
+    // derive one from — so it NAMES the household, resolved by `public_id` beside the profile. A
+    // correction that matched a profile in some other household would be the worst possible version
+    // of this tool: an irreversible write to a family that never reported a problem. The scope is
+    // `householdScopeForScript`, which `packages/db/src/index.ts` deliberately does not re-export,
+    // so the app can never reach the constructor that takes an id as an argument.
+    const scopedHouseholdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
+    if (scopedHouseholdId === null) {
+      throw new Error(
+        `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
+      );
+    }
+    const scope = householdScopeForScript(scopedHouseholdId);
     const [profile] = await db
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
-      .where(isLiveProfile(LIAM_PUBLIC_ID));
+      .where(isLiveProfile(LIAM_PUBLIC_ID, scope));
 
     if (!profile) {
       throw new Error(
@@ -429,13 +464,11 @@ const nullRoutineToFull: Correction = {
     const changes: string[] = [];
 
     // The seeded household, resolved by its stable public_id — never an internal id (README rule 3).
-    const [household] = await db
-      .select({ id: schema.households.id })
-      .from(schema.households)
-      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID))
-      .limit(1);
+    const householdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
 
-    if (!household) return ['the seeded household is not in this database — nothing to do'];
+    if (householdId === null) {
+      return ['the seeded household is not in this database — nothing to do'];
+    }
 
     // `IS NULL` is the per-row guard (once corrected, a row stops matching); the household predicate is
     // the per-era guard (see the ⚠️ above — this must never reach a PROF-1-created athlete elsewhere).
@@ -444,7 +477,7 @@ const nullRoutineToFull: Correction = {
       .from(schema.profiles)
       .where(
         and(
-          eq(schema.profiles.householdId, household.id),
+          eq(schema.profiles.householdId, householdId),
           isNull(schema.profiles.routineConfig),
           isNull(schema.profiles.deletedAt),
         ),
@@ -474,7 +507,7 @@ const nullRoutineToFull: Correction = {
           .where(
             and(
               eq(schema.profiles.publicId, t.publicId),
-              eq(schema.profiles.householdId, household.id), // the SAME guards the read used
+              eq(schema.profiles.householdId, householdId), // the SAME guards the read used
               isNull(schema.profiles.routineConfig),
               isNull(schema.profiles.deletedAt),
             ),
