@@ -155,10 +155,15 @@ scope.
 dashboards. No credential for any of them exists in this repo, deliberately.
 
 > ⚠️ **Run this BEFORE merging the OPS-1 PR.** Pre-merge code reads none of the new variables, so
-> every step below is safe to do first and there is no window in which anything is broken. Merge
-> afterwards and the guard is already satisfied. Merge **first** and every open PR's preview build —
-> Dependabot's included — fails until step 5 is done. That failure is the guard working, not a
-> defect, but there is no reason to pay for it.
+> every step below is safe to do first and no other PR's preview breaks. Merge afterwards and the
+> guard is already satisfied. Merge **first** and every open PR's preview build — Dependabot's
+> included — fails until step 5 is done. That failure is the guard working, not a defect, but there
+> is no reason to pay for it.
+>
+> **The one exception is the OPS-1 PR's own preview.** It runs the guard before anything is merged,
+> so its Vercel check is red — `Refusing to boot: VERCEL_ENV=preview, but DATABASE_URL does not name
+a preview database` — until step 5 is done. That red is expected; redeploy the preview after step 5
+> and it should go green, which doubles as the end-to-end proof that the split worked.
 
 > 🔑 **Token hygiene for step 8.** A Vercel API token is account- or team-scoped and has **no
 > read-only scope**: it can decrypt every production environment variable and create deployments.
