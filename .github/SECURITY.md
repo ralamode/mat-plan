@@ -21,7 +21,11 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 "Tokens / secrets" and for the 403 carve-out under "API shape", so it stays.
 
 > ⛔ **The control that holds today is operational, not code.** The only thing preventing a
-> cross-household leak right now is that **production holds exactly one household**
+> cross-household leak right now is that **production holds exactly one household** — and that control
+> is about _households_, not about _surfaces_: **every pull request also gets a Vercel preview carrying
+> the production database string and the production access code**, ~100 of which are live and
+> anonymously enumerable from this public repo (`OPS-1`, and `data-inventory.md` §4). Until OPS-1 lands,
+> "one household" is the whole of the guarantee, on more hosts than one
 > ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_), and
 > [ADR 0006](../docs/decisions/0006-household-addressing.md) makes that a sequencing constraint rather
 > than a hope. **No second household may exist in production before TEN-1 and AUTH-1 have both
@@ -115,8 +119,13 @@ goes false the day `TEN-1` merges. Do not read those exceptions as permission to
   third-party sharing** — this is what keeps COPPA deferred; changing either triggers a privacy
   review." Child accounts are still out. **"No third-party sharing" was never true of the running
   system** — Neon, Vercel, GitHub Actions, Sentry and Upstash each receive a slice today, and Clerk
-  and Google join at AUTH-1. So the trigger had fired, and the review is what discharges it rather
-  than the sentence. (2025 FTC COPPA amendments: compliance by 2026-04-22.)
+  and Google join at AUTH-1. So the trigger had fired, and the **engineering** review is now done
+  ([docs/privacy/](../docs/privacy/)) rather than deferred behind a sentence that was not true.
+  ⚠️ **That is not a COPPA answer.** Whether COPPA applies here, and what it would require, turns on
+  who the service is directed to and what is collected — not on whether an internal review exists.
+  It is **unanswered in this repository and needs a lawyer**; see
+  [notice.md](../docs/privacy/notice.md) → "About this notice". (2025 FTC COPPA amendments:
+  compliance by 2026-04-22.)
 - **Data minimisation and a defined retention/delete path remain the rule.** The path now exists:
   [runbooks.md](../docs/runbooks.md) → "Delete a household and everyone in it".
 - **Pointers, not copies** — one owner each, because this list had already drifted:

@@ -42,8 +42,15 @@ is usually typing.
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item so the same entry is not saved twice.
 
-**What we never ask for**: no email address _(until sign-in arrives — see "What is changing")_, no
-phone number, no address, no payment details, no photos, no location, and no date of birth.
+**What we never ask for _inside the app_**: no email address _(until sign-in arrives — see "What is
+changing")_, no phone number, no address, no payment details, no photos, no location, and no date of
+birth.
+
+⚠️ **One thing is held outside the app**, and it would be misleading to leave it out of that list: the
+adult who was invited gave a **contact address** — an email address or a phone number — and the beta
+depends on it. It is how an invitation arrives, how a deletion request is confirmed before it is
+carried out, and how a full copy of your data is sent if you ask for one. It lives in the maintainer's
+mailbox or messages, not in this app's database. See "Who else it passes through".
 
 ## Children
 
@@ -72,7 +79,7 @@ still works.
 - **Nobody else** — there are no public pages, no advertising, no analytics about you, and your data
   is never sold or shared for anyone else's purposes.
 
-**Three honest limitations during the beta:**
+**Four honest limitations during the beta:**
 
 1. **One shared access code.** Everyone in the household uses the same code. There is no per-person
    login yet, and no way to revoke access for one person without changing the code for everyone.
@@ -82,6 +89,12 @@ still works.
    invited could see anyone's log.
 3. **Anyone with your access code can download any athlete's full history.** That follows from (1) and
    (2). Guard the code the way you would guard a password.
+4. **Every proposed change to the app gets a temporary preview copy, and today those copies read the
+   same live database, unlocked by the same code.** Roughly a hundred are currently reachable, and
+   they are listed publicly because the source code is public — so "guard the code" means guarding it
+   against more than one address. An older preview also runs _older_ code, without fixes added since.
+   This is being changed so previews use test data and their own separate code (`OPS-1`), and that
+   work is a condition of inviting anyone.
 
 ## Who else it passes through
 

@@ -167,8 +167,41 @@ headers, bodies, query strings, Server-Action form data, stack-frame variables, 
 >    child framing inverted, and found two processor rows materially wrong. Its findings are in the
 >    review-response log, labelled as a stand-in.
 >
-> **A human reviewer should give this dimension more attention than usual.** Registering the agent is
-> filed as a follow-up so the next schema/DAL/export PR gets the real thing.
+> **✅ RESOLVED 2026-10-08 — the lens is registered and has now run on this PR.** Its verdict was
+> **merge**, with two notice edits required before `PRIV-2` publishes anything. It re-walked the schema
+> and the call sites rather than trusting the stand-in, and confirmed the load-bearing claims (no hard
+> `DELETE` anywhere; `buildCheckins([])` header-only; `listProfiles()` and the export route both
+> without a household predicate; the 12-table delete order complete; `db:seed` re-creating a deleted
+> seeded household). It also went looking for an orphan gap at `profiles.household_id` and found it
+> **closed** — nullable at the column level but CHECK-enforced NOT NULL and VALIDATEd
+> (`migrations/0001_loose_barracuda.sql:155-159`).
+>
+> **What the stand-in missed, and why it matters as a lesson rather than a scolding:** it audited
+> **what the documents say** and not **what the operating environment is**. Every finding below except
+> the `feel` contradiction came from outside the text — the Vercel preview estate, the out-of-band
+> channel the deletion procedure depends on, the Neon project's branch list, and the sequencing of two
+> backlog rows against each other. **That is where a lens-shaped hole hides**, and it is worth
+> remembering the next time a specialist lens is unavailable: a stand-in reads the diff, a lens reads
+> the system.
+
+### Privacy lens — round 2 (the registered lens, 2026-10-08)
+
+| #    | Finding                                                                                           | Verdict                      | Resolution                                                                                                                                                                                                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1   | The notice's "who can see it" omits ~100 live preview deployments on the production database      | **accepted**                 | Independently confirmed: `grep -rn -i preview docs/privacy .github/SECURITY.md` returned **nothing**. Fixed in `notice.md` (limitation 4), `data-inventory.md` §4 + the §7 Vercel row, and `SECURITY.md`'s ⛔ block, which was silent about _surfaces_ while asserting a control about _households_. |
+| F2   | The invitation channel is an uninventoried processor, and the notice says "no email address"      | **accepted**                 | Confirmed against the notice text. It verifies irreversible deletions and carries a hand-built extract of a minor's history, so it is a ninth recipient. Added to `notice.md`, §7 and §8 with an honest "not knowable from here" retention answer.                                                   |
+| F3   | The hand-built full extract is a second new personal-data artifact with no retention or close-out | **accepted**                 | §8 row added, with the caveat that if the channel cannot be purged it is **not** deleted. ⚠️ The matching `runbooks.md` step-7 bullet is **not in this PR** — see below.                                                                                                                             |
+| F4   | "Permanently removed from the database" is proved only against the primary Neon branch            | **open — needs the console** | Not a code fact. The probe is `neonctl branches list` (or Neon console → Branches); if any non-primary branch exists, each is a copy-on-write copy of every household with its own endpoint and the residual list is incomplete. Left for the maintainer rather than guessed.                        |
+| P2-5 | `data-inventory.md` §3 says `feel` is exported; §6 and the notice say it is not                   | **accepted**                 | Confirmed: `feel` appears in **no** CSV source and is not in `STRENGTH_LOG_HEADER`. §3 was the wrong half — fixed, and it now points at both sections.                                                                                                                                               |
+| P2-6 | The Beta 0 deletion exit criterion collides with "do not delete a seeded household until OPS-2"   | **open**                     | A real sequencing problem: production holds one household, it is the seeded one, and the runbook declares it undeletable. The fix (`OPS-2` above the criterion; rehearse on a throwaway household) is the maintainer's sequencing call, not this PR's.                                               |
+| P2-7 | `SECURITY.md` reads as "the review discharges COPPA"                                              | **accepted**                 | Reworded: the **engineering** review is done; whether COPPA applies is unanswered here and needs a lawyer. The lens's own red flag works both ways — claiming something is now lawful is as much a finding as claiming it is not.                                                                    |
+| P2-8 | §9 publishes a path-level index to committed minors' data before the scrub lands                  | **noted**                    | The lens would not reverse correcting the stale audit in place, and nor would I. The residual is sequencing: `OSS-1` should land ahead of or alongside `PRIV-2`. Recorded on the rows, not fixed here.                                                                                               |
+
+**Applied in this PR:** F1, F2, P2-5, P2-7. **Left open with their reasons:** F3's runbook bullet,
+F4 (needs the Neon console), P2-6 and P2-8 (both sequencing decisions for the maintainer). The smaller
+"also found" items — the gate cookie called a "sign-in cookie", the `tz`/theme omission from the
+residual list, and the `notice.md` vs `SECURITY.md` disagreement about whether a second household may
+exist — are **not** fixed here and are listed in the PR description so they are not lost.
 
 **1. What personal data does this start holding?** The first draft answered **"none"** and banked it
 as a pass. The security re-review showed that is wrong, and the error is instructive: a docs-only PR
