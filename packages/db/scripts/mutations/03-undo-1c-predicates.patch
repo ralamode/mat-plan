@@ -1,0 +1,105 @@
+diff --git a/apps/web/lib/dal/entries.ts b/apps/web/lib/dal/entries.ts
+index 5cec1df..fa0aac1 100644
+--- a/apps/web/lib/dal/entries.ts
++++ b/apps/web/lib/dal/entries.ts
+@@ -398,7 +398,9 @@ export async function logCheckinEntries(args: {
+   const [profile] = await db
+     .select({ id: schema.profiles.id })
+     .from(schema.profiles)
+-    .where(isLiveProfile(args.profilePublicId, scope))
++    .where(
++      and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
++    )
+     .limit(1);
+   if (!profile) throw new Error('Profile not found');
+ 
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index 78ceaf6..b4bec3f 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -96,7 +96,8 @@ export function strengthMonthRows(
+       )
+       .where(
+         and(
+-          isLiveProfile(args.profilePublicId, args.scope),
++          eq(schema.profiles.publicId, args.profilePublicId),
++          isNull(schema.profiles.deletedAt),
+           isNull(schema.entries.deletedAt),
+           gte(schema.entries.activityDate, from),
+           lt(schema.entries.activityDate, to),
+@@ -139,7 +140,8 @@ export function bodyweightMonthRows(
+     .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
+     .where(
+       and(
+-        isLiveProfile(args.profilePublicId, args.scope),
++        eq(schema.profiles.publicId, args.profilePublicId),
++        isNull(schema.profiles.deletedAt),
+         isNull(schema.entries.deletedAt),
+         eq(schema.activityTypes.key, 'weigh_in'),
+         gte(schema.entries.activityDate, from),
+@@ -167,6 +169,12 @@ export function loggedMonths(
+     .selectDistinct({ month: sql<string>`to_char(${schema.entries.activityDate}, 'YYYY-MM')` })
+     .from(schema.entries)
+     .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
+-    .where(and(isLiveProfile(args.profilePublicId, args.scope), isNull(schema.entries.deletedAt)))
++    .where(
++      and(
++        eq(schema.profiles.publicId, args.profilePublicId),
++        isNull(schema.profiles.deletedAt),
++        isNull(schema.entries.deletedAt),
++      ),
++    )
+     .orderBy(sql`to_char(${schema.entries.activityDate}, 'YYYY-MM') desc`);
+ }
+diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
+index 6c81d32..9da7654 100644
+--- a/packages/db/src/queries/program-day.ts
++++ b/packages/db/src/queries/program-day.ts
+@@ -63,7 +63,11 @@ export function programDayRows(
+   // is the last thing that should drift between call sites. Named once here and used by BOTH sub-selects
+   // below (the household hop and the per-kid target scope) so the two can never drift into scoping by
+   // different rules — which is exactly how a BOLA hole gets introduced by a later edit.
+-  const isThisProfile = isLiveProfile(args.profilePublicId, args.scope);
++  void args.scope;
++  const isThisProfile = and(
++    eq(schema.profiles.publicId, args.profilePublicId),
++    isNull(schema.profiles.deletedAt),
++  );
+ 
+   // The newest of the profile's own household's live blocks THAT PROGRAMS THIS DAY — see the shape note.
+   // A scalar subquery (not a join) so the LIMIT 1 picks a BLOCK, not one of the prescription rows we want
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+index 0154b8e..a031d73 100644
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -319,6 +319,7 @@ export async function seedProgram(
+     // cannot use the helper directly — but the household conjunct is the SAME single-sourced
+     // `inHousehold`, which is the one function in the repo allowed to unwrap the scope (ADR 0006 fwd-1).
+     const blockScope = householdScopeForScript(household.id);
++    void blockScope;
+     const profileRows = profilePublicIds.length
+       ? await db
+           .select({ id: schema.profiles.id, publicId: schema.profiles.publicId })
+@@ -327,7 +328,6 @@ export async function seedProgram(
+             and(
+               inArray(schema.profiles.publicId, profilePublicIds),
+               isNull(schema.profiles.deletedAt),
+-              inHousehold(blockScope),
+             ),
+           )
+       : [];
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index efc4104..414a8bb 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -304,7 +304,9 @@ export async function writeStrengthSession(
+     const [profile] = await tx
+       .select({ id: schema.profiles.id })
+       .from(schema.profiles)
+-      .where(isLiveProfile(args.profilePublicId, args.scope))
++      .where(
++        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
++      )
+       .limit(1);
+     if (!profile) throw new Error('Profile not found');
+ 
