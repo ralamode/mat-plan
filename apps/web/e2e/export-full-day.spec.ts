@@ -73,7 +73,7 @@ const PROBE_CSV_MOVEMENT = 'export-probe-squat';
 
 /**
  * A DECIMAL on purpose — `formatNumeric` must keep `84.5` a string end to end. Distinct from every
- * other spec's weigh-in, though since V1-24 PR 1a it no longer has to be: this spec owns Liam's
+ * other spec's weigh-in, though since V1-24 PR 1a it no longer has to be: this spec owns Athlete One's
  * YESTERDAY outright (see the test), so the value in the CSV is the one it typed.
  */
 const PROBE_BODYWEIGHT = '84.5';
@@ -120,10 +120,10 @@ function parse(files: Map<string, string>, path: string): Csv {
 }
 
 test('a full day logged through the UI round-trips through the CSV export', async ({ page }) => {
-  // ⚠️ Liam's YESTERDAY, not today (V1-24 PR 1a). Once a day has a weight the weigh-in form is
+  // ⚠️ Athlete One's YESTERDAY, not today (V1-24 PR 1a). Once a day has a weight the weigh-in form is
   // replaced by a receipt, so two specs logging the same `(profile, day)` under `fullyParallel` would
   // race: whichever ran second would find the other's value and never exercise its own write. The
-  // smoke owns Liam's today; this owns his yesterday (inside the ±1 write window).
+  // smoke owns Athlete One's today; this owns their yesterday (inside the ±1 write window).
   await page.goto(`${SEED_PROFILE_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
 
   // The day the WRITE will carry, read from the field the forms actually submit — not recomputed

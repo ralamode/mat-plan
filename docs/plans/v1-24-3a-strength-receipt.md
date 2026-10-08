@@ -89,11 +89,11 @@ next to `isEditableSet`, and is derived from the same clauses (a test pins that
 **I5 — Closed days.** No change: Change keeps rendering on every day. `CLOSED_DAY_NOTICE` changes to
 "…correct a logged weight or set", because 3a-i makes the set correction visible as a peer.
 
-**As shipped (implementation review):** the a11y e2e case logs its own plain probe set on **Scarlett's
+**As shipped (implementation review):** the a11y e2e case logs its own plain probe set on **Athlete Two's
 yesterday** and opens Change there (~294px), rather than reusing a 3a-ii session; logging a superset
 through the UI in a test costs far more. The 280px superset-member case is covered by the unit test's
 structural assertion, the width math (with the unit **code** as the suffix) and the `strength-amend`
-screenshot. ⚠️ **For 3a-ii:** that probe means Scarlett's yesterday has strength logged, so its section
+screenshot. ⚠️ **For 3a-ii:** that probe means Athlete Two's yesterday has strength logged, so its section
 starts collapsed; 3a-ii's new strength writes must use another `(profile, day)`.
 
 **What PR 2's shared primitive must keep (the two amends differ on purpose):** bodyweight follows the
@@ -245,7 +245,7 @@ The parent's Open question 0 is answered as: 3a before 2, and the incident class
 **e2e** (correctness B1, a11y 7). The collapse breaks specs that need the form open on a day another
 spec logs strength on (`playwright.config.ts`: `fullyParallel`, retries 1):
 
-- writers on Liam's today: `scaffold-submit.spec.ts` (two tests, after V1-27); on yesterday:
+- writers on Athlete One's today: `scaffold-submit.spec.ts` (two tests, after V1-27); on yesterday:
   `export-full-day.spec.ts`;
 - readers that need the open form: `a11y.spec.ts` (three strength cases), `scaffold-submit.spec.ts`
   (two), `day-nav-form-state.spec.ts`, and `export-full-day.spec.ts` on retry.
@@ -258,7 +258,7 @@ pass silently). Every reader calls it, and `day-nav-form-state.spec.ts` calls it
 "Strength"). `export-full-day.spec.ts`'s post-click `toBeEnabled()` wait becomes a wait for the
 receipt.
 
-**New strength writes get their own `(profile, day)`:** **Scarlett, yesterday** (only a bodyweight
+**New strength writes get their own `(profile, day)`:** **Athlete Two, yesterday** (only a bodyweight
 write there today). The a11y receipt case logs a session with a superset, a locked (BW) movement and
 a skipped movement **only if no receipt exists** (the `testInfo.retry` pattern), so a retry never
 measures "session 2". `global.setup.ts`'s allocation comment is extended to strength writes.
@@ -278,7 +278,7 @@ indivisible change (collapsing without the e2e fixes breaks CI).
 set-state-in-effect` forbids the effect-based version.)
 - **The list's session block changed too**, because it is the same renderer: the header shows the
   honest counts and the session ordinal there as well (not "Saved", which is section-only).
-- **The new a11y case writes on Scarlett's today** (not her yesterday, which 3a-i's probe holds).
+- **The new a11y case writes on Athlete Two's today** (not their yesterday, which 3a-i's probe holds).
   Its superset coverage is the receipt's unit tests and the screenshots.
 - **The review's carry-overs from 3a-i landed here:** one Locked line per session listing its
   movements (J15), and Change is an outline button that reads as a control (J16).
@@ -365,7 +365,7 @@ No BLOCKING findings. Every SHOULD is accepted except where noted.
 | A2       | A11y                  | Focusing the first control skips the trust lines for screen readers            | Focus a labelled group described by both lines (D2).                                                                      |
 | A3b      | A11y                  | `aria-controls` dangles when the form unmounts                                 | The form is hidden, not unmounted (D2).                                                                                   |
 | A5       | A11y                  | "Session 2" outside the h3 gives identical headings                            | Inside the h3 (D4).                                                                                                       |
-| A6       | A11y                  | New e2e writes need their own `(profile, day)` and a retry guard               | Scarlett yesterday; log only if no receipt; the allocation comment is extended.                                           |
+| A6       | A11y                  | New e2e writes need their own `(profile, day)` and a retry guard               | Athlete Two yesterday; log only if no receipt; the allocation comment is extended.                                        |
 
 ### 3a-i implementation review (`review-pr` on #211): correctness, UX, reuse
 
@@ -384,7 +384,7 @@ No P0. Every P1 and P2 is fixed in the PR unless marked.
 | J9  | Reuse                    | `amendErrorId` named generically but set-only                               | Renamed `setAmendErrorId`.                                                                          |
 | J10 | Reuse                    | The guide quoted copy that had already drifted                              | The guide points at `AMEND_COPY.locked` / `lockedRecovery`.                                         |
 | J11 | Reuse                    | The two amends' deliberate differences aren't written down                  | Listed above, for PR 2.                                                                             |
-| J12 | Correctness              | Plan vs shipped e2e case; Scarlett-yesterday strength hazard for 3a-ii      | Recorded above ("As shipped").                                                                      |
+| J12 | Correctness              | Plan vs shipped e2e case; Athlete Two-yesterday strength hazard for 3a-ii   | Recorded above ("As shipped").                                                                      |
 | J13 | Correctness              | Unscoped, non-exact e2e locators                                            | Scoped to the region, `exact: true`; Change found by `changeLabel` exactly.                         |
 | J14 | Correctness              | Orphaned `SessionMovementItem` docblock in `page.tsx`                       | Moved with the function.                                                                            |
 | J15 | UX                       | The Locked line repeats on a bodyweight-heavy day                           | **3a-ii**: the session receipt owns session-level layout (one line per session, listing movements). |

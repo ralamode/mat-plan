@@ -1,6 +1,6 @@
 - **2026-09-30** — **V1-24 PR 1c: the duplicate weigh-ins have a correction that refuses to guess**
   ([plan](../plans/v1-24-form-is-the-day.md)). A read against prod found exactly one duplicate group —
-  Liam, 2026-09-30, three live bodyweight rows — and Ray named the keeper (the 12:17 morning weigh-in;
+  one athlete, 2026-09-30, three live bodyweight rows — and Ray named the keeper (the 12:17 morning weigh-in;
   the 19:46 pair was six seconds apart, so time of day is all that distinguishes them). The correction
   soft-deletes the other two under a guard pinned on `public_id` + the `updated_at` token +
   `deleted_at IS NULL`, re-checks the keeper under a row lock, and asserts the day ends with **exactly

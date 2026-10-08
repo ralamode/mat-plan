@@ -6,7 +6,7 @@
 
 ## Goal
 
-Stop the failure that produced the first real data loss. On 2026-09-28 Liam's KB swings were logged
+Stop the failure that produced the first real data loss. On 2026-09-28 an athlete's KB swings were logged
 `20 × BW` when the session was `10 reps × 20 lb`, and **the app could not fix it** — corrected out of
 band by [`db:correct`](../../packages/db/scripts/corrections/README.md) (#162), a treatment rather
 than a cure.

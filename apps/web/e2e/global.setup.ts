@@ -1,3 +1,4 @@
+import { SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
 import { test as setup } from '@playwright/test';
 
 import { STORAGE_STATE } from '../playwright.config';
@@ -25,22 +26,22 @@ setup('authenticate + warm the write path', async ({ page }) => {
   await page.context().storageState({ path: STORAGE_STATE });
 
   await page.goto(APP_HOME_PATH);
-  // ⚠️ **Scarlett's today, not Liam's** (V1-24 PR 1a). Once a day has a weight the surface renders a
+  // ⚠️ **Athlete Two's today, not Athlete One's** (V1-24 PR 1a). Once a day has a weight the surface renders a
   // RECEIPT with no form, so whoever writes first owns that `(profile, day)`. The e2e rule (plan, under
-  // the 1a table): warm-up → Scarlett today; smoke → Liam today; export → Liam yesterday; a11y →
-  // Scarlett yesterday (bodyweight, and since V1-24 3a-i one strength probe — a different surface);
-  // 3a-ii's receipt case logs strength on Scarlett today (beside this warm-up's weigh-in). No
+  // the 1a table): warm-up → Athlete Two today; smoke → Athlete One today; export → Athlete One yesterday; a11y →
+  // Athlete Two yesterday (bodyweight, and since V1-24 3a-i one strength probe — a different surface);
+  // 3a-ii's receipt case logs strength on Athlete Two today (beside this warm-up's weigh-in). No
   // two writers of the same surface share a day; 3a-ii's collapsed strength form makes strength writes
   // count too. The action is profile-agnostic, so the cold cost
   // is absorbed either way.
-  await selectProfile(page, 'Scarlett'); // the picker (V1-3) → tap into a scoped Today
+  await selectProfile(page, SEED_PROFILE_2_NAME); // the picker (V1-3) → tap into a scoped Today
   // cold: boot cost lands here, not in the test
   await logBodyweight(page, WARMUP_BODYWEIGHT, { timeout: 30_000 });
 
-  // Back to Liam for the check-ins warm-up — `Splits` is asserted-on by nobody, but the check-in
-  // specs run against Liam, so the warm statement plan has to be primed on his rows.
+  // Back to Athlete One for the check-ins warm-up — `Splits` is asserted-on by nobody, but the check-in
+  // specs run against Athlete One, so the warm statement plan has to be primed on their rows.
   await page.goto(APP_HOME_PATH);
-  await selectProfile(page, 'Liam');
+  await selectProfile(page, SEED_PROFILE_NAME);
 
   // …and warm the CHECK-INS path too. Warming bodyweight alone was not enough: `logCheckinsAction` is a
   // DIFFERENT, heavier action (it resolves several catalog rows, then does a MULTI-row insert), so it

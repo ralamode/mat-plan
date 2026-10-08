@@ -16,30 +16,30 @@ import { ProfileTile } from './profile-tile';
 // and throws `window is not defined`. Since vitest globals are off, register it here.
 afterEach(cleanup);
 
-const liam: ProfileDTO = {
+const athleteOne: ProfileDTO = {
   id: '019826b4-0000-7000-8000-000000000001',
-  name: 'Liam',
+  name: 'Athlete One',
   kind: 'kid',
   avatar: null,
 };
 
 describe('ProfileTile', () => {
   it('links to the profile-scoped Today at /p/<publicId>', () => {
-    render(<ProfileTile profile={liam} />);
-    const link = screen.getByRole('link', { name: /Liam/ });
+    render(<ProfileTile profile={athleteOne} />);
+    const link = screen.getByRole('link', { name: /Athlete One/ });
     expect(link).toHaveProperty('tagName', 'A');
-    expect(link.getAttribute('href')).toBe(`/p/${liam.id}`);
+    expect(link.getAttribute('href')).toBe(`/p/${athleteOne.id}`);
   });
 
   it('renders the profile name and kind', () => {
-    render(<ProfileTile profile={liam} />);
-    expect(screen.getByText('Liam')).toBeTruthy();
+    render(<ProfileTile profile={athleteOne} />);
+    expect(screen.getByText('Athlete One')).toBeTruthy();
     expect(screen.getByText('kid')).toBeTruthy();
   });
 
   it('falls back to the name initial when there is no avatar', () => {
-    render(<ProfileTile profile={liam} />);
+    render(<ProfileTile profile={athleteOne} />);
     // The avatar bubble is aria-hidden; assert the initial is present in the DOM.
-    expect(screen.getByText('L')).toBeTruthy();
+    expect(screen.getByText('A')).toBeTruthy(); // 'Athlete One' → 'A'
   });
 });

@@ -22,7 +22,7 @@ Clerk-era parent nav will place it properly. No sibling-routines load (copy-from
 
 **E2 — `<RoutineEditor>` (client) — a checklist + ▲▼ reorder.** Local state = the ordered list of in-routine
 **`RoutineItem`s** (`{ key, conditional? }`, seeded from `profile.routine.order` — already resolved by the DAL,
-NOT re-resolved client-side). **Preserves `conditional`** through every transform (C3 — Scarlett's `strength`
+NOT re-resolved client-side). **Preserves `conditional`** through every transform (C3 — Athlete Two's `strength`
 carries it; dropping it silently defeats the V1-10 down-payment). Renders: a **caption** "Weigh-in always comes
 first" (NOT a locked row — a non-interactive row is markup + an a11y mis-tap trap, and it must never emit an
 `order` input; C-note + simplicity #3); then each in-routine item as a row with **remove** + **▲▼ nudge**;

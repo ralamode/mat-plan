@@ -144,7 +144,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           sessionType: 'trainer',
           movementSlug: 'sled_push',
           prescribed: '3x50ft',
-          notes: 'shared with Scarlett; heavy',
+          notes: 'shared with Athlete B; heavy',
           sets: Array.from({ length: 3 }, () =>
             set({
               reps: 1,
@@ -153,7 +153,7 @@ describe('the contract’s own example rows, byte for byte', () => {
           ),
         }),
       ),
-    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Scarlett; heavy');
+    ).toBe('2020-06-02,trainer,sled-push,3,1,123 (50ft),3x50ft,shared with Athlete B; heavy');
   });
 
   it('a timed movement — duration in LOAD, reps is 1', () => {
@@ -329,8 +329,8 @@ describe('the unit tripwire — refuse, never convert', () => {
 describe('the raw joiner — no CSV library', () => {
   // Any RFC-4180 writer re-emits these as "" and the diff fails.
   it('passes bare inch marks through untouched', () => {
-    expect(csvRow(['Liam at 30" box (Scarlett did 36")'], ['notes'])).toBe(
-      'Liam at 30" box (Scarlett did 36")\n',
+    expect(csvRow(['Athlete A at 30" box (Athlete B did 36")'], ['notes'])).toBe(
+      'Athlete A at 30" box (Athlete B did 36")\n',
     );
   });
 
@@ -353,8 +353,8 @@ describe('the raw joiner — no CSV library', () => {
 
   it('writes trailing empty fields rather than dropping them', () => {
     expect(
-      csvRow(['2026-07-09', '71.4', 'morning', ''], ['date', 'weight_lb', 'context', 'notes']),
-    ).toBe('2026-07-09,71.4,morning,\n');
+      csvRow(['2020-07-09', '92.3', 'morning', ''], ['date', 'weight_lb', 'context', 'notes']),
+    ).toBe('2020-07-09,92.3,morning,\n');
   });
 });
 

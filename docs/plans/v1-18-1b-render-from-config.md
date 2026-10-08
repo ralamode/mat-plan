@@ -57,7 +57,7 @@ per-instance state, so reorder/split just mints independent trees (disjoint idem
 **R7 — Tests + screenshots.** Unit: `buildRoutineBlocks` (contiguous collapse, split, interleave, finisher
 dropped, empty); `ROUTINE_CATALOG` derivation (matches the live catalog). Update `actions.test.ts` ProfileDTO
 mock (`routine`). **Tri-viewport Playwright screenshots** (visible layout change) — including a seeded kid
-(Scarlett, an explicit routine) so the reorder is visible; assert `DEFAULT_ROUTINE` == today's order (ships-dark
+(Athlete Two, an explicit routine) so the reorder is visible; assert `DEFAULT_ROUTINE` == today's order (ships-dark
 no-op) in the block test. One minimal ordering smoke.
 
 ## File-by-file
@@ -85,7 +85,7 @@ net-new finisher types (V1-10 catalog), drag-reorder, kid-edit. `finisher:*` key
 _(4 lenses — correctness · simplicity/scope · architecture/consistency+code-reuse. No DB-safety (no
 migration). Reconciled below.)_
 
-**Key correction the panel surfaced:** the SEEDED Scarlett routine
+**Key correction the panel surfaced:** the SEEDED Athlete Two routine
 (`[checkin:rice_bucket, strength, checkin:brush_teeth:stance, life:wake]`, merged in PR 1a) already produces
 BOTH a scattered check-in **split** (→ two `CheckinForm` blocks) AND a life **subset** — so simplicity's
 "those shapes are unreachable in slice 1, cut them" is wrong: both are reachable and must work. Correctness
@@ -130,10 +130,10 @@ form's FormData; whole `loggedFieldKeys` is fine since inertness keys on each fo
 - **[simplicity S3 + correctness N1] No `finisher:*` arm** — `resolveRoutine` strips it (not in `ROUTINE_CATALOG`),
   so it can't reach `buildRoutineBlocks`; the builder just skips unknown namespaces (defensive default), no
   dedicated arm/test needed.
-- **[simplicity N5] Trim the test matrix but KEEP the split** (reachable via Scarlett): DEFAULT-contiguous → ONE
-  check-in block (the ships-dark assertion) · Scarlett scatter → TWO check-in blocks · empty · the
+- **[simplicity N5] Trim the test matrix but KEEP the split** (reachable via Athlete Two): DEFAULT-contiguous → ONE
+  check-in block (the ships-dark assertion) · Athlete Two scatter → TWO check-in blocks · empty · the
   `ROUTINE_CATALOG`-derivation anti-drift test.
-- **[correctness N2] Scarlett's scatter → two "Log check-ins" buttons** — the honest consequence of scattering
+- **[correctness N2] Athlete Two's scatter → two "Log check-ins" buttons** — the honest consequence of scattering
   check-ins (per the eng-plan); confirm it in the tri-viewport screenshots.
 - **[arch N7] `catalog.ts` stays pure** (no `server-only`/React) so the `server-only` DAL importing it drags no
   client boundary — the transitive `checkin-fields`/`life-activities` are already pure.
@@ -144,5 +144,5 @@ form's FormData; whole `loggedFieldKeys` is fine since inertness keys on each fo
 tails, skips unknown namespaces) → `getProfileByPublicId` returns `… & { routine }` (resolve; `listProfiles`
 untouched) → `page.tsx` maps blocks into the EXISTING section markup (labels from an `as const` map;
 `fieldsFor` over `CHECKIN_FIELDS`; empty-run guard) → `LifeForm` gains an additive `activityKeys?` → tests
-(moved/split; DEFAULT==today, scatter, empty, catalog-derivation) → tri-viewport screenshots (Liam DEFAULT =
-today; Scarlett reordered + two check-in blocks).
+(moved/split; DEFAULT==today, scatter, empty, catalog-derivation) → tri-viewport screenshots (Athlete One DEFAULT =
+today; Athlete Two reordered + two check-in blocks).

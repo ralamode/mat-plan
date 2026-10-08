@@ -57,7 +57,7 @@ and a kid who has to record against it without an adult standing over them.
 ### Why now, and why it's tractable
 
 Youth sport has professionalized — a middle-school wrestler may lift three days a week on a written
-program. The tooling has not followed. And the piece that used to make this expensive, turning "Liam
+program. The tooling has not followed. And the piece that used to make this expensive, turning "Athlete One
 did three sets of eight pull-ups" into structured data, is now cheap enough to be a feature rather than
 a company (see [§5](#5-the-one-inviolable-rule)).
 

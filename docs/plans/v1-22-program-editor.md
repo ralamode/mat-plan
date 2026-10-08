@@ -140,7 +140,7 @@ movement name while the _edited_ cells sit off-screen.
 2.  Trap-Bar Deadlift                      [↑] [↓] [⋯]
     Sets [4]   Reps [3 (top triple, then 2 back-offs)]
 
-    ☑ Same load for both      · applies to Liam and Scarlett
+    ☑ Same load for both      · applies to Athlete One and Athlete Two
     Load  [~145-150]
 ```
 
@@ -169,7 +169,7 @@ edits get lost.
 
 Not examples, and never a suggestion — **the athlete's own history**, which already exists in `entry_sets`:
 
-> Liam last did **3 × 60** here on Sep 15 · **[Use 60]**
+> Athlete One last did **3 × 60** here on Sep 15 · **[Use 60]**
 
 One gesture, one value, source visible. That is ONB-1 **R8a** exactly: the extracted text shows beside the
 field and the coach taps to fill it, at the moment of use. It is _not_ the app suggesting a load — it is

@@ -17,7 +17,7 @@
 
 This is **three distinct needs**, not one widget — and they want different UX:
 
-- **N1 — verify / fix a recent day** ("did Scarlett log her weigh-in yesterday?", "I mistyped Tuesday's
+- **N1 — verify / fix a recent day** ("did Athlete Two log their weigh-in yesterday?", "I mistyped Tuesday's
   squat"). Short-range, backward, high-frequency. The real daily friction. → **a navigation problem.**
 - **N2 — see what's coming** ("what's the plan today / this week?"). Forward-looking, but the data barely
   exists yet (`ramp_targets` is weekly + ships empty; day-grained programming is V1-10 / V2). → **a

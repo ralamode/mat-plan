@@ -1,4 +1,4 @@
-import { SEED_SCARLETT_ROUTINE } from '@mat-plan/db';
+import { SEED_ATHLETE_TWO_ROUTINE } from '@mat-plan/db';
 import {
   buildDefaultRoutine,
   parseRoutineKey,
@@ -112,7 +112,7 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
   });
 
   it('a valid authored config resolves DISTINCTLY from the default (A≠B holds at the resolved layer)', () => {
-    const scarlett: RoutineConfig = {
+    const athleteTwo: RoutineConfig = {
       version: 1,
       order: [
         { key: 'checkin:rice_bucket' },
@@ -120,7 +120,7 @@ describe('resolveRoutine — forgiving, item-by-item', () => {
         { key: 'life:wake' },
       ],
     };
-    expect(resolveRoutine(scarlett, CATALOG)).not.toEqual(buildDefaultRoutine(CATALOG));
+    expect(resolveRoutine(athleteTwo, CATALOG)).not.toEqual(buildDefaultRoutine(CATALOG));
   });
 
   it('a fully-stale config (every item dropped) falls back to the default, never a blank routine', () => {
@@ -195,9 +195,9 @@ describe('parseRoutineKey — no-colon guard', () => {
 // which live app-side): a stale seed key is grammar-valid but silently DROPPED on render, weakening the
 // A≠B demo — this catches that drift at CI time.
 describe('the seeded routine binds to the live app catalog', () => {
-  it('every key in Scarlett’s seed resolves against ROUTINE_CATALOG (nothing dropped)', () => {
-    const resolved = resolveRoutine(SEED_SCARLETT_ROUTINE, ROUTINE_CATALOG);
-    expect(resolved.order.length).toBe(SEED_SCARLETT_ROUTINE.order.length);
+  it('every key in Athlete Two’s seed resolves against ROUTINE_CATALOG (nothing dropped)', () => {
+    const resolved = resolveRoutine(SEED_ATHLETE_TWO_ROUTINE, ROUTINE_CATALOG);
+    expect(resolved.order.length).toBe(SEED_ATHLETE_TWO_ROUTINE.order.length);
     expect(resolved).not.toEqual(buildDefaultRoutine(ROUTINE_CATALOG)); // A≠B holds against the live catalog
   });
 });

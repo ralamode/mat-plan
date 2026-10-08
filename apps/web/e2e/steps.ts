@@ -24,15 +24,15 @@ import { formatValueUnit } from '../lib/entries/format-value-unit';
 export const SEED_PROFILE_ROUTE = `/p/${SEED_PROFILE_PUBLIC_ID}`;
 
 /**
- * The SECOND seeded profile's Today (Scarlett). `global.setup.ts` warms the bodyweight write path on
- * her TODAY, so that day always holds `WARMUP_BODYWEIGHT` by the time any spec runs — the one
+ * The SECOND seeded profile's Today (Athlete Two). `global.setup.ts` warms the bodyweight write path on
+ * their TODAY, so that day always holds `WARMUP_BODYWEIGHT` by the time any spec runs — the one
  * deterministic fixture for the "already logged" read state (V1-24 PR 1a). Her YESTERDAY belongs to
  * `a11y.spec.ts`.
  */
 export const SEED_PROFILE_2_ROUTE = `/p/${SEED_PROFILE_2_PUBLIC_ID}`;
 
 /**
- * The warm-up's weigh-in on Scarlett's today. Inside the plausibility bound (it was `0.5`, which the
+ * The warm-up's weigh-in on Athlete Two's today. Inside the plausibility bound (it was `0.5`, which the
  * bound now rejects) and a decimal, so the receipt spec can assert the exact value it renders.
  */
 export const WARMUP_BODYWEIGHT = '61.5';

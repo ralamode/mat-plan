@@ -31,7 +31,7 @@ export async function listProfiles(): Promise<ProfileDTO[]> {
     })
     .from(schema.profiles)
     .where(isNull(schema.profiles.deletedAt))
-    // Stable tile order — earliest-created first (the seed order: Liam, Scarlett).
+    // Stable tile order — earliest-created first (the seed order: Athlete One, Athlete Two).
     .orderBy(asc(schema.profiles.id));
 
   return rows.map((r) => ({

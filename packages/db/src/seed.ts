@@ -12,7 +12,9 @@ import {
   type ProgramBlockSeedRow,
   type RoutineConfig,
   SEED_HOUSEHOLD_PUBLIC_ID,
+  SEED_PROFILE_2_NAME,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
 } from '@mat-plan/shared';
@@ -22,8 +24,8 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
 /**
- * V1-18: Scarlett's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
- * demonstrates A≠B vs Liam (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
+ * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
+ * demonstrates A≠B vs Athlete One (whose own routine is `SEED_FULL_ROUTINE` since ONB-0 — it was NULL, i.e. the
  * old whole-catalog default). Exported so an app-side test can bind these keys
  * to the REAL catalog (`CHECKIN_FIELDS`/`LIFE_ACTIVITY_KEYS`, which live app-side) — a stale seed key would
  * be silently dropped on render, so the test asserts every key resolves. The keys are grammar-valid
@@ -74,10 +76,10 @@ export const SEED_FULL_ROUTINE = {
   ],
 } as const satisfies RoutineConfig;
 
-export const SEED_SCARLETT_ROUTINE = {
+export const SEED_ATHLETE_TWO_ROUTINE = {
   version: 1,
   order: [
-    // Check-ins FIRST (before strength) — a genuine reorder vs Liam's default — and CONTIGUOUS (rice bucket
+    // Check-ins FIRST (before strength) — a genuine reorder vs Athlete One's default — and CONTIGUOUS (rice bucket
     // + the push-up count in ONE block), so the check-in-logging e2e has a single, full surface. Then
     // strength (cosmetic `conditional` marker), then a life SUBSET (wake only, not wrestling). Demonstrates
     // A≠B via order + selection without splitting the check-in form.
@@ -91,8 +93,8 @@ export const SEED_SCARLETT_ROUTINE = {
 /**
  * Idempotent seed (AGENTS.md: seed reference data ON CONFLICT DO NOTHING; runs
  * twice → identical result). Seeds the `units` + `activity_type_categories`
- * reference tables, the root household, two kid profiles scoped to it (V1-3: Liam +
- * Scarlett), and (V1-2) the FULL catalog — `activity_types`, `metric_definitions`, and
+ * reference tables, the root household, two kid profiles scoped to it (V1-3: Athlete One +
+ * Athlete Two), and (V1-2) the FULL catalog — `activity_types`, `metric_definitions`, and
  * `movements` — sourced from @mat-plan/shared as the single source of truth. Fixed
  * UUIDv7s let re-runs conflict on the natural key / public_id instead of inserting
  * duplicates. V1-1b's three minimal rows (weigh_in / sc_lift / bodyweight) are SPREAD
@@ -107,6 +109,8 @@ export {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_NAME,
+  SEED_PROFILE_2_NAME,
 } from '@mat-plan/shared';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
@@ -151,14 +155,16 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
 
   // V1-3: the two kid profiles the picker tiles render. Both scoped to the root
-  // household; idempotent by public_id (a re-seed of prod's existing "Athlete One"
-  // row conflicts on SEED_PROFILE_PUBLIC_ID and keeps its name — rename is fresh-DB only).
+  // household; idempotent by public_id. ⚠️ `onConflictDoNothing` means a re-seed CANNOT rename a row
+  // that already exists: a live household keeps whatever names it entered, which is its own data and
+  // not this seed's business (OSS-1 scrubbed the REPO, never the database). So these role names are a
+  // FRESH-DB fixture only — what a reviewer sees in a preview, a screenshot or `db:verify`.
   await db
     .insert(schema.profiles)
     .values([
       {
         publicId: SEED_PROFILE_PUBLIC_ID,
-        name: 'Liam',
+        name: SEED_PROFILE_NAME,
         kind: 'kid',
         householdId: household.id,
         // ONB-0: EXPLICIT, where this row used to be NULL. NULL now means "the neutral first-run
@@ -167,10 +173,10 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
       },
       {
         publicId: SEED_PROFILE_2_PUBLIC_ID,
-        name: 'Scarlett',
+        name: SEED_PROFILE_2_NAME,
         kind: 'kid',
         householdId: household.id,
-        routineConfig: SEED_SCARLETT_ROUTINE,
+        routineConfig: SEED_ATHLETE_TWO_ROUTINE,
       },
     ])
     .onConflictDoNothing({ target: schema.profiles.publicId });
