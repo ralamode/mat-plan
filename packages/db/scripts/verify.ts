@@ -224,10 +224,10 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 // the wrong reason, and that is invisible in review. Two named constants mean a wrong scope is a
 // wrong NAME, which reads.
 //
-// A_SCOPE is the SEED household — Ray's. It is the scope every pre-TEN-1 assertion in this file was
-// implicitly written against, so threading it is what keeps those proofs proving what their messages
-// say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is inserted,
-// ~3400 lines down, which is also where the TEN-1 matrix lives.
+// A_SCOPE is the SEED household — the real one. It is the scope every pre-TEN-1 assertion in this file
+// was implicitly written against, so threading it is what keeps those proofs proving what their
+// messages say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is
+// inserted, ~3400 lines down, at the V1-10 programming fixture.
 const A_SCOPE = householdScopeForScript(households[0].id);
 
 // ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
@@ -1783,6 +1783,7 @@ console.log(
 const flatSessionCid = '019826b4-0000-7000-8000-000000001200';
 const flatArgs = {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  scope: A_SCOPE,
   day: '2026-02-03',
   sessionType: SESSION_TYPES[0],
   sessionClientId: flatSessionCid,
@@ -1913,6 +1914,7 @@ console.log(
 // asserts the DELTA the writer adds.
 const ssArgs = {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  scope: A_SCOPE,
   day: '2026-02-04',
   sessionType: SESSION_TYPES[0],
   sessionClientId: '019826b4-0000-7000-8000-000000001300',
@@ -2024,6 +2026,7 @@ const LABELED_SESSION_CLIENT_ID = newId();
 const LABELED_MOVEMENT_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  scope: A_SCOPE,
   day: '2026-02-10',
   sessionType: SESSION_TYPES[0],
   sessionClientId: LABELED_SESSION_CLIENT_ID,
@@ -2113,6 +2116,7 @@ const LABELED_SS_A = newId();
 const LABELED_SS_B = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  scope: A_SCOPE,
   day: '2026-02-11',
   sessionType: SESSION_TYPES[0],
   sessionClientId: LABELED_SS_SESSION,
@@ -2170,6 +2174,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const MODE_PLUS_MAGNITUDE = newId();
   await writeStrengthSession(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    scope: A_SCOPE,
     day: '2026-02-12',
     sessionType: SESSION_TYPES[0],
     sessionClientId: newId(),
@@ -2219,6 +2224,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const EXPORT_SESSION = newId();
   await writeStrengthSession(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    scope: A_SCOPE,
     day: '2026-03-11',
     sessionType: SESSION_TYPES[0],
     sessionClientId: EXPORT_SESSION,
@@ -2249,6 +2255,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const rows = await strengthMonthRows(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
     month: '2026-03',
+    scope: A_SCOPE,
   });
 
   // A SKIPPED movement carries ZERO set rows, and the LEFT JOIN must still surface it — an inner
@@ -2266,18 +2273,23 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const adjacent = await strengthMonthRows(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
     month: '2026-04',
+    scope: A_SCOPE,
   });
   assert.equal(adjacent.length, 0, 'V1-13b: an adjacent month sees none of these rows');
 
   // BOLA: the same month for a different profile must be empty.
+  // BOLA inside ONE household: both profiles are legitimately in A, so A_SCOPE is correct here and
+  // the profile conjunct is what must refuse. The cross-HOUSEHOLD direction is the TEN-1 matrix.
   const otherProfile = await strengthMonthRows(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009b0',
     month: '2026-03',
+    scope: A_SCOPE,
   });
   assert.equal(otherProfile.length, 0, 'V1-13b: the export read is profile-scoped');
 
   const months = await loggedMonths(asPg, {
     profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+    scope: A_SCOPE,
   });
   assert.ok(
     months.some((m) => m.month === '2026-03'),
@@ -2297,6 +2309,7 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
   const V130_PROFILE = '019826b4-0000-7000-8000-0000000009a0';
   await writeStrengthSession(asPg, {
     profilePublicId: V130_PROFILE,
+    scope: A_SCOPE,
     day: '2026-05-14',
     sessionType: SESSION_TYPES[0],
     sessionClientId: newId(),
@@ -2336,7 +2349,11 @@ console.log('✓ GAP-3: BW / duration loads round-trip typed, incl. on a superse
     ],
     'V1-30: kg stores as (mass, kg) and m as (length, m)',
   );
-  const read = await strengthMonthRows(asPg, { profilePublicId: V130_PROFILE, month: '2026-05' });
+  const read = await strengthMonthRows(asPg, {
+    profilePublicId: V130_PROFILE,
+    month: '2026-05',
+    scope: A_SCOPE,
+  });
   assert.deepEqual(
     read
       .filter((r) => r.valueNum !== null)
@@ -2532,6 +2549,7 @@ await assertCheckCoversConst('sessions_day_role_check', DAY_ROLES);
 const DAY_ROLE_SESSION_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0', // sessionProfileA
+  scope: A_SCOPE,
   day: '2026-03-02',
   sessionType: SESSION_TYPES[0],
   sessionClientId: DAY_ROLE_SESSION_CLIENT_ID,
@@ -2563,6 +2581,7 @@ assert.equal(
 const NO_ROLE_SESSION_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  scope: A_SCOPE,
   day: '2026-03-03',
   sessionType: SESSION_TYPES[0],
   sessionClientId: NO_ROLE_SESSION_CLIENT_ID,
@@ -2609,6 +2628,7 @@ const SKIPPED_MOVEMENT_CLIENT_ID = newId();
 const DONE_MOVEMENT_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  scope: A_SCOPE,
   day: '2026-03-05',
   sessionType: SESSION_TYPES[0],
   sessionClientId: SKIP_SESSION_CLIENT_ID,
@@ -2693,6 +2713,7 @@ assert.equal(
 // resurrect set rows onto a skipped movement).
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  scope: A_SCOPE,
   day: '2026-03-05',
   sessionType: SESSION_TYPES[0],
   sessionClientId: SKIP_SESSION_CLIENT_ID,
@@ -2730,6 +2751,7 @@ const SF_SESSION_CLIENT_ID = newId();
 const SF_MOVEMENT_CLIENT_ID = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: '019826b4-0000-7000-8000-0000000009a0',
+  scope: A_SCOPE,
   day: '2026-03-06',
   sessionType: SESSION_TYPES[0],
   sessionClientId: SF_SESSION_CLIENT_ID,
@@ -2998,7 +3020,11 @@ const bwKgProbe = await insertBodyweightProbe({
   unit: 'kg',
   activityDate: '2026-09-14',
 });
-const bwExport = await bodyweightMonthRows(asPg, { profilePublicId: bwOwner, month: '2026-09' });
+const bwExport = await bodyweightMonthRows(asPg, {
+  profilePublicId: bwOwner,
+  month: '2026-09',
+  scope: A_SCOPE,
+});
 const bwExportTarget = bwExport.find((r) => r.value === '84.500');
 assert.ok(bwExportTarget, 'CSV-1: the bodyweight export read returns the logged weight');
 assert.equal(bwExportTarget.unit, 'lb', 'CSV-1: ...carrying the unit it was logged in');
@@ -3671,6 +3697,13 @@ assert.equal(
   false,
   'TEN-1 1a: an insert that does not name synthetic gets false from the column DEFAULT',
 );
+
+// ── THE SECOND SCOPE. `householdScopeForScript(` appears in this file EXACTLY TWICE — see A_SCOPE ──
+// Defined here, the moment household B exists, because TEN-1 1c made `programDayRows` scoped and the
+// V1-10 block below is the single biggest consumer of B's scope (its whole point is that A and B
+// program DISJOINT day_roles). The TEN-1 matrix ~900 lines down uses this same constant.
+const B_SCOPE = householdScopeForScript(verifyHh.id);
+
 await db.insert(schema.profiles).values({
   publicId: VERIFY_PROFILE_PUBLIC_ID,
   name: 'Verify Kid',
@@ -3762,6 +3795,7 @@ console.log(
 
 // (a) The YOUTH DAILY PROGRAM: Day A is 7 movements, in the coach's authored `idx` order.
 const athleteOneDayA = await programDayRows(asPg, {
+  scope: A_SCOPE,
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_a',
 });
@@ -3783,6 +3817,7 @@ assert.deepEqual(
 // Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
 // every day while each individual movement lands every other session.
 const athleteOneDayB = await programDayRows(asPg, {
+  scope: A_SCOPE,
   profilePublicId: SEED_PROFILE_PUBLIC_ID,
   dayRole: 'strength_b',
 });
@@ -3800,6 +3835,7 @@ assert.ok(
 // loads at all, so what this proves is that BOTH kids get a row per movement (a WHERE-scoped join
 // would drop one), not that the loads differ.
 const athleteTwoDayA = await programDayRows(asPg, {
+  scope: A_SCOPE,
   profilePublicId: SEED_PROFILE_2_PUBLIC_ID,
   dayRole: 'strength_a',
 });
@@ -3836,32 +3872,54 @@ assert.equal(hipThrust?.targetReps, '10 per side', 'YDP: ...and their per-side p
 
 // (c) A day with no prescriptions → zero rows (the page renders no card). Strength B exists; 'skill' doesn't.
 assert.equal(
-  (await programDayRows(asPg, { profilePublicId: SEED_PROFILE_PUBLIC_ID, dayRole: 'skill' }))
-    .length,
+  (
+    await programDayRows(asPg, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      dayRole: 'skill',
+      scope: A_SCOPE,
+    })
+  ).length,
   0,
   'V1-10: an unprogrammed day_role returns no rows',
 );
 
-// (d) BOLA, probed in BOTH directions. The two households program DISJOINT day_roles — Ray's block only
+// (d) BOLA, probed in BOTH directions. The two households program DISJOINT day_roles — the seed block only
 // has strength_a/b/c, the verify block only has plain 'strength' — so each direction is a real leak test:
 // whichever household you ask from, the OTHER household's day_role must come back empty. (Asking only one
 // way would pass even with the household scoping deleted, since the globally-newest block happens to be
 // the verify one — the assertion would then be proving fixture ordering, not ownership.)
+//
+// ⚠️ Each direction asks from its OWN household's scope (TEN-1 1c), so what is under test here is still
+// the day_role disjointness and the block selection — not the scope. Asking from the WRONG scope would
+// make these pass for a second reason and stop proving what their messages say. The scope's own four-way
+// proof is the TEN-1 matrix at the end of this file, which seeds a day_role BOTH households program so a
+// refusal cannot be mistaken for an unprogrammed day.
 assert.equal(
-  (await programDayRows(asPg, { profilePublicId: VERIFY_PROFILE_PUBLIC_ID, dayRole: 'strength_a' }))
-    .length,
+  (
+    await programDayRows(asPg, {
+      profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+      dayRole: 'strength_a',
+      scope: B_SCOPE,
+    })
+  ).length,
   0,
   'V1-10: another household’s profile cannot read the kids’ strength_a (BOLA)',
 );
 assert.equal(
-  (await programDayRows(asPg, { profilePublicId: SEED_PROFILE_PUBLIC_ID, dayRole: 'strength' }))
-    .length,
+  (
+    await programDayRows(asPg, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      dayRole: 'strength',
+      scope: A_SCOPE,
+    })
+  ).length,
   0,
   'V1-10: …and a kid cannot read the other household’s plain-strength day (BOLA, reverse)',
 );
 const otherHouseholdOwn = await programDayRows(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   dayRole: 'strength',
+  scope: B_SCOPE,
 });
 assert.equal(otherHouseholdOwn.length, 1, 'V1-10: …but each DOES return its OWN household’s block');
 assert.equal(otherHouseholdOwn[0].load, '65', 'V1-10: with this profile’s own target');
@@ -3878,6 +3936,7 @@ await db.insert(schema.profiles).values({
 const untargeted = await programDayRows(asPg, {
   profilePublicId: VERIFY_PROFILE_2_PUBLIC_ID,
   dayRole: 'strength',
+  scope: B_SCOPE,
 });
 assert.equal(
   untargeted.length,
@@ -3896,6 +3955,7 @@ assert.equal(
     await programDayRows(asPg, {
       profilePublicId: '019826b4-0000-7000-8000-0000000000ff',
       dayRole: 'strength',
+      scope: B_SCOPE,
     })
   ).length,
   0,
@@ -3925,6 +3985,7 @@ await seedProgram(asPg, [
 const twoBlocks = await programDayRows(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   dayRole: 'strength',
+  scope: B_SCOPE,
 });
 assert.equal(twoBlocks.length, 1, 'V1-10: two blocks do NOT fan the day out (one block wins)');
 assert.equal(twoBlocks[0].targetReps, 'newer', 'V1-10: the NEWEST block wins deterministically');
@@ -3955,6 +4016,7 @@ await seedProgram(asPg, [
 const stillFallsBack = await programDayRows(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
   dayRole: 'strength',
+  scope: B_SCOPE,
 });
 assert.equal(
   stillFallsBack.length,
@@ -3968,8 +4030,13 @@ assert.equal(
 );
 // …and that newest block still answers for the day it does program.
 assert.equal(
-  (await programDayRows(asPg, { profilePublicId: VERIFY_PROFILE_PUBLIC_ID, dayRole: 'skill' }))[0]
-    ?.targetReps,
+  (
+    await programDayRows(asPg, {
+      profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+      dayRole: 'skill',
+      scope: B_SCOPE,
+    })
+  )[0]?.targetReps,
   'other-role',
   'V1-10: the newest block still wins for the day_role it programs',
 );
@@ -4007,7 +4074,11 @@ await seedProgram(asPg, [
     ],
   },
 ]);
-const sdArgs = { profilePublicId: VERIFY_SD_PROFILE_PUBLIC_ID, dayRole: 'core' } as const;
+const sdArgs = {
+  profilePublicId: VERIFY_SD_PROFILE_PUBLIC_ID,
+  dayRole: 'core',
+  scope: B_SCOPE,
+} as const;
 const [sdBaseline] = await programDayRows(asPg, sdArgs);
 assert.equal(sdBaseline?.load, 'sd-load', 'V1-10: soft-delete fixture renders before any deletion');
 
@@ -4324,8 +4395,9 @@ console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
 // household A. It does not prove the requester is who they claim. That is AUTH-1, and it is the most
 // likely thing for a reader of this block to over-claim.
 
-// ── THE SECOND SCOPE. `householdScopeForScript(` appears in this file EXACTLY TWICE — see A_SCOPE ──
-const B_SCOPE = householdScopeForScript(verifyHh.id);
+// B_SCOPE is defined where household B is created (the V1-10 fixture, ~900 lines up) — TEN-1 1c's
+// scoped `programDayRows` needs it there. A_SCOPE and B_SCOPE are still the only two scopes in this
+// file, which `packages/db/src/scope.test.ts` pins.
 const [verifyProfileRow] = await db
   .select({ id: schema.profiles.id })
   .from(schema.profiles)
@@ -4492,6 +4564,7 @@ const bSessionClientId = newId();
 const bMovementClientId = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
   day: '2026-03-03',
   sessionType: SESSION_TYPES[0],
   sessionClientId: bSessionClientId,
@@ -4513,6 +4586,7 @@ const aSessionClientId = newId();
 const aMovementClientId = newId();
 await writeStrengthSession(asPg, {
   profilePublicId: ssArgs.profilePublicId,
+  scope: A_SCOPE,
   day: '2026-03-03',
   sessionType: SESSION_TYPES[0],
   sessionClientId: aSessionClientId,
@@ -4542,19 +4616,137 @@ const aSet = await ten1SetOf(aMovementClientId);
 assert.ok(bSet, 'TEN-1 fixture: household B has an editable strength set');
 assert.ok(aSet, 'TEN-1 fixture: household A has an editable strength set');
 
+// (d) TEN-1 1c: a weigh-in for household A in the SAME month as B's, so `bodyweightMonthRows` has a
+// row to wrongly find in both directions. B's is `bTarget` (2026-03-03); A's goes on a day no other
+// probe owns — `uq_entries_profile_day_bodyweight` allows one live weigh-in per (profile, day, slot),
+// and (4a) below claims 2026-03-04.
+const aBwExportTarget = await insertBodyweightProbe({
+  profileId: bwOwnerRow.id,
+  value: 88.2,
+  activityDate: '2026-03-02',
+});
+
+// (e) TEN-1 1c: ONE block per household, both programming the SAME day_role, through the REAL
+// `seedProgram`. The V1-10 fixture deliberately gives the two households DISJOINT day_roles, which
+// proves day-aware block selection but cannot prove household scoping — asked for a day_role the
+// other household does not program, a leak and a correct refusal are the same zero rows. A day both
+// households program is what makes the four-way matrix below mean something: every direction has a
+// row to find, so only the scope can be what refuses.
+//
+// `'legs'` is used by no other fixture in this file, and the slugs are TEN-1's own, so
+// `uq_program_blocks_household_slug` cannot collide with a future data-PR block.
+const TEN1_DAY_ROLE = 'legs' as const;
+for (const [householdPublicId, profilePublicId, slug, load] of [
+  [SEED_HOUSEHOLD_PUBLIC_ID, SEED_PROFILE_PUBLIC_ID, 'ten1_legs_a', 'a-load'],
+  [VERIFY_HH_PUBLIC_ID, VERIFY_PROFILE_PUBLIC_ID, 'ten1_legs_b', 'b-load'],
+] as const) {
+  await seedProgram(asPg, [
+    {
+      householdPublicId,
+      slug,
+      name: `TEN-1 ${slug}`,
+      notes: null,
+      prescriptions: [
+        {
+          dayRole: TEN1_DAY_ROLE,
+          movementSlug: anyMovement.slug,
+          idx: 0,
+          sets: 3,
+          targetReps: '8',
+          targets: [{ profilePublicId, load, reps: null }],
+        },
+      ],
+    },
+  ]);
+}
+// The fixture itself, both ways — a seedProgram that silently wrote nothing would make every
+// `programDayRows` row below pass for the wrong reason.
+assert.equal(
+  (
+    await programDayRows(asPg, {
+      profilePublicId: SEED_PROFILE_PUBLIC_ID,
+      dayRole: TEN1_DAY_ROLE,
+      scope: A_SCOPE,
+    })
+  )[0]?.load,
+  'a-load',
+  "TEN-1 fixture: household A's legs block carries A's own target",
+);
+assert.equal(
+  (
+    await programDayRows(asPg, {
+      profilePublicId: VERIFY_PROFILE_PUBLIC_ID,
+      dayRole: TEN1_DAY_ROLE,
+      scope: B_SCOPE,
+    })
+  )[0]?.load,
+  'b-load',
+  "TEN-1 fixture: household B's legs block carries B's own target",
+);
+
+// ⚠️ TEN-1 1c: `seedProgram` itself is household-scoped now — a target naming a profile in ANOTHER
+// household throws with nothing written, instead of seeding a cross-household `prescription_targets`
+// row that `programDayRows` would then have to refuse. This runs against PROD on every push, so it
+// gets the positive direction above AND this negative one (the plan's R-af).
+await assert.rejects(
+  seedProgram(asPg, [
+    {
+      householdPublicId: VERIFY_HH_PUBLIC_ID,
+      slug: 'ten1_cross_household_target',
+      name: 'TEN-1 cross-household target',
+      notes: null,
+      prescriptions: [
+        {
+          dayRole: TEN1_DAY_ROLE,
+          movementSlug: anyMovement.slug,
+          idx: 0,
+          sets: 1,
+          targetReps: '1',
+          // household A's kid, inside household B's block
+          targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'leak', reps: null }],
+        },
+      ],
+    },
+  ]),
+  /unknown profile .* not in household/,
+  'TEN-1 1c: seedProgram refuses a target in another household',
+);
+assert.equal(
+  (
+    await db
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.slug, 'ten1_cross_household_target'))
+  ).length,
+  0,
+  'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
+);
+
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
-// `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so this
-// row is the predicate's own proof. `weeklyAdherenceRows` is the scoped READ the Today page runs.
+// `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
+// row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
+// adherence and programmed-day cards, and the three month reads behind the CSV export.
+//
+// Each row names **its own pair of profiles**. The reads need different fixtures — adherence needs
+// ramp targets, the export reads need logged sessions, the program read needs a block — and one
+// shared pair would have forced a re-typed lookalike fixture per read, which is the vehicle the
+// panel rejected for the picker. The pair varies; the FOUR assertions do not.
 const TEN1_READS: readonly [
-  string,
-  (profilePublicId: string, scope: HouseholdScope) => Promise<readonly unknown[]>,
+  label: string,
+  aProfile: string,
+  bProfile: string,
+  call: (profilePublicId: string, scope: HouseholdScope) => Promise<readonly unknown[]>,
 ][] = [
   [
     'ownedEntryIds (THE live-profile predicate)',
+    RAMP_TEST_PROFILE_PUBLIC_ID,
+    VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) => ownedEntryIds(asPg, profilePublicId, scope),
   ],
   [
     'weeklyAdherenceRows (the Today page’s adherence read)',
+    RAMP_TEST_PROFILE_PUBLIC_ID,
+    VERIFY_PROFILE_PUBLIC_ID,
     (profilePublicId, scope) =>
       weeklyAdherenceRows(asPg, {
         profilePublicId,
@@ -4564,31 +4756,73 @@ const TEN1_READS: readonly [
         scope,
       }),
   ],
+  // ── TEN-1 1c ────────────────────────────────────────────────────────────────────────────────────
+  [
+    'programDayRows (the Today page’s program card)',
+    SEED_PROFILE_PUBLIC_ID,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) =>
+      programDayRows(asPg, { profilePublicId, dayRole: TEN1_DAY_ROLE, scope }),
+  ],
+  [
+    'strengthMonthRows (the CSV export’s strength log)',
+    ssArgs.profilePublicId,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) =>
+      strengthMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
+  ],
+  [
+    'bodyweightMonthRows (the CSV export’s weigh-ins)',
+    bwOwner,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) =>
+      bodyweightMonthRows(asPg, { profilePublicId, month: '2026-03', scope }),
+  ],
+  [
+    'loggedMonths (which months the export writes at all)',
+    bwOwner,
+    VERIFY_PROFILE_PUBLIC_ID,
+    (profilePublicId, scope) => loggedMonths(asPg, { profilePublicId, scope }),
+  ],
 ];
 
-for (const [label, call] of TEN1_READS) {
+for (const [label, aProfile, bProfile, call] of TEN1_READS) {
   assert.ok(
-    (await call(RAMP_TEST_PROFILE_PUBLIC_ID, A_SCOPE)).length > 0,
+    (await call(aProfile, A_SCOPE)).length > 0,
     `TEN-1: ${label} returns household A's OWN rows`,
   );
   assert.equal(
-    (await call(RAMP_TEST_PROFILE_PUBLIC_ID, B_SCOPE)).length,
+    (await call(aProfile, B_SCOPE)).length,
     0,
     `TEN-1: ${label} — household B cannot read A`,
   );
   assert.ok(
-    (await call(VERIFY_PROFILE_PUBLIC_ID, B_SCOPE)).length > 0,
+    (await call(bProfile, B_SCOPE)).length > 0,
     `TEN-1: ${label} returns household B's OWN rows`,
   );
   assert.equal(
-    (await call(VERIFY_PROFILE_PUBLIC_ID, A_SCOPE)).length,
+    (await call(bProfile, A_SCOPE)).length,
     0,
     `TEN-1: ${label} — household A cannot read B (reverse)`,
   );
 }
 console.log(
-  '✓ TEN-1 1b: the READ matrix — ownedEntryIds + weeklyAdherenceRows, each proved in BOTH directions',
+  `✓ TEN-1 1b/1c: the READ matrix — ${TEN1_READS.length} scoped reads (ownedEntryIds, adherence, ` +
+    'programDayRows, the three export month reads), each proved in BOTH directions',
 );
+
+// The export's weigh-in fixture is load-bearing for the row above, so pin WHICH row the matrix found:
+// a future probe that lands another weigh-in in March turns this into a failure rather than a silently
+// vacuous pass. `insertBodyweightProbe` returns the public id; the month read returns the value.
+const [aMarchWeighIn, ...otherMarchWeighIns] = await bodyweightMonthRows(asPg, {
+  profilePublicId: bwOwner,
+  month: '2026-03',
+  scope: A_SCOPE,
+});
+assert.equal(otherMarchWeighIns.length, 0, 'TEN-1 fixture: one March weigh-in for household A');
+assert.equal(Number(aMarchWeighIn.value), 88.2, 'TEN-1 fixture: …and it is (d)’s probe');
+assert.equal(aMarchWeighIn.date, '2026-03-02', 'TEN-1 fixture: …on the day (d) wrote it');
+assert.ok(aBwExportTarget.publicId, 'TEN-1 fixture: (d) returned a public id');
 
 // ── (4) THE WRITE MATRIX — the refusal shape, both directions ─────────────────────────────────────
 // Writers answer `null`/throw rather than zero rows, so they use this file's refusal-matrix idiom
@@ -4754,6 +4988,71 @@ assert.equal(bSetAfter.reps, 6, "TEN-1: A's refused set-edit left B's set alone"
 
 console.log(
   '✓ TEN-1 1b: the WRITE matrix — bodyweight amend, amend re-read and set-edit, each refused across the household seam in BOTH directions, with no side effect',
+);
+
+// ── (5) TEN-1 1c: `writeStrengthSession` — the whole-session write core ───────────────────────────
+// Different refusal shape from the amends: the ownership check is a `SELECT … LIMIT 1` inside the
+// transaction, so a profile outside the scope resolves to nothing and the core THROWS
+// `Profile not found` — byte-identical to the shape an unknown or soft-deleted profile already got.
+// It is the one writer here whose refusal has to roll a multi-table graph back, so each refused
+// direction also asserts that no `sessions` row survived: a refusal that still wrote half a session
+// would be worse than a leak, because the athlete's next replay would attach to it.
+const TEN1_SESSION_MOVEMENT = {
+  movementName: 'Tenancy Session Lift',
+  unit: 'lb' as const,
+  movementId: movX.id,
+  sets: [{ reps: 5, weight: 115 }],
+};
+/** Did a session with this client_id reach the database at all? */
+async function ten1SessionExists(clientId: string): Promise<boolean> {
+  return (
+    (
+      await db
+        .select({ id: schema.sessions.id })
+        .from(schema.sessions)
+        .where(eq(schema.sessions.clientId, clientId))
+    ).length > 0
+  );
+}
+for (const [label, profilePublicId, ownScope, otherScope, day] of [
+  ["household A's own session", ssArgs.profilePublicId, A_SCOPE, B_SCOPE, '2026-03-07'],
+  ["household B's own session", VERIFY_PROFILE_PUBLIC_ID, B_SCOPE, A_SCOPE, '2026-03-08'],
+] as const) {
+  const okClientId = newId();
+  const written = await writeStrengthSession(asPg, {
+    profilePublicId,
+    scope: ownScope,
+    day,
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: okClientId,
+    activityTypeId: scLiftActivityId,
+    movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
+  });
+  assert.ok(written.sessionId, `TEN-1: writeStrengthSession writes ${label}`);
+  assert.ok(await ten1SessionExists(okClientId), `TEN-1: …and the session row is there (${label})`);
+
+  const refusedClientId = newId();
+  await assert.rejects(
+    writeStrengthSession(asPg, {
+      profilePublicId,
+      scope: otherScope,
+      day,
+      sessionType: SESSION_TYPES[0],
+      sessionClientId: refusedClientId,
+      activityTypeId: scLiftActivityId,
+      movements: [{ ...TEN1_SESSION_MOVEMENT, clientId: newId() }],
+    }),
+    /Profile not found/,
+    `TEN-1: …and the other household cannot write it (${label})`,
+  );
+  assert.equal(
+    await ten1SessionExists(refusedClientId),
+    false,
+    `TEN-1: …with the whole transaction rolled back — no session row (${label})`,
+  );
+}
+console.log(
+  '✓ TEN-1 1c: writeStrengthSession — each household writes its OWN session and is refused the other’s, in BOTH directions, with the transaction rolled back',
 );
 
 console.log('✓ verify passed');

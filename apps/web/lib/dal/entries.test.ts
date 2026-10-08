@@ -18,7 +18,7 @@ vi.mock('./db', () => ({ db: recording.db }));
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
-import { listEntriesForDay } from './entries';
+import { listEntriesForDay, logCheckinEntries } from './entries';
 
 const PROFILE = '019826b4-0000-7000-8000-000000000099';
 
@@ -49,6 +49,53 @@ describe('listEntriesForDay — ownership scope (DAL-1 + TEN-1)', () => {
     const { listEntriesForDay: scoped } = await import('./entries');
     await expect(scoped(PROFILE, '2026-09-30')).resolves.toEqual([]);
     expect(dark.queries.filter((q) => /from "entries"/.test(q.text))).toEqual([]);
+    vi.doUnmock('./db');
+    vi.resetModules();
+  });
+});
+
+// TEN-1 1c: `logCheckinEntries` resolves the profile itself (it is not behind a `packages/db` write
+// core), so its predicate is an app-DAL site `db:verify` cannot execute — the same case as
+// `listEntriesForDay`, proved the same way. The predicate it uses, `isLiveProfile`, IS proved against
+// a real database in both directions by the TEN-1 matrix (via `ownedEntryIds`, which is the same
+// function); what these two cases pin is that the check-in writer actually calls it.
+describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
+  const ITEMS = [
+    {
+      clientId: '019826b4-0000-7000-8000-00000000a001',
+      activityKey: 'sleep',
+      metricKey: null,
+      value: 1,
+    },
+  ] as const;
+
+  it('resolves the profile through the household-scoped predicate', async () => {
+    // The profile resolve is the FIRST query after the households probe, and the only one that can
+    // run: the recording pool answers it with zero rows, so the writer throws before the INSERT.
+    await expect(logCheckinEntries({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS })) //
+      .rejects.toThrow('Profile not found');
+    const resolve = queryMatching(recording, /from "profiles"/);
+    const where = whereOf(resolve);
+    expect(where).toContain('"profiles"."public_id" = $');
+    expect(where).toContain('"profiles"."deleted_at" is null');
+    // TEN-1: the third conjunct, bound to the household the resolver found — not merely present.
+    expect(where).toContain('"profiles"."household_id" = $');
+    expect(resolve.values).toContain(PROFILE);
+    expect(resolve.values).toContain(ONE_HOUSEHOLD_ID);
+  });
+
+  it('emits NO profiles query at all when no household resolves', async () => {
+    // The dark-app path: an unresolvable scope must take the SAME path as an unknown profile, and it
+    // must do so BEFORE the read — a zero-household database running an unscoped resolve is exactly
+    // the "dark, not leaky" claim being prose.
+    const dark = (await import('./recording-db')).createRecordingDb(() => []);
+    vi.doMock('./db', () => ({ db: dark.db }));
+    vi.resetModules();
+    const { logCheckinEntries: scoped } = await import('./entries');
+    await expect(
+      scoped({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS }),
+    ).rejects.toThrow('Profile not found');
+    expect(dark.queries.filter((q) => /from "profiles"/.test(q.text))).toEqual([]);
     vi.doUnmock('./db');
     vi.resetModules();
   });
