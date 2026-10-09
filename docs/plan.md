@@ -1247,8 +1247,23 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   two households before AUTH-1 (the resolver throws on a second live household), so the window opens
   the moment household #2 exists. Evidence, the alternative considered and the recommendation:
   [TEN-1's plan](./plans/ten-1-household-scope.md) → "1d as built — the catalog verdict". _(Beta 0.)_
-- **TEN-2a — expand: `movements.household_id`, nullable, shipping dark.** _(Beta 0; TEN-2's first of
-  three.)_ Add the column plus the two partial unique indexes that will replace the global
+- **TEN-2a — expand: `movements.household_id`, nullable, shipping dark.**
+  [Plan](./plans/ten-2a-household-movements.md) _(Beta 0; TEN-2's first of three; seven-lens panel —
+  10 blocking + 25 substantive findings reconciled, 7 pushbacks)._ **🔴 The design question is
+  SETTLED:** `household_id` is **nullable forever** — `IS NULL` means _reference data owned by no
+  household_, so **2c does NOT contract to `NOT NULL`**; it contracts to a `NOT VALID`
+  `CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)` plus an exact set-membership proof. A
+  household **cannot** shadow a seeded movement because the resolver is **global-first** (the only
+  writer cannot author `pattern` / `unit_default`, so a household row would always be strictly
+  worse) — ⚠️ which is the **opposite** of what this backlog's TEN-2b row said, and 2a rewrites it.
+  **Measured against production:** all 35 `movements` rows are the 35 const seed rows by `public_id`
+  identity — **zero app-authored rows exist**, so the whole arc carries no existing-data risk.
+  ⚠️ **"Custom" is NOT a `SEED_PUBLIC_ID_PREFIX` prefix test** (that prefix is the _global_ seed
+  namespace, shared by every seeded table) — it is exact membership in `MOVEMENT_SEED_ROWS`.
+  Two things the row did not predict: this PR's FK would **abort the household-deletion runbook**
+  (`23503`, measured), and the **2b→2c window is a cross-household denial primitive** that cannot be
+  resequenced away — so "no second household between 2b and 2c" becomes a named invite precondition.
+  Add the column plus the two partial unique indexes that will replace the global
   `movements.slug` UNIQUE. No reader, no writer, no behaviour change: the global UNIQUE stays, so
   every deployed `ON CONFLICT (slug)` keeps its arbiter.
   ⚠️ **How the indexes get built is a choice this row's plan must make, not a given.**
