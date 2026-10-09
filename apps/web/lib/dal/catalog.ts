@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { schema } from '@mat-plan/db';
-import { movementSlug, newId } from '@mat-plan/shared';
+import { findOrCreateMovement, schema } from '@mat-plan/db';
 import { eq } from 'drizzle-orm';
 import { cache } from 'react';
 
@@ -13,6 +12,22 @@ import { db } from './db';
  * helpers are request-`cache()`d (one query per key per request). `movements` is
  * the one write path here: the v0 strength form submits a free-text movement name,
  * so we FIND-OR-CREATE by slug — the v0→v1 bridge until the movement picker (V1-8).
+ *
+ * ## ⚠️ Three of the five `lib/dal` functions that reach `db` with NO household scope live here
+ *
+ * `apps/web/lib/dal/scoped.test.ts` (TEN-1 1d) allowlists them **by function**, with the reason
+ * beside each — the other two are in `household.ts` (`getHouseholdScope`, which *is* the scope
+ * point, and `reportScopeMiss`'s existence-only probe). These three are **global reference data by
+ * design**, not sites TEN-1 forgot:
+ *
+ * - `activity_types`, `metric_definitions` and `units` are seeded from `packages/shared`
+ *   (`architecture.md` § 4), shared by every household, and carry **no `household_id` column** to
+ *   scope by. Resolving a unit or a metric definition reveals nothing about any household.
+ * - `movements` carries none either, and that one is **not benign** — see `findOrCreateMovementId`
+ *   below. It is the one residual TEN-1 proves rather than closes, and **TEN-2** is its fix.
+ *
+ * A NEW read here that touches household data is a design question, not an edit: put it in a module
+ * that resolves `getHouseholdScope()`, or the structural guard fails the build.
  */
 
 /**
@@ -69,22 +84,17 @@ export async function assertMetricKeyExists(key: string): Promise<string> {
 
 /**
  * Find-or-create a movement from a free-text name and return its internal id.
- * Idempotent by `slug` (UNIQUE): INSERT … ON CONFLICT DO NOTHING, then select the
- * id. The slug is derived once via the shared `movementSlug` (the same derivation
- * the V1-1b migration backfill uses), so v0 names converge on the same rows.
+ *
+ * ⚠️ **The one write reachable from this app that is NOT household-scoped, and it cannot be here.**
+ * The core is `findOrCreateMovement` in `packages/db/src/writers/movement-catalog.ts`, single-sourced
+ * per `write-path.md` invariant 3 so `db:verify` runs **this** function rather than a re-typed
+ * lookalike — which is the only way the cross-household behaviour could be *proved* rather than
+ * asserted. Read that docblock before changing anything here: `movements` has **no `household_id`
+ * column at all**, so another household's free-text name binds to the row this one created, and
+ * whichever household types a name first pins that slug's metadata permanently.
+ *
+ * TEN-1 1d records the verdict and its evidence; **TEN-2** is the fix.
  */
 export async function findOrCreateMovementId(name: string): Promise<number> {
-  const slug = movementSlug(name);
-  await db
-    .insert(schema.movements)
-    .values({ publicId: newId(), slug, name, isBodyweight: false })
-    .onConflictDoNothing({ target: schema.movements.slug });
-
-  const [row] = await db
-    .select({ id: schema.movements.id })
-    .from(schema.movements)
-    .where(eq(schema.movements.slug, slug))
-    .limit(1);
-  if (!row) throw new Error(`movement not found after upsert for slug: ${slug}`);
-  return row.id;
+  return findOrCreateMovement(db, name);
 }
