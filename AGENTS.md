@@ -313,8 +313,14 @@ The deletion procedure is [runbooks.md](./docs/runbooks.md) → "Delete a househ
   Not for a standalone PR (a dependency bump, a one-off bug) — those belong to no milestone and the
   "Where this sits" section is deleted for them too.
 
-- Every PR gets a Vercel preview + a Neon branch (prod-shaped DB) for migration testing; all required
-  CI checks must be green. Reference the backlog id (V0-x / V1-x) in the PR.
+- Every PR gets a Vercel preview; all required CI checks must be green. Reference the backlog id
+  (V0-x / V1-x) in the PR. ⚠️ **There is no Neon branch per PR, and there never was** — this line
+  claimed one for months, as did `docs/spec.md`, `docs/architecture.md`, `docs/deploy.md` and
+  `docs/plan.md` (corrected together by OPS-1, 2026-10-07). A preview points at a **separate,
+  seed-only Neon project**, never a branch of production, which would clone every family's data into
+  every preview ([OPS-1](./docs/plans/ops-1-preview-isolation.md)). The prod-shaped migration
+  rehearsal is still **not wired** ([tech-debt](./docs/tech-debt.md)); don't cite it as a safety
+  argument.
 
 ## Feature guides (docs/features/)
 

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx scripts/dev-local.ts",
-    "dev:prod": "echo '⚠️  dev:prod → LIVE Neon via .env.local. Writes hit REAL prod data. Use `pnpm dev` for the local sandbox.' && next dev",
+    "dev:prod": "echo '⚠️  dev:prod → LIVE Neon via .env.local. Writes hit REAL prod data. Use `pnpm dev` for the local sandbox.' && ALLOW_LIVE_DB=1 next dev",
     "db:local:reset": "tsx scripts/db-local-reset.ts",
     "build": "next build",
     "start": "next start",
