@@ -1258,7 +1258,11 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the end state is probably _not_ `NOT NULL`, and the partial unique indexes are what carry the
   invariant (`UNIQUE (slug) WHERE household_id IS NULL` + `UNIQUE (household_id, slug) WHERE
 household_id IS NOT NULL`). **Settle that in the plan before writing the migration**, because it
-  decides whether TEN-2c contracts to `NOT NULL` at all.
+  decides whether TEN-2c contracts to `NOT NULL` at all. **The same plan must define the backfill's
+  terms** (open, from #269's review): what counts as **custom** (a slug not in the seeded catalog,
+  not "referenced by several households", which seeded rows also are); what happens to a custom row
+  **nothing references** (the refused-write path creates exactly these); and how 2c picks which
+  household keeps a shared row's original, so the split is deterministic.
 
 - **TEN-2b — move every slug conflict target and lookup onto the partial indexes.** _(Beta 0; TEN-2's
   second.)_ `findOrCreateMovementId` takes a `HouseholdScope` and resolves `(household_id, slug)`,
