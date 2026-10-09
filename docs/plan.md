@@ -1278,9 +1278,10 @@ household_id IS NOT NULL`). **Settle that in the plan before writing the migrati
   **Backfill:** a custom row referenced by exactly one household is assigned to it, guarded on
   `household_id IS NULL` so a re-run is a no-op. A row referenced by **more than one** household
   **cannot be split here**: a per-household clone keeps the slug, and the global UNIQUE still exists
-  in 2b. So 2b's backfill **refuses** (fails loudly, assigns nothing) if any such row exists, and the
-  split belongs to 2c. With one live household no such row can exist, which is one more reason TEN-2
-  lands before the invite.
+  in 2b. So 2b's backfill **leaves such rows at `household_id IS NULL` and logs each one** (the
+  migration still succeeds, so 2b deploys), and the split belongs to 2c. Until then a shared row is
+  served through the global fallback, which is the leak 2b does not claim to close. With one live
+  household no such row can exist, which is one more reason TEN-2 lands before the invite.
   ⚠️ **2b does NOT close the leak and does NOT flip the verdict.** While the global
   `movements.slug` UNIQUE (`packages/db/src/schema.ts` → `movements`) exists, a second household
   cannot hold its own row for a slug another household already has: its insert hits the global
@@ -1300,10 +1301,13 @@ household_id IS NOT NULL`). **Settle that in the plan before writing the migrati
   live and every free-text movement write fails. `AGENTS.md`'s deploy order puts a contract after the
   app that stopped depending on it. Dropping a constraint deletes no data, so this is not gated on
   `OPS-3`'s restore drill; cut a Neon **restore branch** before it anyway, per `AGENTS.md`'s
-  rollback rule. **The split backfill lives here, after the drop:** a custom row referenced by more
-  than one household is cloned per household (legal only once the global UNIQUE is gone), with
-  `entries.movement_id` and `prescriptions.movement_id` repointed, guarded on `household_id IS NULL`.
-  If 2b's refusal never fired, this is a no-op.
+  rollback rule. **The split backfill lives here, after the drop:** for each custom row 2b left at
+  `household_id IS NULL` because more than one household references it, the original row is
+  **assigned to one** referencing household and a clone is made for **each other** household (legal
+  only once the global UNIQUE is gone), with that household's `entries.movement_id` and
+  `prescriptions.movement_id` repointed to its clone. Afterwards **no custom row has
+  `household_id IS NULL`**, so the global fallback reaches seeded reference rows only; `db:verify`
+  asserts that, and it is part of the verdict flip. If 2b logged no shared rows, this step is a no-op.
 
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️

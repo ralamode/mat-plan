@@ -840,7 +840,8 @@ discovered: a call-site guard cannot see SQL, so patch 01 (delete the household 
 **green** while the matrix goes red — which is why all three vehicles exist.
 
 **Two corrections to the canonical list itself, found by writing the guard** (the list lives in
-`packages/db/src/writers/ownership.ts`'s docblock, which 1c's review had just rewritten):
+`packages/db/src/writers/ownership.ts`'s docblock, which 1c's review had just rewritten; since the #269
+review, `scoped.test.ts`'s `ALLOWED_UNSCOPED` / `PROBE` are canonical):
 
 - it named **`getActivityTypeIdByKey` and `assertMetricKeyExists`** as the two global reference reads.
   Those two **delegate and build no query**; the functions that actually reach `db` are the `cache()`d
