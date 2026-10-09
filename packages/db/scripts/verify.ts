@@ -5321,11 +5321,18 @@ assert.equal(
   'TEN-1 1d WRITE: …and the declaration the log form seeds its unit from is the other household’s too (`movements.is_bodyweight` is read as "the MOVEMENT’s declaration, not the coach’s")',
 );
 
-// (e) A REFUSED write has already committed its caller-supplied catalog text. The strength DAL
-// resolves every movement through find-or-create BEFORE `writeStrengthSession`, whose in-transaction
-// re-resolve is the actual household seam — so the seam's refusal rolls back the SESSION and leaves
-// the globally-visible movement row behind. Categorically different from a read leak: it is a
-// cross-tenant WRITE primitive surviving a refusal.
+// (e) A REFUSED write leaves its caller-supplied catalog text behind. The strength DAL
+// (`apps/web/lib/dal/entries.ts` → `logStrengthSession`) resolves every movement through
+// find-or-create BEFORE `writeStrengthSession`, whose in-transaction re-resolve is the actual
+// household seam — so the seam's refusal rolls back the SESSION and leaves the globally-visible
+// movement row behind. Categorically different from a read leak: it is a cross-tenant WRITE primitive
+// surviving a refusal.
+//
+// ⚠️ **This is a FIXTURE reproducing the DAL's call order, not a proof of it.** It calls
+// `findOrCreateMovement` itself before the refused write, so the final assertion cannot fail — it
+// shows what that order does to the database, given the order. That the DAL really calls
+// find-or-create first, even for a write that is then refused, is asserted where the DAL can run:
+// `apps/web/lib/dal/entries.test.ts` → "find-or-create runs, and commits, before the refused write".
 const REFUSED_MOVEMENT_NAME = 'TEN-1 Refused Session Lift';
 const refusedMovementId = await findOrCreateMovement(asPg, REFUSED_MOVEMENT_NAME);
 const refusedCatalogClientId = newId();

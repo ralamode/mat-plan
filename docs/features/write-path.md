@@ -136,7 +136,12 @@ flowchart LR
      - 🔴 **a session write the seam REFUSES has already committed the caller's text**, because the
        DAL resolves every movement before `writeStrengthSession`, whose in-transaction re-resolve is
        the actual seam. A cross-tenant **write** primitive surviving its own refusal, which is
-       categorically worse than a read leak.
+       categorically worse than a read leak. ⚠️ **Two vehicles, not one proof:** `db:verify`'s
+       refused-write case is a **fixture reproducing the DAL's call order** (it calls
+       `findOrCreateMovement` itself, so its last assertion cannot fail); the order itself is pinned
+       by `apps/web/lib/dal/entries.test.ts` → _"find-or-create runs, and commits, before the refused
+       write"_, which asserts on the SQL `logStrengthSession` emits that the movement `INSERT` precedes
+       the session transaction's `BEGIN` and the profile resolve that refuses.
 
      **`TEN-2` is the fix**, and the recorded verdict is that it belongs in Beta 0 — before a second
      household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built"_. Do not read
