@@ -1,3 +1,4 @@
+import { ENTRY_STATUS } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // DAL-1 / TEN-1 1b: `listEntriesForDay` must scope by THE live-profile predicate — so a soft-deleted
@@ -18,7 +19,7 @@ vi.mock('./db', () => ({ db: recording.db }));
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
-import { listEntriesForDay, logCheckinEntries, logStrengthSession } from './entries';
+import { listEntriesForDay, logCheckinEntries } from './entries';
 
 const PROFILE = '019826b4-0000-7000-8000-000000000099';
 
@@ -131,6 +132,7 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
             movementName: 'TEN-1 Refused Lift',
             unit: 'lb',
             clientId: '019826b4-0000-7000-8000-00000000b002',
+            status: ENTRY_STATUS.done,
             sets: [{ reps: 5, weight: 100 }],
           },
         ],
