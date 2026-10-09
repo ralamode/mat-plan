@@ -143,7 +143,8 @@ code rotated. `pnpm preview:check` exits 0. ⚠️ **It also found that producti
 database**, so the gate's rate limiter had been failing open in production while the docs called it
 optional and the gate rate limited. Both are corrected, and production is now limited. The Neon
 password rotation was skipped by decision (no fork PR has ever existed; the string is server-only).
-**Follow-up:** reset the preview database, which was seeded before the OSS-1 rename.
+The preview database, seeded before the OSS-1 rename, was reset the same day and holds only the
+role-named fixtures.
 
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
