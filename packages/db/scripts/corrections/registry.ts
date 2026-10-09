@@ -56,6 +56,21 @@ async function liveHouseholdScope(db: Database, publicId: string): Promise<House
 }
 
 /**
+ * `liveHouseholdScope`, for a correction whose target household MUST be here: it throws rather than
+ * returning `null`, so a correction that cannot find its household refuses instead of guessing.
+ * Extracted at its second consumer (`kbSwingsLoadRepsSwap`, `bodyweightDuplicates`), which carried
+ * the same refusal block word for word. `nullRoutineToFull` keeps the nullable form on purpose — a
+ * database without the seeded household is "nothing to do" for it, not an error.
+ */
+async function requireLiveHouseholdScope(db: Database, publicId: string): Promise<HouseholdScope> {
+  const scope = await liveHouseholdScope(db, publicId);
+  if (scope === null) {
+    throw new Error(`household ${publicId} is missing or soft-deleted here — wrong target?`);
+  }
+  return scope;
+}
+
+/**
  * 2026-09-28 — an athlete's KB swings were logged `20 × BW` when the session was **10 reps × 20 lb**,
  * five sets.
  *
@@ -84,12 +99,7 @@ const kbSwingsLoadRepsSwap: Correction = {
     // family that never reported a problem. The row set is unchanged, because this profile is in
     // the seeded household (and this correction was applied on 2026-09-30, so the `is_bodyweight`
     // guard already makes a re-run a no-op either way).
-    const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
-    if (scope === null) {
-      throw new Error(
-        `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
-      );
-    }
+    const scope = await requireLiveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
 
     // Target by (profile public_id, day, movement slug) — never an internal id, which differs
     // between environments. The `is_bodyweight` predicate is the GUARD: once corrected, it matches
@@ -270,12 +280,7 @@ const bodyweightDuplicates: Correction = {
     // of this tool: an irreversible write to a family that never reported a problem. The scope is
     // `householdScopeForScript`, which `packages/db/src/index.ts` deliberately does not re-export,
     // so the app can never reach the constructor that takes an id as an argument.
-    const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
-    if (scope === null) {
-      throw new Error(
-        `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
-      );
-    }
+    const scope = await requireLiveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
     const [profile] = await db
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
