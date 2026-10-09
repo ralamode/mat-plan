@@ -12,8 +12,12 @@
   **six**, each still proved **four** ways (own household, other household, and both reverses), plus
   `writeStrengthSession` refused across the seam with the whole transaction rolled back, plus
   `seedProgram` refusing a cross-household prescription target with nothing written. A third committed
-  mutation patch undoes all seven conversions and asserts the proofs go red — and every 1b assertion
-  stays green under it, which is what shows the new rows carry their own weight. ⚠️ Still **consistent
+  mutation patch undoes all seven conversions and asserts the proofs go red, on the **named** first
+  assertion — each patch now carries a `.expect` file the runner compares, so "something went red" is
+  no longer enough and two patches breaking the same proof are no longer indistinguishable. ⚠️ Note
+  the gate shows the first failure is a 1c assertion, **not** that every 1b assertion stays green:
+  `db:verify` is fail-fast, so those are unreached rather than green, and the claim rests on the
+  per-predicate runs recorded in the plan. ⚠️ Still **consistent
   scoping, not authorization** (AUTH-1), and `findOrCreateMovementId` is still unscopable, so a
   **refused** strength write has already committed its caller-supplied movement name to the shared
   catalog — 1d records that proof and the **TEN-2** go/no-go.

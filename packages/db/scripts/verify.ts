@@ -4691,44 +4691,6 @@ assert.equal(
   "TEN-1 fixture: household B's legs block carries B's own target",
 );
 
-// ⚠️ TEN-1 1c: `seedProgram` itself is household-scoped now — a target naming a profile in ANOTHER
-// household throws with nothing written, instead of seeding a cross-household `prescription_targets`
-// row that `programDayRows` would then have to refuse. This runs against PROD on every push, so it
-// gets the positive direction above AND this negative one (the plan's R-af).
-await assert.rejects(
-  seedProgram(asPg, [
-    {
-      householdPublicId: VERIFY_HH_PUBLIC_ID,
-      slug: 'ten1_cross_household_target',
-      name: 'TEN-1 cross-household target',
-      notes: null,
-      prescriptions: [
-        {
-          dayRole: TEN1_DAY_ROLE,
-          movementSlug: anyMovement.slug,
-          idx: 0,
-          sets: 1,
-          targetReps: '1',
-          // household A's kid, inside household B's block
-          targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'leak', reps: null }],
-        },
-      ],
-    },
-  ]),
-  /unknown profile .* not in household/,
-  'TEN-1 1c: seedProgram refuses a target in another household',
-);
-assert.equal(
-  (
-    await db
-      .select({ id: schema.programBlocks.id })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.slug, 'ten1_cross_household_target'))
-  ).length,
-  0,
-  'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
-);
-
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
@@ -4738,12 +4700,46 @@ assert.equal(
 // ramp targets, the export reads need logged sessions, the program read needs a block — and one
 // shared pair would have forced a re-typed lookalike fixture per read, which is the vehicle the
 // panel rejected for the picker. The pair varies; the FOUR assertions do not.
-const TEN1_READS: readonly [
+type Ten1Read = readonly [
   label: string,
   aProfile: string,
   bProfile: string,
   call: (profilePublicId: string, scope: HouseholdScope) => Promise<readonly unknown[]>,
-][] = [
+];
+
+/**
+ * The FOUR assertions, in one place, run over whichever list of reads is passed in.
+ *
+ * ⚠️ **1b's reads and 1c's are two lists on purpose (the 1d follow-up 1c's review recorded).**
+ * `db:verify` is fail-fast, so `03-undo-1c-predicates.patch`'s claim — *"the first failure is a 1c
+ * one, and 1b carries its own weight"* — was only half-checkable while a 1c assertion sat ahead of
+ * 1b's: the 1b rows after it were **unreached, not green**. With every 1b proof ordered first, one
+ * patch-03 run passes through all of them and then fails on a 1c row, which is the claim itself.
+ */
+async function ten1ReadMatrix(reads: readonly Ten1Read[]): Promise<void> {
+  for (const [label, aProfile, bProfile, call] of reads) {
+    assert.ok(
+      (await call(aProfile, A_SCOPE)).length > 0,
+      `TEN-1: ${label} returns household A's OWN rows`,
+    );
+    assert.equal(
+      (await call(aProfile, B_SCOPE)).length,
+      0,
+      `TEN-1: ${label} — household B cannot read A`,
+    );
+    assert.ok(
+      (await call(bProfile, B_SCOPE)).length > 0,
+      `TEN-1: ${label} returns household B's OWN rows`,
+    );
+    assert.equal(
+      (await call(bProfile, A_SCOPE)).length,
+      0,
+      `TEN-1: ${label} — household A cannot read B (reverse)`,
+    );
+  }
+}
+
+const TEN1_READS_1B: readonly Ten1Read[] = [
   [
     'ownedEntryIds (THE live-profile predicate)',
     RAMP_TEST_PROFILE_PUBLIC_ID,
@@ -4763,7 +4759,11 @@ const TEN1_READS: readonly [
         scope,
       }),
   ],
-  // ── TEN-1 1c ────────────────────────────────────────────────────────────────────────────────────
+];
+
+// ── TEN-1 1c's reads, asserted BELOW the 1b write matrix — see `ten1ReadMatrix` for why the order
+// is load-bearing rather than cosmetic.
+const TEN1_READS_1C: readonly Ten1Read[] = [
   [
     'programDayRows (the Today page’s program card)',
     SEED_PROFILE_PUBLIC_ID,
@@ -4793,29 +4793,10 @@ const TEN1_READS: readonly [
   ],
 ];
 
-for (const [label, aProfile, bProfile, call] of TEN1_READS) {
-  assert.ok(
-    (await call(aProfile, A_SCOPE)).length > 0,
-    `TEN-1: ${label} returns household A's OWN rows`,
-  );
-  assert.equal(
-    (await call(aProfile, B_SCOPE)).length,
-    0,
-    `TEN-1: ${label} — household B cannot read A`,
-  );
-  assert.ok(
-    (await call(bProfile, B_SCOPE)).length > 0,
-    `TEN-1: ${label} returns household B's OWN rows`,
-  );
-  assert.equal(
-    (await call(bProfile, A_SCOPE)).length,
-    0,
-    `TEN-1: ${label} — household A cannot read B (reverse)`,
-  );
-}
+await ten1ReadMatrix(TEN1_READS_1B);
 console.log(
-  `✓ TEN-1 1b/1c: the READ matrix — ${TEN1_READS.length} scoped reads (ownedEntryIds, adherence, ` +
-    'programDayRows, the three export month reads), each proved in BOTH directions',
+  `✓ TEN-1 1b: the READ matrix — ${TEN1_READS_1B.length} scoped reads (ownedEntryIds, adherence), ` +
+    'each proved in BOTH directions',
 );
 
 // The export's weigh-in fixture is load-bearing for the row above, so pin WHICH row the matrix found:
@@ -4995,6 +4976,56 @@ assert.equal(bSetAfter.reps, 6, "TEN-1: A's refused set-edit left B's set alone"
 
 console.log(
   '✓ TEN-1 1b: the WRITE matrix — bodyweight amend, amend re-read and set-edit, each refused across the household seam in BOTH directions, with no side effect',
+);
+
+// ── (4b) TEN-1 1c's READS and its seed resolver — ordered AFTER every 1b proof above ────────────
+// Deliberately down here, not beside 1b's: `03-undo-1c-predicates.patch` claims that under it every
+// 1b assertion holds and the first failure is a 1c one. `db:verify` is fail-fast, so that was only
+// provable with 1b's proofs ahead of 1c's — otherwise the 1b rows below a 1c failure are unreached
+// rather than green, and the gate was being credited with showing something it could not. This is the
+// follow-up 1c's own review recorded for 1d.
+await ten1ReadMatrix(TEN1_READS_1C);
+console.log(
+  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the three ` +
+    'export month reads), each proved in BOTH directions, after every 1b proof above',
+);
+
+// ⚠️ TEN-1 1c: `seedProgram` itself is household-scoped now — a target naming a profile in ANOTHER
+// household throws with nothing written, instead of seeding a cross-household `prescription_targets`
+// row that `programDayRows` would then have to refuse. This runs against PROD on every push, so it
+// gets the positive direction above AND this negative one (the plan's R-af).
+await assert.rejects(
+  seedProgram(asPg, [
+    {
+      householdPublicId: VERIFY_HH_PUBLIC_ID,
+      slug: 'ten1_cross_household_target',
+      name: 'TEN-1 cross-household target',
+      notes: null,
+      prescriptions: [
+        {
+          dayRole: TEN1_DAY_ROLE,
+          movementSlug: anyMovement.slug,
+          idx: 0,
+          sets: 1,
+          targetReps: '1',
+          // household A's kid, inside household B's block
+          targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'leak', reps: null }],
+        },
+      ],
+    },
+  ]),
+  /unknown profile .* not in household/,
+  'TEN-1 1c: seedProgram refuses a target in another household',
+);
+assert.equal(
+  (
+    await db
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.slug, 'ten1_cross_household_target'))
+  ).length,
+  0,
+  'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
 );
 
 // ── (5) TEN-1 1c: `writeStrengthSession` — the whole-session write core ───────────────────────────

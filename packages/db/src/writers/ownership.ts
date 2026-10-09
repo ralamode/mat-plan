@@ -42,15 +42,44 @@ import type { Executor } from './executor';
  * 1c converted the tail: `logCheckinEntries`, `writeStrengthSession`'s in-transaction resolve,
  * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
  * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
- * one function allowed to unwrap the scope). **There is no copy of this predicate left anywhere in
- * the repo**, which is what lets 1d's structural guard be absolute rather than shipping with an
- * allowlist that then has to shrink.
+ * one function allowed to unwrap the scope). **There is no copy of this predicate left in
+ * `packages/db/src/**` or `apps/web/**`** — which is the domain 1d's structural guard inspects, and
+ * what lets it be absolute rather than shipping with an allowlist that then has to shrink.
  *
- * Two reads deliberately do NOT use it, both documented where they live: `reportScopeMiss`'s
- * existence-only probe (`apps/web/lib/dal/household.ts` — it is how the miss path distinguishes
- * `cross_household` from `unknown_resource`, and it returns `void`), and `catalog.ts`'s three global
- * reference reads. A NEW read or write that wants to be neither is a design question, not an edit:
- * use this helper.
+ * ## TEN-1 1d — the count is zero EVERYWHERE, scripts included
+ *
+ * 1c left three copies in `packages/db/scripts/corrections/registry.ts` — a verbatim pre-1c predicate
+ * in `kbSwingsLoadRepsSwap`, and `inHousehold`'s body hand-written twice in `nullRoutineToFull` — and
+ * said so rather than claiming them away, because they sit outside the domain 1d's `lib/dal` guard
+ * inspects and `scope.test.ts`'s "exactly one module reads `scope.householdId`" could not see them
+ * (they named a raw id, not a scope). **1d converted all three.** A correction now resolves its
+ * household into a `HouseholdScope` (`liveHouseholdScope`) and rides `isLiveProfile` where there is a
+ * `public_id` and `inHousehold` for the one bulk shape — so no correction holds a raw `household_id`
+ * either, and ADR 0006's capability rule holds in the scripts too.
+ *
+ * Four sites deliberately do NOT use it, each documented where it lives — and they are **not all
+ * reads**, which is why 1d's allowlist is written per function:
+ *
+ * 1. `reportScopeMiss`'s existence-only probe (`apps/web/lib/dal/household.ts`) — how the miss path
+ *    tells `cross_household` from `unknown_resource`. Returns `void`, so it cannot be copied into
+ *    something that returns data.
+ * 2. `getActivityTypeByKey` and 3. `getMetricDefinition` (`apps/web/lib/dal/catalog.ts`) — genuinely
+ *    global reference reads. ⚠️ **It is these two `cache()`d readers that reach `db`, not the
+ *    `getActivityTypeIdByKey` / `assertMetricKeyExists` wrappers** this list named before 1d: those
+ *    delegate and build no query, so an allowlist keyed on them would have exempted the wrong
+ *    symbols. `scoped.test.ts` finds the real ones by construction.
+ * 4. ⚠️ **`findOrCreateMovementId` (`catalog.ts`) is a WRITE, not a reference read.** It is
+ *    `INSERT … ON CONFLICT DO NOTHING` against a `movements` table with **no `household_id` column
+ *    at all**, so it cannot be scoped — a household typing a name another household already created
+ *    is handed that household's row, and whoever types a name first pins that slug's metadata for
+ *    everyone. **TEN-1 1d proved it in both directions** (`db:verify` → "the catalog verdict",
+ *    running the single-sourced core in `writers/movement-catalog.ts`) and the recorded verdict moves
+ *    **TEN-2** into Beta 0. A guard that allowlists this as "a reference read" would be describing it
+ *    wrongly.
+ *
+ * A NEW read or write that wants to be none of these is a design question, not an edit: use this
+ * helper. All four are enforced as allowlists with a reason each — `apps/web/lib/dal/scoped.test.ts`
+ * — not as this prose, and its dead-entry assertion makes TEN-2 delete entry 4 rather than leave it.
  *
  * ⚠️ **`profiles.household_id` is typed NULLABLE in drizzle and is NOT NULL in the database.**
  * `0001_loose_barracuda.sql` adds `profiles_household_id_not_null` as `CHECK … NOT VALID` and then

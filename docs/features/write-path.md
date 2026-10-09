@@ -10,6 +10,8 @@ owns:
   - packages/db/src/queries/household-profiles.ts
   - packages/db/src/queries/household-scope.ts
   - packages/db/src/queries/export-month.ts
+  # TEN-1 1c made seedProgram household-scoped, and it runs against prod on every merge.
+  - packages/db/src/seed.ts
   - packages/db/src/queries/weekly-adherence.ts
 ---
 
@@ -226,21 +228,28 @@ flowchart LR
     predicate is the last thing that should drift between call sites, so a new read or write uses the
     helper — never an eighth copy, and never a hand-written `household_id =` beside it.
 
-    **Two deliberate exceptions, both documented where they live, neither a copy of this predicate:**
-    `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_ probe that reaches `db` with no
-    scope on purpose (it is how the miss path tells `cross_household` from `unknown_resource`) and
-    returns `void` so it cannot be copied into something that returns data; and `catalog.ts`'s three
-    reference reads are global by design.
+    **Four deliberate exceptions, each documented where it lives, none a copy of this predicate** —
+    and they are **not all reads**. `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_
+    probe that reaches `db` with no scope on purpose (it is how the miss path tells `cross_household`
+    from `unknown_resource`) and returns `void` so it cannot be copied into something that returns
+    data. `getActivityTypeByKey` and `getMetricDefinition` in `catalog.ts` are global reference reads.
+    ⚠️ **`findOrCreateMovementId` in `catalog.ts` is a global unscopable WRITE**, not a reference read:
+    `movements` has no `household_id` column, so a household typing a name another household already
+    created is handed that household's row. TEN-2 is the fix; 1d records the proof and the Beta-0
+    verdict. The canonical list lives in `packages/db/src/writers/ownership.ts`'s docblock — read it
+    there rather than trusting this restatement.
 
-    **Those two ARE the whole allowlist, and since TEN-1 1d they are a test rather than this
-    paragraph** — `apps/web/lib/dal/scoped.test.ts`, two assertions with one exception list each:
-    (1) nothing in `lib/dal` reaches `db` without resolving or being handed a `HouseholdScope`
-    (exception: `catalog.ts`'s three), and (2) nothing builds its own ownership predicate (exception:
-    `household.ts`, for the probe). The unit is a **top-level declaration, exported or not**, because
-    a private helper reaching `db` unscoped is the same leak as a public one (`export.ts` →
-    `prescribedFor` is that shape). Comments are stripped, so a `// TODO: getHouseholdScope()` cannot
-    satisfy it. A **dead-entry** assertion fails if an allowlisted function stops needing its entry,
-    so `TEN-2` has to delete `findOrCreateMovementId`'s rather than leave it standing — the
+    **Since TEN-1 1d those four are a TEST rather than this paragraph** —
+    `apps/web/lib/dal/scoped.test.ts`, two assertions with one exception list each: (1) nothing in
+    `lib/dal` reaches `db` without resolving or being handed a `HouseholdScope` (exceptions:
+    `catalog.ts`'s three), and (2) nothing builds its own ownership predicate (exception:
+    `household.ts`, for the probe). Two lists rather than one because assertion 1 **cannot** see the
+    probe: it resolves a scope to classify the outcome and then queries without it, so it reads as
+    scoped there. The unit is a **top-level declaration, exported or not**, because a private helper
+    reaching `db` unscoped is the same leak as a public one (`export.ts` → `prescribedFor` is that
+    shape). Comments are stripped, so a `// TODO: getHouseholdScope()` cannot satisfy it. And a
+    **dead-entry** assertion fails if an allowlisted function stops needing its entry, so `TEN-2` has
+    to delete `findOrCreateMovementId`'s rather than leave it standing — the
     `household-synthetic-is-dark.test.ts` lesson: an allowlist that cannot go stale.
 
     ⚠️ **It is a call-site guard, so it cannot see SQL.** Delete the household conjunct from
@@ -248,6 +257,11 @@ flowchart LR
     **green** (`db:mutations`' patch 01 demonstrates exactly that). Three vehicles, none of them the
     proof alone. The other half of the containment — the scope **type** — is
     `packages/db/src/scope.test.ts`, and the two deliberately do not overlap.
+
+    ✅ **`packages/db/scripts/corrections/registry.ts`'s three copies are gone too (1d).** They were
+    outside the domain the `lib/dal` guard inspects, so they were stated rather than claimed away;
+    they now ride `isLiveProfile` / `inHousehold`, and no correction holds a raw `household_id`. See
+    "When the app cannot fix the data" below.
 
   - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
     three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not
@@ -367,14 +381,20 @@ flowchart LR
   assertions), pointing `verify.ts`'s `A_SCOPE` at the household next door (the "dual" — it catches
   the half the first cannot, because a **negative** assertion like _"refuses a non-done row"_ still
   returns `null` when threaded with the wrong scope and would silently stop proving its own message),
-  **undoing 1c's seven conversions** (every 1b assertion stays green and the first failure is a 1c
-  one, which is what proves the new rows carry their own weight rather than riding 1b's), dropping
-  the **correction's** household conjunct, and — for 1d's catalog verdict — removing the shared
-  `movementSlug` derivation. That last one is deliberately **not** "scope the catalog": a leak
-  assertion cannot be falsified by scoping a table with no column to scope by (that is `TEN-2`), so
-  the patch breaks the property the verdict actually rests on — that one derivation is the single
-  **global arbiter** two households' different spellings converge on. Without it the verdict would be
-  measuring fixture ordering.
+  **undoing 1c's seven conversions**, dropping the **correction's** household conjunct, and — for
+  1d's catalog verdict — removing the shared `movementSlug` derivation. **Each patch names the
+  assertion that must fail FIRST in a sibling `.expect` file, and the runner compares it**, so a patch
+  that reddens the wrong proof fails the gate rather than passing as "something went red". And since
+  1d the TEN-1 block in `verify.ts` runs **1b-then-1c** (`ten1ReadMatrix` over two lists), so patch
+  03's full claim — _every 1b assertion green, then a 1c one_ — is what one run shows; before the
+  reorder the 1b rows below a 1c failure were unreached rather than green, because `db:verify` is
+  fail-fast. **Order is load-bearing there: do not interleave a 1c proof back above a 1b one.**
+
+  **Patch 04 is deliberately NOT "scope the catalog".** That is `TEN-2`, not a one-line break, and a
+  leak assertion driven by the same name on both sides cannot be falsified by any change that keeps
+  the signature. It breaks the property the verdict actually rests on — that one derivation is the
+  single **global arbiter** two households' different spellings converge on. Without it the verdict
+  would be measuring fixture ordering.
   **Patches, never a runtime flag:** a switch that can disable a BOLA predicate must not exist in
   shipped `packages/db` source. Editing a mutated line means regenerating its patch — the gate then
   fails loudly with _"does not apply"_ rather than passing vacuously.

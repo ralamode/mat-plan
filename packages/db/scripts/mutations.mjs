@@ -15,6 +15,7 @@
  * it concurrently with anything else that touches `packages/db`.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +59,22 @@ for (const patch of patches) {
       const why =
         (run.stderr || run.stdout || '').match(/AssertionError[^\n]*\n?[^\n]*/)?.[0] ??
         `exit ${run.status}`;
-      console.log(`✓ ${patch}: RED (expected) — ${why.replace(/\s+/g, ' ').trim().slice(0, 160)}`);
+      const summary = why.replace(/\s+/g, ' ').trim();
+      // The patch's `.expect` file names the assertion that must be the FIRST to fail. Without this
+      // the runner only proved "something went red", so two patches breaking the same assertion were
+      // indistinguishable — and a patch's reason for existing (03: the first failure is a 1c one) was
+      // asserted in four documents and checked by nothing. A gate that cannot tell which proof it
+      // broke is the vacuity this directory exists to catch, pointed at itself.
+      const expectPath = join(DIR, patch.replace(/\.patch$/, '.expect'));
+      const expected = existsSync(expectPath) ? readFileSync(expectPath, 'utf8').trim() : '';
+      if (expected && !summary.includes(expected)) {
+        console.error(
+          `✗ ${patch}: RED, but on the WRONG assertion.\n    expected first failure: ${expected}\n    got:                    ${summary.slice(0, 200)}`,
+        );
+        failed += 1;
+      } else {
+        console.log(`✓ ${patch}: RED (expected) — ${summary.slice(0, 160)}`);
+      }
     }
   } finally {
     git('apply', '-R', path);
