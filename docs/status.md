@@ -96,6 +96,19 @@ PR screenshot is clean by construction, which is what matters before another hou
 History rewriting was out of scope, and the **production database was deliberately untouched**: those
 names are the household's own data ([inventory](./privacy/data-inventory.md) §9).
 
+🟡 **OPS-1 — previews are isolated in code; the dashboard half is OUTSTANDING.** Every Vercel scope
+shared one set of environment variables, so a preview deployment of any PR read and wrote
+**production** with the **production** access-gate code. The repo half has merged: the app and the
+migrator both refuse a database that disagrees with their environment
+(`packages/shared/src/db-environment.ts`), `pnpm preview:check` verifies the Vercel scopes
+structurally, and a preview estate gets its own migrator. **What remains is dashboard work and only
+the maintainer can do it** — the Neon preview project, the Vercel scope split, a second Upstash
+database, and, the part the backlog row's own wording missed, **purging ~100 publicly-listed preview
+deployments that still hold the production credentials and rotating both of them** (Vercel bakes env
+values in at build time, so rotation is not retroactive). Nine ordered steps, meant to run _before_
+the merge: [runbooks.md](./runbooks.md) → OPS-1 ([plan](./plans/ops-1-preview-isolation.md)). Until
+its closeout commit lands, **OPS-1 is open** and Beta 0's ops step is not clear.
+
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
 tree. It had lived only inside `verify`, which no workflow runs, so **four** advisories reached `main`
