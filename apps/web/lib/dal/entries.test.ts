@@ -1,3 +1,4 @@
+import { ENTRY_STATUS } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // DAL-1 / TEN-1 1b: `listEntriesForDay` must scope by THE live-profile predicate — so a soft-deleted
@@ -96,6 +97,56 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
       scoped({ profilePublicId: PROFILE, day: '2026-09-30', items: ITEMS }),
     ).rejects.toThrow('Profile not found');
     expect(dark.queries.filter((q) => /from "profiles"/.test(q.text))).toEqual([]);
+    vi.doUnmock('./db');
+    vi.resetModules();
+  });
+});
+
+// TEN-1 1d review: `db:verify`'s "refused write survives" case is a FIXTURE — it calls
+// `findOrCreateMovement` itself before the refused `writeStrengthSession`, so it shows what that call
+// order does to the database but cannot fail if the DAL's order changed. This pins the order where the
+// DAL actually runs: the movement INSERT is emitted before the session transaction BEGINs (so a
+// ROLLBACK cannot take it back), and the in-transaction profile resolve — the household seam — then
+// refuses. TEN-2 may move the find-or-create inside the transaction, after the resolve; this test is
+// what has to change then, deliberately.
+describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
+  it('find-or-create runs, and commits, before the refused write', async () => {
+    const rows = (await import('./recording-db')).createRecordingDb((sql) => {
+      if (/from "households"/.test(sql)) return [[ONE_HOUSEHOLD_ID]];
+      if (/from "activity_types"/.test(sql)) return [[1, null]]; // { id, defaultUnit }
+      if (/^select .* from "movements"/.test(sql)) return [[77]]; // the find after the INSERT
+      return []; // …and the in-transaction profile resolve finds nothing → the seam refuses
+    });
+    vi.doMock('./db', () => ({ db: rows.db }));
+    vi.resetModules();
+    const { logStrengthSession: write } = await import('./entries');
+
+    await expect(
+      write({
+        profilePublicId: PROFILE,
+        sessionType: 'strength',
+        clientId: '019826b4-0000-7000-8000-00000000b001',
+        day: '2026-09-30',
+        movements: [
+          {
+            movementName: 'TEN-1 Refused Lift',
+            unit: 'lb',
+            clientId: '019826b4-0000-7000-8000-00000000b002',
+            status: ENTRY_STATUS.done,
+            sets: [{ reps: 5, weight: 100 }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('Profile not found');
+
+    const texts = rows.queries.map((q) => q.text.toLowerCase());
+    const insertMovement = texts.findIndex((t) => t.startsWith('insert into "movements"'));
+    const begin = texts.findIndex((t) => t === 'begin');
+    const resolve = texts.findIndex((t, i) => i > begin && /from "profiles"/.test(t));
+    expect(insertMovement, 'findOrCreateMovementId was called').toBeGreaterThanOrEqual(0);
+    expect(begin, 'writeStrengthSession opened its transaction').toBeGreaterThan(insertMovement);
+    expect(resolve, 'the in-transaction profile resolve ran after it').toBeGreaterThan(begin);
+    expect(texts, 'the refused session rolled back').toContain('rollback');
     vi.doUnmock('./db');
     vi.resetModules();
   });

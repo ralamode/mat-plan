@@ -10,6 +10,43 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+🔴 **TEN-1 is DONE — and its last chunk moved TEN-2 into Beta 0 (2026-10-08).** 1d closed the seam's
+three remaining obligations and answered the one question the milestone attached to it.
+
+- **The structural guard catches the common forms; `db:verify` is the proof.**
+  `apps/web/lib/dal/scoped.test.ts`: nothing in `lib/dal` reaches the database without resolving or
+  being handed a `HouseholdScope`, and nothing builds its own ownership predicate. **Two exception
+  families, each enumerated with a reason** — `catalog.ts`'s three entries (two global reference
+  reads and one write, `findOrCreateMovementId`), and `household.ts#reportScopeMiss`'s
+  existence-only probe, with the test's own lists as the source of truth — which is _smaller_ than the plan's own list, and only possible because 1c left zero hand-written
+  predicates. Its unit is a top-level declaration, **exported or not**, because a private helper
+  reaching `db` unscoped is the same leak as a public one. A **dead-entry** assertion means TEN-2 has
+  to delete its entry rather than leave it standing as coverage nobody re-earned.
+- **The corrections registry lost its last three predicates** — one in `kbSwingsLoadRepsSwap`, two in
+  `nullRoutineToFull`, whose bulk read takes `inHousehold(scope)` for want of a `public_id` half. No
+  correction holds a raw `household_id` any more, and `db:verify` runs the registry entry's **own dry
+  run** to prove it finds its household's NULL-routine rows and never the other household's — the
+  refusal-matrix row the plan asked for and 1b had not delivered.
+- 🔴 **The catalog verdict: it leaks, in both directions, so TEN-2 moves into Beta 0.** `movements`
+  has **no `household_id` column at all**, so `findOrCreateMovementId` cannot be scoped. Proved
+  against a real database through the same core the app runs: one household is handed another's row
+  (inheriting its `name`, `is_bodyweight` and `unit_default`); whoever types a name **first** pins
+  that slug for everyone, and the other household's **own correctly-scoped** Today card renders it;
+  and a session write the household seam **refuses** has already committed the caller's text — a
+  cross-tenant _write_ primitive surviving its own refusal. `beta-1.md`'s criterion fired as written.
+  **TEN-2's deadline is the invite, not AUTH-1's merge:** nothing can serve two households before
+  AUTH-1 (the resolver **throws** on a second live household), so **AUTH-1 is still next** and
+  TEN-2's three PRs run beside it. Evidence, the alternative considered, and the recommendation —
+  explicitly the maintainer's call — are in
+  [the plan](./plans/ten-1-household-scope.md) → "1d as built".
+- `pnpm db:mutations` is at **five** patches, all RED. The two new ones cover 1d's own proofs, and
+  the catalog one deliberately breaks the shared slug derivation — the _global arbiter_ the verdict
+  rests on — because "scope the catalog" is TEN-2, not a one-line mutation.
+
+⚠️ **Still consistent scoping, not authorization.** The gate is one shared code until **AUTH-1**, so
+anyone holding it can still reach any athlete in the one live household. That is AUTH-1's to close,
+and it is the most likely thing to over-read about TEN-1.
+
 ✅ **TEN-1 1c — DAL-2's tail: the last hand-written ownership predicate is gone (2026-10-08).** The
 five sites 1b left existence-scoped — `logCheckinEntries`, `writeStrengthSession`'s in-transaction
 resolve, `programDayRows`'s `isThisProfile`, `export-month`'s three month reads and `seedProgram`'s

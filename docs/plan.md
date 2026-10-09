@@ -167,7 +167,8 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   movement, a thing a kid did that nobody planned — **Add movement**
   (`apps/web/app/p/[profileId]/strength-form.tsx:579`) gives a blank card whose **Movement** field is
   a plain `<input type="text">` with `autoComplete="off"` and no catalog behind it (`:812`–`:823`).
-  Whatever is typed goes to `findOrCreateMovementId` (`apps/web/lib/dal/catalog.ts:76`), an
+  Whatever is typed goes to `findOrCreateMovementId` (core: `packages/db/src/writers/movement-catalog.ts` →
+  `findOrCreateMovement`), an
   `INSERT … ON CONFLICT DO NOTHING` keyed on `movementSlug(name)` — so "Bulgarian Split Squats"
   against a catalog holding "Bulgarian Split Squat" is a **second row**, that movement's history is
   split across both, and with no delete action in the app the fix is a `db:correct` correction. **This
@@ -182,7 +183,7 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   **Acceptance, stated so a test can fail it.** On a day whose program does not prescribe it, an
   athlete selects a movement and submits a set for it, and (1) the stored row resolves to the
   **existing** catalog movement rather than a near-duplicate minted by `findOrCreateMovementId`
-  (`apps/web/lib/dal/catalog.ts:76`, unrecoverable through the UI — there is no delete action), and
+  (core: `packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`, unrecoverable through the UI — there is no delete action), and
   (2) **no magnitude arrives prefilled**, the same boundary V1-19's structural test already pins for
   the scaffold.
 
@@ -927,6 +928,8 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   (`packages/db/src/schema.ts:422`) while `program_blocks` is household-scoped, so a copied program's
   movement references are **shared rows** — the recipient silently inherits the source household's
   unit and bodyweight flags, which is the `findOrCreateMovementId` defect TEN-2 exists to fix.
+  **No longer a prediction:** TEN-1 chunk 1d proved exactly that inheritance, in both directions,
+  and moved TEN-2 into Beta 0 — so by the time this row is scoped the prerequisite is already met.
   **The product rule to write down first: copy the structure, drop the loads.** The inviolable rule in
   this repo is that the model never authors loads, because a bad load is an injury risk. A copy feature
   puts one household's prescribed loads onto another household's athlete — the same risk with a
@@ -1198,21 +1201,118 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   path is cheap and complete — delete the project; it rebuilds from `db:migrate` + `db:seed` in
   minutes — but it has to be _in_ the ledger, or it is the copy a request misses.
 
-- **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
-  every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to the
-  maintainer's household; AUTH-1 swaps its implementation. `db:verify` proves a second household
-  cannot read, write, correct or export the first's data, at every entry point, including
-  `findOrCreateMovementId`. **Unblocked:** the household-addressing ADR it needed —
-  **[ADR 0006](./decisions/0006-household-addressing.md) — is ✅ Accepted (option A, session-only)**
-  _(the maintainer, 2026-10-07; #252)_, which was chunk 0 of
-  [TEN-1's plan](./plans/ten-1-household-scope.md). The plan's six-lens panel ran 2026-10-07 and its
-  review-response log is committed. **Chunk 1a (`households.synthetic`, shipped dark) is in flight;**
-  1b (the seam and the gate), 1c (DAL-2's tail) and 1d (guards, the catalog verdict, docs) follow in
-  that order. _(Beta 0.)_
-- **TEN-2 — custom movements per household.** `movements.slug` is globally unique and
-  `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
-  `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
-  Three PRs. _(Beta 0 if TEN-1 can't prove the catalog stays per household; else Beta 1.)_
+- **TEN-1 — household scoping through one DAL seam, proven.** ✅ **DONE 2026-10-08**, all four chunks
+  ([plan](./plans/ten-1-household-scope.md)): 1a (`households.synthetic`, dark), 1b (the seam and the
+  gate), 1c (DAL-2's tail), 1d (the guards, the corrections, the catalog verdict, the docs). A
+  `cache()`d `getHouseholdScope()` is the one place that derives a household from a request; every DAL
+  read and write resolves it there and passes it into `packages/db` through **one** named predicate
+  whose `scope` parameter is required and positional, so a missed call site is a compile error. The
+  hand-written count is **zero**, and two structural guards keep it there
+  (`packages/db/src/scope.test.ts` for the type's containment, `apps/web/lib/dal/scoped.test.ts` for
+  the DAL's call sites, two enumerated exceptions and no more). `db:verify` proves in **both**
+  directions that a second household cannot read, write, correct or export the first's data, and
+  `pnpm db:mutations` runs five committed patches that must each turn it red.
+  **[ADR 0006](./decisions/0006-household-addressing.md)** was chunk 0 — ✅ Accepted (option A,
+  session-only) _(the maintainer, 2026-10-07; #252)_. **Folds in DAL-2.** AUTH-1 replaces only
+  `getHouseholdScope()`'s body. ⚠️ **It buys _consistent scoping_, not authorization** (AUTH-1's), and
+  it could not cover `movements` — see TEN-2. _(Beta 0.)_
+- **TEN-2 — custom movements per household. 🔴 IN BETA 0, by TEN-1's recorded verdict (2026-10-08).**
+  `movements` has no `household_id` column at all, so `findOrCreateMovementId` cannot be scoped — and
+  TEN-1 chunk 1d **proved**, in both directions against a real database, that one household is handed
+  another's row; that whoever types a name **first** pins that slug's `name` / `is_bodyweight` /
+  `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
+  and that a session write the household seam **refuses** has already committed the caller's text — a
+  cross-tenant _write_ primitive surviving its own refusal. **That primitive does not need a second
+  household:** `logStrengthSession` runs `findOrCreateMovementId` _before_ `writeStrengthSession`'s
+  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order is pinned by
+  `entries.test.ts`), so any gate-holder's session write, even one the write core then refuses for
+  any reason, commits its catalog text. TEN-2 may move the find-or-create inside the transaction,
+  after the profile resolves. Expand (nullable `household_id` + partial unique indexes) → move every
+  slug conflict target and lookup onto them → contract (drop the global UNIQUE). Three PRs; it
+  carries a migration, so it needs its own plan and panel.
+  **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
+  two households before AUTH-1 (the resolver throws on a second live household), so the window opens
+  the moment household #2 exists. Evidence, the alternative considered and the recommendation:
+  [TEN-1's plan](./plans/ten-1-household-scope.md) → "1d as built — the catalog verdict". _(Beta 0.)_
+- **TEN-2a — expand: `movements.household_id`, nullable, shipping dark.** _(Beta 0; TEN-2's first of
+  three.)_ Add the column plus the two partial unique indexes that will replace the global
+  `movements.slug` UNIQUE. No reader, no writer, no behaviour change: the global UNIQUE stays, so
+  every deployed `ON CONFLICT (slug)` keeps its arbiter.
+  ⚠️ **How the indexes get built is a choice this row's plan must make, not a given.**
+  `CREATE INDEX CONCURRENTLY` cannot run inside a transaction, `drizzle-kit migrate` wraps each file
+  in one, and the transaction-stripping runner [AGENTS.md](../AGENTS.md) describes **does not exist**
+  (`.squawk.toml` excludes `require-concurrent-index-creation` for exactly that reason;
+  [tech-debt](./tech-debt.md)). So either **(a) build that runner** — a CI/migration-path change with
+  its own plan — or **(b) justify a plain `CREATE UNIQUE INDEX`** on `movements`, a small table, under
+  the migration's `lock_timeout`, with the reasoning in a comment directly above the statement (and a
+  `-- squawk-ignore require-concurrent-index-creation` there if that rule is ever re-enabled; today it
+  is excluded repo-wide, so the gate will not ask for the justification — the plan has to).
+  ⚠️ **2a owns the tripwire it fires.** Adding the column turns `db:verify`'s structural assertion
+  (`packages/db/scripts/verify.ts` → _"TEN-1 1d: `movements` has NO household_id column"_) red, and
+  `packages/db/scripts/mutations/README.md` names that assertion as the verdict's tripwire. 2a
+  rewrites both — the column now exists and nothing reads or writes it — rather than leaving 2b a red
+  build; the leak assertions themselves still hold until 2c.
+  **The design question this row must answer first, and it is not obvious:** the seeded catalog rows
+  are **reference data belonging to no household**, while a free-text row belongs to whoever typed
+  it. So `household_id` is legitimately NULL for the seed and NOT NULL for custom rows — which means
+  the end state is probably _not_ `NOT NULL`, and the partial unique indexes are what carry the
+  invariant (`UNIQUE (slug) WHERE household_id IS NULL` + `UNIQUE (household_id, slug) WHERE
+household_id IS NOT NULL`). **Settle that in the plan before writing the migration**, because it
+  decides whether TEN-2c contracts to `NOT NULL` at all. **The same plan must define the backfill's
+  terms** (open, from #269's review): what counts as **custom** (a slug not in the seeded catalog,
+  not "referenced by several households", which seeded rows also are); what happens to a custom row
+  **nothing references** (the refused-write path creates exactly these); and how 2c picks which
+  household keeps a shared row's original, so the split is deterministic.
+
+- **TEN-2b — move every slug conflict target and lookup onto the partial indexes.** _(Beta 0; TEN-2's
+  second.)_ `findOrCreateMovementId` takes a `HouseholdScope` and resolves `(household_id, slug)`,
+  falling back to the global reference row; the catalog read path and `programDayRows`' movement
+  declaration follow. **2b owns every place that names a movement by slug**, because each stops
+  identifying one row once two rows can share a slug:
+  - `packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`'s `ON CONFLICT (slug)`
+    and the `select … where slug = …` after it;
+  - `packages/db/src/seed.ts` → the `MOVEMENT_SEED_ROWS` upsert, also `ON CONFLICT (slug)`;
+  - `seedProgram`'s `inArray(movements.slug, …)` resolution, which must pick the global
+    (`household_id IS NULL`) row or the block's own household's, not any row with that slug.
+
+  ⚠️ **Every conflict target must repeat its index's `WHERE` predicate literally** —
+  `WHERE household_id IS NULL` / `WHERE household_id IS NOT NULL` — not as a bound parameter, or
+  Postgres cannot infer the partial index as the arbiter and the statement errors (the V1-5
+  partial-index lesson `seed.ts` already cites for `ramp_targets`).
+  **Backfill:** a custom row referenced by exactly one household is assigned to it, guarded on
+  `household_id IS NULL` so a re-run is a no-op. A row referenced by **more than one** household
+  **cannot be split here**: a per-household clone keeps the slug, and the global UNIQUE still exists
+  in 2b. So 2b's backfill **leaves such rows at `household_id IS NULL` and logs each one** (the
+  migration still succeeds, so 2b deploys), and the split belongs to 2c. Until then a shared row is
+  served through the global fallback, which is the leak 2b does not claim to close. With one live
+  household no such row can exist, which is one more reason TEN-2 lands before the invite.
+  ⚠️ **2b does NOT close the leak and does NOT flip the verdict.** While the global
+  `movements.slug` UNIQUE (`packages/db/src/schema.ts` → `movements`) exists, a second household
+  cannot hold its own row for a slug another household already has: its insert hits the global
+  UNIQUE, which a partial-index `ON CONFLICT` does not absorb. Harmless only while one household
+  exists. ⚠️ `findOrCreateMovementId` is the one allowlist entry in
+  `apps/web/lib/dal/scoped.test.ts` whose reason says TEN-2 **deletes** it; once it takes a
+  `HouseholdScope` that test's dead-entry assertion fails until the entry goes, so the deletion is
+  this row's.
+
+- **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This is where the leak closes.**
+  _(Beta 0; TEN-2's third.)_ With the global UNIQUE gone a second household can hold its own row for
+  a slug, so this PR carries the proofs: TEN-1 1d's `db:verify` catalog verdict flips from
+  _"LEAKS"_ to _"isolated"_, both directions, and **mutation patch `04-slug-is-not-the-arbiter` is
+  rewritten or retired** — its job is to prove the global slug _is_ the arbiter, which stops being
+  true here. **Separate PR and separate deploy from 2b**, because code deployed before 2b still says
+  `ON CONFLICT (slug)`, and that needs the global UNIQUE as its arbiter: drop it while that code is
+  live and every free-text movement write fails. `AGENTS.md`'s deploy order puts a contract after the
+  app that stopped depending on it. Dropping a constraint deletes no data, so this is not gated on
+  `OPS-3`'s restore drill; cut a Neon **restore branch** before it anyway, per `AGENTS.md`'s
+  rollback rule. **The split backfill lives here, after the drop:** for each custom row 2b left at
+  `household_id IS NULL` because more than one household references it, the original row is
+  **assigned to one** referencing household and a clone is made for **each other** household (legal
+  only once the global UNIQUE is gone), with that household's `entries.movement_id` and
+  `prescriptions.movement_id` repointed to its clone. Afterwards **no custom row has
+  `household_id IS NULL`**, so the global fallback reaches seeded reference rows only; `db:verify`
+  asserts that, and it is part of the verdict flip. If 2b logged no shared rows, this step is a no-op.
+
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
   **Row added 2026-10-06:** EVAL-0 had a merged plan and a line in [roadmap.md](./roadmap.md) but **no
@@ -1641,11 +1741,17 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
   soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
   place to make it unskippable.
-- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites** (DAL-1 moved the two sites that lacked the soft-delete half — `listEntriesForDay`, `weeklyAdherenceRows` — onto the helper). V1-24 PR 1b
-  extracts it to `packages/db/src/writers/ownership.ts` and converts the strength writer; the rest are
-  untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
-  what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s
-  cross-profile proofs as the check. No behaviour change.
+- **DAL-2 — the live-profile ownership predicate was hand-written at nine sites.** ✅ **DONE
+  2026-10-08, folded into TEN-1** (1b the profile-resolution sites and everything `ownedEntryIds`
+  reaches, 1c the tail, 1d the corrections registry). **The hand-written count is zero**, and the
+  predicate now also carries the household — a security predicate is the last thing that should drift
+  between call sites (DAL-1 is what drift looks like). Held there by
+  `packages/db/src/scope.test.ts` (no defaulted `scope` parameter, one reader of
+  `scope.householdId`) and `apps/web/lib/dal/scoped.test.ts` (no DAL function builds its own
+  predicate). Its exception lists are the source of truth: assertion 1 (scope) allows
+  `catalog.ts`'s three entries (two reference reads and one write, `findOrCreateMovementId`);
+  assertion 2 (no hand-written predicate) allows only `household.ts#reportScopeMiss`'s
+  existence-only probe.
 - **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** ✅ **Fixed 2026-10-01** (`fix/sec-3-sentry-db-params`):
   the scrubber cuts `params:` off every message and drops `params` keys at any depth. 🔴 Found 2026-09-30 by #192's
   security lens. drizzle-orm's `DrizzleQueryError` message embeds the query's params
@@ -2078,7 +2184,8 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     built.
 
     1. **`findOrCreateMovementId`'s `isBodyweight: false` is not a bug.** The insert is
-       `ON CONFLICT DO NOTHING` on `slug` (`apps/web/lib/dal/catalog.ts:76-88`), so the 7 seeded
+       `ON CONFLICT DO NOTHING` on `slug` (`packages/db/src/writers/movement-catalog.ts` →
+       `findOrCreateMovement`), so the 7 seeded
        bodyweight movements keep their correct `true`. The hardcode only applies to a genuinely NEW
        movement typed as free text, where the app has no way to know — `false` is the safe default, not
        an oversight.

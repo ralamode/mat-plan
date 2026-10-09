@@ -57,18 +57,20 @@ flowchart LR
 
 ## Files
 
-| File / dir                     | What it is for                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/p/[profileId]/actions.ts` | Every Server Action. Thin by contract: validate → DAL → revalidate. Seven actions today.                                                                                                                                                                                                                                                    |
-| `action-state.ts`              | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                                                                                                                                       |
-| `lib/dal/`                     | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                                                                                                                                             |
-| `lib/dal/profiles.ts`          | Also the one READ that resolves untrusted JSONB: `getProfileByPublicId` maps `routine_config` through `resolveProfileRoutine`, which pairs the membership set (the whole catalog) with the neutral first-run fallback — see [programming](./programming.md) invariant 5. Never pass those two lists by hand.                                |
-| `lib/dal/household.ts`         | **`getHouseholdScope()`** — the ONE place in the repo that derives a household from a request, plus `reportScopeMiss` (ADR 0006's miss-path event). AUTH-1 replaces only this body.                                                                                                                                                         |
-| `lib/dal/recording-db.ts`      | TEST SUPPORT: a Drizzle client over a recording pg pool, for emitted-SQL proofs of reads `db:verify` cannot execute (they are `server-only`). Rows are ARRAYS — drizzle queries with `rowMode: 'array'`.                                                                                                                                    |
-| `packages/db/src/scope.ts`     | `HouseholdScope` (branded) + `householdScopeForRequest`. `householdScopeForScript` lives in `writers/household-scope-script.ts`, which the package barrel does **not** re-export — so `apps/web` cannot reach it by **module resolution**, which is why the one `apps/web` fixture script that needs a scope _derives_ one instead (below). |
-| `packages/db/src/queries/`     | The single-sourced, security-load-bearing reads: `household-profiles.ts` (the picker — the whole isolation boundary under ADR 0006), `household-scope.ts` (the resolver's own probe), `weekly-adherence.ts`, `export-month.ts`. Owned by name, not by prefix: `program-day.ts` belongs to [programming](./programming.md).                  |
-| `packages/db/src/writers/`     | The write cores — transactional creates, single guarded-UPDATE amends — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                                                                                                         |
-| `packages/db/src/client.ts`    | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone.                                                                                                                        |
+| File / dir                        | What it is for                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/p/[profileId]/actions.ts`    | Every Server Action. Thin by contract: validate → DAL → revalidate. Seven actions today.                                                                                                                                                                                                                                                    |
+| `action-state.ts`                 | The shared typed envelope + `INITIAL_ACTION_STATE` that `useActionState` starts from.                                                                                                                                                                                                                                                       |
+| `lib/dal/`                        | All Drizzle access and all `process.env` reads. `import 'server-only'`. Returns DTOs, not rows.                                                                                                                                                                                                                                             |
+| `lib/dal/profiles.ts`             | Also the one READ that resolves untrusted JSONB: `getProfileByPublicId` maps `routine_config` through `resolveProfileRoutine`, which pairs the membership set (the whole catalog) with the neutral first-run fallback — see [programming](./programming.md) invariant 5. Never pass those two lists by hand.                                |
+| `lib/dal/household.ts`            | **`getHouseholdScope()`** — the ONE place in the repo that derives a household from a request, plus `reportScopeMiss` (ADR 0006's miss-path event). AUTH-1 replaces only this body.                                                                                                                                                         |
+| `lib/dal/recording-db.ts`         | TEST SUPPORT: a Drizzle client over a recording pg pool, for emitted-SQL proofs of reads `db:verify` cannot execute (they are `server-only`). Rows are ARRAYS — drizzle queries with `rowMode: 'array'`.                                                                                                                                    |
+| `packages/db/src/scope.ts`        | `HouseholdScope` (branded) + `householdScopeForRequest`. `householdScopeForScript` lives in `writers/household-scope-script.ts`, which the package barrel does **not** re-export — so `apps/web` cannot reach it by **module resolution**, which is why the one `apps/web` fixture script that needs a scope _derives_ one instead (below). |
+| `packages/db/src/queries/`        | The single-sourced, security-load-bearing reads: `household-profiles.ts` (the picker — the whole isolation boundary under ADR 0006), `household-scope.ts` (the resolver's own probe), `weekly-adherence.ts`, `export-month.ts`. Owned by name, not by prefix: `program-day.ts` belongs to [programming](./programming.md).                  |
+| `packages/db/src/writers/`        | The write cores — transactional creates, single guarded-UPDATE amends — shared so the DAL **and** `db:verify` prove the same guard.                                                                                                                                                                                                         |
+| `…/writers/movement-catalog.ts`   | 🔴 `findOrCreateMovement` — the **one** write core here that takes **no** `HouseholdScope`, because `movements` has no `household_id` column to scope by. Extracted in TEN-1 1d solely so `db:verify` could run the real function for the catalog verdict. Read its docblock before touching it; `TEN-2` is what changes its signature.     |
+| `apps/web/lib/dal/scoped.test.ts` | TEN-1 1d's structural guard: nothing in `lib/dal` reaches `db` unscoped, and nothing builds its own ownership predicate. Two exception lists, both enumerated with a reason, both final. Not to be confused with `packages/db/src/scope.test.ts`, which guards the scope **type**.                                                          |
+| `packages/db/src/client.ts`       | Pool + schema binding. Node runtime, Fluid `attachDatabasePool`, pooled string through PgBouncer. Also `withVerifiedTls` — upgrades a hosted `sslmode=require` to `verify-full`, leaves a no-TLS local string alone.                                                                                                                        |
 
 ## Invariants
 
@@ -116,6 +118,34 @@ flowchart LR
    - ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so
      TEN-1 buys _consistent scoping_ — B's data is unreachable from a request scoped to A. It does
      not prove the requester is who they claim. That is the most likely thing to over-claim here.
+   - 🔴 **ONE WRITE PATH IS OUTSIDE THIS INVARIANT AND CANNOT BE BROUGHT IN:
+     `findOrCreateMovementId`.** `movements` has **no `household_id` column at all**, so there is
+     nothing to scope by — and a `scope` parameter accepted and ignored would be worse than the honest
+     absence, which is why `findOrCreateMovement` (`packages/db/src/writers/movement-catalog.ts`)
+     takes none. TEN-1 chunk 1d **proved** the consequence in both directions against a real
+     database — `db:verify` → _"TEN-1 1d: the catalog verdict"_ — rather than asserting it:
+     - one household typing a movement is handed another household's row, inheriting its `name`,
+       `is_bodyweight` and `unit_default`, and `programDayRows` renders those on the **other**
+       household's Today card under its own correct scope;
+     - whoever types a name **first** pins that slug permanently (`ON CONFLICT (slug) DO NOTHING`
+       discards the second household's text, and the seed only ever touches its own slugs, so nothing
+       repairs it);
+     - this function can only ever write `is_bodyweight: false` and no `unit_default`, so a movement
+       first typed by one household is declared loaded-with-no-default-unit for everybody — and given
+       the inviolable load rule that is safety-adjacent, not cosmetic;
+     - 🔴 **a session write the seam REFUSES has already committed the caller's text**, because the
+       DAL resolves every movement before `writeStrengthSession`, whose in-transaction re-resolve is
+       the actual seam. A cross-tenant **write** primitive surviving its own refusal, which is
+       categorically worse than a read leak. ⚠️ **Two vehicles, not one proof:** `db:verify`'s
+       refused-write case is a **fixture reproducing the DAL's call order** (it calls
+       `findOrCreateMovement` itself, so its last assertion cannot fail); the order itself is pinned
+       by `apps/web/lib/dal/entries.test.ts` → _"find-or-create runs, and commits, before the refused
+       write"_, which asserts on the SQL `logStrengthSession` emits that the movement `INSERT` precedes
+       the session transaction's `BEGIN` and the profile resolve that refuses.
+
+     **`TEN-2` is the fix**, and the recorded verdict is that it belongs in Beta 0 — before a second
+     household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built"_. Do not read
+     "the writer is scoped" as "the strength write path is tenant-isolated".
 
 3. **The writer is shared with `db:verify`.** A guard that exists only in the DAL is a guard no proof
    covers. When a writer's WHERE encodes a rule, `packages/db/scripts/verify.ts` exercises the **same
@@ -207,16 +237,36 @@ flowchart LR
     and they are **not all reads**. `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_
     probe that reaches `db` with no scope on purpose (it is how the miss path tells `cross_household`
     from `unknown_resource`) and returns `void` so it cannot be copied into something that returns
-    data. `getActivityTypeIdByKey` and `assertMetricKeyExists` in `catalog.ts` are global reference
-    reads. ⚠️ **`findOrCreateMovementId` in `catalog.ts` is a global unscopable WRITE**, not a
-    reference read: `movements` has no `household_id` column, so a household typing a name another
-    household already created is handed that household's row. TEN-2 is the fix; 1d records the proof
-    and the Beta-0 verdict. The canonical list lives in `packages/db/src/writers/ownership.ts`'s
-    docblock — read it there rather than trusting this restatement.
+    data. `getActivityTypeByKey` and `getMetricDefinition` in `catalog.ts` are global reference reads.
+    ⚠️ **`findOrCreateMovementId` in `catalog.ts` is a global unscopable WRITE**, not a reference read:
+    `movements` has no `household_id` column, so a household typing a name another household already
+    created is handed that household's row. TEN-2 is the fix; 1d records the proof and the Beta-0
+    verdict. The canonical lists are `ALLOWED_UNSCOPED` and `PROBE` in `apps/web/lib/dal/scoped.test.ts` —
+    read them there rather than trusting this restatement.
 
-    ⚠️ **`packages/db/scripts/corrections/registry.ts` still holds three copies** (`:85-93`, `:480`,
-    `:510`). They are 1d's by the plan's file-by-file table, and they are outside the domain 1d's
-    `lib/dal` guard inspects — so the guard is absolute over its domain, not over the repo.
+    **Since TEN-1 1d those four are a TEST rather than this paragraph** —
+    `apps/web/lib/dal/scoped.test.ts`, two assertions with one exception list each: (1) nothing in
+    `lib/dal` reaches `db` without resolving or being handed a `HouseholdScope` (exceptions:
+    `catalog.ts`'s three), and (2) nothing builds its own ownership predicate (exception:
+    `household.ts#reportScopeMiss`, the probe). Two lists rather than one because assertion 1 **cannot** see the
+    probe: it resolves a scope to classify the outcome and then queries without it, so it reads as
+    scoped there. The unit is a **top-level declaration, exported or not**, because a private helper
+    reaching `db` unscoped is the same leak as a public one (`export.ts` → `prescribedFor` is that
+    shape). Comments are stripped, so a `// TODO: getHouseholdScope()` cannot satisfy it. And a
+    **dead-entry** assertion fails if an allowlisted function stops needing its entry, so `TEN-2` has
+    to delete `findOrCreateMovementId`'s rather than leave it standing — the
+    `household-synthetic-is-dark.test.ts` lesson: an allowlist that cannot go stale.
+
+    ⚠️ **It is a call-site guard, so it cannot see SQL.** Delete the household conjunct from
+    `isLiveProfile` and the `db:verify` matrix goes red in both directions while that file stays
+    **green** (`db:mutations`' patch 01 demonstrates exactly that). Three vehicles, none of them the
+    proof alone. The other half of the containment — the scope **type** — is
+    `packages/db/src/scope.test.ts`, and the two deliberately do not overlap.
+
+    ✅ **`packages/db/scripts/corrections/registry.ts`'s three copies are gone too (1d).** They were
+    outside the domain the `lib/dal` guard inspects, so they were stated rather than claimed away;
+    they now ride `isLiveProfile` / `inHousehold`, and no correction holds a raw `household_id`. See
+    "When the app cannot fix the data" below.
 
   - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
     three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not
@@ -332,14 +382,24 @@ flowchart LR
 - **⚠️ A boundary test that cannot fail is worse than none, and `db:verify` has a gate for that
   (TEN-1 1b).** `pnpm db:mutations` applies each committed patch in
   `packages/db/scripts/mutations/`, runs `db:verify`, asserts it goes **RED**, and reverts; it runs
-  inside `pnpm verify`. Three mutations today: deleting the household conjunct (must redden 18
+  inside `pnpm verify`. **Five mutations today**: deleting the household conjunct (must redden 18
   assertions), pointing `verify.ts`'s `A_SCOPE` at the household next door (the "dual" — it catches
   the half the first cannot, because a **negative** assertion like _"refuses a non-done row"_ still
   returns `null` when threaded with the wrong scope and would silently stop proving its own message),
-  and **undoing 1c's seven conversions** (the first failure is a 1c one — asserted by that patch's
-  `.expect` file, which the runner compares, so a patch that reddens the wrong proof now fails the
-  gate). ⚠️ That 1b **stays** green under it is established by the per-predicate runs in the plan, not
-  by the gate: `db:verify` is fail-fast, so later assertions are unreached rather than green.
+  **undoing 1c's seven conversions**, dropping the **correction's** household conjunct, and — for
+  1d's catalog verdict — removing the shared `movementSlug` derivation. **Each patch names the
+  assertion that must fail FIRST in a sibling `.expect` file, and the runner compares it**, so a patch
+  that reddens the wrong proof fails the gate rather than passing as "something went red". And since
+  1d the TEN-1 block in `verify.ts` runs **1b-then-1c** (`ten1ReadMatrix` over two lists), so patch
+  03's full claim — _every 1b assertion green, then a 1c one_ — is what one run shows; before the
+  reorder the 1b rows below a 1c failure were unreached rather than green, because `db:verify` is
+  fail-fast. **Order is load-bearing there: do not interleave a 1c proof back above a 1b one.**
+
+  **Patch 04 is deliberately NOT "scope the catalog".** That is `TEN-2`, not a one-line break, and a
+  leak assertion driven by the same name on both sides cannot be falsified by any change that keeps
+  the signature. It breaks the property the verdict actually rests on — that one derivation is the
+  single **global arbiter** two households' different spellings converge on. Without it the verdict
+  would be measuring fixture ordering.
   **Patches, never a runtime flag:** a switch that can disable a BOLA predicate must not exist in
   shipped `packages/db` source. Editing a mutated line means regenerating its patch — the gate then
   fails loudly with _"does not apply"_ rather than passing vacuously.
@@ -366,6 +426,22 @@ Guarded, idempotent, dry-run-by-default, targeted by `public_id`. Add one in
 `packages/db/scripts/corrections/registry.ts`; rules in its README, runbook in
 [runbooks.md](../runbooks.md). **A correction treats the data — the bug that produced it still needs
 its own PR.**
+
+- **A correction NAMES its household, and that is the per-era guard (TEN-1 1b + 1d).** It has no
+  request to derive a scope from, so `liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID)` resolves one
+  by `public_id` — never an internal id — and every predicate in the file rides it:
+  `isLiveProfile(publicId, scope)` where there is a `public_id`, `inHousehold(scope)` for the one
+  **bulk** shape (a whole household's profiles). After 1d there is **no hand-written ownership
+  predicate left in the registry**, and no correction holds a raw `household_id`, so ADR 0006's
+  capability rule holds in this script too.
+
+  Why the conjunct matters more here than anywhere else: a `WHERE` guarded only by the value being
+  corrected **from** is idempotent per ROW but not per ERA. `routine_config IS NULL` is the correct
+  state for a newly-created athlete after PROF-1, so an unscoped `--apply` later would stamp this
+  household's routine onto somebody else's brand-new kid — a write with no delete action behind it,
+  i.e. exactly the unrecoverable class corrections exist to repair rather than cause. The household
+  predicate makes the correction **expire on its own**, and `db:verify` proves it in both directions
+  by running the registry entry's own dry run.
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never

@@ -165,6 +165,27 @@ and stop proving their own messages. The scope's own four-way proof is the TEN-1
 `verify.ts`, which seeds a day_role **both** households program — so a refusal there cannot be mistaken
 for an unprogrammed day.
 
+4c. 🔴 **The four `movement*` columns on the card are GLOBAL, and a correctly-scoped read can render
+another household's string.** `programDayRows` is household-scoped end to end (4b) and still returns
+`movements.name`, `.slug`, `.is_bodyweight` and `.unit_default` off a table with **no `household_id`
+column at all**. The strength form writes that table from free text
+(`findOrCreateMovementId` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions resolve
+by **slug** — the same arbiter — so:
+
+- whichever household types a movement name **first** pins that slug's row permanently, with its own
+  free text as `name`, `is_bodyweight: false` and no `unit_default` (all this function can write);
+- a prescription authored by **another** household on that slug then renders the first typist's
+  string on its own Today card, and the log form seeds its unit from the first typist's declaration —
+  which `ScaffoldRow` reads as _"the MOVEMENT's declaration, not the coach's"_.
+
+**Proved, not suspected** (TEN-1 chunk 1d): `db:verify` → _"TEN-1 1d: the catalog verdict"_ does
+exactly this, end to end, through the real `findOrCreateMovement` and this query. **`TEN-2` is the
+fix** (a `household_id` column plus partial unique indexes; how they are built is TEN-2a's call)
+and the recorded verdict is that it belongs in Beta 0. Until then: **do not "tidy" the movement columns by assuming
+they are as scoped as the rest of the row**, and do not add a NEW read of `movements` metadata without
+reading [the plan](../plans/ten-1-household-scope.md) → "1d as built" first. 4b's scoping is correct
+and complete; this is the one thing it cannot reach.
+
 5. **`routine_config` NULL means "the NEUTRAL FIRST-RUN routine", not "no routine" and not "everything".**
    It ships dark: a profile with no config renders a fallback order, which is how V1-18 landed without a
    backfill. **ONB-0 split what used to be one list into two, and the split is the invariant:**

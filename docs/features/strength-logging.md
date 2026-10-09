@@ -349,13 +349,36 @@ Real ones, each with the file to look at.
   it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
   action and `ResolvedSessionMovement` are all unchanged.
 
-  ⚠️ **`findOrCreateMovementId` runs BEFORE this and is still unscopable** — `movements` has no
-  `household_id` column at all — so a session the seam **refuses** has already committed its
-  caller-supplied movement name to the shared catalog, and whichever household types a name first
-  pins that slug's `is_bodyweight` / `unit_default` for everyone. That is a cross-tenant write
-  surviving a refusal, it is **TEN-2's** fix (partial unique indexes, three PRs), and TEN-1 chunk 1d
-  records the proof and the Beta-0 go/no-go. Do not read "the writer is scoped" as "the strength write
-  path is tenant-isolated". See [write-path](./write-path.md) invariant 2.
+  🔴 **`findOrCreateMovementId` runs BEFORE this, is unscopable, and TEN-1 1d PROVED what that
+  costs.** `movements` has no `household_id` column at all, so there is nothing to scope by — and a
+  `scope` parameter accepted and ignored would be worse than the honest absence, which is why the
+  core (`packages/db/src/writers/movement-catalog.ts`) takes none. `db:verify` →
+  _"TEN-1 1d: the catalog verdict"_ runs that core in both directions and asserts, against a real
+  database:
+
+  - **the read leak** — one household typing a movement is handed another household's row, with its
+    `name`, `is_bodyweight` and `unit_default`. A free-text name that slugs onto a **catalog** row
+    comes back `is_bodyweight: true`, a declaration this function can never write, which is the
+    clearest statement that the row's metadata is not the caller's;
+  - **the write/poison, which is strictly worse** — whoever types a name first pins that slug
+    permanently (`ON CONFLICT (slug) DO NOTHING` discards the second household's text, and the seed
+    only ever touches its own slugs, so nothing repairs it). Since this function can only ever write
+    `is_bodyweight: false` and no `unit_default`, a movement one household typed is declared
+    loaded-with-no-default-unit for everybody — and the **other** household's Today card, read under
+    its own correct scope, renders that string and that declaration
+    ([programming](./programming.md) invariant 4c). Given the inviolable load rule that is
+    safety-adjacent, not cosmetic: a typo in one household changes which load the form offers in
+    another;
+  - **the refused write still commits** — the DAL resolves every movement before
+    `writeStrengthSession`, whose in-transaction re-resolve is the actual seam, so a POST the seam
+    **refuses** has already written globally-visible caller-supplied text. A cross-tenant **write**
+    primitive surviving its own refusal, categorically different from a read leak.
+
+  **`TEN-2` is the fix** (a `household_id` column plus partial unique indexes, three PRs; see
+  `plan.md` → TEN-2a/2b/2c), and the recorded verdict is that it belongs in **Beta 0**, before a
+  second household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_. Do
+  not read "the writer is scoped" as "the strength write path is tenant-isolated". See
+  [write-path](./write-path.md) invariant 2.
 
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the

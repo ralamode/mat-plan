@@ -43,31 +43,49 @@ import type { Executor } from './executor';
  * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
  * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
  * one function allowed to unwrap the scope). **There is no copy of this predicate left in
- * `packages/db/src/**` or `apps/web/**`** — which is the domain 1d's structural guard inspects, and
- * what lets it be absolute rather than shipping with an allowlist that then has to shrink.
+ * `packages/db/src/**` or `apps/web/lib/dal/**`** (bar the probe below). 1d's structural guard,
+ * `apps/web/lib/dal/scoped.test.ts`, inspects **only** `apps/web/lib/dal/*.ts`; `packages/db/src`
+ * is held by `scope.test.ts`'s containment rules and by `db:verify`, not by a text scan.
  *
- * ⚠️ **Three copies DO remain, all in `packages/db/scripts/corrections/registry.ts`, and they are
- * 1d's** (the plan's file-by-file table assigns them there): a verbatim pre-1c predicate at `:85-93`,
- * and `inHousehold`'s body hand-written at `:480` and `:510`. `scope.test.ts`'s "exactly one module
- * reads `scope.householdId`" cannot see those two — they name a raw id, not a scope. Said here
- * because this docblock is what a 1d author reads first to decide whether the guard can be absolute.
+ * ## TEN-1 1d — zero in `lib/dal`, `packages/db/src` and the corrections registry
+ *
+ * ⚠️ **Not zero everywhere.** `apps/web/scripts/screenshot-ephemeral.ts` still hand-writes
+ * `eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID)` to stage screenshot fixtures. It is an
+ * exception, not a leak: it only ever runs against the throwaway database it provisions itself, and
+ * nothing inspects it.
+ *
+ * 1c left three copies in `packages/db/scripts/corrections/registry.ts` — a verbatim pre-1c predicate
+ * in `kbSwingsLoadRepsSwap`, and `inHousehold`'s body hand-written twice in `nullRoutineToFull` — and
+ * said so rather than claiming them away, because they sit outside the domain 1d's `lib/dal` guard
+ * inspects and `scope.test.ts`'s "exactly one module reads `scope.householdId`" could not see them
+ * (they named a raw id, not a scope). **1d converted all three.** A correction now resolves its
+ * household into a `HouseholdScope` (`liveHouseholdScope`) and rides `isLiveProfile` where there is a
+ * `public_id` and `inHousehold` for the one bulk shape — so no correction holds a raw `household_id`
+ * either, and ADR 0006's capability rule holds in the scripts too.
  *
  * Four sites deliberately do NOT use it, each documented where it lives — and they are **not all
- * reads**, which matters to whoever writes 1d's allowlist:
+ * reads**, which is why 1d's allowlist is written per function:
  *
  * 1. `reportScopeMiss`'s existence-only probe (`apps/web/lib/dal/household.ts`) — how the miss path
  *    tells `cross_household` from `unknown_resource`. Returns `void`, so it cannot be copied into
  *    something that returns data.
- * 2. `getActivityTypeIdByKey` and 3. `assertMetricKeyExists` (`apps/web/lib/dal/catalog.ts`) —
- *    genuinely global reference reads.
+ * 2. `getActivityTypeByKey` and 3. `getMetricDefinition` (`apps/web/lib/dal/catalog.ts`) — genuinely
+ *    global reference reads. ⚠️ **It is these two `cache()`d readers that reach `db`, not the
+ *    `getActivityTypeIdByKey` / `assertMetricKeyExists` wrappers** this list named before 1d: those
+ *    delegate and build no query, so an allowlist keyed on them would have exempted the wrong
+ *    symbols. `scoped.test.ts` finds the real ones by construction.
  * 4. ⚠️ **`findOrCreateMovementId` (`catalog.ts`) is a WRITE, not a reference read.** It is
  *    `INSERT … ON CONFLICT DO NOTHING` against a `movements` table with **no `household_id` column
  *    at all**, so it cannot be scoped — a household typing a name another household already created
- *    is handed that household's row. TEN-2 is the fix; 1d records the proof and the Beta-0 verdict.
- *    A guard that allowlists this as "a reference read" would be describing it wrongly.
+ *    is handed that household's row, and whoever types a name first pins that slug's metadata for
+ *    everyone. **TEN-1 1d proved it in both directions** (`db:verify` → "the catalog verdict",
+ *    running the single-sourced core in `writers/movement-catalog.ts`) and the recorded verdict moves
+ *    **TEN-2** into Beta 0. A guard that allowlists this as "a reference read" would be describing it
+ *    wrongly.
  *
  * A NEW read or write that wants to be none of these is a design question, not an edit: use this
- * helper.
+ * helper. All four are enforced as allowlists with a reason each — `apps/web/lib/dal/scoped.test.ts`
+ * — not as this prose, and its dead-entry assertion makes TEN-2 delete entry 4 rather than leave it.
  *
  * ⚠️ **`profiles.household_id` is typed NULLABLE in drizzle and is NOT NULL in the database.**
  * `0001_loose_barracuda.sql` adds `profiles_household_id_not_null` as `CHECK … NOT VALID` and then

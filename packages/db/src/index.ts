@@ -23,6 +23,10 @@ export * from './queries/household-profiles';
 export * from './queries/household-scope';
 // The single-sourced strength-session write core (V1-8-2), run by both the app DAL and db:verify.
 export * from './writers/bodyweight';
+// The single-sourced find-or-create for `movements` (TEN-1 1d). Extracted so db:verify proves the
+// catalog's CROSS-HOUSEHOLD behaviour against the same function the app runs — `movements` has no
+// `household_id`, so that behaviour is TEN-2's verdict, not something this seam can close.
+export * from './writers/movement-catalog';
 export * from './writers/ownership';
 export * from './writers/strength-session';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so

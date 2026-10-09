@@ -15,6 +15,41 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The `movements` catalog verdict is restated in ~12 places, and TEN-2 has to retract every one (found 2026-10-09, TEN-1 1d review)
+
+- **What & why:** TEN-1 1d's finding — `movements` has no `household_id`, so free-text catalog rows
+  cross households and a refused write still commits one — is written out at length in
+  `.github/SECURITY.md`, `docs/architecture.md`, three feature guides (`write-path.md`,
+  `strength-logging.md`, `programming.md`), `docs/milestones/beta-1.md`, `docs/plan.md`,
+  `docs/roadmap.md`, `docs/status.md`, `packages/db/src/writers/ownership.ts`,
+  `apps/web/lib/dal/catalog.ts` and `packages/db/src/writers/movement-catalog.ts`. The 1d review
+  already had to correct the same overstatement (the indexes "built `CONCURRENTLY`") in several of
+  them at once.
+- **Impact:** each copy goes false the day TEN-2c merges, and a missed one keeps telling a reader the
+  catalog leaks. Drift between copies
+  is how the docs stopped matching the code in the first place.
+- **Proposed fix:** keep the evidence in two places only — `docs/plans/ten-1-household-scope.md` →
+  "1d as built — the catalog verdict" and `docs/privacy/data-inventory.md` §4's `movements` row — and
+  cut every other copy to one sentence plus a link. Whatever is left, **TEN-2c must retract each
+  copy** in the PR that flips the verdict; `git grep -n "catalog verdict"` finds most of them.
+- **Severity:** low (docs drift), rising to medium the day TEN-2c lands if it is not done.
+
+### The comment-stripping `code()` test helper has five copies (found 2026-10-09, TEN-1 1d review)
+
+- **What & why:** the same "comments out, strings kept" `code(file)` helper is defined separately in
+  `apps/web/lib/dal/scoped.test.ts`, `apps/web/app/pages-are-gated.test.ts`,
+  `apps/web/app/tenancy-is-not-cached.test.ts`, `apps/web/lib/household-synthetic-is-dark.test.ts`
+  and `packages/db/src/scope.test.ts` (and `apps/web/app/design/tokens/token-sets.test.ts` carries the
+  same block-comment regex inline). AGENTS.md makes the second copy the trigger to extract; this is
+  the fifth.
+- **Impact:** these are the structural guards. A fix to the stripping (a `//` inside a string, a
+  template literal) lands in one copy and not the others, so two guards can disagree about what is
+  code.
+- **Proposed fix:** extract once into a small test-support module (one per package, or one shared
+  under `packages/shared` if a cross-package import of test support is acceptable) and import it from
+  every guard, in one mechanical PR.
+- **Severity:** low.
+
 ### The light-mode focus ring misses SC 1.4.11, and the test that looks like it checks this skips the shipping palette (found 2026-10-07, ONB-0 UX panel)
 
 - **What & why:** `--ring: oklch(0.708 0 0)` on `--background: oklch(1 0 0)` (`apps/web/app/globals.css`)
