@@ -1033,6 +1033,10 @@ async function main(): Promise<void> {
     // (it reads its own env, possibly live Neon). This path is the deliberate exception.
     const baseUrl = process.env.SCREENSHOT_BASE_URL ?? 'http://localhost:3996';
     assertDbTargetAllowed(process.env.DATABASE_URL ?? 'postgresql://x@localhost/x', true);
+    // OPS-1 note: this path starts NO server, so `lib/env.ts`'s database-environment guard is
+    // enforced by whatever the caller already started — `pnpm dev:prod` sets `ALLOW_LIVE_DB=1`
+    // for exactly this case. Nothing to set here.
+
     console.warn(
       '⚠️  --use-live-db: capturing against the already-running server (no embedded DB).',
     );

@@ -40,17 +40,27 @@ but DDL/migrations need a **direct** session (PgBouncer's transaction pooling ca
   reads the workspace root — `pnpm-workspace.yaml`, `packages/*`).
 - **Framework preset:** Next.js (auto-detected). **Install/Build:** defaults. **Node.js:** 22+.
 
-**Environment variables** (Project → Settings → Environment Variables), set for **Production** and
-**Preview**:
+**Environment variables** (Project → Settings → Environment Variables). **Per scope — a variable
+must never target more than one scope (OPS-1).** Create a separate record for each, even where the
+value is identical:
 
-| Variable               | Value                              | Notes                    |
-| ---------------------- | ---------------------------------- | ------------------------ |
-| `ACCESS_GATE_PASSWORD` | a long random code (≥8 chars)      | V0-4 access-gate stopgap |
-| `DATABASE_URL`         | Neon **pooled** string (`-pooler`) | app runtime only         |
+| Variable               | Production                 | Preview / Development              | Notes                               |
+| ---------------------- | -------------------------- | ---------------------------------- | ----------------------------------- |
+| `ACCESS_GATE_PASSWORD` | a long random code         | a **different** long random code   | V0-4 stopgap; see the warning below |
+| `DATABASE_URL`         | production Neon **pooled** | `mat-plan-preview` Neon **pooled** | app runtime only                    |
 
-- Validated at boot by `lib/env.ts` — **the app refuses to start if either is missing/invalid.**
+- Validated at boot by `lib/env.ts` — **the app refuses to start if either is missing/invalid**, and
+  since OPS-1 it also refuses to start when `VERCEL_ENV` and the database the string names disagree
+  (`packages/shared/src/db-environment.ts`). That is why the preview database is named
+  `mat_plan_preview`: the name is the check.
 - **No secret gets a `NEXT_PUBLIC_` prefix.** `DATABASE_URL_UNPOOLED` does **not** go in Vercel (only
   GitHub Actions migrates).
+- **Never set `SKIP_ENV_VALIDATION` or `ALLOW_LIVE_DB` in any Vercel scope.** The first turns off env
+  validation including the database guard; the second is the deliberate off-Vercel opt-in that lets
+  `pnpm dev:prod` target live Neon. `pnpm preview:check` fails if either appears.
+- **Previews get their own everything**: the seed-only Neon project, their own gate code, their own
+  Upstash database, and **no** `SENTRY_DSN`. The ordered procedure, with confirmations, is
+  [runbooks.md](./runbooks.md) → OPS-1.
 
 ## 3. GitHub Actions secret
 
@@ -65,11 +75,16 @@ Both are **optional**; absent means the feature no-ops and the app behaves exact
 They go in **Vercel only** — CI never calls either service, deliberately, so that no external outage
 can redden a build.
 
-| Variable                   | Where to get it                              | Vercel envs                      |
-| -------------------------- | -------------------------------------------- | -------------------------------- |
-| `UPSTASH_REDIS_REST_URL`   | Upstash console -> your Redis DB -> REST API | Production, Preview, Development |
-| `UPSTASH_REDIS_REST_TOKEN` | same panel                                   | Production, Preview, Development |
-| `SENTRY_DSN`               | Sentry -> Settings -> Client Keys (DSN)      | Production, Preview, Development |
+| Variable                   | Where to get it                              | Production | Preview / Development              |
+| -------------------------- | -------------------------------------------- | ---------- | ---------------------------------- |
+| `UPSTASH_REDIS_REST_URL`   | Upstash console -> your Redis DB -> REST API | ✅ prod DB | ✅ a **second**, preview-only DB   |
+| `UPSTASH_REDIS_REST_TOKEN` | same panel                                   | ✅ prod DB | ✅ the same second DB              |
+| `SENTRY_DSN`               | Sentry -> Settings -> Client Keys (DSN)      | ✅         | ⬜ **unset** — no prod DSN (OPS-1) |
+
+**Optional for Production, effectively required for Preview.** A preview URL is publicly listed (the
+GitHub deployments API exposes `environment_url` on a public repo), and with no Upstash credentials
+`lib/rate-limit.ts` fails open — so previews would be a publicly-listed URL in front of an
+**unlimited** password oracle. [runbooks.md](./runbooks.md) → OPS-1 step 4.
 
 No `SENTRY_AUTH_TOKEN`/`ORG`/`PROJECT`: source-map upload is deliberately disabled (see
 `next.config.ts` and docs/tech-debt.md), so the DSN is the only Sentry credential.
@@ -125,11 +140,21 @@ you'll be writing test data. See the local-dev section in the [README](../README
 in `packages/db/src/seed.ts` (idempotent, `ON CONFLICT`). **The same migrations + seed apply to every
 environment** — that is the dev/prod parity guarantee, and it is _enforced_, not hoped:
 
-| Environment              | Database                                                   | How migrations + seed apply                                    | When               |
-| ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------- | ------------------ |
-| **Dev** (your laptop)    | a real **local embedded Postgres** (`apps/web/.local-db/`) | `pnpm dev` runs `db:migrate` + `db:seed` on start (idempotent) | every `pnpm dev`   |
-| **Prod**                 | **Neon** (pooled = runtime, direct/unpooled = migrator)    | GitHub Actions `migrate.yml` — the **single migrator**         | on merge to `main` |
-| **CI (pre-merge proof)** | **PGlite** (`db:verify`) + **Docker Postgres** (`e2e`)     | `db:migrate` + `db:seed` inside the jobs                       | every PR           |
+| Environment              | Database                                                            | How migrations + seed apply                                    | When               |
+| ------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------ |
+| **Dev** (your laptop)    | a real **local embedded Postgres** (`apps/web/.local-db/`)          | `pnpm dev` runs `db:migrate` + `db:seed` on start (idempotent) | every `pnpm dev`   |
+| **Prod**                 | **Neon** (pooled = runtime, direct/unpooled = migrator)             | GitHub Actions `migrate.yml` — the **single migrator**         | on merge to `main` |
+| **Preview**              | **Neon `mat-plan-preview`** — a separate, seed-only project (OPS-1) | GitHub Actions `migrate-preview.yml`, its own file             | on merge to `main` |
+| **CI (pre-merge proof)** | **PGlite** (`db:verify`) + **Docker Postgres** (`e2e`)              | `db:migrate` + `db:seed` inside the jobs                       | every PR           |
+
+**Preview is a fourth migrated environment, and it lags a PR's own migration — deliberately.** It is
+migrated on merge to `main`, exactly as production is, so a PR that adds a migration gets a preview
+on the pre-migration schema. That is not new: production behaves the same way, and the pre-merge
+proof is the `e2e` Docker-Postgres apply. To refresh it from a branch, run `db:migrate` **locally**
+against the preview string — never a `workflow_dispatch` of `migrate.yml` from a branch, which would
+apply unmerged migrations to production (now blocked by a `github.ref` guard on that job). The
+preview project is **disposable**: [runbooks.md](./runbooks.md) → OPS-1 has the reset recipe, and it
+is how a fixture rename reaches it.
 
 **The workflow for a data-model change:** edit `schema.ts` → `pnpm --filter @mat-plan/db db:generate`
 → commit the generated `.sql` + snapshot → open the PR. CI's **drift guard** (`db:generate` must
@@ -159,8 +184,15 @@ schedule empty). Play data belongs to your dev sandbox only. Manual prod data fi
   string) — see the DB rules in [../AGENTS.md](../AGENTS.md). Vercel only builds and serves.
 - Additive/expand migrations run and race the Vercel deploy safely (backward-compatible by design);
   destructive **contract** steps ship in a separate, later deploy (expand → contract).
-- **Preview databases** (later, V0-11): preview deploys point at a per-PR **Neon branch** (prod-shaped)
-  via the Neon–Vercel integration.
+- **Preview databases (OPS-1, 2026-10-07):** preview deploys point at **`mat-plan-preview`, a
+  separate seed-only Neon project** — and the Preview scope holds no production credential.
+  ⚠️ This line previously promised a per-PR **Neon branch** "later, V0-11". V0-11 shipped long ago
+  and no Neon branching was ever built; worse, a branch is a copy-on-write clone of production, so it
+  would have put every family's bodyweight into every preview. The claim also stood in `AGENTS.md`,
+  `spec.md`, `architecture.md` and `plan.md` — all corrected together. Procedure:
+  [runbooks.md](./runbooks.md) → OPS-1.
+- **Migrations do not run on a fork PR.** `migrate.yml` and `migrate-preview.yml` are
+  `push: [main]` + `workflow_dispatch` only, so a fork never sees either database credential.
 
 ## Verifying
 
@@ -168,4 +200,8 @@ schedule empty). Play data belongs to your dev sandbox only. Manual prod data fi
   env var fails the Vercel build (by design).
 - **Migration applied:** the "Migrate (production)" run is green; in the Neon console the `units`,
   `profiles`, `entries`, `entry_sets` tables exist and `units`/`profiles` are seeded.
-- **Preview:** open any PR → Vercel posts a preview URL; that URL renders the branch.
+- **Preview:** open any PR → Vercel posts a preview URL; that URL renders the branch, against the
+  **preview** database and the **preview** gate code. Confirm the isolation mechanically with
+  `pnpm preview:check` ([runbooks.md](./runbooks.md) → OPS-1 step 8); a _red_ preview build after
+  OPS-1 usually means a scope still holds the production connection string, which is the guard
+  working.

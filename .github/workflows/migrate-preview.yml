@@ -1,0 +1,82 @@
+name: Migrate + seed (preview database)
+
+# OPS-1 — the PREVIEW estate's migrator. Plan: docs/plans/ops-1-preview-isolation.md.
+#
+# Previews run against a separate, seed-only Neon project (`mat-plan-preview`), never a branch of
+# production — a branch is a copy-on-write clone, so it would put every family's bodyweight in every
+# preview. That project still needs the schema and the reference catalog, so it is migrated and
+# seeded here, by the same `packages/db` scripts production uses. One source of truth, applied
+# identically (docs/deploy.md).
+#
+# WHY A SEPARATE FILE RATHER THAN A SECOND JOB IN migrate.yml. `workflow_dispatch` lets you pick any
+# ref, and a dispatched run executes THAT ref's code. A preview job living in `migrate.yml` would
+# mean "dispatch from my branch to refresh the preview DB" also runs the PRODUCTION job, applying an
+# unmerged, unreviewed migration to production. Here the production credential is not even present,
+# so that mistake is unreachable rather than merely discouraged. AGENTS.md's "GitHub Actions is the
+# SINGLE migrator" is about WHO migrates, not how many files say so.
+#
+# Runs on every push to main, with no path filter, for the reason `migrate.yml` gives: a
+# reference-data change in `seed.ts` or `@mat-plan/shared` must reach the database even when the PR
+# carries no migration. `db:migrate` is a no-op when nothing is pending and `db:seed` is idempotent.
+#
+# SCHEMA LAG IS DELIBERATE AND IS NOT A REGRESSION: a PR that adds a migration gets a preview on the
+# pre-migration schema, exactly as it gets production's pre-migration schema today. The pre-merge
+# proof is the e2e smoke (ephemeral Postgres, migrated from the branch). To refresh the preview DB
+# from a branch, run `packages/db/scripts/migrate.ts` LOCALLY against the preview direct string —
+# never a dispatch from the branch (docs/runbooks.md -> OPS-1).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # re-apply the preview estate on demand
+
+# Never cancel an in-flight migration; serialize runs against the preview database.
+concurrency:
+  group: migrate-preview
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-preview:
+    name: apply migrations (preview)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The four steps above duplicate migrate.yml's, deliberately. `ci.yml` already carries two
+      # copies of the same block, there is no `.github/actions/`, and a local composite action would
+      # FAIL `pnpm actions:check` (check-action-pins.mjs does not scan a local action's own `uses:`
+      # lines). The only allowed de-dup shapes are a `strategy.matrix` or a `workflow_call`, both new
+      # patterns for this repo. Duplicating is the right call at ~4h/wk — do not "tidy" it.
+
+      - name: Apply migrations + idempotent seed (preview Neon project, direct string)
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.PREVIEW_DATABASE_URL_UNPOOLED }}
+          # Makes both scripts refuse a target whose database name is not a preview database's, so a
+          # mis-pasted secret cannot DDL + seed production (the seed is ON CONFLICT DO NOTHING, which
+          # is why that mistake would otherwise be silent). See packages/shared/src/db-environment.ts.
+          EXPECTED_DB_ENV: preview
+        run: |
+          if [ -z "$DATABASE_URL_UNPOOLED" ]; then
+            # ⚠️ TEMPORARY, and tracked: a `::warning::` on a green job is invisible a week later,
+            # which is the claimed-but-unwired-gate shape docs/tech-debt.md exists to log. The
+            # OPS-1 runbook's CLOSEOUT step turns this into `exit 1` once the secret exists.
+            echo "::warning::PREVIEW_DATABASE_URL_UNPOOLED not set — skipping. OPS-1's runbook has not been executed yet (docs/runbooks.md -> OPS-1); its closeout step makes this a hard failure."
+            exit 0
+          fi
+          pnpm --filter @mat-plan/db db:migrate
+          pnpm --filter @mat-plan/db db:seed

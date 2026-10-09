@@ -325,6 +325,21 @@ success.` Harmless there — nothing referenced the files yet.
   describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
 - **Severity:** low.
 
+### `migrate-preview.yml` skips GREEN until the OPS-1 runbook is executed (added 2026-10-07, OPS-1)
+
+- **What:** the preview migrator exits 0 with a `::warning::` when `PREVIEW_DATABASE_URL_UNPOOLED` is
+  absent, mirroring `migrate.yml`'s existing guard so the maintainer only has to add a secret rather
+  than also edit a workflow.
+- **Why it is debt and not just a guard:** a `::warning::` on a green job is invisible a week later.
+  For production the same shape is self-correcting — the app breaks loudly — but nobody would notice
+  for months that previews are running an unmigrated, unseeded schema. It is the
+  claimed-but-unwired-gate shape this file exists to log, shipped knowingly, in the same PR that
+  corrects six documents for the same sin.
+- **Payoff trigger:** the maintainer executes [runbooks.md](./runbooks.md) → OPS-1. Its **closeout
+  commit** (step 9) changes `exit 0` to `exit 1` and deletes this entry.
+- **Severity:** low while OPS-1's runbook is outstanding and visible in `plan.md`; it becomes a real
+  blind spot only if that row is ticked without the closeout.
+
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)
 
 - **What & why:** the DB-safety reviewer on GAP-3's panel checked the plan's claim that _"Squawk hard-fails
@@ -364,6 +379,11 @@ success.` Harmless there — nothing referenced the files yet.
 - **Why it went unnoticed:** the rules were written as the intended end state and never re-verified.
   `db:verify` and the drift guard _are_ real and genuinely good, which makes the DB section read as
   covered at a glance. The lesson generalizes: **do not cite a gate without opening `.github/workflows/`.**
+- ⚠️ **Re-scope the proposed fix before building it (OPS-1, 2026-10-07).** It branches from `main`,
+  i.e. **production** — which with a second family would clone their data into a database CI can
+  reach, the exact shape [OPS-1](./plans/ops-1-preview-isolation.md) rejected for previews. When this
+  is built it must branch the **`mat-plan-preview`** project or use an anonymized snapshot. The
+  rehearsal value (real row counts) is partly lost that way, which is a trade to make deliberately.
 - **Proposed fix:** a PR job that cuts a Neon branch from `main` and applies the migration against it
   (AGENTS.md's "(b) a Neon branch cut from main"). Needs a Neon API token in repo secrets and a
   create/delete branch step — the reason it has been deferred is credentials plus per-PR cost, not
