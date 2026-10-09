@@ -5,18 +5,27 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 /**
- * **TEN-1 1d — the DAL-side structural guard, and it is ABSOLUTE.**
+ * **TEN-1 1d — the DAL-side structural guard.** It catches the common forms; `db:verify` is the proof.
  *
  * Two claims about `apps/web/lib/dal/`, each as its own assertion with its own exception list:
  *
  * 1. **nothing reaches the database without resolving or being handed a household scope** — exception:
- *    `catalog.ts`'s three global reads;
- * 2. **nothing builds its own ownership predicate** — exception: `household.ts`, for
- *    `reportScopeMiss`'s existence-only probe.
+ *    `ALLOWED_UNSCOPED` below, three `catalog.ts` entries (two global reference reads and one write,
+ *    `findOrCreateMovementId`);
+ * 2. **nothing builds its own ownership predicate** — exception: `household.ts#reportScopeMiss`, the
+ *    existence-only probe.
  *
- * Those are **exactly the two exceptions** [write-path.md](../../../../docs/features/write-path.md)
- * (invariant 2, Traps) already declares, and no others. If a third is ever needed, that is a design
- * question, not an edit to this file.
+ * **These two lists are the source of truth.** [write-path.md](../../../../docs/features/write-path.md)
+ * (invariant 2, Traps) points here rather than restating them. If another exception is ever needed,
+ * that is a design question, not an edit to this file.
+ *
+ * ## ⚠️ What it catches, stated plainly
+ *
+ * It matches **source text**, so it catches the common forms — `db.` / `(db, …)` reaches, and
+ * `eq` / `isNull` / `inArray` on an ownership column of `schema.profiles`, across line breaks. It does
+ * not catch an aliased import, a column reached through another name, or SQL built some other way.
+ * Isolation is **proved** by `db:verify`'s two-household matrix and `db:mutations`; this file keeps
+ * the obvious regressions from reaching it.
  *
  * ## Why this file could not be written before 1c
  *
@@ -57,7 +66,10 @@ import { describe, expect, it } from 'vitest';
 
 const DAL_DIR = dirname(fileURLToPath(import.meta.url));
 
-/** Comments out, strings kept — matching calls and identifiers in this app's source. */
+/**
+ * Comments out, strings kept — matching calls and identifiers in this app's source. ⚠️ One of five
+ * copies of this helper (docs/tech-debt.md → "the comment-stripping `code()` helper").
+ */
 function code(file: string): string {
   return readFileSync(file, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -103,7 +115,8 @@ const REACHES_DB = /(?<![\w$.])db\s*\.|\(\s*db\s*[,)]/;
 const CARRIES_SCOPE = /await\s+getHouseholdScope\(\)|\bHouseholdScope\b/;
 
 /**
- * **Exception list 1 — three entries, all in `catalog.ts`, all already recorded in `write-path.md`.**
+ * **Exception list 1 — three entries, all in `catalog.ts`: two reference reads and one write.** This
+ * list is the source of truth; `write-path.md` points here.
  *
  * The reason **is** the entry: a future author adding a fourth has to write one, next to the three
  * above it, in the file CI runs — which is the whole point of a list over a regex. A new read that
@@ -172,10 +185,10 @@ describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', ()
    * compiler cannot see a twelfth copy — it type-checks perfectly, it is just scoped weaker.
    */
   const OWNERSHIP_COLUMN =
-    /\b(?:eq|isNull)\(\s*schema\.profiles\.(?:publicId|householdId|deletedAt)\b/;
+    /\b(?:eq|isNull|inArray)\(\s*schema\.profiles\.(?:publicId|householdId|deletedAt)\b/;
 
   /**
-   * **Exception list 2 — one file.** `household.ts` holds `reportScopeMiss`, ADR 0006 obligation 3's
+   * **Exception list 2 — one declaration.** `household.ts#reportScopeMiss`, ADR 0006 obligation 3's
    * existence-only probe: deliberately unscoped, because telling `cross_household` from
    * `unknown_resource` is the entire signal the scoped predicate destroys. It selects a literal,
    * returns `void` (so it cannot be copied into something that returns data) and swallows its own
@@ -185,18 +198,27 @@ describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', ()
    * classify the outcome) and then queries without it, so it reads as scoped there. Two assertions,
    * two exception lists, for exactly that reason.
    */
-  const PROBE_FILE = 'household.ts';
+  const PROBE = 'household.ts#reportScopeMiss';
+
+  /**
+   * Matched per comment-stripped DECLARATION BODY, not per line — so a predicate broken across lines
+   * (`eq(\n  schema.profiles.publicId, …)`) is still one match — and the self-check below goes
+   * through this same function, so the detector it proves non-vacuous is the one the assertion uses.
+   */
+  const handWritten = (file: string) =>
+    declarationsOf(file)
+      .filter((d) => d.id !== PROBE && OWNERSHIP_COLUMN.test(d.body))
+      .map((d) => d.id);
 
   it('can see a hand-written predicate (the detector is not vacuous)', () => {
     expect(dalFiles.length).toBeGreaterThan(5);
-    expect(OWNERSHIP_COLUMN.test(code(join(DAL_DIR, PROBE_FILE)))).toBe(true);
+    const probe = declarationsOf('household.ts').find((d) => d.id === PROBE);
+    expect(probe, `${PROBE} exists (an exception for nothing is a dead entry)`).toBeDefined();
+    expect(OWNERSHIP_COLUMN.test(probe!.body)).toBe(true);
   });
 
-  it.each(dalFiles.filter((f) => f !== PROBE_FILE).map((f) => [f]))('%s', (file) => {
-    const hits = code(join(DAL_DIR, file))
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => OWNERSHIP_COLUMN.test(line));
+  it.each(dalFiles.map((f) => [f]))('%s', (file) => {
+    const hits = handWritten(file);
     expect(
       hits,
       `${file} builds an ownership predicate by hand — use isLiveProfile(publicId, scope) or ` +
