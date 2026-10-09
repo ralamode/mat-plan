@@ -1,0 +1,12 @@
+diff --git a/packages/db/scripts/corrections/registry.ts b/packages/db/scripts/corrections/registry.ts
+index 262cacd..42ca941 100644
+--- a/packages/db/scripts/corrections/registry.ts
++++ b/packages/db/scripts/corrections/registry.ts
+@@ -504,7 +504,6 @@ const nullRoutineToFull: Correction = {
+       .from(schema.profiles)
+       .where(
+         and(
+-          inHousehold(scope),
+           isNull(schema.profiles.routineConfig),
+           isNull(schema.profiles.deletedAt),
+         ),

@@ -55,7 +55,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 
-import { schema } from '../src/client';
+import { type Database, schema } from '../src/client';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
@@ -71,8 +71,15 @@ import {
 // cannot reach the constructor that takes a household id as an argument at all (module resolution
 // fails on a deep bare import). A script has no request to derive a scope from, so it NAMES one.
 import { householdScopeForScript } from '../src/writers/household-scope-script';
+// TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
+// `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
+// run the code the app runs if that core lives here (write-path.md invariant 3).
+import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import { ownedEntryIds } from '../src/writers/ownership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
+// TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
+// the correction's own dry run rather than a lookalike of its SQL.
+import { CORRECTIONS, NULL_ROUTINE_TO_FULL_NAME } from './corrections/registry';
 import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -4684,44 +4691,6 @@ assert.equal(
   "TEN-1 fixture: household B's legs block carries B's own target",
 );
 
-// ⚠️ TEN-1 1c: `seedProgram` itself is household-scoped now — a target naming a profile in ANOTHER
-// household throws with nothing written, instead of seeding a cross-household `prescription_targets`
-// row that `programDayRows` would then have to refuse. This runs against PROD on every push, so it
-// gets the positive direction above AND this negative one (the plan's R-af).
-await assert.rejects(
-  seedProgram(asPg, [
-    {
-      householdPublicId: VERIFY_HH_PUBLIC_ID,
-      slug: 'ten1_cross_household_target',
-      name: 'TEN-1 cross-household target',
-      notes: null,
-      prescriptions: [
-        {
-          dayRole: TEN1_DAY_ROLE,
-          movementSlug: anyMovement.slug,
-          idx: 0,
-          sets: 1,
-          targetReps: '1',
-          // household A's kid, inside household B's block
-          targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'leak', reps: null }],
-        },
-      ],
-    },
-  ]),
-  /unknown profile .* not in household/,
-  'TEN-1 1c: seedProgram refuses a target in another household',
-);
-assert.equal(
-  (
-    await db
-      .select({ id: schema.programBlocks.id })
-      .from(schema.programBlocks)
-      .where(eq(schema.programBlocks.slug, 'ten1_cross_household_target'))
-  ).length,
-  0,
-  'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
-);
-
 // ── (3) THE READ MATRIX — every scoped read, both directions ──────────────────────────────────────
 // `ownedEntryIds` is `isLiveProfile` itself (it is the subselect both amend writers ride), so that
 // row is the predicate's own proof. The rest are the shipped reads behind a screen: the Today page's
@@ -4731,12 +4700,46 @@ assert.equal(
 // ramp targets, the export reads need logged sessions, the program read needs a block — and one
 // shared pair would have forced a re-typed lookalike fixture per read, which is the vehicle the
 // panel rejected for the picker. The pair varies; the FOUR assertions do not.
-const TEN1_READS: readonly [
+type Ten1Read = readonly [
   label: string,
   aProfile: string,
   bProfile: string,
   call: (profilePublicId: string, scope: HouseholdScope) => Promise<readonly unknown[]>,
-][] = [
+];
+
+/**
+ * The FOUR assertions, in one place, run over whichever list of reads is passed in.
+ *
+ * ⚠️ **1b's reads and 1c's are two lists on purpose (the 1d follow-up 1c's review recorded).**
+ * `db:verify` is fail-fast, so `03-undo-1c-predicates.patch`'s claim — *"the first failure is a 1c
+ * one, and 1b carries its own weight"* — was only half-checkable while a 1c assertion sat ahead of
+ * 1b's: the 1b rows after it were **unreached, not green**. With every 1b proof ordered first, one
+ * patch-03 run passes through all of them and then fails on a 1c row, which is the claim itself.
+ */
+async function ten1ReadMatrix(reads: readonly Ten1Read[]): Promise<void> {
+  for (const [label, aProfile, bProfile, call] of reads) {
+    assert.ok(
+      (await call(aProfile, A_SCOPE)).length > 0,
+      `TEN-1: ${label} returns household A's OWN rows`,
+    );
+    assert.equal(
+      (await call(aProfile, B_SCOPE)).length,
+      0,
+      `TEN-1: ${label} — household B cannot read A`,
+    );
+    assert.ok(
+      (await call(bProfile, B_SCOPE)).length > 0,
+      `TEN-1: ${label} returns household B's OWN rows`,
+    );
+    assert.equal(
+      (await call(bProfile, A_SCOPE)).length,
+      0,
+      `TEN-1: ${label} — household A cannot read B (reverse)`,
+    );
+  }
+}
+
+const TEN1_READS_1B: readonly Ten1Read[] = [
   [
     'ownedEntryIds (THE live-profile predicate)',
     RAMP_TEST_PROFILE_PUBLIC_ID,
@@ -4756,7 +4759,11 @@ const TEN1_READS: readonly [
         scope,
       }),
   ],
-  // ── TEN-1 1c ────────────────────────────────────────────────────────────────────────────────────
+];
+
+// ── TEN-1 1c's reads, asserted BELOW the 1b write matrix — see `ten1ReadMatrix` for why the order
+// is load-bearing rather than cosmetic.
+const TEN1_READS_1C: readonly Ten1Read[] = [
   [
     'programDayRows (the Today page’s program card)',
     SEED_PROFILE_PUBLIC_ID,
@@ -4786,29 +4793,10 @@ const TEN1_READS: readonly [
   ],
 ];
 
-for (const [label, aProfile, bProfile, call] of TEN1_READS) {
-  assert.ok(
-    (await call(aProfile, A_SCOPE)).length > 0,
-    `TEN-1: ${label} returns household A's OWN rows`,
-  );
-  assert.equal(
-    (await call(aProfile, B_SCOPE)).length,
-    0,
-    `TEN-1: ${label} — household B cannot read A`,
-  );
-  assert.ok(
-    (await call(bProfile, B_SCOPE)).length > 0,
-    `TEN-1: ${label} returns household B's OWN rows`,
-  );
-  assert.equal(
-    (await call(bProfile, A_SCOPE)).length,
-    0,
-    `TEN-1: ${label} — household A cannot read B (reverse)`,
-  );
-}
+await ten1ReadMatrix(TEN1_READS_1B);
 console.log(
-  `✓ TEN-1 1b/1c: the READ matrix — ${TEN1_READS.length} scoped reads (ownedEntryIds, adherence, ` +
-    'programDayRows, the three export month reads), each proved in BOTH directions',
+  `✓ TEN-1 1b: the READ matrix — ${TEN1_READS_1B.length} scoped reads (ownedEntryIds, adherence), ` +
+    'each proved in BOTH directions',
 );
 
 // The export's weigh-in fixture is load-bearing for the row above, so pin WHICH row the matrix found:
@@ -4990,6 +4978,56 @@ console.log(
   '✓ TEN-1 1b: the WRITE matrix — bodyweight amend, amend re-read and set-edit, each refused across the household seam in BOTH directions, with no side effect',
 );
 
+// ── (4b) TEN-1 1c's READS and its seed resolver — ordered AFTER every 1b proof above ────────────
+// Deliberately down here, not beside 1b's: `03-undo-1c-predicates.patch` claims that under it every
+// 1b assertion holds and the first failure is a 1c one. `db:verify` is fail-fast, so that was only
+// provable with 1b's proofs ahead of 1c's — otherwise the 1b rows below a 1c failure are unreached
+// rather than green, and the gate was being credited with showing something it could not. This is the
+// follow-up 1c's own review recorded for 1d.
+await ten1ReadMatrix(TEN1_READS_1C);
+console.log(
+  `✓ TEN-1 1c: the READ matrix — ${TEN1_READS_1C.length} scoped reads (programDayRows, the three ` +
+    'export month reads), each proved in BOTH directions, after every 1b proof above',
+);
+
+// ⚠️ TEN-1 1c: `seedProgram` itself is household-scoped now — a target naming a profile in ANOTHER
+// household throws with nothing written, instead of seeding a cross-household `prescription_targets`
+// row that `programDayRows` would then have to refuse. This runs against PROD on every push, so it
+// gets the positive direction above AND this negative one (the plan's R-af).
+await assert.rejects(
+  seedProgram(asPg, [
+    {
+      householdPublicId: VERIFY_HH_PUBLIC_ID,
+      slug: 'ten1_cross_household_target',
+      name: 'TEN-1 cross-household target',
+      notes: null,
+      prescriptions: [
+        {
+          dayRole: TEN1_DAY_ROLE,
+          movementSlug: anyMovement.slug,
+          idx: 0,
+          sets: 1,
+          targetReps: '1',
+          // household A's kid, inside household B's block
+          targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'leak', reps: null }],
+        },
+      ],
+    },
+  ]),
+  /unknown profile .* not in household/,
+  'TEN-1 1c: seedProgram refuses a target in another household',
+);
+assert.equal(
+  (
+    await db
+      .select({ id: schema.programBlocks.id })
+      .from(schema.programBlocks)
+      .where(eq(schema.programBlocks.slug, 'ten1_cross_household_target'))
+  ).length,
+  0,
+  'TEN-1 1c: …and wrote no block (refs resolve BEFORE the insert)',
+);
+
 // ── (5) TEN-1 1c: `writeStrengthSession` — the whole-session write core ───────────────────────────
 // Different refusal shape from the amends: the ownership check is a `SELECT … LIMIT 1` inside the
 // transaction, so a profile outside the scope resolves to nothing and the core THROWS
@@ -5053,6 +5091,287 @@ for (const [label, profilePublicId, ownScope, otherScope, day] of [
 }
 console.log(
   '✓ TEN-1 1c: writeStrengthSession — each household writes its OWN session and is refused the other’s, in BOTH directions, with the transaction rolled back',
+);
+
+// ── (6) TEN-1 1d: `db:correct`'s registry — the last hand-written predicates in the repo ──────────
+// 1d converted the three that remained (`kbSwingsLoadRepsSwap`'s owner half, and `nullRoutineToFull`'s
+// read AND write guards). The read is the one BULK shape anywhere in the corrections — a whole
+// household's profiles, with no `public_id` half — so it takes `inHousehold(scope)` rather than
+// `isLiveProfile`, the same split `seedProgram` made in 1c. That conjunct is the correction's "per-era
+// guard": after PROF-1 ships athlete creation, `routine_config IS NULL` becomes the CORRECT state for
+// somebody else's brand-new athlete, and an unscoped `--apply` would stamp this household's full
+// routine onto them — a write with no delete action behind it.
+//
+// Proved through the REGISTRY ENTRY, dry-run (`apply = false`, so nothing is written), because that is
+// the only vehicle that runs the correction's own SQL rather than a lookalike. The plan's § Test plan
+// names "the `db:correct` registry query" in the refusal matrix; this is it.
+// PGlite through one more step than `asPg`: `Correction.run` takes the POOLED `Database`, which
+// carries a `$client: Pool` that PGlite has no equivalent of and that no correction touches. Same
+// device, same reason, as `asPg` itself.
+const asCorrectionDb = asPg as unknown as Database;
+const nullRoutineCorrection = CORRECTIONS.find((c) => c.name === NULL_ROUTINE_TO_FULL_NAME);
+assert.ok(nullRoutineCorrection, 'TEN-1 1d: the null-routine correction is in the registry');
+
+// Both directions need a fixture that could go wrong. An UNSCOPED `routine_config IS NULL` sweep is
+// exactly what the correction would be without `inHousehold(scope)`, so it is the baseline: it
+// reaches household B's profile (inserted with no routine_config) as well as household A's. Asserted
+// rather than assumed — if B ever gained a routine, the negative below would pass for the wrong
+// reason, which is the plan's R5 vacuity.
+const unscopedNullRoutine = (
+  await db
+    .select({ publicId: schema.profiles.publicId })
+    .from(schema.profiles)
+    .where(and(isNull(schema.profiles.routineConfig), isNull(schema.profiles.deletedAt)))
+).map((r) => r.publicId);
+// Household B's profiles, by household rather than by a hardcoded id — B has more than one, and a
+// list that named only the first would have made the set comparison below pass while leaking the rest.
+const bProfilePublicIds = new Set(
+  (
+    await db
+      .select({ publicId: schema.profiles.publicId })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.householdId, verifyHh.id))
+  ).map((r) => r.publicId),
+);
+assert.ok(bProfilePublicIds.size > 1, 'TEN-1 1d fixture: household B has more than one profile');
+assert.ok(
+  unscopedNullRoutine.some((id) => bProfilePublicIds.has(id)),
+  "TEN-1 1d fixture: an UNSCOPED NULL-routine sweep DOES reach household B's profiles — the rows the correction must refuse",
+);
+
+// The dry run (`apply = false`: nothing is written) must return exactly the NULL-routine profiles
+// that are NOT household B's. Both directions in one assertion — it fails if the correction misses
+// one of its own household's rows, and it fails if it reaches the other household's.
+const nullRoutineDryRun = await nullRoutineCorrection.run(asCorrectionDb, false);
+const foundPublicIds = nullRoutineDryRun
+  .map((line) => /profile ([0-9a-f-]{36})/.exec(line)?.[1])
+  .filter((id): id is string => id !== undefined)
+  .sort();
+assert.ok(
+  foundPublicIds.length > 0,
+  "TEN-1 1d: the correction DOES find household A's own NULL-routine profiles (the positive direction — a correction that found nothing would pass the negative for free)",
+);
+assert.deepEqual(
+  foundPublicIds,
+  unscopedNullRoutine.filter((id) => !bProfilePublicIds.has(id)).sort(),
+  "TEN-1 1d: …and EXACTLY those: every NULL-routine profile in household A, and none of household B's, though theirs are NULL too. `inHousehold(scope)` is the correction's per-era guard",
+);
+assert.equal(
+  nullRoutineDryRun.length,
+  foundPublicIds.length,
+  'TEN-1 1d: …and every line the dry run printed is one of them (no unparsed line hiding a row)',
+);
+
+console.log(
+  '✓ TEN-1 1d: db:correct’s bulk predicate — the null-routine correction finds household A’s NULL routine and never household B’s, dry-run, in both directions',
+);
+
+// ── (7) TEN-1 1d: THE CATALOG VERDICT — `movements` is shared, and here is the proof ─────────────
+//
+// ⚠️ **These assertions state what the code DOES, not what it should do.** They are the only input to
+// `docs/milestones/beta-1.md`'s question — *"either TEN-1 proves the picker and the metadata stay per
+// household, or TEN-2 moves into Beta 0"* — so an aspirational assertion here would answer a
+// go/no-go with a wish. The verdict and its evidence are recorded in
+// `docs/plans/ten-1-household-scope.md` → "1d as built — the catalog verdict".
+//
+// The function under test is `findOrCreateMovement`, the REAL core the app DAL's
+// `findOrCreateMovementId` delegates to (single-sourced in 1d exactly so this proof can run it;
+// `apps/web/lib/dal/catalog.ts` is `server-only` and cannot execute here).
+
+// (a) The structural fact everything below follows from, and the assertion TEN-2 reddens.
+assert.equal(
+  (await columnsOf('movements')).has('household_id'),
+  false,
+  'TEN-1 1d: `movements` has NO household_id column — there is nothing for this write path to scope BY, which is why 1d records a verdict instead of closing the gap (TEN-2 adds the column, and this assertion is what fails then)',
+);
+
+/** The one movement row behind an internal id — the three columns the catalog DECLARES. */
+async function movementRow(id: number) {
+  const [row] = await db
+    .select({
+      publicId: schema.movements.publicId,
+      name: schema.movements.name,
+      slug: schema.movements.slug,
+      isBodyweight: schema.movements.isBodyweight,
+      unitDefault: schema.movements.unitDefault,
+    })
+    .from(schema.movements)
+    .where(eq(schema.movements.id, id));
+  return row;
+}
+
+// (b) READ: household B typing a name household A already created is handed A's ROW.
+// Neutral fixture names, never a person's (AGENTS.md → "No personal names"). B's text is spelled
+// differently on purpose — `movementSlug` collapses case and whitespace, so the SLUG is the only
+// arbiter and two different strings converge on one row.
+const CATALOG_NAME_BY_A = 'TEN-1 Catalog Probe';
+const CATALOG_NAME_BY_B = '  ten-1   CATALOG   probe ';
+assert.equal(
+  movementSlug(CATALOG_NAME_BY_A),
+  movementSlug(CATALOG_NAME_BY_B),
+  'TEN-1 1d fixture: the two households type different strings that slug the same',
+);
+const aMovementId = await findOrCreateMovement(asPg, CATALOG_NAME_BY_A);
+const bMovementId = await findOrCreateMovement(asPg, CATALOG_NAME_BY_B);
+assert.equal(
+  bMovementId,
+  aMovementId,
+  'TEN-1 1d READ — LEAKS: household B is handed household A’s movement row. No scope is involved because there is none to involve',
+);
+// The POSITIVE twin (verify.ts's both-directions rule, generalised): a genuinely different name does
+// get its own row — so the assertion above is about the SLUG being a global arbiter, not about
+// find-or-create trivially returning one row for everything.
+assert.notEqual(
+  await findOrCreateMovement(asPg, 'TEN-1 Catalog Probe Two'),
+  aMovementId,
+  'TEN-1 1d READ: …while a genuinely different name gets its OWN row (the assertion above is not vacuous)',
+);
+assert.equal(
+  (await movementRow(aMovementId)).name,
+  CATALOG_NAME_BY_A,
+  'TEN-1 1d READ: the FIRST typist’s text is what the row carries — `ON CONFLICT DO NOTHING` discards the second household’s',
+);
+
+// (c) And the metadata it inherits can be a declaration this function could never have written.
+// `Box Jump` is in the SEEDED catalog as `is_bodyweight: true`; `findOrCreateMovement` can only ever
+// write `false`. So a free-text name that happens to slug onto a catalog row inherits the catalog's
+// declaration wholesale — which is the benign half of the same mechanism as (d).
+const seededBoxJump = MOVEMENT_SEED_ROWS.find((m) => m.slug === 'box_jump');
+assert.ok(
+  seededBoxJump?.isBodyweight,
+  'TEN-1 1d fixture: box_jump is a seeded bodyweight movement',
+);
+const boxJump = await movementRow(await findOrCreateMovement(asPg, seededBoxJump.name));
+assert.equal(
+  boxJump.publicId,
+  seededBoxJump.publicId,
+  'TEN-1 1d READ: free text matching a catalog slug resolves to the SEEDED row, not a new one',
+);
+assert.equal(
+  boxJump.isBodyweight,
+  true,
+  'TEN-1 1d READ: …carrying `is_bodyweight: true`, which this function can never write — whatever the row declares, the caller did not declare it',
+);
+
+// (d) WRITE / POISON — strictly worse than the read, and the half the first draft of the plan missed.
+// Household B types a brand-new name FIRST. That pins the slug permanently: `is_bodyweight: false`,
+// no `unit_default`, and B's exact free text as the display name. Household A's own later call gets
+// B's row.
+const POISON_NAME_BY_B = 'TEN-1 Poisoned Lift';
+const POISON_NAME_BY_A = 'ten-1  poisoned   LIFT';
+const poisonedId = await findOrCreateMovement(asPg, POISON_NAME_BY_B);
+assert.equal(
+  await findOrCreateMovement(asPg, POISON_NAME_BY_A),
+  poisonedId,
+  'TEN-1 1d WRITE: household A, typing its own text, is handed the row household B created',
+);
+const poisoned = await movementRow(poisonedId);
+assert.equal(
+  poisoned.name,
+  POISON_NAME_BY_B,
+  'TEN-1 1d WRITE: the row carries household B’s text — whoever types a name first pins that slug, and the seed only ever touches its OWN slugs so nothing repairs it',
+);
+assert.equal(
+  poisoned.isBodyweight,
+  false,
+  'TEN-1 1d WRITE: …declared loaded-rather-than-bodyweight for EVERY household, because this function can only write false',
+);
+assert.equal(
+  poisoned.unitDefault,
+  null,
+  'TEN-1 1d WRITE: …with no default unit, which the log form reads as the movement’s own declaration',
+);
+
+// …and it reaches the other household's Today card, under that household's OWN, correct scope.
+// `seedProgram` resolves prescriptions by movement SLUG — the same arbiter — so a prescription
+// household A authored renders household B's string. `'pull'` is programmed by no other fixture or
+// seed block here, so the "newest block that programs this day" selection is unambiguous.
+await seedProgram(asPg, [
+  {
+    householdPublicId: SEED_HOUSEHOLD_PUBLIC_ID,
+    slug: 'ten1_catalog_verdict',
+    name: 'TEN-1 catalog verdict',
+    notes: null,
+    prescriptions: [
+      {
+        dayRole: 'pull',
+        movementSlug: poisoned.slug,
+        idx: 0,
+        sets: 3,
+        targetReps: '5',
+        targets: [{ profilePublicId: SEED_PROFILE_PUBLIC_ID, load: 'a-load', reps: null }],
+      },
+    ],
+  },
+]);
+const [poisonedCard] = await programDayRows(asPg, {
+  profilePublicId: SEED_PROFILE_PUBLIC_ID,
+  dayRole: 'pull',
+  scope: A_SCOPE,
+});
+assert.ok(poisonedCard, 'TEN-1 1d fixture: household A’s pull card renders (the row below exists)');
+assert.equal(
+  poisonedCard.movementName,
+  POISON_NAME_BY_B,
+  'TEN-1 1d WRITE: household A’s OWN Today card, read under A’s OWN scope, renders household B’s free text — the household-scoped read is CORRECT and still shows another household’s string, because the string is not household data as far as the schema is concerned',
+);
+assert.equal(
+  poisonedCard.movementIsBodyweight,
+  false,
+  'TEN-1 1d WRITE: …and the declaration the log form seeds its unit from is the other household’s too (`movements.is_bodyweight` is read as "the MOVEMENT’s declaration, not the coach’s")',
+);
+
+// (e) A REFUSED write leaves its caller-supplied catalog text behind. The strength DAL
+// (`apps/web/lib/dal/entries.ts` → `logStrengthSession`) resolves every movement through
+// find-or-create BEFORE `writeStrengthSession`, whose in-transaction re-resolve is the actual
+// household seam — so the seam's refusal rolls back the SESSION and leaves the globally-visible
+// movement row behind. Categorically different from a read leak: it is a cross-tenant WRITE primitive
+// surviving a refusal.
+//
+// ⚠️ **This is a FIXTURE reproducing the DAL's call order, not a proof of it.** It calls
+// `findOrCreateMovement` itself before the refused write, so the final assertion cannot fail — it
+// shows what that order does to the database, given the order. That the DAL really calls
+// find-or-create first, even for a write that is then refused, is asserted where the DAL can run:
+// `apps/web/lib/dal/entries.test.ts` → "find-or-create runs, and commits, before the refused write".
+const REFUSED_MOVEMENT_NAME = 'TEN-1 Refused Session Lift';
+const refusedMovementId = await findOrCreateMovement(asPg, REFUSED_MOVEMENT_NAME);
+const refusedCatalogClientId = newId();
+await assert.rejects(
+  writeStrengthSession(asPg, {
+    profilePublicId: ssArgs.profilePublicId, // household A's athlete…
+    scope: B_SCOPE, // …asked for from household B's scope
+    day: '2026-03-09',
+    sessionType: SESSION_TYPES[0],
+    sessionClientId: refusedCatalogClientId,
+    activityTypeId: scLiftActivityId,
+    movements: [
+      {
+        movementName: REFUSED_MOVEMENT_NAME,
+        unit: 'lb',
+        movementId: refusedMovementId,
+        sets: [{ reps: 5, weight: 100 }],
+        clientId: newId(),
+      },
+    ],
+  }),
+  /Profile not found/,
+  'TEN-1 1d: the household seam refuses the cross-household session write (as 1c proves)',
+);
+assert.equal(
+  await ten1SessionExists(refusedCatalogClientId),
+  false,
+  'TEN-1 1d: …with the whole session transaction rolled back',
+);
+assert.ok(
+  await movementRow(refusedMovementId),
+  'TEN-1 1d WRITE: …and YET the movement row the refused caller named is still in the shared catalog — a cross-tenant write that survived its own refusal',
+);
+
+console.log(
+  '✓ TEN-1 1d THE CATALOG VERDICT: `movements` has no household_id, so find-or-create LEAKS in BOTH directions — ' +
+    'B reads A’s row, the first typist pins the slug’s name/is_bodyweight/unit_default for everyone, ' +
+    'the other household’s correctly-scoped Today card renders it, and a REFUSED session write leaves ' +
+    'the caller-supplied row committed. Verdict + recommendation: docs/plans/ten-1-household-scope.md → "1d as built"',
 );
 
 console.log('✓ verify passed');
