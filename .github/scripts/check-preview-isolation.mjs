@@ -150,10 +150,21 @@ async function fetchVercel() {
       die(CANNOT_CHECK, `could not reach the Vercel API (${key}): ${err.message}`);
     }
     if (!res.ok) {
+      // Vercel's own error code + message say WHY (expired token, wrong team scope, missing
+      // permission). They carry no secret value, and a bare "403" left the operator guessing (OPS-1).
+      let reason = '';
+      try {
+        const { error } = await res.json();
+        if (error?.code || error?.message)
+          reason = ` — ${error.code ?? ''}: ${error.message ?? ''}`;
+      } catch {
+        // Not JSON: the status line alone is all there is.
+      }
       die(
         CANNOT_CHECK,
-        `Vercel API returned ${res.status} for ${key}. Nothing was asserted. ` +
-          `(401/403 = the token is expired or lacks access; 404 = wrong VERCEL_PROJECT_ID.)`,
+        `Vercel API returned ${res.status} for ${key}${reason}. Nothing was asserted. ` +
+          `(401/403 = the token is expired, lacks access, or VERCEL_TEAM_ID is wrong; ` +
+          `404 = wrong VERCEL_PROJECT_ID.)`,
       );
     }
     try {

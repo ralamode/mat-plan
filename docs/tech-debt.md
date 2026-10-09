@@ -298,7 +298,7 @@ success.` Harmless there — nothing referenced the files yet.
   Redis round-trip to every tap on the gym floor (an INP cost against the ADR-0001 budget).
 - **Impact:** low today. Reaching these actions at all requires the gate cookie (re-checked inside
   each action since SEC-1; before that only the proxy checked it, and prefetch-flagged requests
-  skipped the proxy), and the gate IS now rate limited; the app is a single household on an unlisted URL. The residual exposure is a gate-holder
+  skipped the proxy), and the gate is rate limited (in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash database, so the limiter failed open there); the app is a single household on an unlisted URL. The residual exposure is a gate-holder
   writing unbounded rows — annoying, not dangerous, and visible in the log.
 - **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
   and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
@@ -359,21 +359,6 @@ success.` Harmless there — nothing referenced the files yet.
   cannot run inside drizzle's per-file transaction and the transaction-stripping runner AGENTS.md
   describes **does not exist**. So AGENTS.md's "Indexes CONCURRENTLY" rule remains review-enforced only.
 - **Severity:** low.
-
-### `migrate-preview.yml` skips GREEN until the OPS-1 runbook is executed (added 2026-10-07, OPS-1)
-
-- **What:** the preview migrator exits 0 with a `::warning::` when `PREVIEW_DATABASE_URL_UNPOOLED` is
-  absent, mirroring `migrate.yml`'s existing guard so the maintainer only has to add a secret rather
-  than also edit a workflow.
-- **Why it is debt and not just a guard:** a `::warning::` on a green job is invisible a week later.
-  For production the same shape is self-correcting — the app breaks loudly — but nobody would notice
-  for months that previews are running an unmigrated, unseeded schema. It is the
-  claimed-but-unwired-gate shape this file exists to log, shipped knowingly, in the same PR that
-  corrects six documents for the same sin.
-- **Payoff trigger:** the maintainer executes [runbooks.md](./runbooks.md) → OPS-1. Its **closeout
-  commit** (step 9) changes `exit 0` to `exit 1` and deletes this entry.
-- **Severity:** low while OPS-1's runbook is outstanding and visible in `plan.md`; it becomes a real
-  blind spot only if that row is ticked without the closeout.
 
 ### The Neon-branch migration apply is the last unwired CI gate (audit 2026-09-23)
 

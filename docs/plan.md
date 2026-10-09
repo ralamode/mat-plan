@@ -1160,12 +1160,25 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   family's data), the Preview scope holds no production secret (separate Clerk dev instance, Upstash,
   Sentry DSN), and Vercel's fork-PR protection is verified on. _(Beta 0.)_
 
-  🟡 **Repo half merged; the dashboard half is OUTSTANDING and OPS-1 is not done until it is run.**
-  The repo now refuses to boot or migrate against a database that disagrees with its environment
-  (`packages/shared/src/db-environment.ts`), ships `pnpm preview:check` to verify the Vercel scopes,
-  and migrates a preview estate (`migrate-preview.yml`). Creating the Neon project, splitting the
-  Vercel scopes and the Upstash database are dashboard work: **[runbooks.md](./runbooks.md) → OPS-1**,
-  nine steps, ordered to run _before_ the merge. Tick this row in that runbook's closeout commit.
+  ✅ **DONE 2026-10-09** (repo half #261; dashboard half executed by the maintainer, closed out in
+  this row's closeout PR). The repo refuses to boot or migrate against a database that disagrees
+  with its environment (`packages/shared/src/db-environment.ts`), `pnpm preview:check` verifies the
+  Vercel scopes, and `migrate-preview.yml` migrates the preview estate and now **fails** if its secret
+  is missing. Executed via **[runbooks.md](./runbooks.md) → OPS-1**:
+  - a separate seed-only Neon project, `mat-plan-preview`;
+  - Vercel's Production, Preview and Development scopes split (12 records, one scope each);
+  - two Upstash databases, preview and production. **Production had none until this run**, so the
+    gate's limiter had been failing open in production, despite the docs calling it rate limited;
+  - fork-PR protection verified, and Vercel Authentication turned on for previews;
+  - **440** preview deployments purged (each still held the production credentials) and the
+    production gate code rotated;
+  - `pnpm preview:check` exit 0.
+
+  The Neon production password rotation was **skipped by decision**: the repo has never had a fork PR,
+  and only the maintainer has used the app or held Vercel access. Runbook step 7 now makes rotation
+  conditional on a real leak path. **Follow-up:** the preview database was seeded before the OSS-1
+  rename merged, so it still carries the old fixture names. Reset it (runbook → "reset the preview
+  database").
 
   ⚠️ **The row's own wording missed the biggest part, found by the PR's security panel.** Vercel
   injects env values at **build time**, so re-scoping the project does nothing for previews that

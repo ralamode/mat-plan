@@ -17,13 +17,13 @@ Related: [deploy.md](./deploy.md) (the deployment topology), [.github/SECURITY.m
 
 ## Status at a glance
 
-| Service           | Purpose                       | Required?                                      | Blocks                       |
-| ----------------- | ----------------------------- | ---------------------------------------------- | ---------------------------- |
-| **Neon**          | Postgres                      | ✅ **Required** — app won't boot               | everything                   |
-| **Vercel**        | Hosting + preview deploys     | ✅ **Required**                                | deploys                      |
-| **GitHub**        | Repo, CI, the single migrator | ✅ **Required**                                | CI, migrations               |
-| **Upstash Redis** | Rate-limits the access gate   | ⬜ Optional for prod, **required for Preview** | nothing in prod; see OPS-1   |
-| **Sentry**        | Server error reporting        | ⬜ Optional                                    | nothing — no-ops when absent |
+| Service           | Purpose                       | Required?                               | Blocks                                         |
+| ----------------- | ----------------------------- | --------------------------------------- | ---------------------------------------------- |
+| **Neon**          | Postgres                      | ✅ **Required** — app won't boot        | everything                                     |
+| **Vercel**        | Hosting + preview deploys     | ✅ **Required**                         | deploys                                        |
+| **GitHub**        | Repo, CI, the single migrator | ✅ **Required**                         | CI, migrations                                 |
+| **Upstash Redis** | Rate-limits the access gate   | ✅ **Required** in every deployed scope | brute-force protection — fails open without it |
+| **Sentry**        | Server error reporting        | ⬜ Optional                             | nothing — no-ops when absent                   |
 
 ### Where personal data lives
 
@@ -41,15 +41,16 @@ has the reset recipe, and deleting the project is the complete deletion path for
 fixture names themselves are **OSS-1 follow-up #2**'s row, not OPS-1's; reference-only seeding, which
 would remove them from this table entirely, is **OPS-2**'s.
 
-**The two optional ones are genuinely optional.** V1-14a was deliberately built so that an absent
-credential means the feature no-ops and the app behaves exactly as it did before. That is not a
-convenience — local dev and CI legitimately run without them, and requiring them would have broken
-`pnpm dev` and CI the day it merged.
+**Sentry is genuinely optional, and Upstash is optional only off Vercel.** V1-14a was deliberately
+built so that an absent credential means the feature no-ops and the app behaves exactly as before.
+That is right for local dev and CI, which legitimately run without them.
 
-⚠️ **One exception since OPS-1: Upstash is effectively required for the Preview scope.** A preview URL
-is publicly listed (the GitHub deployments API exposes `environment_url` on a public repo), and
-without Upstash the rate limiter fails open — so previews would be a publicly-listed URL in front of
-an **unlimited** password oracle on the only control they have.
+⚠️ **On Vercel, Upstash is required in every scope.** Without it the rate limiter fails **open**, so
+the access gate (the app's only control before AUTH-1) becomes an **unlimited** password oracle. That
+is not hypothetical: **production ran with no Upstash database until 2026-10-09**, while this file
+called it optional and `tech-debt.md` said the gate was rate limited. The no-op that makes CI work is
+the same no-op that hid it. Preview URLs are also publicly listed (the GitHub deployments API exposes
+`environment_url` on a public repo), which is why Preview needs its own database too.
 
 ---
 

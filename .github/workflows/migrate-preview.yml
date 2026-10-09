@@ -72,11 +72,11 @@ jobs:
           EXPECTED_DB_ENV: preview
         run: |
           if [ -z "$DATABASE_URL_UNPOOLED" ]; then
-            # ⚠️ TEMPORARY, and tracked: a `::warning::` on a green job is invisible a week later,
-            # which is the claimed-but-unwired-gate shape docs/tech-debt.md exists to log. The
-            # OPS-1 runbook's CLOSEOUT step turns this into `exit 1` once the secret exists.
-            echo "::warning::PREVIEW_DATABASE_URL_UNPOOLED not set — skipping. OPS-1's runbook has not been executed yet (docs/runbooks.md -> OPS-1); its closeout step makes this a hard failure."
-            exit 0
+            # OPS-1 closeout (2026-10-09): the secret exists, so its absence is now a failure. A green
+            # skip with a `::warning::` is invisible a week later; previews would run an unmigrated
+            # schema and nobody would notice.
+            echo "::error::PREVIEW_DATABASE_URL_UNPOOLED is not set, so the preview database cannot be migrated. Restore it (docs/runbooks.md -> OPS-1 step 6)."
+            exit 1
           fi
           pnpm --filter @mat-plan/db db:migrate
           pnpm --filter @mat-plan/db db:seed
