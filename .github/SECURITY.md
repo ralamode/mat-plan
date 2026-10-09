@@ -61,9 +61,14 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     `name` / `is_bodyweight` / `unit_default` for everyone, and the other household's own
     correctly-scoped Today card renders it; and a session write the household seam **refuses** has
     already committed its caller-supplied text to the shared catalog — a cross-tenant **write**
-    primitive surviving its own refusal, which is categorically worse than a read leak. **`TEN-2` is
-    the fix** (a `household_id` column plus partial unique indexes built `CONCURRENTLY`), and the
-    recorded verdict is that it belongs in Beta 0, before a second household exists:
+    primitive surviving its own refusal, which is categorically worse than a read leak. **That write
+    primitive does not need a second household:** `logStrengthSession` runs `findOrCreateMovementId`
+    _before_ the write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`), so any
+    gate-holder's session write, even one later refused for any reason, commits its catalog text;
+    TEN-2 may move the find-or-create inside the transaction, after the profile resolves. **`TEN-2` is
+    the fix** (a `household_id` column plus partial unique indexes; the leak closes when its third PR
+    drops the global `slug` UNIQUE), and the recorded verdict is that it belongs in Beta 0, before a
+    second household exists:
     [the plan](../docs/plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_.
   - The one other deliberately unscoped read is `reportScopeMiss`'s **existence-only** probe (ADR
     0006 obligation 3): it returns `void` and is how the miss path tells `cross_household` from

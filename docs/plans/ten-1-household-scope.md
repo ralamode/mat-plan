@@ -964,7 +964,7 @@ cheapest while there are few.
 
 ### Not in 1d, and why
 
-- **TEN-2 itself.** It needs a migration with partial unique indexes built `CONCURRENTLY` — its own
+- **TEN-2 itself.** It needs a migration with partial unique indexes — its own
   plan, its own panel, three PRs (`plan.md` → TEN-2). 1d produces the verdict, not the fix.
 - **An e2e cross-household spec** — Out-of-scope, unchanged (OPS-2 seed collision; the DoD pyramid).
 - **The miss-path event's `cross_household` branch has no proof that it fires**, because it cannot

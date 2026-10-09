@@ -180,8 +180,8 @@ by **slug** — the same arbiter — so:
 
 **Proved, not suspected** (TEN-1 chunk 1d): `db:verify` → _"TEN-1 1d: the catalog verdict"_ does
 exactly this, end to end, through the real `findOrCreateMovement` and this query. **`TEN-2` is the
-fix** (a `household_id` column plus partial unique indexes built `CONCURRENTLY`) and the recorded
-verdict is that it belongs in Beta 0. Until then: **do not "tidy" the movement columns by assuming
+fix** (a `household_id` column plus partial unique indexes; how they are built is TEN-2a's call)
+and the recorded verdict is that it belongs in Beta 0. Until then: **do not "tidy" the movement columns by assuming
 they are as scoped as the rest of the row**, and do not add a NEW read of `movements` metadata without
 reading [the plan](../plans/ten-1-household-scope.md) → "1d as built" first. 4b's scoping is correct
 and complete; this is the one thing it cannot reach.

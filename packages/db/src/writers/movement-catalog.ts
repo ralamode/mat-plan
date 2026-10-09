@@ -27,8 +27,8 @@ import type { Executor } from './executor';
  * - this function can only ever write `is_bodyweight: false` and **no** `unit_default`, so a
  *   movement first typed by one household is declared loaded-with-no-default-unit for everybody.
  *
- * TEN-1 **cannot** fix that: the fix is a `household_id` column plus partial unique indexes built
- * `CONCURRENTLY`, which is **TEN-2** ([plan.md](../../../../docs/plan.md) → TEN-2). What TEN-1 owns is
+ * TEN-1 **cannot** fix that: the fix is a `household_id` column plus partial unique indexes, which
+ * is **TEN-2** ([plan.md](../../../../docs/plan.md) → TEN-2). What TEN-1 owns is
  * the **verdict**, and the reason this core exists at all is that the verdict had to be *proved*
  * rather than asserted: `apps/web/lib/dal/catalog.ts` is `server-only` and imports the app's env, so
  * `db:verify` cannot execute it, and re-typing these two statements in the proof would have made the

@@ -374,9 +374,9 @@ Real ones, each with the file to look at.
     **refuses** has already written globally-visible caller-supplied text. A cross-tenant **write**
     primitive surviving its own refusal, categorically different from a read leak.
 
-  **`TEN-2` is the fix** (a `household_id` column plus partial unique indexes built `CONCURRENTLY`,
-  three PRs), and the recorded verdict is that it belongs in **Beta 0**, before a second household
-  exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_. Do
+  **`TEN-2` is the fix** (a `household_id` column plus partial unique indexes, three PRs; see
+  `plan.md` → TEN-2a/2b/2c), and the recorded verdict is that it belongs in **Beta 0**, before a
+  second household exists: [the plan](../plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_. Do
   not read "the writer is scoped" as "the strength write path is tenant-isolated". See
   [write-path](./write-path.md) invariant 2.
 

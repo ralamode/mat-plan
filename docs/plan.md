@@ -1221,19 +1221,36 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   another's row; that whoever types a name **first** pins that slug's `name` / `is_bodyweight` /
   `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
   and that a session write the household seam **refuses** has already committed the caller's text — a
-  cross-tenant _write_ primitive surviving its own refusal. Expand (nullable `household_id` + partial
-  unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract. Three PRs; it carries a
-  migration, so it needs its own plan and panel.
+  cross-tenant _write_ primitive surviving its own refusal. **That primitive does not need a second
+  household:** `logStrengthSession` runs `findOrCreateMovementId` _before_ `writeStrengthSession`'s
+  in-transaction profile resolve (`apps/web/lib/dal/entries.ts`; the order is pinned by
+  `entries.test.ts`), so any gate-holder's session write, even one the write core then refuses for
+  any reason, commits its catalog text. TEN-2 may move the find-or-create inside the transaction,
+  after the profile resolves. Expand (nullable `household_id` + partial unique indexes) → move every
+  slug conflict target and lookup onto them → contract (drop the global UNIQUE). Three PRs; it
+  carries a migration, so it needs its own plan and panel.
   **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
   two households before AUTH-1 (the resolver throws on a second live household), so the window opens
   the moment household #2 exists. Evidence, the alternative considered and the recommendation:
   [TEN-1's plan](./plans/ten-1-household-scope.md) → "1d as built — the catalog verdict". _(Beta 0.)_
 - **TEN-2a — expand: `movements.household_id`, nullable, shipping dark.** _(Beta 0; TEN-2's first of
-  three.)_ Add the column plus the partial unique indexes that will replace the global
-  `movements.slug` UNIQUE, **built `CONCURRENTLY`**. No reader, no writer, no behaviour change.
-  ⚠️ **`CREATE INDEX CONCURRENTLY` cannot run inside a transaction and `drizzle-kit migrate` wraps
-  each file in one** ([AGENTS.md](../AGENTS.md) → Database rules) — so the concurrent statements go in
-  their own file with the runner that strips the transaction, exactly as that gotcha prescribes.
+  three.)_ Add the column plus the two partial unique indexes that will replace the global
+  `movements.slug` UNIQUE. No reader, no writer, no behaviour change: the global UNIQUE stays, so
+  every deployed `ON CONFLICT (slug)` keeps its arbiter.
+  ⚠️ **How the indexes get built is a choice this row's plan must make, not a given.**
+  `CREATE INDEX CONCURRENTLY` cannot run inside a transaction, `drizzle-kit migrate` wraps each file
+  in one, and the transaction-stripping runner [AGENTS.md](../AGENTS.md) describes **does not exist**
+  (`.squawk.toml` excludes `require-concurrent-index-creation` for exactly that reason;
+  [tech-debt](./tech-debt.md)). So either **(a) build that runner** — a CI/migration-path change with
+  its own plan — or **(b) justify a plain `CREATE UNIQUE INDEX`** on `movements`, a small table, under
+  the migration's `lock_timeout`, with the reasoning in a comment directly above the statement (and a
+  `-- squawk-ignore require-concurrent-index-creation` there if that rule is ever re-enabled; today it
+  is excluded repo-wide, so the gate will not ask for the justification — the plan has to).
+  ⚠️ **2a owns the tripwire it fires.** Adding the column turns `db:verify`'s structural assertion
+  (`packages/db/scripts/verify.ts` → _"TEN-1 1d: `movements` has NO household_id column"_) red, and
+  `packages/db/scripts/mutations/README.md` names that assertion as the verdict's tripwire. 2a
+  rewrites both — the column now exists and nothing reads or writes it — rather than leaving 2b a red
+  build; the leak assertions themselves still hold until 2c.
   **The design question this row must answer first, and it is not obvious:** the seeded catalog rows
   are **reference data belonging to no household**, while a free-text row belongs to whoever typed
   it. So `household_id` is legitimately NULL for the seed and NOT NULL for custom rows — which means
@@ -1242,24 +1259,46 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
 household_id IS NOT NULL`). **Settle that in the plan before writing the migration**, because it
   decides whether TEN-2c contracts to `NOT NULL` at all.
 
-- **TEN-2b — switch every slug lookup to the scoped one.** _(Beta 0; TEN-2's second.)_
-  `findOrCreateMovementId` takes a `HouseholdScope` and resolves `(household_id, slug)`, falling back
-  to the global reference row; the backfill assigns existing custom rows to their household; the
-  catalog read path and `programDayRows`' movement declaration follow. **This is the PR that closes
-  the leak**, so it carries the proofs: TEN-1 1d's `db:verify` catalog verdict flips from _"LEAKS"_ to
-  _"isolated"_, both directions, and **mutation patch `04-slug-is-not-the-arbiter` is rewritten or
-  retired** — its current job is to prove the global slug _is_ the arbiter, which stops being true
-  here. ⚠️ `findOrCreateMovementId` is the one allowlist entry in
-  `apps/web/lib/dal/scoped.test.ts` whose docblock says TEN-2 **deletes** it; that deletion is this
-  row's acceptance, and 1d made it a dead-entry assertion so it cannot be forgotten.
+- **TEN-2b — move every slug conflict target and lookup onto the partial indexes.** _(Beta 0; TEN-2's
+  second.)_ `findOrCreateMovementId` takes a `HouseholdScope` and resolves `(household_id, slug)`,
+  falling back to the global reference row; the catalog read path and `programDayRows`' movement
+  declaration follow. **2b owns every place that names a movement by slug**, because each stops
+  identifying one row once two rows can share a slug:
+  - `packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`'s `ON CONFLICT (slug)`
+    and the `select … where slug = …` after it;
+  - `packages/db/src/seed.ts` → the `MOVEMENT_SEED_ROWS` upsert, also `ON CONFLICT (slug)`;
+  - `seedProgram`'s `inArray(movements.slug, …)` resolution, which must pick the global
+    (`household_id IS NULL`) row or the block's own household's, not any row with that slug.
 
-- **TEN-2c — contract: drop the global uniqueness.** _(Beta 0; TEN-2's third.)_ Remove the old
-  `movements.slug` UNIQUE once nothing reads through it, per expand→contract. **Separate PR and
-  separate deploy from 2b** — `AGENTS.md`'s deploy order puts a destructive contract _after_ the app
-  that stopped depending on it, and Squawk requires `NOT VALID` and `VALIDATE` be split across PRs
-  anyway. Cut a Neon **RESTORE** branch before it. ⚠️ **Blocked on `OPS-3`**, which is still a stub:
-  `AGENTS.md` wants a rehearsed restore before any destructive step, and TEN-1 1d's own residual says
-  a mistaken deletion is not recoverable until that drill is done.
+  ⚠️ **Every conflict target must repeat its index's `WHERE` predicate literally** —
+  `WHERE household_id IS NULL` / `WHERE household_id IS NOT NULL` — not as a bound parameter, or
+  Postgres cannot infer the partial index as the arbiter and the statement errors (the V1-5
+  partial-index lesson `seed.ts` already cites for `ramp_targets`).
+  **Backfill:** a custom row referenced by one household is assigned to it; a row referenced by
+  **more than one** household is **split** — cloned per household, with `entries.movement_id` and
+  `prescriptions.movement_id` repointed — never assigned to one of them. Guarded on
+  `household_id IS NULL`, so a re-run is a no-op. It is only trivially correct while **one** live
+  household exists, which is one more reason TEN-2 lands before the invite.
+  ⚠️ **2b does NOT close the leak and does NOT flip the verdict.** While the global
+  `movements.slug` UNIQUE (`packages/db/src/schema.ts` → `movements`) exists, a second household
+  cannot hold its own row for a slug another household already has: its insert hits the global
+  UNIQUE, which a partial-index `ON CONFLICT` does not absorb. Harmless only while one household
+  exists. ⚠️ `findOrCreateMovementId` is the one allowlist entry in
+  `apps/web/lib/dal/scoped.test.ts` whose reason says TEN-2 **deletes** it; once it takes a
+  `HouseholdScope` that test's dead-entry assertion fails until the entry goes, so the deletion is
+  this row's.
+
+- **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This is where the leak closes.**
+  _(Beta 0; TEN-2's third.)_ With the global UNIQUE gone a second household can hold its own row for
+  a slug, so this PR carries the proofs: TEN-1 1d's `db:verify` catalog verdict flips from
+  _"LEAKS"_ to _"isolated"_, both directions, and **mutation patch `04-slug-is-not-the-arbiter` is
+  rewritten or retired** — its job is to prove the global slug _is_ the arbiter, which stops being
+  true here. **Separate PR and separate deploy from 2b**, because code deployed before 2b still says
+  `ON CONFLICT (slug)`, and that needs the global UNIQUE as its arbiter: drop it while that code is
+  live and every free-text movement write fails. `AGENTS.md`'s deploy order puts a contract after the
+  app that stopped depending on it. Dropping a constraint deletes no data, so this is not gated on
+  `OPS-3`'s restore drill; cut a Neon **restore branch** before it anyway, per `AGENTS.md`'s
+  rollback rule.
 
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
