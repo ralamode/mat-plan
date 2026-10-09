@@ -2079,20 +2079,34 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   every entry point rejects a caller with no session. Facebook waits for a tester to ask.** Replaces the shared
   access code with per-person identity.
 
-  **PLAN: [auth-1-clerk-google.md](./plans/auth-1-clerk-google.md)** — **four chunks** (Clerk wired
-  dark → `household_members` + the claim correction dark → the boundary moves → retire the gate),
-  hardened by a seven-lens panel. The gate and the session are **both** enforced for two chunks on
-  purpose: AND-composition is what removes the window in which neither holds. Three things the plan
-  found that the milestone's prose does not say: `beta-1.md` § 3's _"existing export-enumeration
-  test"_ is an export-**shape** guard that would pass a brand-new action with no auth check at all
-  (the real coverage is a hand-maintained array nothing cross-checks), so the enforcement is a new
-  test; `TEN-1` 1d's claim that the `cross_household` event _cannot fire_ before AUTH-1 is
+  **PLAN: [auth-1-clerk-google.md](./plans/auth-1-clerk-google.md)** — **six chunks** (Clerk wired dark
+  → the enumeration guard → `household_members` + the claim correction dark → the Playwright session
+  story → the boundary moves → retire the gate), **hardened by a seven-lens panel**. The gate and the
+  session are **both** enforced across the cutover on purpose: AND-composition is what removes the
+  window in which neither holds. Three things the plan found that the milestone's prose does not say:
+  `beta-1.md` § 3's _"existing export-enumeration test"_ is an export-**shape** guard that would pass a
+  brand-new action with no auth check at all (the real coverage is a hand-maintained array nothing
+  cross-checks); `TEN-1` 1d's claim that the `cross_household` event _cannot fire_ before AUTH-1 is
   over-stated (a profile pointing at a soft-deleted household reaches it today), so what AUTH-1 owes
   is the row-level `db:verify` proof, not a first firing; and _"a new user gets a new, empty
   household"_ is the clause that opens `TEN-2`'s proven catalog write, so the plan recommends it
-  **leave AUTH-1** for the invite row. **Open for the maintainer:** Clerk Organizations
-  (recommended **against** for Beta 0), that household-creation move, "household" vs "club", and
-  whether chunk 1d's Clerk/Playwright/screenshot story needs its own plan.
+  **leave AUTH-1** for the invite row.
+
+  **And what the panel changed, because the plan's decisions survived but several of its mechanisms did
+  not.** It overturned no decision and no finding, but it rewrote the resolver's query (it dropped the
+  `households.deleted_at` conjunct `TEN-1` extracted it to protect, so a membership on a soft-deleted
+  household would have **resurrected** its profiles), the no-household screen's discriminator (which
+  would have shown a signed-in parent _"it takes a change to this deployment's seed data"_), the
+  enumeration test, the role CHECK's single-sourcing, the claim correction's guard, and the rate
+  limiter. It also found that `household_members` would have **aborted the household-deletion
+  transaction** — `PRIV-3`'s predicted "19th table" — that the **production seed** can create household
+  #2 with no request path at the same moment the plan deletes the ≥2-household throw, that **three
+  chunks were red against guards already committed here**, and that the **CSP widening `beta-1.md`
+  assigned to this plan by name** was missing entirely. **Open for the maintainer, all unsigned:**
+  Clerk Organizations (recommended **against** for Beta 0, reversal re-priced), the household-creation
+  move, "household" vs "club", whether the Clerk/Playwright/screenshot chunk needs its own plan, the
+  scope-miss `actor`, **whether the mutation limiter stays in AUTH-1**, and **whether `db:correct` gets
+  `--household`/`--user` flags** — the last two added because lenses disagreed with the plan.
 
   **Why it became P0 the day the repo went public:** the access gate is a single shared password, and
   it is now the only thing between the internet and two children's logged health data. The public repo

@@ -193,8 +193,8 @@ they are how to schedule any milestone, not facts about this one.
 
 ### 3 · AUTH-1 — Clerk, Google, invitation-only
 
-**PLAN: [auth-1-clerk-google.md](../plans/auth-1-clerk-google.md)** — four chunks, hardened by a
-seven-lens panel. It settles the two questions the decisions table above deferred to it (**Clerk
+**PLAN: [auth-1-clerk-google.md](../plans/auth-1-clerk-google.md)** — **six** chunks, hardened by a
+seven-lens panel that moved one chunk boundary and found three chunks red by construction. It settles the two questions the decisions table above deferred to it (**Clerk
 Organizations: recommended against for Beta 0**, with the cost of being wrong priced; **"household"
 over "club"**), and it puts two things back to the maintainer. First, it recommends that _"a new user
 gets a new, empty household"_ (below) **leave AUTH-1** for the invite row: that clause is what opens
@@ -204,8 +204,9 @@ auth assertion, so the enforcement is a **new** test rather than an extension.
 
 - Clerk with **only** the Google strategy enabled and **sign-up restricted to invited emails**. The
   dashboard settings live nowhere in code, so they go in a runbook checklist — along with the
-  production instance's own Google OAuth credentials, the consent screen's privacy-policy URL (PRIV-1
-  first), and the domain.
+  production instance's own Google OAuth credentials, the consent screen's privacy-policy URL (**PRIV-2**
+  first — it is the row that ships `/privacy`; this said PRIV-1 until AUTH-1's panel caught it), and the
+  domain.
 - A **`household_members`** table (migration + ERD): a user belongs to a household; the first user is
   its owner.
 - **Ray's existing household is claimed, not inherited.** A guarded `db:correct` correction binds it to
