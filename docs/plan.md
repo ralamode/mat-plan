@@ -167,7 +167,8 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   movement, a thing a kid did that nobody planned — **Add movement**
   (`apps/web/app/p/[profileId]/strength-form.tsx:579`) gives a blank card whose **Movement** field is
   a plain `<input type="text">` with `autoComplete="off"` and no catalog behind it (`:812`–`:823`).
-  Whatever is typed goes to `findOrCreateMovementId` (`apps/web/lib/dal/catalog.ts:76`), an
+  Whatever is typed goes to `findOrCreateMovementId` (core: `packages/db/src/writers/movement-catalog.ts` →
+  `findOrCreateMovement`), an
   `INSERT … ON CONFLICT DO NOTHING` keyed on `movementSlug(name)` — so "Bulgarian Split Squats"
   against a catalog holding "Bulgarian Split Squat" is a **second row**, that movement's history is
   split across both, and with no delete action in the app the fix is a `db:correct` correction. **This
@@ -182,7 +183,7 @@ tournament is a JSON dropped into `apps/web/lib/duals/events/`, not new code.
   **Acceptance, stated so a test can fail it.** On a day whose program does not prescribe it, an
   athlete selects a movement and submits a set for it, and (1) the stored row resolves to the
   **existing** catalog movement rather than a near-duplicate minted by `findOrCreateMovementId`
-  (`apps/web/lib/dal/catalog.ts:76`, unrecoverable through the UI — there is no delete action), and
+  (core: `packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`, unrecoverable through the UI — there is no delete action), and
   (2) **no magnitude arrives prefilled**, the same boundary V1-19's structural test already pins for
   the scaffold.
 
@@ -2169,7 +2170,8 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     built.
 
     1. **`findOrCreateMovementId`'s `isBodyweight: false` is not a bug.** The insert is
-       `ON CONFLICT DO NOTHING` on `slug` (`apps/web/lib/dal/catalog.ts:76-88`), so the 7 seeded
+       `ON CONFLICT DO NOTHING` on `slug` (`packages/db/src/writers/movement-catalog.ts` →
+       `findOrCreateMovement`), so the 7 seeded
        bodyweight movements keep their correct `true`. The hardcode only applies to a genuinely NEW
        movement typed as free text, where the app has no way to know — `false` is the safe default, not
        an oversight.
