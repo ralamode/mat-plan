@@ -75,7 +75,11 @@ because there is nothing of theirs in them.
 with **no household scoping** (`apps/web/lib/dal/catalog.ts` → `findOrCreateMovementId`). It is the
 only user-reachable writer to any catalog table — `activity_types` and `metric_definitions` have no
 equivalent. Consequence: **a movement name one household types survives that household's deletion**,
-and until `TEN-2` lands another household can inherit its unit and bodyweight flag on a name clash.
+and until `TEN-2` lands the first household to type a name sets that slug's **display name** for
+everyone: a household typing the same movement later is handed that row and shown the first typist's
+text. That name is what crosses: the row's unit and bodyweight flag carry nothing from the typist,
+because the free-text writer only ever writes `is_bodyweight: false` and no `unit_default`
+(`packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`).
 
 ## 2. Columns that exist and hold nothing
 
@@ -99,7 +103,7 @@ separately. **Two reach the UI today:**
    `movements` row. **This is the one that leaves the household** — and since TEN-1 1d that is
    measured rather than suspected: `db:verify` → _"TEN-1 1d: the catalog verdict"_ proves the row
    is reachable from, and renderable in, another household, and that it survives a write the
-   household seam **refused**. `TEN-2` is the fix; §4's third row carries the consequence.
+   household seam **refused**. `TEN-2` is the fix; §4's `movements` row carries the consequence.
 
 Both validate through `freeTextNoteSchema` (`packages/shared/src/text.ts`), capped at
 `FREE_TEXT_NOTE_MAX`. There is no content filter — whatever is typed is stored, and `feel` is exported.
