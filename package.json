@@ -31,6 +31,7 @@
     "actions:check": "node .github/scripts/check-action-pins.mjs",
     "audit:check": "node .github/scripts/check-audit.mjs",
     "preview:check": "node .github/scripts/check-preview-isolation.mjs",
+    "preview:purge": "node .github/scripts/purge-vercel-previews.mjs",
     "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh && bash .github/scripts/check-action-pins.test.sh && bash .github/scripts/check-audit.test.sh && bash .github/scripts/check-preview-isolation.test.sh"
   },
   "devDependencies": {

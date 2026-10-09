@@ -200,6 +200,10 @@ stop and say so — the token in `packages/shared/src/db-environment.ts` has to 
 **Confirm:** production's database name has no `preview` in it, and both settings are written down
 with their current values.
 
+**Recorded 2026-10-09:** _Vercel Authentication_ is **on** for previews, so only members of the Vercel
+team can open one. The DoD's "preview deploy manually verified" box says what that costs an outside
+reviewer ([definition-of-done.md](./definition-of-done.md)).
+
 ### 1. Confirm fork-PR protection
 
 **Project → Settings → Git → fork protection** (wording may differ; it is the setting that requires
@@ -242,8 +246,13 @@ Copy **both** strings: pooled (host contains `-pooler`) and direct/unpooled.
 
 ### 3. Migrate + seed it from your machine
 
+Paste these **one line at a time**, pressing Enter after each. Pasted as a block, `read -s` reads
+nothing and the variable stays empty (both scripts then stop with "Set DATABASE_URL_UNPOOLED"), and
+zsh passes a trailing `# comment` to the command as arguments unless `interactive_comments` is set.
+At `read -s PREVIEW_DIRECT`, paste the preview **direct** (unpooled) string at the blank prompt.
+
 ```bash
-read -s PREVIEW_DIRECT      # paste the preview DIRECT/unpooled string
+read -s PREVIEW_DIRECT
 export EXPECTED_DB_ENV=preview
 DATABASE_URL_UNPOOLED="$PREVIEW_DIRECT" pnpm --filter @mat-plan/db db:migrate
 DATABASE_URL_UNPOOLED="$PREVIEW_DIRECT" pnpm --filter @mat-plan/db db:seed
@@ -329,33 +338,52 @@ gh api "repos/<owner>/<repo>/deployments/<id>/statuses" --jq '.[0].environment_u
 ```
 
 At the time OPS-1 was written that listed **100** deployments, and the recent ones answered `200`.
+When the runbook was executed (2026-10-09), Vercel held **440** preview deployments.
 
-1. **Record two or three of those `environment_url`s** so you can verify the purge.
-2. **Vercel → Deployments → filter Preview → delete every one of them.** (Or loop
-   `DELETE /v13/deployments/{id}` with the token from step 8.)
+1. **Record two or three of those `environment_url`s** so you can verify the purge. Note what each
+   answers now: behind Vercel Authentication a live deployment answers **302** (a login redirect),
+   not `200`.
+2. **Delete every preview deployment with `pnpm preview:purge`**, using the same token and ids as
+   step 8. The dashboard has no bulk delete, so one at a time is hours of clicking. The script lists
+   preview deployments only and never production. It is a dry run unless you pass `--yes`, and it
+   waits out Vercel's delete rate limit (about 200 per window, then `429 … try again in 10 m`) instead
+   of failing. Re-running it picks up whatever is left.
+   ```bash
+   pnpm preview:purge
+   pnpm preview:purge --yes
+   ```
 3. **Rotate `ACCESS_GATE_PASSWORD` in the Production scope** to a new long random value, and
    redeploy production.
-4. **Rotate the Neon production role password**, then update **both** copies: `DATABASE_URL` in the
-   Vercel Production scope and the `DATABASE_URL_UNPOOLED` GitHub Actions secret. Redeploy
-   production and re-run "Migrate + seed (production)" to confirm the new string works.
+4. **Rotate the Neon production role password only if the string could have left the server.**
+   `DATABASE_URL` is read server-side and never sent to a browser, so a purged preview did not expose
+   it to a visitor. Rotate when any of these holds: a **fork PR** ever built with the Preview scope
+   (its build runs attacker-controlled code), the string appeared in a **log**, a **client bundle** or
+   a commit, or a non-maintainer ever had Vercel access. To rotate, reset the role in Neon and update
+   **both** copies (`DATABASE_URL` in Vercel Production, the `DATABASE_URL_UNPOOLED` Actions secret),
+   redeploy production, and re-run "Migrate + seed (production)". _2026-10-09: skipped by decision —
+   the repo has never had a fork PR, and only the maintainer has used the app or held Vercel access._
 
 **Rotation is not retroactive, and that generalises.** A credential that was ever injected into a
 build stays in that build. So whenever the _preview_ credentials are rotated later, the previews
 built before the rotation must be **purged**, not merely superseded.
 
-**Confirm:** `curl -so /dev/null -w '%{http_code}\n' <a recorded URL>` returns `404`, the
-`deployments?environment=Preview` count is down to today's, and the production URL accepts the new
-gate code and rejects the old one.
+**Confirm:** `curl -so /dev/null -w '%{http_code}\n' <a recorded URL>` returns **`404`** for every
+recorded URL (a `302` means it still exists), `pnpm preview:purge` (dry run) lists no deployment
+older than step 5, and the production URL accepts the new gate code and rejects the old one. **Do not
+use GitHub's deployment count as the check:** GitHub keeps its own deployment records, so that count
+never drops when Vercel deletes a deployment.
 
 ### 8. Verify it mechanically
 
 ```bash
-read -s VERCEL_TOKEN; export VERCEL_TOKEN
-export VERCEL_PROJECT_ID=prj_…        # Project → Settings → General
-export VERCEL_TEAM_ID=team_…          # only for a team project
+read -s VERCEL_TOKEN
+export VERCEL_TOKEN VERCEL_PROJECT_ID=prj_… VERCEL_TEAM_ID=team_…
 pnpm preview:check
 unset VERCEL_TOKEN VERCEL_PROJECT_ID VERCEL_TEAM_ID
 ```
+
+The project id is under Project → Settings → General and the team id under Team → Settings →
+General; paste the lines one at a time, as in step 3.
 
 Exit **0** = isolated · **1** = isolation is broken · **2** = could not check, so **nothing was
 asserted** (an unreachable API, an expired token, or an unexpected response shape all land here

@@ -336,6 +336,27 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## CI / secrets
 
+- **A control the code wires can still be OFF in production, and the docs will not notice.** →
+  `lib/rate-limit.ts` fails **open** when `UPSTASH_REDIS_REST_URL`/`_TOKEN` are unset (correct for
+  local dev and CI). Production had **no Upstash database at all** until OPS-1's runbook (2026-10-09),
+  while `service-setup.md` called Upstash optional and `tech-debt.md` said "the gate IS now rate
+  limited". The same no-op that keeps CI green hid it. → For any fail-open control, check the
+  **deployed scope**, not the code: Vercel → Environment Variables, filtered by Production.
+  `service-setup.md` now marks Upstash required in every deployed scope.
+
+- **Deleting Vercel deployments in bulk: there is no bulk delete in the dashboard, and the API
+  rate-limits deletes** (about 200, then `429 rate_limited "now-rm" … try again in 10 m`). → Use
+  `pnpm preview:purge`, which waits out the 429 and resumes. **Prove a purge by URL, not by count:**
+  GitHub keeps its own deployment records, so `deployments?environment=Preview` never drops. A
+  recorded `environment_url` must answer **404**; behind Vercel Authentication a live deployment
+  answers **302**, which looks like "protected" and is not "deleted". (OPS-1, 2026-10-09)
+
+- **A runbook block pasted into zsh fails in two silent-looking ways.** → `read -s VAR` pasted together
+  with the lines after it reads **nothing**, so `VAR` is empty and a later script fails with "Set
+  DATABASE_URL_UNPOOLED". And without `setopt interactive_comments`, zsh passes a trailing
+  `# comment` to the command as **arguments** (`sed: #: No such file or directory`, `tsx script.ts '#'
+'→'`). → Runbook blocks carry no trailing comments and say "one line at a time". (OPS-1, 2026-10-09)
+
 - **Before closing OR fixing a red dependency major, check the ecosystem's peer ranges — it takes one
   command and it settles the question.** → `npm view eslint-plugin-react peerDependencies` showed
   `eslint: "... || ^9.7"` on its LATEST version, proving ESLint 10 was unfixable on our side rather than

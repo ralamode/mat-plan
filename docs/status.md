@@ -96,18 +96,17 @@ PR screenshot is clean by construction, which is what matters before another hou
 History rewriting was out of scope, and the **production database was deliberately untouched**: those
 names are the household's own data ([inventory](./privacy/data-inventory.md) §9).
 
-🟡 **OPS-1 — previews are isolated in code; the dashboard half is OUTSTANDING.** Every Vercel scope
-shared one set of environment variables, so a preview deployment of any PR read and wrote
-**production** with the **production** access-gate code. The repo half has merged: the app and the
-migrator both refuse a database that disagrees with their environment
-(`packages/shared/src/db-environment.ts`), `pnpm preview:check` verifies the Vercel scopes
-structurally, and a preview estate gets its own migrator. **What remains is dashboard work and only
-the maintainer can do it** — the Neon preview project, the Vercel scope split, a second Upstash
-database, and, the part the backlog row's own wording missed, **purging ~100 publicly-listed preview
-deployments that still hold the production credentials and rotating both of them** (Vercel bakes env
-values in at build time, so rotation is not retroactive). Nine ordered steps, meant to run _before_
-the merge: [runbooks.md](./runbooks.md) → OPS-1 ([plan](./plans/ops-1-preview-isolation.md)). Until
-its closeout commit lands, **OPS-1 is open** and Beta 0's ops step is not clear.
+✅ **OPS-1 — previews are isolated from production (closed 2026-10-09).** Every Vercel scope had
+shared one set of environment variables, so a preview of any PR read and wrote **production** with the
+**production** gate code. The repo half (#261) makes the app and the migrator refuse a database that
+disagrees with their environment; the maintainer then ran the dashboard half
+([runbooks.md](./runbooks.md) → OPS-1): a seed-only `mat-plan-preview` Neon project, the Vercel
+scopes split, Vercel Authentication on previews, **440** old preview deployments purged, and the gate
+code rotated. `pnpm preview:check` exits 0. ⚠️ **It also found that production had no Upstash
+database**, so the gate's rate limiter had been failing open in production while the docs called it
+optional and the gate rate limited. Both are corrected, and production is now limited. The Neon
+password rotation was skipped by decision (no fork PR has ever existed; the string is server-only).
+**Follow-up:** reset the preview database, which was seeded before the OSS-1 rename.
 
 🔒 **SEC-5 — the production audit is a CI gate.** `pnpm audit:check` runs in `ci.yml`'s `quality` job
 and in local `pnpm verify`, from one definition, and fails on any `high` or `critical` in the `--prod`
