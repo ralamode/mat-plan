@@ -2,6 +2,8 @@ import { and, asc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from '../schema';
+import type { HouseholdScope } from '../scope';
+import { isLiveProfile } from '../writers/ownership';
 
 /**
  * The month-scoped reads behind the CSV export (V1-13b), single-sourced here so the DAL **and**
@@ -16,6 +18,15 @@ import * as schema from '../schema';
  * so intra-session order is *insertion* order. A set flushed late from a second device lands at the
  * bottom of a session it happened at the top of. What this DOES guarantee is that re-exporting the
  * same month twice is byte-identical, which is the property the workflow actually depends on.
+ *
+ * ## TEN-1 1c — all three reads are household-scoped
+ *
+ * Each takes a required `HouseholdScope` and resolves ownership through the single-sourced
+ * `isLiveProfile` (`writers/ownership.ts`) instead of a hand-written
+ * `and(eq(publicId, …), isNull(deletedAt))`. `lib/dal/export.ts` already fails closed at
+ * `getProfileByPublicId` before any of these runs, so this is depth behind the gate — which is exactly
+ * what `docs/features/write-path.md` demands: *"a guard that exists only in the DAL is a guard no proof
+ * covers."* `db:verify`'s TEN-1 read matrix drives all three in both directions.
  */
 
 /** `YYYY-MM` → the half-open date range `[first, next month)`. */
@@ -36,7 +47,12 @@ export function monthRange(month: string): { from: string; to: string } {
  */
 export function strengthMonthRows(
   db: NodePgDatabase<typeof schema>,
-  args: { profilePublicId: string; month: string },
+  args: {
+    profilePublicId: string;
+    month: string;
+    /** TEN-1: the household this request is authorized for. The third conjunct of `isLiveProfile`. */
+    scope: HouseholdScope;
+  },
 ) {
   const { from, to } = monthRange(args.month);
   return (
@@ -80,8 +96,7 @@ export function strengthMonthRows(
       )
       .where(
         and(
-          eq(schema.profiles.publicId, args.profilePublicId),
-          isNull(schema.profiles.deletedAt),
+          isLiveProfile(args.profilePublicId, args.scope),
           isNull(schema.entries.deletedAt),
           gte(schema.entries.activityDate, from),
           lt(schema.entries.activityDate, to),
@@ -101,7 +116,12 @@ export function strengthMonthRows(
 /** Every bodyweight reading in one month. */
 export function bodyweightMonthRows(
   db: NodePgDatabase<typeof schema>,
-  args: { profilePublicId: string; month: string },
+  args: {
+    profilePublicId: string;
+    month: string;
+    /** TEN-1: the household this request is authorized for. */
+    scope: HouseholdScope;
+  },
 ) {
   const { from, to } = monthRange(args.month);
   return db
@@ -119,8 +139,7 @@ export function bodyweightMonthRows(
     .innerJoin(schema.activityTypes, eq(schema.activityTypes.id, schema.entries.activityTypeId))
     .where(
       and(
-        eq(schema.profiles.publicId, args.profilePublicId),
-        isNull(schema.profiles.deletedAt),
+        isLiveProfile(args.profilePublicId, args.scope),
         isNull(schema.entries.deletedAt),
         eq(schema.activityTypes.key, 'weigh_in'),
         gte(schema.entries.activityDate, from),
@@ -136,17 +155,18 @@ export function bodyweightMonthRows(
  * One indexed scan over `idx_entries_profile_date`. Drives which files the export writes, so a
  * profile with no data produces no directory rather than an empty one.
  */
-export function loggedMonths(db: NodePgDatabase<typeof schema>, args: { profilePublicId: string }) {
+export function loggedMonths(
+  db: NodePgDatabase<typeof schema>,
+  args: {
+    profilePublicId: string;
+    /** TEN-1: the household this request is authorized for. */
+    scope: HouseholdScope;
+  },
+) {
   return db
     .selectDistinct({ month: sql<string>`to_char(${schema.entries.activityDate}, 'YYYY-MM')` })
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.profiles.id, schema.entries.profileId))
-    .where(
-      and(
-        eq(schema.profiles.publicId, args.profilePublicId),
-        isNull(schema.profiles.deletedAt),
-        isNull(schema.entries.deletedAt),
-      ),
-    )
+    .where(and(isLiveProfile(args.profilePublicId, args.scope), isNull(schema.entries.deletedAt)))
     .orderBy(sql`to_char(${schema.entries.activityDate}, 'YYYY-MM') desc`);
 }

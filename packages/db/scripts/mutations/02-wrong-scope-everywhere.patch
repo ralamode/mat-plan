@@ -1,11 +1,11 @@
 diff --git a/packages/db/scripts/verify.ts b/packages/db/scripts/verify.ts
-index 1406a6f..3732bb8 100644
+index 7b43ec6..da0bc1f 100644
 --- a/packages/db/scripts/verify.ts
 +++ b/packages/db/scripts/verify.ts
-@@ -225,7 +225,7 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
- // implicitly written against, so threading it is what keeps those proofs proving what their messages
- // say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is inserted,
- // ~3400 lines down, which is also where the TEN-1 matrix lives.
+@@ -228,7 +228,7 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
+ // was implicitly written against, so threading it is what keeps those proofs proving what their
+ // messages say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is
+ // inserted, ~3400 lines down, at the V1-10 programming fixture.
 -const A_SCOPE = householdScopeForScript(households[0].id);
 +const A_SCOPE = householdScopeForScript(households[0].id + 1);
  

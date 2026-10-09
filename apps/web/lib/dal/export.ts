@@ -1,6 +1,12 @@
 import 'server-only';
 
-import { bodyweightMonthRows, loggedMonths, programDayRows, strengthMonthRows } from '@mat-plan/db';
+import {
+  bodyweightMonthRows,
+  type HouseholdScope,
+  loggedMonths,
+  programDayRows,
+  strengthMonthRows,
+} from '@mat-plan/db';
 import { type DayRole, DAY_ROLES } from '@mat-plan/shared';
 import {
   bodyweightPath,
@@ -16,6 +22,7 @@ import {
 } from '@mat-plan/shared/csv';
 
 import { db } from './db';
+import { getHouseholdScope } from './household';
 import { getProfileByPublicId } from './profiles';
 
 /**
@@ -24,6 +31,14 @@ import { getProfileByPublicId } from './profiles';
  * Ownership first: the profile is resolved by `public_id` — never a raw internal id from the request
  * — and everything below is scoped by it. `public_id` is also the `<athlete>` **path segment**, so
  * the directory is rename-proof by construction (Ray, 2026-09-24).
+ *
+ * **TEN-1 1c: the household scope is resolved ONCE, in `buildExportEntries`, and threaded down.** The
+ * `getProfileByPublicId` call there already fails closed on a foreign id, so the four queries below are
+ * *depth behind the gate* — which `docs/features/write-path.md` demands anyway (*"a guard that exists
+ * only in the DAL is a guard no proof covers"*). It is threaded rather than re-resolved per query
+ * because the export runs in a Route Handler, where `cache()` may not memoise: one resolve per export,
+ * not one per month per file. The scope is an explicit parameter from here down — `lib/dal` is the only
+ * layer allowed to hold it ambiently (invariant 8), and this module is that layer.
  */
 
 /** Fold the flat (entry × set × quantity) join into one row per movement. */
@@ -95,11 +110,15 @@ type ExportQuantityMutable = StrengthLogRow['sets'][number]['quantities'][number
  * seed-immutable; **V1-22 breaks it**, and that is recorded on the V1-22 row as a blocker it must
  * solve.
  */
-async function prescribedFor(profilePublicId: string, dayRoles: ReadonlySet<string>) {
+async function prescribedFor(
+  profilePublicId: string,
+  dayRoles: ReadonlySet<string>,
+  scope: HouseholdScope,
+) {
   const byKey = new Map<string, string | null>(); // `${dayRole}:${slug}` → text, or null if ambiguous
   for (const role of dayRoles) {
     if (!(DAY_ROLES as readonly string[]).includes(role)) continue;
-    const rows = await programDayRows(db, { profilePublicId, dayRole: role as DayRole });
+    const rows = await programDayRows(db, { profilePublicId, dayRole: role as DayRole, scope });
     const seen = new Map<string, number>();
     for (const p of rows) {
       const key = `${role}:${p.movementSlug}`;
@@ -117,26 +136,32 @@ async function prescribedFor(profilePublicId: string, dayRoles: ReadonlySet<stri
 
 /** Every CSV file for one athlete, as zip entries. */
 export async function buildExportEntries(profilePublicId: string): Promise<ZipEntry[]> {
+  // The gate: a foreign (or unknown) id returns nothing before any month query runs. `getProfileByPublicId`
+  // is itself household-scoped since TEN-1 1b, so a null scope also lands here.
   const profile = await getProfileByPublicId(profilePublicId);
   if (!profile) return [];
+  const scope = await getHouseholdScope();
+  if (!scope) return [];
 
-  const months = (await loggedMonths(db, { profilePublicId })).map((r) => r.month);
+  const months = (await loggedMonths(db, { profilePublicId, scope })).map((r) => r.month);
   const entries: ZipEntry[] = [];
 
   for (const month of months) {
-    const strengthRows = foldStrengthRows(await strengthMonthRows(db, { profilePublicId, month }));
+    const strengthRows = foldStrengthRows(
+      await strengthMonthRows(db, { profilePublicId, month, scope }),
+    );
 
     const roles = new Set(
       strengthRows.map((r) => r.dayRole).filter((r): r is string => r !== null),
     );
-    const prescribed = await prescribedFor(profilePublicId, roles);
+    const prescribed = await prescribedFor(profilePublicId, roles, scope);
     for (const row of strengthRows) {
       const key = `${row.dayRole}:${row.movementSlug}`;
       row.prescribed = prescribed.get(key) ?? '';
     }
 
     const bodyweightRows: BodyweightRow[] = (
-      await bodyweightMonthRows(db, { profilePublicId, month })
+      await bodyweightMonthRows(db, { profilePublicId, month, scope })
     ).map((r) => ({
       date: r.date,
       weight: r.value ?? '',

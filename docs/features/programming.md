@@ -136,6 +136,35 @@ evidence that an unprogrammed day exists.
 4. **Every read is scoped by profile `public_id` and filters soft-deleted rows at every level** —
    block, prescription, target, movement. `db:verify` proves each one independently.
 
+4b. **`programDayRows` is HOUSEHOLD-scoped since TEN-1 1c, and that is a strengthening, not a
+refactor.** `isThisProfile` is now the single-sourced `isLiveProfile(publicId, scope)` from
+`packages/db/src/writers/ownership.ts`, with a **required** `scope` on the query — so an unconverted
+caller is a compile error, and both sub-selects (the household hop and the per-kid target scope) pick
+up the household conjunct together, which invariant 4's "one named predicate" rule already demanded.
+
+What changed is the _claim_, not the shape. The pre-TEN-1 chain authorized the **block** against the
+**profile's own** `household_id`; nothing checked that the **requester** belonged to that household,
+because there was no requester. Now the requester's household is asserted independently and the two
+must agree — so a profile whose `household_id` were ever repointed (a household transfer, a
+correction, an ONB-2 bug) can no longer read the new household's program unchecked. `lib/dal/programming.ts`
+resolves the scope with `getHouseholdScope()` and returns `[]` on a null one, so the page signature
+and the no-card-rendered behaviour are unchanged.
+
+Two things not to tidy:
+
+- **The `profiles` join inside the block subquery is now redundant — leave it.** Removing a join from
+  a BOLA-load-bearing subquery for neatness is risk with no payoff.
+- **The "a NULL `household_id` matches no block" note is unreachable** (`profiles_household_id_not_null`
+  is a validated CHECK), and it still stays. Do **not** conclude from the nullable drizzle type that an
+  orphan profile can exist and add an `OR household_id IS NULL` escape — that would be a hole in the one
+  predicate the seam exists to create.
+
+⚠️ **The V1-10 BOLA probes ask from each household's OWN scope on purpose.** They test day_role
+disjointness and block selection; asking from the wrong scope would make them pass for a second reason
+and stop proving their own messages. The scope's own four-way proof is the TEN-1 matrix at the end of
+`verify.ts`, which seeds a day_role **both** households program — so a refusal there cannot be mistaken
+for an unprogrammed day.
+
 5. **`routine_config` NULL means "the NEUTRAL FIRST-RUN routine", not "no routine" and not "everything".**
    It ships dark: a profile with no config renders a fallback order, which is how V1-18 landed without a
    backfill. **ONB-0 split what used to be one list into two, and the split is the invariant:**

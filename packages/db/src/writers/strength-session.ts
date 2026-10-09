@@ -15,7 +15,7 @@ import type { Schema } from '../client';
 import { schema } from '../client';
 import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
-import { ownedEntryIds } from './ownership';
+import { isLiveProfile, ownedEntryIds } from './ownership';
 
 /**
  * The strength-session write core (V1-8-2), single-sourced HERE in `packages/db` — NOT in the
@@ -274,11 +274,21 @@ async function writeSessionStrengthEntry(
  * session id. The profile is resolved by `public_id` inside the tx (the F7 seam — never a raw
  * internal id from the request). Catalog ids (`activityTypeId`, each `movementId`) are resolved by
  * the caller and passed in. Returns the session's `public_id`.
+ *
+ * **TEN-1 1c: that in-transaction resolve is household-scoped.** It now runs the single-sourced
+ * `isLiveProfile(publicId, scope)` rather than its own `and(eq(publicId, …), isNull(deletedAt))`
+ * copy, so a profile outside `scope` resolves to nothing and the whole transaction throws
+ * `Profile not found` — the same shape a soft-deleted or unknown profile already got, with nothing
+ * written. The scope is **required**: an unconverted caller is a compile error, which is the only
+ * mechanism that makes a sweep this wide safe (the plan's §Design 1). `db:verify`'s TEN-1 write
+ * matrix proves the refusal in both directions and asserts the rollback left no session row.
  */
 export async function writeStrengthSession(
   db: NodePgDatabase<Schema>,
   args: {
     profilePublicId: string;
+    /** TEN-1: the household this request is authorized for. The third conjunct of `isLiveProfile`. */
+    scope: HouseholdScope;
     day: string;
     sessionType: string;
     sessionClientId: string;
@@ -294,9 +304,7 @@ export async function writeStrengthSession(
     const [profile] = await tx
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
-      .where(
-        and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
-      )
+      .where(isLiveProfile(args.profilePublicId, args.scope))
       .limit(1);
     if (!profile) throw new Error('Profile not found');
 

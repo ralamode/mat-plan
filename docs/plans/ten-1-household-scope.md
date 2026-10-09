@@ -716,6 +716,90 @@ specify:
   `updateBodyweightEntryById` 1 / 8; `findAmendableBodyweight` 1 / 5), so no negative assertion is the
   only proof in its block, and the dual mutation is detected. C9's hole is narrowed, not closed.
 
+## 1c as built — the real surface, and what diverged
+
+Recorded in the implementing PR, per AGENTS.md. **The line numbers in the chunk table predate 1b**, so
+every site was found by symbol and reconciled against the list.
+
+### The surface the chunk table named, versus what was there
+
+| Chunk-table site                | Found as                                                                             | Converted                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `logCheckinEntries` (`:376`)    | `apps/web/lib/dal/entries.ts` → `logCheckinEntries` (`:393`)                         | ✅ `isLiveProfile`, scope resolved in the function          |
+| `writeStrengthSession` (`:295`) | `packages/db/src/writers/strength-session.ts` (`:298`)                               | ✅ `isLiveProfile`, **required** `scope` on the args object |
+| `programDayRows` (`:41`)        | `packages/db/src/queries/program-day.ts` → `isThisProfile` (`:42`)                   | ✅ both sub-selects inherit it                              |
+| `export-month` ×3               | `strengthMonthRows` (`:84`), `bodyweightMonthRows` (`:123`), `loggedMonths` (`:147`) | ✅ all three                                                |
+| `seed.ts:256`                   | `packages/db/src/seed.ts` → `seedProgram` (`:311`)                                   | ✅ `inHousehold(householdScopeForScript(household.id))`     |
+
+**Exactly the five families the plan named, no more and none already gone.** Three further sites that
+hold the predicate's _shape_ and are deliberately **not** conversions, stated so 1d's guard does not
+have to rediscover them:
+
+- **`apps/web/lib/dal/household.ts` → `reportScopeMiss`** — an **existence-only** probe that reaches
+  `db` with no scope **on purpose**: it is how the miss-path event tells `cross_household` from
+  `unknown_resource`. 1b already documented it as the one allowlisted unscoped read and made it return
+  `void`. Not converted, by design.
+- **`packages/db/scripts/corrections/registry.ts`** — two predicates (the KB-swings correction and
+  PROF-1's `routine_config` backfill, the latter already household-scoped by hand). Both are **1d**'s
+  by the file-by-file table, and `registry.ts` is a script, not app code — the structural guard 1d
+  writes covers `apps/web/lib/dal/`, so 1c's "zero" is zero **where that guard looks** plus zero in
+  `packages/db/src/`. Stated plainly rather than claimed away.
+- **`apps/web/scripts/screenshot-ephemeral.ts`** — see divergence 1.
+
+### Divergences
+
+| #     | The plan said                                                                                                                                          | What shipped                                                                                                                                                                                                                                                                                                                                                                                                                                       | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The file-by-file table names no `apps/web` caller of `writeStrengthSession` other than the DAL.                                                        | **`apps/web/scripts/screenshot-ephemeral.ts` calls it three times** and the required parameter made it a build failure. It now **derives** a scope from the throwaway database through `liveHouseholdIds` + `householdScopeForRequest`, throwing on anything but exactly one live household; `scope.test.ts` names that one file **and gains a new, absolute assertion** that nothing under `apps/web/{app,lib,components}/` mints a scope at all. | The plan's §Design 1b containment works exactly as designed and _forces_ this: `packages/db`'s `exports` map publishes only `"."`, so an `apps/web` script **cannot** reach `householdScopeForScript` by module resolution. Deriving is the stronger half of the rule — it never names a household id. The allowlist does not shrink, and the tree-level assertion is coverage the file did not have before, so the net is tighter than 1b's, not looser.                                                                                 |
+| **2** | `B_SCOPE` lives beside the TEN-1 matrix at the end of `verify.ts`.                                                                                     | **`B_SCOPE` moved ~900 lines up**, to where household B is created, with a pointer comment left at the old site.                                                                                                                                                                                                                                                                                                                                   | 1c made `programDayRows` scoped, and the V1-10 block — household B's biggest consumer, 12 of the 17 call sites — sits above the old definition. Still exactly two `householdScopeForScript(` calls in the file, which `scope.test.ts` pins.                                                                                                                                                                                                                                                                                               |
+| **3** | The matrix is one `ENTRY_POINTS` loop over a single `(A_PROFILE, B_PROFILE)` pair.                                                                     | **Each row carries its own pair.** The four assertions are unchanged.                                                                                                                                                                                                                                                                                                                                                                              | The reads need different fixtures — adherence needs ramp targets, the export reads need logged sessions, the program read needs a block. One shared pair would have meant a re-typed lookalike fixture per read, which is the vehicle the panel rejected for the picker (**A2 · S1 · C7**). The pair varies; the both-directions rule does not.                                                                                                                                                                                           |
+| **4** | Nothing about `programDayRows` needing its own fixture.                                                                                                | **Two new blocks through the real `seedProgram`, one per household, both programming `legs`** — a day_role no other fixture uses.                                                                                                                                                                                                                                                                                                                  | The V1-10 fixture gives the two households **disjoint** day_roles on purpose, which proves day-aware block selection but **cannot** prove household scoping: asked for a day the other household does not program, a leak and a correct refusal are the same zero rows. A day both households program is what makes the four-way row mean anything — and it is the exact R5 vacuity the plan warns about, found by writing the assertion.                                                                                                 |
+| **5** | 1c's `seed.ts` conjunct "runs against **prod** on every push, so it needs a positive assertion too" (**R-af · D-af**).                                 | **Both**: the two fixture blocks are the positive, and a new negative asserts `seedProgram` **rejects** a target naming a profile in another household _and_ wrote no block.                                                                                                                                                                                                                                                                       | The refs resolve before the insert, so "throws with nothing written" is a claim about two things. The throw message now names the household, which is what the negative matches on.                                                                                                                                                                                                                                                                                                                                                       |
+| **6** | §Design 1b: `householdScopeForScript` is _"imported by relative path from `packages/db/scripts/**`"_, and its own docblock said `scripts/**` **only**. | **`packages/db/src/seed.ts` now calls it too** — the first `src/` consumer. The docblock, `index.ts`'s comment and `write-path.md` are corrected to say `scripts/**` plus `src/seed.ts`.                                                                                                                                                                                                                                                           | `seedProgram` resolves **one household per block, inside the loop**, so a caller-supplied scope would be the wrong one. It is safe because nothing re-exports the constructor and nothing in `apps/web` names it — both pinned by `scope.test.ts` — but `src/seed.ts` **is** in the barrel's graph, so the invariant had to be restated rather than silently widened. ⚠️ Added during review (architecture lens, P1-2): the plan's chunk-1d rationale also says 1d gives the constructor its _second_ consumer; after 1c it is the third. |
+
+### Mutation results — every predicate 1c added, broken on purpose
+
+Each conversion was reverted by hand, one at a time, to the pre-1c hand-written predicate, and
+`db:verify` re-run. **All seven have a matching red assertion, and it is the right one:**
+
+| Predicate broken                       | First failure                                                                                                  |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `programDayRows` → `isThisProfile`     | `TEN-1: programDayRows (the Today page's program card) — household B cannot read A`                            |
+| `strengthMonthRows`                    | `TEN-1: strengthMonthRows (the CSV export's strength log) — household B cannot read A`                         |
+| `bodyweightMonthRows`                  | `TEN-1: bodyweightMonthRows (the CSV export's weigh-ins) — household B cannot read A`                          |
+| `loggedMonths`                         | `TEN-1: loggedMonths (which months the export writes at all) — household B cannot read A`                      |
+| `writeStrengthSession`                 | `Missing expected rejection: TEN-1: …and the other household cannot write it`                                  |
+| `seedProgram`                          | `Missing expected rejection: TEN-1 1c: seedProgram refuses a target in another household`                      |
+| `logCheckinEntries` (Vitest — app DAL) | `logCheckinEntries — ownership scope (TEN-1 1c) > resolves the profile through the household-scoped predicate` |
+
+**A third committed patch, `03-undo-1c-predicates.patch`**, reverts all seven at once and is wired into
+`pnpm db:mutations`. Its load-bearing property is the one the per-predicate runs above cannot be a gate
+for: **the first failure under it is a 1c assertion**, so the new rows are not merely riding 1b's.
+⚠️ **Corrected during review (correctness P1-1, security P1-4, accepted).** This previously read
+"every 1b assertion stays green and the first failure is a 1c one". The second half is now asserted —
+each patch carries a `.expect` file naming its required first failure and the runner compares it,
+where before it only printed one. The first half was **not** established and is now stated accurately:
+`db:verify` is fail-fast and the 1c `seedProgram` negative sits at `verify.ts:4712`, ahead of the read
+matrix (`:4789`) and the whole 1b write matrix (`:5051`), so ~22 1b assertions are **unreached, not
+green**. They do hold — by the per-predicate runs below, by inspection, and by each row's shape — but
+the gate was being credited with proving it. **Follow-up for 1d:** split the TEN-1 block so the 1b
+assertions run before the 1c ones, after which one patch-03 run shows the claim directly. Like mutation 02 it fails fast, so it
+demonstrates one 1c assertion per run — which is why the per-predicate results are recorded here
+rather than left to the gate. A single-predicate revert that the combined patch no longer matches is
+caught as `patch does not apply`, which the gate reports as a failure.
+
+### Not in 1c, and why
+
+- **`listEntriesForDay` still has no `db:verify` row** (1b's reasoning, unchanged): the app DAL cannot
+  run there, and reproducing its join would be the lookalike the panel rejected. `logCheckinEntries`
+  joins it in the same vehicle — an emitted-SQL proof plus a dark-path proof in
+  `lib/dal/entries.test.ts` — and both ride the predicate the matrix proves against a real database.
+- **`findOrCreateMovementId` is still unscopable** and a refused strength write has already committed
+  its caller-supplied catalog text. 1c makes `writeStrengthSession` scoped; it does **not** make the
+  strength write path tenant-isolated. The proof and the TEN-2 verdict are **1d**'s, by the plan.
+- **`scoped.test.ts`, `registry.ts`, `architecture.md`, `SECURITY.md`'s exception clause and the
+  `plan.md`/`status.md` TEN-1 rows** are **1d**'s, untouched here.
+
 ## Risks / rollback
 
 | #      | Risk                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |

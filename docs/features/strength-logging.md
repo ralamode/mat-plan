@@ -338,10 +338,24 @@ Real ones, each with the file to look at.
   which rides into `ownedEntryIds` → `isLiveProfile` and adds `profiles.household_id = $n` to the
   guarded UPDATE. The app DAL (`editStrengthSet`) resolves it via `getHouseholdScope()`, so nothing
   in the form or the action changed. `db:verify`'s TEN-1 write matrix proves the refusal in **both**
-  directions with no side effect. ⚠️ `writeStrengthSession`'s own in-transaction profile resolution is
-  still the pre-TEN-1 hand-written predicate — **chunk 1c** converts it. Not a leak today
-  (`getProfileByPublicId` fails closed before the writer is reached), but do not read that line as
-  household-scoped yet. See [write-path](./write-path.md) invariant 2.
+  directions with no side effect.
+
+- **`writeStrengthSession`'s in-transaction profile resolve is household-scoped too (TEN-1 1c).** It
+  takes a **required** `scope` and runs the same single-sourced `isLiveProfile`, so a profile outside
+  the scope resolves to nothing and the core throws `Profile not found` — byte-identical to the shape
+  an unknown or soft-deleted profile already got, with the **whole multi-table graph rolled back**.
+  `db:verify` asserts both directions and that no `sessions` row survived a refusal: a refusal that
+  wrote half a session would be worse than a leak, because the athlete's next replay would attach to
+  it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
+  action and `ResolvedSessionMovement` are all unchanged.
+
+  ⚠️ **`findOrCreateMovementId` runs BEFORE this and is still unscopable** — `movements` has no
+  `household_id` column at all — so a session the seam **refuses** has already committed its
+  caller-supplied movement name to the shared catalog, and whichever household types a name first
+  pins that slug's `is_bodyweight` / `unit_default` for everyone. That is a cross-tenant write
+  surviving a refusal, it is **TEN-2's** fix (partial unique indexes, three PRs), and TEN-1 chunk 1d
+  records the proof and the Beta-0 go/no-go. Do not read "the writer is scoped" as "the strength write
+  path is tenant-isolated". See [write-path](./write-path.md) invariant 2.
 
 - **A hidden-but-present `required` input makes the form silently dead.** Native validation blocks
   submit with a "not focusable" error you cannot see. `strength-form.tsx` documents this twice, at the

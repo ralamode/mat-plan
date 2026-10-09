@@ -10,6 +10,23 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+✅ **TEN-1 1c — DAL-2's tail: the last hand-written ownership predicate is gone (2026-10-08).** The
+five sites 1b left existence-scoped — `logCheckinEntries`, `writeStrengthSession`'s in-transaction
+resolve, `programDayRows`'s `isThisProfile`, `export-month`'s three month reads and `seedProgram`'s
+plural variant — all run the single-sourced household-scoped predicate now. Eleven hand-typed copies at
+V1-24, five after 1b, **zero**: that is the precondition **1d**'s structural guard needs to be
+_absolute_ rather than an allowlist that then has to shrink. `programDayRows` also gains a property its
+two-hop correlation could not express — the **requester's** household is asserted independently of the
+profile's own row. `db:verify`'s matrix went from two scoped reads to **six**, each still proved four
+ways, plus `writeStrengthSession` refused across the seam with the transaction rolled back and
+`seedProgram` refusing a cross-household prescription target with nothing written; a **third** mutation
+patch undoes all seven conversions and asserts the proofs go red, with every 1b assertion staying green
+under it. ⚠️ Still **consistent scoping, not authorization** (**AUTH-1**), and `findOrCreateMovementId`
+is still unscopable — a **refused** strength write has already committed its caller-supplied movement
+name to the shared catalog. **1d** is next: the structural guard, the corrections, `architecture.md` /
+`SECURITY.md`, and the `findOrCreateMovementId` → **TEN-2** go/no-go
+([plan](./plans/ten-1-household-scope.md)).
+
 ✅ **TEN-1 1b — the household scoping seam, and the gate closes (2026-10-08).** One household's data
 is no longer reachable from another household's request. `getHouseholdScope()` (`lib/dal/household.ts`)
 is the single scope point; `isLiveProfile` takes a **required** `HouseholdScope`, so an unconverted
@@ -19,10 +36,9 @@ returned every profile in the database — and it is now a single-sourced query 
 **two households × two profiles, in both directions**, alongside both scoped reads and all three amend
 writers. `pnpm db:mutations` breaks the predicate on purpose and asserts the proofs go red, because a
 boundary test that cannot fail is counted as coverage. ⚠️ This buys **consistent scoping**; isolation is
-only _authorized_ at **AUTH-1** — the gate is still one shared code. **1c** converts the remaining five
-predicate sites (`logCheckinEntries`, `writeStrengthSession`, `programDayRows`, `export-month` ×3,
-`seed.ts`); **1d** adds the structural guard, the corrections and the `findOrCreateMovementId` →
-**TEN-2** go/no-go ([plan](./plans/ten-1-household-scope.md)).
+only _authorized_ at **AUTH-1** — the gate is still one shared code. The five predicate sites it left
+existence-scoped converted in **1c**, above; **1d** adds the structural guard, the corrections and the
+`findOrCreateMovementId` → **TEN-2** go/no-go ([plan](./plans/ten-1-household-scope.md)).
 
 ✅ **ONB-0 — first run is honest (2026-10-07).** A brand-new household no longer inherits the
 maintainer's household's routine, and the picker no longer tells a human to seed a database.

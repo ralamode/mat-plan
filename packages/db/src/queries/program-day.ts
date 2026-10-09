@@ -3,6 +3,8 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
+import type { HouseholdScope } from '../scope';
+import { isLiveProfile } from '../writers/ownership';
 
 /**
  * The programmed movements for ONE kid on ONE `day_role` (V1-10 slice 2), single-sourced here so the app
@@ -14,6 +16,23 @@ import { schema } from '../client';
  * program_blocks.household_id` — the caller never supplies (and `ProfileDTO` never exposes) a household id,
  * so a kid can only ever see their OWN household's block. A profile with a NULL `household_id` matches no
  * block → zero rows.
+ *
+ * **TEN-1 1c — and the requester's household is now asserted INDEPENDENTLY of the profile's row.** The
+ * correlated chain above authorizes the *block* against the *profile's own* `household_id`; nothing in it
+ * checked that the **requester** belongs to that household, because before TEN-1 there was no requester.
+ * `isLiveProfile(publicId, scope)` adds `profiles.household_id = $scope`, and the existing join equality
+ * (`profiles.household_id = program_blocks.household_id`) then pins the block to the scope transitively. So
+ * a profile whose `household_id` were ever repointed — a future household transfer, a correction, an ONB-2
+ * bug — can no longer read the new household's program with no independent check. That is a property the
+ * two-hop correlation cannot express on its own, which makes this a strengthening rather than a refactor.
+ *
+ * ⚠️ With the conjunct in the `WHERE`, the `profiles` join inside the block subquery is now **redundant**
+ * — and it stays. Removing a join from a BOLA-load-bearing subquery for tidiness is risk with no payoff.
+ *
+ * ⚠️ `:15`'s NULL-`household_id` case is **unreachable**: `0001_loose_barracuda.sql` adds
+ * `profiles_household_id_not_null` as `CHECK … NOT VALID` and then `VALIDATE`s it, so the column is NOT
+ * NULL in the database even though `schema.ts` types it nullable. The defensive note stays; do not conclude
+ * from the drizzle type that an orphan profile can exist (`writers/ownership.ts` → R9).
  *
  * Shape notes:
  * - **Deterministic single block, chosen among the blocks that actually PROGRAM this day.** A household
@@ -32,15 +51,19 @@ import { schema } from '../client';
  */
 export function programDayRows(
   db: NodePgDatabase<typeof schema>,
-  args: { profilePublicId: string; dayRole: DayRole },
+  args: {
+    profilePublicId: string;
+    dayRole: DayRole;
+    /** TEN-1: the household this request is authorized for. The third conjunct of `isLiveProfile`. */
+    scope: HouseholdScope;
+  },
 ) {
-  // THE ownership predicate — "the live profile this request is for". Named once and used by BOTH
-  // sub-selects below (the household hop and the per-kid target scope) so the two can never drift into
-  // scoping by different rules — which is exactly how a BOLA hole gets introduced by a later edit.
-  const isThisProfile = and(
-    eq(schema.profiles.publicId, args.profilePublicId),
-    isNull(schema.profiles.deletedAt),
-  );
+  // THE ownership predicate — "the live profile this request is for, in this household". Since TEN-1 1c
+  // it is `writers/ownership.ts`'s single-sourced `isLiveProfile`, not a local copy: a security predicate
+  // is the last thing that should drift between call sites. Named once here and used by BOTH sub-selects
+  // below (the household hop and the per-kid target scope) so the two can never drift into scoping by
+  // different rules — which is exactly how a BOLA hole gets introduced by a later edit.
+  const isThisProfile = isLiveProfile(args.profilePublicId, args.scope);
 
   // The newest of the profile's own household's live blocks THAT PROGRAMS THIS DAY — see the shape note.
   // A scalar subquery (not a join) so the LIMIT 1 picks a BLOCK, not one of the prescription rows we want

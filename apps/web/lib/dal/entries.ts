@@ -386,12 +386,19 @@ export async function logCheckinEntries(args: {
   day: string;
   items: readonly CheckinItemInput[];
 }): Promise<CheckinResult[]> {
+  // TEN-1 1c: the profile resolve is household-scoped, through the same single-sourced
+  // `isLiveProfile` as `logBodyweight` — and an unresolvable scope takes the SAME path as an unknown
+  // profile. The caller re-checks ownership through `getProfileByPublicId` first, so reaching here
+  // with a foreign id is already a caller bug; the throw says the one true thing without naming a
+  // household. Pinned by the emitted-SQL proof in `entries.test.ts` (the app DAL cannot run under
+  // `db:verify`), and the predicate itself is proved against a real database by the TEN-1 matrix.
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+
   const [profile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
-    .where(
-      and(eq(schema.profiles.publicId, args.profilePublicId), isNull(schema.profiles.deletedAt)),
-    )
+    .where(isLiveProfile(args.profilePublicId, scope))
     .limit(1);
   if (!profile) throw new Error('Profile not found');
 
@@ -472,6 +479,14 @@ export type LogStrengthSessionArgs = {
 export async function logStrengthSession(
   args: LogStrengthSessionArgs,
 ): Promise<{ sessionId: string }> {
+  // TEN-1 1c: the scope rides into the write core, whose in-transaction profile resolve is the
+  // actual seam (`writeStrengthSession`). Resolved BEFORE the catalog work so a request with no
+  // household does none of it. ⚠️ `findOrCreateMovementId` below is still **unscopable** —
+  // `movements` has no `household_id` column — so a refused session has already committed its
+  // caller-supplied catalog text. That is TEN-2's problem; 1d records the verdict.
+  const scope = await getHouseholdScope();
+  if (!scope) throw new Error('Profile not found');
+
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
   // Resolve each movement's id up front (find-or-create is idempotent by slug → safe outside the tx,
   // and independent → resolved in PARALLEL so a 12-movement session isn't 12 serial round trips).
@@ -484,6 +499,7 @@ export async function logStrengthSession(
 
   return writeStrengthSession(db, {
     profilePublicId: args.profilePublicId,
+    scope,
     day: args.day,
     sessionType: args.sessionType,
     sessionClientId: args.clientId,
