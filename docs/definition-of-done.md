@@ -15,7 +15,12 @@ Every PR must satisfy:
 - [ ] Migration + idempotent seed updated if the schema changed (see DB rules in AGENTS.md)
 - [ ] `client_id` stamped on writes
 - [ ] Playwright updated if a critical flow changed
-- [ ] Preview deploy manually verified
+- [ ] Preview deploy manually verified. ⚠️ **Previews are behind Vercel Authentication** (turned on
+      2026-10-08 during OPS-1): only members of the Vercel team can open one. Today that is only the
+      maintainer, so this box is theirs to tick. **Before an outside contributor or reviewer is relied on
+      for it, they need a seat on the Vercel team** (which may cost a paid seat), or the preview has to
+      be verified by someone who has one. A preview that answers with a Vercel login page is protected,
+      not broken.
 - [ ] Changelog fragment added in `docs/changelog/` (product branches must; docs/chore usually do) — [format](./changelog/README.md); status.md's "Where we are" pointer and backlog row moved if this change moves them
 - [ ] Conventional Commit PR title; PR template filled
 - [ ] All required CI checks green
