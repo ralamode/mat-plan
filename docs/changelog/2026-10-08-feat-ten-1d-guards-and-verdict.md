@@ -27,7 +27,9 @@
   a family that never reported a problem. And `db:verify` now runs the registry entry's **own dry
   run** (writing nothing) to prove it returns exactly its household's NULL-routine profiles and none
   of the other household's, against an unscoped baseline asserted to reach them — the refusal-matrix
-  row the plan asked for and 1b had not delivered.
+  row the plan asked for and 1b had not delivered. ⚠️ **Two of the three conversions have no test:** `kbSwingsLoadRepsSwap`'s
+  `isLiveProfile` (its dry run finds zero rows outside prod) and `nullRoutineToFull`'s `UPDATE` guard
+  (the `db:verify` row runs the dry run only, which returns before the `UPDATE`).
 
   🔴 **The catalog verdict: it leaks, in both directions.** `movements` has **no `household_id`
   column at all**, so `findOrCreateMovementId` cannot be scoped — and a `scope` parameter accepted and

@@ -974,6 +974,10 @@ cheapest while there are few.
   2026-09-28 rows exist only in prod), and a zero that cannot be anything else proves nothing. The
   null-routine correction is the one that carries the registry's proof; fabricating a 2026-09-28
   fixture to assert against would be testing the fixture.
+- ⚠️ **So two of the registry's three conversions have no test at all:** `kbSwingsLoadRepsSwap`'s
+  `isLiveProfile` (above), and `nullRoutineToFull`'s `UPDATE` guard — `db:verify` runs that entry with
+  `apply = false`, which returns before the transaction, so only the read's `inHousehold(scope)` is
+  proved. Stated rather than claimed away; neither is exercised by `db:mutations` either.
 
 ## Risks / rollback
 
