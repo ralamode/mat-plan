@@ -241,14 +241,14 @@ flowchart LR
     ⚠️ **`findOrCreateMovementId` in `catalog.ts` is a global unscopable WRITE**, not a reference read:
     `movements` has no `household_id` column, so a household typing a name another household already
     created is handed that household's row. TEN-2 is the fix; 1d records the proof and the Beta-0
-    verdict. The canonical list lives in `packages/db/src/writers/ownership.ts`'s docblock — read it
-    there rather than trusting this restatement.
+    verdict. The canonical lists are `ALLOWED_UNSCOPED` and `PROBE` in `apps/web/lib/dal/scoped.test.ts` —
+    read them there rather than trusting this restatement.
 
     **Since TEN-1 1d those four are a TEST rather than this paragraph** —
     `apps/web/lib/dal/scoped.test.ts`, two assertions with one exception list each: (1) nothing in
     `lib/dal` reaches `db` without resolving or being handed a `HouseholdScope` (exceptions:
     `catalog.ts`'s three), and (2) nothing builds its own ownership predicate (exception:
-    `household.ts`, for the probe). Two lists rather than one because assertion 1 **cannot** see the
+    `household.ts#reportScopeMiss`, the probe). Two lists rather than one because assertion 1 **cannot** see the
     probe: it resolves a scope to classify the outcome and then queries without it, so it reads as
     scoped there. The unit is a **top-level declaration, exported or not**, because a private helper
     reaching `db` unscoped is the same leak as a public one (`export.ts` → `prescribedFor` is that

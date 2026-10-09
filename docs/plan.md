@@ -1275,11 +1275,12 @@ household_id IS NOT NULL`). **Settle that in the plan before writing the migrati
   `WHERE household_id IS NULL` / `WHERE household_id IS NOT NULL` — not as a bound parameter, or
   Postgres cannot infer the partial index as the arbiter and the statement errors (the V1-5
   partial-index lesson `seed.ts` already cites for `ramp_targets`).
-  **Backfill:** a custom row referenced by one household is assigned to it; a row referenced by
-  **more than one** household is **split** — cloned per household, with `entries.movement_id` and
-  `prescriptions.movement_id` repointed — never assigned to one of them. Guarded on
-  `household_id IS NULL`, so a re-run is a no-op. It is only trivially correct while **one** live
-  household exists, which is one more reason TEN-2 lands before the invite.
+  **Backfill:** a custom row referenced by exactly one household is assigned to it, guarded on
+  `household_id IS NULL` so a re-run is a no-op. A row referenced by **more than one** household
+  **cannot be split here**: a per-household clone keeps the slug, and the global UNIQUE still exists
+  in 2b. So 2b's backfill **refuses** (fails loudly, assigns nothing) if any such row exists, and the
+  split belongs to 2c. With one live household no such row can exist, which is one more reason TEN-2
+  lands before the invite.
   ⚠️ **2b does NOT close the leak and does NOT flip the verdict.** While the global
   `movements.slug` UNIQUE (`packages/db/src/schema.ts` → `movements`) exists, a second household
   cannot hold its own row for a slug another household already has: its insert hits the global
@@ -1299,7 +1300,10 @@ household_id IS NOT NULL`). **Settle that in the plan before writing the migrati
   live and every free-text movement write fails. `AGENTS.md`'s deploy order puts a contract after the
   app that stopped depending on it. Dropping a constraint deletes no data, so this is not gated on
   `OPS-3`'s restore drill; cut a Neon **restore branch** before it anyway, per `AGENTS.md`'s
-  rollback rule.
+  rollback rule. **The split backfill lives here, after the drop:** a custom row referenced by more
+  than one household is cloned per household (legal only once the global UNIQUE is gone), with
+  `entries.movement_id` and `prescriptions.movement_id` repointed, guarded on `household_id IS NULL`.
+  If 2b's refusal never fired, this is a no-op.
 
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
@@ -1736,8 +1740,10 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   between call sites (DAL-1 is what drift looks like). Held there by
   `packages/db/src/scope.test.ts` (no defaulted `scope` parameter, one reader of
   `scope.householdId`) and `apps/web/lib/dal/scoped.test.ts` (no DAL function builds its own
-  predicate), with two enumerated exceptions: `reportScopeMiss`'s existence-only probe and
-  `catalog.ts`'s three global reference reads.
+  predicate). Its exception lists are the source of truth: assertion 1 (scope) allows
+  `catalog.ts`'s three entries (two reference reads and one write, `findOrCreateMovementId`);
+  assertion 2 (no hand-written predicate) allows only `household.ts#reportScopeMiss`'s
+  existence-only probe.
 - **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** ✅ **Fixed 2026-10-01** (`fix/sec-3-sentry-db-params`):
   the scrubber cuts `params:` off every message and drops `params` keys at any depth. 🔴 Found 2026-09-30 by #192's
   security lens. drizzle-orm's `DrizzleQueryError` message embeds the query's params

@@ -13,7 +13,7 @@ import { db } from './db';
  * the one write path here: the v0 strength form submits a free-text movement name,
  * so we FIND-OR-CREATE by slug — the v0→v1 bridge until the movement picker (V1-8).
  *
- * ## ⚠️ Three `lib/dal` functions reach `db` with NO household scope, and all three live here
+ * ## ⚠️ Three of the four unscoped `lib/dal` queries live here
  *
  * `apps/web/lib/dal/scoped.test.ts` (TEN-1 1d) allowlists them **by function** in `ALLOWED_UNSCOPED`,
  * with the reason beside each — that list is the source of truth. Two are **reference reads**, one is

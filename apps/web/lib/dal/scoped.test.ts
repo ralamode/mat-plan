@@ -202,8 +202,9 @@ describe('no lib/dal function builds its own ownership predicate (TEN-1 1d)', ()
 
   /**
    * Matched per comment-stripped DECLARATION BODY, not per line — so a predicate broken across lines
-   * (`eq(\n  schema.profiles.publicId, …)`) is still one match — and the self-check below goes
-   * through this same function, so the detector it proves non-vacuous is the one the assertion uses.
+   * (`eq(\n  schema.profiles.publicId, …)`) is still one match. The self-check below uses the same
+   * `declarationsOf` and `OWNERSHIP_COLUMN` (it cannot call this function, which filters the probe
+   * out), so the detector it proves non-vacuous is the one the assertion uses.
    */
   const handWritten = (file: string) =>
     declarationsOf(file)
