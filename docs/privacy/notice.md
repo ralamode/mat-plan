@@ -80,6 +80,8 @@ still works.
    data is unreachable from another's is underway and not finished. **That is exactly why the beta
    starts with a single invited family.** Until it is done, please treat the app as if anyone who was
    invited could see anyone's log.
+   **One part of this is separate work:** the list of exercise names is shared by every household (see
+   "Movement names" below), and it has to be separated before a second family is invited.
 3. **Anyone with your access code can download any athlete's full history.** That follows from (1) and
    (2). Guard the code the way you would guard a password.
 
@@ -167,9 +169,11 @@ Because this cannot be undone and there is currently no per-person login to prov
   source code and the database, and it is deleted once the restore windows above have passed.
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
   should contain your data, but logs record that requests happened.
-- **Movement names.** If someone in your household typed a movement that wasn't already in the app's
-  catalogue, that name stays in the shared catalogue. It is a name like "Romanian deadlift" — not
-  anything about a person — but it is not removed by deleting your household.
+- **Movement names.** If someone in your household types a movement that isn't already in the app's
+  catalogue, whatever they typed is stored in a catalogue **shared by every household**. Until that
+  catalogue is separated per household, it can appear to another household, and it is **not removed** when
+  you delete your household. So please type only the name of an exercise there — **never a person's
+  name or anything personal.**
 - **Any export you downloaded.** That copy is yours and outside our reach.
 - **The public source code.** The project is open source. Some early test data — including two
   children's first names — was committed to it before this review, and **removing a name from the
