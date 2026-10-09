@@ -1,11 +1,13 @@
 - **2026-10-08** — **TEN-1 1d: the guards, the corrections, and the catalog verdict — TEN-1 is DONE,
   and TEN-2 moves into Beta 0** ([plan](../plans/ten-1-household-scope.md) → "1d as built").
 
-  **The structural guard is absolute.** `apps/web/lib/dal/scoped.test.ts` asserts two things:
+  **The structural guard catches the common forms; `db:verify` is the proof.**
+  `apps/web/lib/dal/scoped.test.ts` asserts two things:
   nothing in `lib/dal` reaches the database without resolving or being handed a `HouseholdScope`,
   and nothing builds its own ownership predicate. **Two exception families, each enumerated with its
-  reason** — `catalog.ts`'s three global reference reads, and `household.ts` for `reportScopeMiss`'s
-  existence-only probe — which is _smaller_ than the plan's own list and only possible because 1c
+  reason** — `catalog.ts`'s three entries (two global
+  reference reads and one write, `findOrCreateMovementId`), and `household.ts#reportScopeMiss`'s
+  existence-only probe, with the test's own lists as the source of truth — which is _smaller_ than the plan's own list and only possible because 1c
   left zero hand-written predicates. Three things it does differently from the plan, all stricter:
   the unit is a top-level declaration **exported or not** (a private helper reaching `db` unscoped is
   the same leak, and `export.ts` → `prescribedFor` is that shape); the `householdScopeForScript`

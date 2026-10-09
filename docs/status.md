@@ -13,11 +13,12 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 🔴 **TEN-1 is DONE — and its last chunk moved TEN-2 into Beta 0 (2026-10-08).** 1d closed the seam's
 three remaining obligations and answered the one question the milestone attached to it.
 
-- **The structural guard is absolute.** `apps/web/lib/dal/scoped.test.ts`: nothing in `lib/dal`
-  reaches the database without resolving or being handed a `HouseholdScope`, and nothing builds its
-  own ownership predicate. **Two exception families, each enumerated with a reason** — `catalog.ts`'s
-  three global reference reads, and `household.ts` for `reportScopeMiss`'s existence-only probe —
-  which is _smaller_ than the plan's own list, and only possible because 1c left zero hand-written
+- **The structural guard catches the common forms; `db:verify` is the proof.**
+  `apps/web/lib/dal/scoped.test.ts`: nothing in `lib/dal` reaches the database without resolving or
+  being handed a `HouseholdScope`, and nothing builds its own ownership predicate. **Two exception
+  families, each enumerated with a reason** — `catalog.ts`'s three entries (two global reference
+  reads and one write, `findOrCreateMovementId`), and `household.ts#reportScopeMiss`'s
+  existence-only probe, with the test's own lists as the source of truth — which is _smaller_ than the plan's own list, and only possible because 1c left zero hand-written
   predicates. Its unit is a top-level declaration, **exported or not**, because a private helper
   reaching `db` unscoped is the same leak as a public one. A **dead-entry** assertion means TEN-2 has
   to delete its entry rather than leave it standing as coverage nobody re-earned.
