@@ -1176,9 +1176,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
 
   The Neon production password rotation was **skipped by decision**: the repo has never had a fork PR,
   and only the maintainer has used the app or held Vercel access. Runbook step 7 now makes rotation
-  conditional on a real leak path. **Follow-up:** the preview database was seeded before the OSS-1
-  rename merged, so it still carries the old fixture names. Reset it (runbook → "reset the preview
-  database").
+  conditional on a real leak path. The preview database, seeded before the OSS-1 rename merged, was **reset
+  2026-10-09** (database recreated, re-seeded by the workflow) and now holds only the role-named
+  fixtures.
 
   ⚠️ **The row's own wording missed the biggest part, found by the PR's security panel.** Vercel
   injects env values at **build time**, so re-scoping the project does nothing for previews that

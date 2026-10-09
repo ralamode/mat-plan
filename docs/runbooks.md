@@ -427,9 +427,23 @@ flow, on the next push to `main`.
 
 Reset it — **before a demo, after a deletion rehearsal, and whenever a reviewer has entered values**:
 
-1. Neon → delete the `mat-plan-preview` project.
-2. Repeat steps 2 and 3, then update `DATABASE_URL` in the Vercel Preview + Development scopes and
-   the `PREVIEW_DATABASE_URL_UNPOOLED` secret with the new strings.
+**Cheapest: recreate the database, not the project.** The host, role and password survive, so every
+stored connection string (Vercel Preview + Development `DATABASE_URL`, the
+`PREVIEW_DATABASE_URL_UNPOOLED` secret) stays valid and nothing needs re-pasting. No terminal either.
+
+1. Neon → **`mat-plan-preview`** project → **Databases**. Note `mat_plan_preview`'s **owner**, then
+   delete it.
+2. **New Database**: name exactly `mat_plan_preview` (the guard and the stored strings depend on it),
+   owner the same role.
+3. GitHub → Actions → **"Migrate + seed (preview database)"** → **Run workflow** on `main`. It ends
+   with `✓ migrations applied` and `✓ seed complete`.
+4. **Confirm:** a preview's picker shows the fixture athletes (`SEED_PROFILE_NAME` /
+   `SEED_PROFILE_2_NAME` in `packages/shared/src/seed-ids.ts`) and nothing anyone typed.
+
+**Only when the role password itself must change** (a suspected leak of the preview string): delete
+the whole `mat-plan-preview` project, repeat steps 2 and 3 above, then update `DATABASE_URL` in the
+Vercel Preview + Development scopes and the `PREVIEW_DATABASE_URL_UNPOOLED` secret with the new
+strings. Purge the previews built before the change (step 7's rule: rotation is not retroactive).
 
 This is also how the preview estate picks up a fixture **rename** (OSS-1 follow-up #2): because a
 rename is fresh-DB-only under `onConflictDoNothing`, the preview project takes it by being recreated,
