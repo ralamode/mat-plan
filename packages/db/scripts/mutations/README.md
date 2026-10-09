@@ -18,11 +18,13 @@ and the gate is what exercises it.
 
 ## The mutations
 
-| Patch                              | What it breaks                                                                                                        | What must go red                                                                                                                                       |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01-drop-household-conjunct.patch` | `inHousehold` stops reading the scope and emits a tautology — i.e. TEN-1 deleted, one line.                           | **18 assertions**: the picker (4), both scoped reads × both directions (4), all three writers × both directions (6), and the four no-side-effect ones. |
-| `02-wrong-scope-everywhere.patch`  | `A_SCOPE` points at the household **next door** — the "dual" mutation: every call site threaded with the wrong scope. | The first **pre-existing** positive assertion that rides `A_SCOPE` (`V1-6b-2: one row per calisthenics target for the week`).                          |
-| `03-undo-1c-predicates.patch`      | TEN-1 **1c undone**: all seven converted sites back to their pre-1c hand-written predicate.                           | A **1c** assertion, with every **1b** assertion still green — `TEN-1 1c: seedProgram refuses a target in another household` is the first to fail.      |
+| Patch                                     | What it breaks                                                                                                                                    | What must go red                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `01-drop-household-conjunct.patch`        | `inHousehold` stops reading the scope and emits a tautology — i.e. TEN-1 deleted, one line.                                                       | **18 assertions**: the picker (4), both scoped reads × both directions (4), all three writers × both directions (6), and the four no-side-effect ones. |
+| `02-wrong-scope-everywhere.patch`         | `A_SCOPE` points at the household **next door** — the "dual" mutation: every call site threaded with the wrong scope.                             | The first **pre-existing** positive assertion that rides `A_SCOPE` (`V1-6b-2: one row per calisthenics target for the week`).                          |
+| `03-undo-1c-predicates.patch`             | TEN-1 **1c undone**: all seven converted sites back to their pre-1c hand-written predicate.                                                       | A **1c** assertion, with every **1b** assertion still green — `TEN-1 1c: seedProgram refuses a target in another household` is the first to fail.      |
+| `04-slug-is-not-the-arbiter.patch`        | `findOrCreateMovement` stops deriving its slug through the shared `movementSlug`, so two spellings of one movement no longer converge on one row. | `TEN-1 1d READ — LEAKS: household B is handed household A's movement row`.                                                                             |
+| `05-correction-loses-its-household.patch` | `nullRoutineToFull`'s bulk read drops `inHousehold(scope)` — the correction's per-era guard, one line.                                            | `TEN-1 1d: …and EXACTLY those: every NULL-routine profile in household A, and none of household B's`.                                                  |
 
 **Why all three.** Mutation 1 proves the predicate is load-bearing. Mutation 2 proves the _threading_
 is: a pre-existing **negative** assertion ("refuses a non-done row") still returns `null` when
@@ -45,6 +47,30 @@ as `patch does not apply`.
 which `db:verify` cannot execute (`server-only` + the app's env), so its half of the patch is proved
 by `lib/dal/entries.test.ts` under `pnpm test` instead. The patch still carries it, so the context
 sensitivity above covers it; the gate's RED comes from the other six.
+
+## Mutations 4 and 5 — why 1d's proofs need their own, and what 4 can and cannot be
+
+**Mutation 5** is the ordinary case: the correction's household conjunct is one line, deleting it is a
+real leak, and the assertion names it. Nothing subtle.
+
+**Mutation 4 is the interesting one, and it is deliberately NOT "scope the catalog".** 1d's catalog
+verdict asserts a **leak** — that `findOrCreateMovement` hands one household another household's row —
+so the obvious mutation (make it not leak) is not a one-line break at all: it is `TEN-2`, a
+`household_id` column plus partial unique indexes. And a leak assertion driven by the _same_ name on
+both sides cannot be falsified by any change that keeps the signature, because the same input gives
+the same slug.
+
+So what mutation 4 breaks is the property the verdict actually **rests on**: that the shared
+`movementSlug` derivation is the single **global arbiter**, which is why two households typing the same
+movement differently (`'TEN-1 Catalog Probe'` vs `'  ten-1   CATALOG   probe '`) converge on one row.
+Without it the proof would be measuring fixture ordering rather than the catalog's shape — the exact
+vacuity `verify.ts` learned at V1-10 — and a later author "fixing" the catalog by not normalising, or
+by matching on `name`, would leave the verdict green and wrong. The patch leaves the `movementSlug`
+import unused for the duration, which `tsx` does not care about and the gate reverts anyway.
+
+⚠️ **The `movements` structural assertion is its own tripwire and needs no patch.**
+`TEN-1 1d: 'movements' has NO household_id column` goes red the day **TEN-2** adds one, which is
+exactly when the verdict has to be re-taken.
 
 ## Adding one
 
