@@ -6,7 +6,7 @@ anything.
 
 ## Why this exists
 
-TEN-1's household scoping is ~22 mechanical `verify.ts` call-site edits plus one predicate. The plan
+TEN-1's household scoping is ~58 mechanical `verify.ts` call-site edits (~22 at 1b, the rest at 1c) plus one predicate. The plan
 ([ten-1-household-scope.md](../../../../docs/plans/ten-1-household-scope.md) → **R5**) names the
 risk this is for: _"one wrong household constant makes an assertion pass for the wrong reason, and
 it is invisible in review."_ A boundary test that cannot fail is worse than none, because it is
@@ -18,11 +18,11 @@ and the gate is what exercises it.
 
 ## The mutations
 
-| Patch                              | What it breaks                                                                                                        | What must go red                                                                                                                                       |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01-drop-household-conjunct.patch` | `inHousehold` stops reading the scope and emits a tautology — i.e. TEN-1 deleted, one line.                           | **18 assertions**: the picker (4), both scoped reads × both directions (4), all three writers × both directions (6), and the four no-side-effect ones. |
-| `02-wrong-scope-everywhere.patch`  | `A_SCOPE` points at the household **next door** — the "dual" mutation: every call site threaded with the wrong scope. | The first **pre-existing** positive assertion that rides `A_SCOPE` (`V1-6b-2: one row per calisthenics target for the week`).                          |
-| `03-undo-1c-predicates.patch`      | TEN-1 **1c undone**: all seven converted sites back to their pre-1c hand-written predicate.                           | A **1c** assertion, with every **1b** assertion still green — `TEN-1 1c: seedProgram refuses a target in another household` is the first to fail.      |
+| Patch                              | What it breaks                                                                                                        | What must go red                                                                                                                                                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-drop-household-conjunct.patch` | `inHousehold` stops reading the scope and emits a tautology — i.e. TEN-1 deleted, one line.                           | **30 assertions**, after 1c: the picker (4), **six** scoped reads × both directions (12), **five** writers × both directions (10), and the four no-side-effect ones. ⚠️ Patches fail fast, so this count is what the patch _would_ redden, not what one run prints. |
+| `02-wrong-scope-everywhere.patch`  | `A_SCOPE` points at the household **next door** — the "dual" mutation: every call site threaded with the wrong scope. | The first **pre-existing** positive assertion that rides `A_SCOPE` (`V1-6b-2: one row per calisthenics target for the week`).                                                                                                                                       |
+| `03-undo-1c-predicates.patch`      | TEN-1 **1c undone**: all seven converted sites back to their pre-1c hand-written predicate.                           | A **1c** assertion, with every **1b** assertion still green — `TEN-1 1c: seedProgram refuses a target in another household` is the first to fail.                                                                                                                   |
 
 **Why all three.** Mutation 1 proves the predicate is load-bearing. Mutation 2 proves the _threading_
 is: a pre-existing **negative** assertion ("refuses a non-done row") still returns `null` when
@@ -31,8 +31,18 @@ what its own message says. Only a wrong-scope mutation can see that, and it is c
 family of threaded negatives shares its block with a threaded **positive**.
 
 Mutation 3 proves something neither can: that **1c's new matrix rows carry their own weight rather
-than riding 1b's**. Under it the picker, `ownedEntryIds`, `weeklyAdherenceRows` and all three amends
-stay green — mutation 1 would have reddened those first and hidden the question.
+than riding 1b's** — mutation 1 would have reddened a 1b assertion first and hidden the question.
+
+⚠️ **What the gate actually asserts, which is less than this once read carelessly.** Each patch has a
+sibling `<name>.expect` naming the assertion that must be the **first** to fail, and the runner now
+compares it. So the gate proves _"the first failure under 03 is a 1c assertion"_ — not _"every 1b
+assertion stays green under it"_. `db:verify` is fail-fast, so the 1b assertions after the first
+failure are **unreached, not green**: the 1c `seedProgram` negative sits at `verify.ts:4712`, ahead of
+the read matrix (`:4789`) and the write matrix (`:5051`). That 1b genuinely holds under 03 is
+established by the per-predicate runs recorded in the plan, by inspection, and by the structure of each
+row (identical call, only `scope` differs, own-direction asserted `> 0` immediately before the
+cross-direction `=== 0`) — **not by this gate**. Making the gate show it directly needs the TEN-1 block
+reordered 1b-then-1c; that is recorded as a follow-up rather than done on a critical-path PR.
 
 ⚠️ **Each patch fails FAST, so one run shows one assertion.** That is a property of `db:verify`, not
 of the patch: `node:assert` throws on the first failure. For mutation 3 the per-predicate results —

@@ -42,15 +42,32 @@ import type { Executor } from './executor';
  * 1c converted the tail: `logCheckinEntries`, `writeStrengthSession`'s in-transaction resolve,
  * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
  * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
- * one function allowed to unwrap the scope). **There is no copy of this predicate left anywhere in
- * the repo**, which is what lets 1d's structural guard be absolute rather than shipping with an
- * allowlist that then has to shrink.
+ * one function allowed to unwrap the scope). **There is no copy of this predicate left in
+ * `packages/db/src/**` or `apps/web/**`** — which is the domain 1d's structural guard inspects, and
+ * what lets it be absolute rather than shipping with an allowlist that then has to shrink.
  *
- * Two reads deliberately do NOT use it, both documented where they live: `reportScopeMiss`'s
- * existence-only probe (`apps/web/lib/dal/household.ts` — it is how the miss path distinguishes
- * `cross_household` from `unknown_resource`, and it returns `void`), and `catalog.ts`'s three global
- * reference reads. A NEW read or write that wants to be neither is a design question, not an edit:
- * use this helper.
+ * ⚠️ **Three copies DO remain, all in `packages/db/scripts/corrections/registry.ts`, and they are
+ * 1d's** (the plan's file-by-file table assigns them there): a verbatim pre-1c predicate at `:85-93`,
+ * and `inHousehold`'s body hand-written at `:480` and `:510`. `scope.test.ts`'s "exactly one module
+ * reads `scope.householdId`" cannot see those two — they name a raw id, not a scope. Said here
+ * because this docblock is what a 1d author reads first to decide whether the guard can be absolute.
+ *
+ * Four sites deliberately do NOT use it, each documented where it lives — and they are **not all
+ * reads**, which matters to whoever writes 1d's allowlist:
+ *
+ * 1. `reportScopeMiss`'s existence-only probe (`apps/web/lib/dal/household.ts`) — how the miss path
+ *    tells `cross_household` from `unknown_resource`. Returns `void`, so it cannot be copied into
+ *    something that returns data.
+ * 2. `getActivityTypeIdByKey` and 3. `assertMetricKeyExists` (`apps/web/lib/dal/catalog.ts`) —
+ *    genuinely global reference reads.
+ * 4. ⚠️ **`findOrCreateMovementId` (`catalog.ts`) is a WRITE, not a reference read.** It is
+ *    `INSERT … ON CONFLICT DO NOTHING` against a `movements` table with **no `household_id` column
+ *    at all**, so it cannot be scoped — a household typing a name another household already created
+ *    is handed that household's row. TEN-2 is the fix; 1d records the proof and the Beta-0 verdict.
+ *    A guard that allowlists this as "a reference read" would be describing it wrongly.
+ *
+ * A NEW read or write that wants to be none of these is a design question, not an edit: use this
+ * helper.
  *
  * ⚠️ **`profiles.household_id` is typed NULLABLE in drizzle and is NOT NULL in the database.**
  * `0001_loose_barracuda.sql` adds `profiles_household_id_not_null` as `CHECK … NOT VALID` and then

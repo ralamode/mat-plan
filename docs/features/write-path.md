@@ -10,6 +10,8 @@ owns:
   - packages/db/src/queries/household-profiles.ts
   - packages/db/src/queries/household-scope.ts
   - packages/db/src/queries/export-month.ts
+  # TEN-1 1c made seedProgram household-scoped, and it runs against prod on every merge.
+  - packages/db/src/seed.ts
   - packages/db/src/queries/weekly-adherence.ts
 ---
 
@@ -201,12 +203,20 @@ flowchart LR
     predicate is the last thing that should drift between call sites, so a new read or write uses the
     helper — never an eighth copy, and never a hand-written `household_id =` beside it.
 
-    **Two deliberate exceptions, both documented where they live, neither a copy of this predicate:**
-    `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_ probe that reaches `db` with no
-    scope on purpose (it is how the miss path tells `cross_household` from `unknown_resource`) and
-    returns `void` so it cannot be copied into something that returns data; and `catalog.ts`'s three
-    reference reads are global by design. Those two are the whole allowlist 1d's structural guard
-    carries — which is only possible because 1c left nothing else behind.
+    **Four deliberate exceptions, each documented where it lives, none a copy of this predicate** —
+    and they are **not all reads**. `reportScopeMiss` in `lib/dal/household.ts` is an _existence-only_
+    probe that reaches `db` with no scope on purpose (it is how the miss path tells `cross_household`
+    from `unknown_resource`) and returns `void` so it cannot be copied into something that returns
+    data. `getActivityTypeIdByKey` and `assertMetricKeyExists` in `catalog.ts` are global reference
+    reads. ⚠️ **`findOrCreateMovementId` in `catalog.ts` is a global unscopable WRITE**, not a
+    reference read: `movements` has no `household_id` column, so a household typing a name another
+    household already created is handed that household's row. TEN-2 is the fix; 1d records the proof
+    and the Beta-0 verdict. The canonical list lives in `packages/db/src/writers/ownership.ts`'s
+    docblock — read it there rather than trusting this restatement.
+
+    ⚠️ **`packages/db/scripts/corrections/registry.ts` still holds three copies** (`:85-93`, `:480`,
+    `:510`). They are 1d's by the plan's file-by-file table, and they are outside the domain 1d's
+    `lib/dal` guard inspects — so the guard is absolute over its domain, not over the repo.
 
   - **The amend's re-read (`findAmendableBodyweight`) shares the UPDATE's shape predicate**, so the
     three-way branch can only ever see a row the UPDATE could have written. It lives in the writer, not
@@ -326,8 +336,10 @@ flowchart LR
   assertions), pointing `verify.ts`'s `A_SCOPE` at the household next door (the "dual" — it catches
   the half the first cannot, because a **negative** assertion like _"refuses a non-done row"_ still
   returns `null` when threaded with the wrong scope and would silently stop proving its own message),
-  and **undoing 1c's seven conversions** (every 1b assertion stays green and the first failure is a 1c
-  one, which is what proves the new rows carry their own weight rather than riding 1b's).
+  and **undoing 1c's seven conversions** (the first failure is a 1c one — asserted by that patch's
+  `.expect` file, which the runner compares, so a patch that reddens the wrong proof now fails the
+  gate). ⚠️ That 1b **stays** green under it is established by the per-predicate runs in the plan, not
+  by the gate: `db:verify` is fail-fast, so later assertions are unreached rather than green.
   **Patches, never a runtime flag:** a switch that can disable a BOLA predicate must not exist in
   shipped `packages/db` source. Editing a mutated line means regenerating its patch — the gate then
   fails loudly with _"does not apply"_ rather than passing vacuously.

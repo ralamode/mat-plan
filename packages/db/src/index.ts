@@ -6,7 +6,8 @@ export type * from './types';
 // TEN-1: the household scope. Named re-exports, NOT `export *` — `makeHouseholdScope` (the shared
 // brand application) must not reach `apps/web` on a bare specifier, and neither must
 // `householdScopeForScript`, which is why that one lives in a module this barrel never names at all
-// (writers/household-scope-script.ts → reachable only by relative path from packages/db/scripts/**).
+// (writers/household-scope-script.ts → reachable only by relative path, from packages/db/scripts/**
+// and src/seed.ts; see that file's "Who may call it").
 export { householdScopeForRequest, type HouseholdScope } from './scope';
 // The single-sourced weekly-adherence query (V1-6b-2), run by both the app DAL and db:verify.
 export * from './queries/weekly-adherence';
