@@ -482,8 +482,11 @@ const bodyweightDuplicates: Correction = {
  * and a URL-only editor behind it, i.e. exactly the unrecoverable class this system exists to repair
  * rather than cause. The household predicate makes the correction expire on its own.
  */
+/** Exported for `verify.ts`, which runs this entry's dry run as its cross-household proof. */
+export const NULL_ROUTINE_TO_FULL_NAME = 'null-routine-to-full-2026-10-07';
+
 const nullRoutineToFull: Correction = {
-  name: 'null-routine-to-full-2026-10-07',
+  name: NULL_ROUTINE_TO_FULL_NAME,
   what: "the seeded household's NULL `routine_config` rode the whole-catalog default ONB-0 narrowed",
   issue: 'ONB-0 (which narrows what NULL MEANS; the NULL itself came from `seed.ts`)',
   async run(db, apply) {
@@ -520,6 +523,8 @@ const nullRoutineToFull: Correction = {
     }
 
     for (const t of targets) {
+      // ⚠️ LOAD-BEARING: parsed by verify.ts — keep the `profile <uuid>` shape. Its cross-household
+      // proof reads the public ids out of these dry-run lines with a regex.
       changes.push(
         `profile ${t.publicId} (${t.name}): routine_config NULL → the explicit pre-ONB-0 default ` +
           `(${SEED_FULL_ROUTINE.order.length} items)`,

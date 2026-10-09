@@ -79,7 +79,7 @@ import { ownedEntryIds } from '../src/writers/ownership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
 // the correction's own dry run rather than a lookalike of its SQL.
-import { CORRECTIONS } from './corrections/registry';
+import { CORRECTIONS, NULL_ROUTINE_TO_FULL_NAME } from './corrections/registry';
 import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
@@ -5109,7 +5109,7 @@ console.log(
 // carries a `$client: Pool` that PGlite has no equivalent of and that no correction touches. Same
 // device, same reason, as `asPg` itself.
 const asCorrectionDb = asPg as unknown as Database;
-const nullRoutineCorrection = CORRECTIONS.find((c) => c.name === 'null-routine-to-full-2026-10-07');
+const nullRoutineCorrection = CORRECTIONS.find((c) => c.name === NULL_ROUTINE_TO_FULL_NAME);
 assert.ok(nullRoutineCorrection, 'TEN-1 1d: the null-routine correction is in the registry');
 
 // Both directions need a fixture that could go wrong. An UNSCOPED `routine_config IS NULL` sweep is
