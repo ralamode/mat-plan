@@ -6,9 +6,10 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
 import type { Database } from '../../src/client';
+import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
-import { isLiveProfile } from '../../src/writers/ownership';
+import { inHousehold, isLiveProfile } from '../../src/writers/ownership';
 
 /**
  * One guarded, idempotent correction to live data.
@@ -28,23 +29,30 @@ export type Correction = {
 };
 
 /**
- * The internal id of a LIVE household named by its stable `public_id` — README rule 3 (never an
- * internal id from outside this database). `null` when this database has no such household, so each
- * caller decides what that means: a correction that cannot find its target must refuse, never guess.
+ * The scope of a LIVE household named by its stable `public_id` — README rule 3 (never an internal
+ * id from outside this database). `null` when this database has no such household, so each caller
+ * decides what that means: a correction that cannot find its target must refuse, never guess.
  *
  * Extracted at its SECOND consumer, not speculatively (the `ownership.ts` rule): TEN-1 1b's scoped
  * `isLiveProfile` needs a NAMED household for a correction, which has no request to derive one
- * from, and `nullRoutineToFull` already resolved one this way. The lookup also gains
- * `deleted_at IS NULL` here, which only makes it stricter — a soft-deleted household now reports
- * "not in this database" instead of matching.
+ * from, and `nullRoutineToFull` already resolved one this way. The lookup also carries
+ * `deleted_at IS NULL`, which only makes it stricter — a soft-deleted household reports "not in
+ * this database" instead of matching.
+ *
+ * ⚠️ **It returns the SCOPE, not the id** (TEN-1 1d, all three remaining predicates converted). A
+ * correction now never holds a raw `household_id`, so ADR 0006's forward requirement 1 — the scope
+ * stays a *capability* and is unwrapped in exactly one place (`ownership.ts` → `inHousehold`) —
+ * holds in this script too, not only in the app. `householdScopeForScript` is the constructor
+ * `packages/db/src/index.ts` deliberately does not re-export, so the app can never reach the one
+ * that takes an id as an argument.
  */
-async function liveHouseholdId(db: Database, publicId: string): Promise<number | null> {
+async function liveHouseholdScope(db: Database, publicId: string): Promise<HouseholdScope | null> {
   const [row] = await db
     .select({ id: schema.households.id })
     .from(schema.households)
     .where(and(eq(schema.households.publicId, publicId), isNull(schema.households.deletedAt)))
     .limit(1);
-  return row?.id ?? null;
+  return row ? householdScopeForScript(row.id) : null;
 }
 
 /**
@@ -68,6 +76,21 @@ const kbSwingsLoadRepsSwap: Correction = {
     const TARGET_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
     const DAY = '2026-09-28';
 
+    // TEN-1 1d: the owner half of this WHERE used to be a hand-typed
+    // `eq(profiles.public_id, …) ∧ profiles.deleted_at IS NULL` — the last copy of the predicate in
+    // this file. It is `isLiveProfile` now, which adds the household conjunct. That is STRICTLY
+    // NARROWER than what shipped, and the narrowing is the point: a correction aimed at a profile
+    // in some other household would be the worst version of this tool — an irreversible write to a
+    // family that never reported a problem. The row set is unchanged, because this profile is in
+    // the seeded household (and this correction was applied on 2026-09-30, so the `is_bodyweight`
+    // guard already makes a re-run a no-op either way).
+    const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
+    if (scope === null) {
+      throw new Error(
+        `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
+      );
+    }
+
     // Target by (profile public_id, day, movement slug) — never an internal id, which differs
     // between environments. The `is_bodyweight` predicate is the GUARD: once corrected, it matches
     // nothing.
@@ -84,13 +107,12 @@ const kbSwingsLoadRepsSwap: Correction = {
       .innerJoin(schema.movements, eq(schema.movements.id, schema.entries.movementId))
       .where(
         and(
-          eq(schema.profiles.publicId, TARGET_PROFILE_PUBLIC_ID),
+          isLiveProfile(TARGET_PROFILE_PUBLIC_ID, scope),
           eq(schema.entries.activityDate, DAY),
           eq(schema.movements.slug, 'kb_swings'),
           eq(schema.entrySets.isBodyweight, true), // ← the guard: already-fixed rows don't match
           isNull(schema.entrySets.deletedAt),
           isNull(schema.entries.deletedAt),
-          isNull(schema.profiles.deletedAt),
         ),
       )
       .orderBy(schema.entrySets.idx);
@@ -248,13 +270,12 @@ const bodyweightDuplicates: Correction = {
     // of this tool: an irreversible write to a family that never reported a problem. The scope is
     // `householdScopeForScript`, which `packages/db/src/index.ts` deliberately does not re-export,
     // so the app can never reach the constructor that takes an id as an argument.
-    const scopedHouseholdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
-    if (scopedHouseholdId === null) {
+    const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
+    if (scope === null) {
       throw new Error(
         `household ${SEED_HOUSEHOLD_PUBLIC_ID} is missing or soft-deleted here — wrong target?`,
       );
     }
-    const scope = householdScopeForScript(scopedHouseholdId);
     const [profile] = await db
       .select({ id: schema.profiles.id })
       .from(schema.profiles)
@@ -464,20 +485,26 @@ const nullRoutineToFull: Correction = {
     const changes: string[] = [];
 
     // The seeded household, resolved by its stable public_id — never an internal id (README rule 3).
-    const householdId = await liveHouseholdId(db, SEED_HOUSEHOLD_PUBLIC_ID);
+    const scope = await liveHouseholdScope(db, SEED_HOUSEHOLD_PUBLIC_ID);
 
-    if (householdId === null) {
+    if (scope === null) {
       return ['the seeded household is not in this database — nothing to do'];
     }
 
     // `IS NULL` is the per-row guard (once corrected, a row stops matching); the household predicate is
     // the per-era guard (see the ⚠️ above — this must never reach a PROF-1-created athlete elsewhere).
+    //
+    // TEN-1 1d: this read has **no `public_id` half** — it is the one bulk shape in this file, a
+    // whole household's profiles — so it takes `inHousehold(scope)` rather than `isLiveProfile`,
+    // which is the same split `seed.ts`'s `seedProgram` made in 1c (`inArray` where `isLiveProfile`
+    // has `eq`). Identical SQL to the hand-written conjunct it replaces; the difference is that the
+    // household half now comes from the one function allowed to unwrap the scope.
     const targets = await db
       .select({ publicId: schema.profiles.publicId, name: schema.profiles.name })
       .from(schema.profiles)
       .where(
         and(
-          eq(schema.profiles.householdId, householdId),
+          inHousehold(scope),
           isNull(schema.profiles.routineConfig),
           isNull(schema.profiles.deletedAt),
         ),
@@ -505,12 +532,10 @@ const nullRoutineToFull: Correction = {
           .update(schema.profiles)
           .set({ routineConfig: SEED_FULL_ROUTINE, updatedAt: sql`now()` }) // README rule 4
           .where(
-            and(
-              eq(schema.profiles.publicId, t.publicId),
-              eq(schema.profiles.householdId, householdId), // the SAME guards the read used
-              isNull(schema.profiles.routineConfig),
-              isNull(schema.profiles.deletedAt),
-            ),
+            // The SAME guards the read used, now through the shared predicate (TEN-1 1d):
+            // `isLiveProfile` IS `public_id ∧ deleted_at IS NULL ∧ household_id = scope`, so this
+            // emits exactly the four conjuncts the hand-written version did.
+            and(isLiveProfile(t.publicId, scope), isNull(schema.profiles.routineConfig)),
           )
           .returning({ publicId: schema.profiles.publicId });
 
