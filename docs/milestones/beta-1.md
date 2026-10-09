@@ -193,6 +193,15 @@ they are how to schedule any milestone, not facts about this one.
 
 ### 3 · AUTH-1 — Clerk, Google, invitation-only
 
+**PLAN: [auth-1-clerk-google.md](../plans/auth-1-clerk-google.md)** — four chunks, hardened by a
+seven-lens panel. It settles the two questions the decisions table above deferred to it (**Clerk
+Organizations: recommended against for Beta 0**, with the cost of being wrong priced; **"household"
+over "club"**), and it puts two things back to the maintainer. First, it recommends that _"a new user
+gets a new, empty household"_ (below) **leave AUTH-1** for the invite row: that clause is what opens
+`TEN-1` 1d's proven cross-tenant catalog write, and `TEN-2b` is what closes it. Second, it finds that
+the _"existing export-enumeration test"_ named below is an export-**shape** guard that cannot carry an
+auth assertion, so the enforcement is a **new** test rather than an extension.
+
 - Clerk with **only** the Google strategy enabled and **sign-up restricted to invited emails**. The
   dashboard settings live nowhere in code, so they go in a runbook checklist — along with the
   production instance's own Google OAuth credentials, the consent screen's privacy-policy URL (PRIV-1

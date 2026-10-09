@@ -2079,6 +2079,21 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   every entry point rejects a caller with no session. Facebook waits for a tester to ask.** Replaces the shared
   access code with per-person identity.
 
+  **PLAN: [auth-1-clerk-google.md](./plans/auth-1-clerk-google.md)** — **four chunks** (Clerk wired
+  dark → `household_members` + the claim correction dark → the boundary moves → retire the gate),
+  hardened by a seven-lens panel. The gate and the session are **both** enforced for two chunks on
+  purpose: AND-composition is what removes the window in which neither holds. Three things the plan
+  found that the milestone's prose does not say: `beta-1.md` § 3's _"existing export-enumeration
+  test"_ is an export-**shape** guard that would pass a brand-new action with no auth check at all
+  (the real coverage is a hand-maintained array nothing cross-checks), so the enforcement is a new
+  test; `TEN-1` 1d's claim that the `cross_household` event _cannot fire_ before AUTH-1 is
+  over-stated (a profile pointing at a soft-deleted household reaches it today), so what AUTH-1 owes
+  is the row-level `db:verify` proof, not a first firing; and _"a new user gets a new, empty
+  household"_ is the clause that opens `TEN-2`'s proven catalog write, so the plan recommends it
+  **leave AUTH-1** for the invite row. **Open for the maintainer:** Clerk Organizations
+  (recommended **against** for Beta 0), that household-creation move, "household" vs "club", and
+  whether chunk 1d's Clerk/Playwright/screenshot story needs its own plan.
+
   **Why it became P0 the day the repo went public:** the access gate is a single shared password, and
   it is now the only thing between the internet and two children's logged health data. The public repo
   does not weaken it — the secret lives in env, not in the code — but a shared credential has **no
