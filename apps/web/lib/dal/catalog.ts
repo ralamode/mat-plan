@@ -13,18 +13,21 @@ import { db } from './db';
  * the one write path here: the v0 strength form submits a free-text movement name,
  * so we FIND-OR-CREATE by slug — the v0→v1 bridge until the movement picker (V1-8).
  *
- * ## ⚠️ Three of the five `lib/dal` functions that reach `db` with NO household scope live here
+ * ## ⚠️ Three `lib/dal` functions reach `db` with NO household scope, and all three live here
  *
- * `apps/web/lib/dal/scoped.test.ts` (TEN-1 1d) allowlists them **by function**, with the reason
- * beside each — the other two are in `household.ts` (`getHouseholdScope`, which *is* the scope
- * point, and `reportScopeMiss`'s existence-only probe). These three are **global reference data by
- * design**, not sites TEN-1 forgot:
+ * `apps/web/lib/dal/scoped.test.ts` (TEN-1 1d) allowlists them **by function** in `ALLOWED_UNSCOPED`,
+ * with the reason beside each — that list is the source of truth. Two are **reference reads**, one is
+ * a **write**:
  *
- * - `activity_types`, `metric_definitions` and `units` are seeded from `packages/shared`
- *   (`architecture.md` § 4), shared by every household, and carry **no `household_id` column** to
- *   scope by. Resolving a unit or a metric definition reveals nothing about any household.
- * - `movements` carries none either, and that one is **not benign** — see `findOrCreateMovementId`
- *   below. It is the one residual TEN-1 proves rather than closes, and **TEN-2** is its fix.
+ * - `getActivityTypeByKey` and `getMetricDefinition` read `activity_types` / `metric_definitions`,
+ *   seeded from `packages/shared` (`architecture.md` § 4), shared by every household, with **no
+ *   `household_id` column** to scope by. Resolving one reveals nothing about any household.
+ * - `findOrCreateMovementId` **writes** `movements`, which carries no `household_id` either, and that
+ *   one is **not benign** — see its docblock below. It is the one residual TEN-1 proves rather than
+ *   closes, and **TEN-2** is its fix.
+ *
+ * `reportScopeMiss`'s existence-only probe (`household.ts`) is the other unscoped query, allowlisted
+ * separately by the same test, and `getHouseholdScope` is the scope point itself.
  *
  * A NEW read here that touches household data is a design question, not an edit: put it in a module
  * that resolves `getHouseholdScope()`, or the structural guard fails the build.
