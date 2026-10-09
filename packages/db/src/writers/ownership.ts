@@ -43,10 +43,16 @@ import type { Executor } from './executor';
  * `programDayRows`'s `isThisProfile`, `export-month`'s three reads, and `seed.ts`'s plural variant
  * (`inArray` where this has `eq`, so it takes `inHousehold` directly — the household half, from the
  * one function allowed to unwrap the scope). **There is no copy of this predicate left in
- * `packages/db/src/**` or `apps/web/**`** — which is the domain 1d's structural guard inspects, and
- * what lets it be absolute rather than shipping with an allowlist that then has to shrink.
+ * `packages/db/src/**` or `apps/web/lib/dal/**`** (bar the probe below). 1d's structural guard,
+ * `apps/web/lib/dal/scoped.test.ts`, inspects **only** `apps/web/lib/dal/*.ts`; `packages/db/src`
+ * is held by `scope.test.ts`'s containment rules and by `db:verify`, not by a text scan.
  *
- * ## TEN-1 1d — the count is zero EVERYWHERE, scripts included
+ * ## TEN-1 1d — zero in `lib/dal`, `packages/db/src` and the corrections registry
+ *
+ * ⚠️ **Not zero everywhere.** `apps/web/scripts/screenshot-ephemeral.ts` still hand-writes
+ * `eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID)` to stage screenshot fixtures. It is an
+ * exception, not a leak: it only ever runs against the throwaway database it provisions itself, and
+ * nothing inspects it.
  *
  * 1c left three copies in `packages/db/scripts/corrections/registry.ts` — a verbatim pre-1c predicate
  * in `kbSwingsLoadRepsSwap`, and `inHousehold`'s body hand-written twice in `nullRoutineToFull` — and
