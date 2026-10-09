@@ -921,6 +921,8 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   (`packages/db/src/schema.ts:422`) while `program_blocks` is household-scoped, so a copied program's
   movement references are **shared rows** — the recipient silently inherits the source household's
   unit and bodyweight flags, which is the `findOrCreateMovementId` defect TEN-2 exists to fix.
+  **No longer a prediction:** TEN-1 chunk 1d proved exactly that inheritance, in both directions,
+  and moved TEN-2 into Beta 0 — so by the time this row is scoped the prerequisite is already met.
   **The product rule to write down first: copy the structure, drop the loads.** The inviolable rule in
   this repo is that the model never authors loads, because a bad load is an injury risk. A copy feature
   puts one household's prescribed loads onto another household's athlete — the same risk with a
@@ -1171,21 +1173,34 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   holds is a whole-database copy, so using it would roll back every other family
   ([priv-1 plan](./plans/priv-1-privacy-review.md) → review log S-N1).
 
-- **TEN-1 — household scoping through one DAL seam, proven.** A `cache()`d `getHouseholdScope()`;
-  every read and write scopes through it (folds in DAL-2). Before AUTH-1 it resolves to the
-  maintainer's household; AUTH-1 swaps its implementation. `db:verify` proves a second household
-  cannot read, write, correct or export the first's data, at every entry point, including
-  `findOrCreateMovementId`. **Unblocked:** the household-addressing ADR it needed —
-  **[ADR 0006](./decisions/0006-household-addressing.md) — is ✅ Accepted (option A, session-only)**
-  _(the maintainer, 2026-10-07; #252)_, which was chunk 0 of
-  [TEN-1's plan](./plans/ten-1-household-scope.md). The plan's six-lens panel ran 2026-10-07 and its
-  review-response log is committed. **Chunk 1a (`households.synthetic`, shipped dark) is in flight;**
-  1b (the seam and the gate), 1c (DAL-2's tail) and 1d (guards, the catalog verdict, docs) follow in
-  that order. _(Beta 0.)_
-- **TEN-2 — custom movements per household.** `movements.slug` is globally unique and
-  `findOrCreateMovementId` silently reuses another household's row on a name clash. Expand (nullable
-  `household_id` + partial unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract.
-  Three PRs. _(Beta 0 if TEN-1 can't prove the catalog stays per household; else Beta 1.)_
+- **TEN-1 — household scoping through one DAL seam, proven.** ✅ **DONE 2026-10-08**, all four chunks
+  ([plan](./plans/ten-1-household-scope.md)): 1a (`households.synthetic`, dark), 1b (the seam and the
+  gate), 1c (DAL-2's tail), 1d (the guards, the corrections, the catalog verdict, the docs). A
+  `cache()`d `getHouseholdScope()` is the one place that derives a household from a request; every DAL
+  read and write resolves it there and passes it into `packages/db` through **one** named predicate
+  whose `scope` parameter is required and positional, so a missed call site is a compile error. The
+  hand-written count is **zero**, and two structural guards keep it there
+  (`packages/db/src/scope.test.ts` for the type's containment, `apps/web/lib/dal/scoped.test.ts` for
+  the DAL's call sites, two enumerated exceptions and no more). `db:verify` proves in **both**
+  directions that a second household cannot read, write, correct or export the first's data, and
+  `pnpm db:mutations` runs five committed patches that must each turn it red.
+  **[ADR 0006](./decisions/0006-household-addressing.md)** was chunk 0 — ✅ Accepted (option A,
+  session-only) _(the maintainer, 2026-10-07; #252)_. **Folds in DAL-2.** AUTH-1 replaces only
+  `getHouseholdScope()`'s body. ⚠️ **It buys _consistent scoping_, not authorization** (AUTH-1's), and
+  it could not cover `movements` — see TEN-2. _(Beta 0.)_
+- **TEN-2 — custom movements per household. 🔴 IN BETA 0, by TEN-1's recorded verdict (2026-10-08).**
+  `movements` has no `household_id` column at all, so `findOrCreateMovementId` cannot be scoped — and
+  TEN-1 chunk 1d **proved**, in both directions against a real database, that one household is handed
+  another's row; that whoever types a name **first** pins that slug's `name` / `is_bodyweight` /
+  `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
+  and that a session write the household seam **refuses** has already committed the caller's text — a
+  cross-tenant _write_ primitive surviving its own refusal. Expand (nullable `household_id` + partial
+  unique indexes, `CONCURRENTLY`) → switch every slug lookup → contract. Three PRs; it carries a
+  migration, so it needs its own plan and panel.
+  **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
+  two households before AUTH-1 (the resolver throws on a second live household), so the window opens
+  the moment household #2 exists. Evidence, the alternative considered and the recommendation:
+  [TEN-1's plan](./plans/ten-1-household-scope.md) → "1d as built — the catalog verdict". _(Beta 0.)_
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
   **Row added 2026-10-06:** EVAL-0 had a merged plan and a line in [roadmap.md](./roadmap.md) but **no
@@ -1614,11 +1629,15 @@ random`), so this also ends the export's always-empty `context` (`packages/share
   ownership invariant the moment one is. **Fix:** add the predicate, plus a DAL test that a
   soft-deleted profile's entries don't come back. `writers/ownership.ts` (V1-24 PR 1b) is the natural
   place to make it unskippable.
-- **DAL-2 — the live-profile ownership predicate is still hand-written at nine sites** (DAL-1 moved the two sites that lacked the soft-delete half — `listEntriesForDay`, `weeklyAdherenceRows` — onto the helper). V1-24 PR 1b
-  extracts it to `packages/db/src/writers/ownership.ts` and converts the strength writer; the rest are
-  untouched. A security predicate is the last thing that should drift between call sites (DAL-1 is
-  what drift looks like). **Fix:** a `refactor/` sweep onto the shared helper, with `db:verify`'s
-  cross-profile proofs as the check. No behaviour change.
+- **DAL-2 — the live-profile ownership predicate was hand-written at nine sites.** ✅ **DONE
+  2026-10-08, folded into TEN-1** (1b the profile-resolution sites and everything `ownedEntryIds`
+  reaches, 1c the tail, 1d the corrections registry). **The hand-written count is zero**, and the
+  predicate now also carries the household — a security predicate is the last thing that should drift
+  between call sites (DAL-1 is what drift looks like). Held there by
+  `packages/db/src/scope.test.ts` (no defaulted `scope` parameter, one reader of
+  `scope.householdId`) and `apps/web/lib/dal/scoped.test.ts` (no DAL function builds its own
+  predicate), with two enumerated exceptions: `reportScopeMiss`'s existence-only probe and
+  `catalog.ts`'s three global reference reads.
 - **SEC-3 — a failed DB call can send a kid's bodyweight to Sentry.** ✅ **Fixed 2026-10-01** (`fix/sec-3-sentry-db-params`):
   the scrubber cuts `params:` off every message and drops `params` keys at any depth. 🔴 Found 2026-09-30 by #192's
   security lens. drizzle-orm's `DrizzleQueryError` message embeds the query's params

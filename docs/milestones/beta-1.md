@@ -80,15 +80,24 @@ flowchart LR
   O[1 · ops: previews, seed split, restore] --> AU
   ONB[ONB-0 · first run ✅] --> S
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
-  C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs]
+  C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
+  T --> T2[TEN-2 · movements per household<br/>moved into Beta 0 by TEN-1's verdict]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
+  T2 --> I
 ```
 
 **This is the canonical chart.** Every PR in this milestone embeds it with its own step marked
 (`AGENTS.md` → "Milestone PRs also embed a progress chart"), so a reviewer sees what is still between
 that PR and the finish. If a PR's position disagrees with this chart, the chart is what gets fixed.
+
+⚠️ **`TEN-2` entered this chart on 2026-10-08, and it entered as a FINDING rather than a plan
+change.** Step 2's own criterion said _"either TEN-1 proves the picker and the metadata stay per
+household, or TEN-2 moves into Beta 0"_; TEN-1 chunk 1d proved the metadata does **not**, so the
+sentence fired. It hangs off `TEN-1` and gates the **invite**, not `AUTH-1`: nothing can serve two
+households before AUTH-1, so the exposure window opens the moment household #2 exists. §2 carries the
+evidence and the reasoning.
 
 ⚠️ **Two rows moved out of step 4 on 2026-10-07, and the reason generalises.** Step 4 previously
 bundled `ONB-0` and `PRIV-1` behind `AUTH-1`, which cost schedule for nothing:
@@ -141,26 +150,46 @@ they are how to schedule any milestone, not facts about this one.
   drill; delete the drill branch after, since it holds everyone's data.
 - **Speed Insights** (ADR 0001 deferred it to prod cutover; it needs the CSP nonce plumbing).
 
-### 2 · TEN-1 — one household cannot see another
+### 2 · TEN-1 — one household cannot see another ✅ DONE
 
-Today `listProfiles()` returns every profile in the database and every write is existence-scoped ("any
-known profile id writes to that profile"). Accepted with one family; a breach with two.
+`listProfiles()` used to return every profile in the database and every write was existence-scoped
+("any known profile id writes to that profile"). Accepted with one family; a breach with two.
+**Shipped 2026-10-08** across four chunks
+([the plan](../plans/ten-1-household-scope.md), 1a–1d), folding in **DAL-2**.
 
 - **The ADR first** — [ADR 0006](../decisions/0006-household-addressing.md) (household addressing,
-  above), **written and proposed 2026-10-07, awaiting the maintainer's signature.** TEN-1 and AUTH-1
-  both build on its answer.
+  above). **Accepted: option A, session-only** _(the maintainer, 2026-10-07; #252)_: `/p/<profileId>`
+  stays the address and a wrong household is a **404**. TEN-1 and AUTH-1 both build on its answer.
 - **TEN-1 — one scoping seam.** A `cache()`d `getHouseholdScope()` in `lib/dal`; **every** DAL read and
-  write scopes through it. Before AUTH-1 it resolves to Ray's household; AUTH-1 then swaps only its
-  implementation to session → membership, so the sweep happens once. Folds in **DAL-2** (the nine
-  hand-written live-profile predicates).
-- **The proofs are the point:** `db:verify` drives two households through every read, write, correction
-  and export, and asserts B can never see or touch A. Including `findOrCreateMovementId`, which today
-  silently **reuses another household's movement row** on a name clash — so B's free-text "RDL" takes
-  A's unit and bodyweight flag. Either TEN-1 proves the picker and the metadata stay per household, or
-  **TEN-2** (custom movements per household: expand → switch writers → contract, three PRs, partial
-  unique indexes built `CONCURRENTLY`) moves into Beta 0.
+  write scopes through it. Before AUTH-1 it resolves to the maintainer's household; AUTH-1 then swaps
+  only its implementation to session → membership, so the sweep happens once. The hand-written
+  live-profile predicate count is **zero** — one named predicate, with a **required positional**
+  scope, so a missed call site is a compile error — and two structural guards hold it there
+  (`packages/db/src/scope.test.ts` for the type's containment, `apps/web/lib/dal/scoped.test.ts` for
+  the DAL's call sites, with two enumerated exceptions and no more).
+- **The proofs are the point, and they are built:** `db:verify` drives two households through every
+  scoped read, write, correction and export in **both** directions, and `pnpm db:mutations` runs five
+  committed patches that must each turn it red — because a boundary test that cannot fail is worse
+  than none.
+- 🔴 **The one question this step asked and had to answer "no" to.** _"Either TEN-1 proves the picker
+  and the metadata stay per household, or **TEN-2** moves into Beta 0."_ The **picker** is proved per
+  household. The **metadata is not**: `movements` has no `household_id` column at all, so chunk 1d
+  proved — in both directions, against a real database — that one household is handed another's
+  movement row, that whoever types a name **first** pins that slug's name / `is_bodyweight` /
+  `unit_default` for everyone including on the other household's own correctly-scoped Today card, and
+  that a session write the seam **refuses** has already committed the caller's text (a cross-tenant
+  _write_ primitive surviving its own refusal).
+
+  **So TEN-2 moves into Beta 0** — recommendation recorded with its evidence in
+  [the plan](../plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_, the
+  maintainer's call. **Its deadline is step 4's invite, not AUTH-1's merge:** nothing can serve two
+  households before AUTH-1 (the resolver **throws** on a second live household), and the window opens
+  the moment household #2 exists — which is AUTH-1's _"a new user gets a new, empty household"_ plus
+  _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's three PRs block the invite and can run
+  beside AUTH-1's dashboard and runbook work.
+
 - TEN-1 alone proves _consistent scoping_. Isolation is only _authorized_ once AUTH-1 lands — the exit
-  criteria say both.
+  criteria say both, and this is the single most likely thing to over-read about this step.
 
 ### 3 · AUTH-1 — Clerk, Google, invitation-only
 

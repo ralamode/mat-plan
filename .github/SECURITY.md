@@ -20,29 +20,59 @@ inside one household. **Kid bodyweight is still the one privileged field.** The 
 consumed by an LLM (a Claude skill) via a **scoped machine token** — that clause is load-bearing for
 "Tokens / secrets" and for the 403 carve-out under "API shape", so it stays.
 
-> ⛔ **The control that holds today is operational, not code.** The only thing preventing a
-> cross-household leak right now is that **production holds exactly one household**
-> ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_), and
-> [ADR 0006](../docs/decisions/0006-household-addressing.md) makes that a sequencing constraint rather
-> than a hope. **No second household may exist in production before TEN-1 and AUTH-1 have both
-> landed.** What is and is not enforced in code is recorded once, in
+> ⛔ **The scoping control is now code; the remaining controls are still operational.** `TEN-1` has
+> landed, so every read and write that touches household data carries a household scope and the
+> isolation is proved against a real database in both directions. Two things that does **not** mean:
+> it is not **authorization** (`AUTH-1` is, and until then the principal is a shared access code),
+> and it does not cover **`movements`**, which has no `household_id` column to scope by — proved, not
+> assumed, and `TEN-2`'s to fix (see "Authorization" below).
+>
+> So the sequencing constraint stands and gains a third row: **no second household may exist in
+> production before `TEN-1`, `AUTH-1` and `TEN-2` have all landed**
+> ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_, and
+> [ADR 0006](../docs/decisions/0006-household-addressing.md) makes it a constraint rather than a
+> hope). It is also enforced in code until `AUTH-1`: the scope resolver **throws** on a second live
+> household rather than picking one. What is and is not enforced is recorded once, in
 > [docs/privacy/data-inventory.md](../docs/privacy/data-inventory.md) §4 — so this file does not carry
-> a status that goes false the day TEN-1 merges.
+> a status that goes false on the next merge.
 
 ## Authorization (the top priority)
 
 **These rules are MANDATORY for all new code.** They are not aspirations, and a new query that skips
 them is a defect today, not a thing `TEN-1` will tidy up.
 
-⚠️ **Two existing call sites violate the first rule and are being brought into line by `TEN-1`:**
-`listProfiles()` and the export route both lack a `household_id` predicate. Separately the seeded
-public ids are fixed and zero-entropy, which `SEC-6` owns — so no code may ever treat a seed id as
-proof of anything. **The violation list lives in exactly one place**,
+✅ **`TEN-1` has landed, and both call sites this paragraph used to name are scoped** —
+`listProfiles()` through the single-sourced picker query and the export route through its three month
+reads, each proved in **both** directions against a real database. Separately the seeded public ids
+are fixed and zero-entropy, which `SEC-6` owns — so no code may ever treat a seed id as proof of
+anything. **The violation list lives in exactly one place**,
 [data-inventory.md](../docs/privacy/data-inventory.md) §4, so this file does not carry a status that
-goes false the day `TEN-1` merges. Do not read those exceptions as permission to add a third.
+goes false the day a scope lands. Do not read the named exceptions below as permission to add another.
 
-- All data access goes through the **server-only DAL** with ownership checks; every query is scoped
-  by `household_id`. Never trust a `householdId` / `profileId` from the request body/params.
+- All data access goes through the **server-only DAL** with ownership checks; every query that
+  touches household data is scoped by `household_id`, through the **one named predicate**
+  (`packages/db/src/writers/ownership.ts` → `isLiveProfile` / `inHousehold`) — never a copy. Never
+  trust a `householdId` / `profileId` from the request body/params.
+  - ⚠️ **That is `true` WITH ONE NAMED EXCEPTION, not `true`: `movements` has no `household_id`
+    column at all**, so the strength form's free-text find-or-create (`findOrCreateMovementId`)
+    cannot be scoped — there is nothing to scope by. TEN-1 chunk 1d **proved** the consequence in
+    both directions rather than asserting it (`db:verify` → _"TEN-1 1d: the catalog verdict"_): one
+    household is handed another's movement row; whoever types a name first pins that slug's
+    `name` / `is_bodyweight` / `unit_default` for everyone, and the other household's own
+    correctly-scoped Today card renders it; and a session write the household seam **refuses** has
+    already committed its caller-supplied text to the shared catalog — a cross-tenant **write**
+    primitive surviving its own refusal, which is categorically worse than a read leak. **`TEN-2` is
+    the fix** (a `household_id` column plus partial unique indexes built `CONCURRENTLY`), and the
+    recorded verdict is that it belongs in Beta 0, before a second household exists:
+    [the plan](../docs/plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_.
+  - The one other deliberately unscoped read is `reportScopeMiss`'s **existence-only** probe (ADR
+    0006 obligation 3): it returns `void` and is how the miss path tells `cross_household` from
+    `unknown_resource`. Both exceptions are enforced as an allowlist with a reason per entry, not as
+    prose — `apps/web/lib/dal/scoped.test.ts`.
+  - ⚠️ **Scoping is not authorization.** Before `AUTH-1` the principal is a shared access code, so
+    what holds today is _consistent scoping_: one household's data is unreachable from a request
+    scoped to another. It does not prove the requester is who they claim. `AUTH-1` authorizes it,
+    and this is the most likely thing on this page to over-read.
 - Public/URL/API IDs are **UUIDv7** (non-enumerable → anti-IDOR).
 - **Middleware is NOT the auth boundary** (CVE-2025-29927) — the real checks live in the DAL, on
   every read and write. Keep Next.js patched.
@@ -98,7 +128,23 @@ goes false the day `TEN-1` merges. Do not read those exceptions as permission to
   "wrong household" and "no such id" the same answer, because an id an attacker holds came from a
   leak and 403 confirms the leak is live. Reasoning:
   [ADR 0006](../docs/decisions/0006-household-addressing.md) → "What a wrong-household request
-  returns" (⚠️ **proposed, unsigned** — but this clause holds under either of its options).
+  returns" — **Accepted: option A (session-only)** _(the maintainer, 2026-10-07; #252)_, and
+  TEN-1's `db:verify` matrix is what proves the answer is the same for a wrong household as for an
+  unknown id.
+- **The 404 rule carries ONE explicit exception, and it is a different rule rather than a hole in
+  this one** (ADR 0006 → "Forward compatibility", requirement 3). **An explicitly PUBLISHED resource
+  answers `200` to a caller with no session.** Everything else 404s. Written here now, while nothing
+  is published, because amending a security rule later — under pressure from the feature that needs
+  it — is how the rule quietly becomes "whatever the feature does":
+  - "Published" means a **deliberate projection a household chose to publish**, in its own
+    unauthenticated namespace, with its own DTO. It is never a household-scoped resource reached
+    without a scope, and never an existing route answering 200 because a scope failed to resolve.
+  - The isolation rule is therefore **"no cross-household access except through an explicitly
+    published projection"**, with the unpublished case proved exactly as strictly as before — which
+    is the phrasing TEN-1's proofs already use, so a future `PUB-1` / `SHARE-1` / `SOCIAL-1` /
+    `COACH-1` extends them instead of rewriting them.
+  - **Nothing is published today.** No row above is in Beta 0, and this clause authorizes none of
+    them.
 
 ## Transport / headers
 

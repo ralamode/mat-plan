@@ -791,6 +791,156 @@ caught as `patch does not apply`, which the gate reports as a failure.
 - **`scoped.test.ts`, `registry.ts`, `architecture.md`, `SECURITY.md`'s exception clause and the
   `plan.md`/`status.md` TEN-1 rows** are **1d**'s, untouched here.
 
+## 1d as built — the guard, the corrections, and THE CATALOG VERDICT
+
+Recorded in the implementing PR, per AGENTS.md. **TEN-1 completes with this chunk.**
+
+### The structural guard — final allowlists, and why each entry is there
+
+`apps/web/lib/dal/scoped.test.ts` ships **two** assertions, each with its own exception list, because
+the plan's single rule ("reaches `db` ⇒ resolves or takes a scope") turned out not to be able to see
+the exception it most needed to:
+
+| Assertion                                                                         | Exceptions                                                                                                 | Why                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1 · nothing reaches `db` without resolving or being handed a `HouseholdScope`** | `catalog.ts#getActivityTypeByKey` · `catalog.ts#getMetricDefinition` · `catalog.ts#findOrCreateMovementId` | Exactly `write-path.md`'s "`catalog.ts`'s three reference reads". The first two are global reference data seeded from `packages/shared` with no household column. The third is the **residual**, not a design choice, and it is the one entry `TEN-2` deletes. |
+| **2 · nothing builds its own ownership predicate**                                | `household.ts` (the file)                                                                                  | `reportScopeMiss`'s existence-only probe — ADR 0006 obligation 3. It is also the one declaration assertion 1 **cannot** see: it resolves a scope (to classify the outcome) and then queries without it, so it reads as scoped there.                           |
+
+**Two exception families, which is exactly the two `write-path.md` already declared** — the plan's
+own prose for assertion 1 listed "`household.ts` itself, `gate.ts`, `db.ts`" as well, and none of
+those is needed: `gate.ts` and `db.ts` never reach the Drizzle client at all, and `household.ts`'s two
+functions each pass on their own merits (the resolver names `HouseholdScope` in its signature; the
+probe resolves one). So the shipped list is **smaller** than the plan's, not larger.
+
+Three divergences from the plan, all in the same direction (stricter):
+
+| #     | The plan said                                                                      | What shipped                                                                                                                    | Why                                                                                                                                                                                                                                                                                                                                                       |
+| ----- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | "every **exported** async function in `apps/web/lib/dal/*.ts` that mentions `db`". | **Every top-level declaration, exported or not.**                                                                               | A private helper that reaches `db` unscoped is the same leak as a public one, and `export.ts` → `prescribedFor` is literally that shape today (it takes a `HouseholdScope` and is never exported). The exported-only rule would have left it unchecked.                                                                                                   |
+| **2** | One assertion, plus "no file under `apps/web` mentions `householdScopeForScript`". | **The second assertion is the no-hand-written-predicate rule instead.** The `householdScopeForScript` sweep was NOT duplicated. | 1b already ships it (`packages/db/src/scope.test.ts` → "apps/web never names the script constructor"), and a second copy is the drift this repo's constants rule exists to prevent. What 1b does **not** cover is "no twelfth copy of the predicate" — which is the rule the chunk actually owed, and the one that catches `reportScopeMiss`-shaped code. |
+| **3** | Nothing about the allowlist going stale.                                           | A **dead-entry assertion**: an allowlisted function that no longer exists, or now carries a scope, fails the build.             | The `household-synthetic-is-dark.test.ts` lesson. Without it, `TEN-2` scoping `movements` leaves `findOrCreateMovementId`'s entry standing as coverage nobody re-earned. Now TEN-2 **has** to delete it.                                                                                                                                                  |
+
+**Verified load-bearing by hand**, since no committed patch covers it (the mutation gate runs
+`db:verify`, not Vitest): an unscoped `db.select(...).where(eq(profiles.publicId, …))` added to
+`lib/dal/programming.ts` reddens **both** assertions and names `programming.ts#leakProbe` and the
+offending line. And the guard's limits are stated in its own docblock rather than left to be
+discovered: a call-site guard cannot see SQL, so patch 01 (delete the household conjunct) leaves it
+**green** while the matrix goes red — which is why all three vehicles exist.
+
+### The corrections — three predicates, found by symbol
+
+The chunk table named one (`registry.ts:65-71`); 1c's audit found three, and the line numbers
+predate 1b, so each was found by symbol:
+
+| Site                                                       | Was                                                                                        | Now                                                          |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `registry.ts` → `kbSwingsLoadRepsSwap.run` (the set query) | `eq(profiles.publicId, TARGET)` + `isNull(profiles.deletedAt)` — the last copy in the repo | `isLiveProfile(TARGET_PROFILE_PUBLIC_ID, scope)`             |
+| `registry.ts` → `nullRoutineToFull.run` (the READ)         | `eq(profiles.householdId, householdId)` + `IS NULL` guards                                 | `inHousehold(scope)` + the same `IS NULL` guards             |
+| `registry.ts` → `nullRoutineToFull.run` (the WRITE guard)  | `eq(publicId)` + `eq(householdId)` + `routineConfig IS NULL` + `deletedAt IS NULL`         | `isLiveProfile(t.publicId, scope)` + `routineConfig IS NULL` |
+
+- **The bulk read has no `public_id` half**, so it takes `inHousehold(scope)` rather than
+  `isLiveProfile` — the same split `seedProgram` made in 1c (`inArray` where `isLiveProfile` has
+  `eq`). Identical SQL to what it replaces.
+- **`kbSwings` is the one that is not byte-identical**: it gains the household conjunct, so it is
+  **strictly narrower**. Stated rather than smoothed over. The row set is unchanged (the profile is in
+  the seeded household) and the correction was applied on 2026-09-30 with an `is_bodyweight` guard
+  that already makes a re-run a no-op, so the narrowing costs nothing and buys the thing
+  `bodyweightDuplicates` already argued for: a correction cannot reach a family that never reported a
+  problem.
+- **`liveHouseholdId` became `liveHouseholdScope`** and returns the capability, so **no correction
+  holds a raw `household_id` any more** — ADR 0006's fwd-1 now holds in this script, not only in the
+  app. Its three consumers are the three corrections.
+- **Proved, which the plan asked for and 1b did not deliver.** § Test plan lists "the `db:correct`
+  registry query" in the refusal matrix and nothing ran it. `db:verify` now runs the null-routine
+  correction's **own dry run** (`apply = false`, nothing written) and asserts it returns _exactly_ the
+  NULL-routine profiles that are not household B's — both directions in one assertion. The baseline is
+  an **unscoped** `IS NULL` sweep, asserted to reach household B's profiles, so the negative cannot
+  pass for free; B's profiles are resolved **by household**, because B has more than one and a list
+  naming only the first would have passed while leaking the rest.
+- **Not done, deliberately:** `inHousehold(scope) + isNull(profiles.deletedAt)` is now the third
+  occurrence of that pair (`householdProfileRows`, `seedProgram`, this read), and it was **not**
+  extracted into a `liveProfilesIn(scope)` helper. The thing that must not drift — the household
+  conjunct — is already single-sourced through `inHousehold`; the soft-delete half appears across the
+  repo and is not the security seam; and the three sites genuinely differ in what else they add
+  (`inArray`, an `ORDER BY`, a from-value guard). Extracting across the package boundary in the last
+  chunk of a critical-path PR is scope the chunk should not take. Recorded so the reuse question is
+  answered rather than unnoticed.
+
+### 🔴 THE CATALOG VERDICT — and the recommendation `beta-1.md` asked for
+
+`beta-1.md` § 2: _"Either TEN-1 proves the picker and the metadata stay per household, or **TEN-2**
+moves into Beta 0."_ This is the only input to that decision, so it is recorded with its evidence.
+
+**The picker: proved per household** (1b, `householdProfileRows`, four-way).
+**The metadata: proved NOT per household.** Every assertion below is in `db:verify` →
+_"TEN-1 1d: the catalog verdict"_, run against PGlite through the **real** `findOrCreateMovement`
+(extracted into `packages/db/src/writers/movement-catalog.ts` in this chunk precisely so the proof
+could run the code the app runs, not a lookalike — the `householdProfileRows` precedent).
+
+| Direction                                         | What the proof shows                                                                                                                                                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Structural**                                    | `movements` has **no `household_id` column**. There is nothing to scope by, so no amount of TEN-1 closes this.                                                                                                                                                         |
+| **READ — leaks**                                  | Two households typing the same movement differently (`'TEN-1 Catalog Probe'` / `'  ten-1   CATALOG   probe '`) converge on **one row**, and the second household is handed the first's. Its positive twin: a genuinely different name does get its own row.            |
+| **READ — metadata inheritance**                   | A free-text name that slugs onto a **catalog** row comes back `is_bodyweight: true` — a declaration `findOrCreateMovement` can never write. Whatever the row says, the caller did not say it.                                                                          |
+| **WRITE — poison**                                | Whoever types a name **first** pins that slug: its `name` is the first typist's free text, `is_bodyweight` is `false` and `unit_default` is NULL, for everyone. `ON CONFLICT DO NOTHING` discards the second household's text and the seed only touches its own slugs. |
+| **WRITE — it reaches the other household's card** | `seedProgram` + `programDayRows`, read under household A's **own correct scope**, render household B's string and B's `is_bodyweight`. The household-scoped read is working exactly as designed and still shows another household's content.                           |
+| **WRITE — surviving a refusal**                   | A session write the seam **refuses** (`Profile not found`, whole transaction rolled back, no `sessions` row) has **already committed** the caller-supplied movement row. A cross-tenant **write** primitive surviving its own refusal.                                 |
+
+**Mutation-proven, so the verdict cannot be vacuous.** `04-slug-is-not-the-arbiter.patch` is
+deliberately _not_ "scope the catalog" — that is TEN-2, not a one-line break, and a leak assertion
+driven by the same name on both sides cannot be falsified by any change that keeps the signature.
+What it breaks is the property the verdict **rests on**: that the shared `movementSlug` derivation is
+the single **global arbiter** two spellings converge on. Without it the proof would be measuring
+fixture ordering — the exact V1-10 vacuity — and a later author "fixing" the catalog by not
+normalising, or by matching on `name`, would leave the verdict green and wrong. The structural
+assertion needs no patch: it reddens the day TEN-2 adds the column, which is when the verdict must be
+re-taken.
+
+#### Recommendation — the maintainer's call, stated plainly
+
+> **TEN-2 moves into Beta 0**, and its deadline is **step 4's invite, not AUTH-1's merge.**
+
+The criterion's own terms are met for the picker and failed for the metadata, so by the sentence
+`beta-1.md` wrote, TEN-2 moves in. The timing argument is what makes it a schedule fact rather than a
+slogan:
+
+- **The leak needs two households, and nothing can serve two before AUTH-1.** `getHouseholdScope()`
+  **throws** on a second live household today, deliberately — so the exposure window does not open
+  when TEN-1 merges, and it does not open when TEN-2 is deferred.
+- **It opens the moment household #2 exists**, which is AUTH-1's _"a new user gets a new, empty
+  household"_ followed by step 4's _"invite family #1"_. That is **inside Beta 0**, not after it. So
+  "defer TEN-2 to Beta 1" is not an option the milestone's own shape allows.
+- **AUTH-1 is therefore still next.** TEN-2 does not block it; it blocks the invite. Three PRs,
+  schedulable in parallel with AUTH-1's dashboard/runbook work, which is why this costs less than the
+  "+3 PRs on the critical path" framing suggests.
+
+**The honest alternative, if three PRs will not fit before the invite** (option B, _not_ the
+recommendation): **make the catalog read-only to the app until V1-8.** `findOrCreateMovementId`
+resolves a seeded slug and **refuses to create**, which closes the write/poison direction and the
+surviving-refusal primitive entirely and reduces the read direction to "both households share the
+seeded catalog", which is by design. Cost: a household typing a movement the catalog does not carry
+gets a refusal instead of a new row — a real product regression on the v0→v1 free-text bridge that
+the strength form uses today, and a **product** decision rather than a security one. It is cheaper
+than TEN-2 and strictly worse for the household; it is listed because the maintainer should see the
+real trade, not because it is preferable.
+
+**Not an option:** accept it. The criterion does not permit it, and the surviving-refusal primitive is
+the kind of finding that gets worse with age — the catalog accumulates rows, and TEN-2's backfill is
+cheapest while there are few.
+
+### Not in 1d, and why
+
+- **TEN-2 itself.** It needs a migration with partial unique indexes built `CONCURRENTLY` — its own
+  plan, its own panel, three PRs (`plan.md` → TEN-2). 1d produces the verdict, not the fix.
+- **An e2e cross-household spec** — Out-of-scope, unchanged (OPS-2 seed collision; the DoD pyramid).
+- **The miss-path event's `cross_household` branch has no proof that it fires**, because it cannot
+  today: it needs two live households and the resolver throws on two. 1b built it and documented it;
+  ADR 0006 files it as **AUTH-1's boundary-test contract**, and that is still where it sits.
+- **`kbSwingsLoadRepsSwap`'s own `db:verify` row.** Its dry run returns zero rows under PGlite (the
+  2026-09-28 rows exist only in prod), and a zero that cannot be anything else proves nothing. The
+  null-routine correction is the one that carries the registry's proof; fabricating a 2026-09-28
+  fixture to assert against would be testing the fixture.
+
 ## Risks / rollback
 
 | #      | Risk                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |

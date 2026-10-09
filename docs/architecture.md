@@ -115,26 +115,54 @@ doesn't.
 
 The picker at `/p` lists profiles; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
 selection lives entirely in the URL — no client state. The `profileId` rides the log forms as a hidden
-field, and every Server Action **re-validates it server-side** via `getProfileByPublicId` (the seam
-v1.5's Clerk household scoping tightens). Profile tiles are a **UX switch, not a security boundary**;
-an unknown/malformed id resolves to `notFound()` (404), never a 500.
+field, and every Server Action **re-validates it server-side** via `getProfileByPublicId`. Profile
+tiles are a **UX switch, not a security boundary**; an unknown/malformed id resolves to `notFound()`
+(404), never a 500.
+
+**The household scope is where that re-validation now happens, and it is ONE point (TEN-1).**
+[ADR 0006](./decisions/0006-household-addressing.md) decided the address stays `/p/<profileId>` with
+**no household segment**, so `/p` is byte-identical for every household and the picker query is the
+whole front-door isolation boundary. `lib/dal/household.ts` → `getHouseholdScope()` is the **one**
+function that decides whose request this is; every DAL read and write resolves it there and passes it
+into `packages/db`, so no page, action or Route Handler signature carries a scope.
+`isLiveProfile(publicId, scope)` is the single predicate they all share, its `scope` parameter
+**required and positional** so an unconverted call site is a compile error.
+
+- **A wrong-household id is a 404, byte-identical to an unknown id** — the same `notFound()` /
+  `NO_PROFILE_LOG` path, no new error shape and no new copy. The signal the scoped predicate destroys
+  is recovered on the miss path only, as a structured `cross_household` / `unknown_resource` event
+  (ADR 0006 obligation 3), never in the response.
+- **Zero live households → `null` (the app goes dark); ≥ 2 → THROW.** Different states, different
+  paths: `null` for both would tell a parent their data does not exist and suggest a production write.
+- **AUTH-1 replaces only `getHouseholdScope()`'s body** (session → `household_members` → household).
+  Nothing else moves, which is the whole reason the seam landed before its consumers.
+- ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so what
+  is proved is _consistent scoping_, not that the requester is who they claim.
+- ⚠️ **One table is outside the seam and cannot be brought in: `movements` has no `household_id`
+  column at all.** The strength form's free-text find-or-create therefore crosses households, which
+  TEN-1 chunk 1d **proved** rather than assumed and `TEN-2` fixes. See §4 and
+  [SECURITY.md](../.github/SECURITY.md) → Authorization.
 
 ```mermaid
 flowchart LR
   LANDING["/ — public landing<br/>(no cookie, no DB)"]
   GATE["/gate — access code"]
-  PICKER["/p — profile picker<br/>listProfiles() → tiles"]
+  PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
   ACT["Server Action<br/>log bodyweight / strength"]
-  DAL["DAL (server-only)<br/>getProfileByPublicId(id)"]
+  SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>0 → null (dark) · ≥2 → throw"]
+  DAL["DAL (server-only)<br/>isLiveProfile(publicId, scope)"]
 
   LANDING -->|"Household sign-in"| GATE
   GATE -->|"code OK → APP_HOME_PATH"| PICKER
   LANDING -.->|"proxy: already has the cookie"| PICKER
+  SCOPE -->|"the one live household<br/>(AUTH-1: the session's)"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
   TODAY -->|"hidden field profileId"| ACT
   ACT -->|"re-validate id (never trust the form)"| DAL
+  SCOPE -->|"required + positional:<br/>a missed site is a compile error"| DAL
+  DAL -->|"wrong household → the SAME 404 as unknown"| TODAY
   DAL -->|"revalidatePath('/p/'+id)"| TODAY
 ```
 
@@ -197,6 +225,14 @@ The concrete tables the v0 thin slice (`units · profiles · entries · entry_se
 `households` is the authz root; the catalogs (`activity_types · movements · metric_definitions`, all
 keyed by natural keys and seeded from `@mat-plan/shared` in V1-2) classify each `entry`; `sessions`
 group a training day's entries. Full column detail in [spec.md](./spec.md) §4a.
+
+⚠️ **`households` is the authz root for everything that hangs off `profiles` — and the catalogs hang
+off nothing.** They are global by design, which is right for `activity_types` and
+`metric_definitions` (seeded, never written by the app) and **wrong for `movements`**, which the
+strength form writes from free text. TEN-1 1d proved the consequence: one household's typed name
+resolves to another household's row, the first typist pins that slug's `name` / `is_bodyweight` /
+`unit_default` for everyone, and the row survives a session write the household seam refused.
+`TEN-2` adds the column; until then the diagram's missing edge _is_ the defect.
 
 ```mermaid
 erDiagram
