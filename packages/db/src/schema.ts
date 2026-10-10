@@ -435,15 +435,39 @@ export const activityTypes = pgTable(
  * 0015), named once here so `verify.ts` and TEN-2b's conflict targets import rather than re-type them
  * — the `BODYWEIGHT_DAY_UNIQUE_INDEX` precedent. Renaming one means a new migration too.
  *
- * ⚠️ **Names are consts; the PREDICATES stay SQL literals below, deliberately.** A name is a string
- * matched at runtime (an `ON CONFLICT` target, an `expectRejectedBy` assertion, `pg_indexes`), so a
- * typo is a silent miss that a const turns into a compile error. A predicate is not matched by
- * anything: it is read by the planner from the catalog, and drizzle renders it into the migration
- * once. Hoisting it into a const would hide the invariant one indirection away from the index that
- * states it, and still not stop a drifting copy in a migration nobody may edit.
+ * ⚠️ **Names are consts; the PREDICATES stay SQL literals below.** A name is a string matched at
+ * runtime (an `ON CONFLICT` target, an `expectRejectedBy` assertion, `pg_indexes`), so a typo is a
+ * silent miss that a const turns into a compile error. Hoisting a predicate into a const would hide
+ * the invariant one indirection away from the index that states it, and still not stop a drifting
+ * copy in a migration nobody may edit.
+ *
+ * 🔴 **TEN-2b corrected the reason this docblock used to give.** It said *"a predicate is not matched
+ * by anything: it is read by the planner from the catalog"* — **false** as of TEN-2b. An
+ * `ON CONFLICT … WHERE <predicate>` arbiter must **imply** the partial index's predicate, or Postgres
+ * cannot infer the index at all and the statement fails `42P10`. So the predicates below ARE matched,
+ * by two arbiters (`writers/ownership.ts` → `insertMovementOwnedBy`, and `seed.ts`'s movements
+ * upsert), which build them from drizzle's `isNull` / `isNotNull` and render byte-identically to the
+ * literals here (measured). What keeps the two in sync is not a shared const but a **proof**:
+ * `db:verify` exercises both arbiters, and a mismatch is a `42P10`, i.e. a red build.
  */
 export const MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX = 'uq_movements_slug_global';
 export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug';
+
+/**
+ * The **legacy, non-partial** `UNIQUE (slug)` constraint drizzle generates from `.unique()` on the
+ * column — an assertion about drizzle's naming, not a declaration. ⚠️ **TEN-2c DELETES it**, and this
+ * const with it.
+ *
+ * Named without `GLOBAL` on purpose: `MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX` above is one word away and
+ * means the **opposite** scope (partial, unowned rows only, vs non-partial over every row). A mix-up
+ * in an arbiter or an `expectRejectedBy` is exactly the silent miss these consts exist to kill.
+ *
+ * It is a const because `findOrCreateMovement`'s `23505` fallback — the only control on the TEN-2b→2c
+ * cross-household denial window — keys on this exact name, so a rename would make that fallback dead
+ * code with every gate still green. `db:verify`'s existing `expectRejectedBy(…)` calls are the pin,
+ * by the stronger mechanism: they read `cause.constraint`, the same field the fallback reads.
+ */
+export const MOVEMENT_SLUG_UNIQUE_CONSTRAINT = 'movements_slug_unique';
 
 /**
  * movement — the exercise catalog (spec.md §4): slug/name + optional movement pattern,
@@ -473,11 +497,15 @@ export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug
  * is to **DELETE the rows** (`docs/runbooks.md` → the PRIV-1 procedure, step 11), never to null the
  * column.
  *
- * ⚠️ **Cross-household references are WRITER-enforced, not schema-enforced** (the
- * `supersets` / `prescription_targets` family): nothing here stops an `entries.movement_id` of
- * household H pointing at a movement owned by ¬H. Global-first plus 2b/2c's backfill rules prevent it
- * by construction; `runbooks.md` step 3 pre-flights it, because the symptom is a mid-transaction
- * abort of the household deletion.
+ * 🔴 **Cross-household references are WRITER-enforced, not schema-enforced — and as of TEN-2b one
+ * writer PRODUCES them, deliberately.** Nothing here stops an `entries.movement_id` of household H
+ * pointing at a movement owned by ¬H. TEN-2a said global-first *"prevents it by construction"*; that
+ * is **wrong**, and TEN-2b measured it: while the non-partial `movements_slug_unique` lives, two
+ * households cannot both hold a row for one slug, so `findOrCreateMovement`'s `23505` fallback hands
+ * the second household the first's row — and the entry it then writes is exactly this reference.
+ * TEN-2a chose that over a permanent write failure; the window closes at TEN-2c.
+ * **The symptom is a mid-transaction abort of the household deletion** (`23503` on step 11), so
+ * `runbooks.md` step 3 pre-flights it and step 11 carries the repair. `db:verify` asserts both.
  *
  * ⚠️ **NO plain `idx_movements_household`, and this is the FIRST break in an 11-for-11 idiom in this
  * file** — so do not "fix" it. `uq_movements_household_slug` leads on `household_id` and its

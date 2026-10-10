@@ -349,13 +349,16 @@ Real ones, each with the file to look at.
   it. `logStrengthSession` (the app DAL) resolves the scope and passes it down, so the form, the
   action and `ResolvedSessionMovement` are all unchanged.
 
-  🔴 **`findOrCreateMovementId` runs BEFORE this, is unscopable, and TEN-1 1d PROVED what that
-  costs.** `movements.household_id` exists (TEN-2a) but nothing reads or writes it — see
-  [data-inventory.md](../privacy/data-inventory.md) §4 for the status — so there is still nothing
-  scoped to scope by, and a `scope` parameter accepted and ignored would be worse than the honest
-  absence, which is why the core (`packages/db/src/writers/movement-catalog.ts`) still takes none. `db:verify` →
-  _"TEN-1 1d: the catalog verdict"_ runs that core in both directions and asserts, against a real
-  database:
+  ✅ **`findOrCreateMovementId` still runs BEFORE this, but it is SCOPED as of `TEN-2b`** — it takes
+  the same `HouseholdScope` `logStrengthSession` already resolved and passes it to the core
+  (`packages/db/src/writers/movement-catalog.ts`), which resolves **global-first**. So a movement a
+  household types belongs to that household, and a session the seam then refuses leaves its catalog
+  row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
+  write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current
+  order deliberately. ⚠️ **One leak survives to `TEN-2c`** (the non-partial `movements_slug_unique`
+  forbids two households a row for one slug, so the second typist is handed the first's row), which is
+  why `db:verify` → _"TEN-1 1d: the catalog verdict"_ still reads `LEAKS`. It runs that core in both
+  directions and asserts, against a real database:
 
   - **the read leak** — one household typing a movement is handed another household's row, with its
     `name`, `is_bodyweight` and `unit_default`. A free-text name that slugs onto a **catalog** row

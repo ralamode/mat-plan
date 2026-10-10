@@ -152,6 +152,44 @@ dark ahead of its reader.
 
 ---
 
+## The seed's shadow guard fired (`db:seed` refuses, migrate.yml is red)
+
+**When:** `migrate.yml` is green on `db:migrate` and **red on `db:seed`**, with
+`seed: N seeded movement slug(s) are already owned by a household …`. Added at `TEN-2b`, which is
+what introduced the guard.
+
+**What it means.** A household owns a `movements` row whose slug the seed wants to add to the **global**
+catalog. The seed refuses rather than proceeding, because the alternative is silent: Postgres infers
+both arbiters for `ON CONFLICT (slug) WHERE household_id IS NULL`, so the global row would be
+**absorbed and never inserted** while `db:seed` reported success (measured; `db:verify` asserts that
+baseline). The guard is the only thing that reports it.
+
+**What it is NOT.** Not a pending migration — `db:migrate` succeeded, so the schema is current and
+nothing is wedged at the DDL level. It is **non-wedging by design**: the guard detects before any
+movement write, omits only the shadowed rows, lets every other table seed, and throws at the end. So
+unrelated reference data **did** reach prod on this run; only the named catalog row(s) are missing.
+
+**Why it will not clear itself.** `db:seed` runs on every push to `main`, so the job stays red until
+the data is changed. Re-running `workflow_dispatch` does nothing.
+
+**The fix — adopt or rename, never null.** Pick one, per named slug:
+
+1. **The household's row is the real one** (someone typed a movement the catalog later added): the
+   household row and the curated row must be merged. That is `TEN-2c`'s split machinery in reverse —
+   repoint that household's `entries.movement_id` / `prescriptions.movement_id` to the curated row,
+   then delete the household row. Needs a guarded, dry-run-first correction
+   (`packages/db/scripts/corrections/`), not a hand-typed `UPDATE`.
+2. **The seed row is the mistake** (the slug should not have been added globally): revert the
+   `MOVEMENT_SEED_ROWS` entry in its own PR. The seed then stops wanting it and the job goes green.
+
+⛔ **Never `UPDATE movements SET household_id = NULL`** on the household's row to clear the collision:
+that promotes one household's free text into the global reference namespace, which is the defect
+`ON DELETE NO ACTION` exists to prevent (`packages/db/src/schema.ts` → the `movements` docblock).
+
+⚠️ **The refusal message is published.** `migrate.yml` logs are world-readable on a public repo, so the
+message names **seed slugs only** — a public const — and never the colliding row's `name`, which is
+uncontrolled household free text. `db:verify` asserts both halves. Keep that property if you extend it.
+
 ## Rename / correct a seeded profile in prod
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
@@ -811,11 +849,30 @@ child:
 --       (and the mirror, plus the same pair over `prescriptions` joined through `b`)
 ```
 
-**Why (d) can exist at all, and why it is checked rather than assumed.** `TEN-2b`'s global-first
-resolver and `TEN-2b`/`2c`'s backfill rules prevent it **by construction** — a household only ever
-resolves to its own row or to a seeded one — which is this repo's idiom, and the idiom is that such an
-invariant is **written in the schema docblock AND pre-flighted here**. It is in both
-(`packages/db/src/schema.ts` → the `movements` docblock). Nothing enforces it in the database.
+🔴 **Why (d) exists, corrected at `TEN-2b`: it is PRODUCED, deliberately, not prevented.** `TEN-2a`
+wrote that global-first and the backfill rules prevent it _"by construction"_. **That was wrong, and
+`TEN-2b` measured it.** While the non-partial `movements_slug_unique` lives (until `TEN-2c`) at most
+one row per slug exists in the whole table, so two households cannot both hold one. When household B
+types a name household A typed first, `findOrCreateMovement`'s `23505` fallback hands B **A's row** —
+chosen deliberately over failing B's write forever — and the entry B then writes **is** a (d) row.
+
+So **(d) is load-bearing, not belt-and-braces**: it is the direction that actually exists, alongside
+(c). `packages/db/src/schema.ts` → the `movements` docblock says the same thing, and `db:verify`
+asserts both the reference and this procedure's abort. Nothing enforces it in the database.
+
+⚠️ **What to do on a non-zero (d) — because "do not proceed" is not an answer here.** The row is
+legitimate app data, not corruption, so it cannot simply be deleted:
+
+- **¬H's rows pointing at a movement owned by H** (the second direction): **repoint them**, inside the
+  step-4 transaction and before step 11, to a ¬H-owned clone of that movement — a fresh `newId()`
+  `public_id`, the same `slug`/`name`, `household_id` = that household. This is `TEN-2c`'s split
+  performed by hand for one row; `TEN-2c` automates it.
+- **H's rows pointing at a movement owned by ¬H** (the first direction): nothing to do — step 11 does
+  not select that movement and must not. H's entries go at step 3; the foreign movement survives,
+  correctly.
+- ⛔ **Never `UPDATE movements SET household_id = NULL`** to clear the block. See step 11.
+
+With one household the count is zero by arithmetic, which is why `TEN-2c` is an invite precondition.
 
 ⚠️ **(c) is the direction that actually exists.** `supersets` has no profile column — it is
 household-scoped by construction through its session — so "a superset owned by an outside profile" is
@@ -823,7 +880,8 @@ not a row that can exist. The reachable defect is the inverse: an **entry** from
 one of H's supersets. Checking the impossible direction instead would leave exactly the
 mid-transaction abort that step 3 exists to pre-empt.
 
-Write all three out against the same CTEs, read the numbers, and do not proceed on a non-zero.
+Write all three out against the same CTEs and read the numbers. (a)–(c) must be zero. For (d), follow
+the repoint above rather than stopping — it is the one pre-flight with a documented remedy.
 
 **4. Apply — one explicit transaction, and re-check inside it.**
 
@@ -893,11 +951,22 @@ then serves it to every other household — the opposite of a deletion. The corr
 blocked delete is always to **delete the rows**. `packages/db/src/schema.ts` and `0015`'s header both
 say so; this is the step they are pointing at.
 
-⚠️ **Residual between `TEN-2b` and `TEN-2c`, stated so nobody promises more than is true.** `TEN-2b`'s
-backfill leaves a movement referenced by **more than one** household at `household_id IS NULL` until
-`TEN-2c` splits it. Such a row carries H's typed `name`, is **not** selected by `household_id = H`, and
-therefore **survives a deletion the notice describes as complete**. One household today, so the case
-cannot arise yet; it becomes real at the invite, which is why `TEN-2c` is an invite precondition.
+⚠️ **Residual between `TEN-2b` and `TEN-2c`, stated so nobody promises more than is true.** Two
+shapes survive a deletion the notice describes as complete, and `TEN-2c` closes both:
+
+1. **A row more than one household references** stays at `household_id IS NULL`. It carries H's typed
+   `name`, is **not** selected by `household_id = H`, and therefore survives. (`TEN-2b` ships **no
+   backfill** — deliberately: assigning such a row to one household would force every other household
+   onto the fallback and so manufacture more (d) rows. The split is `TEN-2c`'s, done properly.)
+2. **A pre-existing app-authored row nothing references** also sits at `household_id IS NULL` and is
+   likewise unselected. Its removal is `TEN-2b-2` (the orphan correction).
+
+🔴 **And a third, which is this step's own failure mode:** if pre-flight (d) found a ¬H row pointing at
+one of H's movements and it was **not** repointed, this `DELETE` raises **`23503`** and strands the
+operator mid-procedure. That is measured and asserted in `db:verify`. Do the repoint in step 3.
+
+One household today, so none of the three can arise yet; they become real at the invite, which is why
+`TEN-2c` is an invite precondition.
 
 **`deleted_at` appears in no `WHERE`.** This is the documented inversion of corrections README rules 2
 and 5: for a deletion, existence _is_ the guard, and soft-deleted rows are exactly what must go.

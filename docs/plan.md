@@ -1232,12 +1232,21 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
 - **TEN-2 — custom movements per household. 🔴 IN BETA 0, by TEN-1's recorded verdict (2026-10-08).**
   🔴 **STATUS, and this row is one of the two homes for it** (the other is
   [data-inventory.md](./privacy/data-inventory.md) §4; everything else in the tree points here rather
-  than restating it): **`movements.household_id` EXISTS as of TEN-2a** (migration `0015`, merged
-  2026-10-09) and **nothing reads or writes it** — the column ships dark, the global `movements.slug`
-  UNIQUE is untouched, and `findOrCreateMovementId` is unchanged. So the leak below is **unchanged**.
-  **TEN-2b** scopes the writer; **the leak closes at TEN-2c**, when the pre-existing app-authored rows
-  leave the global namespace. Dropping the global UNIQUE closes nothing by itself — it only _permits_
-  two namespaces.
+  than restating it): **`movements.household_id` EXISTS (TEN-2a, migration `0015`) and IS LIVE as of
+  TEN-2b** (migration `0016`, merged 2026-10-10) — `findOrCreateMovementId` takes a `HouseholdScope`
+  and resolves **global-first**, `seedProgram` reads the global namespace only, and the FK is
+  `VALIDATE`d. ✅ **Two of the three defects below are CLOSED**: a session write the seam refuses now
+  leaves its row in the **caller's own** namespace (garbage, not a cross-tenant write), and the other
+  household's Today card can no longer render it — `seedProgram` **refuses** loudly instead.
+  🔴 **The verdict is still `LEAKS`, and one leak is left.** The non-partial `movements_slug_unique`
+  forbids two households a row for one slug, so the second household to type a name is handed the
+  first's row via a `23505` fallback — chosen over failing a child's session write. **The leak closes
+  at TEN-2c**, when the constraint goes **and** the pre-existing app-authored rows leave the global
+  namespace; dropping the UNIQUE alone closes nothing — it only _permits_ two namespaces.
+  ⚠️ **TEN-2b measured a price TEN-2a had asserted away:** that fallback leaves a cross-household
+  `entries.movement_id`, which **aborts the household-deletion procedure** (`23503`). `schema.ts` no
+  longer claims the reference is _"prevented by construction"_, and `runbooks.md` pre-flight (d) now
+  carries a repair step. ⚠️ **TEN-2b deferred two items with new rows: `TEN-2b-1` and `TEN-2b-2`.**
   🔴 **NAMED INVITE PRECONDITION: no second household may exist between TEN-2b's deploy and
   TEN-2c's.** Not a leak caveat — a **cross-household denial primitive**: with global-first, household
   A typing a novel name inserts `(household_id = A, slug = 'x')`, and B typing the same name then
@@ -1308,100 +1317,108 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   correction, not tombstoned; and 2c picks a shared row's keeper by **earliest referencing row** across
   `entries` ∪ `prescriptions`, ties broken on the household's **`public_id`**.
 
-- **TEN-2b — move every slug conflict target and lookup onto the partial indexes.** _(Beta 0; TEN-2's
-  second.)_ `findOrCreateMovementId` takes a `HouseholdScope` and resolves **GLOBAL-FIRST**: match
-  `slug` against `household_id IS NULL` and return that row if found; **only then** `(scope, slug)`;
-  **only then** insert `(scope, slug)`. The catalog read path and `programDayRows`' movement
-  declaration follow.
-  🔴 **Global-first, not household-first — rewritten here by TEN-2a, which rejected the order this row
-  used to specify** (_"resolves `(household_id, slug)`, falling back to the global reference row"_).
-  The reason is specific to this app: **nothing in it can author movement metadata.**
-  `findOrCreateMovement` writes exactly `{publicId, slug, name, isBodyweight: false}` — no `pattern`,
-  no `unit_default` — so a household-first rule would let the free-text path shadow the seeded
-  `box_jump` (`is_bodyweight: true`) with a household row declaring it loaded-with-no-unit, and
-  `programDayRows` reads exactly those columns as _"the movement's declaration"_. A household override
-  would always be **strictly worse** than the row it overrode, and it would break the 1d assertion that
-  is **good** behaviour and must survive TEN-2. Reasoning + the future cost of flipping it (a repoint
-  migration, not a flag): [TEN-2a's plan](./plans/ten-2a-household-movements.md).
-  **2b also runs the FK's `VALIDATE CONSTRAINT`** (`movements_household_id_households_id_fk`, shipped
-  `NOT VALID` by 2a) and **flips `db:verify`'s `convalidated` assertion from `false` to `true`** — which
-  is how 2a turned "don't forget the VALIDATE" into a red build.
-  🔴 **2b must catch `23505` on `movements_slug_unique` and fall back to resolving the existing global
-  row**, with a boundary test. Without it, the 2b→2c window is a cross-household **denial** primitive
-  (see the TEN-2 row); with it, B gets A's row — the **pre-existing** read leak 2c closes — instead of
-  a 500. That is the right failure direction, and it makes the control more than prose. **2b owns every place that names a movement by slug**, because each stops
-  identifying one row once two rows can share a slug:
-  - `packages/db/src/writers/movement-catalog.ts` → `findOrCreateMovement`'s `ON CONFLICT (slug)`
-    and the `select … where slug = …` after it;
-  - `packages/db/src/seed.ts` → the `MOVEMENT_SEED_ROWS` upsert, also `ON CONFLICT (slug)`;
-  - `seedProgram`'s `inArray(movements.slug, …)` resolution, which must pick the **global
-    (`household_id IS NULL`) row first**, then the block's own household's — never any row with that
-    slug. ⚠️ It builds a slug-keyed map where **last row wins**, so the moment two rows share a slug a
-    prescription can silently attach to another household's row.
+- ✅ **TEN-2b — the writer is scoped: find-or-create resolves global-first, per household.**
+  [Plan](./plans/ten-2b-scoped-movement-lookup.md) _(Beta 0; TEN-2's second; **merged 2026-10-10**;
+  seven-lens panel — 13 blocking + 27 substantive findings reconciled, 6 pushbacks)._
+  `findOrCreateMovementId` takes a `HouseholdScope` and resolves **GLOBAL-FIRST**: `slug` against
+  `household_id IS NULL` → that row; **only then** `(scope, slug)`; **only then** insert
+  `(scope, slug)`. `seedProgram` resolves the **global namespace only** — one line, and the
+  slug-keyed map's last-row-wins hazard dies structurally. Migration `0016` runs
+  `VALIDATE CONSTRAINT`, flipping `db:verify`'s `convalidated` assertion `false` → `true`, which is
+  how TEN-2a turned "do not forget the VALIDATE" into a red build. The `findOrCreateMovementId`
+  allowlist entry is **gone** (its dead-entry assertion forced it) and
+  `movements-household-is-dark.test.ts` is **deleted**.
+  ✅ **Two halves of 1d's verdict closed, and both are asserted rather than claimed:** a refused
+  session's committed row lands in the **caller's own** namespace (garbage, not a cross-tenant write),
+  and a prescription can no longer resolve another household's movement — `seedProgram` **refuses**
+  loudly, so 1d's poisoned-Today-card assertion is **inverted**, not deleted.
+  🔴 **The verdict stays `LEAKS`, and patch `04` stays RED — by arithmetic, not preference.** The
+  non-partial `movements_slug_unique` means **at most one row per slug exists in the whole table**, so
+  two households cannot both hold one: the only reachable outcomes are "B is handed A's row" (the
+  leak, via the `23505` fallback) and "B's write fails forever" (the denial). ⚠️ Patch `04` was
+  nevertheless **REGENERATED** — same break, same `.expect`, new context — because its hunk used the
+  signature this PR rewrote, so `db:mutations` would have failed `patch does not apply` rather than
+  reporting RED. Regenerated ≠ rewritten ≠ retired; retiring it is 2c's.
+  🔴 **The fallback's PRICE, measured and now a committed assertion:** it leaves a cross-household
+  `entries.movement_id`, so `runbooks.md` step 11 aborts `23503`. TEN-2a's _"prevented by
+  construction"_ claim in `schema.ts`, `runbooks.md`, `SECURITY.md` and `notice.md` was **false** and
+  all four were corrected; pre-flight (d) gained a repair step (repoint to a clone — **never**
+  `SET NULL`).
+  🔴 **The seed's shadow guard shipped, and the hazard was not what the row predicted.** Postgres
+  infers **both** arbiters for `ON CONFLICT (slug) WHERE household_id IS NULL`, so a global-UNIQUE
+  collision is **absorbed** and the curated row is _never inserted_ while `db:seed` reports success
+  (measured). The symptom is **silence, not a duplicate**, so the guard is the only detector. It is
+  **non-wedging** (detect → omit only the shadowed rows → seed everything else → throw last) because
+  `migrate.yml` seeds production on every push; recovery is a new `runbooks.md` heading, and the
+  refusal names **seed slugs only** (a public const) because that log is world-readable.
+  🔴 **NO BACKFILL — moved to TEN-2c, deliberately.** Six reasons, five measured: it is vacuous in
+  production (zero app-authored rows); it **makes the 2b→2c window worse** (assigning a shared row to
+  one household forces every other onto the fallback, manufacturing the cross-household references
+  that abort deletion); it duplicates 2c, which must compute referencing-households-per-movement
+  anyway; `profiles.household_id` is nullable so an orphan-profile reference mis-assigns the row; a
+  **soft-deleted** reference strands a row at `household_id IS NULL` forever; and it rewrites
+  ownership with no dry run, where AGENTS.md channels such edits into `db:correct`.
+  ⚠️ **TEN-2c inherits from this PR:** the verdict flip, patch `04`'s retirement, the backfill (with
+  **one** definition of "referenced" shared with `TEN-2b-2`'s hard `DELETE` — live references attribute
+  ownership, any reference makes a row non-orphan), _"logs the count"_ rather than per-row, and the
+  deletion of the `23505` fallback + `MOVEMENT_SLUG_UNIQUE_CONSTRAINT` + `db:verify`'s fallback test.
+  ⚠️ **Two acceptance sentences this row used to carry were rewritten by the plan, not quietly
+  dropped:** `programDayRows` gets **no** read-path predicate (2a settled the reference as
+  writer-enforced; a predicate would make a card vanish, and in `export-month` would silently drop a
+  month of CSV), and the backfill's _"logs each one"_ became a count, for privacy.
 
-  ⚠️ **Every conflict target must repeat its index's `WHERE` predicate literally** —
-  `WHERE household_id IS NULL` / `WHERE household_id IS NOT NULL` — not as a bound parameter, or
-  Postgres cannot infer the partial index as the arbiter and the statement errors (the V1-5
-  partial-index lesson `seed.ts` already cites for `ramp_targets`).
-  🔴 **The predicate goes in `where:`, NOT `targetWhere:`** — verified in drizzle `0.45.3`'s source:
-  `onConflictDoNothing` reads `config.where` and **silently drops** `targetWhere`, so the predicate
-  would vanish and the partial index could not be inferred (`42P10`, measured).
-  [lessons.md](./lessons.md) documents only the `onConflictDoUpdate({ targetWhere })` form — the one
-  2b must **not** use; 2a added the missing half.
-  ⚠️ **`ON CONFLICT (household_id, slug)` against only a partial index fails `42P10`** — the obvious
-  implementation breaks on the first custom movement. The target must carry the predicate
-  (`on conflict (household_id, slug) where household_id is not null`), measured.
-  🔴 **PRECONDITION 2b must land: the seed's shadow guard.** The seed has grown three times and
-  `migrate.yml` runs `db:seed` against production on **every** push to `main`. If a household holds a
-  custom `kb_swings` and a later seed adds `kb_swings` globally, global-first re-points that
-  household's **new** logs to the seeded row while its **existing** `entries.movement_id` /
-  `prescriptions.movement_id` still point at its own — two rows for one slug inside one household's
-  history, breaking per-movement aggregation (DASH-1, the CSV grouping key). The seed must detect a
-  pre-existing household row for a slug it is about to add globally and **refuse or adopt**. It is a
-  precondition in **2c's** acceptance too, because 2c's backfill is the other thing that creates
-  household-owned rows.
-  **Backfill:** a custom row referenced by exactly one household is assigned to it, guarded on
-  `household_id IS NULL` so a re-run is a no-op. A row referenced by **more than one** household
-  **cannot be split here**: a per-household clone keeps the slug, and the global UNIQUE still exists
-  in 2b. So 2b's backfill **leaves such rows at `household_id IS NULL` and logs each one** (the
-  migration still succeeds, so 2b deploys), and the split belongs to 2c. Until then a shared row is
-  served through the global fallback, which is the leak 2b does not claim to close. With one live
-  household no such row can exist, which is one more reason TEN-2 lands before the invite.
-  ⚠️ **2b does NOT close the leak and does NOT flip the verdict.** While the global
-  `movements.slug` UNIQUE (`packages/db/src/schema.ts` → `movements`) exists, a second household
-  cannot hold its own row for a slug another household already has: its insert hits the global
-  UNIQUE, which a partial-index `ON CONFLICT` does not absorb. Harmless only while one household
-  exists. ⚠️ `findOrCreateMovementId` is the one allowlist entry in
-  `apps/web/lib/dal/scoped.test.ts` whose reason says TEN-2 **deletes** it; once it takes a
-  `HouseholdScope` that test's dead-entry assertion fails until the entry goes, so the deletion is
-  this row's. **`apps/web/lib/movements-household-is-dark.test.ts` is 2b's to DELETE** as well — 2a
-  added it as the read-side proof that the column is dark, and the deletion is the visible edit that
-  says it is live now (the TEN-1 1a / OBS-2 idiom). Do not extend an allowlist to keep it green.
-  🔴 **The orphan-row correction — a custom row NOTHING references** (1d's surviving-refusal primitive
-  creates exactly these). It is **removed, not assigned**, and it must be a **HARD `DELETE`**: the
-  registry's only existing delete precedent is a **soft** one, and a tombstoned app-authored row still
-  occupies its slug in a namespace whose resolver has no `deleted_at` filter, so it would be handed
-  back forever. Justified by `corrections/README.md` rule 8. Four rules it needs that do not exist yet,
-  all 2b's: **(a)** it is a **second** sanctioned deletion — rule 8 scopes the exception to a PRIV-1
-  household deletion, so extend it or write a sibling exception beside the rules; **(b)** neither the
-  dry-run output nor the committed `Applied` table may carry the row's `name` or `slug` —
-  uncontrolled household free text, `public_id` plus counts only (rule 9's redaction rule names only a
-  privileged value, and 2b extends it to uncontrolled free text); **(c)** do **not** rest the
+- **TEN-2b-1 — move find-or-create inside `writeStrengthSession`'s transaction.** _(Beta 0; deferred
+  from TEN-2b, which is where the reasoning lives.)_ Today `logStrengthSession` resolves every
+  movement **before** the write core opens its transaction, so a session the household seam refuses
+  has already committed its catalog text. **TEN-2b defused the cross-tenant half** — that row now
+  lands in the caller's own namespace, where `runbooks.md` step 11 removes it — so this is **garbage
+  collection, not an isolation fix**, which is why it is its own row rather than a blocker.
+  It needs `writeStrengthSession` to take movement **names** instead of resolved ids (a write-core
+  contract change), serializes the current `Promise.all`, widens the session transaction's lock
+  footprint, and **flips `apps/web/lib/dal/entries.test.ts`'s pinned ordering assertion** — which is
+  the only test in the repo proving the catalog write commits before the transaction opens, so it
+  must be changed deliberately, never deleted.
+  🔴 **And it is strictly harder than it looks:** inside the transaction the `23505` fallback can no
+  longer catch-and-re-query, because a failed statement aborts the transaction (`25P02`) and would
+  kill the whole session write. This PR owes a `SAVEPOINT` — the mechanic `verify.ts` already
+  documents for `expectRejectedBy`. **Ordered BEFORE `TEN-2b-2`** (TEN-2a's correction rule (d)).
+
+- **TEN-2b-2 — the orphan-row correction: a custom movement nothing references.** _(Beta 0; deferred
+  from TEN-2b; runs AFTER `TEN-2b-1` per TEN-2a's rule (d), or it deletes rows the live app is still
+  creating.)_ 1d's surviving-refusal primitive creates exactly these. The row is **removed, not
+  assigned**, and it must be a **HARD `DELETE`**: the registry's only delete precedent is a **soft**
+  one, and a tombstoned app-authored row still occupies its slug in a namespace whose resolver has no
+  `deleted_at` filter, so it would be handed back forever. Justified by `corrections/README.md` rule 8.
+  Four rules it needs that do not exist yet: **(a)** it is a **second** sanctioned deletion — rule 8
+  scopes the exception to a PRIV-1 household deletion, so extend it or write a sibling; **(b)** neither
+  the dry-run output nor the committed `Applied` table may carry the row's `name` or `slug` —
+  uncontrolled household free text, `public_id` plus counts only; **(c)** do **not** rest the
   justification on "unattributable" — with one live household and a `created_at` the owner is
-  inferable; the justification is **no purpose, no scope, nothing references it**; **(d)** it runs
-  **after** 2b moves the find-or-create inside `writeStrengthSession`'s transaction, or it deletes rows
-  the live app is still creating — and the count is **re-measured immediately before the invite**,
-  because "zero" is a dated fact, not an invariant.
-  **Privacy documents 2b owns**, because they stop being true the moment the column is written:
-  [data-inventory.md](./privacy/data-inventory.md) §1b's _"no household scoping"_ and _"survives that
-  household's deletion"_ claims plus §1b's framing sentence (_"Not deleted when a household is deleted,
-  because there is nothing of theirs in them"_ — now with an exception), the `movements` row's move
-  from §1b to §1a, and [notice.md](./privacy/notice.md)'s _"it is **not removed** when you delete your
-  household"_ — same PR as the deletion step. **And `runbooks.md` step 11** already exists (2a added
-  it, because 2a's FK is what aborts the transaction).
+  inferable; it is **no purpose, no scope, nothing references it**; **(d)** the count is **re-measured
+  immediately before the invite**, because "zero" is a dated fact, not an invariant.
+  ⚠️ **It must share ONE definition of "referenced" with TEN-2c's backfill** — TEN-2b measured the
+  trap: if tombstones are ignored, a row referenced only by soft-deleted entries looks unreferenced and
+  this hard `DELETE` then hits `23503` on the surviving tombstone's FK. The shape TEN-2b recommends:
+  **live** references attribute ownership; **any** reference, tombstoned included, makes a row
+  non-orphan. ⚠️ Until it lands, `data-inventory.md` §8 records such rows as kept **indefinitely**,
+  owned by this row — not unowned.
 
 - **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This is where the leak closes.**
-  _(Beta 0; TEN-2's third.)_ With the global UNIQUE gone a second household can hold its own row for
+  _(Beta 0; TEN-2's third.)_
+  🔴 **What TEN-2b handed this row, beyond what was already here.** (i) **The backfill**, moved here
+  with its reasoning — and it owes **one** definition of "referenced", shared with `TEN-2b-2`'s hard
+  `DELETE`: TEN-2b measured that a row referenced only by a **soft-deleted** entry otherwise strands at
+  `household_id IS NULL` forever, and that `profiles.household_id` being nullable lets an
+  orphan-profile reference mis-assign a row. (ii) **Deleting the `23505` fallback** in
+  `writers/movement-catalog.ts`, the `MOVEMENT_SLUG_UNIQUE_CONSTRAINT` const, and `db:verify`'s
+  fallback + price assertions — all three become dead or red the moment the constraint goes, and the
+  `expectRejectedBy(MOVEMENT_SLUG_UNIQUE_CONSTRAINT, …)` calls are the **forcing** artifact: they
+  redden 2c's own build, which is the feature. (iii) _"Logs the count"_, not per-row (privacy).
+  (iv) The last deferred catalog-verdict copy: `docs/decisions/0006-household-addressing.md` —
+  `SECURITY.md` and `beta-1.md` were paid off by 2b instead.
+  ⚠️ **And the thing 2c must not repeat:** `tech-debt.md` predicted "2b and 2c each edit two files, not
+  twelve" and 2b edited about a dozen, because **a pointer that embeds the status clause is not a
+  pointer**. Budget for the sweep. With the global UNIQUE gone a second household can hold its own row for
   a slug, so this PR carries the proofs: TEN-1 1d's `db:verify` catalog verdict flips from
   _"LEAKS"_ to _"isolated"_, both directions, and **mutation patch `04-slug-is-not-the-arbiter` is
   rewritten or retired** — its job is to prove the global slug _is_ the arbiter, which stops being

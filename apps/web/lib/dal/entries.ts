@@ -481,10 +481,14 @@ export async function logStrengthSession(
 ): Promise<{ sessionId: string }> {
   // TEN-1 1c: the scope rides into the write core, whose in-transaction profile resolve is the
   // actual seam (`writeStrengthSession`). Resolved BEFORE the catalog work so a request with no
-  // household does none of it. ⚠️ `findOrCreateMovementId` below is still **unscoped** —
-  // `movements.household_id` exists (TEN-2a) but nothing reads or writes it yet; see
-  // `docs/privacy/data-inventory.md` §4 for the status — so a refused session has already committed
-  // its caller-supplied catalog text. That is TEN-2's problem; 1d records the verdict.
+  // household does none of it — and, since TEN-2b, so `findOrCreateMovementId` below can be handed it.
+  //
+  // ⚠️ The residual, stated honestly: find-or-create still runs BEFORE `writeStrengthSession`'s
+  // transaction, so a session the household seam then REFUSES has already committed its
+  // caller-supplied catalog text. TEN-2b defuses the cross-tenant half — the committed row now lands
+  // in the caller's OWN namespace (`household_id = scope`), where the household-deletion procedure
+  // removes it — so what survives a refusal is garbage, not a leak. Moving the call inside the
+  // transaction is `TEN-2b-1`; `entries.test.ts` pins the current order deliberately.
   const scope = await getHouseholdScope();
   if (!scope) throw new Error('Profile not found');
 
@@ -494,7 +498,7 @@ export async function logStrengthSession(
   const movements = await Promise.all(
     args.movements.map(async (m) => ({
       ...m,
-      movementId: await findOrCreateMovementId(m.movementName),
+      movementId: await findOrCreateMovementId(scope, m.movementName),
     })),
   );
 
