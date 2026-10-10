@@ -167,8 +167,9 @@ for an unprogrammed day.
 
 4c. 🔴 **The four `movement*` columns on the card are GLOBAL, and a correctly-scoped read can render
 another household's string.** `programDayRows` is household-scoped end to end (4b) and still returns
-`movements.name`, `.slug`, `.is_bodyweight` and `.unit_default` off a table with **no `household_id`
-column at all**. The strength form writes that table from free text
+`movements.name`, `.slug`, `.is_bodyweight` and `.unit_default` off a table whose `household_id`
+column exists (TEN-2a) but is **dark** — nothing reads or writes it; see
+[data-inventory.md](../privacy/data-inventory.md) §4 for the status. The strength form writes that table from free text
 (`findOrCreateMovementId` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions resolve
 by **slug** — the same arbiter — so:
 

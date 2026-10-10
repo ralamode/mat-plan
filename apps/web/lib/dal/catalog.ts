@@ -22,9 +22,10 @@ import { db } from './db';
  * - `getActivityTypeByKey` and `getMetricDefinition` read `activity_types` / `metric_definitions`,
  *   seeded from `packages/shared` (`architecture.md` § 4), shared by every household, with **no
  *   `household_id` column** to scope by. Resolving one reveals nothing about any household.
- * - `findOrCreateMovementId` **writes** `movements`, which carries no `household_id` either, and that
- *   one is **not benign** — see its docblock below. It is the one residual TEN-1 proves rather than
- *   closes, and **TEN-2** is its fix.
+ * - `findOrCreateMovementId` **writes** `movements`. `movements.household_id` exists (TEN-2a,
+ *   migration 0015) but nothing reads or writes it yet — see `docs/privacy/data-inventory.md` §4 for
+ *   the status. So this one is **not benign**: see its docblock below. It is the one residual TEN-1
+ *   proves rather than closes, and **TEN-2** is its fix.
  *
  * `reportScopeMiss`'s existence-only probe (`household.ts`) is the other unscoped query, allowlisted
  * separately by the same test, and `getHouseholdScope` is the scope point itself.
@@ -92,11 +93,14 @@ export async function assertMetricKeyExists(key: string): Promise<string> {
  * The core is `findOrCreateMovement` in `packages/db/src/writers/movement-catalog.ts`, single-sourced
  * per `write-path.md` invariant 3 so `db:verify` runs **this** function rather than a re-typed
  * lookalike — which is the only way the cross-household behaviour could be *proved* rather than
- * asserted. Read that docblock before changing anything here: `movements` has **no `household_id`
- * column at all**, so another household's free-text name binds to the row this one created, and
- * whichever household types a name first pins that slug's metadata permanently.
+ * asserted. Read that docblock before changing anything here: `movements.household_id` exists
+ * (TEN-2a) but **this function does not use it, and must not start** — see
+ * `docs/privacy/data-inventory.md` §4 for the status. So another household's free-text name still
+ * binds to the row this one created, and whichever household types a name first pins that slug's
+ * metadata permanently.
  *
- * TEN-1 1d records the verdict and its evidence; **TEN-2** is the fix.
+ * TEN-1 1d records the verdict and its evidence; **TEN-2b** changes this function's signature and
+ * **TEN-2c** closes the leak.
  */
 export async function findOrCreateMovementId(name: string): Promise<number> {
   return findOrCreateMovement(db, name);

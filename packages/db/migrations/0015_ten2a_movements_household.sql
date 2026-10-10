@@ -1,0 +1,102 @@
+-- TEN-2a — `movements.household_id` + the two partial unique indexes, shipped dark.
+--
+-- WHY / THE SHAPE: `movements` is the one table in the schema with no household column, which is why
+--   `findOrCreateMovement` cannot be scoped and why TEN-1 chunk 1d proved — in both directions,
+--   against a real database — that one household is handed another's catalog row, that whoever types
+--   a name first pins that slug's name / is_bodyweight / unit_default for everybody, and that a
+--   session write the household seam REFUSES has already committed the caller's text. That verdict
+--   moved TEN-2 into Beta 0. This file adds the column and the two namespaces the invariant will
+--   live in. `household_id IS NULL` is a VALUE, not missing data: reference data owned by no
+--   household (the curated seed rows, each with a pattern a human chose). A non-NULL value means
+--   "this household typed this name". So the column is nullable FOREVER — TEN-2c does NOT contract
+--   it to NOT NULL (that would assert some household owns `Box Jump`); it contracts to a NOT VALID
+--   CHECK (household_id IS NOT NULL OR pattern IS NOT NULL).
+--   Plan: docs/plans/ten-2a-household-movements.md. Addressing: docs/decisions/0006-household-addressing.md.
+--
+-- CONSTRAINT ON TEN-2b (one line, not a design): the resolver must be GLOBAL-FIRST — resolve `slug`
+--   against household_id IS NULL first, and only then (scope, slug) — or a household row can shadow
+--   a seeded one with strictly worse metadata, because nothing in the app can author movement
+--   metadata. Reasoning, the seed-growth hazard and the 2b->2c window: the plan. This file states
+--   what the indexes MEAN; it does not design 2b.
+--
+-- ⚠️ ON DELETE NO ACTION IS LOAD-BEARING: SET NULL would silently promote every row of a deleted
+--   household into the GLOBAL reference namespace — household_id IS NULL, served by global-first to
+--   every other household — breaking "IS NULL => seeded" with no code change anywhere. The correct
+--   response to a household delete blocked by this FK is to DELETE the rows (docs/runbooks.md ->
+--   "Delete a household and everyone in it", step 11), never to null the column.
+--
+-- ⚠️ WRITER-ENFORCED, NOT SCHEMA-ENFORCED (the `supersets` / `prescription_targets` family): nothing
+--   here stops an entries.movement_id of household H pointing at a movement owned by not-H.
+--   Global-first + 2b/2c's backfill rules prevent it by construction; runbooks.md step 3 pre-flights
+--   it, because the symptom is a mid-transaction abort of the household deletion.
+--
+-- MEASURED: see the plan -> "What the real production data says". No backfill here, and none needed.
+--   ⚠️ NO PRODUCTION NUMBERS IN THIS FILE: migrations are forward-only and never edited, so a fact
+--   written here is permanent (docs/privacy/data-inventory.md §9 residual 2 — 0012 carries a given
+--   name in a comment and can only go if history is rewritten). Production state belongs in the
+--   plan and the PR body, which stay editable.
+--
+-- LOCKS: the whole file is one transaction, so ADD COLUMN's ACCESS EXCLUSIVE on `movements` — which
+--   blocks READS as well as writes — is held through both index builds until COMMIT. The SHARE lock a
+--   bare CREATE INDEX would take is therefore irrelevant: a strictly stronger lock is already held.
+--   The FK additionally takes SHARE ROW EXCLUSIVE on `households`. lock_timeout bounds how long THIS
+--   STATEMENT WAITS to acquire its lock — nothing bounds the queue piling up behind it;
+--   statement_timeout bounds the WORK. At 35 rows the whole hold is milliseconds, and migrate.yml
+--   serializes and runs db:seed only after db:migrate returns, so the seed cannot queue behind it.
+--   ⚠️ drizzle wraps the WHOLE PENDING SET in ONE transaction (verified in drizzle-orm 0.45.3,
+--   pg-core/dialect.js: migrate() is a single session.transaction with the file loop INSIDE it), not
+--   each file as five places in this repo still say. Alongside another pending file the ACCESS
+--   EXCLUSIVE hold therefore spans the whole run — and plain SET (not SET LOCAL, kept for
+--   consistency with 0006-0014) leaks these timeouts onto later files in that run.
+--
+-- NO PRE-CHECK (contrast 0012's DO $$ block): uq_movements_slug_global indexes a SUBSET of the rows
+--   movements_slug_unique already forces unique, and uq_movements_household_slug's predicate matches
+--   ZERO rows. Neither build can raise 23505. The only realistic failure is lock_timeout (55P03).
+--
+-- NOT CONCURRENTLY: the transaction-stripping runner AGENTS.md describes DOES NOT EXIST
+--   (scripts/migrate.ts is drizzle's stock migrator), a CONCURRENTLY statement inside a drizzle
+--   migration fails at runtime with 25001, and the gate that would ask is excluded repo-wide —
+--   reasoning recorded in .squawk.toml, not restated here. 35 rows, under a 5s lock_timeout.
+--
+-- SHIPS DARK: no reader, no writer, no behaviour change. `movements_slug_unique` — the GLOBAL,
+--   non-partial UNIQUE constraint — is UNTOUCHED, so every deployed `ON CONFLICT (slug)` keeps its
+--   arbiter until 2c (measured: a bare conflict target can only infer a NON-PARTIAL index, so these
+--   two partial indexes change no deployed behaviour). db:verify proves every movements row still has
+--   household_id IS NULL after the whole run, including the rows the REAL find-or-create wrote.
+--
+-- FK IS NOT VALID, deliberately, and TEN-2b runs the VALIDATE CONSTRAINT: AGENTS.md's rule is that
+--   NOT VALID and VALIDATE are SPLIT across PRs, and Squawk (measured) reports 0 issues for the
+--   NOT VALID form and two warnings for the validated one. NOT VALID skips only the validation SCAN;
+--   both referential triggers are created and live, so new rows are enforced from the moment this
+--   applies — measured in PGlite: inserting a child with a non-existent parent is 23503, and
+--   DELETEing a referenced parent is 23503 even while the constraint is NOT VALID. db:verify asserts
+--   convalidated = false, which is the ONLY thing that would catch this hand-edit being lost on a
+--   rebase (the drift guard diffs schema.ts against the snapshot, not this SQL). 2b flips that
+--   assertion to true.
+--
+-- RE-RUN SAFETY comes from the transaction, not from IF NOT EXISTS: a failed run leaves nothing
+--   behind. The ADD COLUMN carries IF NOT EXISTS anyway (0006:9, 0008:8, 0009:19, 0013:32, 0014);
+--   ADD CONSTRAINT has no such clause, and the two indexes omit it deliberately, per 0012 — it would
+--   mask a same-named index with a DIFFERENT predicate, and the predicate IS the invariant.
+--
+-- WHAT db:verify DOES NOT PROVE: PGlite starts EMPTY (the "35 existing rows acquire a column" path is
+--   never exercised), is single-connection (lock_timeout is never exercised) and models NO
+--   CONCURRENCY at all — so the ACCESS EXCLUSIVE hold and the movements->households lock order above
+--   are review-enforced only. The header has to be right because nothing else will catch it.
+--
+-- IF IT FAILS: no partial state, but the migration stays PENDING, re-fails on every later push to
+--   main and takes db:seed with it — docs/runbooks.md -> "A pending migration wedges prod and the
+--   seed with it". Recovery is a workflow_dispatch re-run.
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "movements" ADD COLUMN IF NOT EXISTS "household_id" bigint;--> statement-breakpoint
+ALTER TABLE "movements" ADD CONSTRAINT "movements_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE no action ON UPDATE no action NOT VALID;--> statement-breakpoint
+-- The global reference namespace: one row per slug among rows owned by no household. Implied by the
+-- existing global UNIQUE today; load-bearing from 2c.
+CREATE UNIQUE INDEX "uq_movements_slug_global" ON "movements" USING btree ("slug") WHERE "movements"."household_id" is null;--> statement-breakpoint
+-- Each household's own namespace. ALSO the covering index for the FK above: it leads on household_id
+-- and its predicate is implied by any `household_id = $1` lookup, so no separate plain index is
+-- needed (unlike idx_program_blocks_household, whose partial sibling is WHERE deleted_at IS NULL and
+-- therefore cannot answer the referential check). ⚠️ Adding `deleted_at IS NULL` here LOSES that
+-- implication, so the PR that does it must also add the plain idx_movements_household.
+CREATE UNIQUE INDEX "uq_movements_household_slug" ON "movements" USING btree ("household_id","slug") WHERE "movements"."household_id" is not null;

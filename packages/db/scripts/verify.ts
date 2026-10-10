@@ -22,6 +22,7 @@ import {
   METRIC_VALUE_TYPES,
   metricDefinitionSeedRowSchema,
   MOVEMENT_PATTERNS,
+  MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
   movementSeedRowSchema,
   movementSlug,
@@ -41,6 +42,8 @@ import {
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
+  SEED_PUBLIC_ID_PREFIX,
+  uuidSchema,
   QUANTITY_SLOT,
   QUANTITY_SLOT_ROWS,
   UNIT_CODES,
@@ -98,16 +101,36 @@ import {
 const db = drizzle(new PGlite(), { schema, casing: 'snake_case' });
 const asPg = db as unknown as NodePgDatabase<typeof schema>;
 
+/** The transaction handle `db.transaction` hands its callback — derived here, never re-typed. */
+type VerifyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Assert `fn` rejects with a Postgres error whose violated constraint is `constraintName`,
  * read off `cause.constraint` (the node-postgres / PGlite error shape). Extracted from the two
  * inline copies this file grew (V1-1c's activity_type_id guard + V1-5's shape-CHECK trap) and
  * reused for the V1-6b-1 ramp_targets rejections — one idiom, so a rename fails in one place.
+ *
+ * **TEN-2a: pass `tx` when the probe runs inside an enclosing transaction.** A failed statement
+ * aborts the whole transaction, so a second probe would fail `25P02` and this helper would report
+ * `got '(none)'` for a constraint that is working perfectly. With `tx` each probe runs in its own
+ * nested `tx.transaction(...)` — drizzle emits `SAVEPOINT` / `ROLLBACK TO SAVEPOINT` — so the
+ * enclosing transaction survives every rejection. `fn` must issue its statements on that same `tx`:
+ * PGlite has ONE connection, so a query on the module-level `db` inside a transaction waits forever.
  */
-async function expectRejectedBy(constraintName: string, fn: () => Promise<unknown>): Promise<void> {
+async function expectRejectedBy(
+  constraintName: string,
+  fn: () => Promise<unknown>,
+  tx?: VerifyTx,
+): Promise<void> {
   let violated: string | undefined;
   try {
-    await fn();
+    if (tx) {
+      await tx.transaction(async () => {
+        await fn();
+      });
+    } else {
+      await fn();
+    }
   } catch (e) {
     violated = (e as { cause?: { constraint?: string } })?.cause?.constraint;
   }
@@ -145,8 +168,8 @@ function assertRefTableMatches(
  * lives ONCE here (the routine_config + entries checks both call it, plus the V1-10 tables).
  *
  * It carries `data_type` only. Nullability and the column default are catalog facts this shape
- * cannot express, so a check that needs them queries `information_schema.columns` for itself (see
- * the TEN-1 1a readback) rather than widening this Map and churning its four existing callers.
+ * cannot express, so a check that needs them calls `columnCatalogShape` below rather than widening
+ * this Map and churning its four existing callers.
  */
 async function columnsOf(tableName: string): Promise<Map<string, string>> {
   const res = await db.execute(
@@ -154,6 +177,30 @@ async function columnsOf(tableName: string): Promise<Map<string, string>> {
   );
   const rows = (res as unknown as { rows: { column_name: string; data_type: string }[] }).rows;
   return new Map(rows.map((r) => [r.column_name, r.data_type]));
+}
+
+/**
+ * The three catalog facts about ONE column that `columnsOf` cannot carry: declared type, NULLability
+ * and the stored default. Returns `undefined` when the column does not exist.
+ *
+ * Extracted at TEN-2a, its second consumer (TEN-1 1a's `households.synthetic` readback was the
+ * first, converted in the same PR). ⚠️ `expectRejectedBy` cannot reach NULLability either — a NOT
+ * NULL violation is `23502`, which carries a column, not a named constraint — so this readback is
+ * the only way to assert that a column shipped nullable, or didn't.
+ */
+async function columnCatalogShape(
+  tableName: string,
+  columnName: string,
+): Promise<{ data_type: string; is_nullable: string; column_default: string | null } | undefined> {
+  const res = await db.execute(
+    sql`select data_type, is_nullable, column_default from information_schema.columns
+        where table_name = ${tableName} and column_name = ${columnName}`,
+  );
+  return (
+    res as unknown as {
+      rows: { data_type: string; is_nullable: string; column_default: string | null }[];
+    }
+  ).rows[0];
 }
 
 await migrate(db, { migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)) });
@@ -252,12 +299,9 @@ assert.equal(
 // cannot reach this either (a NOT NULL violation is 23502, which carries a column, not a named
 // constraint). This is the half that guarantees prod's pre-existing household row acquired `false`
 // rather than NULL, and that the stored default has not drifted from drizzle's `.default(false)`.
-const [syntheticCol] = (
-  (await db.execute(
-    sql`select is_nullable, column_default from information_schema.columns
-        where table_name = 'households' and column_name = 'synthetic'`,
-  )) as unknown as { rows: { is_nullable: string; column_default: string | null }[] }
-).rows;
+// (TEN-2a: this readback moved into `columnCatalogShape` when TEN-2a became its second consumer —
+// same assertions, one less inline `information_schema` cast.)
+const syntheticCol = await columnCatalogShape('households', 'synthetic');
 assert.equal(syntheticCol?.is_nullable, 'NO', 'TEN-1 1a: households.synthetic is NOT NULL');
 assert.equal(
   syntheticCol?.column_default,
@@ -5178,12 +5222,32 @@ console.log(
 // `findOrCreateMovementId` delegates to (single-sourced in 1d exactly so this proof can run it;
 // `apps/web/lib/dal/catalog.ts` is `server-only` and cannot execute here).
 
-// (a) The structural fact everything below follows from, and the assertion TEN-2 reddens.
-assert.equal(
-  (await columnsOf('movements')).has('household_id'),
-  false,
-  'TEN-1 1d: `movements` has NO household_id column — there is nothing for this write path to scope BY, which is why 1d records a verdict instead of closing the gap (TEN-2 adds the column, and this assertion is what fails then)',
-);
+// (a) The structural fact everything below follows from.
+//
+// ⚠️ **TEN-2a RE-TOOK THIS TRIPWIRE.** Until TEN-2a it read `(await columnsOf('movements'))
+// .has('household_id') === false` — "there is nothing for this write path to scope BY" — and said
+// TEN-2 was the PR that would redden it. TEN-2a is that PR, so the assertion now states what is true
+// instead of being deleted: the column EXISTS, and it is NULLABLE (`household_id IS NULL` is a
+// value — reference data owned by no household — not missing data, which is why TEN-2c contracts to
+// a CHECK rather than to NOT NULL).
+//
+// **Everything below is unchanged and still GREEN.** The column is dark: nothing reads it, nothing
+// writes it, and the global `movements_slug_unique` is untouched, so `findOrCreateMovement` still
+// leaks in both directions exactly as 1d proved. The leak closes at TEN-2c, not here. The column's
+// shape, the FK, the two partial indexes and the proof that every row is still NULL live in the
+// `TEN-2a` section at the end of this file.
+{
+  const householdIdCol = await columnCatalogShape('movements', 'household_id');
+  assert.ok(
+    householdIdCol,
+    'TEN-2a: `movements` HAS a household_id column now (this is TEN-1 1d’s tripwire, re-taken by the PR that fired it — the leak assertions below are unchanged and still green, because the column is dark until TEN-2b)',
+  );
+  assert.equal(
+    householdIdCol.is_nullable,
+    'YES',
+    'TEN-2a: …and it is NULLABLE, forever — NULL means reference data owned by no household, so TEN-2c contracts to a CHECK, never to NOT NULL',
+  );
+}
 
 /** The one movement row behind an internal id — the three columns the catalog DECLARES. */
 async function movementRow(id: number) {
@@ -5368,10 +5432,253 @@ assert.ok(
 );
 
 console.log(
-  '✓ TEN-1 1d THE CATALOG VERDICT: `movements` has no household_id, so find-or-create LEAKS in BOTH directions — ' +
+  '✓ TEN-1 1d THE CATALOG VERDICT: `movements.household_id` is dark (TEN-2a added it; nothing reads or ' +
+    'writes it and the global slug UNIQUE still arbitrates), so find-or-create LEAKS in BOTH directions — ' +
     'B reads A’s row, the first typist pins the slug’s name/is_bodyweight/unit_default for everyone, ' +
     'the other household’s correctly-scoped Today card renders it, and a REFUSED session write leaves ' +
     'the caller-supplied row committed. Verdict + recommendation: docs/plans/ten-1-household-scope.md → "1d as built"',
 );
+
+// ── TEN-2a: the column exists, and nothing uses it ────────────────────────────────────────────────
+//
+// `movements.household_id` + the two partial unique indexes (migration 0015), shipped DARK: no
+// reader, no writer, no behaviour change, and the global `movements_slug_unique` constraint
+// untouched so every deployed `ON CONFLICT (slug)` keeps its arbiter until TEN-2c.
+// Plan: docs/plans/ten-2a-household-movements.md.
+//
+// ⚠️ **NO COMMITTED STATEMENT IN THIS SECTION MAY SET `household_id`.** That is the invariant the
+// dark gate at (4) encodes, which is why every non-NULL fixture below either is REJECTED or lives
+// inside the rolled-back transaction at (3). The tempting repair when (4) goes red is to weaken it
+// to `<= 1`, at which point it stops proving anything.
+{
+  const FK = 'movements_household_id_households_id_fk';
+  const GLOBAL_UQ = schema.MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX;
+  const HOUSEHOLD_UQ = schema.MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX;
+  const SLUG_CONSTRAINT = 'movements_slug_unique'; // pinned deliberately: TEN-2c is what drops it
+
+  // Resolved BEFORE the transaction at (3): PGlite has ONE connection, so a query on the
+  // module-level `db` inside `tx` waits forever (the V1-24 1d lesson, 2,000 lines up).
+  const [ten2aHousehold] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+  assert.ok(ten2aHousehold, 'TEN-2a fixture: the seed household resolves');
+
+  // Probe rows. Their public_ids sit OUTSIDE `SEED_PUBLIC_ID_PREFIX` deliberately (the seed namespace
+  // is `…-000000000xxx`, nine zeros; these are `…-00000002a0xx`), so even if one ever leaked past a
+  // rollback it would be classified as app-authored rather than as curated reference data.
+  const movementRowValues = (suffix: string, slug: string, householdId: number | null) => ({
+    publicId: `019826b4-0000-7000-8000-00000002a0${suffix}`,
+    slug,
+    name: `TEN-2a ${slug} ${suffix}`,
+    householdId,
+  });
+
+  // ── (1) SHAPE, and the FK — both halves, because the FK is this PR's load-bearing safety claim ──
+  const shape = await columnCatalogShape('movements', 'household_id');
+  assert.ok(shape, 'TEN-2a: movements.household_id exists');
+  assert.equal(shape.data_type, 'bigint', 'TEN-2a: movements.household_id is bigint');
+  assert.equal(
+    shape.is_nullable,
+    'YES',
+    'TEN-2a: movements.household_id is NULLABLE — forever. NULL is a VALUE (reference data owned by no household), so TEN-2c contracts to a CHECK, never to NOT NULL',
+  );
+  assert.equal(
+    shape.column_default,
+    null,
+    'TEN-2a: …with no column default — a default would make "unowned" a shape the writer backs into rather than states',
+  );
+
+  // The FK REJECTS a non-existent household. `NOT VALID` skips only the validation SCAN: both
+  // referential triggers are created and live, so TEN-2b's writes are protected before the
+  // constraint is ever validated.
+  await expectRejectedBy(FK, () =>
+    db.insert(schema.movements).values(movementRowValues('01', 'ten2a_fk_probe', 9_999_999)),
+  );
+  // …and it is ACTUALLY `NOT VALID`. `drizzle-kit generate` emits the FK VALIDATED — the
+  // `NOT VALID` is a hand-edit of 0015, and the drift guard diffs `schema.ts` against the snapshot,
+  // not the SQL, so **nothing else in any gate catches this hand-edit being lost on a rebase**.
+  // Losing it means prod runs a validating scan instead. ⚠️ TEN-2b runs the `VALIDATE CONSTRAINT`
+  // and FLIPS THIS ASSERTION TO `true` — that is the point: a prose reminder becomes a red build.
+  const fkValidated = (
+    (await db.execute(
+      sql`select convalidated from pg_constraint where conname = ${FK}`,
+    )) as unknown as { rows: { convalidated: boolean }[] }
+  ).rows;
+  assert.equal(fkValidated.length, 1, `TEN-2a: ${FK} exists`);
+  assert.equal(
+    fkValidated[0].convalidated,
+    false,
+    'TEN-2a: …and it is NOT VALID, as 0015 hand-edits it (TEN-2b runs VALIDATE CONSTRAINT and flips this to true)',
+  );
+
+  // ── (2) `movements_slug_unique` IS UNCHANGED — the basis of "2a changes no deployed behaviour" ──
+  // Outside any transaction, and the one assertion that proves the OLD constraint is still
+  // non-partial and still binding: a household-owned row cannot share a slug with a GLOBAL row while
+  // it exists. `box_jump` is a seeded (household_id IS NULL) row, so this inserts nothing at all.
+  await expectRejectedBy(SLUG_CONSTRAINT, () =>
+    db.insert(schema.movements).values(movementRowValues('02', 'box_jump', ten2aHousehold.id)),
+  );
+
+  // ── (3) THE THREE UNIQUENESS FACTS — in ONE transaction that is ALWAYS rolled back ──────────────
+  //
+  // ⚠️ They CANNOT be asserted outside one. `movements_slug_unique` is non-partial on `(slug)`, so it
+  // dominates both new indexes for every row inserted here; index insertion walks the index list in
+  // OID order, and a 0001-era constraint has a far lower OID than a 0015 index — so
+  // `expectRejectedBy`, which asserts the EXACT `cause.constraint`, would deterministically get
+  // `movements_slug_unique` and these three facts would be unprovable.
+  //
+  // Four mechanics, each load-bearing:
+  //  - `ALTER TABLE … DROP CONSTRAINT`, not `DROP INDEX` — the constraint OWNS the index, so
+  //    `DROP INDEX` fails `2BP01` (measured).
+  //  - the household id was resolved ABOVE, outside the transaction (one connection).
+  //  - `expectRejectedBy` is passed `tx`, so each expected rejection runs in its own SAVEPOINT. A
+  //    failed statement aborts the enclosing transaction, so without that the second probe fails
+  //    `25P02` and reports `got '(none)'`.
+  //  - the rollback is UNCONDITIONAL: the callback ends by throwing a sentinel the caller swallows.
+  //    0012's transaction rolls back because its DO block RAISES; a callback that merely finishes
+  //    **COMMITS**, which here would permanently drop `movements_slug_unique` for the rest of this
+  //    file and make every later assertion pass for the wrong reason.
+  const ROLLBACK_SENTINEL = 'TEN-2a: rollback (expected)';
+  try {
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)}`,
+      );
+
+      // (a) two rows, same slug, both household_id NULL → the GLOBAL namespace is one row per slug.
+      await tx.insert(schema.movements).values(movementRowValues('03', 'ten2a_ns_probe', null));
+      await expectRejectedBy(
+        GLOBAL_UQ,
+        () => tx.insert(schema.movements).values(movementRowValues('04', 'ten2a_ns_probe', null)),
+        tx,
+      );
+
+      // (b) two rows, same slug, the SAME non-NULL household → one row per slug per household.
+      await tx
+        .insert(schema.movements)
+        .values(movementRowValues('05', 'ten2a_hh_probe', ten2aHousehold.id));
+      await expectRejectedBy(
+        HOUSEHOLD_UQ,
+        () =>
+          tx
+            .insert(schema.movements)
+            .values(movementRowValues('06', 'ten2a_hh_probe', ten2aHousehold.id)),
+        tx,
+      );
+
+      // (c) one GLOBAL row + one HOUSEHOLD row, SAME slug → BOTH insert. The namespaces are
+      // separate, which is the entire point of the shape — and the ONLY assertion here that
+      // distinguishes the new indexes from the constraint they replace. Without it, (1)–(3) would
+      // pass against a migration that created no indexes at all.
+      await tx.insert(schema.movements).values(movementRowValues('07', 'ten2a_both_probe', null));
+      await tx
+        .insert(schema.movements)
+        .values(movementRowValues('08', 'ten2a_both_probe', ten2aHousehold.id));
+      const bothNamespaces = await tx
+        .select({ householdId: schema.movements.householdId })
+        .from(schema.movements)
+        .where(eq(schema.movements.slug, 'ten2a_both_probe'));
+      assert.equal(
+        bothNamespaces.length,
+        2,
+        'TEN-2a: a global row and a household row SHARE a slug — the two namespaces are separate (this is what the partial indexes buy; the global constraint forbade it at (2))',
+      );
+      assert.deepEqual(
+        bothNamespaces.map((r) => r.householdId).sort(),
+        [null, ten2aHousehold.id].sort(),
+        'TEN-2a: …one owned by no household, one owned by this household',
+      );
+
+      throw new Error(ROLLBACK_SENTINEL);
+    });
+    assert.fail('TEN-2a: the uniqueness transaction MUST roll back — it dropped a live constraint');
+  } catch (e) {
+    if ((e as Error).message !== ROLLBACK_SENTINEL) throw e;
+  }
+
+  // 0012's closing re-assertion, without which (a)–(c) could leak a dropped constraint into the rest
+  // of this file: the constraint is back, and still binding.
+  await expectRejectedBy(SLUG_CONSTRAINT, () =>
+    db.insert(schema.movements).values(movementRowValues('09', 'box_jump', null)),
+  );
+  const leakedProbes = await db
+    .select({ slug: schema.movements.slug })
+    .from(schema.movements)
+    .where(
+      inArray(schema.movements.slug, ['ten2a_ns_probe', 'ten2a_hh_probe', 'ten2a_both_probe']),
+    );
+  assert.deepEqual(leakedProbes, [], 'TEN-2a: …and the rollback took every probe row with it');
+
+  // ── (4) THE DARK CLAIM — the whole reason this PR is safe to land ahead of TEN-2b ───────────────
+  //
+  // Anti-vacuity FIRST, and it is PROPERTY-BASED on purpose: `count(*) > MOVEMENT_SEED_ROWS.length`
+  // would be satisfied by extra rows from ANY source (this section's own probes included), while the
+  // risk being guarded is "no row was created by a writer that COULD have set the column". So: at
+  // least one row outside `MOVEMENT_SEED_PUBLIC_IDS` — i.e. authored by the only writer there is,
+  // the REAL `findOrCreateMovement` the TEN-1 1d fixtures above drive.
+  const allMovements = await db
+    .select({
+      publicId: schema.movements.publicId,
+      householdId: schema.movements.householdId,
+      pattern: schema.movements.pattern,
+    })
+    .from(schema.movements);
+  const appAuthored = allMovements.filter((m) => !MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId));
+  assert.ok(
+    appAuthored.length > 0,
+    'TEN-2a anti-vacuity: at least one movements row was authored by the app’s find-or-create (outside MOVEMENT_SEED_PUBLIC_IDS) — otherwise the dark assertion below holds for want of a writer, not because the writer leaves the column alone',
+  );
+  assert.deepEqual(
+    allMovements.filter((m) => m.householdId !== null),
+    [],
+    'TEN-2a SHIPS DARK: after migrations, two seeds and every TEN-1 fixture — including rows the REAL findOrCreateMovement wrote — EVERY movements row still has household_id IS NULL. Nothing in the app sets this column. ⚠️ If this goes red, something started writing it: do NOT weaken this assertion, and do NOT commit a non-NULL fixture',
+  );
+
+  // ── (5) THE AUTHORSHIP DISCRIMINATOR — three directions ────────────────────────────────────────
+  // TEN-2b's backfill and its correction DELETE rows on this test, so it is proved here before
+  // anything depends on it. The discriminator is exact set membership in `MOVEMENT_SEED_PUBLIC_IDS`,
+  // NOT a `SEED_PUBLIC_ID_PREFIX` test: that prefix is the GLOBAL seed namespace shared by every
+  // seeded table, so a `movements` row carrying `seedPublicId('010')` (the household's id) would pass
+  // a prefix test and be mistaken for curated reference data.
+  const seeded = allMovements.filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId));
+  assert.equal(
+    seeded.length,
+    MOVEMENT_SEED_ROWS.length,
+    'TEN-2a: every seeded movement is present exactly once',
+  );
+  assert.deepEqual(
+    seeded.filter((m) => m.pattern === null),
+    [],
+    'TEN-2a discriminator (1/3): a row IN the set has a non-NULL `pattern` — `movementSeedRowSchema` makes it non-nullable',
+  );
+  assert.deepEqual(
+    appAuthored.filter((m) => m.pattern !== null),
+    [],
+    'TEN-2a discriminator (2/3): a row OUTSIDE the set has `pattern IS NULL` — `findOrCreateMovement` writes neither pattern nor unit_default, so this is the cross-check the backfill can lean on',
+  );
+  assert.deepEqual(
+    appAuthored.filter((m) => m.publicId.startsWith(SEED_PUBLIC_ID_PREFIX)),
+    [],
+    'TEN-2a discriminator (3/3): NO row carries a seed-NAMESPACE public_id that is not in MOVEMENT_SEED_PUBLIC_IDS — the direction a prefix test would have missed entirely',
+  );
+  // And the obligation behind all three: a `movements.public_id` only ever comes from `newId()` or
+  // the seed const. Asserted nowhere before this. ⚠️ Version-agnostic on purpose: V1-1b's backfill
+  // fixture ~4,500 lines up inserts via raw SQL with `gen_random_uuid()` (a UUIDv4), so a
+  // UUIDv7-shaped assertion would fail on this file's own fixture rather than on a real defect.
+  for (const m of appAuthored) {
+    assert.ok(
+      uuidSchema.safeParse(m.publicId).success,
+      `TEN-2a: every non-seed movements.public_id is a generated UUID, never hand-typed (${m.publicId})`,
+    );
+  }
+
+  console.log(
+    `✓ TEN-2a: movements.household_id — nullable bigint, FK NOT VALID (rejects a missing household, convalidated = false), ` +
+      `${GLOBAL_UQ} + ${HOUSEHOLD_UQ} each reject their own duplicate and the two namespaces are SEPARATE, ` +
+      `${SLUG_CONSTRAINT} still binds (so every deployed ON CONFLICT (slug) keeps its arbiter), ` +
+      `and all ${allMovements.length} rows — ${appAuthored.length} of them app-authored — still have household_id IS NULL`,
+  );
+}
 
 console.log('✓ verify passed');
