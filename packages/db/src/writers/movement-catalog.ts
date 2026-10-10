@@ -13,9 +13,14 @@ import type { Executor } from './executor';
  *
  * ## ⚠️ This is the one write path in the app that is NOT household-scoped, and it cannot be
  *
- * `movements` has **no `household_id` column at all** — the table is global reference data seeded
- * from `packages/shared`, and the slug is its natural key. So this function is **cross-tenant by
- * construction**:
+ * `movements.household_id` **exists** (TEN-2a, migration 0015) and **this function does not use it
+ * — and must not start.** The column is dark: no reader, no writer, and the global `movements.slug`
+ * UNIQUE is untouched, so `ON CONFLICT (slug)` below keeps its arbiter. See
+ * `docs/privacy/data-inventory.md` §4 for the status. **TEN-2b is what changes this function's
+ * signature** (it takes a `HouseholdScope` and resolves GLOBAL-FIRST — global namespace, then the
+ * household's own, then insert into the household's own); **TEN-2c** drops the global UNIQUE and
+ * closes the leak. Until then the table is a single global namespace whose natural key is the slug,
+ * so this function is **cross-tenant by construction**:
  *
  * - a household typing a name another household already created is handed **that household's row**,
  *   with its `name`, `is_bodyweight` and `unit_default`, which
@@ -27,8 +32,9 @@ import type { Executor } from './executor';
  * - this function can only ever write `is_bodyweight: false` and **no** `unit_default`, so a
  *   movement first typed by one household is declared loaded-with-no-default-unit for everybody.
  *
- * TEN-1 **cannot** fix that: the fix is a `household_id` column plus partial unique indexes, which
- * is **TEN-2** ([plan.md](../../../../docs/plan.md) → TEN-2). What TEN-1 owns is
+ * TEN-1 **cannot** fix that: the fix is the `household_id` column plus partial unique indexes
+ * TEN-2a has now added, used by TEN-2b and completed by TEN-2c
+ * ([plan.md](../../../../docs/plan.md) → TEN-2). What TEN-1 owns is
  * the **verdict**, and the reason this core exists at all is that the verdict had to be *proved*
  * rather than asserted: `apps/web/lib/dal/catalog.ts` is `server-only` and imports the app's env, so
  * `db:verify` cannot execute it, and re-typing these two statements in the proof would have made the

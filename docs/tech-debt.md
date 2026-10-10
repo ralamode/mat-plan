@@ -18,21 +18,57 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 ### The `movements` catalog verdict is restated in ~12 places, and TEN-2 has to retract every one (found 2026-10-09, TEN-1 1d review)
 
 - **What & why:** TEN-1 1d's finding — `movements` has no `household_id`, so free-text catalog rows
-  cross households and a refused write still commits one — is written out at length in
-  `.github/SECURITY.md`, `docs/architecture.md`, three feature guides (`write-path.md`,
-  `strength-logging.md`, `programming.md`), `docs/milestones/beta-1.md`, `docs/plan.md`,
-  `docs/roadmap.md`, `docs/status.md`, `packages/db/src/writers/ownership.ts`,
-  `apps/web/lib/dal/catalog.ts` and `packages/db/src/writers/movement-catalog.ts`. The 1d review
-  already had to correct the same overstatement (the indexes "built `CONCURRENTLY`") in several of
-  them at once.
-- **Impact:** each copy goes false the day TEN-2c merges, and a missed one keeps telling a reader the
-  catalog leaks. Drift between copies
-  is how the docs stopped matching the code in the first place.
-- **Proposed fix:** keep the evidence in two places only — `docs/plans/ten-1-household-scope.md` →
-  "1d as built — the catalog verdict" and `docs/privacy/data-inventory.md` §4's `movements` row — and
-  cut every other copy to one sentence plus a link. Whatever is left, **TEN-2c must retract each
-  copy** in the PR that flips the verdict; `git grep -n "catalog verdict"` finds most of them.
-- **Severity:** low (docs drift), rising to medium the day TEN-2c lands if it is not done.
+  cross households and a refused write still commits one — was written out at length in a dozen
+  places. The 1d review already had to correct the same overstatement (the indexes "built
+  `CONCURRENTLY`") in several of them at once.
+- ✅ **Mostly paid off by TEN-2a (2026-10-09), in the shape proposed below.** The statement now lives
+  in **two** homes — `docs/plan.md`'s `TEN-2` row and `docs/privacy/data-inventory.md` §4 — and
+  everything else carries a **pointer** instead: `docs/architecture.md`, the three feature guides
+  (`write-path.md` ×3, `strength-logging.md`, `programming.md`), `docs/status.md`, `docs/roadmap.md`,
+  `apps/web/lib/dal/catalog.ts` (×2 — missed by the first sweep's grep, and one of them sits directly
+  above `findOrCreateMovementId`), `apps/web/lib/dal/entries.ts`, `apps/web/lib/dal/scoped.test.ts`,
+  `packages/db/src/writers/movement-catalog.ts`, `packages/db/src/writers/ownership.ts` and
+  `packages/db/scripts/mutations/README.md`. So **TEN-2b and TEN-2c each edit two files, not twelve.**
+- **Still open — three copies, deliberately deferred to TEN-2c:** `.github/SECURITY.md`,
+  `docs/milestones/beta-1.md` and `docs/decisions/0006-household-addressing.md`. In each the sentence
+  supports a conclusion that is **still true** (the leak does not close until 2c), so retracting it in
+  2a would have been premature. ⚠️ Two files must **never** be edited for this:
+  `docs/plans/ten-1-household-scope.md` and `docs/changelog/2026-10-08-…`, both kept as-merged.
+- **Lesson for the sweep itself:** a literal single-phrase `git grep` **cannot** police text Prettier
+  reflows — the sentence wraps mid-phrase in three files. The gate that works is phrasing-tolerant:
+  `git grep -nEi 'no (\*\*)?.?household_id.?( column)?|carries no .household_id.|column at all' -- . ':!docs/plans/' ':!docs/changelog'`
+  then eyeball the residue (`README.md`, `docs/programs/daily-five-default.md` and
+  `docs/specs/v1-22-…` are known false positives — they are about other columns).
+- **Severity:** low (docs drift), and now three copies rather than twelve.
+
+### "drizzle wraps EACH migration file in a transaction" is wrong, in five places (found 2026-10-09, TEN-2a)
+
+- **What & why:** verified in `drizzle-orm@0.45.3`'s source — `pg-core/dialect.js` → `migrate()` is a
+  **single** `session.transaction(...)` with `for await (const migration of migrations)` **inside** it.
+  So the whole **pending set** is one transaction, not one per file. The repo says "each file" in
+  **five** places: `AGENTS.md`'s `CREATE INDEX CONCURRENTLY` GOTCHA, `.squawk.toml` (where the claim is
+  marked LOAD-BEARING), migrations `0012` and `0014`, and `docs/runbooks.md`.
+- **Impact:** low, and in the **safe** direction — the real atomicity is _stronger_ than claimed, so
+  `assume_in_transaction = true` stays correct. Two things it does change: alongside another pending
+  file, an `ACCESS EXCLUSIVE` taken by one migration is held for the **entire run**; and a plain `SET`
+  (which 0006–0015 all use, rather than `SET LOCAL`) **leaks its timeouts onto later files in the same
+  run**.
+- **Proposed fix:** a one-line docs PR correcting the three editable places (`AGENTS.md`,
+  `.squawk.toml`, `runbooks.md`). ⚠️ `0012` and `0014` are **applied migrations and may never be
+  edited** — their copies stay wrong, which is itself an argument for keeping claims out of migration
+  headers. `0015` states the corrected version.
+- **Severity:** low.
+
+### Two load-bearing strings are re-typed next to the const that defines them (found 2026-10-09, TEN-2a reuse panel)
+
+- **What & why:** out of TEN-2a's diff, so recorded rather than fixed. (1) `packages/db/scripts/verify.ts`
+  has `const UQ = 'uq_entries_profile_day_bodyweight'`, re-typing the value `schema.ts` already exports
+  as `BODYWEIGHT_DAY_UNIQUE_INDEX`. (2) `packages/shared/src/seed-ids.ts` hand-types
+  `SEED_PUBLIC_ID_PREFIX`'s value **three** times instead of importing the const.
+- **Impact:** low today; a rename in either place goes green and means nothing.
+- **Proposed fix:** import the const in both. Charged to nobody — a good first slice for whoever next
+  touches either file.
+- **Severity:** low.
 
 ### The comment-stripping `code()` test helper has five copies (found 2026-10-09, TEN-1 1d review)
 

@@ -21,6 +21,13 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   (`WHERE deleted_at IS NULL`, this repo's soft-delete idiom). A partial index only arbitrates when the
   statement repeats its predicate. → Add the predicate: `ON CONFLICT (a, b) WHERE deleted_at IS NULL`,
   or drizzle's `onConflictDoUpdate({ target: [...], targetWhere: isNull(t.deletedAt) })`.
+  ⚠️ **`onConflictDoNothing` reads `where`, NOT `targetWhere`** — the other half of the same lesson,
+  and the form above is the one that does **not** work there. Verified in `drizzle-orm@0.45.3`'s
+  source: `onConflictDoNothing` builds its clause from `config.where` and **silently drops**
+  `targetWhere`, so the predicate vanishes, the partial index cannot be inferred, and you get the same
+  `42P10` message with no sign of why. → `onConflictDoNothing({ target: [...], where: isNull(t.deletedAt) })`.
+  The predicate must also render as a **literal**, never a bound `$1`. (found TEN-2a, 2026-10-09;
+  TEN-2b is the first consumer)
 
 - **`drizzle-kit generate` hangs or dies with `Interactive prompts require a TTY terminal` when a
   migration both ADDS and DROPS columns on one table.** → Drizzle asks whether the drop+add is a

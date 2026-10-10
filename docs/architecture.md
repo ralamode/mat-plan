@@ -138,9 +138,11 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   Nothing else moves, which is the whole reason the seam landed before its consumers.
 - ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so what
   is proved is _consistent scoping_, not that the requester is who they claim.
-- ⚠️ **One table is outside the seam and cannot be brought in: `movements` has no `household_id`
-  column at all.** The strength form's free-text find-or-create therefore crosses households, which
-  TEN-1 chunk 1d **proved** rather than assumed and `TEN-2` fixes. See §4 and
+- ⚠️ **One table is still outside the seam: `movements`.** `movements.household_id` exists (TEN-2a,
+  migration 0015) but nothing reads or writes it — see
+  [data-inventory.md](./privacy/data-inventory.md) §4 for the status — so the strength form's
+  free-text find-or-create still crosses households, which TEN-1 chunk 1d **proved** rather than
+  assumed. `TEN-2b` scopes the writer and `TEN-2c` closes it. See §4 and
   [SECURITY.md](../.github/SECURITY.md) → Authorization.
 
 ```mermaid
@@ -226,17 +228,24 @@ The concrete tables the v0 thin slice (`units · profiles · entries · entry_se
 keyed by natural keys and seeded from `@mat-plan/shared` in V1-2) classify each `entry`; `sessions`
 group a training day's entries. Full column detail in [spec.md](./spec.md) §4a.
 
-⚠️ **`households` is the authz root for everything that hangs off `profiles` — and the catalogs hang
-off nothing.** They are global by design, which is right for `activity_types` and
-`metric_definitions` (seeded, never written by the app) and **wrong for `movements`**, which the
-strength form writes from free text. TEN-1 1d proved the consequence: one household's typed name
-resolves to another household's row, the first typist pins that slug's `name` / `is_bodyweight` /
-`unit_default` for everyone, and the row survives a session write the household seam refused.
-`TEN-2` adds the column; until then the diagram's missing edge _is_ the defect.
+⚠️ **`households` is the authz root for everything that hangs off `profiles` — and two of the three
+catalogs hang off nothing.** Global is right for `activity_types` and `metric_definitions` (seeded,
+never written by the app) and **wrong for `movements`**, which the strength form writes from free
+text. TEN-1 1d proved the consequence: one household's typed name resolves to another household's
+row, the first typist pins that slug's `name` / `is_bodyweight` / `unit_default` for everyone, and the
+row survives a session write the household seam refused.
+
+**TEN-2a added the edge the diagram below now draws** — `movements.household_id`, nullable, where
+`NULL` means _reference data owned by no household_ (the seeded catalog) and a value means _this
+household typed this name_ — plus the two partial unique indexes that give the table two namespaces.
+It ships **dark**: nothing reads or writes the column, so the defect above is unchanged until `TEN-2b`
+scopes the writer, and the leak closes at `TEN-2c` when the pre-existing app-authored rows leave the
+global namespace. The edge is now in the schema and not yet in the behaviour.
 
 ```mermaid
 erDiagram
   households ||--o{ profiles : "scopes"
+  households ||--o{ movements : "owns custom (TEN-2a; NULL = seeded, owned by nobody)"
   profiles ||--o{ sessions : "logs"
   profiles ||--o{ entries : "logs"
   profiles ||--o{ day_readiness : "gate 🟢🟡🔴"

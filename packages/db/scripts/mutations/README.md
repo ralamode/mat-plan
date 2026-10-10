@@ -79,9 +79,13 @@ vacuity `verify.ts` learned at V1-10 — and a later author "fixing" the catalog
 by matching on `name`, would leave the verdict green and wrong. The patch leaves the `movementSlug`
 import unused for the duration, which `tsx` does not care about and the gate reverts anyway.
 
-⚠️ **The `movements` structural assertion is its own tripwire and needs no patch.**
-`TEN-1 1d: 'movements' has NO household_id column` goes red the day **TEN-2** adds one, which is
-exactly when the verdict has to be re-taken.
+⚠️ **The `movements` structural assertion was its own tripwire, and it has FIRED.** It read
+`TEN-1 1d: 'movements' has NO household_id column` and was written to go red the day TEN-2 added one.
+**TEN-2a is that day**, and it re-took the assertion rather than deleting it: `verify.ts` now asserts
+the column exists and is nullable (`TEN-2a: 'movements' HAS a household_id column now`). The **leak
+assertions below it are unchanged and still green** — the column ships dark, and the leak closes at
+**TEN-2c** — so patch `04-slug-is-not-the-arbiter` is untouched and still RED. A tripwire that fires
+is supposed to be re-taken by the PR that fires it; that is why it needed no patch.
 
 ## Adding one
 
