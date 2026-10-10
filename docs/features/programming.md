@@ -165,13 +165,23 @@ and stop proving their own messages. The scope's own four-way proof is the TEN-1
 `verify.ts`, which seeds a day_role **both** households program — so a refusal there cannot be mistaken
 for an unprogrammed day.
 
-4c. 🔴 **The four `movement*` columns on the card are GLOBAL, and a correctly-scoped read can render
-another household's string.** `programDayRows` is household-scoped end to end (4b) and still returns
-`movements.name`, `.slug`, `.is_bodyweight` and `.unit_default` off a table whose `household_id`
-column exists (TEN-2a) but is **dark** — nothing reads or writes it; see
-[data-inventory.md](../privacy/data-inventory.md) §4 for the status. The strength form writes that table from free text
-(`findOrCreateMovementId` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions resolve
-by **slug** — the same arbiter — so:
+4c. ✅ **This invariant CHANGED at `TEN-2b`, and the mechanism is now in the writer, not the read.**
+`programDayRows` is household-scoped end to end (4b) and still returns `movements.name`, `.slug`,
+`.is_bodyweight` and `.unit_default` with **no household predicate of its own** — deliberately, because
+adding one would make a card silently vanish rather than render. What changed is how the prescription's
+`movement_id` is resolved: **`seedProgram` now reads the GLOBAL namespace only**
+(`household_id IS NULL`), so a prescription can no longer attach to another household's movement row,
+and the slug-keyed map's **last-row-wins** hazard is gone _structurally_ (the global namespace is unique
+by slug) rather than by preference. A slug that exists only in some household's namespace now falls
+through to `seedProgram`'s unknown-slug **throw** — loud, with nothing written, which `db:verify`
+asserts. ⚠️ So the cross-household reference is **writer-enforced**, and `runbooks.md` pre-flight (d)
+is what catches one that got in another way (`TEN-2b`'s `23505` fallback does create them — see
+[write-path](./write-path.md)).
+
+**What follows is the defect as it stood before `TEN-2b`**, kept because it is what the 1d proof
+asserts and because `TEN-2c` is where the last of it closes. The strength form writes `movements` from
+free text (`findOrCreateMovementId` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions
+resolved by **slug** against a single global namespace — the same arbiter — so:
 
 - whichever household types a movement name **first** pins that slug's row permanently, with its own
   free text as `name`, `is_bodyweight: false` and no `unit_default` (all this function can write);

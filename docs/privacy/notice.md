@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-10-07. This is a beta.**
+**Last updated: 2026-10-10. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -170,10 +170,12 @@ Because this cannot be undone and there is currently no per-person login to prov
 - **Server logs** at Vercel, and **error reports** at Sentry, for their retention periods. Neither
   should contain your data, but logs record that requests happened.
 - **Movement names.** If someone in your household types a movement that isn't already in the app's
-  catalogue, whatever they typed is stored in a catalogue **shared by every household**. Until that
-  catalogue is separated per household, it can appear to another household, and it is **not removed** when
-  you delete your household. So please type only the name of an exercise there — **never a person's
-  name or anything personal.**
+  catalogue, whatever they typed is stored as a movement **belonging to your household**, and it **is
+  removed** when you delete your household. Two things to know while the catalogue is still being
+  separated: a name that another household typed first is still shared with yours, so it can appear to
+  both of you; and a shared name like that stays in the catalogue when either household is deleted,
+  until the separation is finished. Please type only the name of an exercise there — **never a
+  person's name or anything personal.**
 - **Any export you downloaded.** That copy is yours and outside our reach.
 - **The public source code.** The project is open source. Some early test data — including two
   children's first names — was committed to it before this review, and **removing a name from the

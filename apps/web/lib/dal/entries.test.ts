@@ -107,14 +107,26 @@ describe('logCheckinEntries — ownership scope (TEN-1 1c)', () => {
 // order does to the database but cannot fail if the DAL's order changed. This pins the order where the
 // DAL actually runs: the movement INSERT is emitted before the session transaction BEGINs (so a
 // ROLLBACK cannot take it back), and the in-transaction profile resolve — the household seam — then
-// refuses. TEN-2 may move the find-or-create inside the transaction, after the resolve; this test is
-// what has to change then, deliberately.
+// refuses. `TEN-2b-1` may move the find-or-create inside the transaction, after the resolve; this
+// test is what has to change then, deliberately — TEN-2b itself did NOT move it.
 describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
   it('find-or-create runs, and commits, before the refused write', async () => {
+    // ⚠️ TEN-2b: the resolver now issues THREE `movements` selects — the global-namespace lookup,
+    // this household's own, then the re-resolve after the INSERT. A stub that answers the FIRST one
+    // with an id makes the resolver short-circuit at step 1, emit no INSERT, and this test's whole
+    // point (`insertMovement` ≥ 0, and `BEGIN` after it) silently stops being exercised. So the two
+    // namespace lookups MISS and only the post-INSERT re-resolve resolves.
+    // ⚠️ Do NOT "fix" a failure here by dropping the `insertMovement` assertion: it is the only test
+    // in the repo pinning that the catalog write COMMITS before the session transaction opens, which
+    // `db:verify` cannot prove (its version is a fixture that calls find-or-create itself).
+    let movementSelects = 0;
     const rows = (await import('./recording-db')).createRecordingDb((sql) => {
       if (/from "households"/.test(sql)) return [[ONE_HOUSEHOLD_ID]];
       if (/from "activity_types"/.test(sql)) return [[1, null]]; // { id, defaultUnit }
-      if (/^select .* from "movements"/.test(sql)) return [[77]]; // the find after the INSERT
+      if (/^select .* from "movements"/.test(sql)) {
+        movementSelects += 1;
+        return movementSelects >= 3 ? [[77]] : []; // 1 = global miss, 2 = household miss, 3 = found
+      }
       return []; // …and the in-transaction profile resolve finds nothing → the seam refuses
     });
     vi.doMock('./db', () => ({ db: rows.db }));

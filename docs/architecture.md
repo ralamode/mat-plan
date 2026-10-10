@@ -138,12 +138,15 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   Nothing else moves, which is the whole reason the seam landed before its consumers.
 - ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so what
   is proved is _consistent scoping_, not that the requester is who they claim.
-- ⚠️ **One table is still outside the seam: `movements`.** `movements.household_id` exists (TEN-2a,
-  migration 0015) but nothing reads or writes it — see
-  [data-inventory.md](./privacy/data-inventory.md) §4 for the status — so the strength form's
-  free-text find-or-create still crosses households, which TEN-1 chunk 1d **proved** rather than
-  assumed. `TEN-2b` scopes the writer and `TEN-2c` closes it. See §4 and
-  [SECURITY.md](../.github/SECURITY.md) → Authorization.
+- ✅ **`movements` came inside the seam at `TEN-2b`.** `findOrCreateMovementId` takes a
+  `HouseholdScope` and resolves **global-first** — the curated namespace (`household_id IS NULL`),
+  then this household's own, then an insert into this household's own — so a name a household types
+  belongs to it and is deleted with it. ⚠️ **One leak survives to `TEN-2c`:** the non-partial
+  `movements_slug_unique` still forbids two households a row for one slug, so the second household to
+  type a name is handed the first's row (a deliberate choice over failing a child's session write),
+  and that leaves a cross-household `entries.movement_id` which **blocks household deletion**. Status:
+  [data-inventory.md](./privacy/data-inventory.md) §4; the resolver's shape is in §4 below. TEN-1
+  chunk 1d **proved** the original defect rather than assuming it, and its verdict is still `LEAKS`.
 
 ```mermaid
 flowchart LR
@@ -230,17 +233,47 @@ group a training day's entries. Full column detail in [spec.md](./spec.md) §4a.
 
 ⚠️ **`households` is the authz root for everything that hangs off `profiles` — and two of the three
 catalogs hang off nothing.** Global is right for `activity_types` and `metric_definitions` (seeded,
-never written by the app) and **wrong for `movements`**, which the strength form writes from free
-text. TEN-1 1d proved the consequence: one household's typed name resolves to another household's
-row, the first typist pins that slug's `name` / `is_bodyweight` / `unit_default` for everyone, and the
-row survives a session write the household seam refused.
+never written by the app) and **was wrong for `movements`**, which the strength form writes from free
+text. TEN-1 1d proved the consequence: one household's typed name resolved to another household's
+row, the first typist pinned that slug's `name` / `is_bodyweight` / `unit_default` for everyone, and
+the row survived a session write the household seam refused.
 
-**TEN-2a added the edge the diagram below now draws** — `movements.household_id`, nullable, where
-`NULL` means _reference data owned by no household_ (the seeded catalog) and a value means _this
-household typed this name_ — plus the two partial unique indexes that give the table two namespaces.
-It ships **dark**: nothing reads or writes the column, so the defect above is unchanged until `TEN-2b`
-scopes the writer, and the leak closes at `TEN-2c` when the pre-existing app-authored rows leave the
-global namespace. The edge is now in the schema and not yet in the behaviour.
+**`TEN-2a` added the edge the ERD below draws** — `movements.household_id`, nullable, where `NULL`
+means _reference data owned by no household_ (the seeded catalog) and a value means _this household
+typed this name_ — plus the two partial unique indexes that give the table two namespaces.
+✅ **`TEN-2b` lit it up**, so the edge is now in the behaviour as well as the schema: the resolver is
+global-first (flowchart below), `seedProgram` reads the global namespace only, and the FK is
+validated. **Two of 1d's three defects are closed**: a refused session's row lands in the caller's own
+namespace, and a prescription can no longer resolve another household's movement — `seedProgram`
+refuses loudly instead.
+
+🔴 **One is not, and it is a schema window, not a code gap.** While the **non-partial**
+`movements_slug_unique` lives, at most one row per slug exists in the whole table, so two households
+cannot both hold one. `TEN-2a` chose, for that window, to hand the second household the first's row
+(the pre-existing read leak) rather than fail its write forever with `23505` — availability over
+confidentiality, bounded by the named invite precondition. ⚠️ **Its price:** the resulting
+cross-household `entries.movement_id` **aborts the household-deletion procedure** (`23503`, measured),
+which is why `runbooks.md` pre-flight (d) carries a repair step and `schema.ts` no longer claims the
+reference is "prevented by construction". **`TEN-2c` drops the constraint and closes it.**
+
+```mermaid
+flowchart TD
+  S["findOrCreateMovement(exec, scope, name)"] --> SL["slug = movementSlug(name)"]
+  SL --> G{"slug WHERE household_id IS NULL?"}
+  G -- yes --> GR["return the SEEDED row<br/>pattern · unit_default · is_bodyweight<br/>a human chose"]
+  G -- no --> H{"slug WHERE household_id = scope?"}
+  H -- yes --> HR["return this household's own row"]
+  H -- no --> I["INSERT (scope, slug)<br/>ON CONFLICT (household_id, slug)<br/>WHERE household_id IS NOT NULL"]
+  I -- ok --> RR["re-resolve in this household's namespace"]
+  I -- "23505 movements_slug_unique" --> F["TEN-2b→2c WINDOW ONLY:<br/>another household owns this slug<br/>(the only reachable cause)"]
+  F --> FB["log + resolve UNSCOPED → that household's row<br/>= the pre-existing read leak, not a 500"]
+  FB --> P["⚠️ PRICE: a cross-household entries.movement_id<br/>→ household deletion aborts 23503"]
+```
+
+**Why global-first and not household-first** — the question a reader will ask: the only writer can
+author `{publicId, slug, name, isBodyweight: false}` and never `pattern` or `unit_default`, so a
+household row is always a **strictly worse** version of a curated one, and `programDayRows` reads
+exactly those columns as _"the movement's declaration"_.
 
 ```mermaid
 erDiagram

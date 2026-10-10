@@ -29,6 +29,39 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
   The predicate must also render as a **literal**, never a bound `$1`. (found TEN-2a, 2026-10-09;
   TEN-2b is the first consumer)
 
+- **`ON CONFLICT (slug) WHERE household_id IS NULL DO NOTHING` reports success while inserting
+  NOTHING, and no error is raised anywhere.** → Postgres infers **every** arbiter the clause could
+  match, not just the partial one you named: a **non-partial** `UNIQUE (slug)` has an _empty_
+  predicate, which is trivially implied by `WHERE household_id IS NULL`, so a collision with the
+  non-partial constraint is absorbed by the same `DO NOTHING`. The row you meant to add is simply
+  absent — `db:seed` is green, seed-twice idempotency is green, and nothing reports it. → While a
+  broad constraint and a narrow partial index coexist on one column (an expand→contract window),
+  **detect the shadowing case explicitly and refuse**; do not rely on the arbiter to tell you. The
+  one place this can be observed is a committed assertion that the row IS there.
+  (found TEN-2b, 2026-10-10; `packages/db/src/seed.ts` → the shadow guard, and `db:verify` →
+  _"TEN-2b SHADOW GUARD"_ which asserts the silent baseline, not just the refusal)
+
+- **A `db:verify` assertion about resolution ORDER can be un-failable, and the mutation that proves
+  it passes.** → TEN-2b's resolver is global-first; the state that distinguishes global-first from
+  household-first is _a global row and a household row sharing a slug_, which is exactly what the
+  still-live non-partial `UNIQUE (slug)` forbids. Measured: both orders returned the same id by the
+  same path and burned the same identity-sequence values, so an assertion outside a transaction that
+  drops the constraint would have passed **under the very mutation it named**. → Assert such an order
+  inside a rolled-back `ALTER TABLE … DROP CONSTRAINT` transaction and label it for what it is ("the
+  resolver under the next PR's schema"). Related: **"no insert was attempted" cannot be asserted on a
+  row count** — an absorbed `ON CONFLICT` leaves the count unchanged too; assert on
+  `<table>_id_seq.last_value`, because an absorbed insert **burns** an identity value and a `SELECT`
+  does not. (found TEN-2b's panel, 2026-10-10)
+
+- ⚠️ **Correction to [TEN-2a's plan](./plans/ten-2a-household-movements.md), kept here because plans
+  are immutable once merged.** Its §"The index behaviour, measured" lists
+  `on conflict (slug) do nothing => OK (infers the non-partial)` **underneath the
+  `after ALTER TABLE … DROP CONSTRAINT` heading**. Post-drop it is **`42P10`** (re-measured at
+  TEN-2b): with the non-partial constraint gone, a bare target cannot infer a partial index. Harmless
+  to 2a's conclusion — it _strengthens_ the refusal to drop the constraint early — but a future author
+  citing 2a as the spec could read it as "the drop is safe for already-deployed code", which is the
+  one mistake that breaks every free-text movement write in production.
+
 - **`drizzle-kit generate` hangs or dies with `Interactive prompts require a TTY terminal` when a
   migration both ADDS and DROPS columns on one table.** → Drizzle asks whether the drop+add is a
   _rename_, and the prompt needs a TTY an agent/CI shell doesn't have. → **Generate in two passes** —

@@ -1,0 +1,41 @@
+-- TEN-2b — VALIDATE the household FK that 0015 shipped NOT VALID.
+--
+-- WHY A SECOND MIGRATION: Squawk requires NOT VALID and VALIDATE be SPLIT ACROSS PRs (in one file
+--   they share a transaction and the NOT VALID buys nothing). 0015 added the FK NOT VALID; this is
+--   the other half, landing in the PR that first writes a non-NULL household_id.
+--   Measured: with the two SETs below this file is `Found 0 issues`; the VALIDATE ALONE raises TWO
+--   warnings (require-lock-timeout, require-statement-timeout), so the timeouts are GATE-REQUIRED
+--   here, not merely the 0006-0015 convention.
+-- WHAT IT PROVES: the existing rows (all household_id IS NULL) satisfy the FK, so Postgres marks
+--   pg_constraint.convalidated = true and stops treating the constraint as unverified. db:verify
+--   asserts that flip; 0015 asserted the `false` it replaces, which is how "do not forget the
+--   VALIDATE" became a red build rather than a prose reminder.
+--   ⚠️ NOT VALID never disarmed the referential TRIGGERS (measured in 0015's PR), so this VALIDATE is
+--   NOT what protects 2b's writes — those were already protected. It clears the catalog's
+--   "unverified" marker, which is what lets a later reader trust the constraint without re-scanning.
+-- NO DATA CHANGES HERE. ⚠️ The single-household BACKFILL the TEN-2b backlog row sketched is
+--   DELIBERATELY NOT IN THIS PR — it is TEN-2c's. Six reasons, five measured, in the plan; the
+--   decisive one is that assigning a shared app-authored row to one household forces every OTHER
+--   household onto findOrCreateMovement's cross-household fallback, which leaves an
+--   entries.movement_id that ABORTS the household-deletion procedure (23503, measured). Leaving those
+--   rows in the global namespace is strictly safer until 2c can split them properly.
+-- LOCKS (measured inside the transaction): movements -> SHARE UPDATE EXCLUSIVE (+ ROW EXCLUSIVE,
+--   ACCESS SHARE); households -> ROW SHARE (+ ACCESS SHARE). SUE blocks neither reads nor DML, but it
+--   DOES conflict with VACUUM / ANALYZE / CREATE INDEX / another ALTER — so autovacuum on `movements`
+--   is the realistic lock_timeout (55P03) source, not application traffic. lock_timeout bounds how
+--   long THIS STATEMENT WAITS to acquire its lock; statement_timeout bounds the work (a small
+--   validation scan: milliseconds).
+--   ⚠️ drizzle wraps the WHOLE PENDING SET in ONE transaction (verified in drizzle-orm 0.45.3
+--   pg-core/dialect.js), not each file, and plain SET (not SET LOCAL, kept for consistency with
+--   0006-0015) leaks these timeouts onto later files in the same run.
+-- RE-RUN SAFETY: VALIDATE CONSTRAINT on an already-validated constraint is a no-op, and a failed run
+--   leaves nothing behind (one statement, one transaction).
+-- IF IT FAILS: no partial state, but the migration stays PENDING and takes db:seed with it ->
+--   docs/runbooks.md -> the pending-migration wedge. Recovery is a workflow_dispatch re-run.
+-- MEASURED PRODUCTION STATE: see docs/plans/ten-2b-scoped-movement-lookup.md.
+--   ⚠️ NO PRODUCTION NUMBERS IN THIS FILE — migrations are forward-only and never edited, so a fact
+--   written here is permanent (0015's own standing rule; data-inventory.md §9 residual 2 is the repo
+--   already paying for that mistake once). Production state belongs in the plan and the PR body.
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "movements" VALIDATE CONSTRAINT "movements_household_id_households_id_fk";
