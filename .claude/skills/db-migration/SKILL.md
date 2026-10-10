@@ -65,7 +65,12 @@ ALTER TABLE "x" ADD COLUMN IF NOT EXISTS "y" text;--> statement-breakpoint
 - `onConflictDoNothing` on the natural key is the default. `UNITS` deliberately uses
   `onConflictDoUpdate` so the table mirrors its source. Never switch a row that FKs depend on to
   DoUpdate if it could change the key.
-- A conflict target on a partial index needs `targetWhere: isNull(t.deletedAt)`.
+- 🔴 **A conflict target on a partial index must repeat the index's predicate, and the KEY DIFFERS BY
+  METHOD** — the single-source is [lessons.md](../../../docs/lessons.md)'s `42P10` entry, verified in
+  drizzle `0.45.3`'s source. `onConflictDoUpdate` reads **`targetWhere:`**; `onConflictDoNothing` reads
+  **`where:`** and **silently drops** `targetWhere`, so the predicate vanishes, the partial index
+  cannot be inferred, and you get `42P10` with no sign of why. This line used to prescribe
+  `targetWhere` for both, which is the broken form for the method the seed actually uses.
 
 ## 4. Prove it in `db:verify`
 

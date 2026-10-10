@@ -24,8 +24,10 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > landed, so every read and write that touches household data carries a household scope and the
 > isolation is proved against a real database in both directions. Two things that does **not** mean:
 > it is not **authorization** (`AUTH-1` is, and until then the principal is a shared access code),
-> and it does not cover **`movements`**, which has no `household_id` column to scope by — proved, not
-> assumed, and `TEN-2`'s to fix (see "Authorization" below).
+> and — until `TEN-2b` (2026-10-10) — it did not cover **`movements`**. It does now: that write is
+> household-scoped and global-first. ⚠️ One leak survives to **`TEN-2c`** (the non-partial
+> `movements_slug_unique` forbids two households a row for one slug), so 1d's verdict is still
+> `LEAKS` — proved, not assumed. See "Authorization" below.
 >
 > So the sequencing constraint stands and gains a third row: **no second household may exist in
 > production before `TEN-1`, `AUTH-1` and `TEN-2` have all landed** — and `TEN-2a` sharpened what that
@@ -59,23 +61,31 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
   touches household data is scoped by `household_id`, through the **one named predicate**
   (`packages/db/src/writers/ownership.ts` → `isLiveProfile` / `inHousehold`) — never a copy. Never
   trust a `householdId` / `profileId` from the request body/params.
-  - ⚠️ **That is `true` WITH ONE NAMED EXCEPTION, not `true`: `movements` has no `household_id`
-    column at all**, so the strength form's free-text find-or-create (`findOrCreateMovementId`)
-    cannot be scoped — there is nothing to scope by. TEN-1 chunk 1d **proved** the consequence in
-    both directions rather than asserting it (`db:verify` → _"TEN-1 1d: the catalog verdict"_): one
-    household is handed another's movement row; whoever types a name first pins that slug's
-    `name` / `is_bodyweight` / `unit_default` for everyone, and the other household's own
-    correctly-scoped Today card renders it; and a session write the household seam **refuses** has
-    already committed its caller-supplied text to the shared catalog — a cross-tenant **write**
-    primitive surviving its own refusal, which is categorically worse than a read leak. **That write
-    primitive does not need a second household:** `logStrengthSession` runs `findOrCreateMovementId`
-    _before_ the write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`), so any
-    gate-holder's session write, even one later refused for any reason, commits its catalog text;
-    TEN-2 may move the find-or-create inside the transaction, after the profile resolves. **`TEN-2` is
-    the fix** (a `household_id` column plus partial unique indexes; the leak closes when its third PR
-    drops the global `slug` UNIQUE), and the recorded verdict is that it belongs in Beta 0, before a
-    second household exists:
-    [the plan](../docs/plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_.
+  - ✅ **`movements` WAS the one named exception, and `TEN-2b` removed it.** The claim that it _"has no
+    `household_id` column at all, so find-or-create cannot be scoped — there is nothing to scope by"_
+    is **false in both halves** as of `TEN-2b` (2026-10-10): the column exists (`TEN-2a`) and
+    `findOrCreateMovementId` takes a `HouseholdScope`, resolving **global-first** — the curated
+    namespace, then this household's own, then an insert into this household's own. ⚠️ **Do not read
+    this bullet as licence for an unscoped write to this table**; there is no such exception any more,
+    and `apps/web/lib/dal/scoped.test.ts`'s dead-entry assertion forced its allowlist entry out.
+  - 🔴 **One leak survives to `TEN-2c`, and it is a SCHEMA window, not a scoping gap.** The
+    **non-partial** `movements_slug_unique` still forbids two households a row for one slug, so the
+    second household to type a name is handed the first's row — `TEN-2a` chose that over failing a
+    child's session write forever with `23505` (availability over confidentiality, bounded by the
+    sequencing rule above). TEN-1 1d's verdict is therefore still **`LEAKS`**, and `db:verify` proves
+    it. ⚠️ **Its price:** the resulting cross-household `entries.movement_id` **aborts the
+    household-deletion procedure** (`23503`, measured), so `docs/runbooks.md` pre-flight (d) carries a
+    repair step. **Two of 1d's three defects ARE closed by `TEN-2b`:** a session write the seam
+    refuses now leaves its row in the **caller's own** namespace (garbage, not a cross-tenant write),
+    and the other household's Today card can no longer render it — `seedProgram` resolves the global
+    namespace only and **refuses** loudly instead. ⚠️ **Still true and unchanged:** the surviving-row
+    primitive needs no second household, because `logStrengthSession` runs find-or-create _before_ the
+    write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`) — moving it inside is
+    `TEN-2b-1`. And **the rate limiter is wired to the gate login only**, so a gate-code holder can
+    still mint unbounded `movements` rows of chosen text; after `TEN-2b` they land in that holder's own
+    household rather than the shared catalog. Verdict and evidence:
+    [the plan](../docs/plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_;
+    `TEN-2b`: [its plan](../docs/plans/ten-2b-scoped-movement-lookup.md).
   - The one other deliberately unscoped read is `reportScopeMiss`'s **existence-only** probe (ADR
     0006 obligation 3): it returns `void` and is how the miss path tells `cross_household` from
     `unknown_resource`. Both exceptions are enforced as an allowlist with a reason per entry, not as

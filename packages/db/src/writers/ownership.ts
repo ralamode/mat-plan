@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
@@ -63,8 +63,8 @@ import type { Executor } from './executor';
  * `public_id` and `inHousehold` for the one bulk shape — so no correction holds a raw `household_id`
  * either, and ADR 0006's capability rule holds in the scripts too.
  *
- * Four sites deliberately do NOT use it, each documented where it lives — and they are **not all
- * reads**, which is why 1d's allowlist is written per function:
+ * **THREE sites deliberately do NOT use it** (TEN-2b removed the fourth — see below), each
+ * documented where it lives:
  *
  * 1. `reportScopeMiss`'s existence-only probe (`apps/web/lib/dal/household.ts`) — how the miss path
  *    tells `cross_household` from `unknown_resource`. Returns `void`, so it cannot be copied into
@@ -74,19 +74,20 @@ import type { Executor } from './executor';
  *    `getActivityTypeIdByKey` / `assertMetricKeyExists` wrappers** this list named before 1d: those
  *    delegate and build no query, so an allowlist keyed on them would have exempted the wrong
  *    symbols. `scoped.test.ts` finds the real ones by construction.
- * 4. ⚠️ **`findOrCreateMovementId` (`catalog.ts`) is a WRITE, not a reference read.** It is
- *    `INSERT … ON CONFLICT DO NOTHING` against `movements`, whose `household_id` column exists
- *    (TEN-2a) but is dark — nothing reads or writes it; see `docs/privacy/data-inventory.md` §4 for
- *    the status — so it is not scoped yet: a household typing a name another household already created
- *    is handed that household's row, and whoever types a name first pins that slug's metadata for
- *    everyone. **TEN-1 1d proved it in both directions** (`db:verify` → "the catalog verdict",
- *    running the single-sourced core in `writers/movement-catalog.ts`) and the recorded verdict moves
- *    **TEN-2** into Beta 0. A guard that allowlists this as "a reference read" would be describing it
- *    wrongly.
+ * ✅ **The fourth is GONE as of TEN-2b, and that is the whole point of the arc.**
+ * `findOrCreateMovementId` was listed here as a WRITE that could not be scoped because `movements`
+ * had nothing to scope by. It now takes a `HouseholdScope` and resolves **global-first** through the
+ * `movements` helpers at the foot of this file, so `scoped.test.ts`'s dead-entry assertion forced its
+ * allowlist entry out rather than letting it stand as coverage nobody re-earned.
+ * ⚠️ **One residual survives to TEN-2c, and it is not an allowlist entry:** while the non-partial
+ * `movements_slug_unique` lives, two households cannot both hold a row for one slug, so the resolver's
+ * `23505` fallback hands the second household the first's row — the pre-existing read leak, kept
+ * deliberately in preference to a permanent write failure. See `movement-catalog.ts`'s docblock and
+ * `db:verify` → "the catalog verdict".
  *
  * A NEW read or write that wants to be none of these is a design question, not an edit: use this
- * helper. All four are enforced as allowlists with a reason each — `apps/web/lib/dal/scoped.test.ts`
- * — not as this prose, and its dead-entry assertion makes TEN-2 delete entry 4 rather than leave it.
+ * helper. All three are enforced as allowlists with a reason each — `apps/web/lib/dal/scoped.test.ts`
+ * — not as this prose.
  *
  * ⚠️ **`profiles.household_id` is typed NULLABLE in drizzle and is NOT NULL in the database.**
  * `0001_loose_barracuda.sql` adds `profiles_household_id_not_null` as `CHECK … NOT VALID` and then
@@ -98,7 +99,11 @@ import type { Executor } from './executor';
  */
 
 /**
- * THE household conjunct — the **only** place in the repo that reads `scope.householdId`.
+ * THE household conjunct for `profiles` — and, with the `movements` helpers at the foot of this
+ * file, one of the handful of reads of `scope.householdId` in the **one module** allowed any.
+ *
+ * ⚠️ TEN-2b made that distinction matter: it is "exactly one MODULE", never "exactly one function".
+ * `packages/db/src/scope.test.ts` asserts the module, which is what ADR 0006 actually needs.
  *
  * ADR 0006's forward-compatibility requirement 1 is that the scope stay a **capability**, never a
  * naked tenant id. That survives a refactor only if unwrapping it happens in exactly one place: a
@@ -134,4 +139,69 @@ export function ownedEntryIds(exec: Executor, profilePublicId: string, scope: Ho
     .from(schema.entries)
     .innerJoin(schema.profiles, eq(schema.entries.profileId, schema.profiles.id))
     .where(and(isLiveProfile(profilePublicId, scope), isNull(schema.entries.deletedAt)));
+}
+
+/**
+ * ## TEN-2b — `movements`' two namespaces, and the one insert that owns a row
+ *
+ * `movements` is the only table with **two** namespaces rather than one tenancy seam
+ * ([TEN-2a's plan](../../../../docs/plans/ten-2a-household-movements.md)):
+ * `household_id IS NULL` is a **value** — reference data owned by no household, the 35 curated seed
+ * rows — and `household_id = <scope>` is one household's own free text. So it needs a namespace
+ * predicate pair as well as a household conjunct, and the four helpers below are not
+ * interchangeable with `inHousehold` / `isLiveProfile` above.
+ *
+ * **Naming convention, stated so a third table does not invent a third one:** an **unprefixed**
+ * helper (`inHousehold`, `isLiveProfile`) is the `profiles` tenancy seam, which every other table
+ * reaches *through*. A helper for a table that carries its own `household_id` is **prefixed**
+ * (`movementInHousehold`). `movements` is the first; it should not be the pattern's only example.
+ *
+ * **Why these two live HERE rather than beside the resolver:** `movementInHousehold` and
+ * `insertMovementOwnedBy` read `scope.householdId`, and `packages/db/src/scope.test.ts` asserts that
+ * exactly one **module** does. The two namespace predicates do not read the scope at all; they live
+ * here because they have two consumers each (this file's own rule: *"extracted with two consumers,
+ * not speculatively"*) — the resolver's lookups plus `seed.ts`' arbiter and `seedProgram`.
+ */
+
+/** `movements.household_id IS NULL` — the GLOBAL reference namespace, owned by no household. */
+export function movementIsGlobal() {
+  return isNull(schema.movements.householdId);
+}
+
+/** `movements.household_id IS NOT NULL` — any household's own namespace. */
+export function movementIsOwned() {
+  return isNotNull(schema.movements.householdId);
+}
+
+/** `movements.household_id = <scope>` — THIS household's namespace. */
+export function movementInHousehold(scope: HouseholdScope) {
+  return eq(schema.movements.householdId, scope.householdId);
+}
+
+/**
+ * Insert a movement **owned by `scope`**, arbitrated by `uq_movements_household_slug`.
+ *
+ * ⚠️ **This performs the insert rather than returning the owner value, and that is the point.** A
+ * `movementOwnerValues(scope)` helper returning `{ householdId }` would hand every caller the naked
+ * tenant id via `.householdId` — without matching `scope.test.ts`'s `/[Ss]cope\.householdId/` regex,
+ * so the guard behind ADR 0006 forward-1 would silently stop covering the one new way to defeat it.
+ * Keeping the number inside this module means the capability rule still has a gate behind it.
+ *
+ * The `where:` predicate **repeats the partial index's own predicate, literally** — it must, or
+ * Postgres cannot infer a partial index as the arbiter and the statement fails `42P10`
+ * ([lessons.md](../../../../docs/lessons.md)). ⚠️ It goes in **`where:`**, never `targetWhere:`:
+ * `onConflictDoNothing` reads `config.where` and **silently drops** `targetWhere`.
+ */
+export async function insertMovementOwnedBy(
+  exec: Executor,
+  scope: HouseholdScope,
+  row: { publicId: string; slug: string; name: string; isBodyweight: boolean },
+): Promise<void> {
+  await exec
+    .insert(schema.movements)
+    .values({ ...row, householdId: scope.householdId })
+    .onConflictDoNothing({
+      target: [schema.movements.householdId, schema.movements.slug],
+      where: movementIsOwned(),
+    });
 }

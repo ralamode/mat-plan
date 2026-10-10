@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { findOrCreateMovement, schema } from '@mat-plan/db';
+import { type HouseholdScope, findOrCreateMovement, schema } from '@mat-plan/db';
 import { eq } from 'drizzle-orm';
 import { cache } from 'react';
 
@@ -13,19 +13,19 @@ import { db } from './db';
  * the one write path here: the v0 strength form submits a free-text movement name,
  * so we FIND-OR-CREATE by slug — the v0→v1 bridge until the movement picker (V1-8).
  *
- * ## ⚠️ Three of the four unscoped `lib/dal` queries live here
+ * ## ⚠️ Two of the three unscoped `lib/dal` queries live here
  *
  * `apps/web/lib/dal/scoped.test.ts` (TEN-1 1d) allowlists them **by function** in `ALLOWED_UNSCOPED`,
- * with the reason beside each — that list is the source of truth. Two are **reference reads**, one is
- * a **write**:
+ * with the reason beside each — that list is the source of truth. Both are **reference reads**:
  *
  * - `getActivityTypeByKey` and `getMetricDefinition` read `activity_types` / `metric_definitions`,
  *   seeded from `packages/shared` (`architecture.md` § 4), shared by every household, with **no
  *   `household_id` column** to scope by. Resolving one reveals nothing about any household.
- * - `findOrCreateMovementId` **writes** `movements`. `movements.household_id` exists (TEN-2a,
- *   migration 0015) but nothing reads or writes it yet — see `docs/privacy/data-inventory.md` §4 for
- *   the status. So this one is **not benign**: see its docblock below. It is the one residual TEN-1
- *   proves rather than closes, and **TEN-2** is its fix.
+ *
+ * ✅ **`findOrCreateMovementId` was the third, and TEN-2b removed it from that list** — it takes a
+ * `HouseholdScope` now, so `scoped.test.ts`'s dead-entry assertion forced the entry out rather than
+ * letting it stand as coverage nobody re-earned. Its remaining residual is not a scoping gap but the
+ * TEN-2b→2c window; see its docblock below.
  *
  * `reportScopeMiss`'s existence-only probe (`household.ts`) is the other unscoped query, allowlisted
  * separately by the same test, and `getHouseholdScope` is the scope point itself.
@@ -89,19 +89,21 @@ export async function assertMetricKeyExists(key: string): Promise<string> {
 /**
  * Find-or-create a movement from a free-text name and return its internal id.
  *
- * ⚠️ **The one write reachable from this app that is NOT household-scoped, and it cannot be here.**
- * The core is `findOrCreateMovement` in `packages/db/src/writers/movement-catalog.ts`, single-sourced
- * per `write-path.md` invariant 3 so `db:verify` runs **this** function rather than a re-typed
- * lookalike — which is the only way the cross-household behaviour could be *proved* rather than
- * asserted. Read that docblock before changing anything here: `movements.household_id` exists
- * (TEN-2a) but **this function does not use it, and must not start** — see
- * `docs/privacy/data-inventory.md` §4 for the status. So another household's free-text name still
- * binds to the row this one created, and whichever household types a name first pins that slug's
- * metadata permanently.
+ * ✅ **Household-scoped as of TEN-2b** — it takes a `HouseholdScope` and resolves **GLOBAL-FIRST**:
+ * the curated namespace (`household_id IS NULL`), then this household's own, then an insert into this
+ * household's own. The core is `findOrCreateMovement` in
+ * `packages/db/src/writers/movement-catalog.ts`, single-sourced per `write-path.md` invariant 3 so
+ * `db:verify` runs **this** function rather than a re-typed lookalike — the only way the
+ * cross-household behaviour could be *proved* rather than asserted. **Read that docblock before
+ * changing anything here**: it holds the resolution order, why it is not household-first, and the
+ * one residual below.
  *
- * TEN-1 1d records the verdict and its evidence; **TEN-2b** changes this function's signature and
- * **TEN-2c** closes the leak.
+ * ⚠️ **One leak survives to TEN-2c, deliberately.** While the non-partial `movements_slug_unique`
+ * lives, two households cannot both hold a row for one slug, so the core's `23505` fallback hands the
+ * second household the first's row — the pre-existing read leak, kept in preference to a permanent
+ * write failure, and it leaves a cross-household `entries.movement_id` that blocks household deletion
+ * (`docs/runbooks.md` step 11). TEN-1 1d records the verdict; **TEN-2c** closes it.
  */
-export async function findOrCreateMovementId(name: string): Promise<number> {
-  return findOrCreateMovement(db, name);
+export async function findOrCreateMovementId(scope: HouseholdScope, name: string): Promise<number> {
+  return findOrCreateMovement(db, scope, name);
 }

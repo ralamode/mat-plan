@@ -173,7 +173,8 @@ they are how to schedule any milestone, not facts about this one.
   than none.
 - 🔴 **The one question this step asked and had to answer "no" to.** _"Either TEN-1 proves the picker
   and the metadata stay per household, or **TEN-2** moves into Beta 0."_ The **picker** is proved per
-  household. The **metadata is not**: `movements` has no `household_id` column at all, so chunk 1d
+  household. The **metadata was not** (`TEN-2a`/`2b` have since given `movements` a scoped
+  `household_id`; one leak survives to `TEN-2c`): at the time, `movements` had no such column, so chunk 1d
   proved — in both directions, against a real database — that one household is handed another's
   movement row, that whoever types a name **first** pins that slug's name / `is_bodyweight` /
   `unit_default` for everyone including on the other household's own correctly-scoped Today card, and
@@ -204,7 +205,23 @@ they are how to schedule any milestone, not facts about this one.
 
 - ✅ **TEN-2a has landed (2026-10-09):** `movements.household_id` + the two partial unique indexes,
   **dark** — no reader, no writer, the global `slug` UNIQUE untouched, every row proved still `NULL`.
-  Nothing about this step's criteria changes yet; the leak closes at TEN-2c.
+
+- ✅ **TEN-2b has landed (2026-10-10):** the writer is **scoped and global-first**, the FK is
+  `VALIDATE`d (migration `0016`), and `seedProgram` resolves the global namespace only.
+  [Plan](../plans/ten-2b-scoped-movement-lookup.md). **Two of chunk 1d's three defects are closed**: a
+  session write the seam refuses now leaves its row in the **caller's own** namespace (garbage, not a
+  cross-tenant write), and the other household's Today card can no longer render another household's
+  free text — `seedProgram` **refuses** loudly instead. 🔴 **The verdict is still `LEAKS`, deliberately
+  and provably:** the non-partial `movements_slug_unique` forbids two households a row for one slug
+  until `TEN-2c`, so the second household to type a name is handed the first's row — chosen over
+  failing a child's session write. ⚠️ **And `TEN-2b` measured a price `TEN-2a` had asserted away**: that
+  fallback leaves a cross-household `entries.movement_id` which **aborts the household-deletion
+  procedure** (`23503`), so `runbooks.md` pre-flight (d) now carries a repair step and `schema.ts` no
+  longer claims the reference is "prevented by construction". **This step's criteria do not change
+  yet; the leak closes at TEN-2c.**
+  ⚠️ **TEN-2b deferred two items it was briefed to carry, each with a new backlog row rather than a
+  note in a merged plan:** `TEN-2b-1` (move find-or-create inside the session transaction) and
+  `TEN-2b-2` (the orphan-row correction). Neither blocks the invite on its own; `TEN-2c` does.
 
 - TEN-1 alone proves _consistent scoping_. Isolation is only _authorized_ once AUTH-1 lands — the exit
   criteria say both, and this is the single most likely thing to over-read about this step.

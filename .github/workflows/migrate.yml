@@ -8,10 +8,18 @@ name: Migrate + seed (production)
 #
 # Runs on EVERY push to main (no path filter) so reference-data changes — a new
 # catalog row / profile in seed.ts or @mat-plan/shared — reach prod even when the
-# PR has no migration. This is drift-proof and safe to always run: `db:migrate` is
-# a no-op when nothing is pending, and `db:seed` is idempotent (ON CONFLICT DO
-# NOTHING). A brittle per-file `paths` allowlist would silently miss seed-only PRs
-# (which is exactly how prod drifted after V1-2/V1-3 shipped no migration).
+# PR has no migration. This is drift-proof: `db:migrate` is a no-op when nothing is
+# pending, and `db:seed` is idempotent (ON CONFLICT DO NOTHING). A brittle per-file
+# `paths` allowlist would silently miss seed-only PRs (which is exactly how prod
+# drifted after V1-2/V1-3 shipped no migration).
+#
+# ⚠️ TEN-2b: "safe to always run" is no longer unqualified. `db:seed` now REFUSES —
+# and so turns this job red on every subsequent push — if a household already owns
+# a `movements` row whose slug the seed adds globally, because the alternative is a
+# silently missing catalog row (measured). The refusal is non-wedging (it detects
+# before any movement write, seeds everything else, throws last), so unrelated
+# reference data still reaches prod. Recovery: docs/runbooks.md -> "the seed's
+# shadow guard fired". It cannot clear itself by re-running.
 #
 # The PREVIEW estate has its own migrator, `migrate-preview.yml` — a separate FILE, not a second job
 # here, so that a branch dispatch cannot reach the production credential below (OPS-1).
