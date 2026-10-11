@@ -114,6 +114,20 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
 
 ## GitHub / PRs
 
+- **A stacked PR reports `MERGED` and its code is nowhere on `main`.** → GitHub merges a PR into
+  whatever its **base** is, and a stacked PR's base is the parent's branch. Merge the parent first and
+  the child's merge lands on a branch nothing will ever ship — `gh pr view <n> --json baseRefName` says
+  `db/<parent>`, not `main`, while the UI says merged either way. GitHub retargets an open PR only when
+  its base branch is **deleted**, so delete-on-merge is a race, not a guarantee (TEN-2a #273 squashed at
+  `14:21:03`; TEN-2b #274 merged into #273's branch at `14:21:09`, six seconds later). → **Retarget the
+  child before merging the parent** (`gh pr edit <n> --base main`), and after merging any stack verify
+  the **content** on `main` — `git ls-tree origin/main <path>` or a `git grep origin/main` for a symbol
+  the child added — never the `MERGED` label. ⚠️ **Recovery is a cherry-pick, not a merge:** `main`'s
+  copy of the parent is a **squash**, a different commit than the branch's, so merging `main` into the
+  orphaned branch re-applies the parent's change and conflicts on every file it touched (nine, here).
+  `git checkout -b <new> origin/main && git cherry-pick <child-squash>` carries the child's diff alone —
+  zero conflicts, here. (TEN-2b, relanded as #275, 2026-10-11)
+
 - **A Mermaid diagram in a PR description fails with `Lexical error on line 2. Unrecognized text`,
   pointing at the first node label.** → **Backticks inside a node label.** Mermaid reads `` ` `` as its
   markdown-string delimiter, so the natural instinct of code-formatting a column or file name —
