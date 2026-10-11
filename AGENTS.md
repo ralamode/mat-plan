@@ -251,6 +251,15 @@ The deletion procedure is [runbooks.md](./docs/runbooks.md) → "Delete a househ
   rebase then needs a force-push, and the squash merge keeps `main` linear either way.
 - **Merge = squash.** PR title is a Conventional Commit → one clean commit per PR on `main`. Delete
   the branch on merge.
+- **A stacked PR is retargeted to `main` BEFORE its parent merges.** A PR merges into whatever its
+  **base** is, so a child based on the parent's branch, merged after the parent squashed, lands on a
+  dead branch and reports `MERGED` with nothing on `main`. GitHub retargets only when the base branch
+  is **deleted**, which makes delete-on-merge a race — it lost by six seconds on TEN-2b (#274 → #275,
+  [lessons.md](./docs/lessons.md) → GitHub / PRs). So: `gh pr edit <child> --base main` **first**, then
+  merge parent, then child; and **verify the content on `main`** (`git grep origin/main -- <path>` for a
+  symbol the child added), never the `MERGED` label. Recovery is a **cherry-pick onto a fresh branch
+  from `origin/main`** — merging `main` into the orphaned branch re-applies the parent's squashed change
+  and conflicts on every file it touched.
 - **The roadmap rides with the work too.** [docs/roadmap.md](./docs/roadmap.md) is the only
   **forward-looking** cross-program view — pillars, what's in flight, what's next, what each thing
   waits on. `status.md` looks backwards; `plan.md` is the backlog. Move the item between columns in the

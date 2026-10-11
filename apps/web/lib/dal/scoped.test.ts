@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
  * Two claims about `apps/web/lib/dal/`, each as its own assertion with its own exception list:
  *
  * 1. **nothing reaches the database without resolving or being handed a household scope** — exception:
- *    `ALLOWED_UNSCOPED` below, three `catalog.ts` entries (two global reference reads and one write,
- *    `findOrCreateMovementId`);
+ *    `ALLOWED_UNSCOPED` below, **two** `catalog.ts` entries, both global reference reads (TEN-2b
+ *    removed the third, `findOrCreateMovementId`, by scoping it);
  * 2. **nothing builds its own ownership predicate** — exception: `household.ts#reportScopeMiss`, the
  *    existence-only probe.
  *
@@ -33,9 +33,9 @@ import { describe, expect, it } from 'vitest';
  * is explicit: *"written earlier it ships with an allowlist that then has to shrink, and an allowlist
  * that shrinks is one nobody audits."* 1b converted the three profile-resolution sites plus everything
  * `ownedEntryIds` reaches; 1c converted the tail and took the hand-written predicate count to **zero**.
- * So these lists are final — the only remaining change is that TEN-2 **removes** one entry, when
- * `movements` gains a `household_id` and `findOrCreateMovementId` stops being a residual. The
- * dead-entry assertion below makes that removal forced rather than optional.
+ * So these lists are final. ✅ **The one remaining change has happened**: TEN-2b scoped
+ * `findOrCreateMovementId`, and the dead-entry assertion below is what forced its entry out rather
+ * than letting it stand. Two entries and one, and nothing is owed.
  *
  * ## ⚠️ What this is NOT — `packages/db/src/scope.test.ts` (1b) owns the other half
  *
@@ -130,16 +130,18 @@ const ALLOWED_UNSCOPED: Readonly<Record<string, string>> = {
     'any household.',
   'catalog.ts#getMetricDefinition':
     '`metric_definitions` — same: global, seeded from the same consts, no household column.',
-  'catalog.ts#findOrCreateMovementId':
-    '⚠️ THE ONE THAT IS NOT BENIGN, and the only entry here that is a residual rather than a design ' +
-    'choice. The `household_id` column on `movements` exists (TEN-2a) but nothing reads or writes ' +
-    'it yet — see ' +
-    'docs/privacy/data-inventory.md §4 for the status — and the table is WRITTEN from free text, so ' +
-    "one household's name binds to another household's row, and whichever types a name first pins " +
-    "that slug's `name` / `is_bodyweight` / `unit_default` for everyone. TEN-1 1d PROVES that " +
-    '(`db:verify` → "TEN-1 1d: the catalog verdict", both directions, through the same ' +
-    '`findOrCreateMovement` core this function delegates to) rather than asserting it. **TEN-2 ' +
-    'deletes this entry.**',
+  // ✅ `catalog.ts#findOrCreateMovementId` WAS the third entry; **TEN-2b deleted it.** The function
+  // takes a `HouseholdScope` now and resolves global-first, so it no longer appears in `unscoped` —
+  // and the dead-entry assertion below is what FORCED the removal, rather than leaving it standing
+  // as coverage nobody re-earned. That is the mechanism working as designed, so do not re-add it.
+  //
+  // ⚠️ **This does NOT mean "no residual", and this file must not read as if it does.** While the
+  // non-partial `movements_slug_unique` lives (until TEN-2c) two households cannot both hold a row
+  // for one slug, so that core's `23505` fallback hands the second household the first's row — the
+  // pre-existing read leak TEN-1 1d proved, kept deliberately in preference to a permanent write
+  // failure. It is a **schema window, not a scoping gap**, which is why it is not an entry here:
+  // it is recorded in `db:verify` → "TEN-1 1d: the catalog verdict" and in
+  // `packages/db/src/writers/movement-catalog.ts`'s docblock.
 };
 
 describe('every lib/dal path to the database carries a household scope (TEN-1 1d)', () => {
@@ -167,10 +169,11 @@ describe('every lib/dal path to the database carries a household scope (TEN-1 1d
     ).toEqual([]);
   });
 
-  it('the allowlist carries no dead entry (TEN-2 must delete its own)', () => {
+  it('the allowlist carries no dead entry (it forced TEN-2b to delete its own)', () => {
     // The `household-synthetic-is-dark.test.ts` lesson: an allowlist that cannot go stale. An entry
     // for a function that no longer exists, or that now carries a scope, is coverage nobody
-    // re-earned — and it is how `findOrCreateMovementId` would quietly stay listed after TEN-2.
+    // re-earned — and it is how `findOrCreateMovementId` would quietly have stayed listed after
+    // TEN-2b scoped it. It did not: this assertion is what made that deletion non-optional.
     const live = new Set(unscoped.map((d) => d.id));
     expect(
       Object.keys(ALLOWED_UNSCOPED).filter((id) => !live.has(id)),

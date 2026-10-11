@@ -81,11 +81,26 @@ import unused for the duration, which `tsx` does not care about and the gate rev
 
 ⚠️ **The `movements` structural assertion was its own tripwire, and it has FIRED.** It read
 `TEN-1 1d: 'movements' has NO household_id column` and was written to go red the day TEN-2 added one.
-**TEN-2a is that day**, and it re-took the assertion rather than deleting it: `verify.ts` now asserts
-the column exists and is nullable (`TEN-2a: 'movements' HAS a household_id column now`). The **leak
-assertions below it are unchanged and still green** — the column ships dark, and the leak closes at
-**TEN-2c** — so patch `04-slug-is-not-the-arbiter` is untouched and still RED. A tripwire that fires
-is supposed to be re-taken by the PR that fires it; that is why it needed no patch.
+**TEN-2a is that day**, and it re-took the assertion rather than deleting it. A tripwire that fires is
+supposed to be re-taken by the PR that fires it; that is why it needed no patch. **TEN-2b re-took a
+second one the same way** — 2a's `household_id IS NOT NULL → 0` dark gate — inverting it to _every row
+the resolver returned is curated-global or owned by the household that asked_.
+
+🔴 **Patch `04` was REGENERATED at TEN-2b, and the distinction is the point.** Its claim is unchanged
+and its `.expect` line is byte-identical: the normalised slug is still the global arbiter of last
+resort, so breaking `movementSlug` still reddens
+`TEN-1 1d READ — LEAKS: household B is handed household A's movement row` **first**. But its only hunk
+used `findOrCreateMovement`'s signature and `.values(...)` as context, and TEN-2b rewrote both — so
+the gate would have failed `patch does not apply` rather than reporting RED, which is a _different_
+failure and exactly the one this directory's "patches are context-sensitive" note warns about.
+**Regenerated ≠ rewritten ≠ retired**: retiring it is TEN-2c's, when the global `slug` UNIQUE is
+dropped and the claim finally stops being true.
+
+⚠️ **The verdict itself is still `LEAKS` after TEN-2b**, so mutation 4 still has something to break.
+Two of 1d's three defects closed (a refused session's row lands in the caller's own namespace;
+`seedProgram` refuses a prescription naming another household's movement), but the non-partial
+`movements_slug_unique` forbids two households a row for one slug until **TEN-2c**, so the second
+household to type a name is still handed the first's row.
 
 ## Adding one
 

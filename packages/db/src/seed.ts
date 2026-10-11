@@ -23,7 +23,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import * as schema from './schema';
 import { householdScopeForScript } from './writers/household-scope-script';
-import { inHousehold } from './writers/ownership';
+import { inHousehold, movementIsGlobal, movementIsOwned } from './writers/ownership';
 
 /**
  * V1-18: Athlete Two's EXPLICIT routine (rice bucket before strength, a metric habit, wake) so a fresh DB
@@ -197,10 +197,47 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .values([...METRIC_DEFINITION_SEED_ROWS])
     .onConflictDoNothing({ target: schema.metricDefinitions.key });
 
-  await db
-    .insert(schema.movements)
-    .values([...MOVEMENT_SEED_ROWS])
-    .onConflictDoNothing({ target: schema.movements.slug });
+  // ── TEN-2b: the SHADOW GUARD, and why it is the only detector of a silent failure ───────────────
+  //
+  // The arbiter below moved onto the partial `uq_movements_slug_global` (predicate repeated
+  // literally, per the V1-5 lesson; `where:` not `targetWhere:`, which onConflictDoNothing silently
+  // drops). But Postgres infers BOTH arbiters for `(slug)`: the non-partial `movements_slug_unique`
+  // has an empty predicate, trivially implied by `WHERE household_id IS NULL`. So if a household
+  // already owns a slug this seed is about to add globally, `DO NOTHING` absorbs the GLOBAL-unique
+  // collision too and the catalog row is NEVER INSERTED — measured. `db:seed` reports success,
+  // seed-twice idempotency stays green, and every household then resolves that slug through
+  // `findOrCreateMovement`'s cross-household fallback. **The failure is silence, not a duplicate**,
+  // which is why this guard exists and why nothing else would ever report it.
+  //
+  // REFUSE, never adopt: adopting would promote one household's free text into the global reference
+  // namespace — the defect `ON DELETE SET NULL` is forbidden for (schema.ts → `movements`).
+  //
+  // ⚠️ NON-WEDGING ON PURPOSE. `migrate.yml` runs `db:migrate` then `db:seed` against PRODUCTION in
+  // one job on every push to `main`, and this function is NOT transactional. So: detect BEFORE any
+  // movement write, omit only the shadowed rows, let everything after this point seed normally, and
+  // throw at the END (see the foot of this function). One colliding slug must not stop unrelated
+  // reference data from reaching prod. Recovery: `docs/runbooks.md` → "the seed's shadow guard fired".
+  //
+  // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
+  // uncontrolled household free text, because this lands in a world-readable Actions log.
+  const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
+  const shadowedSlugs = (
+    await db
+      .select({ slug: schema.movements.slug })
+      .from(schema.movements)
+      .where(and(inArray(schema.movements.slug, seedMovementSlugs), movementIsOwned()))
+  )
+    .map((r) => r.slug)
+    .sort();
+
+  const seedableMovements = MOVEMENT_SEED_ROWS.filter((m) => !shadowedSlugs.includes(m.slug));
+  // Drizzle rejects an empty VALUES list (the `ramp_targets` precedent below).
+  if (seedableMovements.length > 0) {
+    await db
+      .insert(schema.movements)
+      .values(seedableMovements)
+      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
+  }
 
   // V1-6b-1: expand the calisthenics ramp schedule into `ramp_targets` rows —
   // CALISTHENICS_RAMP_SCHEDULE × KID profiles × the calisthenics metric keys. The schedule
@@ -244,6 +281,18 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
   // V1-10: the programming blocks + prescriptions + per-kid load targets. Ships EMPTY today (PROGRAM_SEED =
   // []); the loop below is a no-op until Ray's real block lands in a data-only PR (the LLM never authors loads).
   await seedProgram(db, PROGRAM_SEED);
+
+  // TEN-2b: the shadow guard's refusal, LAST — everything above has seeded, so one colliding slug
+  // costs the catalog row it names and nothing else. Seed slugs only (a public const); never the
+  // colliding row's `name`. Recovery: `docs/runbooks.md` → "the seed's shadow guard fired".
+  if (shadowedSlugs.length > 0) {
+    throw new Error(
+      `seed: ${shadowedSlugs.length} seeded movement slug(s) are already owned by a household, so ` +
+        `the global catalog row(s) were NOT inserted: ${shadowedSlugs.join(', ')}. ` +
+        'Adopting them would promote household free text into the global reference namespace. ' +
+        'See docs/runbooks.md → "the seed\'s shadow guard fired".',
+    );
+  }
 }
 
 /**
@@ -299,11 +348,18 @@ export async function seedProgram(
     // Resolve every referenced movement + profile ONCE for the block (one query each, no N+1), among LIVE
     // rows; a ref that doesn't resolve is an authoring typo → throw (before any write) rather than skip.
     const movementSlugs = [...new Set(block.prescriptions.map((p) => p.movementSlug))];
+    // TEN-2b: resolve in the GLOBAL namespace only (`household_id IS NULL`). One line, and it kills
+    // the last-row-wins hazard STRUCTURALLY rather than by preference: the global namespace is unique
+    // by slug (`uq_movements_slug_global`), so the map below can no longer be overwritten by a
+    // household's own row, and a prescription can no longer silently attach to another household's
+    // movement. A slug that exists ONLY in some household's namespace now falls through to the
+    // unknown-slug throw below — correct and loud: `seedProgram` seeds `PROGRAM_SEED`, whose slugs
+    // are all catalog slugs, and there is no authoring path that puts a household row here.
     const movementRows = movementSlugs.length
       ? await db
           .select({ id: schema.movements.id, slug: schema.movements.slug })
           .from(schema.movements)
-          .where(inArray(schema.movements.slug, movementSlugs))
+          .where(and(inArray(schema.movements.slug, movementSlugs), movementIsGlobal()))
       : [];
     const movementIdBySlug = new Map(movementRows.map((m) => [m.slug, m.id]));
     for (const slug of movementSlugs) {

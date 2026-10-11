@@ -1,13 +1,12 @@
 diff --git a/packages/db/src/writers/movement-catalog.ts b/packages/db/src/writers/movement-catalog.ts
-index 5516596..051a13d 100644
 --- a/packages/db/src/writers/movement-catalog.ts
 +++ b/packages/db/src/writers/movement-catalog.ts
-@@ -42,7 +42,7 @@ import type { Executor } from './executor';
-  * reason beside it, and TEN-2 is what removes that entry.
-  */
- export async function findOrCreateMovement(exec: Executor, name: string): Promise<number> {
+@@ -65,7 +65,7 @@
+   scope: HouseholdScope,
+   name: string,
+ ): Promise<number> {
 -  const slug = movementSlug(name);
 +  const slug = name;
-   await exec
-     .insert(schema.movements)
-     .values({ publicId: newId(), slug, name, isBodyweight: false })
+ 
+   /** One shape for all four lookups, so none can forget `limit(1)` or the id pluck. */
+   const movementIdWhere = async (where: SQL | undefined): Promise<number | undefined> => {

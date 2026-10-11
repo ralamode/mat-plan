@@ -28,11 +28,21 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `apps/web/lib/dal/catalog.ts` (×2 — missed by the first sweep's grep, and one of them sits directly
   above `findOrCreateMovementId`), `apps/web/lib/dal/entries.ts`, `apps/web/lib/dal/scoped.test.ts`,
   `packages/db/src/writers/movement-catalog.ts`, `packages/db/src/writers/ownership.ts` and
-  `packages/db/scripts/mutations/README.md`. So **TEN-2b and TEN-2c each edit two files, not twelve.**
-- **Still open — three copies, deliberately deferred to TEN-2c:** `.github/SECURITY.md`,
-  `docs/milestones/beta-1.md` and `docs/decisions/0006-household-addressing.md`. In each the sentence
-  supports a conclusion that is **still true** (the leak does not close until 2c), so retracting it in
-  2a would have been premature. ⚠️ Two files must **never** be edited for this:
+  `packages/db/scripts/mutations/README.md`.
+- 🔴 **"So TEN-2b and TEN-2c each edit two files, not twelve" did NOT hold — corrected at TEN-2b
+  (2026-10-10).** TEN-2b edited roughly a dozen of them, and the reason is worth keeping: **a
+  "pointer" that embeds the status clause is not a pointer.** Every one of the files above said
+  _"nothing reads or writes it"_ or _"is dark"_ **and then** pointed at §4 — so when the column woke
+  up, each sentence was independently false and had to be edited anyway. The shape that would have
+  worked is a pointer carrying **no status at all** (_"see data-inventory.md §4"_, full stop). Charged
+  to nobody; the lesson is for the next arc that tries this, and TEN-2c inherits the same cost.
+- **Still open — one copy deliberately deferred to TEN-2c:**
+  `docs/decisions/0006-household-addressing.md`, where the sentence supports a conclusion that is
+  still true (the leak does not close until 2c). ✅ **`.github/SECURITY.md` and
+  `docs/milestones/beta-1.md` were paid off by TEN-2b instead of 2c**: `SECURITY.md`'s was an
+  exception bullet under _"These rules are MANDATORY"_ telling the next agent an unscoped write to
+  this table was permitted, which stopped being true in the PR that scoped it, and `beta-1.md`'s sat
+  in the sentence recording the go/no-go. ⚠️ Two files must **never** be edited for this:
   `docs/plans/ten-1-household-scope.md` and `docs/changelog/2026-10-08-…`, both kept as-merged.
 - **Lesson for the sweep itself:** a literal single-phrase `git grep` **cannot** police text Prettier
   reflows — the sentence wraps mid-phrase in three files. The gate that works is phrasing-tolerant:
