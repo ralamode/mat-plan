@@ -188,6 +188,24 @@ they are how to schedule any milestone, not facts about this one.
   _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's three PRs block the invite and can run
   beside AUTH-1's dashboard and runbook work.
 
+  🔴 **A sharper invite precondition, named by TEN-2a: NO SECOND HOUSEHOLD MAY EXIST BETWEEN TEN-2b's
+  DEPLOY AND TEN-2c's.** Not a restatement of the above — a different and worse failure. With
+  TEN-2b's global-first resolver live and the non-partial `movements_slug_unique` still in place until
+  2c, household A typing a novel name inserts `(household_id = A, slug = 'x')`, and B typing the same
+  name then **violates that global constraint**, which is not the arbiter: `23505` propagates out of
+  `findOrCreateMovement` and **B's session write fails**. So in that window A can permanently deny B
+  the ability to log any movement name A typed first — a cross-household **availability** primitive,
+  inside the arc whose purpose is isolation. It is **structural**: both resequencings were considered
+  and rejected (dropping the constraint in 2b fails every write from code deployed before 2b with
+  `42P10`; moving the writer into 2c just moves the boundary). The real control is therefore the
+  **schedule**, with 2b's `23505` fallback degrading the denial into the pre-existing read leak.
+  Reasoning: [TEN-2a's plan](../plans/ten-2a-household-movements.md) → _"The 2b→2c window"_.
+  ⚠️ **TEN-2 may be FOUR PRs, not three**: 2c's `NOT VALID` CHECK needs its `VALIDATE` in the PR after.
+
+- ✅ **TEN-2a has landed (2026-10-09):** `movements.household_id` + the two partial unique indexes,
+  **dark** — no reader, no writer, the global `slug` UNIQUE untouched, every row proved still `NULL`.
+  Nothing about this step's criteria changes yet; the leak closes at TEN-2c.
+
 - TEN-1 alone proves _consistent scoping_. Isolation is only _authorized_ once AUTH-1 lands — the exit
   criteria say both, and this is the single most likely thing to over-read about this step.
 

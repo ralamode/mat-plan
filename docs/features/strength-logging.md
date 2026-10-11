@@ -350,9 +350,10 @@ Real ones, each with the file to look at.
   action and `ResolvedSessionMovement` are all unchanged.
 
   🔴 **`findOrCreateMovementId` runs BEFORE this, is unscopable, and TEN-1 1d PROVED what that
-  costs.** `movements` has no `household_id` column at all, so there is nothing to scope by — and a
-  `scope` parameter accepted and ignored would be worse than the honest absence, which is why the
-  core (`packages/db/src/writers/movement-catalog.ts`) takes none. `db:verify` →
+  costs.** `movements.household_id` exists (TEN-2a) but nothing reads or writes it — see
+  [data-inventory.md](../privacy/data-inventory.md) §4 for the status — so there is still nothing
+  scoped to scope by, and a `scope` parameter accepted and ignored would be worse than the honest
+  absence, which is why the core (`packages/db/src/writers/movement-catalog.ts`) still takes none. `db:verify` →
   _"TEN-1 1d: the catalog verdict"_ runs that core in both directions and asserts, against a real
   database:
 

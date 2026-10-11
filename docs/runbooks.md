@@ -113,6 +113,45 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
 
 ---
 
+## A pending migration wedges prod and the seed with it
+
+**When:** a `migrate.yml` run failed and left a migration **pending**. Promoted to its own heading at
+`TEN-2a` because the migration headers that send an operator here (`0012`, `0014`, `0015`) were
+pointing at prose buried inside the `db:correct` entry above, and the two other headings nearby are
+still `_TODO_` stubs. **This applies to ANY pending migration**, whatever made it fail.
+
+**Why it is manual:** `migrate.yml` runs on **every** push to `main`, with no path filter and no gate,
+and `db:seed` runs in the **same job** immediately after `db:migrate`. So a failed migration:
+
+1. **re-fails on every later push**, because the pending file is retried first;
+2. **takes `db:seed` down with it**, so no new reference-data row reaches prod either;
+3. leaves **no partial state** — drizzle wraps the whole pending set in one transaction, so nothing
+   half-applied needs undoing.
+
+**Steps.**
+
+1. Read the failing step's log and decide which of the two it is. A **data** refusal (a migration's own
+   `DO $$` pre-check raising, a constraint rejecting existing rows) means the data must be corrected
+   first — use the `db:correct` entry above. A **`lock_timeout` / `statement_timeout`** failure
+   (`canceling statement due to lock timeout`, SQLSTATE `55P03`) means nothing is wrong with the data:
+   the DDL waited out its 5 s behind someone else's transaction.
+2. **Freeze merges to `main` until the wedge clears.** Any later PR that needs a migration or a seed
+   row is broken in prod until then. The **one exception** is a correction PR: a correction must be on
+   `main` before it can `--apply`, so it merges while migrate is wedged, and that merge's own
+   `migrate.yml` run **fails too, as expected**. Don't chase that red run.
+3. Fix the cause — `--apply` the correction, or simply wait out the lock.
+4. **Re-run `migrate.yml` via `workflow_dispatch`** (see "Manually re-seed / re-apply prod" below) and
+   confirm it is green on the current `main` SHA: `gh run list --workflow migrate.yml --branch main -L 3`.
+   ⚠️ A green run is not sufficient on its own — the migrate step `exit 0`s with a warning when
+   `DATABASE_URL_UNPOOLED` is absent. Confirm in prod that the thing the migration adds is actually
+   there (`information_schema.columns`, `pg_indexes`, `pg_constraint`).
+
+**Safety.** Nothing here is destructive. The app keeps serving: a pending migration means prod simply
+does not yet have the new column/index, which is why every migration in this repo ships additive and
+dark ahead of its reader.
+
+---
+
 ## Rename / correct a seeded profile in prod
 
 **When:** the seed changed a profile's name (or similar reference value) but prod already had the row.
@@ -745,7 +784,12 @@ UNION ALL SELECT 'program_blocks', count(*) FROM b
 UNION ALL SELECT 'prescriptions', count(*) FROM prescriptions WHERE block_id IN (SELECT id FROM b)
 UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
   WHERE profile_id IN (SELECT id FROM p) OR prescription_id IN
-    (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b));
+    (SELECT id FROM prescriptions WHERE block_id IN (SELECT id FROM b))
+-- TEN-2a: `movements` is no longer purely global. A row with `household_id = H` is free text THIS
+-- household typed; a row with `household_id IS NULL` is seeded reference data owned by nobody and
+-- must SURVIVE. Counted here because the counts are the proof, and step 5 has nothing to compare
+-- against without it.
+UNION ALL SELECT 'movements', count(*) FROM movements WHERE household_id = (SELECT id FROM h);
 ```
 
 **Pre-flight integrity — every one of these must return 0, or STOP.** `entries.session_id`,
@@ -766,6 +810,26 @@ child:
 --       JOIN sessions sess ON sess.id = s.session_id
 --       WHERE sess.profile_id IN (SELECT id FROM p) AND e.profile_id NOT IN (SELECT id FROM p)
 ```
+
+```sql
+-- (d) TEN-2a: an ENTRY or a PRESCRIPTION of H referencing a movement owned by ANOTHER household.
+--       `entries.movement_id` and `prescriptions.movement_id` are unscoped FKs too, and nothing in
+--       the schema stops them crossing. Both directions, because both abort step 4:
+--         H's row -> a movement with household_id NOT IN (NULL, H)  → step 11 misses it, and
+--                                                                     DELETE FROM households aborts
+--         ¬H's row -> a movement with household_id = H              → step 11 deletes a movement
+--                                                                     another family's row needs
+--       FROM entries e JOIN movements m ON m.id = e.movement_id
+--       WHERE e.profile_id IN (SELECT id FROM p)
+--         AND m.household_id IS NOT NULL AND m.household_id <> (SELECT id FROM h)
+--       (and the mirror, plus the same pair over `prescriptions` joined through `b`)
+```
+
+**Why (d) can exist at all, and why it is checked rather than assumed.** `TEN-2b`'s global-first
+resolver and `TEN-2b`/`2c`'s backfill rules prevent it **by construction** — a household only ever
+resolves to its own row or to a seeded one — which is this repo's idiom, and the idiom is that such an
+invariant is **written in the schema docblock AND pre-flighted here**. It is in both
+(`packages/db/src/schema.ts` → the `movements` docblock). Nothing enforces it in the database.
 
 ⚠️ **(c) is the direction that actually exists.** `supersets` has no profile column — it is
 household-scoped by construction through its session — so "a superset owned by an outside profile" is
@@ -792,7 +856,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 12 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 13 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -814,20 +878,57 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 | 8   | `prescription_targets` | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
 | 9   | `prescriptions`        | `block_id` ∈ program_blocks of H                               |
 | 10  | `program_blocks`       | `household_id` = H                                             |
-| 11  | `profiles`             | `household_id` = H                                             |
-| 12  | `households`           | `id` = H                                                       |
+| 11  | **`movements`**        | `household_id` = H — **TEN-2a; see below**                     |
+| 12  | `profiles`             | `household_id` = H                                             |
+| 13  | `households`           | `id` = H                                                       |
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
 cascade reports nothing.
 
+🔴 **Step 11 (`movements`) is new at `TEN-2a`, and without it this whole procedure aborts.** Migration
+`0015` added `movements.household_id` with `ON DELETE NO ACTION`, so from the first non-NULL value the
+final `DELETE FROM households` raises **`23503`** and strands the operator mid-procedure. Measured;
+`NOT VALID` does **not** disarm it — `NOT VALID` skips the validation scan, it does not skip the
+referential triggers. Step 11 must run **after 3 and 9** (`entries.movement_id` and
+`prescriptions.movement_id` both reference it) and **before 12/13**.
+
+```sql
+DELETE FROM movements WHERE household_id = (SELECT id FROM h);
+```
+
+⚠️ **`household_id IS NULL` rows are NOT H's and must survive** — they are the seeded catalog, owned
+by no household. The predicate is `household_id = H`, never `IS NULL OR = H`.
+
+⛔ **Never "fix" an abort here with `ON DELETE SET NULL`, and never hand-type
+`UPDATE movements SET household_id = NULL WHERE household_id = H`.** Either one promotes this
+household's free text into the **global reference namespace**, where `TEN-2b`'s global-first resolver
+then serves it to every other household — the opposite of a deletion. The correct response to a
+blocked delete is always to **delete the rows**. `packages/db/src/schema.ts` and `0015`'s header both
+say so; this is the step they are pointing at.
+
+⚠️ **Residual between `TEN-2b` and `TEN-2c`, stated so nobody promises more than is true.** `TEN-2b`'s
+backfill leaves a movement referenced by **more than one** household at `household_id IS NULL` until
+`TEN-2c` splits it. Such a row carries H's typed `name`, is **not** selected by `household_id = H`, and
+therefore **survives a deletion the notice describes as complete**. One household today, so the case
+cannot arise yet; it becomes real at the invite, which is why `TEN-2c` is an invite precondition.
+
 **`deleted_at` appears in no `WHERE`.** This is the documented inversion of corrections README rules 2
 and 5: for a deletion, existence _is_ the guard, and soft-deleted rows are exactly what must go.
 
-**5. Verify, after the commit.** Re-run the step-3 counts — all zero — and confirm `movements` is
-**not** empty (it is global and must survive). Every FK except the two cascades is `NO ACTION`, so a
-table this procedure missed would have aborted the transaction rather than silently orphaning rows;
-that is a real safety property, not a hope.
+**5. Verify, after the commit.** Re-run the step-3 counts — **all zero, `movements` included** — and
+then confirm the catalog's **seeded** rows are still there:
+
+```sql
+-- H owns nothing any more…
+SELECT count(*) FROM movements WHERE household_id = :h_id;              -- must be 0
+-- …and the global reference catalog survived (TEN-2a: `household_id IS NULL` = owned by nobody).
+SELECT count(*) FROM movements WHERE household_id IS NULL;              -- must be > 0
+```
+
+Every FK except the two cascades is `NO ACTION`, so a table this procedure missed would have aborted
+the transaction rather than silently orphaning rows; that is a real safety property, not a hope — and
+`movements.household_id` is exactly that property firing, which is why step 11 exists.
 
 **6. Delete the Clerk users** (after `AUTH-1`). Clerk dashboard → each user id recorded at step 0b →
 Delete user. The database delete does not touch Clerk. Before `AUTH-1` there are no per-person

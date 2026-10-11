@@ -132,7 +132,9 @@ const ALLOWED_UNSCOPED: Readonly<Record<string, string>> = {
     '`metric_definitions` — same: global, seeded from the same consts, no household column.',
   'catalog.ts#findOrCreateMovementId':
     '⚠️ THE ONE THAT IS NOT BENIGN, and the only entry here that is a residual rather than a design ' +
-    'choice. `movements` has no `household_id` column either, but it is WRITTEN from free text — so ' +
+    'choice. The `household_id` column on `movements` exists (TEN-2a) but nothing reads or writes ' +
+    'it yet — see ' +
+    'docs/privacy/data-inventory.md §4 for the status — and the table is WRITTEN from free text, so ' +
     "one household's name binds to another household's row, and whichever types a name first pins " +
     "that slug's `name` / `is_bodyweight` / `unit_default` for everyone. TEN-1 1d PROVES that " +
     '(`db:verify` → "TEN-1 1d: the catalog verdict", both directions, through the same ' +

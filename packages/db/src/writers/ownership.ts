@@ -75,8 +75,9 @@ import type { Executor } from './executor';
  *    delegate and build no query, so an allowlist keyed on them would have exempted the wrong
  *    symbols. `scoped.test.ts` finds the real ones by construction.
  * 4. ⚠️ **`findOrCreateMovementId` (`catalog.ts`) is a WRITE, not a reference read.** It is
- *    `INSERT … ON CONFLICT DO NOTHING` against a `movements` table with **no `household_id` column
- *    at all**, so it cannot be scoped — a household typing a name another household already created
+ *    `INSERT … ON CONFLICT DO NOTHING` against `movements`, whose `household_id` column exists
+ *    (TEN-2a) but is dark — nothing reads or writes it; see `docs/privacy/data-inventory.md` §4 for
+ *    the status — so it is not scoped yet: a household typing a name another household already created
  *    is handed that household's row, and whoever types a name first pins that slug's metadata for
  *    everyone. **TEN-1 1d proved it in both directions** (`db:verify` → "the catalog verdict",
  *    running the single-sourced core in `writers/movement-catalog.ts`) and the recorded verdict moves

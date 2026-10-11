@@ -73,7 +73,9 @@ CHECK. All rows household-scoped for DAL authz.
   input_shape(set_list|single_metric|boolean|timing), default_unit, icon. _(The catalog is what makes
   it portable: wake, weigh_in, rice_bucket, wrestling_practice, calisthenics, brush_teeth, splits,
   sc_lift, brain_rep, shots are rows.)_
-- `movement` — slug, name, pattern, unit_default, is_bodyweight, video_url, cues.
+- `movement` — slug, name, household_id? (FK; **NULL = seeded reference row owned by no
+  household**, a value = this household typed this name — TEN-2a), pattern, unit_default,
+  is_bodyweight, video_url, cues.
 - `metric_definition` — key, label, unit, value_type, aggregation(sum|last|max|avg). Includes a
   canonical `shot` metric and a first-class `pullup_max` (aggregation=max).
 

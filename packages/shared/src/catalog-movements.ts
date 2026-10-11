@@ -336,3 +336,28 @@ export const MOVEMENT_SEED_ROWS = [
 export function movementSlugMatchesName(row: MovementSeedRow): boolean {
   return row.slug === movementSlug(row.name);
 }
+
+/**
+ * TEN-2a — **the authorship discriminator, in one place.** A `movements` row is **app-authored**
+ * (someone typed it into the strength form) **iff its `public_id` is NOT in this set** — exact set
+ * membership against the rows above.
+ *
+ * ⚠️ **NOT a `SEED_PUBLIC_ID_PREFIX` prefix test**, which is the mistake this const exists to
+ * prevent. `SEED_PUBLIC_ID_PREFIX` is the **global** seed namespace shared by every seeded table
+ * (`001` profile, `010` household, `020`/`021` activity types, `030` metrics, `050`+ movements), so
+ * "inside the prefix" means "in the seed namespace of _any_ table" — a `movements` row carrying
+ * `seedPublicId('010')` would pass a prefix test and be called reference data. TEN-2b's backfill and
+ * its correction **delete** rows on this test, so getting it wrong is destructive.
+ *
+ * Sound by construction, in both directions: `movementSeedRowSchema` requires a non-nullable
+ * `pattern` and `db:verify` parses every row above through it, so every seeded row has a `pattern`;
+ * `findOrCreateMovement` writes neither `pattern` nor `unitDefault`, so every app-authored row has
+ * `pattern IS NULL`. That is the cross-check, not the test. Nor is it forgeable: `newId()` (UUIDv7)
+ * is the only other source of a `movements.public_id`.
+ *
+ * Single home on purpose — `db:verify`, TEN-2b's backfill, TEN-2b's correction and TEN-2c's split all
+ * need this rule, and a re-derived predicate is how four copies drift.
+ */
+export const MOVEMENT_SEED_PUBLIC_IDS: ReadonlySet<string> = new Set(
+  MOVEMENT_SEED_ROWS.map((row) => row.publicId),
+);

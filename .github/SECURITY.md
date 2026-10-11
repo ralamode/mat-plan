@@ -28,7 +28,13 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > assumed, and `TEN-2`'s to fix (see "Authorization" below).
 >
 > So the sequencing constraint stands and gains a third row: **no second household may exist in
-> production before `TEN-1`, `AUTH-1` and `TEN-2` have all landed**
+> production before `TEN-1`, `AUTH-1` and `TEN-2` have all landed** — and `TEN-2a` sharpened what that
+> protects: **the window it matters most in is between `TEN-2b`'s deploy and `TEN-2c`'s**, where the
+> failure is not a leak but a cross-household **denial** (with `TEN-2b`'s global-first resolver live
+> and the non-partial `movements_slug_unique` still in place, one household typing a name first makes
+> every other household's write of that name fail `23505`). The window is structural and cannot be
+> resequenced away, so the control is the schedule plus `TEN-2b`'s `23505` fallback
+> ([TEN-2a's plan](../docs/plans/ten-2a-household-movements.md))
 > ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_, and
 > [ADR 0006](../docs/decisions/0006-household-addressing.md) makes it a constraint rather than a
 > hope). It is also enforced in code until `AUTH-1`: the scope resolver **throws** on a second live

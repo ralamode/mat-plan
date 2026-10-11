@@ -431,8 +431,72 @@ export const activityTypes = pgTable(
 );
 
 /**
+ * The two partial unique indexes that carry `movements`' two-namespace invariant (TEN-2a, migration
+ * 0015), named once here so `verify.ts` and TEN-2b's conflict targets import rather than re-type them
+ * — the `BODYWEIGHT_DAY_UNIQUE_INDEX` precedent. Renaming one means a new migration too.
+ *
+ * ⚠️ **Names are consts; the PREDICATES stay SQL literals below, deliberately.** A name is a string
+ * matched at runtime (an `ON CONFLICT` target, an `expectRejectedBy` assertion, `pg_indexes`), so a
+ * typo is a silent miss that a const turns into a compile error. A predicate is not matched by
+ * anything: it is read by the planner from the catalog, and drizzle renders it into the migration
+ * once. Hoisting it into a const would hide the invariant one indirection away from the index that
+ * states it, and still not stop a drifting copy in a migration nobody may edit.
+ */
+export const MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX = 'uq_movements_slug_global';
+export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug';
+
+/**
  * movement — the exercise catalog (spec.md §4): slug/name + optional movement pattern,
  * default unit, bodyweight flag, and coaching media. `pattern` is a text+CHECK enum.
+ *
+ * ── TEN-2a: `household_id`, and the two namespaces ───────────────────────────────────────────────
+ *
+ * **`household_id IS NULL` is a VALUE, not missing data.** It means _reference data owned by no
+ * household_ — the curated `MOVEMENT_SEED_ROWS`, each with a `pattern`, a `unit_default` and an
+ * `is_bodyweight` a human chose. A non-NULL `household_id` means _this household typed this name_.
+ * Two kinds of row in one table, and NULL is the honest encoding of the first — which is why the
+ * column is **nullable FOREVER**: TEN-2c does NOT contract it to `NOT NULL` (that would assert some
+ * household owns `Box Jump`, and inventing a sentinel household to satisfy the constraint would put
+ * a fiction in the table every scoped query then has to exclude). What 2c contracts to instead is a
+ * `NOT VALID CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)`.
+ *
+ * The resolution rule the two namespaces depend on is **GLOBAL-FIRST**, and it is TEN-2b's to
+ * implement: resolve `slug` against `household_id IS NULL` first, and only then `(scope, slug)`.
+ * Reasoning (nothing in the app can author movement metadata, so a household row would always be
+ * strictly worse than the seeded row it shadowed), the seed-growth hazard and the TEN-2b→2c window:
+ * `docs/plans/ten-2a-household-movements.md`. This table states what the indexes MEAN; it does not
+ * design 2b.
+ *
+ * ⚠️ **`ON DELETE NO ACTION` IS LOAD-BEARING — never `SET NULL`.** `SET NULL` would silently promote
+ * every row of a deleted household into the **global reference namespace**, where global-first then
+ * serves it to every other household. The correct response to a household delete blocked by this FK
+ * is to **DELETE the rows** (`docs/runbooks.md` → the PRIV-1 procedure, step 11), never to null the
+ * column.
+ *
+ * ⚠️ **Cross-household references are WRITER-enforced, not schema-enforced** (the
+ * `supersets` / `prescription_targets` family): nothing here stops an `entries.movement_id` of
+ * household H pointing at a movement owned by ¬H. Global-first plus 2b/2c's backfill rules prevent it
+ * by construction; `runbooks.md` step 3 pre-flights it, because the symptom is a mid-transaction
+ * abort of the household deletion.
+ *
+ * ⚠️ **NO plain `idx_movements_household`, and this is the FIRST break in an 11-for-11 idiom in this
+ * file** — so do not "fix" it. `uq_movements_household_slug` leads on `household_id` and its
+ * predicate is **implied** by any `household_id = $1` lookup, so it already serves the FK's
+ * referential check and every household-scoped read. `idx_program_blocks_household` exists only
+ * because its partial sibling's predicate is `WHERE deleted_at IS NULL`, which `household_id = $1`
+ * does **not** imply. (A planner claim, stated as reasoning: on a 35-row table PGlite seq-scans, so
+ * `db:verify` cannot exercise it.)
+ *
+ * ⚠️ **Neither index carries `deleted_at IS NULL`**, diverging from every other natural key here, and
+ * for a reason: `findOrCreateMovement`'s `SELECT … WHERE slug = $1 LIMIT 1` has **no `deleted_at`
+ * filter and no `ORDER BY`**, so a tombstone-ignoring natural key would let a live row and a tombstone
+ * share a slug and let the resolver hand back the tombstone. The repo's partial-on-`deleted_at` idiom
+ * is for tables whose WRITERS filter tombstones; this one does not.
+ * **Hard constraint until that changes: nothing may set `movements.deleted_at`.** The PR that first
+ * soft-deletes a movement must do **three** things in one change — add `deleted_at IS NULL` to both
+ * indexes, add a `deleted_at` filter to the resolver, **and** add the plain `idx_movements_household`,
+ * because the moment the predicate becomes `… AND deleted_at IS NULL` it stops being implied by
+ * `household_id = $1` and the FK loses its index.
  */
 export const movements = pgTable(
   'movements',
@@ -441,6 +505,9 @@ export const movements = pgTable(
     publicId: uuid('public_id').notNull().unique(),
     slug: text('slug').notNull().unique(),
     name: text('name').notNull(),
+    // TEN-2a: nullable FOREVER (NULL = reference data owned by no household — see the docblock).
+    // Mirrors `profiles.householdId`'s shape, and NO ACTION is load-bearing, not mimicry.
+    householdId: bigint('household_id', { mode: 'number' }).references(() => households.id),
     pattern: text('pattern'), // mirrors MOVEMENT_PATTERNS (nullable)
     unitDefault: text('unit_default').references(() => units.code),
     isBodyweight: boolean('is_bodyweight').notNull().default(false),
@@ -454,6 +521,15 @@ export const movements = pgTable(
       'movements_pattern_check',
       sql`${t.pattern} in ('squat', 'hinge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'lunge', 'jump', 'core', 'carry', 'isolation')`,
     ),
+    // The global reference namespace: one row per slug among rows owned by no household. Implied by
+    // the existing global `slug` UNIQUE today (which TEN-2a leaves alone); load-bearing from TEN-2c.
+    uniqueIndex(MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX)
+      .on(t.slug)
+      .where(sql`${t.householdId} is null`),
+    // Each household's own namespace — AND the covering index for the household FK above.
+    uniqueIndex(MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX)
+      .on(t.householdId, t.slug)
+      .where(sql`${t.householdId} is not null`),
   ],
 );
 

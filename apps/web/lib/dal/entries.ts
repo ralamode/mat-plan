@@ -481,9 +481,10 @@ export async function logStrengthSession(
 ): Promise<{ sessionId: string }> {
   // TEN-1 1c: the scope rides into the write core, whose in-transaction profile resolve is the
   // actual seam (`writeStrengthSession`). Resolved BEFORE the catalog work so a request with no
-  // household does none of it. ⚠️ `findOrCreateMovementId` below is still **unscopable** —
-  // `movements` has no `household_id` column — so a refused session has already committed its
-  // caller-supplied catalog text. That is TEN-2's problem; 1d records the verdict.
+  // household does none of it. ⚠️ `findOrCreateMovementId` below is still **unscoped** —
+  // `movements.household_id` exists (TEN-2a) but nothing reads or writes it yet; see
+  // `docs/privacy/data-inventory.md` §4 for the status — so a refused session has already committed
+  // its caller-supplied catalog text. That is TEN-2's problem; 1d records the verdict.
   const scope = await getHouseholdScope();
   if (!scope) throw new Error('Profile not found');
 
