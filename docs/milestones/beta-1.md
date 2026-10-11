@@ -206,7 +206,7 @@ they are how to schedule any milestone, not facts about this one.
 - ✅ **TEN-2a has landed (2026-10-09):** `movements.household_id` + the two partial unique indexes,
   **dark** — no reader, no writer, the global `slug` UNIQUE untouched, every row proved still `NULL`.
 
-- ✅ **TEN-2b has landed (2026-10-10):** the writer is **scoped and global-first**, the FK is
+- ✅ **TEN-2b has landed (2026-10-11):** the writer is **scoped and global-first**, the FK is
   `VALIDATE`d (migration `0016`), and `seedProgram` resolves the global namespace only.
   [Plan](../plans/ten-2b-scoped-movement-lookup.md). **Two of chunk 1d's three defects are closed**: a
   session write the seam refuses now leaves its row in the **caller's own** namespace (garbage, not a
