@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
 
-import { ENTRY_STATUS, SEED_METRIC_KEYS, type Unit } from '@mat-plan/shared';
+import {
+  ENTRY_STATUS,
+  MOVEMENT_SEED_PUBLIC_IDS,
+  SEED_METRIC_KEYS,
+  type Unit,
+} from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { SEED_FULL_ROUTINE, SEED_HOUSEHOLD_PUBLIC_ID } from '../../src/seed';
 import type { Database } from '../../src/client';
+// TEN-2c: the one definition of "a movement is REFERENCED", shared with `db:verify`,
+// `runbooks.md` pre-flight (d) and (by requirement) TEN-2b-2's correction + TEN-2c-1's split.
+import {
+  crossHouseholdMovementRefs,
+  sharedMovementRows,
+} from '../../src/queries/movement-ownership';
 import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
@@ -24,6 +35,22 @@ export type Correction = {
   what: string;
   /** The backlog row that fixes the CAUSE. A correction treats data; the bug still needs a PR. */
   issue: string;
+  /**
+   * `'report'` — this entry **only reads**, with or without `--apply`, and its output is a census
+   * rather than a list of pending writes. Absent means the ordinary thing: it writes under `--apply`.
+   *
+   * ⚠️ **It exists because `correct.ts` otherwise LIES about a reporter.** The runner prints
+   * *"No matching rows — already corrected, or the guard did not match"* on an empty result, which for
+   * a reporter is the **good** outcome reported as the wrong thing, and *"Re-run with --apply to write
+   * them"* on a non-empty one, which a reporter can never do. One discriminator, three strings
+   * branched — see `scripts/correct.ts`. (Added at TEN-2c, which brought the first reporter.)
+   *
+   * ⚠️ **Rules 2, 4, 5 and 7 below are VACUOUS for a reporter**, not merely satisfied: there is no
+   * value being corrected *from*, no `updated_at` to touch, no resurrection to avoid and no write to
+   * wrap in a transaction. Rules 1, 3, 6, 8, 9 and 10 all still bind, and rule 9 binds harder — a
+   * census is output-only, so what it prints is the whole surface.
+   */
+  kind?: 'report';
   /** Returns a human-readable line per row it would change (dry run) or did change (`--apply`). */
   run: (db: Database, apply: boolean) => Promise<string[]>;
 };
@@ -562,8 +589,93 @@ const nullRoutineToFull: Correction = {
   },
 };
 
+/**
+ * 2026-10-11 (TEN-2c) — **a REPORT, not a correction: it never writes, with or without `--apply`.**
+ *
+ * TEN-2c drops the non-partial `movements_slug_unique`, which closes the 2b→2c cross-household
+ * **denial** primitive completely and closes **nothing** of the pre-existing **read** leak: a row
+ * already sitting at `household_id IS NULL` that is not a curated catalog row is still resolved by
+ * global-first for every household. `TEN-2c-1` (the split backfill) is what closes that, and
+ * `TEN-2d` runs the `VALIDATE` on `movements_global_row_has_pattern`.
+ *
+ * ⚠️ **Why it ships in TEN-2c rather than in the PR that consumes it.** The whole isolation argument
+ * rests on a **dated** zero — `ten-2a`'s plan measured zero app-authored `movements` rows in
+ * production on 2026-10-09 and wrote the expiry itself: *"the count is re-measured immediately before
+ * the invite, because 'zero' is a dated fact, not an invariant."* A measurement taken **after** the
+ * verdict flips is not evidence for it. So this runs against production **before TEN-2c merges**, its
+ * counts go in the PR body, and a non-zero count is a merge blocker on TEN-2c.
+ *
+ * ⚠️ **DELIBERATELY UNSCOPED, and stated so the next reader does not "fix" it.** Every other entry in
+ * this file is household-scoped, and the scope is the safety argument. This one must not be: the
+ * question is precisely *"does any row cross a household boundary, and is the global namespace
+ * exactly the curated catalog"*, and a `HouseholdScope` can only ever answer it for one side.
+ * Scoping this would not make it safer; it would **blind** it. Everything it reads comes from
+ * `src/queries/movement-ownership.ts`, the one definition of *referenced* that `TEN-2b-2` and
+ * `TEN-2c-1` must also use.
+ *
+ * 🔴 **AGGREGATE COUNTS ONLY — no `slug`, no `name`, no `public_id`.** `registry.ts`'s own
+ * `nullRoutineToFull` prints `profile <uuid> (<name>)`, and that is the precedent **not** to follow
+ * here: `movements.name` is the one free-text box the privacy notice warns people may put a person's
+ * name into, a `slug` is derived from it character for character, and these counts are pasted into a
+ * PR body on a **public** repo (README rule 9). A count is enough to decide whether TEN-2c-1 has work
+ * to do; naming the rows is the operator's job, at the console, when it does.
+ */
+export const MOVEMENTS_OWNERSHIP_REPORT_NAME = 'movements-ownership-2026-10-11';
+
+const movementsOwnershipReport: Correction = {
+  name: MOVEMENTS_OWNERSHIP_REPORT_NAME,
+  kind: 'report',
+  what: 'census of the movements rows TEN-2c does NOT fix — aggregate counts only, never a name or slug',
+  issue: 'TEN-2c-1 (the split backfill) · TEN-2b-2 (the orphan removal) · TEN-2d (the VALIDATE)',
+  async run(db) {
+    // (1) The namespaces, by exact set membership in the curated catalog — never a slug test and
+    // never a `public_id` PREFIX test. Both were tried in this arc and both were wrong: the seed list
+    // has grown three times, and `SEED_PUBLIC_ID_PREFIX` is the GLOBAL seed namespace shared by every
+    // seeded table, so a `movements` row carrying the household's own seed id would pass it.
+    const rows = await db
+      .select({
+        id: schema.movements.id,
+        publicId: schema.movements.publicId,
+        householdId: schema.movements.householdId,
+        pattern: schema.movements.pattern,
+      })
+      .from(schema.movements);
+    const global = rows.filter((r) => r.householdId === null);
+    const curated = global.filter((r) => MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId));
+    const residual = global.filter((r) => !MOVEMENT_SEED_PUBLIC_IDS.has(r.publicId));
+
+    // (2) Who references the global rows — the shared definition, covering `entries` AND
+    // `prescriptions`. `>= 1` household is TEN-2c-1's clone/split work; `0` is TEN-2b-2's orphan.
+    const refsByMovementId = new Map(
+      (await sharedMovementRows(db)).map((r) => [r.movementId, r.householdRefs]),
+    );
+    const residualShared = residual.filter((r) => (refsByMovementId.get(r.id) ?? 0) > 1);
+    const residualSingle = residual.filter((r) => (refsByMovementId.get(r.id) ?? 0) === 1);
+    const residualOrphan = residual.filter((r) => (refsByMovementId.get(r.id) ?? 0) === 0);
+
+    // (3) `runbooks.md` pre-flight (d) — the count that must be zero before a household deletion.
+    const crossRefs = await crossHouseholdMovementRefs(db);
+
+    // (4) What `TEN-2d`'s `VALIDATE` will hit. `NOT VALID` scanned nothing, so TEN-2c cannot fail on
+    // a pre-existing violation — it would wedge 2d with a `23514`, and `db:verify` cannot see it
+    // because it never runs against production.
+    const checkViolations = global.filter((r) => r.pattern === null);
+
+    return [
+      `movements rows: ${rows.length} total — ${global.length} global (household_id IS NULL), ${rows.length - global.length} household-owned`,
+      `global rows: ${curated.length} curated (exact members of MOVEMENT_SEED_PUBLIC_IDS), ${residual.length} NOT curated`,
+      `TEN-2c-1 input (the read leak's residual): ${residual.length} — of which ${residualShared.length} referenced by MORE THAN ONE household (clone + split), ${residualSingle.length} by exactly one (repoint), ${residualOrphan.length} referenced by NO household`,
+      `TEN-2b-2 input (global, non-curated, unreferenced): ${residualOrphan.length}`,
+      `runbooks.md pre-flight (d) — references crossing a household boundary: ${crossRefs.total} (${crossRefs.entries} entries, ${crossRefs.prescriptions} prescriptions)`,
+      `TEN-2d blocker — global rows with pattern IS NULL (movements_global_row_has_pattern would reject on VALIDATE): ${checkViolations.length}`,
+      'EXPECTED, every line: zero in every residual/blocker count. A non-zero count blocks TEN-2c’s merge (ten-2a measured zero on 2026-10-09, and a dated zero is not an invariant).',
+    ];
+  },
+};
+
 export const CORRECTIONS: readonly Correction[] = [
   kbSwingsLoadRepsSwap,
   bodyweightDuplicates,
   nullRoutineToFull,
+  movementsOwnershipReport,
 ];
