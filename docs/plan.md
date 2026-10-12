@@ -1404,6 +1404,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   owned by this row — not unowned.
 
 - **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This is where the leak closes.**
+  📋 **Plan: [plans/ten-2c-drop-global-slug-unique.md](./plans/ten-2c-drop-global-slug-unique.md)** (2026-10-11) — six-lens panel, 17 blocking findings reconciled, 4 pushbacks. ⚠️ **This row's own title is the mis-attribution the plan retracts:** the drop closes the **denial** primitive; the **read** leak closes at `TEN-2c-1`, per this file's own TEN-2 row above and TEN-2a's plan.
   _(Beta 0; TEN-2's third.)_
   🔴 **What TEN-2b handed this row, beyond what was already here.** (i) **The backfill**, moved here
   with its reasoning — and it owes **one** definition of "referenced", shared with `TEN-2b-2`'s hard
@@ -1485,6 +1486,42 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   ⚠️ **The `ALTER TABLE … DROP CONSTRAINT movements_slug_unique` form is load-bearing:** `DROP INDEX`
   fails `2BP01` because the constraint owns the index (measured).
 
+- **TEN-2c-1 — the split backfill: pre-existing custom rows leave the global namespace.** _(Beta 0;
+  TEN-2's fourth of five, moved out of `TEN-2c` by
+  [its plan](./plans/ten-2c-drop-global-slug-unique.md).)_ 🔴 **This is where the READ leak actually
+  closes** — not `TEN-2c`, which only _permits_ two namespaces. For each custom row left at
+  `household_id IS NULL`, assign the original to **one** referencing household and clone it for each
+  other, repointing that household's `entries.movement_id` / `prescriptions.movement_id` to its clone.
+  Clone rules, settled: original to the household with the **earliest** referencing row across
+  `entries` ∪ `prescriptions` (`min(created_at)`), ties by household **`public_id`** — never a raw
+  internal id ([corrections/README.md](../packages/db/scripts/corrections/README.md) rule 3) — a fresh
+  `newId()` `public_id` per clone, and every repoint through `inHousehold(scope)`. **Input measured
+  zero** (`ten-2a` plan: zero `movements` rows outside `MOVEMENT_SEED_ROWS` in production, 2026-10-09),
+  which is why it is its own row and not a blocker on `TEN-2c`. ⚠️ **A dated zero is not an
+  invariant** — `TEN-2c`'s report-only correction re-measures before merge, and a non-zero count makes
+  this row block `TEN-2d`. The clone carries the **other** household's free text as `name`, so it owes
+  either a slug-derived name or a named residual in
+  [data-inventory.md](./privacy/data-inventory.md) §9.
+- **TEN-2d — `VALIDATE` the end-state CHECK, and delete the `23505` fallback.** _(Beta 0; TEN-2's
+  fifth.)_ Two things that cannot ride `TEN-2c`. (1) `ALTER TABLE movements VALIDATE CONSTRAINT
+movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDATE` be split across
+  PRs** (measured: a same-file `VALIDATE` fires `constraint-missing-not-valid`), which is why TEN-2 is
+  five rows. This is **the arc's only mechanical production-side gate**: it raises `23514` on any
+  residual and reddens `migrate.yml` until fixed, so **it must precede any invite**. (2) Delete
+  `findOrCreateMovement`'s `23505` `catch` — it cannot go in `TEN-2c`, because `migrate.yml` and Vercel
+  fire on the same push with no gate between them, so a catch-less resolver reaching a schema that
+  still has the constraint raises a raw `23505` out of a child's session write (AGENTS.md's deploy
+  order: the destructive contract runs _after_ the app that stopped depending on it).
+  **Precondition on acceptance:** `TEN-2c`'s reporter has returned zero against production, or
+  `TEN-2c-1` landed first.
+- **DX-9 — `profiles.household_id` is nullable in Drizzle and NOT NULL in the database.** _(Small;
+  found by `TEN-2c`'s panel.)_ `packages/db/src/schema.ts` declares the column with no `.notNull()`,
+  while migration `0001:158-159` adds `profiles_household_id_not_null` as a `CHECK … NOT VALID` and
+  then `VALIDATE`s it — never dropped. So an orphan profile is **unreachable in the database**, but
+  TypeScript forces every caller to handle a `number | null` that cannot occur, which is what made
+  `TEN-2c`'s "which household owns this row" question look open when it was not. Adding `.notNull()`
+  generates `ALTER COLUMN … SET NOT NULL`, i.e. a migration — so this is its own PR, and the validated
+  CHECK means Postgres can skip the scan.
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
   **Row added 2026-10-06:** EVAL-0 had a merged plan and a line in [roadmap.md](./roadmap.md) but **no
