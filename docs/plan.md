@@ -907,6 +907,18 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
 ## Later — ideas captured, not scoped
 
+- **LADDER-1 — Strength Ladder: an adaptive calisthenics progression.** _(captured 2026-10-11, not
+  scoped.)_ Ordered ladders of steps per movement family, a current step per athlete, a placement
+  test, and a deterministic "two clean sessions + a human form check → advance" rule, with volume that
+  flexes with mat load and a standalone (no-wrestling) mode. **Feasibility:
+  [specs/ladder-1-strength-ladder.md](./specs/ladder-1-strength-ladder.md)**: viable, and it is the
+  `ladder`/`rung`/`progression_state` sketch in [spec.md](./spec.md) §4 that the v2 row already names,
+  but most of what it leans on is unbuilt (`packages/engine` is empty, nothing writes day load, no MCP).
+  Ladders get their **own typed tables** rather than reusing `prescriptions`, whose verbatim-text
+  invariant a machine-checkable standard would break. **The model drafts ladder definitions for coach
+  sign-off; it never places, advances or regresses an athlete.** Needs an ADR before any plan, and sits
+  behind Beta 0 and ideally SCHED-1.
+
 - **PUB-1 — a public household page, with per-field visibility.** _(captured 2026-10-07, not scoped.)_
   Visit a household at a public, human-meaningful address and see only what it chose to publish —
   a streak, or the movements of a workout without the logged values, or more. Needs its **own
