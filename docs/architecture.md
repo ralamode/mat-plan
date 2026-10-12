@@ -141,12 +141,16 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 - ✅ **`movements` came inside the seam at `TEN-2b`.** `findOrCreateMovementId` takes a
   `HouseholdScope` and resolves **global-first** — the curated namespace (`household_id IS NULL`),
   then this household's own, then an insert into this household's own — so a name a household types
-  belongs to it and is deleted with it. ⚠️ **One leak survives to `TEN-2c`:** the non-partial
-  `movements_slug_unique` still forbids two households a row for one slug, so the second household to
-  type a name is handed the first's row (a deliberate choice over failing a child's session write),
-  and that leaves a cross-household `entries.movement_id` which **blocks household deletion**. Status:
+  belongs to it and is deleted with it. ✅ **`TEN-2c` (migration `0017`) dropped the non-partial
+  `movements_slug_unique`, so two households each hold their OWN row for one slug and the denial
+  window is closed** — and with it the cross-household `entries.movement_id` that blocked household
+  deletion, which was the fallback's measured price. ⚠️ **One residual survives, and it is not the
+  constraint:** the **pre-`TEN-2b`** rows still at `household_id IS NULL`, which global-first serves
+  to every household — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing,
+  via `movements_global_row_has_pattern`. Status:
   [data-inventory.md](./privacy/data-inventory.md) §4; the resolver's shape is in §4 below. TEN-1
-  chunk 1d **proved** the original defect rather than assuming it, and its verdict is still `LEAKS`.
+  chunk 1d **proved** the original defect rather than assuming it, and its verdict now names both
+  halves rather than reading `LEAKS`.
 
 ```mermaid
 flowchart LR
@@ -254,7 +258,9 @@ cannot both hold one. `TEN-2a` chose, for that window, to hand the second househ
 confidentiality, bounded by the named invite precondition. ⚠️ **Its price:** the resulting
 cross-household `entries.movement_id` **aborts the household-deletion procedure** (`23503`, measured),
 which is why `runbooks.md` pre-flight (d) carries a repair step and `schema.ts` no longer claims the
-reference is "prevented by construction". **`TEN-2c` drops the constraint and closes it.**
+reference is "prevented by construction". **`TEN-2c` dropped the constraint, and `db:verify` now
+asserts pre-flight (d) reads ZERO across `entries` and `prescriptions` while step 11's `DELETE`
+completes instead of aborting** — both assertions inverted rather than retired.
 
 ```mermaid
 flowchart TD
