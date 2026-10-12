@@ -17,11 +17,16 @@ Each movement family (push, pull, squat, hinge/bridge, core, plus wrestling-spec
 bear crawl) is an **ordered ladder of steps**. A step has a **standard** (sets × reps, or sets × hold
 seconds), coaching cues and a regression. Each athlete has a **current step per ladder**. A day-one
 **placement test** puts them on the highest step they do cleanly. A deterministic rule moves them:
-**hit the standard on every set in two consecutive sessions, then a parent or coach form check, then
-advance.** Two misses in a row means **suggest a regression**. Several athletes (a parent and the
+**hit the standard on every set in two consecutive sessions, then a form check by the athlete's
+program manager, then advance.** Two misses in a row means **suggest a regression**. Several athletes (a parent and the
 kids) can train one ladder together, each at their own step. Volume flexes with mat load: full on light
 days, maintenance on heavy practice days, nothing the day before a competition. It must also work as a
 **standalone** calisthenics progression for someone with no wrestling schedule.
+
+**"Program manager"** in this document means whoever runs the athlete's program: a parent or coach for
+a kid, or **the athlete themself** for an adult training on their own. Every human confirm step
+(placement, form check, advance, regress) is theirs. The model is the same in both cases; only who taps
+differs.
 
 ## Verdict
 
@@ -155,11 +160,13 @@ NULL)`**, the tagged-union pattern AGENTS.md already uses. The regression is `id
   **Unique `(profile_id, ladder_id)` where live.** This is the denormalized "where am I now", the one
   row the composer reads.
 - **`ladder_events`**: append-only. `profile_id`, `ladder_id`, `from_step_id` null, `to_step_id`,
-  `kind` (text + CHECK over `LADDER_EVENT_KINDS`: `placed | advanced | regressed | manual_set |
-form_check_failed`), `decided_on` date (local), `client_id` UUIDv7 unique (idempotency),
+  `kind` (text + CHECK over `LADDER_EVENT_KINDS`:
+  `placed | advanced | regressed | replaced | manual_set | form_check_failed`), `decided_on` date
+  (local), `client_id` UUIDv7 unique (idempotency),
   `confirmed_by` (null until AUTH-1 gives an identity, then the member). **Recorded, not recomputed**:
   the lesson ADR 0007 and SCHED-1 requirement 3 already paid for. If a standard is later edited, the
-  history still says why each move happened.
+  history still says why each move happened. `replaced` is a multi-step move down after a break (§4a),
+  so the history says "re-placed", not "failed twice, twice".
 - **`ladder_attempts`**: `profile_id`, `ladder_step_id`, `entry_id` FK unique, `activity_date`,
   `day_load` (text + CHECK `full | maintenance`), `standard_snapshot` (sets/reps/seconds copied at
   write time), `met` bool. **Written in the same transaction as the entry** by the writer. `met` comes
@@ -206,10 +213,14 @@ composeLadderSession(input: {
 evaluateAttempt(step: Step, sets: SetResult[]): { met: boolean };
 
 evaluateProgression(input: {
+  today: LocalDate;               // the athlete's local day (localDayIso), for the break rule (§4a)
+  ladder: Step[];                 // ordered, for re-placement and the previous best
   step: Step;
-  recentAttempts: Attempt[];      // this step only, newest first, full-load days only
-  lastEventOnLadder: LadderEvent;
-}): 'hold' | 'advance_eligible' | 'suggest_regress';
+  recentAttempts: Attempt[];      // this ladder, newest first, with activity_date and day_load
+  events: LadderEvent[];          // this ladder; the previous best is derived from these
+}):
+  | { kind: 'hold' | 'advance_eligible' | 'suggest_regress' | 're_entry' }
+  | { kind: 'suggest_replace'; to: Step };
 
 placeFromTest(ladder: Step[], results: PlacementResult[]): Step;
 ```
@@ -220,10 +231,11 @@ placeFromTest(ladder: Step[], results: PlacementResult[]): Step;
   judged against the step **current at the time**, from `standard_snapshot`.
 - **Consecutive** counts **attempts at this step on `full` days**, not calendar days. A skipped day
   breaks nothing. A `maintenance` attempt is recorded but **neither hits nor misses**, so a hard practice
-  week cannot trigger a regression from fatigue.
+  week cannot trigger a regression from fatigue. A long gap is handled by §4a, not by this rule.
 - Two consecutive hits → `advance_eligible`. The UI asks for the **form check**. Pass → an `advanced`
   event. Fail → a `form_check_failed` event, which **resets the streak** (an open question below).
-- Two consecutive misses → `suggest_regress`, and a human confirms. The engine never writes.
+- Two consecutive misses → `suggest_regress`, and the program manager confirms. The engine never
+  writes.
 - Counting restarts after any event on that ladder.
 
 **Load gating.** `dayLoad` is an **input** to the composer, never derived inside it:
@@ -237,13 +249,55 @@ placeFromTest(ladder: Step[], results: PlacementResult[]): Step;
 **Where `dayLoad` comes from is the real dependency.** Nothing today records practice load or
 competitions:
 
-- **MVP:** default `full`, with a one-tap **parent override** for the day (Full / Light / Off). It is
+- **MVP:** default `full`, with a one-tap **program-manager override** for the day (Full / Light / Off). It is
   honest and cheap, and the override is the data a later model is built from.
 - **Later:** derived from SCHED-1's assignment + weekday rows **plus a new practice/competition
-  calendar**. A `practice_load` per day and `competition` dates feed a pure `deriveDayLoad(calendar,
-day)`. This is a new model, so it needs its own ADR. It should also be the first writer
+  calendar**. A `practice_load` per day and `competition` dates feed a pure
+  `deriveDayLoad(calendar, day)`. This is a new model, so it needs its own ADR. It should also be the first writer
   `day_readiness` has ever had, or that table should be retired. Two "how hard is today" sources is the
   drift AGENTS.md forbids.
+
+### 4a. Returning after a break
+
+**The case:** an athlete is on `pull-up 3×10` and hitting it, takes 5+ days off, comes back and logs
+`5, 5, 5`. Under the base rule alone, the gap is invisible ("a skipped day breaks nothing"). The day back
+is a miss, a second miss suggests a regression, and the athlete drops **one** step. That has three
+defects:
+
+- **One step can be too few.** If the ladder runs `pull-up 3×5 → 3×8 → 3×10`, the athlete belongs at
+  3×5, and gets there only after another round of misses at 3×8. That is four discouraging sessions.
+- **It can over-react.** After a short break, real strength loss is small, and the first session back is
+  mostly rust. Two sessions is too little evidence to regress on.
+- **The climb back costs as much as the first climb**, at two clean sessions plus a form check per step,
+  for steps the athlete already proved.
+
+**The rule.** It is deterministic, and it is all derived from rows the model already records
+(`ladder_attempts.activity_date` and `ladder_events`), with no new table:
+
+1. **Re-entry.** If the last `full`-day attempt on this ladder is **≥ `BREAK_DAYS`** before `today`
+   (proposed 7, measured in calendar days on the athlete's local date), the next attempt is a
+   **re-entry**. The composer prescribes the current step as usual, and the attempt is recorded but
+   **neither hits nor misses**, like a maintenance attempt. One rusty day cannot start a regression.
+2. **Re-placement, not step-by-step regression.** If the attempt **after** re-entry is still short by
+   more than `REPLACE_SHORTFALL` (proposed: below half the standard), the engine returns
+   `suggest_replace` to the **highest step whose standard that attempt met**. This is a mini placement
+   from real data, which works because several steps can share one movement at different standards
+   (`5, 5, 5` meets `pull-up 3×5` exactly). The program manager confirms, and a `replaced` event is
+   written. A smaller shortfall falls through to the base rule's ordinary miss counting.
+3. **Fast-track back to the previous best.** The **previous best** is the highest `to_step` of any
+   `advanced` or `placed` event on this ladder. For steps **at or below it**, one clean session makes
+   the athlete `advance_eligible` instead of two, and the form check is **optional**, because the program
+   manager already signed off form at that step. Above the previous best, the full rule applies again.
+
+**Golden vectors this adds:** a gap of `BREAK_DAYS - 1` is not a re-entry; a gap of exactly
+`BREAK_DAYS` is. A re-entry miss does not count. `5,5,5` after re-entry on the ladder above → replace
+to 3×5, not 3×8. `8,7,7` after re-entry → an ordinary miss, no replace. Fast-track stops at the previous
+best, not one step past it. A `replaced` event resets counting, like any event.
+
+**The thresholds are coaching judgments.** `BREAK_DAYS`, `REPLACE_SHORTFALL` and the one-session
+fast-track go to the coach with the ladder content (§5). They are engine constants in
+`packages/engine`, not values the model chooses, and the numbers above are placeholders until signed
+off.
 
 ## 5. Content: drafting and sign-off
 
@@ -279,13 +333,15 @@ The athlete is calisthenics-only, with no wrestling schedule. Because the model 
 
 - **Which ladders:** assign push / pull / squat / hinge / core and not bridge / sprawl / crawl.
   Assignment is the switch.
-- **When:** without SCHED-1, "is a ladder due" defaults to every day at `full`, and the parent
-  override still works. With SCHED-1, a ladder assignment is a program assignment with weekday rows
+- **When:** without SCHED-1, "is a ladder due" defaults to every day at `full`, and the
+  program-manager override still works. With SCHED-1, a ladder assignment is a program assignment with weekday rows
   (e.g. Mon/Wed/Fri). The "rest day" is a weekday that is not assigned, not a `none` load.
 - **Load:** always `full`, unless overridden. There are no practice or competition inputs, so the
   composer's load path simply never fires.
 - **Who:** `profiles.kind = 'adult'` already exists, so a solo adult is a one-profile household. No
-  new tenancy shape is needed.
+  new tenancy shape is needed. **The adult is their own program manager**, so they confirm their own
+  placement, form checks and moves. A self-assessed form check is weaker evidence than a second pair of
+  eyes, and the copy should say so plainly rather than pretend otherwise (open question 6).
 - **First run:** placement **is** the onboarding. That overlaps with **ONB-2's Daily Five default**.
   Whether a standalone household gets the Daily Five, ladders, or a choice is a product question, open
   below.
@@ -313,7 +369,7 @@ process requires. Sign-off latency (the coach) is outside them.
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------- |
 | **0 · Model + content**      | ADR 0008 (ladder model, naming, routine-overlap rule, the advancement rule), `spec.md` §4 reconciled, three drafted ladder docs (push, pull, squat), coach sign-off                                                             | 8–10  | Beta 0 done; a coach available                  |
 | **1 · MVP** (4–5 PRs)        | Migration A + seed · engine functions + golden vectors · Migration B + privacy inventory/runbook · placement flow · ladder card on Today: log through the existing writer, record the attempt, suggest, confirm advance/regress | 30–40 | Phase 0; TEN-2 (step movements are global rows) |
-| **2 · Together + load**      | Shared session screen (N athletes, one screen, per-athlete writes) · the Full/Light/Off parent override → `dayLoad` · maintenance semantics                                                                                     | 15–20 | Phase 1; UX panel (44px, 360px with N athletes) |
+| **2 · Together + load**      | Shared session screen (N athletes, one screen, per-athlete writes) · the Full/Light/Off program-manager override → `dayLoad` · maintenance semantics                                                                            | 15–20 | Phase 1; UX panel (44px, 360px with N athletes) |
 | **3 · Wrestling + schedule** | Bridge / sprawl / crawl ladders (signed off) · ladder assignment through SCHED-1 weekday rows · a practice/competition calendar ADR → `deriveDayLoad`                                                                           | 25–35 | SCHED-1 landed; its own ADR                     |
 | **4 · Standalone + reach**   | Standalone onboarding (placement as first run; the ONB-2 decision) · ladder history on V1-16's dashboard · MCP read resources                                                                                                   | 15–25 | AUTH-1/self-serve; v3 MCP                       |
 
@@ -321,7 +377,8 @@ Roughly **70–130 hours, or 4–8 months at 4 h/week**. The MVP alone is about 
 
 **Recommended MVP:** _one household, any athlete, three ladders (push, pull, squat), placement on day
 one, a ladder card that logs through the existing strength writer, a recorded verdict per attempt, and
-a deterministic advance/regress **suggestion** that a parent confirms (form check included)._ Every
+a deterministic advance/regress **suggestion** that the program manager confirms (form check
+included)._ Every
 day is `full`. There is no shared screen, no load gating and no wrestling ladders. It proves the one
 new thing, **history-driven prescription with a human gate**, on rails that already exist.
 
@@ -332,6 +389,7 @@ new thing, **history-driven prescription with a human gate**, on rails that alre
 | A child advances to a step they cannot do safely                                      | Advance is never automatic: two hits + a **human form check**. Signed-off content only. Steps are bodyweight-only in the MVP   |
 | Double counting with the routine's calisthenics counters (CAT-1's trap, a third time) | The ADR decides ownership before any code: a ladder movement's attempt is counted by the ladder, not the routine               |
 | Verdicts recomputed from current standards rewrite history                            | `ladder_attempts.met` + `standard_snapshot` and `ladder_events` are **recorded**                                               |
+| Time off, then a bad day back → wrongful or too-small regression                      | §4a: re-entry does not count, re-placement by what was actually met, fast-track back to the previous best                      |
 | Fatigue on heavy practice days reads as "miss" → wrongful regression                  | Maintenance attempts do not count. Regress is a suggestion, never automatic                                                    |
 | Copyright: content drifts toward a published program's ladder                         | Originality rule + provenance line + sign-off covers it (§5)                                                                   |
 | Neck loading in the wrestling bridge for kids                                         | Coach sign-off must address it explicitly. Possibly no neck bridge on kid ladders                                              |
@@ -347,10 +405,18 @@ new thing, **history-driven prescription with a human gate**, on rails that alre
    or do both exist (CAT-1)?
 5. **Standalone first run:** Daily Five, ladders, or a choice (ONB-2)?
 6. **Who confirms a form check** before AUTH-1 gives identities: any gate holder, recorded as a role?
+   And for an adult who is their own program manager, is a self-check enough, or should the app offer
+   a lightweight aid (such as a recorded set to review)? The latter is new media storage and a privacy
+   question of its own.
 7. **Ladder vs program:** is a ladder a kind of program (one SCHED-1 assignment) or its own
    assignment? SCHED-1's in-flight plan should be checked before the ADR, so the two do not mint
    parallel assignment concepts.
 8. **Step vs rung:** `docs/spec.md` says rung; the brief says step. Pick one in the ADR.
+9. **The break thresholds (§4a), for the coach:** is `BREAK_DAYS = 7` right, or should it scale with
+   how long the athlete has been on the ladder? Is "below half the standard" the right trigger for
+   re-placement? Is one clean session enough to fast-track back to the previous best?
+10. **Breaks the athlete declares:** should the program manager be able to mark a planned break
+    (illness, vacation, competition taper) up front, so re-entry is expected rather than inferred?
 
 ## Context read
 
