@@ -79,10 +79,9 @@ import type { Executor } from './executor';
  * had nothing to scope by. It now takes a `HouseholdScope` and resolves **global-first** through the
  * `movements` helpers at the foot of this file, so `scoped.test.ts`'s dead-entry assertion forced its
  * allowlist entry out rather than letting it stand as coverage nobody re-earned.
- * ⚠️ **One residual survives to TEN-2c, and it is not an allowlist entry:** while the non-partial
- * `movements_slug_unique` lives, two households cannot both hold a row for one slug, so the resolver's
- * `23505` fallback hands the second household the first's row — the pre-existing read leak, kept
- * deliberately in preference to a permanent write failure. See `movement-catalog.ts`'s docblock and
+ * ⚠️ **One residual survives TEN-2c, and it is not an allowlist entry:** `0017` dropped
+ * `movements_slug_unique`, so the resolver's `23505` fallback is now unreachable (it survives one more
+ * PR for the deploy race — `TEN-2d`) and the **denial** window is closed. What is left is the **pre-2b** rows still at `household_id IS NULL`, which global-first serves to every household — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via `movements_global_row_has_pattern`.
  * `db:verify` → "the catalog verdict".
  *
  * A NEW read or write that wants to be none of these is a design question, not an edit: use this
