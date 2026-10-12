@@ -454,20 +454,29 @@ export const MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX = 'uq_movements_slug_global';
 export const MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX = 'uq_movements_household_slug';
 
 /**
- * The **legacy, non-partial** `UNIQUE (slug)` constraint drizzle generates from `.unique()` on the
- * column — an assertion about drizzle's naming, not a declaration. ⚠️ **TEN-2c DELETES it**, and this
- * const with it.
+ * The CHECK that keeps the GLOBAL namespace reference data (TEN-2c, migration 0017) — named here for
+ * the same reason as the two index names above: `db:verify` matches it by string.
  *
- * Named without `GLOBAL` on purpose: `MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX` above is one word away and
- * means the **opposite** scope (partial, unowned rows only, vs non-partial over every row). A mix-up
- * in an arbiter or an `expectRejectedBy` is exactly the silent miss these consts exist to kill.
+ * **Predicate-descriptive on purpose, like `movements_pattern_check` and
+ * `profiles_household_id_not_null`.** An earlier draft called it `movements_owned_or_seeded`, which
+ * names an intent the predicate does not test — a global row with a hand-typed `pattern` satisfies it
+ * while being neither owned nor seeded. A name stating the intent is how a later reader concludes the
+ * database enforces seededness and deletes `db:verify`'s exact set-membership proof as redundant. The
+ * intent, and that gap, live in 0017's header and in `docs/plans/ten-2c-drop-global-slug-unique.md`.
  *
- * It is a const because `findOrCreateMovement`'s `23505` fallback — the only control on the TEN-2b→2c
- * cross-household denial window — keys on this exact name, so a rename would make that fallback dead
- * code with every gate still green. `db:verify`'s existing `expectRejectedBy(…)` calls are the pin,
- * by the stronger mechanism: they read `cause.constraint`, the same field the fallback reads.
+ * ⚠️ **Shipped `NOT VALID`; the `VALIDATE` is `TEN-2d`.** drizzle's `check()` emits a VALIDATED
+ * constraint, so the `NOT VALID` is a **hand-edit of 0017** — the same hand-edit class as 0015's FK.
+ * `db:verify` captures `convalidated` **immediately after `migrate()`** because nothing else catches
+ * the hand-edit being lost on a rebase, and because `verify.ts` itself drops and re-adds this
+ * constraint around the V1-1b backfill simulation (a later read would measure that re-add).
+ *
+ * 🔴 **`MOVEMENT_SLUG_UNIQUE_CONSTRAINT` used to live here and TEN-2c DELETED it**, as the const's own
+ * docblock promised it would. Migration `0017` drops the constraint, so a const in the module that
+ * DECLARES the live schema would now name something the schema does not have. The one surviving
+ * matcher is `movement-catalog.ts`'s deploy-race `catch` (`TEN-2d` deletes it), which carries the
+ * historical literal module-privately and says why.
  */
-export const MOVEMENT_SLUG_UNIQUE_CONSTRAINT = 'movements_slug_unique';
+export const MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK = 'movements_global_row_has_pattern';
 
 /**
  * movement — the exercise catalog (spec.md §4): slug/name + optional movement pattern,
@@ -479,10 +488,11 @@ export const MOVEMENT_SLUG_UNIQUE_CONSTRAINT = 'movements_slug_unique';
  * household_ — the curated `MOVEMENT_SEED_ROWS`, each with a `pattern`, a `unit_default` and an
  * `is_bodyweight` a human chose. A non-NULL `household_id` means _this household typed this name_.
  * Two kinds of row in one table, and NULL is the honest encoding of the first — which is why the
- * column is **nullable FOREVER**: TEN-2c does NOT contract it to `NOT NULL` (that would assert some
+ * column is **nullable FOREVER**: TEN-2c did NOT contract it to `NOT NULL` (that would assert some
  * household owns `Box Jump`, and inventing a sentinel household to satisfy the constraint would put
- * a fiction in the table every scoped query then has to exclude). What 2c contracts to instead is a
- * `NOT VALID CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)`.
+ * a fiction in the table every scoped query then has to exclude). What 2c contracted to instead is
+ * `movements_global_row_has_pattern` — `CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)`,
+ * `NOT VALID`, at the foot of this table.
  *
  * The resolution rule the two namespaces depend on is **GLOBAL-FIRST**, and it is TEN-2b's to
  * implement: resolve `slug` against `household_id IS NULL` first, and only then `(scope, slug)`.
@@ -497,15 +507,20 @@ export const MOVEMENT_SLUG_UNIQUE_CONSTRAINT = 'movements_slug_unique';
  * is to **DELETE the rows** (`docs/runbooks.md` → the PRIV-1 procedure, step 11), never to null the
  * column.
  *
- * 🔴 **Cross-household references are WRITER-enforced, not schema-enforced — and as of TEN-2b one
- * writer PRODUCES them, deliberately.** Nothing here stops an `entries.movement_id` of household H
- * pointing at a movement owned by ¬H. TEN-2a said global-first *"prevents it by construction"*; that
- * is **wrong**, and TEN-2b measured it: while the non-partial `movements_slug_unique` lives, two
- * households cannot both hold a row for one slug, so `findOrCreateMovement`'s `23505` fallback hands
- * the second household the first's row — and the entry it then writes is exactly this reference.
- * TEN-2a chose that over a permanent write failure; the window closes at TEN-2c.
- * **The symptom is a mid-transaction abort of the household deletion** (`23503` on step 11), so
- * `runbooks.md` step 3 pre-flights it and step 11 carries the repair. `db:verify` asserts both.
+ * 🔴 **Cross-household references are WRITER-enforced, not schema-enforced.** Nothing here stops an
+ * `entries.movement_id` of household H pointing at a movement owned by ¬H. TEN-2a said global-first
+ * *"prevents it by construction"*; that was **wrong**, and TEN-2b measured it — while the non-partial
+ * `movements_slug_unique` lived, two households could not both hold a row for one slug, so
+ * `findOrCreateMovement`'s `23505` fallback handed the second household the first's row and the entry
+ * it then wrote was exactly this reference.
+ *
+ * ✅ **TEN-2c removed the writer that produced them.** With the constraint dropped, step 3 inserts
+ * into the asking household's own namespace and the fallback is unreachable, so no NEW cross-household
+ * reference can be minted. The `catch` survives one more PR for the deploy race (`movement-catalog.ts`;
+ * `TEN-2d` deletes it). **Pre-TEN-2c references are data, not a code path:** `runbooks.md` step 3
+ * pre-flights them and step 11 carries the repair, because the symptom is a mid-transaction abort of
+ * the household deletion (`23503` on step 11). `db:verify` asserts the count is zero and that step 11
+ * now succeeds.
  *
  * ⚠️ **NO plain `idx_movements_household`, and this is the FIRST break in an 11-for-11 idiom in this
  * file** — so do not "fix" it. `uq_movements_household_slug` leads on `household_id` and its
@@ -531,7 +546,12 @@ export const movements = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(),
-    slug: text('slug').notNull().unique(),
+    // TEN-2c: NO `.unique()`. The non-partial `UNIQUE (slug)` drizzle generated from it
+    // (`movements_slug_unique`) is DROPPED by migration 0017 — it dominated both partial indexes
+    // below, so while it lived at most one row per slug existed table-wide and the two namespaces
+    // were declared but not in effect. The arbiters are the two `uniqueIndex`es at the foot of this
+    // table now, and nothing else.
+    slug: text('slug').notNull(),
     name: text('name').notNull(),
     // TEN-2a: nullable FOREVER (NULL = reference data owned by no household — see the docblock).
     // Mirrors `profiles.householdId`'s shape, and NO ACTION is load-bearing, not mimicry.
@@ -549,8 +569,20 @@ export const movements = pgTable(
       'movements_pattern_check',
       sql`${t.pattern} in ('squat', 'hinge', 'horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull', 'lunge', 'jump', 'core', 'carry', 'isolation')`,
     ),
-    // The global reference namespace: one row per slug among rows owned by no household. Implied by
-    // the existing global `slug` UNIQUE today (which TEN-2a leaves alone); load-bearing from TEN-2c.
+    // TEN-2c: a GLOBAL row must carry a `pattern` — i.e. it must be the kind of row only a human
+    // curating `MOVEMENT_SEED_ROWS` can author, because `findOrCreateMovement` writes neither
+    // `pattern` nor `unit_default` and never can. It blocks the realistic way into the forbidden
+    // state: an operator hand-running `UPDATE movements SET household_id = NULL` to unwedge a
+    // household delete the FK aborted. Shipped `NOT VALID` (0017, hand-edited); the `VALIDATE` is
+    // `TEN-2d`. Layer 2 of the same invariant — exact set membership in `MOVEMENT_SEED_PUBLIC_IDS` —
+    // lives in `db:verify`, because `db:verify` never runs against production and this does.
+    check(
+      MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK,
+      sql`${t.householdId} is not null or ${t.pattern} is not null`,
+    ),
+    // The global reference namespace: one row per slug among rows owned by no household. Declared at
+    // TEN-2a, in effect from TEN-2c: until 0017 dropped the non-partial `movements_slug_unique`, the
+    // broader constraint already forbade everything this narrower one does.
     uniqueIndex(MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX)
       .on(t.slug)
       .where(sql`${t.householdId} is null`),
