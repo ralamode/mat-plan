@@ -33,4 +33,6 @@ overrides:
   # GHSA-2w6q-fjjm-54f4 + GHSA-9jm3-4fm8-q4qc (moderate) — isInSubnet() and a parse diagnostic.
   # Dev-only, via the `shadcn` CLI > @modelcontextprotocol/sdk > express-rate-limit, which declares
   # `^10.2.0`. The real fix is the SDK bump upstream; this is in-range until then.
+  # Still needed after the SDK reached 1.32.1: express-rate-limit@8.7.0 still declares `^10.2.0`,
+  # and shadcn > socks@2.8.10 declares `^10.1.1`. Drop it once neither range admits <10.7.1.
   ip-address: '>=10.7.1'
