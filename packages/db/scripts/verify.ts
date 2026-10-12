@@ -62,6 +62,10 @@ import { type Database, schema } from '../src/client';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
+// TEN-2c: the ONE definition of "a movement is referenced", shared with `runbooks.md` pre-flight (d),
+// the report-only correction, and (by requirement) TEN-2b-2's orphan correction + TEN-2c-1's split.
+// This file hand-wrote the `entries` half of it before 2c and missed `prescriptions` entirely.
+import { crossHouseholdMovementRefs, sharedMovementRows } from '../src/queries/movement-ownership';
 import { programDayRows } from '../src/queries/program-day';
 import type { HouseholdScope } from '../src/scope';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
@@ -205,6 +209,61 @@ async function columnCatalogShape(
 
 await migrate(db, { migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)) });
 console.log('✓ migration applied to PGlite');
+
+// ── 🔴 TEN-2c: TWO CATALOG FACTS THAT MUST BE READ *HERE*, AND NOWHERE ELSE ────────────────────────
+//
+// ⚠️ **DO NOT MOVE THESE DOWN THE FILE. They are only true of the MIGRATION at this point.** A
+// fixture below mutates exactly this object, so a later read measures `verify.ts` instead of 0017:
+// the V1-1b backfill simulation (~550 lines down) **drops and re-adds**
+// `movements_global_row_has_pattern` itself, because that CHECK post-dates 0002's backfill and the
+// simulation is faithful to the DEPLOY ORDER. Its re-add is hand-written `NOT VALID`, so a
+// `convalidated` read taken after it would pass even if 0017 had **lost** its own `NOT VALID`
+// hand-edit on a rebase — and `drizzle-kit`'s drift guard diffs `schema.ts` against the snapshot, not
+// the SQL, so nothing else in any gate catches that. This read is the only thing that does.
+//
+// `movements_slug_unique` is read here for the same reason, one step weaker: the TEN-2a/2b sections
+// below used to DROP and re-`ADD` it around their probes, and asserting its absence from up here is
+// what keeps the assertion about **the migration** rather than about whatever ran last.
+//
+// The 0015 FK precedent (`convalidated = true`, asserted in the TEN-2a block) escapes this only
+// because nothing re-adds the FK; `entries_activity_type_id_not_null` escapes it because nothing
+// asserts its `convalidated` at all.
+{
+  const CHECK = schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK;
+  const checkRows = (
+    (await db.execute(
+      sql`select convalidated from pg_constraint where conname = ${CHECK}`,
+    )) as unknown as { rows: { convalidated: boolean }[] }
+  ).rows;
+  assert.equal(
+    checkRows.length,
+    1,
+    `TEN-2c: ${CHECK} exists in pg_constraint, exactly once — a count of 0 means 0017 did not apply`,
+  );
+  assert.equal(
+    checkRows[0].convalidated,
+    false,
+    `TEN-2c: …and it is NOT VALID, as 0017 hand-wrote it — drizzle's check() emits a VALIDATED constraint, so this is the only guard on that hand-edit surviving a rebase. ⚠️ Do NOT "fix" a true here by relaxing the expectation: flipping it is TEN-2d's VALIDATE, and 2d must precede any invite`,
+  );
+
+  // The constraint 0017 DROPPED — asserted ABSENT by name, which is where the literal
+  // 'movements_slug_unique' survives in this file, once. (0017 deliberately carries no `IF EXISTS`,
+  // so no DDL guard masks a database where it had already been removed by hand.)
+  const droppedRows = (
+    (await db.execute(
+      sql`select conname from pg_constraint where conname = 'movements_slug_unique'`,
+    )) as unknown as { rows: { conname: string }[] }
+  ).rows;
+  assert.deepEqual(
+    droppedRows,
+    [],
+    'TEN-2c: movements_slug_unique is GONE from pg_constraint — the non-partial UNIQUE("slug") dominated both partial indexes, so until 0017 they were declared and NOT in effect',
+  );
+  console.log(
+    `✓ TEN-2c: movements_slug_unique is absent from pg_constraint, and ${CHECK} exists NOT VALID ` +
+      '(both read HERE, before any fixture re-adds either — see the note above)',
+  );
+}
 
 // Seed twice → must be idempotent.
 await seed(asPg);
@@ -731,6 +790,29 @@ const [scLift] = await db
 // (entries_activity_type_id_not_null) now forbids. That is faithful to the DEPLOY ORDER — 0002's
 // backfill runs BEFORE 0003 adds the CHECK — so we reproduce it here: drop the CHECK, run the
 // backfill sim, then re-add it (NOT VALID → VALIDATE) against the now-backfilled rows.
+//
+// 🔴 **TEN-2c added a SECOND constraint to the same dance, for the same reason, and it took TWO
+// fixes rather than one — measured, not reasoned.** 0017 drops `movements_slug_unique` and adds
+// `movements_global_row_has_pattern`. The raw `INSERT INTO "movements" … ON CONFLICT ("slug")` below
+// is 0002's backfill verbatim, and it died **twice** against the post-0017 schema:
+//
+//  1. `42P10` — a bare `ON CONFLICT ("slug")` can only infer a NON-PARTIAL unique index, and after
+//     0017 there is none. The arbiter below therefore carries `WHERE "household_id" IS NULL`, which
+//     implies `uq_movements_slug_global`'s predicate. ⚠️ A fidelity compromise, stated: 0002's real
+//     statement had no such clause. The alternative is no simulation at all.
+//  2. `23514` — the rows it inserts are `household_id NULL` **and** `pattern NULL`, which the new
+//     CHECK forbids. The planner resolves the arbiter before any row is inserted, which is why
+//     `42P10` comes first and why fixing only the arbiter just moves the failure.
+//
+// Giving those fixture rows a `pattern` instead would be wrong: the discriminator at
+// "TEN-2a discriminator (2/3)" requires every app-authored row to have `pattern IS NULL`, and these
+// rows are app-authored by construction. So the CHECK joins the drop → sim → re-add `NOT VALID`
+// shape this block already uses — which is also faithful to the deploy order, since 0017 genuinely
+// post-dates 0002. ⚠️ **That re-add is why `convalidated` is read right after `migrate()`** (see the
+// TEN-2c block up there): from here on, a `convalidated` read measures THIS re-add, not 0017's.
+await db.execute(
+  sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)}`,
+);
 await db.execute(sql`ALTER TABLE "entries" DROP CONSTRAINT "entries_activity_type_id_not_null"`);
 await db.insert(schema.entries).values({
   publicId: '019826b4-0000-7000-8000-0000000000c1',
@@ -756,7 +838,7 @@ await db.execute(sql`
   SELECT gen_random_uuid(), lower(regexp_replace(btrim("movement_name"), '\s+', '_', 'g')), "movement_name", false
   FROM (SELECT DISTINCT "movement_name" FROM "entries"
         WHERE "kind" = 'strength' AND "movement_name" IS NOT NULL AND "deleted_at" IS NULL) d
-  ON CONFLICT ("slug") DO NOTHING`);
+  ON CONFLICT ("slug") WHERE "household_id" IS NULL DO NOTHING`);
 await db.execute(sql`
   UPDATE "entries" SET
     "activity_type_id" = (SELECT "id" FROM "activity_types" WHERE "key" = 'weigh_in'),
@@ -776,6 +858,15 @@ await db.execute(
 );
 await db.execute(
   sql`ALTER TABLE "entries" VALIDATE CONSTRAINT "entries_activity_type_id_not_null"`,
+);
+// TEN-2c: and the CHECK 0017 added, back as `NOT VALID` — the shape 0017 ships. ⚠️ **NOT** `VALIDATE`d
+// here: the rows this simulation just inserted are global with `pattern IS NULL`, i.e. exactly what
+// TEN-2d's `VALIDATE` will have to deal with in production, and validating them away here would make
+// this file quietly stronger than the database. ⚠️ Nothing may assert `convalidated` on this
+// constraint below this line — it would measure this statement rather than the migration; the read
+// that matters is immediately after `migrate()`.
+await db.execute(
+  sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(schema.MOVEMENT_GLOBAL_ROW_HAS_PATTERN_CHECK)} CHECK ("household_id" IS NOT NULL OR "pattern" IS NOT NULL) NOT VALID`,
 );
 
 const [bwEntry] = await db
@@ -5210,13 +5301,14 @@ console.log(
   '✓ TEN-1 1d: db:correct’s bulk predicate — the null-routine correction finds household A’s NULL routine and never household B’s, dry-run, in both directions',
 );
 
-// ── (7) TEN-1 1d: THE CATALOG VERDICT — `movements` is shared, and here is the proof ─────────────
+// ── (7) TEN-1 1d: THE CATALOG VERDICT — the two namespaces, and what is still shared ─────────────
 //
 // ⚠️ **These assertions state what the code DOES, not what it should do.** They are the only input to
 // `docs/milestones/beta-1.md`'s question — *"either TEN-1 proves the picker and the metadata stay per
 // household, or TEN-2 moves into Beta 0"* — so an aspirational assertion here would answer a
 // go/no-go with a wish. The verdict and its evidence are recorded in
-// `docs/plans/ten-1-household-scope.md` → "1d as built — the catalog verdict".
+// `docs/plans/ten-1-household-scope.md` → "1d as built — the catalog verdict", and the three PRs that
+// have moved it since: `ten-2a`, `ten-2b`, `ten-2c`.
 //
 // The function under test is `findOrCreateMovement`, the REAL core the app DAL's
 // `findOrCreateMovementId` delegates to (single-sourced in 1d exactly so this proof can run it;
@@ -5228,23 +5320,36 @@ console.log(
 // .has('household_id') === false` — "there is nothing for this write path to scope BY" — and said
 // TEN-2 was the PR that would redden it. TEN-2a is that PR, so the assertion now states what is true
 // instead of being deleted: the column EXISTS, and it is NULLABLE (`household_id IS NULL` is a
-// value — reference data owned by no household — not missing data, which is why TEN-2c contracts to
+// value — reference data owned by no household — not missing data, which is why TEN-2c contracted to
 // a CHECK rather than to NOT NULL).
 //
-// 🔴 **TEN-2b CHANGED TWO OF THESE ASSERTIONS, and both changes are wins — read this before
-// "fixing" anything below.** The verdict HEADLINE is still `LEAKS`, because while the non-partial
-// `movements_slug_unique` lives (until TEN-2c) at most one row per slug exists in the whole table, so
-// two households cannot both hold one — leaving only "B is handed A's row" (the leak, via the
-// resolver's `23505` fallback) or "B's write fails forever" (a denial). TEN-2a chose the leak. But:
+// 🔴 **TEN-2c INVERTED TWO OF THESE ASSERTIONS. Read this before "fixing" anything below.**
 //
-//   (i)  the row a refused session leaves behind now lands in the CALLER'S OWN namespace, so it is
-//        garbage rather than a cross-tenant write — (e) below says so now;
-//   (ii) the PROGRAMMING half of the leak is CLOSED: `seedProgram` resolves in the global namespace
-//        only, so a prescription can no longer attach to another household's movement row — (d)
-//        below asserts the refusal instead of the poisoned card.
+// TEN-2b left the verdict reading `LEAKS` by arithmetic: the non-partial `movements_slug_unique` was
+// still live, so at most one row per slug existed in the whole table and two households could not
+// both hold one — leaving only "B is handed A's row" (the leak, via the resolver's `23505` fallback)
+// or "B's write fails forever" (a denial). TEN-2a chose the leak. **Migration 0017 removed the
+// arithmetic**: the two partial indexes are the only arbiters now, so B's own row simply inserts.
 //
-// The column's shape, the FK, the partial indexes and the re-taken dark gate live in the TEN-2a/2b
-// section at the end of this file.
+// What that closes, and what it does NOT — the distinction the TEN-2c plan exists to keep honest:
+//
+//   ✅ **(A) the 2b→2c DENIAL primitive is closed, completely, by the drop alone.** A typing a name
+//      first can no longer make B's write of that name fail forever; (b) and (d) below are that proof,
+//      inverted rather than deleted.
+//   ⚠️ **(B) the pre-existing READ leak is NOT closed here.** Any row already sitting at
+//      `household_id IS NULL` that is not a seeded catalog row is still resolved by global-first for
+//      **every** household. `TEN-2c-1` (the split backfill) is what closes that; 0017 only stops it
+//      growing, via `movements_global_row_has_pattern`. The headline below says so.
+//
+// Already closed at TEN-2b, and unchanged here:
+//   (i)  the row a refused session leaves behind lands in the CALLER'S OWN namespace, so it is
+//        garbage rather than a cross-tenant write — (e) below says so;
+//   (ii) the PROGRAMMING half: `seedProgram` resolves in the global namespace only, so a prescription
+//        can no longer attach to another household's movement row — (d) asserts the refusal instead
+//        of the poisoned card.
+//
+// The column's shape, the FK, the partial indexes in their new sole-arbiter role and the re-taken
+// dark gate live in the TEN-2a/2b/2c section at the end of this file.
 {
   const householdIdCol = await columnCatalogShape('movements', 'household_id');
   assert.ok(
@@ -5276,10 +5381,10 @@ async function movementRow(id: number) {
   return row;
 }
 
-// (b) READ: household B typing a name household A already created is handed A's ROW.
-// Neutral fixture names, never a person's (AGENTS.md → "No personal names"). B's text is spelled
-// differently on purpose — `movementSlug` collapses case and whitespace, so the SLUG is the only
-// arbiter and two different strings converge on one row.
+// (b) READ: the two namespaces, and the slug's two jobs.
+// Neutral fixture names, never a person's (AGENTS.md → "No personal names"). The second string is
+// spelled differently on purpose — `movementSlug` collapses case and whitespace, so the SLUG is the
+// arbiter and two different strings converge on one row WITHIN a namespace.
 const CATALOG_NAME_BY_A = 'TEN-1 Catalog Probe';
 const CATALOG_NAME_BY_B = '  ten-1   CATALOG   probe ';
 assert.equal(
@@ -5287,35 +5392,71 @@ assert.equal(
   movementSlug(CATALOG_NAME_BY_B),
   'TEN-1 1d fixture: the two households type different strings that slug the same',
 );
-// TEN-2b: the two calls now carry DIFFERENT scopes — which is the whole point, and is what makes
-// this assertion mean something it could not mean in 1d. In 1d there was no scope to involve; now A
-// asks as A and B asks as B, and B is STILL handed A's row.
 const aMovementId = await findOrCreateMovement(asPg, A_SCOPE, CATALOG_NAME_BY_A);
-const bMovementId = await findOrCreateMovement(asPg, B_SCOPE, CATALOG_NAME_BY_B);
+
+// 🔴 **TEN-2c: SAME-HOUSEHOLD CONVERGENCE — the normalisation property nothing proved before.**
+//
+// Until 2c the cross-household assertion below doubled as the slug-normalisation proof, which is why
+// mutation patch `04-slug-is-not-the-arbiter` pointed at it. 0017 inverted that assertion into "two
+// households each get their OWN row", and a `notEqual` cannot see a broken `movementSlug` — two
+// different strings would give two different rows either way, and the assertion would pass under the
+// very mutation it was named for. So the property gets its own assertion, inside ONE household, where
+// it is still true and still load-bearing: **two spellings of one movement are one movement to the
+// household that typed them.** Without it a later author "fixing" the catalog by matching on `name`
+// would split a kid's history for one lift across two rows with every gate green.
+//
+// ⚠️ This is patch `04`'s `.expect` line. It must stay the FIRST assertion that a broken
+// `movementSlug` reddens — i.e. it stays ahead of everything else that calls the resolver.
 assert.equal(
+  await findOrCreateMovement(asPg, A_SCOPE, CATALOG_NAME_BY_B),
+  aMovementId,
+  'TEN-2c SAME-HOUSEHOLD CONVERGENCE: two spellings of one movement are ONE row within a household — the shared movementSlug derivation is the arbiter inside each namespace, so a household cannot end up with two rows (and two histories) for one lift',
+);
+
+// 🔴 **TEN-2c INVERTED THIS: household B typing a name household A already created now gets its OWN
+// row.** This read `assert.equal(bMovementId, aMovementId)` from TEN-1 1d until 0017, with the
+// message "LEAKS: household B is handed household A's movement row" — the single most-quoted
+// assertion in the TEN-2 arc, and the one the `23505` fallback produced. It is INVERTED rather than
+// deleted, which is what makes it the acceptance criterion rather than a claim.
+//
+// **Three conjuncts, because two of them would pass vacuously.** Different ids alone would pass if B
+// got a row in the wrong namespace; the ownership conjuncts alone would pass if the two rows carried
+// different slugs (which is what a broken `movementSlug` does — hence the convergence assertion
+// above). The slug conjunct is the one that says these are the SAME movement in TWO namespaces.
+const bMovementId = await findOrCreateMovement(asPg, B_SCOPE, CATALOG_NAME_BY_B);
+assert.notEqual(
   bMovementId,
   aMovementId,
-  'TEN-1 1d READ — LEAKS: household B is handed household A’s movement row. ⚠️ TEN-2b STRENGTHENED this: B now asks under its OWN scope and is still handed A’s row, because the non-partial movements_slug_unique forbids B a row of its own, so the resolver’s 23505 fallback returns A’s. This is the one leak that survives to TEN-2c',
+  'TEN-2c READ — the denial window is CLOSED: household B typing a name household A typed first gets its OWN row, not A’s. ⚠️ This assertion was `equal` and read "LEAKS" from TEN-1 1d through TEN-2b; migration 0017 dropped the non-partial movements_slug_unique that forced the two households to share one row, and the resolver’s 23505 fallback is now unreachable. Do NOT "fix" a failure here by restoring the equality',
 );
-// …and the row A created is in A's OWN namespace — fact 2 of the verdict. Before TEN-2b it was owned
-// by nobody, so no household deletion could ever reach it.
+const aRow = await movementRow(aMovementId);
+const bRow = await movementRow(bMovementId);
+assert.deepEqual(
+  [aRow.householdId, bRow.householdId],
+  [households[0].id, verifyHh.id],
+  'TEN-2c READ: …each row is owned by the household that asked for it (A’s by A, B’s by B) — the two namespaces are real, not just two ids',
+);
 assert.equal(
-  (await movementRow(aMovementId)).householdId,
-  households[0].id,
-  'TEN-2b: …and the row the first typist created is OWNED BY THAT HOUSEHOLD (household_id = A), not global — so the deletion procedure can reach it',
+  bRow.slug,
+  aRow.slug,
+  'TEN-2c READ: …and BOTH rows carry the SAME slug, which is the state that was unreachable before 0017 and is the whole acceptance criterion. Without this conjunct the two assertions above pass under patch 04’s mutation and prove nothing about the namespaces',
 );
 // The POSITIVE twin (verify.ts's both-directions rule, generalised): a genuinely different name does
-// get its own row — so the assertion above is about the SLUG being a global arbiter, not about
+// get its own row — so the convergence assertion above is about the SLUG being the arbiter, not about
 // find-or-create trivially returning one row for everything.
 assert.notEqual(
   await findOrCreateMovement(asPg, A_SCOPE, 'TEN-1 Catalog Probe Two'),
   aMovementId,
-  'TEN-1 1d READ: …while a genuinely different name gets its OWN row (the assertion above is not vacuous)',
+  'TEN-1 1d READ: …while a genuinely different name gets its OWN row (the convergence assertion above is not vacuous)',
 );
-assert.equal(
-  (await movementRow(aMovementId)).name,
-  CATALOG_NAME_BY_A,
-  'TEN-1 1d READ: the FIRST typist’s text is what the row carries — `ON CONFLICT DO NOTHING` discards the second household’s',
+// TEN-2c: each household's row carries ITS OWN typist's text now. Before 0017 there was one row and
+// `ON CONFLICT DO NOTHING` discarded the second household's string, so this read `=== CATALOG_NAME_BY_A`
+// for `aMovementId` and nothing else was assertable. Both directions, because "each household keeps
+// its own text" is the readable half of "each household has its own row".
+assert.deepEqual(
+  [aRow.name, bRow.name],
+  [CATALOG_NAME_BY_A, CATALOG_NAME_BY_B],
+  'TEN-2c READ: …and each row carries the text ITS OWN household typed — B’s string is no longer discarded by an `ON CONFLICT DO NOTHING` against A’s row',
 );
 
 // (c) And the metadata it inherits can be a declaration this function could never have written.
@@ -5353,33 +5494,45 @@ assert.equal(
   'TEN-1 1d READ: …carrying `is_bodyweight: true`, which this function can never write — whatever the row declares, the caller did not declare it',
 );
 
-// (d) WRITE / POISON — strictly worse than the read, and the half the first draft of the plan missed.
-// Household B types a brand-new name FIRST. That pins the slug permanently: `is_bodyweight: false`,
-// no `unit_default`, and B's exact free text as the display name. Household A's own later call gets
-// B's row.
+// (d) WRITE / POISON — 1d's worst defect, and the direction TEN-2c closes.
+// Household B types a brand-new name FIRST. Until 0017 that pinned the slug permanently for
+// EVERYBODY: `is_bodyweight: false`, no `unit_default`, and B's exact free text as the display name,
+// handed to household A on its own later call. Now A's call gets A's own row.
 const POISON_NAME_BY_B = 'TEN-1 Poisoned Lift';
 const POISON_NAME_BY_A = 'ten-1  poisoned   LIFT';
 const poisonedId = await findOrCreateMovement(asPg, B_SCOPE, POISON_NAME_BY_B);
-assert.equal(
-  await findOrCreateMovement(asPg, A_SCOPE, POISON_NAME_BY_A),
+// 🔴 TEN-2c INVERTED this too: it read `assert.equal(…, poisonedId)` — "household A, typing its own
+// text, is handed the row household B created" — from TEN-1 1d through TEN-2b.
+const unpoisonedId = await findOrCreateMovement(asPg, A_SCOPE, POISON_NAME_BY_A);
+assert.notEqual(
+  unpoisonedId,
   poisonedId,
-  'TEN-1 1d WRITE: household A, typing its own text, is handed the row household B created',
+  'TEN-2c WRITE — CLOSED: household A, typing its own text, gets its OWN row rather than the one household B created first. ⚠️ Inverted from TEN-1 1d’s "is handed the row household B created"; whoever types a name first no longer pins that slug for anybody else',
 );
 const poisoned = await movementRow(poisonedId);
-assert.equal(
-  poisoned.name,
-  POISON_NAME_BY_B,
-  'TEN-1 1d WRITE: the row carries household B’s text — whoever types a name first pins that slug, and the seed only ever touches its OWN slugs so nothing repairs it',
+const unpoisoned = await movementRow(unpoisonedId);
+assert.deepEqual(
+  [poisoned.name, unpoisoned.name],
+  [POISON_NAME_BY_B, POISON_NAME_BY_A],
+  'TEN-2c WRITE: …each row carries its own household’s text, and NEITHER household’s free text is now visible to the other',
+);
+assert.deepEqual(
+  [poisoned.householdId, unpoisoned.householdId],
+  [verifyHh.id, households[0].id],
+  'TEN-2c WRITE: …with each row owned by the household that typed it — so a household deletion reaches its own row and only its own',
 );
 assert.equal(
-  poisoned.isBodyweight,
-  false,
-  'TEN-1 1d WRITE: …declared loaded-rather-than-bodyweight for EVERY household, because this function can only write false',
+  unpoisoned.slug,
+  poisoned.slug,
+  'TEN-2c WRITE: …and both rows carry the SAME slug: one movement, two namespaces (the second direction of the acceptance criterion)',
 );
-assert.equal(
-  poisoned.unitDefault,
-  null,
-  'TEN-1 1d WRITE: …with no default unit, which the log form reads as the movement’s own declaration',
+// What a household-authored row can and cannot declare is unchanged, and still worth asserting: the
+// metadata hazard global-first exists to prevent is that this writer can only ever author `false` /
+// no unit, so a household row is always a strictly worse version of a curated one.
+assert.deepEqual(
+  [poisoned.isBodyweight, poisoned.unitDefault],
+  [false, null],
+  'TEN-1 1d WRITE: …and a household-authored row is still declared loaded-rather-than-bodyweight with no default unit, because this function can only write false — which is WHY the resolver is global-first',
 );
 
 // ── 🔴 TEN-2b CLOSED THIS HALF, and the assertion is inverted rather than deleted ───────────────
@@ -5506,41 +5659,51 @@ const TEN2B_RESOLVER_IDS: number[] = [
   bMovementId,
   boxJumpId,
   poisonedId,
+  // TEN-2c: the two rows 0017 made reachable — household A's own row for a slug B typed first, and
+  // (via `bMovementId` above) B's own row for a slug A typed first. They are the inverted
+  // assertions' subjects, so they belong in the end-state membership proof too.
+  unpoisonedId,
   refusedMovementId,
 ];
 
+// ⚠️ **NOT A BARE "isolated", and that is deliberate.** This headline is the only input to beta-1's
+// go/no-go on the invite, so it names what closed AND what did not. `docs/plan.md` is explicit that
+// *"dropping the UNIQUE alone closes nothing — it only PERMITS two namespaces"*, and an earlier draft
+// of TEN-2c's plan asserted the read leak's closure while deferring the step that delivers it.
 console.log(
-  '✓ TEN-1 1d THE CATALOG VERDICT, as of TEN-2b — STILL `LEAKS`, and now exactly ONE shape: the ' +
-    'resolver is household-scoped and GLOBAL-FIRST, but the non-partial movements_slug_unique still ' +
-    'forbids two households a row for one slug, so B asking under its OWN scope is handed A’s row via ' +
-    'the 23505 fallback (a leak chosen over a permanent write failure). ✅ TWO halves CLOSED here: the ' +
-    'refused-session row now lands in the caller’s OWN namespace (garbage, not cross-tenant), and ' +
-    'seedProgram REFUSES a prescription naming another household’s movement (1d’s poisoned Today card ' +
-    'is unreachable). ⚠️ PRICE: the fallback leaves a cross-household entries.movement_id that ABORTS ' +
-    'household deletion (23503) — proved below. The leak closes at TEN-2c. ' +
-    'Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; TEN-2b: docs/plans/ten-2b-scoped-movement-lookup.md',
+  '✓ TEN-1 1d THE CATALOG VERDICT, as of TEN-2c — the DENIAL window is CLOSED, the READ leak has a ' +
+    'NAMED RESIDUAL. ✅ CLOSED HERE, by migration 0017 dropping the non-partial movements_slug_unique: ' +
+    'two households each hold their OWN row for one slug (asserted three ways — different ids, each row ' +
+    'owned by the household that asked, both rows carrying the same slug, in BOTH directions), so A ' +
+    'typing a name first can no longer deny B that write, and the resolver’s 23505 fallback is ' +
+    'unreachable (it survives one more PR for the deploy race — TEN-2d). The global catalog is still ' +
+    'SHARED on purpose: both households resolve the same curated box_jump. ✅ ALREADY CLOSED at TEN-2b: ' +
+    'the refused-session row lands in the caller’s OWN namespace (garbage, not cross-tenant), and ' +
+    'seedProgram REFUSES a prescription naming another household’s movement. ⚠️ **NOT CLOSED HERE: any ' +
+    'PRE-TEN-2b app-authored row still sitting at household_id IS NULL is resolved by global-first for ' +
+    'EVERY household — the read leak’s residual, which closes at TEN-2c-1 (the split backfill). 0017 ' +
+    'only stops it GROWING, via movements_global_row_has_pattern (NOT VALID; the VALIDATE is TEN-2d, ' +
+    'which must precede any invite).** Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; ' +
+    'docs/plans/ten-2b-scoped-movement-lookup.md; docs/plans/ten-2c-drop-global-slug-unique.md',
 );
 
-// ── TEN-2a: the column exists, and nothing uses it ────────────────────────────────────────────────
+// ── TEN-2a/2c: the column, the FK, and the two indexes in their SOLE-ARBITER role ────────────────
 //
-// `movements.household_id` + the two partial unique indexes (migration 0015), shipped DARK: no
-// reader, no writer, no behaviour change, and the global `movements_slug_unique` constraint
-// untouched so every deployed `ON CONFLICT (slug)` keeps its arbiter until TEN-2c.
-// Plan: docs/plans/ten-2a-household-movements.md.
+// `movements.household_id` + the two partial unique indexes shipped DARK at TEN-2a (migration 0015),
+// with the global `movements_slug_unique` left untouched so every deployed `ON CONFLICT (slug)` kept
+// its arbiter. **Migration 0017 dropped that constraint**, which is what turns the two indexes from
+// declared into binding — a narrower rule cannot widen what a broader one already forbids.
+// Plans: docs/plans/ten-2a-household-movements.md, docs/plans/ten-2c-drop-global-slug-unique.md.
 //
-// ⚠️ **NO COMMITTED STATEMENT IN THIS SECTION MAY SET `household_id`.** That is the invariant the
-// dark gate at (4) encodes, which is why every non-NULL fixture below either is REJECTED or lives
-// inside the rolled-back transaction at (3). The tempting repair when (4) goes red is to weaken it
-// to `<= 1`, at which point it stops proving anything.
+// ⚠️ **NO COMMITTED STATEMENT IN THIS SECTION MAY LEAVE A ROW BEHIND.** The dark gate at (4) and the
+// discriminator at (5) read the WHOLE table, so every fixture below either is REJECTED, lives inside
+// the rolled-back transaction at (3), or is DELETED by the statement after it — and the one committed
+// probe TEN-2c added says so at both ends. The tempting repair when (4) goes red is to weaken it to
+// `<= 1`, at which point it stops proving anything.
 {
   const FK = 'movements_household_id_households_id_fk';
   const GLOBAL_UQ = schema.MOVEMENT_SLUG_GLOBAL_UNIQUE_INDEX;
   const HOUSEHOLD_UQ = schema.MOVEMENT_HOUSEHOLD_SLUG_UNIQUE_INDEX;
-  // TEN-2b: imported, not re-typed. `findOrCreateMovement`'s `23505` fallback — the only control on
-  // the 2b→2c cross-household denial window — keys on this exact string, so the two must be one
-  // value. These `expectRejectedBy` calls are therefore the fallback's PIN, and they pin it by the
-  // right mechanism: they assert `cause.constraint`, the same field the fallback reads.
-  const SLUG_CONSTRAINT = schema.MOVEMENT_SLUG_UNIQUE_CONSTRAINT;
 
   // Resolved BEFORE the transaction at (3): PGlite has ONE connection, so a query on the
   // module-level `db` inside `tx` waits forever (the V1-24 1d lesson, 2,000 lines up).
@@ -5567,7 +5730,7 @@ console.log(
   assert.equal(
     shape.is_nullable,
     'YES',
-    'TEN-2a: movements.household_id is NULLABLE — forever. NULL is a VALUE (reference data owned by no household), so TEN-2c contracts to a CHECK, never to NOT NULL',
+    'TEN-2a: movements.household_id is NULLABLE — forever. NULL is a VALUE (reference data owned by no household), which is why TEN-2c contracted to movements_global_row_has_pattern and never to NOT NULL',
   );
   assert.equal(
     shape.column_default,
@@ -5603,45 +5766,83 @@ console.log(
     'TEN-2b: …and it is now VALIDATED — migration 0016 ran VALIDATE CONSTRAINT, flipping 2a’s `convalidated = false` assertion. ⚠️ A `false` here means 0016 did not apply or lost its body; do NOT relax this expectation',
   );
 
-  // ── (2) `movements_slug_unique` IS UNCHANGED — the basis of "2a changes no deployed behaviour" ──
-  // Outside any transaction, and the one assertion that proves the OLD constraint is still
-  // non-partial and still binding: a household-owned row cannot share a slug with a GLOBAL row while
-  // it exists. `box_jump` is a seeded (household_id IS NULL) row, so this inserts nothing at all.
-  await expectRejectedBy(SLUG_CONSTRAINT, () =>
-    db.insert(schema.movements).values(movementRowValues('02', 'box_jump', ten2aHousehold.id)),
+  // ── (2) 🔴 TEN-2c INVERTED THIS — the two-namespace proof, COMMITTED ────────────────────────────
+  //
+  // This was the one assertion in this block whose truth value FLIPS, and it is the acceptance
+  // criterion stated at the schema level rather than through the resolver. From TEN-2a until 0017 it
+  // read `expectRejectedBy(SLUG_CONSTRAINT, insert box_jump owned by this household)` — "the OLD
+  // constraint is still non-partial and still binding, so a household-owned row cannot share a slug
+  // with a GLOBAL row". `box_jump` is a seeded (`household_id IS NULL`) row, so the insert now
+  // SUCCEEDS and the two rows coexist.
+  //
+  // ⚠️ **It is OUTSIDE any transaction, so the row must be DELETED, and that is load-bearing in two
+  // directions.** (4)'s dark gate and (5)'s discriminator read the WHOLE table a few lines down, and
+  // the snapshot is taken AFTER this. A committed app-authored row owned by a household is tolerable
+  // there; a committed app-authored row carrying a non-NULL `pattern` would redden discriminator 2/3,
+  // which is also why `movementRowValues` must NOT grow a `pattern` and only the GLOBAL probes below
+  // pass one. Deleting it is simpler than reasoning about either.
+  await db.insert(schema.movements).values(movementRowValues('02', 'box_jump', ten2aHousehold.id));
+  const boxJumpNamespaces = await db
+    .select({ householdId: schema.movements.householdId })
+    .from(schema.movements)
+    .where(eq(schema.movements.slug, 'box_jump'));
+  assert.deepEqual(
+    boxJumpNamespaces.map((r) => r.householdId).sort(),
+    [null, ten2aHousehold.id].sort(),
+    'TEN-2c: a household now holds its OWN row for a SEEDED slug, alongside the curated global one — the state movements_slug_unique forbade, asserted on committed rows rather than inside a rolled-back transaction. ⚠️ Inverted from TEN-2a’s expectRejectedBy(movements_slug_unique, …); do NOT "fix" a failure here by restoring the rejection',
+  );
+  // …and gone again, before (4) and (5) read the table. See the ⚠️ above.
+  await db
+    .delete(schema.movements)
+    .where(eq(schema.movements.publicId, movementRowValues('02', 'box_jump', null).publicId));
+  assert.deepEqual(
+    await db
+      .select({ householdId: schema.movements.householdId })
+      .from(schema.movements)
+      .where(eq(schema.movements.slug, 'box_jump')),
+    [{ householdId: null }],
+    'TEN-2c: …and the probe row is deleted again, leaving only the curated global row — (4) and (5) below read the WHOLE table',
   );
 
   // ── (3) THE THREE UNIQUENESS FACTS — in ONE transaction that is ALWAYS rolled back ──────────────
   //
-  // ⚠️ They CANNOT be asserted outside one. `movements_slug_unique` is non-partial on `(slug)`, so it
-  // dominates both new indexes for every row inserted here; index insertion walks the index list in
-  // OID order, and a 0001-era constraint has a far lower OID than a 0015 index — so
-  // `expectRejectedBy`, which asserts the EXACT `cause.constraint`, would deterministically get
-  // `movements_slug_unique` and these three facts would be unprovable.
+  // ⚠️ **TEN-2c CHANGED WHY THIS TRANSACTION EXISTS, and the old reason is now FALSE — do not quote
+  // it.** It used to say these facts *"CANNOT be asserted outside one"*, because `movements_slug_unique`
+  // was non-partial on `(slug)` and therefore dominated both indexes: index insertion walks the index
+  // list in OID order, so `expectRejectedBy`, which asserts the EXACT `cause.constraint`, would
+  // deterministically get the 0001-era constraint rather than a 0015 index. 0017 dropped it, so each
+  // probe below now names the index that actually rejected it, and (2) above proves the positive
+  // direction on COMMITTED rows.
   //
-  // Four mechanics, each load-bearing:
-  //  - `ALTER TABLE … DROP CONSTRAINT`, not `DROP INDEX` — the constraint OWNS the index, so
-  //    `DROP INDEX` fails `2BP01` (measured).
+  // The transaction stays for **row hygiene**: six probe rows across three slugs, in a file whose
+  // next two sections read the whole table. The `DROP CONSTRAINT` it used to open with is GONE.
+  //
+  // Three mechanics still load-bearing:
   //  - the household id was resolved ABOVE, outside the transaction (one connection).
   //  - `expectRejectedBy` is passed `tx`, so each expected rejection runs in its own SAVEPOINT. A
   //    failed statement aborts the enclosing transaction, so without that the second probe fails
   //    `25P02` and reports `got '(none)'`.
   //  - the rollback is UNCONDITIONAL: the callback ends by throwing a sentinel the caller swallows.
   //    0012's transaction rolls back because its DO block RAISES; a callback that merely finishes
-  //    **COMMITS**, which here would permanently drop `movements_slug_unique` for the rest of this
-  //    file and make every later assertion pass for the wrong reason.
+  //    **COMMITS**, which here would leave six probe rows behind for (4) and (5) to trip over.
+  //
+  // ⚠️ **The GLOBAL probes carry a `pattern`; the household ones must NOT.** `movements_global_row_has_pattern`
+  // (0017) rejects a global row without one — `23514`, before any index is consulted. The `pattern` is
+  // passed per-probe rather than added to `movementRowValues`, because a household-owned probe row
+  // with a non-NULL `pattern` would redden discriminator 2/3 at (5).
   const ROLLBACK_SENTINEL = 'TEN-2a: rollback (expected)';
+  /** A GLOBAL probe row: same shape, plus the `pattern` the TEN-2c CHECK requires of global rows. */
+  const globalMovementRowValues = (suffix: string, slug: string) => ({
+    ...movementRowValues(suffix, slug, null),
+    pattern: MOVEMENT_PATTERNS[0],
+  });
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)}`,
-      );
-
       // (a) two rows, same slug, both household_id NULL → the GLOBAL namespace is one row per slug.
-      await tx.insert(schema.movements).values(movementRowValues('03', 'ten2a_ns_probe', null));
+      await tx.insert(schema.movements).values(globalMovementRowValues('03', 'ten2a_ns_probe'));
       await expectRejectedBy(
         GLOBAL_UQ,
-        () => tx.insert(schema.movements).values(movementRowValues('04', 'ten2a_ns_probe', null)),
+        () => tx.insert(schema.movements).values(globalMovementRowValues('04', 'ten2a_ns_probe')),
         tx,
       );
 
@@ -5660,9 +5861,10 @@ console.log(
 
       // (c) one GLOBAL row + one HOUSEHOLD row, SAME slug → BOTH insert. The namespaces are
       // separate, which is the entire point of the shape — and the ONLY assertion here that
-      // distinguishes the new indexes from the constraint they replace. Without it, (1)–(3) would
-      // pass against a migration that created no indexes at all.
-      await tx.insert(schema.movements).values(movementRowValues('07', 'ten2a_both_probe', null));
+      // distinguishes the new indexes from the constraint they replaced. Without it, (1)–(3) would
+      // pass against a migration that created no indexes at all. (Since TEN-2c it has a committed
+      // twin at (2) above, on a SEEDED slug.)
+      await tx.insert(schema.movements).values(globalMovementRowValues('07', 'ten2a_both_probe'));
       await tx
         .insert(schema.movements)
         .values(movementRowValues('08', 'ten2a_both_probe', ten2aHousehold.id));
@@ -5673,7 +5875,7 @@ console.log(
       assert.equal(
         bothNamespaces.length,
         2,
-        'TEN-2a: a global row and a household row SHARE a slug — the two namespaces are separate (this is what the partial indexes buy; the global constraint forbade it at (2))',
+        'TEN-2a: a global row and a household row SHARE a slug — the two namespaces are separate (this is what the partial indexes buy, and since TEN-2c dropped movements_slug_unique it is the state (2) above proves on committed rows too)',
       );
       assert.deepEqual(
         bothNamespaces.map((r) => r.householdId).sort(),
@@ -5683,16 +5885,16 @@ console.log(
 
       throw new Error(ROLLBACK_SENTINEL);
     });
-    assert.fail('TEN-2a: the uniqueness transaction MUST roll back — it dropped a live constraint');
+    assert.fail(
+      'TEN-2a: the uniqueness transaction MUST roll back — a callback that merely finishes COMMITS',
+    );
   } catch (e) {
     if ((e as Error).message !== ROLLBACK_SENTINEL) throw e;
   }
 
-  // 0012's closing re-assertion, without which (a)–(c) could leak a dropped constraint into the rest
-  // of this file: the constraint is back, and still binding.
-  await expectRejectedBy(SLUG_CONSTRAINT, () =>
-    db.insert(schema.movements).values(movementRowValues('09', 'box_jump', null)),
-  );
+  // The rollback took the probe rows with it. (TEN-2c deleted the "and the constraint is back" probe
+  // that used to sit here: there is no constraint to restore, and the whole-table reads at (4)/(5)
+  // are what this check protects.)
   const leakedProbes = await db
     .select({ slug: schema.movements.slug })
     .from(schema.movements)
@@ -5756,7 +5958,7 @@ console.log(
     'TEN-2b THE COLUMN IS LIVE: every row the REAL findOrCreateMovement returned in this run is either a CURATED global row (resolved, not cloned) or OWNED by the household that asked — none is an app-authored row left in the shared namespace. ⚠️ This replaces TEN-2a’s all-NULL gate; a row appearing here means the resolver wrote outside the asking household’s namespace, which is the leak TEN-2 exists to close. Do NOT relax it',
   );
 
-  // ── (5) THE AUTHORSHIP DISCRIMINATOR — three directions ────────────────────────────────────────
+  // ── (5) THE AUTHORSHIP DISCRIMINATOR — four directions since TEN-2c ────────────────────────────
   // TEN-2b's backfill and its correction DELETE rows on this test, so it is proved here before
   // anything depends on it. The discriminator is exact set membership in `MOVEMENT_SEED_PUBLIC_IDS`,
   // NOT a `SEED_PUBLIC_ID_PREFIX` test: that prefix is the GLOBAL seed namespace shared by every
@@ -5771,17 +5973,53 @@ console.log(
   assert.deepEqual(
     seeded.filter((m) => m.pattern === null),
     [],
-    'TEN-2a discriminator (1/3): a row IN the set has a non-NULL `pattern` — `movementSeedRowSchema` makes it non-nullable',
+    'TEN-2a discriminator (1/4): a row IN the set has a non-NULL `pattern` — `movementSeedRowSchema` makes it non-nullable',
   );
   assert.deepEqual(
     appAuthored.filter((m) => m.pattern !== null),
     [],
-    'TEN-2a discriminator (2/3): a row OUTSIDE the set has `pattern IS NULL` — `findOrCreateMovement` writes neither pattern nor unit_default, so this is the cross-check the backfill can lean on',
+    'TEN-2a discriminator (2/4): a row OUTSIDE the set has `pattern IS NULL` — `findOrCreateMovement` writes neither pattern nor unit_default, so this is the cross-check the backfill can lean on',
   );
   assert.deepEqual(
     appAuthored.filter((m) => m.publicId.startsWith(SEED_PUBLIC_ID_PREFIX)),
     [],
-    'TEN-2a discriminator (3/3): NO row carries a seed-NAMESPACE public_id that is not in MOVEMENT_SEED_PUBLIC_IDS — the direction a prefix test would have missed entirely',
+    'TEN-2a discriminator (3/4): NO row carries a seed-NAMESPACE public_id that is not in MOVEMENT_SEED_PUBLIC_IDS — the direction a prefix test would have missed entirely',
+  );
+
+  // 🔴 **(4/4) TEN-2c: END-STATE MEMBERSHIP — layer 2 of `movements_global_row_has_pattern`.**
+  //
+  // The CHECK 0017 added is a real control but a weaker one than its name suggests: a global row with
+  // a hand-typed `pattern` satisfies it while being neither owned nor seeded. The exact invariant —
+  // *the global namespace contains exactly the curated catalog* — is set membership, and only a proof
+  // can state it. This is that proof, and it is why the CHECK must not be read as making this
+  // assertion redundant. (`db:verify` never runs against production, which is why the CHECK exists at
+  // all; the CHECK cannot express membership, which is why this does.)
+  //
+  // ⚠️ **SCOPED TO RESOLVER-TOUCHED ROWS, and the table-wide version is FALSE here** — see the
+  // warning at (4) above: V1-1b's raw-SQL backfill fixture mints non-seed rows at
+  // `household_id IS NULL`, so asserting it table-wide would be a self-inflicted red build. The
+  // table-wide invariant lands with **`TEN-2c-1`** (the split backfill), which is the PR that removes
+  // the rows that make it false. Said plainly rather than implied, because this is the gap between
+  // "the denial window is closed" and "the read leak is closed".
+  const resolverGlobal = resolverTouched.filter((m) => m.householdId === null);
+  assert.ok(
+    resolverGlobal.length > 0,
+    'TEN-2c anti-vacuity: the resolver returned at least one GLOBAL row this run (global-first resolved curated reference data) — otherwise the membership assertion below holds for want of a row',
+  );
+  assert.deepEqual(
+    resolverGlobal
+      .map((m) => m.publicId)
+      .filter((id) => !MOVEMENT_SEED_PUBLIC_IDS.has(id))
+      .sort(),
+    [],
+    'TEN-2c END-STATE MEMBERSHIP (4/4): every GLOBAL row the resolver returned is a member of MOVEMENT_SEED_PUBLIC_IDS — exact set membership, not a slug test and not a public_id-prefix test (both were tried in this arc and both were wrong). This is layer 2 of movements_global_row_has_pattern, which can only require a `pattern`',
+  );
+  assert.deepEqual(
+    allMovements
+      .filter((m) => MOVEMENT_SEED_PUBLIC_IDS.has(m.publicId) && m.pattern === null)
+      .map((m) => m.publicId),
+    [],
+    'TEN-2c: …and every curated row carries the `pattern` the CHECK requires of a global row, so the two layers agree rather than one of them being decoration',
   );
   // And the obligation behind all three: a `movements.public_id` only ever comes from `newId()` or
   // the seed const. Asserted nowhere before this. ⚠️ Version-agnostic on purpose: V1-1b's backfill
@@ -5795,22 +6033,29 @@ console.log(
   }
 
   console.log(
-    `✓ TEN-2a/2b: movements.household_id — nullable bigint; the FK rejects a missing household and is ` +
+    `✓ TEN-2a/2b/2c: movements.household_id — nullable bigint; the FK rejects a missing household and is ` +
       `now VALIDATED (0016 flipped 2a's convalidated = false, which is how "don't forget the VALIDATE" ` +
-      `was a red build); ${GLOBAL_UQ} + ${HOUSEHOLD_UQ} each reject their own duplicate and the two ` +
-      `namespaces are SEPARATE; ${SLUG_CONSTRAINT} still binds until TEN-2c; and of ${allMovements.length} rows ` +
+      `was a red build); ${GLOBAL_UQ} + ${HOUSEHOLD_UQ} are now the SOLE arbiters — each rejects its own ` +
+      `duplicate, and a household holds its own row for a SEEDED slug alongside the curated one, on ` +
+      `COMMITTED rows (the state movements_slug_unique forbade until 0017); and of ${allMovements.length} rows ` +
       `(${appAuthored.length} app-authored), every row the REAL resolver returned is either curated-global or ` +
-      `owned by the household that asked — 2a's all-NULL dark gate, re-taken and inverted`,
+      `owned by the household that asked, with every global one an exact member of MOVEMENT_SEED_PUBLIC_IDS ` +
+      `— 2a's all-NULL dark gate, re-taken and inverted twice`,
   );
 }
 
-// ── TEN-2b: the resolver is scoped, and the two facts only provable under 2c's schema ────────────
+// ── TEN-2b/2c: the resolver is scoped, and the facts 2c's schema finally makes observable ────────
 //
-// Plan: docs/plans/ten-2b-scoped-movement-lookup.md. The TEN-1 1d section above already drives the
-// REAL `findOrCreateMovement` in both directions and carries the verdict; this section proves the
-// four things 1d's fixtures cannot observe.
+// Plans: docs/plans/ten-2b-scoped-movement-lookup.md, docs/plans/ten-2c-drop-global-slug-unique.md.
+// The TEN-1 1d section above already drives the REAL `findOrCreateMovement` in both directions and
+// carries the verdict; this section proves the three things 1d's fixtures cannot observe.
+//
+// ✅ **TEN-2c SIMPLIFIED THIS SECTION, which is the clearest single sign the PR did its job.** Both
+// proofs below used to live inside a transaction that DROPPED `movements_slug_unique` and was always
+// rolled back, with the honest label *"this is the resolver under TEN-2c's schema, with the
+// interference removed"*. 0017 removed the interference for real, so the scaffolding is gone and the
+// assertions run against the live schema.
 {
-  const SLUG_CONSTRAINT = schema.MOVEMENT_SLUG_UNIQUE_CONSTRAINT;
   const [ten2bHousehold] = await db
     .select({ id: schema.households.id })
     .from(schema.households)
@@ -5844,117 +6089,105 @@ console.log(
     'TEN-2b: …and the movements identity sequence did NOT advance — so global-first RETURNED at step 1 rather than attempting an insert that ON CONFLICT then absorbed (a row count cannot tell those apart)',
   );
 
-  // ── (2) GLOBAL-FIRST — provable ONLY with the non-partial constraint gone ───────────────────────
+  // ── (2) GLOBAL-FIRST — on the LIVE schema since TEN-2c ─────────────────────────────────────────
   //
-  // 🔴 **This is the plan's central design decision, and in 2b's LIVE schema it has no observable
-  // consequence at all.** Measured during the panel: with `movements_slug_unique` present, a global
-  // row and a household row cannot share a slug, so global-first and household-first return the SAME
-  // id by the same path and burn the same sequence values — an assertion out here would pass under
-  // the very mutation it names. The distinguishing state is exactly what the constraint forbids.
+  // 🔴 **This is TEN-2b's central design decision, and until 0017 it had no observable consequence at
+  // all.** Measured during 2b's panel: with `movements_slug_unique` present, a global row and a
+  // household row could not share a slug, so global-first and household-first returned the SAME id by
+  // the same path and burned the same sequence values — an assertion out here would have passed under
+  // the very mutation it names. The distinguishing state was exactly what the constraint forbade, so
+  // 2b proved the order inside a transaction that dropped the constraint and always rolled back, with
+  // the honest label *"the resolver under TEN-2c's schema, with the interference removed"*.
   //
-  // So the order is proved where it differs: inside a transaction that drops the constraint and is
-  // ALWAYS rolled back. Honest label: **this is the resolver under TEN-2c's schema, with the
-  // interference removed.** Global-first is a property of CODE; the verdict above is a property of
-  // schema + code, which is why that one stays `LEAKS` and this one does not pretend to flip it.
-  //
-  // Four mechanics, each load-bearing (the TEN-2a section above documents why):
-  // DROP CONSTRAINT not DROP INDEX (2BP01); ids resolved before the transaction (one connection);
-  // `expectRejectedBy` passed `tx`; and an UNCONDITIONAL sentinel throw, because a callback that
-  // merely finishes COMMITS — which here would permanently drop a live constraint.
-  const GF_SENTINEL = 'TEN-2b: rollback (expected)';
+  // ✅ **TEN-2c removed the interference, so the scaffolding is gone.** The two orders are now
+  // distinguishable in the live schema, which is the win. The probe rows are COMMITTED and then
+  // deleted (the whole-table reads are in the section above, which has already run) — the
+  // `DROP CONSTRAINT`, the sentinel throw and the restore probe are all deleted with the constraint.
   const GF_SLUG = 'ten-2b_order_probe';
   const GF_NAME = 'TEN-2b Order Probe';
+  const GF_GLOBAL_PUBLIC_ID = '019826b4-0000-7000-8000-00000002b001';
+  const GF_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-00000002b002';
   assert.equal(movementSlug(GF_NAME), GF_SLUG, 'TEN-2b fixture: the probe name slugs as expected');
-  try {
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)}`,
-      );
-      // The state the live constraint forbids: one curated row and one household row, same slug.
-      const [globalRow] = await tx
-        .insert(schema.movements)
-        .values({
-          publicId: '019826b4-0000-7000-8000-00000002b001',
-          slug: GF_SLUG,
-          name: 'Curated Order Probe',
-          pattern: 'squat',
-          householdId: null,
-        })
-        .returning({ id: schema.movements.id });
-      const [householdRow] = await tx
-        .insert(schema.movements)
-        .values({
-          publicId: '019826b4-0000-7000-8000-00000002b002',
-          slug: GF_SLUG,
-          name: 'Household Order Probe',
-          householdId: ten2bHousehold.id,
-        })
-        .returning({ id: schema.movements.id });
-      assert.notEqual(globalRow.id, householdRow.id, 'TEN-2b fixture: two distinct rows exist');
-
-      // THE assertion. Household-first would return `householdRow.id` here, and that row declares
-      // `is_bodyweight: false` with no `unit_default` — strictly worse metadata than the curated row
-      // it would be shadowing, which `queries/program-day.ts` reads as the movement's declaration.
-      assert.equal(
-        // Cast for the same reason `asPg` exists at the top of this file: PGlite's tx type is not
-        // node-postgres's, and the writers are typed for the real driver. The CODE under test is
-        // unchanged — that is the point of write-path.md invariant 3.
-        await findOrCreateMovement(tx as unknown as typeof asPg, A_SCOPE, GF_NAME),
-        globalRow.id,
-        'TEN-2b GLOBAL-FIRST: with BOTH a curated row and this household’s own row for one slug, the resolver returns the CURATED one. ⚠️ Household-first returns the household row here and that is the whole hazard: the only writer cannot author `pattern` / `unit_default`, so a household row always shadows curated metadata with something strictly worse',
-      );
-      throw new Error(GF_SENTINEL);
-    });
-    assert.fail(
-      'TEN-2b: the global-first transaction MUST roll back — it dropped a live constraint',
-    );
-  } catch (e) {
-    if ((e as Error).message !== GF_SENTINEL) throw e;
-  }
-  // The constraint is back and still binding, and the probe rows went with the rollback.
-  await expectRejectedBy(SLUG_CONSTRAINT, () =>
-    db.insert(schema.movements).values({
-      publicId: '019826b4-0000-7000-8000-00000002b003',
-      slug: MOVEMENT_SEED_ROWS[0].slug,
-      name: 'TEN-2b restore probe',
+  // The state `movements_slug_unique` forbade: one curated row and one household row, same slug.
+  const [gfGlobalRow] = await db
+    .insert(schema.movements)
+    .values({
+      publicId: GF_GLOBAL_PUBLIC_ID,
+      slug: GF_SLUG,
+      name: 'Curated Order Probe',
+      pattern: 'squat',
+      householdId: null,
+    })
+    .returning({ id: schema.movements.id });
+  const [gfHouseholdRow] = await db
+    .insert(schema.movements)
+    .values({
+      publicId: GF_HOUSEHOLD_PUBLIC_ID,
+      slug: GF_SLUG,
+      name: 'Household Order Probe',
       householdId: ten2bHousehold.id,
-    }),
+    })
+    .returning({ id: schema.movements.id });
+  assert.notEqual(gfGlobalRow.id, gfHouseholdRow.id, 'TEN-2b fixture: two distinct rows exist');
+
+  // THE assertion. Household-first would return `gfHouseholdRow.id` here, and that row declares
+  // `is_bodyweight: false` with no `unit_default` — strictly worse metadata than the curated row it
+  // would be shadowing, which `queries/program-day.ts` reads as the movement's declaration.
+  assert.equal(
+    await findOrCreateMovement(asPg, A_SCOPE, GF_NAME),
+    gfGlobalRow.id,
+    'TEN-2b GLOBAL-FIRST: with BOTH a curated row and this household’s own row for one slug, the resolver returns the CURATED one. ⚠️ Household-first returns the household row here and that is the whole hazard: the only writer cannot author `pattern` / `unit_default`, so a household row always shadows curated metadata with something strictly worse. ✅ Since TEN-2c this runs against the LIVE schema — 2b could only prove it inside a rolled-back DROP CONSTRAINT transaction',
   );
+  // Clean up the two committed probe rows — the proof is done, and nothing downstream should resolve
+  // this slug. (2b got this for free from its rollback; 2c pays for the simpler shape here.)
+  await db
+    .delete(schema.movements)
+    .where(inArray(schema.movements.publicId, [GF_GLOBAL_PUBLIC_ID, GF_HOUSEHOLD_PUBLIC_ID]));
   assert.deepEqual(
     await db
       .select({ slug: schema.movements.slug })
       .from(schema.movements)
       .where(eq(schema.movements.slug, GF_SLUG)),
     [],
-    'TEN-2b: …and the rollback took both order-probe rows with it',
+    'TEN-2b: …and both order-probe rows are deleted again',
   );
 
-  // ── (3) THE FALLBACK'S PRICE — the erasure hazard, as a proof rather than a caveat ──────────────
+  // ── (3) 🔴 THE FALLBACK'S PRICE, INVERTED — the one direct proof that 2c PAID it off ────────────
   //
-  // 🔴 `schema.ts`, `runbooks.md`, `SECURITY.md` and `notice.md` all used to say a cross-household
-  // `entries.movement_id` was "prevented by construction". TEN-2b's `23505` fallback PRODUCES one by
-  // design: the 1d section above already had household B handed household A's row, so the entry B
-  // writes against it is exactly this reference. The consequence is that `runbooks.md`'s PRIV-1 step
-  // 11 — `DELETE FROM movements WHERE household_id = H`, hand-typed after a 7-day cooling-off, in the
-  // procedure `notice.md` calls "permanently removed" — ABORTS mid-transaction.
+  // `schema.ts`, `runbooks.md`, `SECURITY.md` and `notice.md` all used to say a cross-household
+  // `entries.movement_id` was "prevented by construction". TEN-2b's `23505` fallback PRODUCED one by
+  // design — the 1d section above had household B handed household A's row, so the entry B wrote
+  // against it was exactly this reference — and `runbooks.md`'s PRIV-1 step 11
+  // (`DELETE FROM movements WHERE household_id = H`, hand-typed after a 7-day cooling-off, in the
+  // procedure `notice.md` calls "permanently removed") then ABORTED mid-transaction. TEN-2b asserted
+  // the abort so the hazard could not be forgotten before TEN-2c.
   //
-  // Asserted so the hazard cannot be forgotten between here and TEN-2c, where it closes.
+  // ✅ **TEN-2c INVERTED BOTH HALVES, and together they are the price being paid off.** B now holds
+  // its own row, so the same probe entry is an ordinary same-household reference: pre-flight (d)
+  // reads **zero**, and step 11 **succeeds**. Both were `> 0` / `expectRejectedBy(…FK)` until 0017.
+  //
+  // ⚠️ **This proves the mechanism is gone, NOT that production is clean.** Any reference the fallback
+  // already minted is real data and outlives the code path; the report-only correction
+  // `movements-ownership-2026-10-11` is what measures that, and `runbooks.md` pre-flight (d) stays in
+  // the procedure for exactly that reason.
   const [ten2bBProfile] = await db
     .select({ id: schema.profiles.id })
     .from(schema.profiles)
     .where(eq(schema.profiles.publicId, VERIFY_PROFILE_PUBLIC_ID));
   assert.ok(ten2bBProfile, 'TEN-2b fixture: household B’s profile resolves');
-  const leakedRow = await movementRow(bMovementId);
+  // 🔴 INVERTED: this read `=== ten2bHousehold.id` ("the row household B was handed is owned by
+  // household A — the fallback's doing"). The fallback no longer runs, so B's row is B's.
   assert.equal(
-    leakedRow.householdId,
-    ten2bHousehold.id,
-    'TEN-2b fixture: the row household B was handed is owned by household A (the fallback’s doing)',
+    (await movementRow(bMovementId)).householdId,
+    verifyHh.id,
+    'TEN-2c fixture: the row household B got for a slug household A typed first is owned by B — inverted from TEN-2b’s "owned by household A (the fallback’s doing)"',
   );
 
-  const PRICE_SENTINEL = 'TEN-2b: price rollback (expected)';
+  const PRICE_SENTINEL = 'TEN-2c: price rollback (expected)';
   try {
     await db.transaction(async (tx) => {
-      // Household B logs against the movement household A owns — nothing in the schema stops it.
+      // Household B logs against the movement it now owns — the SAME statement TEN-2b used to
+      // manufacture a cross-household reference with.
       await tx.insert(schema.entries).values({
         publicId: '019826b4-0000-7000-8000-00000002b010',
         clientId: '019826b4-0000-7000-8000-00000002b011',
@@ -5966,77 +6199,156 @@ console.log(
         kind: 'strength',
         movementName: 'TEN-2b price probe',
       });
-      // `runbooks.md` pre-flight (d): the count that is supposed to be zero.
-      const crossRefs = (
-        (await tx.execute(sql`
-          select count(*)::int as n from entries e
-            join profiles p on p.id = e.profile_id
-            join movements m on m.id = e.movement_id
-           where m.household_id is not null and m.household_id <> p.household_id
-        `)) as unknown as { rows: { n: number }[] }
-      ).rows[0].n;
-      assert.ok(
-        crossRefs > 0,
-        'TEN-2b PRICE: runbooks.md pre-flight (d) — a cross-household entries.movement_id EXISTS. "Prevented by construction" was false; the 23505 fallback is the writer that creates it',
+      // `runbooks.md` pre-flight (d), through the SHARED census rather than a re-typed join:
+      // `queries/movement-ownership.ts` is the one definition of "referenced", covering `entries`
+      // AND `prescriptions`, which `TEN-2b-2` and `TEN-2c-1` must both use.
+      const crossRefs = await crossHouseholdMovementRefs(tx as unknown as typeof asPg);
+      assert.deepEqual(
+        crossRefs,
+        { entries: 0, prescriptions: 0, total: 0 },
+        'TEN-2c PRICE PAID: runbooks.md pre-flight (d) reads ZERO — no entries row and no prescriptions row crosses a household boundary, even with the probe entry TEN-2b used to manufacture one. ⚠️ Inverted from TEN-2b’s `crossRefs > 0`; this says the WRITER is gone, not that a live database is clean (that is the reporter’s job)',
       );
-      // …and step 11 therefore aborts.
-      await expectRejectedBy(
-        'entries_movement_id_movements_id_fk',
-        () => tx.execute(sql`delete from movements where household_id = ${ten2bHousehold.id}`),
-        tx,
+      // …and step 11 therefore SUCCEEDS. ⚠️ **Faithful to the procedure's ORDER, and that is not
+      // padding.** A household's OWN `entries.movement_id` / `prescriptions.movement_id` are
+      // perfectly ordinary FKs that would abort step 11 too, which is why `runbooks.md` deletes the
+      // household's own rows (steps 3–10, children before parents) before step 11 touches its
+      // movements. What TEN-2b proved was that an OUTSIDE household's reference aborted step 11 **even
+      // after all of that** — the one abort the procedure had no remedy for. So the statements below
+      // are the procedure's own ordering, compressed.
+      const hhProfiles = sql`(select id from profiles where household_id = ${ten2bHousehold.id})`;
+      const hhBlocks = sql`(select id from program_blocks where household_id = ${ten2bHousehold.id})`;
+      await tx.execute(sql`
+        delete from entry_set_quantities where entry_set_id in (
+          select id from entry_sets where entry_id in (
+            select id from entries where profile_id in ${hhProfiles}))`);
+      await tx.execute(sql`
+        delete from entry_sets where entry_id in (
+          select id from entries where profile_id in ${hhProfiles})`);
+      await tx.execute(sql`delete from entries where profile_id in ${hhProfiles}`);
+      await tx.execute(sql`
+        delete from prescription_targets where prescription_id in (
+          select id from prescriptions where block_id in ${hhBlocks})`);
+      await tx.execute(sql`delete from prescriptions where block_id in ${hhBlocks}`);
+      await tx.execute(sql`delete from movements where household_id = ${ten2bHousehold.id}`);
+      assert.deepEqual(
+        await tx
+          .select({ id: schema.movements.id })
+          .from(schema.movements)
+          .where(eq(schema.movements.householdId, ten2bHousehold.id)),
+        [],
+        'TEN-2c PRICE PAID: …and `DELETE FROM movements WHERE household_id = H` (runbooks.md step 11) COMPLETES rather than aborting 23503 on another household’s reference. ⚠️ Inverted from TEN-2b’s expectRejectedBy(entries_movement_id_movements_id_fk, …); do NOT "fix" a failure here by restoring the expected rejection — it means a cross-household reference exists again',
       );
       throw new Error(PRICE_SENTINEL);
     });
-    assert.fail('TEN-2b: the price transaction MUST roll back');
+    assert.fail('TEN-2c: the price transaction MUST roll back — it deletes real fixture rows');
   } catch (e) {
     if ((e as Error).message !== PRICE_SENTINEL) throw e;
   }
+  // The rollback put everything back — otherwise every later assertion would run against a household
+  // with no entries, no prescriptions and no movements, and pass for the wrong reason.
+  assert.ok(
+    (
+      await db
+        .select({ id: schema.movements.id })
+        .from(schema.movements)
+        .where(eq(schema.movements.householdId, ten2bHousehold.id))
+    ).length > 0,
+    'TEN-2c: …and the price transaction rolled back — household A still holds its movements',
+  );
 
   console.log(
-    '✓ TEN-2b: the resolver is SCOPED — a global resolve attempts no insert (sequence unmoved); ' +
-      'GLOBAL-FIRST proved under TEN-2c’s schema (curated row wins over the household’s own, in a ' +
-      'rolled-back DROP CONSTRAINT transaction, because the live constraint makes the two orders ' +
-      'indistinguishable); and the 23505 fallback’s PRICE is proved — it creates the cross-household ' +
-      'entries.movement_id that runbooks.md called impossible, which ABORTS household deletion (23503)',
+    '✓ TEN-2b/2c: the resolver is SCOPED — a global resolve attempts no insert (sequence unmoved); ' +
+      'GLOBAL-FIRST now proved on the LIVE schema (the curated row wins over the household’s own; 2b ' +
+      'could only prove it inside a rolled-back DROP CONSTRAINT transaction, because the non-partial ' +
+      'constraint made the two orders indistinguishable); and the 23505 fallback’s PRICE is PAID OFF — ' +
+      'runbooks.md pre-flight (d) reads ZERO across entries AND prescriptions, and step 11’s ' +
+      'DELETE FROM movements completes instead of aborting 23503 (both assertions inverted)',
   );
 }
 
-// ── TEN-2b: the SEED'S SHADOW GUARD — both directions, through the REAL `seed()` ─────────────────
+// ── TEN-2c: the SEED'S SHADOW REPORT — all three directions, through the REAL `seed()` ──────────
 //
-// 🔴 **The failure this guards is SILENCE, not a duplicate**, which is why the guard is the only
-// detector. Measured during the panel: with the non-partial `movements_slug_unique` present, the
-// seed's new arbiter — `ON CONFLICT (slug) WHERE household_id IS NULL DO NOTHING` — lets Postgres
-// infer BOTH arbiters (the non-partial one's empty predicate is trivially implied by
-// `WHERE household_id IS NULL`), so a global-UNIQUE collision is ABSORBED. Without the guard,
-// `db:seed` reports success while the curated catalog row is never inserted, seed-twice idempotency
-// stays green, and every household then resolves that slug through the cross-household fallback.
+// 🔴 **What this block used to prove, and why 0017 falsified it.** With the non-partial
+// `movements_slug_unique` present, the seed's arbiter —
+// `ON CONFLICT (slug) WHERE household_id IS NULL DO NOTHING` — let Postgres infer BOTH arbiters (the
+// non-partial one's empty predicate is trivially implied by `WHERE household_id IS NULL`), so a
+// global-UNIQUE collision was ABSORBED: `db:seed` reported success while the curated catalog row was
+// never inserted, seed-twice idempotency stayed green, and every household then resolved that slug
+// through the cross-household fallback. The failure was SILENCE, so the guard was the only detector
+// and it REFUSED (`throw`) rather than adopting the household's free text.
 //
-// ⚠️ **This block MUTATES the schema (it drops the constraint) and must be LAST in the file**, after
-// every other assertion, with an explicit restore and a re-assertion that the constraint binds
-// again. It cannot be done inside a transaction: `seed()` queries the module-level `db`, and PGlite
-// has ONE connection, so calling it inside `db.transaction` would wait forever.
+// ✅ **TEN-2c demoted the guard to a REPORT, and BOTH halves had to move.** The guard was
+// detect → **omit** → seed → throw, and `seed.ts` filtered the shadowed slugs out of the `VALUES`
+// list *before* the arbiter was ever consulted. Demoting only the `throw` would have left the curated
+// row still never inserted, forever, with nothing complaining loudly — a loud confidentiality guard
+// turned into a silent, permanent gap in reference data, which is strictly WORSE than the behaviour it
+// replaced. So (a) proves the absorb is gone, (b) proves the curated row now LANDS and that the
+// warning still says the right things, and (c) is the unchanged positive direction.
+//
+// ⚠️ **No DDL left in this block.** It used to drop and re-`ADD` `movements_slug_unique` three times
+// and had to be LAST in the file for that reason; it no longer mutates the schema at all. It still
+// cannot run inside a transaction: `seed()` queries the module-level `db`, and PGlite has ONE
+// connection, so calling it inside `db.transaction` would wait forever.
 {
-  const SLUG_CONSTRAINT = schema.MOVEMENT_SLUG_UNIQUE_CONSTRAINT;
   const [guardHousehold] = await db
     .select({ id: schema.households.id })
     .from(schema.households)
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
   assert.ok(guardHousehold, 'TEN-2b guard fixture: the seed household resolves');
-  const shadowed = MOVEMENT_SEED_ROWS[0];
 
-  // (a) THE BASELINE the guard exists to prevent — the silent absorb, on a NON-seed slug so the
-  // constraint can be restored around it. This is the measurement, as a proof.
+  // ⚠️ **The shadowed seed row is CHOSEN AT RUNTIME, and it has to be.** (b) below DELETES the
+  // curated row to prove the seed puts it back, and `entries.movement_id` / `prescriptions.movement_id`
+  // would abort that delete `23503` — `MOVEMENT_SEED_ROWS[0]` (`box_jump`) is referenced by this
+  // file's own fixtures, measured. So pick the first seed row nothing references, through the SHARED
+  // census (`queries/movement-ownership.ts`) rather than a hand-written join: `householdRefs === 0`
+  // is that module's definition of unreferenced, and it covers both referencing tables.
+  const unreferencedGlobalIds = new Set(
+    (await sharedMovementRows(asPg)).filter((r) => r.householdRefs === 0).map((r) => r.movementId),
+  );
+  const globalRowIds = await db
+    .select({ id: schema.movements.id, publicId: schema.movements.publicId })
+    .from(schema.movements)
+    .where(movementIsGlobal());
+  const shadowed = MOVEMENT_SEED_ROWS.find((m) => {
+    const row = globalRowIds.find((g) => g.publicId === m.publicId);
+    return row !== undefined && unreferencedGlobalIds.has(row.id);
+  });
+  assert.ok(
+    shadowed,
+    'TEN-2c guard fixture: at least one curated movement is referenced by nothing, so (b) can delete it and watch the seed restore it',
+  );
+
+  /**
+   * Run `fn` with `console.warn` captured. The guard is a WARNING now, not a `throw`, so
+   * `assert.rejects` cannot reach it — and the two things that must be true of its text (it names the
+   * seed slug; it does NOT name the household's free text) are the privacy proof this PR was most at
+   * risk of dropping on the floor. Restores the real `console.warn` in a `finally`, because
+   * `findOrCreateMovement` also warns and a swallowed warning elsewhere would be its own defect.
+   */
+  const captureWarnings = async (fn: () => Promise<void>): Promise<string> => {
+    const real = console.warn;
+    const lines: string[] = [];
+    console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '));
+    try {
+      await fn();
+    } finally {
+      console.warn = real;
+    }
+    return lines.join('\n');
+  };
+
+  // (a) 🔴 THE BASELINE, INVERTED — the absorb the guard existed to detect is GONE.
+  // Until 0017 this asserted that a global catalog insert whose slug a household already owns is
+  // SILENTLY ABSORBED (one row, the household's). With only `uq_movements_slug_global` left, the
+  // household row is outside the arbiter's subset, so there is no collision and BOTH rows land —
+  // which is the intended end state, since global-first then serves the curated one.
   const BASELINE_SLUG = 'ten2b_baseline_probe';
-  await db.execute(sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)}`);
   await db.insert(schema.movements).values({
     publicId: '019826b4-0000-7000-8000-00000002b020',
     slug: BASELINE_SLUG,
     name: 'TEN-2b baseline probe',
     householdId: guardHousehold.id,
   });
-  await db.execute(
-    sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)} UNIQUE ("slug")`,
-  );
   await db
     .insert(schema.movements)
     .values({
@@ -6048,18 +6360,23 @@ console.log(
     })
     .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
   assert.deepEqual(
-    await db
-      .select({ householdId: schema.movements.householdId })
-      .from(schema.movements)
-      .where(eq(schema.movements.slug, BASELINE_SLUG)),
-    [{ householdId: guardHousehold.id }],
-    'TEN-2b BASELINE: a global catalog insert whose slug a household already owns is SILENTLY ABSORBED by the partial arbiter — no error, no row. This is what the shadow guard detects and nothing else would ever report',
+    (
+      await db
+        .select({ householdId: schema.movements.householdId })
+        .from(schema.movements)
+        .where(eq(schema.movements.slug, BASELINE_SLUG))
+    )
+      .map((r) => r.householdId)
+      .sort(),
+    [null, guardHousehold.id].sort(),
+    'TEN-2c BASELINE — the absorb is GONE: a global catalog insert whose slug a household already owns now LANDS alongside it, because the only arbiter left is partial on `household_id IS NULL`. ⚠️ Inverted from TEN-2b’s "SILENTLY ABSORBED — no error, no row", which was the premise of the whole shadow guard',
   );
   await db.delete(schema.movements).where(eq(schema.movements.slug, BASELINE_SLUG));
 
-  // (b) THE GUARD REFUSES, through the real `seed()`. The constraint has to stay dropped while a
-  // household owns a SEEDED slug, because the two rows share that slug by construction.
-  await db.execute(sql`ALTER TABLE "movements" DROP CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)}`);
+  // (b) 🔴 THE GUARD REPORTS AND THE CURATED ROW LANDS — through the real `seed()`.
+  // To prove the row LANDS the curated row has to be absent first, so this deletes it and lets the
+  // seed put it back. That is the exact half the panel caught: with the `seedableMovements` filter
+  // still in place, this assertion would fail — which is the point of making it.
   const SHADOW_NAME = 'TEN-2b shadow probe free text';
   await db.insert(schema.movements).values({
     publicId: '019826b4-0000-7000-8000-00000002b022',
@@ -6067,47 +6384,62 @@ console.log(
     name: SHADOW_NAME,
     householdId: guardHousehold.id,
   });
-  let guardMessage = '';
-  await assert.rejects(
-    () => seed(asPg),
-    (e: Error) => {
-      guardMessage = e.message;
-      return /already owned by a household/.test(e.message);
-    },
-    'TEN-2b SHADOW GUARD: `seed()` REFUSES when a household already owns a seeded movement slug — rather than silently skipping the curated row (the baseline above)',
+  await db
+    .delete(schema.movements)
+    .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal()));
+  assert.deepEqual(
+    await db
+      .select({ publicId: schema.movements.publicId })
+      .from(schema.movements)
+      .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal())),
+    [],
+    'TEN-2c guard fixture: the curated row for the shadowed slug is absent before the seed runs — otherwise "the curated row lands" would hold because it never left',
+  );
+  const guardMessage = await captureWarnings(async () => {
+    await seed(asPg);
+  });
+  assert.deepEqual(
+    (
+      await db
+        .select({ publicId: schema.movements.publicId })
+        .from(schema.movements)
+        .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal()))
+    ).map((r) => r.publicId),
+    [shadowed.publicId],
+    'TEN-2c SHADOW REPORT: `seed()` INSERTS the curated catalog row even though a household owns that slug — the `seedableMovements` filter is gone, so the guard suppresses no write. ⚠️ This is the half a `throw`-only demotion would have left broken FOREVER and silently: the curated row never inserted, with nothing complaining loudly',
+  );
+  assert.match(
+    guardMessage,
+    /ALSO owned by a household/,
+    'TEN-2c SHADOW REPORT: …and it still REPORTS the shadowing, as a console.warn rather than a throw — `migrate.yml` seeds PRODUCTION on every push to `main`, where a throw turns the job red on every subsequent push and cannot clear itself by re-running',
   );
   assert.ok(
     guardMessage.includes(shadowed.slug),
-    'TEN-2b: …and the refusal NAMES the seed slug, so the operator knows which catalog row is missing',
+    'TEN-2b: …and the warning NAMES the seed slug, so the operator knows which catalog row is shadowed',
   );
   // 🔴 Privacy: the message lands in a WORLD-READABLE Actions log (`migrate.yml` runs `db:seed`
   // against production on every push to `main`, in a public repo). Seed slugs come from a public
   // const; the colliding row's `name` is uncontrolled household free text and must never appear.
+  // ⚠️ This assertion MOVED with the demotion (it used to read the thrown `Error.message`). Losing it
+  // in the rewrite would have deleted a privacy proof while the gate stayed green.
   assert.ok(
     !guardMessage.includes(SHADOW_NAME),
     'TEN-2b: …and it does NOT contain the colliding row’s `name` — uncontrolled household free text, and this message is published to a public Actions log',
   );
 
-  // Restore, and prove the restore worked — otherwise this block would leave a dropped constraint
-  // behind and any future assertion after it would pass for the wrong reason.
+  // (c) THE POSITIVE DIRECTION: with no shadow, `seed()` is still idempotent — a third run after
+  // everything above, so the partial arbiter is exercised against a populated table.
   await db
     .delete(schema.movements)
     .where(eq(schema.movements.publicId, '019826b4-0000-7000-8000-00000002b022'));
-  await db.execute(
-    sql`ALTER TABLE "movements" ADD CONSTRAINT ${sql.identifier(SLUG_CONSTRAINT)} UNIQUE ("slug")`,
+  const quietMessage = await captureWarnings(async () => {
+    await seed(asPg);
+  });
+  assert.equal(
+    quietMessage,
+    '',
+    'TEN-2c: …and with no shadow the seed warns about NOTHING — the report is a report, not noise on every run',
   );
-  await expectRejectedBy(SLUG_CONSTRAINT, () =>
-    db.insert(schema.movements).values({
-      publicId: '019826b4-0000-7000-8000-00000002b023',
-      slug: shadowed.slug,
-      name: 'TEN-2b guard restore probe',
-      householdId: guardHousehold.id,
-    }),
-  );
-
-  // (c) THE POSITIVE DIRECTION: with no shadow, `seed()` succeeds and is still idempotent — a third
-  // run after everything above, so the new arbiter is exercised against a populated table.
-  await seed(asPg);
   assert.equal(
     (
       await db
@@ -6116,14 +6448,15 @@ console.log(
         .where(and(eq(schema.movements.slug, shadowed.slug), movementIsGlobal()))
     ).length,
     1,
-    'TEN-2b: …and with no shadow the seed succeeds, leaving exactly ONE curated row for that slug — the new partial arbiter is idempotent on a third run',
+    'TEN-2b: …leaving exactly ONE curated row for that slug — the partial arbiter is idempotent on a third run',
   );
 
   console.log(
-    '✓ TEN-2b SHADOW GUARD, both directions: the BASELINE is proved (a global catalog insert whose ' +
-      'slug a household owns is silently absorbed — the guard is the only detector), `seed()` REFUSES ' +
-      'and names the seed slug without leaking the household’s free text, the dropped constraint is ' +
-      'restored and still binds, and with no shadow the seed stays idempotent',
+    '✓ TEN-2c SEED SHADOW REPORT, three directions: the ABSORB IS GONE (a global catalog insert whose ' +
+      'slug a household owns now lands alongside it — TEN-2b’s baseline, inverted), `seed()` INSERTS ' +
+      'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
+      'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
+      'idempotent. No DDL left in this block',
   );
 }
 

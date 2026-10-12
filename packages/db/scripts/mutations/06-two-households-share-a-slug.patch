@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/movement-catalog.ts b/packages/db/src/writers/movement-catalog.ts
+index 1eb9391..073ad2c 100644
+--- a/packages/db/src/writers/movement-catalog.ts
++++ b/packages/db/src/writers/movement-catalog.ts
+@@ -88,7 +88,7 @@ export async function findOrCreateMovement(
+   };
+ 
+   // (1) GLOBAL FIRST — a curated row wins over anything this function could author.
+-  const globalId = await movementIdWhere(and(eq(schema.movements.slug, slug), movementIsGlobal()));
++  const globalId = await movementIdWhere(eq(schema.movements.slug, slug));
+   if (globalId !== undefined) return globalId;
+ 
+   // (2) …then this household's own namespace.
