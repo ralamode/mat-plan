@@ -1623,6 +1623,7 @@ _Exit: zero hardcoded user-facing strings; a second locale could be added by dro
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
+  📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows
   (no RRULE) and `daily` is seven rows; rotation becomes an anchor + an ordered list **on the block**
   (not the assignment — one program must not get N phases, or co-training siblings desynchronize) and
