@@ -1,0 +1,1 @@
+- **2026-10-11** — **LADDER-1: the Strength Ladder is captured as a future feature, with a feasibility assessment** ([spec](../specs/ladder-1-strength-ladder.md)). Viable on the existing write path and typed quantities, but it needs the engine, a day-load source and an ADR first; filed under plan.md → Later, not scheduled.
