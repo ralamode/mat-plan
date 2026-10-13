@@ -907,6 +907,79 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
 ## Later — ideas captured, not scoped
 
+- **SYNTH-1 — a synthetic household generator, and EVAL-0 grown into the eval harness every AI
+  feature reports into.** _(captured 2026-10-12, not scoped.)_ [EVAL-0](./plans/eval-0-gate-before-model.md)
+  is planned as AI-1's two gates: accuracy, and a binary never-emits-a-load invariant. Every AI row
+  below needs the same harness with different fixtures, and every fixture must be **synthetic**,
+  because this repo is public and holds minors' data (`docs/plan.md` → AI-1 already requires it).
+  - **The generator** produces realistic fake households: athletes across ages, logs with gaps and
+    mis-taps, practice weeks, typed-in notes and short voice clips. It is seeded and deterministic, so
+    every fixture is reproducible. It replaces hand-written cases and also seeds previews and demos
+    without a real family's data.
+  - **The harness** carries three gate kinds: **accuracy** (scalar threshold per field),
+    **invariants** (binary, 100%, such as never-emits-a-load, never answers outside the approved
+    corpus, never writes without a confirm), and **budget** (cost and latency per case, so a prompt
+    change that triples spend fails CI like a broken test). An LLM judge is used only where no exact
+    answer exists, and the judge itself is checked against a small hand-labelled set.
+  - **Order:** the EVAL-0 phases as planned, then the generator, then each AI row brings its own
+    fixtures. Nothing here calls a model in CI on a PR without a cost cap. Owner pillar: Platform.
+
+- **MCP-1 — an MCP server so Claude reads the app's data directly.** _(captured 2026-10-12, not
+  scoped.)_ The v3 row's "MCP/REST API so Claude fetches from the app", given an id. Today the
+  maintainer's Claude workflow reads **CSV exports** ([csv-export-contract.md](./csv-export-contract.md));
+  an MCP server replaces the export round-trip with live, scoped reads.
+  - **Resources (read):** a household's athletes, a date range of entries with typed quantities, the
+    program and its prescriptions, and (later) ladder positions. Shapes come from the existing DTOs,
+    never raw rows.
+  - **Tools:** typed, household-scoped queries (`get_entries(profile, from, to)`, `get_program(...)`),
+    never free-form SQL. **Writes:** none at first. SECURITY.md allows "reads + one narrow write", and
+    that write is spent deliberately later, if ever.
+  - **Auth:** a separate, revocable, least-privilege token per household, never the human session
+    (SECURITY.md → MCP). Kid bodyweight is excluded by default. Every call is logged with the token id.
+  - **Transport:** Streamable HTTP from a Route Handler (the read path), rate-limited, Node runtime.
+  - **Privacy:** data leaves to the token holder's Claude client, and so to Anthropic under that
+    account. The notice and [data-inventory.md](./privacy/data-inventory.md) must say so before it
+    ships. `privacy-reviewer` on every PR. **Depends on AUTH-1** (an identity to issue tokens to).
+    Owner pillar: Insight (it is the export's successor).
+
+- **VOICE-1 — per-set voice logging, extraction only.** _(captured 2026-10-12, not scoped.)_ The
+  [AI-1](#ai-1--nl-logging-plan) idea fitted to the real constraint: an athlete with taped fingers and
+  20 seconds between sets. Press and hold, say "ten, ten, eight", and the set rows fill. One tap
+  confirms.
+  - **Pipeline:** speech-to-text → Anthropic structured output into the **existing** set schema (typed
+    quantities from GAP-3) → confirm chip → the existing writer with its `client_id` idempotency.
+    Nothing new on the write path.
+  - **Rules:** it **records what was done and never suggests what is next** (the no-loads rule). It
+    never writes without the confirm tap. A low-confidence parse shows the uncertain field highlighted
+    instead of guessing.
+  - **Evals (SYNTH-1):** field-level precision/recall on synthetic clips, including gym noise, accents
+    and corrections ("ten, no, nine"). The never-emits-a-load invariant from EVAL-0 applies unchanged.
+  - **Privacy:** audio is a new data class. Transcribe and discard; the clip is never stored. The
+    processor goes in the notice.
+  - **Order:** behind AI-1's own gate, which is **PICK-1 usage data** (AI-1 is parked until ad-hoc
+    logging is shown to happen). Voice may change that calculus, because typing was the barrier. That
+    is the question to answer first, not assume. Owner pillar: Logging & Measurement.
+
+- **SENTINEL-1 — a safety sentinel: rules decide, the model explains, the parent is told.**
+  _(captured 2026-10-12, not scoped.)_ Deterministic checks on data the app already holds: bodyweight
+  loss rate against the high-school weight-management limit (about 1.5% per week), a sudden spike in
+  training volume, and (with height logging) growth-spurt awareness, when technique and load
+  tolerance drop. The model's only jobs are classifying free-text notes ("knee hurts") and writing the
+  alert in plain language.
+  - **Never advice:** no diet, no cut plan, no medical claim. It flags and points to a coach or
+    clinician. Parent view only, never on a child's screen.
+  - **Privacy:** bodyweight is privileged data. Rules must be opt-in per athlete, and the inventory
+    gains whatever height logging adds. `privacy-reviewer` on every PR. Owner pillar: Insight.
+
+- **ASK-1 — "ask the playbook": grounded Q&A over coach-approved content.** _(captured 2026-10-12,
+  not scoped.)_ A parent who is not a coach will ask questions anyway ("can he lift the day after a
+  tournament?"). Answers come **only** from signed-off documents, with the source shown under the
+  answer. If nothing approved answers it, the reply is "ask your coach", by design.
+  - **Evals (SYNTH-1):** answer faithfulness against the cited passage, and a **refusal** invariant on
+    out-of-corpus and unsafe questions.
+  - **Content first:** without a signed-off corpus there is nothing to ground in. The same sign-off
+    convention as the Daily Five. Owner pillar: Insight.
+
 - **LADDER-1 — Strength Ladder: an adaptive calisthenics progression.** _(captured 2026-10-11, not
   scoped.)_ Ordered ladders of steps per movement family, a current step per athlete, a placement
   test, and a deterministic "two clean sessions + a human form check → advance" rule, with volume that
