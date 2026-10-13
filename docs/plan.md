@@ -1671,7 +1671,18 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   far broader than `OSS-1`'s audit records — ~50 files, raised to **P0**, and `OSS-1`'s audit
   conclusion is now wrong. See `OSS-1` and [data-inventory.md](./privacy/data-inventory.md) §9.
 
-- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.** The real `AUTH-1` gate: the
+- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.**
+  ✅ **Planned** ([plan](./plans/priv-2-serve-the-notice.md), 2026-10-13), and the plan splits it into
+  **two PRs**. First a docs-only `docs(priv-1)` that fills the blanks — there are **five** `⏳`, not
+  four, and one of them is a _paragraph_ to delete rather than a cell to fill — and corrects **three
+  factual errors** in the notice: it says _"there are no public pages"_, which this row makes false
+  (and the notice's own re-review trigger is "anything is made publicly visible"); its 7-day restore
+  promise contradicts both `runbooks.md` and its own next paragraph, in the **only** place the notice
+  quantifies retention; and the sign-off is an unfilled blank form. Then `feat(priv-2)`, which opens
+  **green**. The six-lens panel killed the first draft's "one PR, with a red merge gate for the PR's
+  life": `.husky/pre-push` runs `pnpm test` with no `set -e`, and `verify` is one `&&` chain with
+  `test` **fourth of ten**, so **`audit:check` would never run** on the PR whose supply-chain argument
+  rests on it. Build-time generation with a byte-exact drift test stands. The real `AUTH-1` gate: the
   Clerk and Google consent screens need a reachable privacy-policy URL. A page, one entry in
   `PUBLIC_PATHS` (`apps/web/lib/access-gate.ts` — the single definition), a footer link, one UX
   reviewer. ⚠️ **Not a one-file PR:** there is **no markdown pipeline in the tree**, so it must
@@ -1679,7 +1690,8 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   keep two copies of a privacy notice — the recommendation is the former, and it is the maintainer's
   call ([plan](./plans/priv-1-privacy-review.md) → Alternatives). Static or generated only — never a
   file read keyed on a request param. **Its acceptance also carries PRIV-1's four unfilled blanks:**
-  the Neon / Sentry / Vercel retention windows and the contact route. _(Beta 0.)_
+  the Neon / Sentry / Vercel retention windows and the contact route — reassigned by the plan to the
+  **first** PR, so they are not a gate on the one that ships code. _(Beta 0.)_
 
 - **PRIV-3 — the household deletion as a guarded script, with a `db:verify` proof.** Wraps
   [runbooks.md](./runbooks.md)'s procedure so the dry run, the target-host print and the
