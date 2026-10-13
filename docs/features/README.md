@@ -22,7 +22,8 @@ _worse_ than no guide, because it gets trusted instead of verified.
 
 **Escape hatch:** the `docs-skip-feature-map` PR label, mirroring `ci-skip-e2e`. For a change that
 genuinely does not affect the guide — a typo, a comment, a dependency bump that touches an owned
-file. Use it sparingly; it is visible on the PR, which is the point.
+file. Use it sparingly; it is visible on the PR, which is the point. Push after adding it: a re-run
+does not see a new label ([AGENTS.md](../../AGENTS.md) → "CI checks").
 
 Run it locally before opening a PR:
 

@@ -51,7 +51,9 @@ chmod +x "$tmp/bin/gh"
 # --no-local: a path clone hardlinks the whole object store, so every SHA would be present and the
 # head-moved refetch (step 2) could never be exercised.
 fresh() { rm -rf "$tmp/repo" "$tmp/out"; git clone -q --no-local "$tmp/origin.git" "$tmp/repo"; }
-run() { (cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_OUTPUT="$tmp/gho" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); }
+# GITHUB_OUTPUT and GITHUB_STEP_SUMMARY always point at scratch files: under CI the runner sets both,
+# and a refusal case would otherwise write into the REAL job summary of a green run (DX-5(b)).
+run() { (cd "$tmp/repo" && PATH="$tmp/bin:$PATH" GITHUB_OUTPUT="$tmp/gho" GITHUB_STEP_SUMMARY="$tmp/summary" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); }
 
 # 1. The hostile PR is materialised as inert data.
 fresh
@@ -76,7 +78,7 @@ run && ok "a re-run replaces the old head cleanly" || bad "re-run failed: $(cat 
 # 1a. The fail-closed re-check: if the rename silently does nothing, the prefetch must refuse.
 mkdir -p "$tmp/nomv" && printf '#!/bin/sh\nexit 0\n' >"$tmp/nomv/mv" && chmod +x "$tmp/nomv/mv"
 fresh
-if (cd "$tmp/repo" && PATH="$tmp/nomv:$tmp/bin:$PATH" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); then bad "a failed rename was not caught"
+if (cd "$tmp/repo" && PATH="$tmp/nomv:$tmp/bin:$PATH" GITHUB_OUTPUT="$tmp/gho" GITHUB_STEP_SUMMARY="$tmp/summary" bash .github/scripts/review-prefetch.sh 7 "$tmp/out" >"$tmp/log" 2>&1); then bad "a failed rename was not caught"
 elif grep -q 'survived neutralisation' "$tmp/log"; then ok "a rename that fails → refuse (fail-closed re-check)"
 else bad "refused, but not by the re-check: $(tail -1 "$tmp/log")"; fi
 
@@ -94,13 +96,23 @@ grep -qx "head-moved-to=$(cat "$tmp/moved") (these checks are for that head, not
 rm -f "$tmp/moved"
 
 # 2. The settings guard fails closed on a base that could widen the model's session.
+# A refusal must reach the step summary (the run page shows why), and an allow must leave it empty.
+summary_matches() { # <name> <want-exit>
+  if [ "$2" -ne 0 ]; then
+    grep -q '^\*\*review-prefetch refused:\*\*' "$tmp/summary" && ok "$1: refusal recorded in the step summary" || bad "$1: refusal missing from the step summary"
+  else
+    [ ! -s "$tmp/summary" ] && ok "$1: step summary left empty" || bad "$1: an allow wrote to the step summary: $(cat "$tmp/summary")"
+  fi
+}
 guard_case() { # <name> <file> <content> <want-exit> [untracked]: committed on the base unless "untracked"
   fresh
   mkdir -p "$(dirname "$tmp/repo/$2")" && printf '%s' "$3" >"$tmp/repo/$2"
   [ "${5:-}" = untracked ] || (cd "$tmp/repo" && g add -A -f && g commit -qm base-config) # -f: global ignores may hide settings.local.json
+  : >"$tmp/summary"
   run
   code=$?
   if [ "$code" -eq "$4" ]; then ok "$1"; else bad "$1: want exit $4, got $code: $(tail -1 "$tmp/log")"; fi
+  summary_matches "$1" "$4"
 }
 guard_case "base .mcp.json → refuse" .mcp.json '{}' 1
 guard_case "base settings.local.json → refuse" .claude/settings.local.json '{}' 1
@@ -111,9 +123,11 @@ guard_case_hooks() { # <name> <hook-body> <want-exit>: the real settings.json, w
   mkdir -p "$tmp/repo/.claude/hooks" && cp "$real/.claude/settings.json" "$tmp/repo/.claude/"
   for f in guard-main-checkout.mjs session-context.mjs; do printf '%s\n' "$2" >"$tmp/repo/.claude/hooks/$f"; done
   (cd "$tmp/repo" && g add -A && g commit -qm hooks)
+  : >"$tmp/summary"
   run
   code=$?
   if [ "$code" -eq "$3" ]; then ok "$1"; else bad "$1: want exit $3, got $code: $(tail -1 "$tmp/log")"; fi
+  summary_matches "$1" "$3"
 }
 guard_case "base settings.json whose hook command is an ARRAY → refuse" .claude/settings.json '{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":["node a","node b"]}]}]}}' 1
 guard_case "an UNTRACKED local settings.local.json (a person's own) → allow" .claude/settings.local.json '{}' 0 untracked

@@ -270,7 +270,8 @@ The deletion procedure is [runbooks.md](./docs/runbooks.md) → "Delete a househ
 - **Status rides with the work.** In the **same PR** as the change it tracks, add a changelog
   fragment ([docs/changelog/](./docs/changelog/README.md), one file per change, so PRs never conflict
   on it) and update `docs/status.md`'s "where we are" pointer and backlog row if the change moves
-  them. No separate status-bump PRs. `pnpm status:check` checks the fragment.
+  them. No separate status-bump PRs. `pnpm status:check` checks the fragment (where it runs: "Local hooks vs
+  CI merge-gates" below).
 - **Implementation plans for significant PRs.** A **significant** PR gets a committed file-by-file
   plan at `docs/plans/<id>-<slug>.md`, written and **reviewed before** implementation code is
   committed (the Plan agent drafts it; a human reviews it). "Significant" = the change touches CI, a
@@ -345,7 +346,8 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   build, as does a guide claiming to own a file that no longer exists (so a rename cannot silently
   drop coverage). Run it yourself with `pnpm guides:check`.
 - **Escape hatch:** the `docs-skip-feature-map` PR label, mirroring `ci-skip-e2e`, for a change that
-  genuinely does not affect the guide. Visible on the PR by design; use it sparingly.
+  genuinely does not affect the guide. Visible on the PR by design; use it sparingly. Push after
+  adding it (see "CI checks" → labels).
 - **A guide is not a changelog or an API dump.** It holds what you would want to have been told.
   Link to the plan/ADR for reasoning rather than restating it — duplicated prose goes stale first.
 
@@ -365,10 +367,13 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   excuse to skip it.
   `db:mutations` (TEN-1 1b, +~5s) applies each committed patch in `packages/db/scripts/mutations/`,
   runs `db:verify`, and asserts it goes **RED** — a boundary test that cannot fail is counted as
-  coverage, which is worse than no test. Local-only, like `skills:check`.
-  `skills:check` and `guards:test` run **only here, not in CI** (`ci.yml` doesn't run them; wiring them
-  in is a CI change that needs its own plan — SEC-5 did the audit third of it). `actions:check`
-  (offline) and `audit:check` run in both, from the same single definition. `db:verify` runs on
+  coverage, which is worse than no test. **Local-only.**
+  **This section is the one list of where each gate runs**; other docs point here rather than
+  restating it. `skills:check`, `guards:test` (all nine guard self-tests) and `audit:check` run here
+  **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
+  on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)). `actions:check` runs here
+  as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
+  workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.
   **Not covered by it:** `next build` (slower, CI-only), the Playwright smoke (its own command —
   see the next bullet), gitleaks, and the forward-only guard (inherently a diff-against-base check).
@@ -383,8 +388,13 @@ across two or more packages, it earns one. Today: strength logging, the write pa
 - **CI checks** (⚠️ **none is a required status check**, so a red PR can still be merged; the
   `review-pr` shipit bar, "CI green", is what holds the line; verified via the API, 2026-09-30):
   typecheck · lint · `prettier --check` · full test suite ·
-  `next build` · gitleaks · (DB) drift check + `db:verify` · **the production audit** (`audit:check`,
-  plus its own self-test before the install). CI re-runs everything regardless of hooks.
+  `next build` · gitleaks · (DB) drift check + `db:verify` · **the production audit** (`audit:check`;
+  its self-test runs in `guards:test`) · `skills:check` · `guards:test` · `status:check` (PRs). CI
+  re-runs everything regardless of hooks.
+  **Skip labels are read from the PR event, so after adding one, PUSH (an empty commit is fine). A
+  re-run replays the old event and will not see it** (PR #67; [lessons](./docs/lessons.md) → GitHub /
+  PRs). The labels: `ci-skip-e2e`, `docs-skip-feature-map`, `docs-skip-changelog`
+  ([the rule](./docs/changelog/README.md)).
   Plus **forward-only** + **Squawk** on new migrations, and **action pins** (offline on every run,
   `--resolve` when a workflow changes; the rule is in [SECURITY.md](./.github/SECURITY.md) → Supply
   chain). The audit's rule lives in the same place — scope, threshold and trigger — and the guard
@@ -407,7 +417,7 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   always runs but **auto-skips the smoke (still reporting success) when every changed file is provably
   inert** — docs, root markdown, `.claude/`, GitHub templates, images (conservative allowlist,
   default-to-run: any app/package/workflow/config/lockfile file forces the smoke). **Manually override
-  a required `e2e`** two ways: add the **`ci-skip-e2e` label** to the PR (skips the smoke but still
+  a required `e2e`** two ways: add the **`ci-skip-e2e` label** to the PR, then push (skips the smoke but still
   reports success — for a known-flaky or e2e-irrelevant change that _does_ touch code), or an **admin
   merge** (branch-protection bypass) as the last-resort escalation. Prefer the label so the intent is
   visible on the PR; use it sparingly — a red `e2e` usually means a real bug. The skip is always
