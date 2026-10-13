@@ -17,6 +17,12 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
+    env:
+      # pnpm 11 defaults verify-deps-before-run to `install`: the first `pnpm run`
+      # in a fresh checkout would silently `pnpm install` (no --frozen-lockfile)
+      # before the explicit Install step below. Off for the whole job; after
+      # Install it is moot. DX-5(b), docs/lessons.md → pnpm.
+      pnpm_config_verify_deps_before_run: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -260,6 +266,17 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      # ── Local gates in CI (DX-5(b); docs/plans/dx-5b-local-gates-in-ci.md) ──
+      # Through pnpm, so package.json stays the single definition. Steps that must
+      # run before `Setup pnpm` (action pins, feature guides) call `node` directly;
+      # that is the only exception. These are integrity checks for honest authors,
+      # not a security boundary: a PR runs its own copy of every script here.
+      - name: Guard self-tests
+        run: pnpm guards:test
+
+      - name: Assert the guards installed nothing
+        run: test ! -e node_modules || { echo '::error::a guard step ran pnpm install'; exit 1; }
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
