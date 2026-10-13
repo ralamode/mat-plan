@@ -244,20 +244,6 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
 
-      # ── Audit guard self-test (SEC-5; .github/scripts/check-audit.test.sh) ────
-      #
-      # The guard is the gate; this proves the guard. Shipping a guard whose
-      # self-test only ever runs locally would reproduce the smell docs/plan.md
-      # records about SEC-2, in the same PR that complains about it.
-      #
-      # Needs no pnpm/node install: bash + the runner's node + crafted fixtures,
-      # and the one case that exercises the spawn path shims `pnpm` on PATH. It
-      # runs BEFORE the setup steps so a broken guard fails in seconds.
-      #
-      # DX-5(b) deletes this step when it wires `guards:test` into CI.
-      - name: Audit guard self-test
-        run: bash .github/scripts/check-audit.test.sh
-
       - name: Setup pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
@@ -272,6 +258,26 @@ jobs:
       # run before `Setup pnpm` (action pins, feature guides) call `node` directly;
       # that is the only exception. These are integrity checks for honest authors,
       # not a security boundary: a PR runs its own copy of every script here.
+      - name: Skills guard
+        run: pnpm skills:check
+
+      - name: Status guard (changelog fragment)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Step-level, never job-level: the status self-test (in "Guard
+          # self-tests") never sets STATUS_BRANCH, so a job-level one would leak
+          # into its detached-HEAD cases. Passed via env only, never into run:,
+          # because head_ref is attacker-controlled on a fork PR.
+          STATUS_BRANCH: ${{ github.head_ref }}
+          # Read from the event payload, so the label takes effect on the NEXT
+          # PUSH, not on a re-run (AGENTS.md → CI checks). The literal mirrors
+          # SKIP_LABEL in check-status-touched.mjs; its self-test pins both.
+          STATUS_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip-changelog') && 'docs-skip-changelog label' || '' }}
+        run: pnpm status:check "$BASE_SHA"
+
+      # Includes check-audit.test.sh and check-action-pins.test.sh (suites 7-8);
+      # SEC-5's standalone audit self-test step is gone.
       - name: Guard self-tests
         run: pnpm guards:test
 

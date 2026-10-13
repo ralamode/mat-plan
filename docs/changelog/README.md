@@ -8,7 +8,13 @@ at the top of `docs/status.md` → Changelog, and each merge re-conflicted every
 
 A product branch (`feat|fix|db|perf|refactor|revert`) **adds** one file here, in the same PR as the
 change. Docs and chore PRs usually write one too. `pnpm status:check` enforces it for product
-branches (`STATUS_SKIP="<why>"` overrides, visibly).
+branches, locally and on every PR.
+
+**Skipping it, visibly.** Locally: `STATUS_SKIP="<why>" pnpm status:check`. On a PR: the
+**`docs-skip-changelog`** label, with the one-line reason in the PR description. The label sets
+`STATUS_SKIP` in CI; it never bypasses the frozen-history check below. For when a label takes effect
+(after a push, not a re-run), see [AGENTS.md](../../AGENTS.md) → "CI checks". Use it for a product
+branch that genuinely moves nothing a reader of the changelog would want, never to save writing one.
 
 **Name:** `<YYYY-MM-DD>-<branch>.md`, where `<branch>` is the full branch name with `/` → `-`, and the
 date is the day you wrote it (for an entry moved out of the old history, keep its own date):
