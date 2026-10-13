@@ -355,10 +355,12 @@ Real ones, each with the file to look at.
   household types belongs to that household, and a session the seam then refuses leaves its catalog
   row in the **caller's own** namespace: garbage the deletion procedure removes, not a cross-tenant
   write. Moving the call inside the transaction is `TEN-2b-1`; `entries.test.ts` pins the current
-  order deliberately. ⚠️ **One leak survives to `TEN-2c`** (the non-partial `movements_slug_unique`
-  forbids two households a row for one slug, so the second typist is handed the first's row), which is
-  why `db:verify` → _"TEN-1 1d: the catalog verdict"_ still reads `LEAKS`. It runs that core in both
-  directions and asserts, against a real database:
+  order deliberately. ✅ **`TEN-2c` dropped the non-partial `movements_slug_unique`, so the second
+  typist now gets their own row and the denial window is closed.** ⚠️ One residual survives — the
+  **pre-`TEN-2b`** rows still at `household_id IS NULL`, which global-first serves to every household
+  — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via
+  `movements_global_row_has_pattern`. `db:verify` → _"TEN-1 1d: the catalog verdict"_ names both
+  halves. It runs that core in both directions and asserts, against a real database:
 
   - **the read leak** — one household typing a movement is handed another household's row, with its
     `name`, `is_bodyweight` and `unit_default`. A free-text name that slugs onto a **catalog** row

@@ -52,11 +52,26 @@ const host = (() => {
 const pool = createDbPool(url);
 const db = createDb(pool);
 
+// TEN-2c: a `kind: 'report'` entry only READS, with or without `--apply`, so all three of the
+// runner's write-shaped strings would be lies about it — "already corrected, or the guard did not
+// match" on an empty result (for a reporter that is the GOOD outcome, reported as the wrong thing),
+// and "Re-run with --apply to write them" on a non-empty one (a reporter can never do that). One
+// discriminator, branched here, rather than each reporter hedging its own output lines.
+const isReport = correction.kind === 'report';
+
 console.log(`\n${correction.name}`);
 console.log(`  ${correction.what}`);
 console.log(`  cause: ${correction.issue}`);
 console.log(`  target: ${host}`);
-console.log(`  mode: ${apply ? 'APPLY — this writes' : 'dry run — nothing will be written'}\n`);
+console.log(
+  `  mode: ${
+    isReport
+      ? 'REPORT ONLY — this reads and never writes, with or without --apply'
+      : apply
+        ? 'APPLY — this writes'
+        : 'dry run — nothing will be written'
+  }\n`,
+);
 
 // A correction may REFUSE. `bodyweight-duplicates-2026-09-30` is the first one designed to:
 // its guard throws when a target row has moved since the read, and when the row it is keeping has
@@ -70,13 +85,19 @@ try {
     // Not an error: a guarded correction that matches nothing has almost certainly already run.
     // A correction that cannot tell "already applied" from "the guard refused" should say so from
     // inside `run` — see the bodyweight one, which throws rather than returning nothing.
-    console.log('No matching rows — already corrected, or the guard did not match. Nothing to do.');
-  } else {
-    for (const line of changes) console.log(`  ${apply ? '✓' : '·'} ${line}`);
     console.log(
-      apply
-        ? `\n✓ applied ${changes.length} change(s).`
-        : `\n${changes.length} change(s) would be made. Re-run with --apply to write them.`,
+      isReport
+        ? 'Nothing to report — this census found no rows in any of the shapes it counts.'
+        : 'No matching rows — already corrected, or the guard did not match. Nothing to do.',
+    );
+  } else {
+    for (const line of changes) console.log(`  ${isReport ? '·' : apply ? '✓' : '·'} ${line}`);
+    console.log(
+      isReport
+        ? `\n${changes.length} line(s) reported. Nothing to apply — this entry only reads.`
+        : apply
+          ? `\n✓ applied ${changes.length} change(s).`
+          : `\n${changes.length} change(s) would be made. Re-run with --apply to write them.`,
     );
   }
 } catch (err) {

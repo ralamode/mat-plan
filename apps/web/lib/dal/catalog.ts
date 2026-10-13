@@ -98,11 +98,9 @@ export async function assertMetricKeyExists(key: string): Promise<string> {
  * changing anything here**: it holds the resolution order, why it is not household-first, and the
  * one residual below.
  *
- * ⚠️ **One leak survives to TEN-2c, deliberately.** While the non-partial `movements_slug_unique`
- * lives, two households cannot both hold a row for one slug, so the core's `23505` fallback hands the
- * second household the first's row — the pre-existing read leak, kept in preference to a permanent
- * write failure, and it leaves a cross-household `entries.movement_id` that blocks household deletion
- * (`docs/runbooks.md` step 11). TEN-1 1d records the verdict; **TEN-2c** closes it.
+ * ✅ **TEN-2c closed the DENIAL window** — `0017` dropped `movements_slug_unique`, so each household
+ * now holds its own row for a slug and the core's `23505` fallback is unreachable (kept one more PR
+ * for the deploy race, `TEN-2d`). ⚠️ **One residual survives:** the **pre-2b** rows still at `household_id IS NULL`, which global-first serves to every household — closing at **`TEN-2c-1`** (the split backfill). `0017` only stops it growing, via `movements_global_row_has_pattern`.
  */
 export async function findOrCreateMovementId(scope: HouseholdScope, name: string): Promise<number> {
   return findOrCreateMovement(db, scope, name);

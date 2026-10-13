@@ -36,9 +36,11 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   up, each sentence was independently false and had to be edited anyway. The shape that would have
   worked is a pointer carrying **no status at all** (_"see data-inventory.md §4"_, full stop). Charged
   to nobody; the lesson is for the next arc that tries this, and TEN-2c inherits the same cost.
-- **Still open — one copy deliberately deferred to TEN-2c:**
-  `docs/decisions/0006-household-addressing.md`, where the sentence supports a conclusion that is
-  still true (the leak does not close until 2c). ✅ **`.github/SECURITY.md` and
+- ✅ **Paid off at TEN-2c:** `docs/decisions/0006-household-addressing.md` carries a dated superseding
+  note, and the present-tense "until TEN-2c" sites were swept — each replaced with a status-free
+  pointer or the two-window statement, so `TEN-2c-1` and `TEN-2d` do not inherit the sweep.
+  ⚠️ **The prediction above was wrong twice:** it said 2b and 2c would each edit two files; 2b edited
+  a dozen and 2c about fifteen.
   `docs/milestones/beta-1.md` were paid off by TEN-2b instead of 2c**: `SECURITY.md`'s was an
   exception bullet under _"These rules are MANDATORY"_ telling the next agent an unscoped write to
   this table was permitted, which stopped being true in the PR that scoped it, and `beta-1.md`'s sat

@@ -120,6 +120,13 @@
       "when": 1791632030000,
       "tag": "0016_ten2b_validate_movements_household",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791832169835,
+      "tag": "0017_ten2c_drop_global_slug_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -492,6 +492,9 @@ re-litigated by the next author.
 
 `findOrCreateMovementId` reuses another household's `movements` row on a slug clash, so B's free-text
 "RDL" takes A's unit and bodyweight flag. **Addressing changes nothing:** the cause is schema —
+_(Superseded, TEN-2c, 2026-10-12: `movements.household_id` exists since migration `0015`, the resolver
+is household-scoped since `0016`, and `0017` dropped the global `slug` UNIQUE. The conclusion below —
+that addressing was not the cause — still stands; its premise is history.)_
 `movements` has no `household_id` column at all (`apps/web/lib/dal/catalog.ts:76-90`;
 `packages/db/src/schema.ts:417-438`), which is why TEN-1's plan calls it _"unscopable"_
 (`ten-1-household-scope.md` → "Entry points"). A URL segment could not scope a writer that never reads a URL, and

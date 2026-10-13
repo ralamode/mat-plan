@@ -1251,24 +1251,31 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   `VALIDATE`d. ✅ **Two of the three defects below are CLOSED**: a session write the seam refuses now
   leaves its row in the **caller's own** namespace (garbage, not a cross-tenant write), and the other
   household's Today card can no longer render it — `seedProgram` **refuses** loudly instead.
-  🔴 **The verdict is still `LEAKS`, and one leak is left.** The non-partial `movements_slug_unique`
-  forbids two households a row for one slug, so the second household to type a name is handed the
-  first's row via a `23505` fallback — chosen over failing a child's session write. **The leak closes
-  at TEN-2c**, when the constraint goes **and** the pre-existing app-authored rows leave the global
-  namespace; dropping the UNIQUE alone closes nothing — it only _permits_ two namespaces.
+  ✅ **The DENIAL window is CLOSED as of TEN-2c** (migration `0017`, merged 2026-10-12): the
+  non-partial `movements_slug_unique` forbade two households a row for one slug, so the second
+  household to type a name was handed the first's row via a `23505` fallback — chosen over failing a
+  child's session write. The constraint is gone, each household holds its own row, and the fallback is
+  unreachable (`TEN-2d` deletes it).
+  🔴 **The READ leak's RESIDUAL is still open, and `TEN-2c` closed none of it.** Every `movements`
+  row already sitting at `household_id IS NULL` that is not a curated catalog row is still resolved by
+  global-first for **every** household. Dropping the UNIQUE only _permitted_ two namespaces;
+  **`TEN-2c-1`** (the split backfill) is what moves those rows out of the global one, and `0017` only
+  stops the set growing, via `movements_global_row_has_pattern` (`NOT VALID` until `TEN-2d`).
   ⚠️ **TEN-2b measured a price TEN-2a had asserted away:** that fallback leaves a cross-household
   `entries.movement_id`, which **aborts the household-deletion procedure** (`23503`). `schema.ts` no
   longer claims the reference is _"prevented by construction"_, and `runbooks.md` pre-flight (d) now
   carries a repair step. ⚠️ **TEN-2b deferred two items with new rows: `TEN-2b-1` and `TEN-2b-2`.**
-  🔴 **NAMED INVITE PRECONDITION: no second household may exist between TEN-2b's deploy and
-  TEN-2c's.** Not a leak caveat — a **cross-household denial primitive**: with global-first, household
-  A typing a novel name inserts `(household_id = A, slug = 'x')`, and B typing the same name then
-  violates the still-live non-partial `movements_slug_unique`, so `23505` propagates out of
-  `findOrCreateMovement` and **B's session write fails, permanently, for any name A typed first**. The
-  window is **structural** — it cannot be resequenced away (dropping the constraint in 2b fails every
-  write from code deployed before 2b; moving the writer into 2c just moves the boundary) — so the
-  control is the sequencing rule `SECURITY.md` and [beta-1.md](./milestones/beta-1.md) already carry,
-  plus 2b's `23505` fallback, which degrades the denial into the pre-existing read leak.
+  ✅ **The NAMED INVITE PRECONDITION _"no second household between TEN-2b's deploy and TEN-2c's"_ is
+  DISCHARGED.** It was not a leak caveat but a **cross-household denial primitive**: with global-first,
+  household A typing a novel name inserted `(household_id = A, slug = 'x')`, and B typing the same name
+  then violated the still-live non-partial `movements_slug_unique`, so `23505` propagated out of
+  `findOrCreateMovement` and **B's session write failed, permanently, for any name A typed first**. The
+  window was **structural** — it could not be resequenced away (dropping the constraint in 2b fails
+  every write from code deployed before 2b; moving the writer into 2c just moves the boundary) — so the
+  control was the sequencing rule plus 2b's `23505` fallback, which degraded the denial into the
+  pre-existing read leak. `0017` removed it structurally, and it was never reachable in production (the
+  scope resolver throws on a second live household). 🔴 **The invite precondition that remains is
+  `TEN-2d`'s `VALIDATE`** — the arc's only mechanical production-side gate — with `TEN-2c-1` before it.
   TEN-1 chunk 1d **proved**, in both directions against a real database, that one household is handed
   another's row; that whoever types a name **first** pins that slug's `name` / `is_bodyweight` /
   `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
@@ -1279,8 +1286,10 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   `entries.test.ts`), so any gate-holder's session write, even one the write core then refuses for
   any reason, commits its catalog text. TEN-2 may move the find-or-create inside the transaction,
   after the profile resolves. Expand (nullable `household_id` + partial unique indexes) → move every
-  slug conflict target and lookup onto them → contract (drop the global UNIQUE). Three PRs; it
-  carries a migration, so it needs its own plan and panel.
+  slug conflict target and lookup onto them → contract (drop the global UNIQUE) → split the residual
+  out of the global namespace → `VALIDATE` and delete the fallback. **FIVE rows, settled at TEN-2c**
+  (`2a`, `2b`, `2c`, `2c-1`, `2d`); each carries a migration or a correction, so each needs its own
+  plan and panel.
   **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
   two households before AUTH-1 (the resolver throws on a second live household), so the window opens
   the moment household #2 exists. Evidence, the alternative considered and the recommendation:
@@ -1416,9 +1425,12 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   non-orphan. ⚠️ Until it lands, `data-inventory.md` §8 records such rows as kept **indefinitely**,
   owned by this row — not unowned.
 
-- **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This is where the leak closes.**
-  📋 **Plan: [plans/ten-2c-drop-global-slug-unique.md](./plans/ten-2c-drop-global-slug-unique.md)** (2026-10-11) — six-lens panel, 17 blocking findings reconciled, 4 pushbacks. ⚠️ **This row's own title is the mis-attribution the plan retracts:** the drop closes the **denial** primitive; the **read** leak closes at `TEN-2c-1`, per this file's own TEN-2 row above and TEN-2a's plan.
-  _(Beta 0; TEN-2's third.)_
+- ✅ **TEN-2c — contract: drop the global `movements.slug` UNIQUE. This closes the cross-household
+  DENIAL window, NOT the read leak.** _(Beta 0; TEN-2's third of five; **merged 2026-10-12**.)_
+  📋 **Plan: [plans/ten-2c-drop-global-slug-unique.md](./plans/ten-2c-drop-global-slug-unique.md)** (2026-10-11) — six-lens panel, 17 blocking findings reconciled, 4 pushbacks, plus a round-3 re-review that caught a half-fix. ⚠️ **This row's ORIGINAL title — _"this is where the leak closes"_ — was the mis-attribution the plan retracts**, and it is retracted here: the drop closes the **denial** primitive; the **read** leak's residual closes at `TEN-2c-1`.
+  ✅ **RESULT:** migration `0017` dropped `movements_slug_unique` and added `movements_global_row_has_pattern` `NOT VALID`, so two households each hold their own row for one slug and the `23505` fallback is unreachable (deleted at `TEN-2d`); `db:verify` now proves `runbooks.md` pre-flight (d) reads **ZERO** across `entries` **and** `prescriptions` and that step 11's `DELETE FROM movements` **completes** instead of aborting `23503` — both inverted, not retired, with `db:mutations` 6/6 RED; the seed's shadow guard **inserts and warns** instead of filtering and throwing; and a **report-only** correction (`movements-ownership-2026-10-11`) counts what `TEN-2c-1` / `TEN-2b-2` / `TEN-2d` still owe, aggregate counts only. **The split backfill moved OUT to `TEN-2c-1`** and the `VALIDATE` + fallback deletion to `TEN-2d`, which is why TEN-2 is **five** rows. ⚠️ **[notice.md](./privacy/notice.md) needed no edit** — its _"while the catalogue is still being separated… a name that another household typed first is still shared with yours"_ remains true of the pre-2b rows until `TEN-2c-1`.
+  ⚠️ **The row below describes the work AS PLANNED; the split-backfill and `VALIDATE` paragraphs are
+  `TEN-2c-1`'s and `TEN-2d`'s, kept here as the reasoning they inherit.**
   🔴 **What TEN-2b handed this row, beyond what was already here.** (i) **The backfill**, moved here
   with its reasoning — and it owes **one** definition of "referenced", shared with `TEN-2b-2`'s hard
   `DELETE`: TEN-2b measured that a row referenced only by a **soft-deleted** entry otherwise strands at
@@ -1456,7 +1468,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   query then has to exclude. The end-state invariant is **`household_id IS NULL` ⟹ the row is a seeded
   catalog row**, and it gets **two layers**: (1) declared in the database as
   `CHECK (household_id IS NOT NULL OR pattern IS NOT NULL)` added **`NOT VALID`**, `VALIDATE`d in the
-  PR **after** (so TEN-2 may be four PRs, not three) — every seeded movement has a non-NULL `pattern`
+  PR **after** (`TEN-2d`; settled — TEN-2 is **five** rows) — every seeded movement has a non-NULL `pattern`
   and `findOrCreateMovement` can never write one; and (2) proved in `db:verify` as exact set membership
   in `MOVEMENT_SEED_PUBLIC_IDS`, which is the precise invariant the CHECK only approximates. ⚠️ The
   CHECK **cannot** land before 2c: today's `findOrCreateMovement` writes `household_id NULL` with no

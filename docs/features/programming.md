@@ -179,9 +179,10 @@ is what catches one that got in another way (`TEN-2b`'s `23505` fallback does cr
 [write-path](./write-path.md)).
 
 **What follows is the defect as it stood before `TEN-2b`**, kept because it is what the 1d proof
-asserts and because `TEN-2c` is where the last of it closes. The strength form writes `movements` from
-free text (`findOrCreateMovementId` → `packages/db/src/writers/movement-catalog.ts`), and prescriptions
-resolved by **slug** against a single global namespace — the same arbiter — so:
+asserts. `TEN-2c` closed the **denial** half; the read leak's residual closes at `TEN-2c-1`. The
+strength form writes `movements` from free text (`findOrCreateMovementId` →
+`packages/db/src/writers/movement-catalog.ts`), and prescriptions resolved by **slug** against a
+single global namespace — the same arbiter — so:
 
 - whichever household types a movement name **first** pins that slug's row permanently, with its own
   free text as `name`, `is_bodyweight: false` and no `unit_default` (all this function can write);

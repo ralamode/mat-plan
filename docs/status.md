@@ -3,14 +3,40 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-10
+**Last updated:** 2026-10-12
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
 
 ## Where we are right now
 
-🔴 **TEN-2b has landed: the movement writer is household-scoped, and the verdict is still `LEAKS`
+✅ **TEN-2c has landed: the cross-household DENIAL window is closed, and the READ leak's residual is
+not (2026-10-12).** Migration `0017` **dropped the non-partial `movements_slug_unique`** and added the
+end-state CHECK `movements_global_row_has_pattern`, `NOT VALID`. Two households now each hold their own
+row for one slug, so `findOrCreateMovement`'s `23505` fallback — the thing that handed the second
+typist the first's row — is **unreachable**; it survives one more PR for the deploy race, and
+`TEN-2d` deletes it. **The price `TEN-2b` measured is paid off, asserted rather than claimed:**
+`db:verify` proves `runbooks.md` pre-flight (d) reads **ZERO** across `entries` **and**
+`prescriptions`, and that step 11's `DELETE FROM movements` **completes** instead of aborting `23503`
+— both assertions **inverted rather than retired**, through one shared definition of _referenced_
+(`movement-ownership.ts`), which is what the pre-2c hand-written check missed: it covered `entries`
+and not `prescriptions`. `pnpm db:mutations` is still **6/6 RED**.
+🔴 **What this did NOT close, said plainly because the plan's own first draft said otherwise and the
+panel retracted it:** the **pre-`TEN-2b`** rows still sitting at `household_id IS NULL` are served to
+**every** household by global-first. That is the **read** leak's residual; it closes at **`TEN-2c-1`**
+(the split backfill), and `0017` only stops the set growing, via the new CHECK. 🔴 **The invite
+blocker is now `TEN-2d`** — the arc's only mechanical production-side gate — and **TEN-2 is FIVE
+rows, not three**: `2a`, `2b`, `2c`, `2c-1`, `2d`.
+Also: the seed's **shadow guard no longer throws.** It **inserts** the curated row and **warns** — the
+demotion had to be both halves, because the old guard filtered the shadowed slug out of the `VALUES`
+**before** the arbiter was consulted, so demoting only the `throw` would have left a silent, permanent
+gap in reference data. The warning names the **seed slug only**, never the household's free text,
+because `migrate.yml` publishes it to a world-readable Actions log. Plus a **report-only** correction,
+`movements-ownership-2026-10-11`, that counts what `TEN-2c-1` / `TEN-2b-2` / `TEN-2d` still owe —
+aggregate counts only, no `name` and no `slug`.
+[Plan](./plans/ten-2c-drop-global-slug-unique.md).
+
+🔴 **TEN-2b landed before it: the movement writer is household-scoped, and the verdict read `LEAKS`
 (2026-10-10).** `findOrCreateMovementId` takes a `HouseholdScope` and resolves **global-first** — the
 curated namespace (`household_id IS NULL`), then this household's own, then an insert into its own —
 `seedProgram` reads the global namespace only, and migration `0016` runs the FK's `VALIDATE`, flipping
@@ -20,22 +46,23 @@ write the household seam **refuses** now leaves its catalog row in the **caller'
 (garbage the deletion procedure removes, not a cross-tenant write), and a prescription can no longer
 resolve another household's movement — `seedProgram` **refuses** loudly, so 1d's poisoned-Today-card
 assertion is **inverted**, not deleted.
-🔴 **One leak survives to TEN-2c, by arithmetic rather than preference.** The non-partial
-`movements_slug_unique` means at most one row per slug exists in the whole table, so two households
-cannot both hold one: the reachable outcomes are "B is handed A's row" (the leak, via a `23505`
-fallback) or "B's write fails forever" (a denial). TEN-2a chose the leak; `db:verify`'s verdict stays
-`LEAKS` and mutation patch `04` stays RED — **regenerated**, because its hunk used the signature this
-PR rewrote, which is not the same as rewritten or retired.
+🔴 **One leak survived here, by arithmetic rather than preference** (closed above, at `TEN-2c`). The
+non-partial `movements_slug_unique` meant at most one row per slug existed in the whole table, so two
+households could not both hold one: the reachable outcomes were "B is handed A's row" (the leak, via a
+`23505` fallback) or "B's write fails forever" (a denial). TEN-2a chose the leak; `db:verify`'s verdict
+read `LEAKS` and mutation patch `04` stayed RED — **regenerated**, because its hunk used the signature
+that PR rewrote, which is not the same as rewritten or retired.
 🔴 **And TEN-2b measured a price TEN-2a had asserted away:** that fallback leaves a cross-household
 `entries.movement_id`, so the household-deletion procedure **aborts with `23503`**. The _"prevented by
 construction"_ claim was false in `schema.ts`, `runbooks.md`, `SECURITY.md` and `notice.md`; all four
 are corrected, pre-flight (d) gained a **repair step**, and `db:verify` asserts the abort.
 Also shipped: the seed's **shadow guard** (without it a curated catalog row is **silently** never
 inserted — Postgres infers both arbiters, so the global collision is absorbed and `db:seed` still
-reports success), non-wedging and with its own runbook heading. **No backfill** — deliberately moved to
-TEN-2c, because assigning a shared row to one household manufactures more of the cross-household
-references that abort deletion. Two items were deferred **with new backlog rows**, `TEN-2b-1` and
-`TEN-2b-2`, rather than left in a merged plan's prose.
+reports success), non-wedging and with its own runbook heading — **demoted to a warning at `TEN-2c`**,
+which is where its premise went. **No backfill** — deliberately deferred, because while the constraint
+lived, assigning a shared row to one household manufactured more of the cross-household references that
+abort deletion; `TEN-2c` made the split legal and **`TEN-2c-1`** performs it. Two items were deferred
+**with new backlog rows**, `TEN-2b-1` and `TEN-2b-2`, rather than left in a merged plan's prose.
 [Plan](./plans/ten-2b-scoped-movement-lookup.md).
 
 **TEN-2a landed first: `movements.household_id` exists, and shipped dark (2026-10-09).** The expand
@@ -49,9 +76,10 @@ the two namespaces are **separate**, and that **every** `movements` row is still
 NULL` after the whole run — including the rows the real `findOrCreateMovement` wrote.
 `apps/web/lib/movements-household-is-dark.test.ts` was the read-side half, and **TEN-2b deleted it** —
 the deletion being the visible edit that says the column is live.
-🔴 **The leak is unchanged, and the status lives in two places only** — this file's pointer, and
+🔴 **The leak was unchanged here, and the status lives in two places only** — this file's pointer, and
 [plan.md](./plan.md)'s TEN-2 row + [data-inventory.md](./privacy/data-inventory.md) §4, which every
-other mention now points at instead of restating. It closes at **TEN-2c**. ⚠️ TEN-2a also wrote the
+other mention now points at instead of restating. The **denial** half closed at `TEN-2c`; the **read**
+half's residual closes at **`TEN-2c-1`**. ⚠️ TEN-2a also wrote the
 **2b→2c cross-household denial window** into `beta-1.md`, `SECURITY.md` and both backlog rows as a
 named invite precondition, and fixed the **household-deletion runbook**, which this PR's FK would
 otherwise abort with `23503`. [Plan](./plans/ten-2a-household-movements.md).

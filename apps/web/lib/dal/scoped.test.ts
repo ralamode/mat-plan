@@ -135,10 +135,10 @@ const ALLOWED_UNSCOPED: Readonly<Record<string, string>> = {
   // and the dead-entry assertion below is what FORCED the removal, rather than leaving it standing
   // as coverage nobody re-earned. That is the mechanism working as designed, so do not re-add it.
   //
-  // ⚠️ **This does NOT mean "no residual", and this file must not read as if it does.** While the
-  // non-partial `movements_slug_unique` lives (until TEN-2c) two households cannot both hold a row
-  // for one slug, so that core's `23505` fallback hands the second household the first's row — the
-  // pre-existing read leak TEN-1 1d proved, kept deliberately in preference to a permanent write
+  // ⚠️ **This does NOT mean "no residual", and this file must not read as if it does.** TEN-2c dropped
+  // `movements_slug_unique`, so the denial window is closed and that core's `23505` fallback is
+  // unreachable (kept one more PR for the deploy race, TEN-2d). What survives is the pre-2b rows still
+  // at `household_id IS NULL`, which global-first serves to every household — closing at TEN-2c-1, the
   // failure. It is a **schema window, not a scoping gap**, which is why it is not an entry here:
   // it is recorded in `db:verify` → "TEN-1 1d: the catalog verdict" and in
   // `packages/db/src/writers/movement-catalog.ts`'s docblock.

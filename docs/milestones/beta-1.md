@@ -82,7 +82,7 @@ flowchart LR
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
-  T --> T2[TEN-2 · movements per household<br/>moved into Beta 0 by TEN-1's verdict]
+  T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ · 2c-1, 2d next]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
   T2 --> I
@@ -174,7 +174,8 @@ they are how to schedule any milestone, not facts about this one.
 - 🔴 **The one question this step asked and had to answer "no" to.** _"Either TEN-1 proves the picker
   and the metadata stay per household, or **TEN-2** moves into Beta 0."_ The **picker** is proved per
   household. The **metadata was not** (`TEN-2a`/`2b` have since given `movements` a scoped
-  `household_id`; one leak survives to `TEN-2c`): at the time, `movements` had no such column, so chunk 1d
+  `household_id` and `TEN-2c` dropped the global `slug` UNIQUE; the read leak's residual closes at
+  `TEN-2c-1`): at the time, `movements` had no such column, so chunk 1d
   proved — in both directions, against a real database — that one household is handed another's
   movement row, that whoever types a name **first** pins that slug's name / `is_bodyweight` /
   `unit_default` for everyone including on the other household's own correctly-scoped Today card, and
@@ -186,22 +187,28 @@ they are how to schedule any milestone, not facts about this one.
   maintainer's call. **Its deadline is step 4's invite, not AUTH-1's merge:** nothing can serve two
   households before AUTH-1 (the resolver **throws** on a second live household), and the window opens
   the moment household #2 exists — which is AUTH-1's _"a new user gets a new, empty household"_ plus
-  _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's three PRs block the invite and can run
+  _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's five rows block the invite and can run
   beside AUTH-1's dashboard and runbook work.
 
-  🔴 **A sharper invite precondition, named by TEN-2a: NO SECOND HOUSEHOLD MAY EXIST BETWEEN TEN-2b's
-  DEPLOY AND TEN-2c's.** Not a restatement of the above — a different and worse failure. With
-  TEN-2b's global-first resolver live and the non-partial `movements_slug_unique` still in place until
-  2c, household A typing a novel name inserts `(household_id = A, slug = 'x')`, and B typing the same
-  name then **violates that global constraint**, which is not the arbiter: `23505` propagates out of
-  `findOrCreateMovement` and **B's session write fails**. So in that window A can permanently deny B
-  the ability to log any movement name A typed first — a cross-household **availability** primitive,
-  inside the arc whose purpose is isolation. It is **structural**: both resequencings were considered
-  and rejected (dropping the constraint in 2b fails every write from code deployed before 2b with
-  `42P10`; moving the writer into 2c just moves the boundary). The real control is therefore the
-  **schedule**, with 2b's `23505` fallback degrading the denial into the pre-existing read leak.
+  ✅ **The sharper invite precondition TEN-2a named is CLOSED, by `TEN-2c` (2026-10-12).** It read
+  _"NO SECOND HOUSEHOLD MAY EXIST BETWEEN TEN-2b's DEPLOY AND TEN-2c's"_, and it was a different and
+  worse failure than the leak: with TEN-2b's global-first resolver live and the non-partial
+  `movements_slug_unique` still in place, household A typing a novel name inserted
+  `(household_id = A, slug = 'x')`, and B typing the same name then **violated that global
+  constraint**, which was not the arbiter — `23505` propagated out of `findOrCreateMovement` and **B's
+  session write failed**. So in that window A could permanently deny B the ability to log any movement
+  name A typed first: a cross-household **availability** primitive, inside the arc whose purpose is
+  isolation. It was **structural** — both resequencings were considered and rejected (dropping the
+  constraint in 2b fails every write from code deployed before 2b with `42P10`; moving the writer into
+  2c just moves the boundary) — so the control was the **schedule**, with 2b's `23505` fallback
+  degrading the denial into the pre-existing read leak. **Migration `0017` removed it structurally**:
+  the two partial indexes are the only arbiters now, so B's own row simply inserts, and the window was
+  never reachable in production (the scope resolver throws on a second live household).
   Reasoning: [TEN-2a's plan](../plans/ten-2a-household-movements.md) → _"The 2b→2c window"_.
-  ⚠️ **TEN-2 may be FOUR PRs, not three**: 2c's `NOT VALID` CHECK needs its `VALIDATE` in the PR after.
+  ✅ **And this settles the PR count: TEN-2 is FIVE rows, not three or four** — `2a`, `2b`, `2c`,
+  `2c-1` (the split backfill) and `2d` (the `VALIDATE` plus the fallback's deletion), all filed in
+  [plan.md](../plan.md). 🔴 **The invite blocker is now `TEN-2d`**, the arc's only mechanical
+  production-side gate.
 
 - ✅ **TEN-2a has landed (2026-10-09):** `movements.household_id` + the two partial unique indexes,
   **dark** — no reader, no writer, the global `slug` UNIQUE untouched, every row proved still `NULL`.
@@ -211,17 +218,33 @@ they are how to schedule any milestone, not facts about this one.
   [Plan](../plans/ten-2b-scoped-movement-lookup.md). **Two of chunk 1d's three defects are closed**: a
   session write the seam refuses now leaves its row in the **caller's own** namespace (garbage, not a
   cross-tenant write), and the other household's Today card can no longer render another household's
-  free text — `seedProgram` **refuses** loudly instead. 🔴 **The verdict is still `LEAKS`, deliberately
-  and provably:** the non-partial `movements_slug_unique` forbids two households a row for one slug
-  until `TEN-2c`, so the second household to type a name is handed the first's row — chosen over
-  failing a child's session write. ⚠️ **And `TEN-2b` measured a price `TEN-2a` had asserted away**: that
-  fallback leaves a cross-household `entries.movement_id` which **aborts the household-deletion
-  procedure** (`23503`), so `runbooks.md` pre-flight (d) now carries a repair step and `schema.ts` no
-  longer claims the reference is "prevented by construction". **This step's criteria do not change
-  yet; the leak closes at TEN-2c.**
+  free text — `seedProgram` **refuses** loudly instead. 🔴 **The verdict read `LEAKS` here, deliberately
+  and provably:** the non-partial `movements_slug_unique` forbade two households a row for one slug, so
+  the second household to type a name was handed the first's row — chosen over failing a child's
+  session write. ⚠️ **And `TEN-2b` measured a price `TEN-2a` had asserted away**: that fallback leaves
+  a cross-household `entries.movement_id` which **aborts the household-deletion procedure** (`23503`),
+  so `runbooks.md` pre-flight (d) carries a repair step and `schema.ts` no longer claims the reference
+  is "prevented by construction".
   ⚠️ **TEN-2b deferred two items it was briefed to carry, each with a new backlog row rather than a
   note in a merged plan:** `TEN-2b-1` (move find-or-create inside the session transaction) and
-  `TEN-2b-2` (the orphan-row correction). Neither blocks the invite on its own; `TEN-2c` does.
+  `TEN-2b-2` (the orphan-row correction). Neither blocks the invite on its own.
+
+- ✅ **TEN-2c has landed (2026-10-12):** migration `0017` **dropped the non-partial
+  `movements_slug_unique`** and added the end-state CHECK `movements_global_row_has_pattern`,
+  `NOT VALID`. [Plan](../plans/ten-2c-drop-global-slug-unique.md). ✅ **The cross-household DENIAL
+  window is closed** — two households now each hold their own row for one slug, so
+  `findOrCreateMovement`'s `23505` fallback is unreachable; it survives one more PR for the deploy
+  race (`TEN-2d`). **And the price `TEN-2b` measured is paid off, asserted rather than claimed:**
+  `db:verify` proves `runbooks.md` pre-flight (d) reads **ZERO** across `entries` **and**
+  `prescriptions`, and that step 11's `DELETE FROM movements` **completes** instead of aborting
+  `23503` — both assertions **inverted rather than retired**, with `pnpm db:mutations` still 6/6 RED.
+  ⚠️ **What it did NOT close, stated plainly because the plan's own first draft got this wrong:** the
+  **pre-`TEN-2b`** rows still sitting at `household_id IS NULL` are served to every household by
+  global-first. That is the **read** leak's residual, and it closes at **`TEN-2c-1`** (the split
+  backfill); `0017` only stops it growing, via the new CHECK. Also: the seed's **shadow guard no
+  longer throws** — it inserts the curated row and **warns**, naming the seed slug only and never the
+  household's free text, because `migrate.yml` publishes that message to a world-readable Actions log.
+  🔴 **`TEN-2d`'s `VALIDATE` is the invite gate now**, so it must precede any invite.
 
 - TEN-1 alone proves _consistent scoping_. Isolation is only _authorized_ once AUTH-1 lands — the exit
   criteria say both, and this is the single most likely thing to over-read about this step.

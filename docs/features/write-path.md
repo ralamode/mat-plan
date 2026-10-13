@@ -241,11 +241,13 @@ flowchart LR
     `getMetricDefinition` in `catalog.ts` are global reference reads.
     ✅ **`findOrCreateMovementId` was a fourth and is not any more** — `TEN-2b` scoped it, and
     `scoped.test.ts`'s dead-entry assertion is what forced its allowlist entry out rather than letting
-    it stand as coverage nobody re-earned. ⚠️ **That is not "no residual":** while the non-partial
-    `movements_slug_unique` lives (until `TEN-2c`) two households cannot both hold a row for one slug,
-    so the resolver's `23505` fallback hands the second household the first's row. It is a **schema
-    window, not a scoping gap**, which is why it is not an allowlist entry — see
-    `writers/movement-catalog.ts`'s docblock and [data-inventory.md](../privacy/data-inventory.md) §4.
+    it stand as coverage nobody re-earned. ✅ **`TEN-2c` dropped `movements_slug_unique`**, so each
+    household now holds its own row for a slug, the resolver's `23505` fallback is unreachable (kept
+    one more PR for the deploy race — `TEN-2d`), and the denial window is closed. ⚠️ **That is still
+    not "no residual":** the pre-`TEN-2b` rows at `household_id IS NULL` are served to every
+    household by global-first, closing at `TEN-2c-1`. It was a **schema window, not a scoping gap**,
+    which is why it was never an allowlist entry — see `writers/movement-catalog.ts`'s docblock and
+    [data-inventory.md](../privacy/data-inventory.md) §4.
     The canonical lists are `ALLOWED_UNSCOPED` and `PROBE` in `apps/web/lib/dal/scoped.test.ts` —
     read them there rather than trusting this restatement.
 

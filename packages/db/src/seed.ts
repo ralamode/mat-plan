@@ -197,29 +197,44 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .values([...METRIC_DEFINITION_SEED_ROWS])
     .onConflictDoNothing({ target: schema.metricDefinitions.key });
 
-  // ── TEN-2b: the SHADOW GUARD, and why it is the only detector of a silent failure ───────────────
+  // ── TEN-2b's SHADOW GUARD, DEMOTED TO A REPORT AT TEN-2c — and BOTH halves had to move ─────────
   //
-  // The arbiter below moved onto the partial `uq_movements_slug_global` (predicate repeated
-  // literally, per the V1-5 lesson; `where:` not `targetWhere:`, which onConflictDoNothing silently
-  // drops). But Postgres infers BOTH arbiters for `(slug)`: the non-partial `movements_slug_unique`
-  // has an empty predicate, trivially implied by `WHERE household_id IS NULL`. So if a household
-  // already owns a slug this seed is about to add globally, `DO NOTHING` absorbs the GLOBAL-unique
-  // collision too and the catalog row is NEVER INSERTED — measured. `db:seed` reports success,
-  // seed-twice idempotency stays green, and every household then resolves that slug through
-  // `findOrCreateMovement`'s cross-household fallback. **The failure is silence, not a duplicate**,
-  // which is why this guard exists and why nothing else would ever report it.
+  // 🔴 **What the guard was for, and why its premise is GONE.** TEN-2b moved the arbiter below onto
+  // the partial `uq_movements_slug_global` (predicate repeated literally, per the V1-5 lesson;
+  // `where:` not `targetWhere:`, which `onConflictDoNothing` silently drops). But while the
+  // non-partial `movements_slug_unique` lived, Postgres inferred BOTH arbiters for `(slug)` — the
+  // non-partial one's empty predicate is trivially implied by `WHERE household_id IS NULL` — so if a
+  // household already owned a slug this seed was about to add globally, `DO NOTHING` absorbed the
+  // GLOBAL-unique collision too and the catalog row was NEVER INSERTED while `db:seed` reported
+  // success (measured). The failure was SILENCE, not a duplicate, which is why the guard was the only
+  // detector, and why it REFUSED rather than adopting — adopting would promote one household's free
+  // text into the global reference namespace, the defect `ON DELETE SET NULL` is forbidden for
+  // (schema.ts → `movements`).
   //
-  // REFUSE, never adopt: adopting would promote one household's free text into the global reference
-  // namespace — the defect `ON DELETE SET NULL` is forbidden for (schema.ts → `movements`).
+  // **Migration 0017 DELETED that premise.** With only `uq_movements_slug_global` left, a
+  // household-owned row sits OUTSIDE the index's subset, so the global insert does not collide with
+  // it and the curated row lands. A global row and a household row sharing one slug is the INTENDED
+  // end state: global-first then serves the curated row to everyone.
   //
-  // ⚠️ NON-WEDGING ON PURPOSE. `migrate.yml` runs `db:migrate` then `db:seed` against PRODUCTION in
-  // one job on every push to `main`, and this function is NOT transactional. So: detect BEFORE any
-  // movement write, omit only the shadowed rows, let everything after this point seed normally, and
-  // throw at the END (see the foot of this function). One colliding slug must not stop unrelated
-  // reference data from reaching prod. Recovery: `docs/runbooks.md` → "the seed's shadow guard fired".
+  // ⚠️ **SO THIS IS NOW A REPORT, AND IT SUPPRESSES NO WRITE — both halves, or it is worse than
+  // either was.** TEN-2c's panel caught the half-fix: the guard was detect → **omit** → seed → throw,
+  // and the omission (a `seedableMovements` filter) happened BEFORE the arbiter was ever consulted. So
+  // demoting only the `throw` would leave the curated row still never inserted, forever, with nothing
+  // complaining loudly — a loud confidentiality guard turned into a silent, permanent gap in reference
+  // data, strictly worse than the status quo. The filter is therefore gone and `MOVEMENT_SEED_ROWS` is
+  // inserted whole; the partial arbiter is correct and idempotent on its own.
+  //
+  // ⚠️ **Why detect at all, then?** Because a household owning a seeded slug is still worth saying out
+  // loud: global-first means that household's own row is now permanently shadowed by the curated one,
+  // which is the right outcome but not an obvious one, and `TEN-2c-1` / `TEN-2b-2` are the rows that
+  // tidy it up. It is **not** an error. `migrate.yml` runs `db:migrate` then `db:seed` against
+  // PRODUCTION in one job on every push to `main`, and `migrate.yml:16-22` spells out what a throw
+  // there costs: the job turns red on every subsequent push and *cannot clear itself by re-running*.
+  // Recovery / context: `docs/runbooks.md` → "the seed's shadow guard fired".
   //
   // ⚠️ The message names SEED SLUGS ONLY — a public const. Never the colliding row's `name`, which is
-  // uncontrolled household free text, because this lands in a world-readable Actions log.
+  // uncontrolled household free text, because this lands in a world-readable Actions log. `db:verify`
+  // asserts both halves of that, and the privacy half is the one that is easy to lose in a rewrite.
   const seedMovementSlugs = MOVEMENT_SEED_ROWS.map((m) => m.slug);
   const shadowedSlugs = (
     await db
@@ -230,14 +245,11 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .map((r) => r.slug)
     .sort();
 
-  const seedableMovements = MOVEMENT_SEED_ROWS.filter((m) => !shadowedSlugs.includes(m.slug));
-  // Drizzle rejects an empty VALUES list (the `ramp_targets` precedent below).
-  if (seedableMovements.length > 0) {
-    await db
-      .insert(schema.movements)
-      .values(seedableMovements)
-      .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
-  }
+  // No filter: every seeded movement is offered to the arbiter, which is the whole fix.
+  await db
+    .insert(schema.movements)
+    .values([...MOVEMENT_SEED_ROWS])
+    .onConflictDoNothing({ target: schema.movements.slug, where: movementIsGlobal() });
 
   // V1-6b-1: expand the calisthenics ramp schedule into `ramp_targets` rows —
   // CALISTHENICS_RAMP_SCHEDULE × KID profiles × the calisthenics metric keys. The schedule
@@ -282,14 +294,19 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
   // []); the loop below is a no-op until Ray's real block lands in a data-only PR (the LLM never authors loads).
   await seedProgram(db, PROGRAM_SEED);
 
-  // TEN-2b: the shadow guard's refusal, LAST — everything above has seeded, so one colliding slug
-  // costs the catalog row it names and nothing else. Seed slugs only (a public const); never the
-  // colliding row's `name`. Recovery: `docs/runbooks.md` → "the seed's shadow guard fired".
+  // TEN-2c: the shadow guard's REPORT, LAST (it was a `throw` until 0017 removed its premise — see
+  // the long note above the movements insert). A warning, not an error: the curated row IS inserted
+  // now, so there is nothing to recover from, and `migrate.yml` seeds production on every push to
+  // `main` where a throw would wedge the job permanently.
+  //
+  // ⚠️ Seed slugs only (a public const); NEVER the colliding row's `name`, which is uncontrolled
+  // household free text landing in a world-readable Actions log. `db:verify` asserts both.
   if (shadowedSlugs.length > 0) {
-    throw new Error(
-      `seed: ${shadowedSlugs.length} seeded movement slug(s) are already owned by a household, so ` +
-        `the global catalog row(s) were NOT inserted: ${shadowedSlugs.join(', ')}. ` +
-        'Adopting them would promote household free text into the global reference namespace. ' +
+    console.warn(
+      `seed: ${shadowedSlugs.length} seeded movement slug(s) are ALSO owned by a household: ` +
+        `${shadowedSlugs.join(', ')}. The global catalog row(s) were inserted — since TEN-2c the two ` +
+        'namespaces are separate and global-first serves the curated row — so that household’s own ' +
+        'row is now permanently shadowed. Nothing is broken; TEN-2c-1 / TEN-2b-2 tidy those rows. ' +
         'See docs/runbooks.md → "the seed\'s shadow guard fired".',
     );
   }

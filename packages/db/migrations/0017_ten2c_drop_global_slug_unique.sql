@@ -1,0 +1,73 @@
+-- TEN-2c — drop the non-partial `movements_slug_unique`, and add the global-row CHECK NOT VALID.
+--
+-- WHAT THIS CONTRACTS: `movements_slug_unique` is a non-partial UNIQUE("slug") over the whole table
+--   (0001:90). While it lived, at most one row per slug existed table-wide, so 0015's two partial
+--   unique indexes were DECLARED and not IN EFFECT — the narrower rule cannot widen what the broader
+--   one already forbids. Dropping it is what makes the two namespaces real:
+--   uq_movements_slug_global (WHERE household_id IS NULL) and uq_movements_household_slug
+--   (WHERE household_id IS NOT NULL) are the only arbiters from here.
+--   Plan: docs/plans/ten-2c-drop-global-slug-unique.md. Addressing: docs/decisions/0006-household-addressing.md.
+--
+-- WHAT IT DOES *NOT* DO — stated here because the backlog row's own title got this wrong: dropping
+--   the constraint closes the 2b->2c cross-household DENIAL primitive completely, and closes NOTHING
+--   of the pre-existing READ leak. Any row already at household_id IS NULL that is not a seeded
+--   catalog row is still resolved by global-first for EVERY household. That residual is TEN-2c-1's
+--   (the split backfill). The CHECK below is what stops the residual GROWING.
+--
+-- THE CHECK IS NOT VALID, and TEN-2d runs the VALIDATE: AGENTS.md splits NOT VALID and VALIDATE
+--   across PRs, and Squawk measures it — a same-file VALIDATE fires constraint-missing-not-valid.
+--   NOT VALID skips only the validation SCAN; the CHECK is enforced on every INSERT/UPDATE from the
+--   instant this applies. drizzle's `check()` emits a VALIDATED constraint, so the NOT VALID is a
+--   HAND-EDIT of this file (same class as 0015's FK). db:verify reads convalidated immediately after
+--   migrate() and asserts `false` — nothing else catches that hand-edit being lost on a rebase.
+--
+-- WHY THE PREDICATE, AND WHAT IT DOES NOT TEST: a global row must carry a `pattern`, which only a
+--   human curating MOVEMENT_SEED_ROWS can author — findOrCreateMovement writes neither `pattern` nor
+--   `unit_default` and never can. So this blocks the realistic path into the forbidden state: an
+--   operator hand-running UPDATE movements SET household_id = NULL to unwedge a household delete the
+--   0015 FK aborted. ⚠️ It does NOT test seededness: a global row with a hand-typed `pattern`
+--   satisfies it. That is why the name is predicate-descriptive and why the exact set-membership
+--   proof in db:verify is a SECOND layer, not a redundant one (db:verify never runs against prod).
+--
+-- ORDER WITHIN THIS FILE is for READABILITY only. A NOT VALID CHECK scans nothing, and the app writes
+--   only after COMMIT, so nothing couples the two statements. (An earlier draft claimed the order was
+--   load-bearing because find-or-create writes household_id NULL; since TEN-2b it goes through
+--   insertMovementOwnedBy and CANNOT.)
+--
+-- LOCKS: DROP CONSTRAINT takes ACCESS EXCLUSIVE on `movements`, which blocks READS as well as writes,
+--   and `movements` is read on the logging path (queries/program-day.ts, queries/export-month.ts).
+--   The work is O(1) — a catalog delete plus an index unlink on a tiny table — so statement_timeout
+--   is slack and lock_timeout is the real bound. ⚠️ lock_timeout bounds how long THIS STATEMENT WAITS
+--   to acquire its lock; nothing bounds the queue piling up behind it, which on a PgBouncer-fronted
+--   pool is the realistic outage shape rather than the lock itself.
+--   ⚠️ drizzle wraps the WHOLE PENDING SET in ONE transaction (verified in drizzle-orm 0.45.3,
+--   pg-core/dialect.js), not each file, so the ACCESS EXCLUSIVE hold spans the whole RUN. Plain SET
+--   (not SET LOCAL, kept for consistency with 0006-0016) leaks these timeouts onto later files in
+--   that run — benign only because this is the one pending file, which is a property of the run.
+--
+-- NO `IF EXISTS` ON THE DROP, deliberately: Squawk does not require it, nothing depends on the DROP
+--   tolerating a missing constraint, and the guard would mask a real problem (a database where the
+--   constraint had already been removed by hand). db:verify asserts ABSENCE from pg_constraint by
+--   name instead — which is also where the literal 'movements_slug_unique' survives, once.
+--
+-- RE-RUN SAFETY: neither statement is idempotent on its own, and neither needs to be — drizzle's
+--   journal runs a file once. A failed run leaves nothing behind (one transaction) but the migration
+--   stays PENDING and takes db:seed with it -> docs/runbooks.md -> the pending-migration wedge.
+--
+-- ⚠️ SQUAWK IS SILENT HERE, NOT APPROVING. Measured with the pinned squawk-cli@2.66.0 + .squawk.toml:
+--   `Found 0 issues`; stripping the two SETs fires both timeout rules on the DROP line. But Squawk's
+--   destructive family has NO ban-drop-constraint rule, so the most dangerous statement in this arc
+--   passes because the gate does not look at it. REVIEW-ENFORCED ONLY.
+--
+-- ROLLBACK: ADD CONSTRAINT movements_slug_unique UNIQUE ("slug") — and it works only until the first
+--   duplicate slug appears. After that this is irreversible by any mechanism, a Neon restore branch
+--   included (a restore branch is a SEPARATE database: it does not un-apply this file on the branch
+--   production writes to, and restoring loses every session logged since the restore point).
+--
+-- MEASURED PRODUCTION STATE: see the plan and the PR body. ⚠️ NO PRODUCTION NUMBERS IN THIS FILE —
+--   migrations are forward-only and never edited, so a fact written here is permanent (0015's
+--   standing rule; data-inventory.md §9 residual 2 is the repo already paying for that once).
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "movements" DROP CONSTRAINT "movements_slug_unique";--> statement-breakpoint
+ALTER TABLE "movements" ADD CONSTRAINT "movements_global_row_has_pattern" CHECK ("movements"."household_id" is not null or "movements"."pattern" is not null) NOT VALID;
