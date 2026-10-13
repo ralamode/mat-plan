@@ -1102,7 +1102,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
   **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
   `clean`), and a direct push to `main` is possible. Separately, `skills:check`, `guards:test` and
-  `status:check` run only in local `pnpm verify`, never in CI. Today the `review-pr` shipit bar is the
+  `status:check` ran only in local `pnpm verify`, never in CI (**fixed by (b), 2026-10-13**). Today the `review-pr` shipit bar is the
   only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run `skills:check`, `guards:test` and

@@ -82,6 +82,8 @@ none` is noise. A plan or spec PR is not standalone — it advances its mileston
   ANY branch that adds an entry to the frozen status.md or skills-README history, and that part is
   not skippable: [the rule](../../../docs/changelog/README.md)). It runs
   here, after the update, not with the step-2 gates: run earlier it fails on every product branch.
+  CI runs it on every PR too, but a local run is cheaper than a CI round trip. CI's form of
+  `STATUS_SKIP` is the `docs-skip-changelog` label, under the same rule.
 - Feature guide: already enforced by `guides:check`, but reread its traps section. Did this change
   add one?
 - [docs/architecture.md](../../../docs/architecture.md): update the diagram if a pivotal flow or
@@ -166,6 +168,7 @@ Then **sweep the other approved PRs**: this merge probably just put them in conf
   only checks the fragment.
 - The PR claims a CI gate that isn't in `.github/workflows/`. AGENTS.md carries an explicit warning
   about exactly this.
-- A `ci-skip-e2e` or `docs-skip-feature-map` label applied with no one-line reason in the PR.
+- A `ci-skip-e2e`, `docs-skip-feature-map` or `docs-skip-changelog` label applied with no one-line
+  reason in the PR.
 - Pushing to fix CI one round at a time when `pnpm verify` / `pnpm e2e:local` would have caught it
   locally.
