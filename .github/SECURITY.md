@@ -26,9 +26,11 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > it is not **authorization** (`AUTH-1` is, and until then the principal is a shared access code),
 > and — until `TEN-2b` (2026-10-10) — it did not cover **`movements`**. It does now: that write is
 > household-scoped and global-first. ✅ **`TEN-2c` (2026-10-12) dropped the non-partial
-> `movements_slug_unique`, closing the cross-household DENIAL window.** ⚠️ One residual survives: the
-> pre-`TEN-2b` rows still at `household_id IS NULL`, which global-first serves to every household —
-> closing at `TEN-2c-1`. 1d's verdict names both halves — proved, not assumed. See "Authorization".
+> `movements_slug_unique`, closing the cross-household DENIAL window**, and ✅ **`TEN-2d` (2026-10-13)
+> `VALIDATE`d the end-state CHECK and deleted the `23505` fallback.** ⚠️ One residual survives
+> structurally: the pre-`TEN-2b` rows still at `household_id IS NULL`, which global-first serves to
+> every household — closing at `TEN-2c-1`, which **measures zero** on current data (production census,
+> 2026-10-13). 1d's verdict names both halves — proved, not assumed. See "Authorization".
 >
 > So the sequencing constraint stands and gains a third row: **no second household may exist in
 > production before `TEN-1`, `AUTH-1` and `TEN-2` have all landed.** ✅ **What `TEN-2c` (2026-10-12)
@@ -36,9 +38,14 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > global-first live and the non-partial `movements_slug_unique` still in place, one household typing a
 > name first made every other household's write of that name fail `23505`. Migration `0017` removed it
 > structurally, and it was never reachable in production. ⚠️ **The three-row rule itself still
-> stands**, because `AUTH-1` has not landed and `TEN-2` is not finished: `TEN-2c-1` (the read leak's
-> residual) and `TEN-2d` are outstanding, and `TEN-2d`'s `VALIDATE` is the arc's only mechanical
-> production-side gate, so it must precede any invite
+> stands, because `AUTH-1` has not landed.** ✅ **`TEN-2`, though, is four of five rows landed:**
+> `TEN-2d` (2026-10-13) `VALIDATE`d the end-state CHECK and deleted the `23505` fallback, so the arc's
+> only mechanical production-side gate — the one that had to precede any invite — is **discharged**.
+> The fifth row, `TEN-2c-1` (the read leak's residual), is a **measured no-op** on current data: the
+> production census of 2026-10-13 found 35 `movements` rows, **all global, all curated, zero
+> household-owned**, so the split backfill has nothing to split. It stays open as a pre-invite
+> re-measure, because a dated zero is not an invariant. **None of that discharges the rule** —
+> `AUTH-1` is the row still outstanding
 > ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_, and
 > [ADR 0006](../docs/decisions/0006-household-addressing.md) makes it a constraint rather than a
 > hope). It is also enforced in code until `AUTH-1`: the scope resolver **throws** on a second live

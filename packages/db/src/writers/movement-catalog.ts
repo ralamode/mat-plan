@@ -23,31 +23,21 @@ import { insertMovementOwnedBy, movementInHousehold, movementIsGlobal } from './
  * Reasoning, and the future cost of flipping it (a repoint migration, not a flag):
  * `docs/plans/ten-2a-household-movements.md`.
  *
- * ## ⚠️ The `23505` fallback is now unreachable — and it stays for exactly one more PR
+ * ## The `23505` fallback is gone — TEN-2d deleted it
  *
- * ✅ **TEN-2c (migration 0017) dropped the non-partial `movements_slug_unique`.** While it lived, at
- * most one row per slug existed in the whole table — two households could not both hold a row for one
- * slug — so step 3 collided whenever another household already owned the slug (step 1 proved no
- * global row held it; step 2 proved we did not). Two outcomes were reachable, and TEN-2a chose:
+ * ✅ **TEN-2c (migration 0017) dropped the non-partial `movements_slug_unique`; TEN-2d (0018)
+ * `VALIDATE`d the end-state CHECK and removed the fallback this docblock used to describe.** While the
+ * constraint lived, at most one row per slug existed in the whole table — two households could not
+ * both hold a row for one slug — so step 3 collided whenever another household already owned the slug.
+ * TEN-2a chose to hand the caller the other household's row rather than fail a kid's session write
+ * forever, and that choice is what the fallback was.
  *
- * - **propagate the `23505`** ⇒ household A could permanently deny household B the ability to log any
- *   name A typed first — an availability primitive, in the arc whose purpose is isolation;
- * - **fall back to the unscoped row** ⇒ B was handed A's row: the **pre-existing** read leak TEN-1 1d
- *   proved. The fallback below is that one, because a kid's session write failing forever is worse
- *   than a leak that is already there.
- *
- * With the constraint gone, step 3's only arbiter is `uq_movements_household_slug`, so an insert into
- * **this** household's namespace cannot collide with **another** household's row and the `catch` can
- * no longer fire.
- *
- * ⚠️ **It survives to `TEN-2d` on purpose, and the reason is the deploy race, not timidity.** Nothing
- * in `migrate.yml` couples a migration to the Vercel deploy — the ordering is a human merge-order
- * convention. If the app wins the race, a catch-less resolver meets a schema that **still has** the
- * constraint and step 3 raises a raw `23505` out of a child's session write: exactly the
- * permanent-write-failure outcome TEN-2a weighed and rejected, now with nothing catching it.
- * AGENTS.md's rule is that a destructive contract runs **after** the app that stopped depending on it;
- * deleting this in the same breath as the constraint inverts it. `TEN-2d` deletes the `catch` and
- * `isGlobalSlugCollision` together, once 0017 has demonstrably applied.
+ * With the constraint gone, step 3's only arbiter is `uq_movements_household_slug`: an insert into
+ * **this** household's namespace cannot collide with **another** household's row, so there was nothing
+ * left for the `catch` to catch. It outlived 0017 by exactly one PR because nothing in `migrate.yml`
+ * couples a migration to the Vercel deploy — had the app won that race, a catch-less resolver would
+ * have met a schema that still had the constraint and raised a raw `23505` out of a session write.
+ * AGENTS.md's rule is that a destructive contract runs **after** the app that stopped depending on it.
  *
  * ⚠️ **The price it already paid is DATA, and that outlives the code.** Every reference the fallback
  * minted is an `entries.movement_id` pointing at a movement owned by **another** household, so
@@ -99,30 +89,12 @@ export async function findOrCreateMovement(
 
   // (3) …then insert into it. The arbiter is `uq_movements_household_slug`, whose predicate the
   // insert repeats literally — see `insertMovementOwnedBy`.
-  try {
-    await insertMovementOwnedBy(exec, scope, {
-      publicId: newId(),
-      slug,
-      name,
-      isBodyweight: false,
-    });
-  } catch (err) {
-    if (!isGlobalSlugCollision(err)) throw err;
-    // Unreachable once 0017 has applied — kept for the deploy race only (documented above). Resolve
-    // UNSCOPED: the row belongs to another household, so neither namespace predicate can see it.
-    const sharedId = await movementIdWhere(eq(schema.movements.slug, slug));
-    if (sharedId === undefined) throw err;
-    // This was the ONLY control on the denial primitive, so it must not fire silently — and after
-    // TEN-2c it firing at all means the app is running AHEAD of migration 0017.
-    console.warn(
-      '[TEN-2b] movements slug collision across households: returned another household’s row ' +
-        'rather than failing the write. ⚠️ Since TEN-2c this should be UNREACHABLE — if you are ' +
-        'seeing it, migration 0017 has not applied to this database yet and the app deployed first. ' +
-        'Leaves a cross-household entries.movement_id that blocks household deletion ' +
-        '(runbooks.md step 11).',
-    );
-    return sharedId;
-  }
+  await insertMovementOwnedBy(exec, scope, {
+    publicId: newId(),
+    slug,
+    name,
+    isBodyweight: false,
+  });
 
   const id = await movementIdWhere(
     and(eq(schema.movements.slug, slug), movementInHousehold(scope)),
@@ -142,24 +114,3 @@ export async function findOrCreateMovement(
  * copy, in the assertion that this name is **absent** from `pg_constraint`.
  */
 const DROPPED_GLOBAL_SLUG_UNIQUE = 'movements_slug_unique';
-
-/**
- * Was this the **global**, non-partial `movements_slug_unique` rejecting the insert?
- *
- * ⚠️ **Dead on any database 0017 has reached** — see the `catch` above; it exists for the window where
- * this bundle is deployed and 0017 is not yet applied. `TEN-2d` deletes it.
- *
- * ⚠️ **Read off the error AND its `cause`.** The `cause` nesting is `DrizzleQueryError`'s, not the
- * driver's: production is node-postgres through a pooler, while `db:verify` is PGlite, which puts the
- * fields at the top level. A one-level shape difference would make this return `false` forever —
- * silently restoring the denial primitive with every gate green.
- *
- * Narrow on purpose: a `23503` from the household FK, a `23502`, a `public_id` collision or a
- * connection error must all still propagate.
- */
-function isGlobalSlugCollision(err: unknown): boolean {
-  return [err, (err as { cause?: unknown })?.cause].some((e) => {
-    const pg = e as { code?: string; constraint?: string } | undefined;
-    return pg?.code === '23505' && pg.constraint === DROPPED_GLOBAL_SLUG_UNIQUE;
-  });
-}

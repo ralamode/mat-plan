@@ -13,13 +13,15 @@ name: Migrate + seed (production)
 # `paths` allowlist would silently miss seed-only PRs (which is exactly how prod
 # drifted after V1-2/V1-3 shipped no migration).
 #
-# ⚠️ TEN-2b: "safe to always run" is no longer unqualified. `db:seed` now REFUSES —
-# and so turns this job red on every subsequent push — if a household already owns
-# a `movements` row whose slug the seed adds globally, because the alternative is a
-# silently missing catalog row (measured). The refusal is non-wedging (it detects
-# before any movement write, seeds everything else, throws last), so unrelated
-# reference data still reaches prod. Recovery: docs/runbooks.md -> "the seed's
-# shadow guard fired". It cannot clear itself by re-running.
+# TEN-2c: "safe to always run" is unqualified again. `db:seed` used to REFUSE — and so
+# turn this job red on every subsequent push — if a household already owned a `movements`
+# row whose slug the seed adds globally, because while the non-partial `movements_slug_unique`
+# lived, `ON CONFLICT DO NOTHING` absorbed that collision and the catalog row was silently
+# never inserted. Migration 0017 dropped that constraint, so the two rows now coexist legally
+# and the global insert lands. The guard REPORTS instead: it seeds the curated row and logs a
+# warning naming the seed slug only — never the colliding row's `name`, which is household free
+# text and this log is world-readable. Background: docs/runbooks.md -> "the seed's shadow
+# guard fired".
 #
 # The PREVIEW estate has its own migrator, `migrate-preview.yml` — a separate FILE, not a second job
 # here, so that a branch dispatch cannot reach the production credential below (OPS-1).

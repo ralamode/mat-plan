@@ -127,6 +127,13 @@
       "when": 1791832169835,
       "tag": "0017_ten2c_drop_global_slug_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791832170835,
+      "tag": "0018_ten2d_validate_global_row_has_pattern",
+      "breakpoints": true
     }
   ]
 }

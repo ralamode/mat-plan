@@ -1,0 +1,40 @@
+-- TEN-2d — VALIDATE `movements_global_row_has_pattern`, the end-state invariant's first layer.
+--
+-- WHY THIS IS ITS OWN FILE: Squawk requires `NOT VALID` and `VALIDATE` be SPLIT ACROSS PRs
+--   (`constraint-missing-not-valid` fires when both sit in one transaction, and `.squawk.toml` sets
+--   `assume_in_transaction = true`). Measured on 0016's header for the FK, and again here. That split
+--   is why TEN-2 is five rows rather than three.
+--
+-- WHAT IT ENFORCES: `household_id IS NOT NULL OR pattern IS NOT NULL` — a `movements` row owned by no
+--   household must be reference data. ⚠️ The predicate tests `pattern`, NOT seededness: a global row
+--   with a hand-typed `pattern` satisfies it while being neither owned nor seeded. The name says what
+--   it checks; the precise invariant (exact membership in MOVEMENT_SEED_PUBLIC_IDS) is a `db:verify`
+--   proof, and that split is deliberate — an exact `public_id` list in SQL would need a migration per
+--   seed extension, and the seed has grown three times.
+--
+-- 🔴 THIS IS THE ARC'S ONLY MECHANICAL PRODUCTION-SIDE GATE. `db:verify` runs on PGlite and never
+--   against production, so until this VALIDATE runs, nothing in the system has checked a real row.
+--   It raises `23514` on any violator and reddens `migrate.yml` until fixed — which is why it must
+--   precede any invite.
+--
+-- MEASURED BEFORE MERGE, against production: `movements-ownership-2026-10-11` reported **0** global
+--   rows with `pattern IS NULL`, so this scan cannot fail on current data. ⚠️ NO PRODUCTION NUMBERS IN
+--   THIS FILE beyond that fact — migrations are forward-only and never edited, so a count written here
+--   would be permanently stale (0015's standing rule). The counts live in the PR body and `plan.md`.
+--
+-- LOCKS: `VALIDATE CONSTRAINT` takes SHARE UPDATE EXCLUSIVE, NOT ACCESS EXCLUSIVE — it does not block
+--   reads or writes, only other schema changes on `movements`. That is the whole point of the NOT
+--   VALID → VALIDATE split: 0017 took the strong lock for an O(1) catalog edit, and the row scan runs
+--   here under a weak one. 35 rows. ⚠️ `lock_timeout` bounds how long this statement WAITS; nothing
+--   bounds the queue piling up behind it while it waits.
+--
+-- SQUAWK: the `VALIDATE` alone raises `require-lock-timeout` + `require-statement-timeout` without the
+--   two SETs below (measured on 0016). With them it is clean.
+--
+-- IF IT FAILS: a `23514` means a global row has no `pattern` — run
+--   `pnpm --filter @mat-plan/db db:correct movements-ownership-2026-10-11` (read-only) for the count,
+--   then `TEN-2c-1`'s split before re-running. The migration stays PENDING and takes `db:seed` with it
+--   (docs/runbooks.md → "A pending migration wedges prod and the seed with it").
+SET lock_timeout = '5s';--> statement-breakpoint
+SET statement_timeout = '60s';--> statement-breakpoint
+ALTER TABLE "movements" VALIDATE CONSTRAINT "movements_global_row_has_pattern";
