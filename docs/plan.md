@@ -1033,7 +1033,8 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run `skills:check`, `guards:test` and
-  `status:check` (DX-2's guard), which needs its own plan and panel. **The audit third of (b) is
+  `status:check` (DX-2's guard), which needs its own plan and panel — **planned 2026-10-12:
+  [dx-5b-local-gates-in-ci](./plans/dx-5b-local-gates-in-ci.md)**, reshaped by a five-lens panel. **The audit third of (b) is
   done** — SEC-5 wired `audit:check` into `quality` and carved its own self-test out of `guards:test`
   as a standalone step; **(b) deletes that step** when it wires `guards:test` properly, and could
   reasonably take `check-action-pins.test.sh` with it (offline, fixture-only, ~1s), which SEC-5
