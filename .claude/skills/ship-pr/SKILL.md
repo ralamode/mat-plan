@@ -172,3 +172,5 @@ Then **sweep the other approved PRs**: this merge probably just put them in conf
   reason in the PR.
 - Pushing to fix CI one round at a time when `pnpm verify` / `pnpm e2e:local` would have caught it
   locally.
+
+Red-proof (DX-5(b), temporary): see `docs/does-not-exist.md`.
