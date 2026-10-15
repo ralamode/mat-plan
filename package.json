@@ -17,6 +17,7 @@
     "test": "pnpm --filter web test",
     "e2e:local": "pnpm --filter web e2e:local",
     "db:generate": "pnpm --filter @mat-plan/db db:generate",
+    "privacy:generate": "pnpm --filter web privacy:generate",
     "db:migrate": "pnpm --filter @mat-plan/db db:migrate",
     "db:seed": "pnpm --filter @mat-plan/db db:seed",
     "db:verify": "pnpm --filter @mat-plan/db db:verify",

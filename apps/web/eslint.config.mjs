@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Generated from docs/privacy/notice.md (PRIV-2). `.prettierignore` alone is NOT enough: the
+    // root package.json's lint-staged runs `eslint --fix` on `apps/web/**/*.{ts,tsx}` on every
+    // commit, which would rewrite this file and fail the byte-exact drift test on a fix nobody made.
+    'lib/privacy/notice-content.ts',
   ]),
 ]);
 
