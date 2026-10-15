@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-10-10. This is a beta.**
+**Last updated: 2026-10-15. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -69,8 +69,10 @@ still works.
 - **Your household**, through the shared login.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
-- **Nobody else** — there are no public pages, no advertising, no analytics about you, and your data
-  is never sold or shared for anyone else's purposes.
+- **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
+  no analytics about you, and your data is never sold or shared for anyone else's purposes. The only
+  pages anyone can open without the code are the landing page and this notice, and neither one reads
+  your data.
 
 **Three honest limitations during the beta:**
 
@@ -116,9 +118,9 @@ Your browser talks to this app and nothing else.
 | Sign-in and timezone cookies          | One year                                                                                        |
 | Your theme choice                     | In your browser, until you clear it                                                             |
 | The IP address used for rate limiting | Minutes                                                                                         |
-| Server error reports                  | ⏳ _Being confirmed_                                                                            |
-| Server request logs                   | ⏳ _Being confirmed_                                                                            |
-| Database backups                      | ⏳ _Being confirmed_                                                                            |
+| Server error reports                  | 30 days                                                                                         |
+| Server request logs                   | 24 hours                                                                                        |
+| Database backups                      | Point-in-time recovery: 6 hours. See below for the separate 7-day restore point.                |
 | An export you have downloaded         | Yours — we cannot keep or delete it                                                             |
 | The public source code                | Permanently, including its history                                                              |
 
@@ -126,10 +128,6 @@ Your browser talks to this app and nothing else.
 yet. Removing something takes it out of your view, but the row stays in the database until your whole
 household is deleted. **Nothing automatically clears it.** Per-item deletion is being built; until then,
 this is how it works, and you should know that before you log something you might regret.
-
-⏳ **Three numbers are still being confirmed** with the companies above. They are marked rather than
-guessed, and this notice will be updated with the real figures before any family is invited. A made-up
-number in a privacy notice is worse than an admitted gap.
 
 ## Getting your data out
 
@@ -155,8 +153,9 @@ Because this cannot be undone and there is currently no per-person login to prov
 
 - **We will confirm the request through the channel your invitation came through** — not simply by
   replying to whatever message arrives. This is to stop someone else having your family's data deleted.
-- **There is a 7-day pause** between confirming and deleting, and a restore point is held for that
-  window. After that it is gone.
+- **There is a 7-day pause** between confirming and deleting, so you can cancel. Nothing is removed
+  during that window. A restore point is cut immediately **before** the deletion and held for **7 days
+  after** it — see "What remains afterwards".
 
 **What remains afterwards, honestly:**
 
@@ -191,10 +190,9 @@ identifier.
 
 ## Asking for anything
 
-To get a full copy of your data, delete your household, correct something, or ask a question: **use
-the contact route given in your invitation.**
-
-⏳ _A permanent contact address will be published here before any family is invited._ Please **do not**
+To get a full copy of your data, delete your household, correct something, or ask a question:
+**write to matplandev@gmail.com.** If you were invited, the channel your invitation came through
+works too. Please **do not**
 post a request publicly — not in a GitHub issue or anywhere else on the open internet — because it
 would put your household's details on a permanently archived, searchable page.
 
@@ -209,12 +207,7 @@ Bodily measurements of a child may count as health data under some laws, with ob
 does not attempt to describe. **If you need that answered, it needs a lawyer, and this document is not
 one.**
 
-**Reviewed and signed off:**
-
-> Role: ______________________ Date: ____________
->
-> _(Per this project's convention, sign-off is recorded by role and date rather than by name — the
-> repository is public, and a name is personal data like any other.)_
+**Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-15.**
 
 **This notice must be reviewed again when** a new company starts receiving data, a retention period
 changes, a new kind of information starts being stored, sign-in goes live, or anything is made

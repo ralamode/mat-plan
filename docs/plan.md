@@ -1641,6 +1641,24 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   ✅ **Precondition on acceptance — DISCHARGED.** `TEN-2c`'s reporter ran against production on
   2026-10-13 and returned **zero** global rows with `pattern IS NULL`, measured **before** the
   migration ran, so the `VALIDATE` could not wedge. `TEN-2c-1` did not need to land first.
+- **OBS-1 — production must assert the protections that are optional everywhere else.** _(Beta 0;
+  found by `PRIV-1`, 2026-10-15, and it is the SECOND instance.)_ `apps/web/lib/env.ts` splits its
+  variables the wrong way round for safety: `ACCESS_GATE_PASSWORD` and `DATABASE_URL` are **required**
+  and fail the build, while `SENTRY_DSN` and the `UPSTASH_REDIS_REST_*` pair are **`.optional()`** and
+  fail **silently** — `Sentry.init` becomes a no-op, the rate limiter returns `null` and the gate fails
+  **open**. So the two that would corrupt data are loud, and the two that protect users are quiet.
+  🔴 **Both were in fact unset in production and nobody knew:** `OPS-1` found production had no Upstash
+  database (`tech-debt.md`), and `PRIV-1` found `SENTRY_DSN` absent from Vercel's Production scope —
+  so nothing had ever observed the production app. ⚠️ **Optionality is not the defect.**
+  `rate-limit.ts` is right that unconfigured is "a FIRST-CLASS state" for local dev, CI and previews.
+  The defect is that **nothing distinguishes "legitimately unconfigured" from "production,
+  unconfigured"** — the exact collapse `check-audit.mjs` exists to prevent (_"collapsing them is how a
+  gate looks wired and checks nothing"_). Acceptance: a guard that fails when `VERCEL_ENV=production`
+  and either is missing, with the three-way verdict (`isolated` / `BROKEN` / `could not check`) the
+  other guards use. The precedent to copy is `check-preview-isolation.mjs`, which reads Vercel's env
+  API by **key and scope without decrypting anything** — exactly the call this needs, and its docblock
+  already explains why that token must not live in CI. _(Beta 0 because the invite is what makes an
+  unobserved, unlimited production app a real exposure rather than a latent one.)_
 - **DX-9 — `profiles.household_id` is nullable in Drizzle and NOT NULL in the database.** _(Small;
   found by `TEN-2c`'s panel.)_ `packages/db/src/schema.ts` declares the column with no `.notNull()`,
   while migration `0001:158-159` adds `profiles_household_id_not_null` as a `CHECK … NOT VALID` and
