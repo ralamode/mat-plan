@@ -18,6 +18,7 @@ import {
   STRENGTH_RECEIPT_ID_PREFIX,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
+  PRIVACY_PATH,
   THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
   PARTIAL_SETS_COPY,
@@ -789,6 +790,28 @@ test.describe('public routes', () => {
       await expectNoHorizontalOverflow(page, `gate (${viewport.width}px)`);
       await expectTapTargets(page, `gate (${viewport.width}px)`);
       await expectLinkTapTargets(page, `gate (${viewport.width}px)`, 1);
+    });
+
+    /**
+     * PRIV-2 — the privacy notice: ~200 lines of prose, two `<dl>`s and the app's first long-form
+     * page, read on a phone.
+     *
+     * ⚠️ Neither tap-target helper is called here, deliberately. `expectTapTargets` would match
+     * NOTHING (the page has no button, select, textarea or input at all) and fail its own
+     * "selector is wrong" guard; `expectLinkTapTargets` measures every link in `<main>`, and the
+     * notice's two prose links legitimately sit under WCAG 2.2 SC 2.5.8's inline-link exception —
+     * the same exception `INTERACTIVE` above already encodes by excluding `<a>`. The FOOTER's two
+     * links are measured directly in `privacy.spec.ts`, where they are also the subject.
+     *
+     * No separate dark-mode axe pass either: the renderer introduces no colour of its own, only
+     * tokens the `dark theme` describe already audits, and contrast is a property of the token
+     * pair. The two dark SCREENSHOTS are where a long-form page's palette is judged.
+     */
+    test(`the privacy notice at ${viewport.width}px: axe, no overflow`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.goto(PRIVACY_PATH, { waitUntil: 'networkidle' });
+      await expectNoAxeViolations(page, `privacy (${viewport.width}px)`);
+      await expectNoHorizontalOverflow(page, `privacy (${viewport.width}px)`);
     });
   }
 });

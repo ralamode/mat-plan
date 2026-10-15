@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
 
-import { GATE_PATH } from '../lib/access-gate';
+import { GATE_PATH, PUBLIC_PATHS } from '../lib/access-gate';
 import {
   APP_HOME_PATH,
   APP_NAME,
@@ -84,7 +84,7 @@ async function routineOrder(page: Page): Promise<string[]> {
  * proven at the unit level (`app/p/[profileId]/actions.test.ts`). What it pins: nothing runs, nothing
  * leaks, nothing changes. An `"ok":` of either value in the body would mean the action ran.
  */
-test('an un-gated POST to / with a real action id runs nothing and leaks nothing', async ({
+test('an un-gated POST to a public path with a real action id runs nothing and leaks nothing', async ({
   page,
   browser,
 }) => {
@@ -110,22 +110,27 @@ test('an un-gated POST to / with a real action id runs nothing and leaks nothing
 
   const anon = await browser.newContext({ storageState: NO_GATE_STATE });
   const variants: Record<string, string>[] = [{}, { 'x-action-forwarded': '1' }];
-  for (const extra of variants) {
-    const label = Object.keys(extra).length > 0 ? 'spoofed-forwarded replay' : 'replay';
-    const res = await anon.request.post('/', {
-      headers: {
-        'next-action': headers['next-action']!,
-        'content-type': headers['content-type']!,
-        accept: 'text/x-component',
-        ...extra,
-      },
-      data: request.postDataBuffer() ?? undefined,
-      maxRedirects: 0,
-    });
-    const body = await res.text();
-    expect(body, `${label}: the action ran`).not.toMatch(/"ok":(true|false)/);
-    for (const leak of [' at ', 'node_modules', '/apps/web/', PICKER_COPY.heading]) {
-      expect(body, `${label} leaks "${leak}"`).not.toContain(leak);
+  // Every public path, not just `/` (PRIV-2): each one is an unauthenticated POST endpoint on the
+  // same terms, so a new entry in `PUBLIC_PATHS` inherits this runtime proof instead of needing a
+  // new test that nobody writes.
+  for (const publicPath of PUBLIC_PATHS) {
+    for (const extra of variants) {
+      const label = `${publicPath}${Object.keys(extra).length > 0 ? ' spoofed-forwarded replay' : ' replay'}`;
+      const res = await anon.request.post(publicPath, {
+        headers: {
+          'next-action': headers['next-action']!,
+          'content-type': headers['content-type']!,
+          accept: 'text/x-component',
+          ...extra,
+        },
+        data: request.postDataBuffer() ?? undefined,
+        maxRedirects: 0,
+      });
+      const body = await res.text();
+      expect(body, `${label}: the action ran`).not.toMatch(/"ok":(true|false)/);
+      for (const leak of [' at ', 'node_modules', '/apps/web/', PICKER_COPY.heading]) {
+        expect(body, `${label} leaks "${leak}"`).not.toContain(leak);
+      }
     }
   }
   await anon.close();
