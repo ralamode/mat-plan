@@ -89,10 +89,18 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 /**
  * Forward the nonce to the renderer via request headers; Next reads it from the
  * CSP header and stamps its own script/style tags automatically.
+ *
+ * `x-pathname` rides the same mechanism (PRIV-2) so the root layout's footer can set
+ * `aria-current="page"` while staying a SERVER component — the alternative is a `usePathname()`
+ * client component on every route in the app, for one attribute. Both are `.set()` on a COPY of the
+ * inbound headers, so an inbound `x-pathname` (or `x-nonce`) is overwritten on every forwarded
+ * request; `proxy.test.ts` asserts that for both. The worst case of a spoof here is a wrong
+ * `aria-current`, not a security property.
  */
 function forward(request: NextRequest, nonce: string, csp: string): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
   requestHeaders.set('Content-Security-Policy', csp);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

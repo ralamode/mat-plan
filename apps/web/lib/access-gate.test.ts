@@ -6,9 +6,12 @@ import {
   isPublicPath,
   isUngatedPath,
   isValidGateCookie,
+  matchesPathTree,
+  PUBLIC_PATH_TREES,
   PUBLIC_PATHS,
   safeInternalPath,
 } from './access-gate';
+import { PRIVACY_PATH } from './constants';
 
 // First tests on the harness (pulled forward ahead of V0-8). The access-gate
 // helpers are pure and security-relevant, so they make a good first target:
@@ -58,27 +61,69 @@ describe('GATE_COOKIE_NAME', () => {
   });
 });
 
-describe('PUBLIC_PATHS / isPublicPath (OSS-2)', () => {
-  it('is exactly the landing — adding a public route is a deliberate edit of this line', () => {
-    expect(PUBLIC_PATHS).toEqual(['/']);
+describe('PUBLIC_PATHS / isPublicPath (OSS-2, PRIV-2)', () => {
+  it('is exactly the landing and the privacy notice — a third entry is a deliberate edit', () => {
+    expect(PUBLIC_PATHS).toEqual(['/', PRIVACY_PATH]);
   });
 
-  it('treats the landing as public', () => {
-    expect(isPublicPath('/')).toBe(true);
+  // The one place the literal belongs: a consent screen and a footer link both depend on this value.
+  it('PRIVACY_PATH is a stable, published URL', () => {
+    expect(PRIVACY_PATH).toBe('/privacy');
+  });
+
+  it.each(['/', PRIVACY_PATH])('treats %s as public', (path) => {
+    expect(isPublicPath(path)).toBe(true);
   });
 
   // Exact membership: each of these would slip through a careless prefix or normalising match.
   it.each(['/p', '/gate', '/profile', '//', '/%2F', '/ ', ''])('keeps %j gated', (path) => {
     expect(isPublicPath(path)).toBe(false);
   });
+
+  /**
+   * PRIV-2's four neighbours of `/privacy`. ⚠️ `/privacy/` never reaches here over HTTP — Next's
+   * trailing-slash redirect 308s it to `/privacy` BEFORE the proxy runs — so the end-to-end claim
+   * is "canonicalises", proven in `e2e/privacy.spec.ts`. This is the unit-level half.
+   */
+  it.each(['/privacyx', '/privacy/', '/privacy/x', '/PRIVACY'])('keeps %j gated', (path) => {
+    expect(isPublicPath(path)).toBe(false);
+  });
+
+  it('has no public subtrees yet — AUTH-1 1a adds /sign-in HERE, not to PUBLIC_PATHS', () => {
+    // Both PUBLIC_PATHS entries are leaves. 1a's arm is committed as generic, which would make
+    // `/privacy/x` public and flip the row above; the opt-in list is what keeps that from happening
+    // by accident, and pinning its emptiness makes adding an entry a visible test edit.
+    expect(PUBLIC_PATH_TREES).toEqual([]);
+  });
+});
+
+describe('matchesPathTree (tested BEFORE any entry needs it)', () => {
+  it.each([
+    ['/sign-in', '/sign-in'],
+    ['/sign-in', '/sign-in/callback'],
+    ['/sign-in', '/sign-in/sso/x'],
+  ])('%s owns %s', (root, path) => {
+    expect(matchesPathTree(root, path)).toBe(true);
+  });
+
+  // DUALS-1's scar: `startsWith('/x')` also opens `/xsecret`. The match is at a SEGMENT boundary.
+  it.each([
+    ['/sign-in', '/sign-inevil'],
+    ['/sign-in', '/sign-in-evil'],
+    ['/sign-in', '/'],
+    ['/sign-in', '/sign'],
+    ['/privacy', '/privacyx'],
+  ])('%s does not own %s', (root, path) => {
+    expect(matchesPathTree(root, path)).toBe(false);
+  });
 });
 
 describe('isUngatedPath', () => {
-  it.each(['/', '/gate'])('serves %s without the cookie', (path) => {
+  it.each(['/', '/gate', PRIVACY_PATH])('serves %s without the cookie', (path) => {
     expect(isUngatedPath(path)).toBe(true);
   });
 
-  it.each(['/p', '/gatex', '/gate/x', '/p/x'])('gates %s', (path) => {
+  it.each(['/p', '/gatex', '/gate/x', '/p/x', '/privacyx'])('gates %s', (path) => {
     expect(isUngatedPath(path)).toBe(false);
   });
 });

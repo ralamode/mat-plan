@@ -13,6 +13,8 @@
  * passed in by the caller.
  */
 
+import { PRIVACY_PATH } from './constants';
+
 export const GATE_COOKIE_NAME = 'mp_gate';
 
 /** Route of the access-gate entry page (also the `app/gate/` segment). */
@@ -107,27 +109,49 @@ export async function isValidGateCookie(
 }
 
 // ---------------------------------------------------------------------------
-// Public routes (OSS-2)
+// Public routes (OSS-2, PRIV-2)
 // ---------------------------------------------------------------------------
 
 /**
- * Routes served WITHOUT the gate. Exactly one: the public landing at `/` (OSS-2), which reads no cookie
- * and queries nothing. DUALS-1 removed the last public path (`/duals`, whose day sheets carried named
- * minors' rosters); this list is the only way back in, and `access-gate.test.ts` pins its contents so
- * adding an entry is a deliberate, visible test edit.
+ * Routes served WITHOUT the gate, matched EXACTLY: the public landing at `/` (OSS-2) and the privacy
+ * notice at `PRIVACY_PATH` (PRIV-2). Neither reads a cookie or queries anything. DUALS-1 removed the
+ * last public path (`/duals`, whose day sheets carried named minors' rosters); this list is the only
+ * way back in, and `access-gate.test.ts` pins its contents so adding an entry is a deliberate,
+ * visible test edit.
  *
- * EXACT membership, deliberately — no prefix matching. DUALS-1's lesson is that a public path must
- * match the SEGMENT exactly (`p === '/x' || p.startsWith('/x/')`), never `startsWith('/x')`, which
- * would also open `/xsecret`. Rather than ship a prefix arm no entry can reach, this matches exactly;
- * when a path with children arrives (`/sign-in/callback` at AUTH-1) the arm is added together with the
- * negative test that proves `/sign-inevil` stays gated.
+ * ⚠️ **Exact membership, with a SEPARATE list for subtrees.** DUALS-1's lesson is that a public path
+ * with children must match the segment (`p === '/x' || p.startsWith('/x/')`), never
+ * `startsWith('/x')`, which would also open `/xsecret`. Neither entry here HAS children, so
+ * generalising this list to a prefix match would quietly make `/privacy/x` public. A route that owns
+ * its subtree goes in `PUBLIC_PATH_TREES` instead — including AUTH-1 1a's `/sign-in`.
  *
- * AUTH-1 inherits this list as "routes that need no session".
+ * AUTH-1 inherits both lists as "routes that need no session".
  */
-export const PUBLIC_PATHS = ['/'] as const;
+export const PUBLIC_PATHS = ['/', PRIVACY_PATH] as const;
+
+/**
+ * Public routes that own their whole SUBTREE. Empty today, and that is the point: both
+ * `PUBLIC_PATHS` entries are leaves, so exact membership still holds for them. AUTH-1 1a's
+ * `/sign-in` catch-all adds its entry HERE — NOT to `PUBLIC_PATHS` — which is what keeps
+ * `/privacy/` and `/privacy/x` gated through that PR rather than flipping two of this module's
+ * negative tests on a PR that has nothing to do with the notice.
+ */
+export const PUBLIC_PATH_TREES = [] as const satisfies readonly string[];
+
+/**
+ * `/x` and everything under it — never `/xsecret`. Exported so the matcher is TESTED before any
+ * entry exists: an unreachable branch is what the previous docblock refused to ship, and a tested
+ * branch with no entry answers that objection without waiting for AUTH-1.
+ */
+export function matchesPathTree(root: string, pathname: string): boolean {
+  return pathname === root || pathname.startsWith(`${root}/`);
+}
 
 export function isPublicPath(pathname: string): boolean {
-  return (PUBLIC_PATHS as readonly string[]).includes(pathname);
+  return (
+    (PUBLIC_PATHS as readonly string[]).includes(pathname) ||
+    (PUBLIC_PATH_TREES as readonly string[]).some((root) => matchesPathTree(root, pathname))
+  );
 }
 
 /**

@@ -79,7 +79,9 @@ flowchart LR
   N[0 · now: PII purge, merge gates] --> AU
   O[1 · ops: previews, seed split, restore] --> AU
   ONB[ONB-0 · first run ✅] --> S
-  PRIV[PRIV-1 · notice, consent, deletion] --> AU
+  PRIV[PRIV-1 · notice, consent, deletion ✅] --> P1[PRIV-2 PR 1 · correct + fill notice.md ✅]
+  P1 --> P2[PRIV-2 PR 2 · serve /privacy]
+  P2 --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]

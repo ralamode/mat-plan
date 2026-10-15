@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { safeInternalPath } from '@/lib/access-gate';
-import { APP_NAME, GATE_COPY } from '@/lib/constants';
+import { APP_NAME, GATE_COPY, QUIET_LINK_CLASS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 
 import { GateForm } from './gate-form';
 
@@ -27,10 +28,7 @@ export default async function GatePage({
         <p className="text-muted-foreground text-sm">{GATE_COPY.subhead}</p>
       </header>
       <GateForm from={safeFrom} />
-      <Link
-        href="/"
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center self-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3"
-      >
+      <Link href="/" className={cn(QUIET_LINK_CLASS, 'self-center')}>
         <span aria-hidden="true">←&nbsp;</span>
         {GATE_COPY.back}
       </Link>

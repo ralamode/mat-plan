@@ -105,13 +105,25 @@ sequenceDiagram
   UI-->>Kid: check-ins rendered in Today
 ```
 
-## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2)
+## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
-`/` is the **public landing** (OSS-2): no cookie read, no DB query, the only route in `PUBLIC_PATHS`.
-A caller who already holds the gate cookie never sees it — the proxy sends `/` (and `/gate`) to the
-picker at **`/p`** (`APP_HOME_PATH`). That redirect is convenience routing, not authorization: every
-gated page still calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails CI if one
-doesn't.
+`/` is the **public landing** (OSS-2): no cookie read, no DB query. A caller who already holds the
+gate cookie never sees it — the proxy sends `/` (and `/gate`) to the picker at **`/p`**
+(`APP_HOME_PATH`). That redirect is convenience routing, not authorization: every gated page still
+calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails CI if one doesn't.
+
+**`PUBLIC_PATHS` holds TWO routes since PRIV-2**: `/` and `/privacy`. The notice at `/privacy` is a
+compiled copy of [`docs/privacy/notice.md`](./privacy/notice.md) — rendered from a committed data
+module, so it reads **no cookie, no database and no request input** (no `params`, no `searchParams`,
+no `fs`), and a byte-exact drift test fails when the page and the reviewed source disagree. It
+exists because the Clerk and Google consent screens need a privacy-policy **URL**.
+
+⚠️ **The two public routes are deliberately asymmetric when the caller is gated.** The proxy's
+redirect arm is `pathname === '/'`, not `isPublicPath(pathname)`, so a gated family lands on the
+picker from `/` but **reads the notice in place** at `/privacy`. A public path that bounced into the
+app would be unreadable to the person who most needs it. `/privacy` also owns **no subtree**:
+`/privacy/x` is gated (`PUBLIC_PATH_TREES` is the separate opt-in a route with children joins), and
+`/privacy/` 308s to `/privacy` before the proxy runs.
 
 The picker at `/p` lists profiles; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
 selection lives entirely in the URL — no client state. The `profileId` rides the log forms as a hidden
@@ -155,6 +167,7 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 ```mermaid
 flowchart LR
   LANDING["/ — public landing<br/>(no cookie, no DB)"]
+  PRIVACY["/privacy — the notice<br/>compiled from docs/privacy/notice.md<br/>(no cookie, no DB, no request input)"]
   GATE["/gate — access code"]
   PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
@@ -165,6 +178,11 @@ flowchart LR
   LANDING -->|"Household sign-in"| GATE
   GATE -->|"code OK → APP_HOME_PATH"| PICKER
   LANDING -.->|"proxy: already has the cookie"| PICKER
+  LANDING -->|"site footer"| PRIVACY
+  GATE -->|"site footer"| PRIVACY
+  PICKER -->|"site footer"| PRIVACY
+  PRIVACY -->|"footer: mat-plan"| LANDING
+  PRIVACY -.->|"gated caller STAYS here<br/>(the arm is pathname === '/')"| PRIVACY
   SCOPE -->|"the one live household<br/>(AUTH-1: the session's)"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER

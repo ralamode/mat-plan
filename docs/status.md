@@ -10,6 +10,17 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+✅ **PRIV-2 has landed: the privacy notice is served at `/privacy`, and `AUTH-1`'s consent-screen URL
+now exists (2026-10-15).** The notice is rendered from
+[docs/privacy/notice.md](./privacy/notice.md) into a committed module by `pnpm privacy:generate`, with
+a **byte-exact** drift test, so the served page cannot become a second copy of a privacy notice. It is
+the second entry in `PUBLIC_PATHS` and a global `<footer>` reaches it from every screen. The parser is
+a devDependency — no runtime parser, no `fs`, no request input. **What remains on the `AUTH-1` path is
+the console configuration itself** ([runbooks.md](./runbooks.md) → the consent checklist, box (a)) and
+`AUTH-1`. ⏳ The page's `robots: noindex` comes off in that PR. ⚠️ One item the plan assigned to
+PR 1 did not land: `notice.md`'s two bold-only faux headings are still not `###`, recorded as a
+pinned assertion rather than absorbed.
+
 ✅ **EVAL-0 has landed: the safety gate ships before the model (2026-10-15).** `packages/evals` is a
 two-gate harness wired into CI — an **accuracy** class against a configurable threshold, and a binary
 **invariant** class at 100%, scored separately and failing with different headlines and different exit
@@ -225,8 +236,9 @@ lenses returned **five blocking findings on the first draft and one more on the 
 that the plan's own self-review understated committed personal data, and that its held restore branch
 was an unwired gate cited as a safety argument, the exact pattern the plan had just accused another
 row of ([plan](./plans/priv-1-privacy-review.md) → review log).
-**Next on this track: `PRIV-2`** — serve the notice at `/privacy` on the app's own domain, which is
-what `AUTH-1`'s consent screen actually needs. A `docs/` file is not a URL.
+✅ **`PRIV-2` closed this track's remaining gate (2026-10-15):** the notice is served at `/privacy`
+on the app's own domain, which is what `AUTH-1`'s consent screen actually needs — a `docs/` file is
+not a URL. **Next on this track: `PRIV-3`** (the household deletion as a guarded script).
 
 ✅ **The P0 is closed: the repository no longer carries the household's given names (2026-10-08).**
 PRIV-1 re-scoped this from 3 files to ~50 and raised it to a Beta 0 blocker; the real surface was

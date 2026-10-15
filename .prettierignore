@@ -8,3 +8,7 @@ next-env.d.ts
 
 # Drizzle-generated migration artifacts (reviewed as SQL; regenerated verbatim).
 packages/db/migrations
+
+# Generated from docs/privacy/notice.md (reviewed as markdown; regenerated verbatim).
+# A formatter rewrite here fails the byte-exact drift test on a fix nobody made.
+apps/web/lib/privacy/notice-content.ts

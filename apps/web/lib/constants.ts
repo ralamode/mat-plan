@@ -9,10 +9,11 @@ import {
 } from '@mat-plan/shared';
 
 /**
- * App-only, cross-feature constants. **Zero dependencies** — kept import-free (like
- * `lib/access-gate.ts`) so it is safe to import from a `'use client'` component or the
- * Edge without dragging server/`zod` code into the client bundle. Named here so a value
- * that must stay in sync across files (a cookie name, the tz default) can't drift.
+ * App-only, cross-feature constants. **No server or IO dependencies** — only `@mat-plan/shared`'s
+ * pure values — so it is safe to import from a `'use client'` component, from the Edge proxy, and
+ * from `lib/access-gate.ts` (which takes `PRIVACY_PATH` from here) without dragging server code into
+ * the client bundle. Named here so a value that must stay in sync across files (a cookie name, the
+ * tz default, a published URL) can't drift.
  */
 
 /** Non-httpOnly cookie the client writes with its detected IANA timezone (V1-6c). The tz
@@ -39,6 +40,16 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
  * membership — not teach the proxy, which is the proxy-as-authorization mistake (CVE-2025-29927).
  */
 export const APP_HOME_PATH = '/p';
+
+/**
+ * The served privacy notice (PRIV-2) — `docs/privacy/notice.md`, compiled into `app/privacy/`.
+ *
+ * It lands HERE, beside `APP_HOME_PATH`, not in `lib/access-gate.ts`: that module is the one AUTH-1
+ * splits and deletes, and `SIGN_IN_PATH` is settled the same way for the same reason. From here it
+ * never moves — `access-gate.ts` imports it for `PUBLIC_PATHS` and the footer links to it, and the
+ * Clerk and Google consent screens are configured with this path, so it is a PUBLISHED URL.
+ */
+export const PRIVACY_PATH = '/privacy';
 
 /**
  * The token-set preview harness (UI-4, built to serve UI-3). Named here because the a11y spec and the
@@ -102,6 +113,21 @@ export const GATE_COPY = {
   /** A wrong code. */
   incorrect: 'Incorrect access code.',
 } as const;
+
+/**
+ * The site footer's two items (PRIV-2). `/privacy` is the SECOND room a stranger can walk into —
+ * someone arriving from a consent screen with no idea what this app is — and `GATE_COPY.back`
+ * already records why such a room needs an exit. One `<footer>` in the root layout, so a family
+ * inside the app can reach the notice too.
+ */
+export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as const;
+
+/**
+ * A quiet, tap-target-sized inline link. Extracted at PRIV-2: the gate's way-back link had it
+ * inline and the footer is the second use site (AGENTS.md — the second occurrence is the trigger).
+ */
+export const QUIET_LINK_CLASS =
+  'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
 
 /**
  * The picker's FIRST-RUN copy (ONB-0) — the screen a brand-new deployment actually opens on, which
