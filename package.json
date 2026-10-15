@@ -13,7 +13,7 @@
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
     "lint": "pnpm --filter web lint",
-    "typecheck": "pnpm --filter web typecheck && pnpm --filter @mat-plan/db typecheck",
+    "typecheck": "pnpm --filter web typecheck && pnpm --filter @mat-plan/db typecheck && pnpm --filter @mat-plan/evals typecheck",
     "test": "pnpm --filter web test",
     "e2e:local": "pnpm --filter web e2e:local",
     "db:generate": "pnpm --filter @mat-plan/db db:generate",
@@ -23,7 +23,7 @@
     "db:mutations": "pnpm --filter @mat-plan/db db:mutations",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm db:verify && pnpm db:mutations && pnpm skills:check && pnpm actions:check && pnpm guards:test && pnpm audit:check",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm eval && pnpm db:verify && pnpm db:mutations && pnpm skills:check && pnpm actions:check && pnpm guards:test && pnpm audit:check",
     "prepare": "husky",
     "guides:check": "node .github/scripts/check-feature-guides.mjs",
     "status:check": "node .github/scripts/check-status-touched.mjs",
@@ -32,7 +32,8 @@
     "audit:check": "node .github/scripts/check-audit.mjs",
     "preview:check": "node .github/scripts/check-preview-isolation.mjs",
     "preview:purge": "node .github/scripts/purge-vercel-previews.mjs",
-    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh && bash .github/scripts/check-action-pins.test.sh && bash .github/scripts/check-audit.test.sh && bash .github/scripts/check-preview-isolation.test.sh"
+    "guards:test": "bash .claude/hooks/hooks.test.sh && bash .github/scripts/check-skills.test.sh && bash .claude/skills/hold-the-bar/check.test.sh && bash .github/scripts/check-status-touched.test.sh && bash .github/scripts/review-prefetch.test.sh && bash .github/scripts/review-post.test.sh && bash .github/scripts/check-action-pins.test.sh && bash .github/scripts/check-audit.test.sh && bash .github/scripts/check-preview-isolation.test.sh",
+    "eval": "pnpm --filter @mat-plan/evals eval"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

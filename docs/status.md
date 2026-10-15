@@ -3,12 +3,22 @@
 Living progress tracker toward the **MVP = end of v1** (kids log a full day online + CSV export keeps
 the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.md](./plan.md).
 
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-15
 
 > Looking **forward** — what's in flight, what's next, by pillar? That's
 > [roadmap.md](./roadmap.md). This file looks **backwards**: where we are, and the merged changelog.
 
 ## Where we are right now
+
+✅ **EVAL-0 has landed: the safety gate ships before the model (2026-10-15).** `packages/evals` is a
+two-gate harness wired into CI — an **accuracy** class against a configurable threshold, and a binary
+**invariant** class at 100%, scored separately and failing with different headlines and different exit
+codes (`1` regression, `2` boundary crossed). The invariant class asserts the write path refuses a
+prescription however it is phrased, and carries five positive controls so it cannot pass vacuously.
+Both gates were broken on purpose and watched fail, and both failure modes are now asserted
+permanently in `harness.test.ts`. **AI-1 stays parked** pending `PICK-1` usage data — what changed is
+that its gate no longer waits on it: EVAL-1 binds the fifteen registered fixtures when GAP-3's typed
+columns are the target, EVAL-2 wires the model, and neither touches the harness.
 
 ✅ **TEN-2d has landed: the end-state CHECK is `VALIDATE`d against real production rows, the `23505`
 fallback is gone, and the arc's last mechanical gate is discharged (2026-10-13).** Migration `0018` ran

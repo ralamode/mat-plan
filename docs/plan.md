@@ -1668,6 +1668,12 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   generates `ALTER COLUMN … SET NOT NULL`, i.e. a migration — so this is its own PR, and the validated
   CHECK means Postgres can skip the scan.
 - **EVAL-0 — the safety gate ships before the model** ([plan](./plans/eval-0-gate-before-model.md), #220).
+  ✅ **Phase EVAL-0 landed 2026-10-15.** `packages/evals` scores two classes separately — accuracy
+  against a threshold, and a binary never-emits-a-load invariant at 100% — with different headlines
+  and different exit codes, wired into CI as a required check. Both gates were broken on purpose and
+  watched fail; both failure modes are asserted permanently in `harness.test.ts`. **EVAL-1** binds the
+  fifteen registered natural-language fixtures to the typed measurement columns; **EVAL-2** wires the
+  model call. Neither changes the harness or the gates.
   The accuracy + never-emits-a-load gates for AI-1, built and proven BEFORE any extraction runs. ⚠️
   **Row added 2026-10-06:** EVAL-0 had a merged plan and a line in [roadmap.md](./roadmap.md) but **no
   backlog row at all** — the inverse of the AI-1/PRIV-1/DX-1 omission in the same PR, and the reason

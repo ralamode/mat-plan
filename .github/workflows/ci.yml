@@ -341,6 +341,16 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # EVAL-0's required check. Two gates, scored separately, failing differently on purpose:
+      # exit 1 = an accuracy threshold was missed (a regression); exit 2 = an invariant was breached
+      # (a boundary crossed). The step fails the job either way — the codes exist so that a human
+      # reading the log, or a later release gate branching on them, can tell the two apart without
+      # parsing prose. See docs/plans/eval-0-gate-before-model.md and ai-1-nl-logging.md S4.
+      #
+      # ⚠️ No AI-1 chunk that calls a model may merge while this is red.
+      - name: EVAL-0 gates (accuracy + invariant)
+        run: pnpm eval
+
       - name: DB drift guard + migration/seed verify
         run: |
           pnpm --filter @mat-plan/db db:generate
