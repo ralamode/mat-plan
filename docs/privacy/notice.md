@@ -18,7 +18,7 @@ says so rather than leaving you to find out.
 
 Everything here is entered by you or by your athlete. Nothing is bought, imported or inferred.
 
-**About the people in your household**
+### About the people in your household
 
 - A **name** for each athlete and for the household itself. Whatever you type — a first name, a
   nickname, "Kid 1". It is up to you how identifying that is.
@@ -26,7 +26,7 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   _(The database has an unused column for a date of birth. Nothing writes to it and the app never asks
   for one. It is listed here because the schema is public and you would otherwise find it.)_
 
-**What gets logged**
+### What gets logged
 
 - **Bodyweight** — a number, a unit, a date, and whether it was morning or another time.
 - **Training** — the movements, how many sets, how many reps, the weight on the bar, whether the set

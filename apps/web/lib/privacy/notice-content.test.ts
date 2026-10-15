@@ -134,19 +134,22 @@ describe('the block kinds on the page are the kinds the source contains', () => 
   });
 
   /**
-   * ⚠️ The model, the generator and the renderer all handle `h3` and `quote`, but the source uses
-   * neither today. That is a KNOWN gap, not an accident: `docs/plans/priv-2-serve-the-notice.md`
-   * § "What PR 1 carries" assigned `notice.md:21` and `:29` ("About the people in your household",
-   * "What gets logged") a promotion from bold-only faux headings to `###` — a screen-reader user
-   * cannot reach them by heading today — and the sign-off as a blockquote. PR 1 (#289) filled the
-   * blanks and fixed the three wrong sentences but left those two shapes alone.
+   * ⚠️ The model, the generator and the renderer all handle `quote`, but the source does not use it
+   * today. That is a KNOWN gap, not an accident — and it is the shape the sign-off USED to have.
+   * `PRIV-1` published it as an empty `> Role: ___ Date: ___` blockquote; #289 filled it as prose,
+   * which is the better page (an empty form announces a review step and shows it not taken) and
+   * which removed the document's only blockquote as a side effect.
    *
-   * This assertion is how that stays visible: promote the two lines and this row changes, with the
-   * `###` assertion above picking them up automatically. The two kinds are exercised directly in
-   * "the flattener reaches every nesting depth" below, so neither is untested in the meantime.
+   * `h3` left this list when `notice.md:21` and `:29` ("About the people in your household", "What
+   * gets logged") were promoted from bold-only faux headings — a screen-reader user could not reach
+   * them by heading before. The plan assigned that to PR 1; it landed here instead, with the
+   * regeneration it requires.
+   *
+   * This assertion is how the remaining gap stays visible. `quote` is exercised directly in "the
+   * flattener reaches every nesting depth" below and by the hostile fixture, so it is not untested.
    */
   it('records which kinds the source does not use yet', () => {
-    expect(BLOCK_KINDS.filter((k) => !present.has(k))).toEqual(['h3', 'quote']);
+    expect(BLOCK_KINDS.filter((k) => !present.has(k))).toEqual(['quote']);
   });
 });
 

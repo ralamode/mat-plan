@@ -83,16 +83,11 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     ]
   },
   {
-    "k": "p",
+    "k": "h3",
     "children": [
       {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
-            "text": "About the people in your household"
-          }
-        ]
+        "k": "text",
+        "text": "About the people in your household"
       }
     ]
   },
@@ -159,16 +154,11 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     ]
   },
   {
-    "k": "p",
+    "k": "h3",
     "children": [
       {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
-            "text": "What gets logged"
-          }
-        ]
+        "k": "text",
+        "text": "What gets logged"
       }
     ]
   },
