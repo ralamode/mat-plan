@@ -93,6 +93,19 @@ what this section exists to record.
 | **Accuracy class**  | `acc-placeholder-scalar` expected `9`, given `8`                           | `ACCURACY BELOW THRESHOLD: 66.7% … below the 100.0% threshold` — **exit 1** |
 | **Invariant class** | `inv-range` pointed at `'75'`, a representable value, instead of `'75-85'` | `BOUNDARY CROSSED: 1 of 15 invariant cases failed` — **exit 2**             |
 
+**The green run in CI**, with the step wired as a required check:
+[run 38748744439 → quality → "EVAL-0 gates (accuracy + invariant)"](https://github.com/ralamode/mat-plan/actions/runs/38748744439/job/116469214660)
+
+```
+EVAL-0 — two gates, scored separately
+
+  invariant  15/15 (100.0%) — required 100%
+  accuracy   3/3 (100.0%) — threshold 100.0%
+  pending    15 natural-language fixtures registered, expectations unbound until EVAL-1
+
+Both gates green.
+```
+
 The invariant break printed **93.3%** next to the boundary message — the exact number S4 names as
 the one a threshold must never average over. Seeing it rendered beside a refusal to treat it as a
 threshold is the clearest demonstration available that the two gates are not the same gate.
