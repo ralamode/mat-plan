@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { headers } from 'next/headers';
 
+import { SiteFooter } from '@/components/layout/site-footer';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { APP_NAME } from '@/lib/constants';
 
@@ -51,7 +52,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const nonce = (await headers()).get('x-nonce') ?? undefined;
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get('x-nonce') ?? undefined;
+  // PRIV-2: the footer's `aria-current` needs the current route. The proxy forwards it the same way
+  // it forwards the nonce, which keeps `SiteFooter` a server component on every route.
+  const pathname = requestHeaders.get('x-pathname');
 
   return (
     <html
@@ -60,7 +65,10 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider nonce={nonce}>{children}</ThemeProvider>
+        <ThemeProvider nonce={nonce}>
+          {children}
+          <SiteFooter pathname={pathname} />
+        </ThemeProvider>
       </body>
     </html>
   );

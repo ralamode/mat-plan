@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 
 import { GATE_COOKIE_NAME, GATE_PATH, gateTokenFor } from '@/lib/access-gate';
-import { APP_HOME_PATH } from '@/lib/constants';
+import { APP_HOME_PATH, PRIVACY_PATH } from '@/lib/constants';
 
 import { config, proxy } from './proxy';
 
@@ -16,15 +16,25 @@ import { config, proxy } from './proxy';
 
 const ORIGIN = 'http://localhost:3000';
 
-async function run(pathname: string, { gated }: { gated: boolean }) {
+async function run(
+  pathname: string,
+  { gated, inbound = {} }: { gated: boolean; inbound?: Record<string, string> },
+) {
   const headers = new Headers();
   if (gated) {
     const token = await gateTokenFor(process.env.ACCESS_GATE_PASSWORD ?? '');
     headers.set('cookie', `${GATE_COOKIE_NAME}=${token}`);
   }
+  for (const [name, value] of Object.entries(inbound)) headers.set(name, value);
   const res = await proxy(new NextRequest(new URL(pathname, ORIGIN), { headers }));
   const location = res.headers.get('location');
   return { res, location: location ? new URL(location) : null };
+}
+
+/** What the RENDERER will see. `NextResponse.next({ request: { headers } })` encodes each override
+ *  as `x-middleware-request-<name>`, which is how the root layout reads `x-nonce` today. */
+function forwarded(res: { headers: Headers }, name: string): string | null {
+  return res.headers.get(`x-middleware-request-${name}`);
 }
 
 describe('proxy routing', () => {
@@ -69,6 +79,52 @@ describe('proxy routing', () => {
     const { res } = await run('/', { gated: false });
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
   });
+
+  // PRIV-2. The notice is the SECOND public path, and the only one that must be served to BOTH a
+  // stranger and the family: the authed-redirect arm is `pathname === '/'` precisely so a future
+  // public path does not bounce into the app.
+  it('serves the privacy notice to an un-gated caller', async () => {
+    const { location } = await run(PRIVACY_PATH, { gated: false });
+    expect(location).toBeNull();
+  });
+
+  it('serves the privacy notice to a GATED caller too — it does not bounce to the app', async () => {
+    const { location } = await run(PRIVACY_PATH, { gated: true });
+    expect(location).toBeNull();
+  });
+
+  it.each([`${PRIVACY_PATH}x`, `${PRIVACY_PATH}/x`, '/PRIVACY'])(
+    'still bounces un-gated %s to the gate',
+    async (path) => {
+      const { location } = await run(path, { gated: false });
+      expect(location?.pathname).toBe(GATE_PATH);
+    },
+  );
+});
+
+/**
+ * PRIV-2 — the per-request values the proxy hands the renderer. The footer's `aria-current` needs
+ * the current pathname in a SERVER component, and `x-nonce` already proves this mechanism works.
+ */
+describe('forwarded request headers', () => {
+  it.each([PRIVACY_PATH, '/p/abc'])('forwards the pathname for %s', async (path) => {
+    const { res } = await run(path, { gated: true });
+    expect(forwarded(res, 'x-pathname')).toBe(path);
+  });
+
+  it.each(['x-pathname', 'x-nonce'])('overwrites an INBOUND %s', async (name) => {
+    // `forward()` builds its headers with `new Headers(request.headers)` and then `.set()`s, so a
+    // caller cannot inject either value. The worst case of a spoofed pathname is a wrong
+    // `aria-current`, not a security property — but the overwrite is the property, so it is pinned.
+    const { res } = await run('/p/abc', { gated: true, inbound: { [name]: 'spoofed' } });
+    expect(forwarded(res, name)).not.toBe('spoofed');
+  });
+
+  it('mints a fresh nonce per request (the reason /privacy declares no `dynamic` of its own)', async () => {
+    const a = await run(PRIVACY_PATH, { gated: false });
+    const b = await run(PRIVACY_PATH, { gated: false });
+    expect(forwarded(a.res, 'x-nonce')).not.toBe(forwarded(b.res, 'x-nonce'));
+  });
 });
 
 // Next's own matcher compiler, so the test sees the regex Next actually runs rather than a re-derivation.
@@ -94,9 +150,12 @@ describe('proxy matcher', () => {
   const [matcher] = getMiddlewareMatchers(config.matcher, {});
   const runsOn = (path: string) => new RegExp(matcher!.regexp).test(path);
 
-  it.each(['/', '/p', '/gate', '/p/x/routine'])('runs on %s', (path) => {
-    expect(runsOn(path)).toBe(true);
-  });
+  it.each(['/', '/p', '/gate', '/p/x/routine', PRIVACY_PATH, `${PRIVACY_PATH}/x`])(
+    'runs on %s',
+    (path) => {
+      expect(runsOn(path)).toBe(true);
+    },
+  );
 
   it.each(['/api', '/api/x', '/_next/static/chunk.js', '/_next/image', '/favicon.ico'])(
     'skips %s (internals and static assets the gate page itself needs)',
