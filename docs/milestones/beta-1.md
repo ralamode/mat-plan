@@ -82,7 +82,7 @@ flowchart LR
   PRIV[PRIV-1 · notice, consent, deletion] --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
   T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household]
-  T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ · 2c-1, 2d next]
+  T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
   T2 --> I
@@ -187,8 +187,9 @@ they are how to schedule any milestone, not facts about this one.
   maintainer's call. **Its deadline is step 4's invite, not AUTH-1's merge:** nothing can serve two
   households before AUTH-1 (the resolver **throws** on a second live household), and the window opens
   the moment household #2 exists — which is AUTH-1's _"a new user gets a new, empty household"_ plus
-  _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's five rows block the invite and can run
-  beside AUTH-1's dashboard and runbook work.
+  _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's five rows ran beside AUTH-1's dashboard
+  and runbook work, and ✅ **four of them have landed** — the fifth, `TEN-2c-1`, is a measured no-op
+  held open as a pre-invite re-measure, so **TEN-2 no longer blocks the invite**.
 
   ✅ **The sharper invite precondition TEN-2a named is CLOSED, by `TEN-2c` (2026-10-12).** It read
   _"NO SECOND HOUSEHOLD MAY EXIST BETWEEN TEN-2b's DEPLOY AND TEN-2c's"_, and it was a different and
@@ -207,8 +208,9 @@ they are how to schedule any milestone, not facts about this one.
   Reasoning: [TEN-2a's plan](../plans/ten-2a-household-movements.md) → _"The 2b→2c window"_.
   ✅ **And this settles the PR count: TEN-2 is FIVE rows, not three or four** — `2a`, `2b`, `2c`,
   `2c-1` (the split backfill) and `2d` (the `VALIDATE` plus the fallback's deletion), all filed in
-  [plan.md](../plan.md). 🔴 **The invite blocker is now `TEN-2d`**, the arc's only mechanical
-  production-side gate.
+  [plan.md](../plan.md). ✅ **`TEN-2d` — that blocker, the arc's only mechanical production-side gate
+  — landed 2026-10-13.** With it discharged, **the invite waits on `AUTH-1` (step 3) and the
+  self-serve step 4** (`PROF-1`, `ONB-2`, `V1-9b`), plus `TEN-2c-1`'s pre-invite re-measure.
 
 - ✅ **TEN-2a has landed (2026-10-09):** `movements.household_id` + the two partial unique indexes,
   **dark** — no reader, no writer, the global `slug` UNIQUE untouched, every row proved still `NULL`.
@@ -233,8 +235,9 @@ they are how to schedule any milestone, not facts about this one.
   `movements_slug_unique`** and added the end-state CHECK `movements_global_row_has_pattern`,
   `NOT VALID`. [Plan](../plans/ten-2c-drop-global-slug-unique.md). ✅ **The cross-household DENIAL
   window is closed** — two households now each hold their own row for one slug, so
-  `findOrCreateMovement`'s `23505` fallback is unreachable; it survives one more PR for the deploy
-  race (`TEN-2d`). **And the price `TEN-2b` measured is paid off, asserted rather than claimed:**
+  `findOrCreateMovement`'s `23505` fallback is unreachable; it survived one more PR for the deploy
+  race and `TEN-2d` **deleted** it (below). **And the price `TEN-2b` measured is paid off, asserted
+  rather than claimed:**
   `db:verify` proves `runbooks.md` pre-flight (d) reads **ZERO** across `entries` **and**
   `prescriptions`, and that step 11's `DELETE FROM movements` **completes** instead of aborting
   `23503` — both assertions **inverted rather than retired**, with `pnpm db:mutations` still 6/6 RED.
@@ -244,7 +247,24 @@ they are how to schedule any milestone, not facts about this one.
   backfill); `0017` only stops it growing, via the new CHECK. Also: the seed's **shadow guard no
   longer throws** — it inserts the curated row and **warns**, naming the seed slug only and never the
   household's free text, because `migrate.yml` publishes that message to a world-readable Actions log.
-  🔴 **`TEN-2d`'s `VALIDATE` is the invite gate now**, so it must precede any invite.
+  ✅ **`TEN-2d`'s `VALIDATE` was the invite gate; it has since landed** (below).
+
+- ✅ **TEN-2d has landed (2026-10-13):** migration `0018` ran `VALIDATE CONSTRAINT
+movements_global_row_has_pattern` — **the arc's only scan of real production rows**, since
+  `db:verify` runs on PGlite and never against prod — and **deleted** `findOrCreateMovement`'s `23505`
+  `catch`. `db:verify`'s `convalidated` assertion flipped `false` → `true`.
+  🔴 **The production census, 2026-10-13, measured BEFORE the migration:** 35 `movements` rows — **35
+  global, 0 household-owned** — all 35 exact members of `MOVEMENT_SEED_PUBLIC_IDS`, so **0** non-curated
+  global rows, **0** `TEN-2c-1` input, **0** `TEN-2b-2` input, **0** pre-flight (d) rows, and **0**
+  global rows with `pattern IS NULL`, which is why the `VALIDATE` could not wedge. `0 household-owned`
+  means **nobody has ever typed a free-text movement name in production** — **the hazard was latent for
+  the whole arc.** That is not the same as the work being unnecessary: the defect was reachable the
+  moment a second household existed, which is exactly what this milestone's invite creates.
+  🔴 **So `TEN-2c-1` is a NO-OP on current data and is NOT closed** — ⚠️ a dated zero is not an
+  invariant (`TEN-2a`'s own discipline). It becomes **"re-measure immediately before the invite;
+  implement only if non-zero"**, and the now-validated CHECK prevents new ones. ⚠️
+  [SECURITY.md](../../.github/SECURITY.md)'s three-row rule **still stands**, because `AUTH-1` has not
+  landed.
 
 - TEN-1 alone proves _consistent scoping_. Isolation is only _authorized_ once AUTH-1 lands — the exit
   criteria say both, and this is the single most likely thing to over-read about this step.

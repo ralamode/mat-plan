@@ -33,11 +33,12 @@
  * keep-mergeable works in a DETACHED worktree and passes STATUS_BRANCH=<headRefName>. With no name at
  * all, only commit subjects decide "owes", and a fragment only has to match the generic name shape.
  *
- * Escape hatch: STATUS_SKIP="<reason>" (mirrors the `docs-skip-feature-map` / `ci-skip-e2e` labels).
- * The reason is printed so it can be pasted into the PR description, where the skip stays visible.
+ * Escape hatch: STATUS_SKIP="<reason>". In CI the `docs-skip-changelog` PR label (SKIP_LABEL) sets it;
+ * the rule for using it lives in docs/changelog/README.md. The reason is printed so it can be pasted
+ * into the PR description, where the skip stays visible.
  *
- * Local-only for now (run by the ship-pr skill, like guides:check before it was wired into CI);
- * promoting it to a CI gate is a CI change and gets its own plan.
+ * Where this runs (locally, in CI, or both) is listed once, in AGENTS.md → "Local hooks vs CI
+ * merge-gates". In CI's `quality` it gets STATUS_BRANCH from the PR's head ref (DX-5(b)).
  *
  * Usage:
  *   node .github/scripts/check-status-touched.mjs [baseRef]   # default: origin/main
@@ -66,6 +67,8 @@ const FROZEN = [
 ];
 const OWES_STATUS = ['feat', 'fix', 'db', 'perf', 'refactor', 'revert'];
 const SKIP_ENV = 'STATUS_SKIP';
+/** The PR label that sets STATUS_SKIP in CI. Mirrored in .github/workflows/ci.yml ("Status guard"); the self-test pins both. */
+const SKIP_LABEL = 'docs-skip-changelog';
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const lines = (s) => s.split('\n').filter(Boolean);
@@ -262,6 +265,8 @@ went into ${STATUS_FILE} (a branch cut before DX-2), MOVE it into that file; kee
 
 If this change genuinely doesn't warrant an entry, say why and re-run:
   ${SKIP_ENV}="<one-line reason>" pnpm status:check
+In CI: add the \`${SKIP_LABEL}\` label, put the reason in the PR description, and PUSH (a re-run does
+not see a newly added label).
 `
     : `
 Status guard failed: this is a ${owing.join('/')} branch and ${STATUS_FILE} is untouched.

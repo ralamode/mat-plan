@@ -17,6 +17,12 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
+    env:
+      # pnpm 11 defaults verify-deps-before-run to `install`: the first `pnpm run`
+      # in a fresh checkout would silently `pnpm install` (no --frozen-lockfile)
+      # before the explicit Install step below. Off for the whole job; after
+      # Install it is moot. DX-5(b), docs/lessons.md → pnpm.
+      pnpm_config_verify_deps_before_run: 'false'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -238,28 +244,45 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node .github/scripts/check-feature-guides.mjs "$BASE_SHA"
 
-      # ── Audit guard self-test (SEC-5; .github/scripts/check-audit.test.sh) ────
-      #
-      # The guard is the gate; this proves the guard. Shipping a guard whose
-      # self-test only ever runs locally would reproduce the smell docs/plan.md
-      # records about SEC-2, in the same PR that complains about it.
-      #
-      # Needs no pnpm/node install: bash + the runner's node + crafted fixtures,
-      # and the one case that exercises the spawn path shims `pnpm` on PATH. It
-      # runs BEFORE the setup steps so a broken guard fails in seconds.
-      #
-      # DX-5(b) deletes this step when it wires `guards:test` into CI.
-      - name: Audit guard self-test
-        run: bash .github/scripts/check-audit.test.sh
-
       - name: Setup pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
+
+      # ── Local gates in CI (DX-5(b); docs/plans/dx-5b-local-gates-in-ci.md) ──
+      # Through pnpm, so package.json stays the single definition. Steps that must
+      # run before `Setup pnpm` (action pins, feature guides) call `node` directly;
+      # that is the only exception. These are integrity checks for honest authors,
+      # not a security boundary: a PR runs its own copy of every script here.
+      - name: Skills guard
+        run: pnpm skills:check
+
+      - name: Status guard (changelog fragment)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Step-level, never job-level: the status self-test (in "Guard
+          # self-tests") never sets STATUS_BRANCH, so a job-level one would leak
+          # into its detached-HEAD cases. Passed via env only, never into run:,
+          # because head_ref is attacker-controlled on a fork PR.
+          STATUS_BRANCH: ${{ github.head_ref }}
+          # Read from the event payload, so the label takes effect on the NEXT
+          # PUSH, not on a re-run (AGENTS.md → CI checks). The literal mirrors
+          # SKIP_LABEL in check-status-touched.mjs; its self-test pins both.
+          STATUS_SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'docs-skip-changelog') && 'docs-skip-changelog label' || '' }}
+        run: pnpm status:check "$BASE_SHA"
+
+      # Includes check-audit.test.sh and check-action-pins.test.sh (suites 7-8);
+      # SEC-5's standalone audit self-test step is gone.
+      - name: Guard self-tests
+        run: pnpm guards:test
+
+      - name: Assert the guards installed nothing
+        run: test ! -e node_modules || { echo '::error::a guard step ran pnpm install'; exit 1; }
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
@@ -434,7 +457,7 @@ jobs:
 
       - name: Setup Node
         if: steps.guard.outputs.skip != 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
@@ -466,7 +489,7 @@ jobs:
 
       - name: Upload report + traces on failure
         if: failure() && steps.guard.outputs.skip != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: |

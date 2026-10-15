@@ -114,6 +114,13 @@ ON CONFLICT specification`, against an index that plainly exists.** → The inde
 
 ## GitHub / PRs
 
+- **A skip label was added, the job was re-run, and the label was ignored.** → A re-run **replays the
+  original event payload**, so `github.event.pull_request.labels` is frozen at the moment the run was
+  triggered. PR #67: `ci-skip-e2e` added at 08:16:17Z, re-run attempt 3 at 08:16:41Z still ran the
+  smoke; the next push skipped it. Every label check in `ci.yml` reads the payload. → **After adding a
+  label, push** (an empty commit is fine). Found by DX-5(b)'s panel before its own label shipped
+  ([plan](./plans/dx-5b-local-gates-in-ci.md)).
+
 - **A stacked PR reports `MERGED` and its code is nowhere on `main`.** → GitHub merges a PR into
   whatever its **base** is, and a stacked PR's base is the parent's branch. Merge the parent first and
   the child's merge lands on a branch nothing will ever ship — `gh pr view <n> --json baseRefName` says
@@ -479,6 +486,15 @@ main` in the main checkout (it stays on `main`; see `ship-pr` step 8), then spot
   tsx run doesn't. → Pass env explicitly (`ACCESS_GATE_PASSWORD=$(…) pnpm --filter web screenshot`).
 
 ## pnpm / build
+
+- **`node_modules` appears in a CI step that never ran `pnpm install`.** → pnpm 11 defaults
+  `verify-deps-before-run` to `install`: the first `pnpm run <script>` in a fresh checkout silently
+  installs (no `--frozen-lockfile`, lifecycle scripts) before running the script. A plan claimed the
+  guard scripts "run with no `node_modules`" because its probe checked for `node_modules` **before**
+  the script, not after. → Set `pnpm_config_verify_deps_before_run: 'false'` (the env var outranks
+  `pnpm-workspace.yaml`) on any job that runs `pnpm` before its explicit install; `quality` does, and
+  asserts nothing was installed ([DX-5(b)](./plans/dx-5b-local-gates-in-ci.md)). Probe both ways: look
+  for the side effect **after**.
 
 - **A dependency bump makes `next build` fail type-check in files it never touched, with**
   `Type 'drizzle-orm/sql/sql'.SQL<unknown> is not assignable to type 'drizzle-orm/sql/sql'.SQL<unknown>`

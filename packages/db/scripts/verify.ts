@@ -242,8 +242,8 @@ console.log('✓ migration applied to PGlite');
   );
   assert.equal(
     checkRows[0].convalidated,
-    false,
-    `TEN-2c: …and it is NOT VALID, as 0017 hand-wrote it — drizzle's check() emits a VALIDATED constraint, so this is the only guard on that hand-edit surviving a rebase. ⚠️ Do NOT "fix" a true here by relaxing the expectation: flipping it is TEN-2d's VALIDATE, and 2d must precede any invite`,
+    true,
+    `TEN-2d: …and it is now VALIDATED — migration 0018 ran VALIDATE CONSTRAINT, flipping 2c's convalidated = false, which is how "do not forget the VALIDATE" was a red build rather than a reminder. ⚠️ This is the arc's ONLY check against a REAL row — db:verify runs on PGlite and never against production, so the VALIDATE itself is what scanned prod (it reported zero violators before merge). A false here means 0018 did not apply`,
   );
 
   // The constraint 0017 DROPPED — asserted ABSENT by name, which is where the literal
@@ -5671,19 +5671,24 @@ const TEN2B_RESOLVER_IDS: number[] = [
 // *"dropping the UNIQUE alone closes nothing — it only PERMITS two namespaces"*, and an earlier draft
 // of TEN-2c's plan asserted the read leak's closure while deferring the step that delivers it.
 console.log(
-  '✓ TEN-1 1d THE CATALOG VERDICT, as of TEN-2c — the DENIAL window is CLOSED, the READ leak has a ' +
-    'NAMED RESIDUAL. ✅ CLOSED HERE, by migration 0017 dropping the non-partial movements_slug_unique: ' +
-    'two households each hold their OWN row for one slug (asserted three ways — different ids, each row ' +
-    'owned by the household that asked, both rows carrying the same slug, in BOTH directions), so A ' +
-    'typing a name first can no longer deny B that write, and the resolver’s 23505 fallback is ' +
-    'unreachable (it survives one more PR for the deploy race — TEN-2d). The global catalog is still ' +
-    'SHARED on purpose: both households resolve the same curated box_jump. ✅ ALREADY CLOSED at TEN-2b: ' +
-    'the refused-session row lands in the caller’s OWN namespace (garbage, not cross-tenant), and ' +
-    'seedProgram REFUSES a prescription naming another household’s movement. ⚠️ **NOT CLOSED HERE: any ' +
-    'PRE-TEN-2b app-authored row still sitting at household_id IS NULL is resolved by global-first for ' +
-    'EVERY household — the read leak’s residual, which closes at TEN-2c-1 (the split backfill). 0017 ' +
-    'only stops it GROWING, via movements_global_row_has_pattern (NOT VALID; the VALIDATE is TEN-2d, ' +
-    'which must precede any invite).** Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; ' +
+  '✓ TEN-1 1d THE CATALOG VERDICT, as of TEN-2d — the DENIAL window is CLOSED, the READ leak has a ' +
+    'NAMED RESIDUAL that is now MEASURED. ✅ CLOSED AT TEN-2c, by migration 0017 dropping the ' +
+    'non-partial movements_slug_unique: two households each hold their OWN row for one slug (asserted ' +
+    'three ways — different ids, each row owned by the household that asked, both rows carrying the ' +
+    'same slug, in BOTH directions), so A typing a name first can no longer deny B that write. ' +
+    '✅ CLOSED AT TEN-2d: the resolver’s 23505 fallback is DELETED — 0017 had already made it ' +
+    'unreachable, and it outlived the drop by one PR only because nothing couples migrate.yml to the ' +
+    'Vercel deploy. The global catalog is still SHARED on purpose: both households resolve the same ' +
+    'curated box_jump. ✅ ALREADY CLOSED at TEN-2b: the refused-session row lands in the caller’s OWN ' +
+    'namespace (garbage, not cross-tenant), and seedProgram REFUSES a prescription naming another ' +
+    'household’s movement. ⚠️ **NOT CLOSED: any PRE-TEN-2b app-authored row still sitting at ' +
+    'household_id IS NULL is resolved by global-first for EVERY household — the read leak’s residual, ' +
+    'which closes at TEN-2c-1 (the split backfill). 0017 stopped it GROWING via ' +
+    'movements_global_row_has_pattern, and TEN-2d (0018) VALIDATEd that CHECK — the arc’s ONLY scan ' +
+    'of real production rows. The production census (movements-ownership-2026-10-11, 2026-10-13) ' +
+    'returned ZERO in every residual and blocker count, so TEN-2c-1 is a NO-OP against current data ' +
+    '— and a dated zero is not an invariant, so it is re-measured immediately before the invite.** ' +
+    'Verdict: docs/plans/ten-1-household-scope.md → "1d as built"; ' +
     'docs/plans/ten-2b-scoped-movement-lookup.md; docs/plans/ten-2c-drop-global-slug-unique.md',
 );
 

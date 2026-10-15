@@ -20,12 +20,39 @@ permanently in `harness.test.ts`. **AI-1 stays parked** pending `PICK-1` usage d
 that its gate no longer waits on it: EVAL-1 binds the fifteen registered fixtures when GAP-3's typed
 columns are the target, EVAL-2 wires the model, and neither touches the harness.
 
+✅ **TEN-2d has landed: the end-state CHECK is `VALIDATE`d against real production rows, the `23505`
+fallback is gone, and the arc's last mechanical gate is discharged (2026-10-13).** Migration `0018` ran
+`ALTER TABLE movements VALIDATE CONSTRAINT movements_global_row_has_pattern` — **the only time this arc
+scanned production data**, because `db:verify` runs on PGlite and never against prod. Its precondition
+was measured **first**, not assumed: the report-only census returned **zero** global rows with
+`pattern IS NULL`, so the scan could not wedge. `db:verify`'s `convalidated` assertion flips `false` →
+`true`, which is how _"do not forget the `VALIDATE`"_ stays a red build rather than a reminder.
+`findOrCreateMovement`'s `23505` `catch` is **deleted**: `0017` had already made it unreachable, and it
+outlived the drop by exactly one PR only because nothing couples `migrate.yml` to the Vercel deploy.
+`migrate.yml`'s header no longer claims `db:seed` **refuses** — `TEN-2c` made that false when it
+demoted the shadow guard to a report.
+🔴 **The production census, run 2026-10-13, is the fact worth keeping:** 35 `movements` rows — **35
+global, 0 household-owned** — and all 35 global rows are exact members of `MOVEMENT_SEED_PUBLIC_IDS`,
+so **0** non-curated global rows, **0** `TEN-2c-1` input, **0** `TEN-2b-2` input, and **0** pre-flight
+(d) rows across `entries` **and** `prescriptions`. `0 household-owned` means **nobody has ever typed a
+free-text movement name in production**: every log resolved to a curated row, so **the hazard was
+latent for the whole arc.** Said honestly and no further — that is not "the work was unnecessary": the
+defect was reachable the moment a second household existed, which is precisely what the invite creates.
+🔴 **So `TEN-2c-1` is a NO-OP on current data, and it is NOT closed.** The split backfill has nothing
+to split, but ⚠️ **a dated zero is not an invariant** — the discipline `TEN-2a` wrote for its own zero.
+The row becomes **"re-measure immediately before the invite; implement only if non-zero"**, and the
+now-validated CHECK prevents new ones. **TEN-2 is four of five rows landed, the fifth a conditional**:
+`2a` (`0015`), `2b` (`0016`), `2c` (`0017`), `2d` (`0018`), plus `2c-1`. **What the invite waits on is
+now `AUTH-1` and the self-serve step** ([beta-1](./milestones/beta-1.md)) — not this arc. ⚠️ And
+[SECURITY.md](../.github/SECURITY.md)'s three-row rule **still stands**: `AUTH-1` has not landed.
+
 ✅ **TEN-2c has landed: the cross-household DENIAL window is closed, and the READ leak's residual is
 not (2026-10-12).** Migration `0017` **dropped the non-partial `movements_slug_unique`** and added the
 end-state CHECK `movements_global_row_has_pattern`, `NOT VALID`. Two households now each hold their own
 row for one slug, so `findOrCreateMovement`'s `23505` fallback — the thing that handed the second
-typist the first's row — is **unreachable**; it survives one more PR for the deploy race, and
-`TEN-2d` deletes it. **The price `TEN-2b` measured is paid off, asserted rather than claimed:**
+typist the first's row — is **unreachable**; it survived one more PR for the deploy race, and
+**`TEN-2d` deleted it** (above). **The price `TEN-2b` measured is paid off, asserted rather than
+claimed:**
 `db:verify` proves `runbooks.md` pre-flight (d) reads **ZERO** across `entries` **and**
 `prescriptions`, and that step 11's `DELETE FROM movements` **completes** instead of aborting `23503`
 — both assertions **inverted rather than retired**, through one shared definition of _referenced_
@@ -34,9 +61,9 @@ and not `prescriptions`. `pnpm db:mutations` is still **6/6 RED**.
 🔴 **What this did NOT close, said plainly because the plan's own first draft said otherwise and the
 panel retracted it:** the **pre-`TEN-2b`** rows still sitting at `household_id IS NULL` are served to
 **every** household by global-first. That is the **read** leak's residual; it closes at **`TEN-2c-1`**
-(the split backfill), and `0017` only stops the set growing, via the new CHECK. 🔴 **The invite
-blocker is now `TEN-2d`** — the arc's only mechanical production-side gate — and **TEN-2 is FIVE
-rows, not three**: `2a`, `2b`, `2c`, `2c-1`, `2d`.
+(the split backfill), and `0017` only stops the set growing, via the new CHECK. ✅ **The invite
+blocker was `TEN-2d`** — the arc's only mechanical production-side gate, discharged above — and
+**TEN-2 is FIVE rows, not three**: `2a`, `2b`, `2c`, `2c-1`, `2d`.
 Also: the seed's **shadow guard no longer throws.** It **inserts** the curated row and **warns** — the
 demotion had to be both halves, because the old guard filtered the shadowed slug out of the `VALUES`
 **before** the arbiter was consulted, so demoting only the `throw` would have left a silent, permanent

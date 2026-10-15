@@ -209,8 +209,8 @@ any movement write, omit only the shadowed rows, let every other table seed, thr
 `db:seed` runs against **production** on every push to `main`, so that throw turned the job red on
 every subsequent push and **could not clear itself by re-running** — the second reason `TEN-2c` demoted
 it. On such a run, unrelated reference data **did** reach prod; only the named catalog row(s) were
-missing, and option 1 or 2 above was the fix. ⚠️ `.github/workflows/migrate.yml`'s header comment still
-describes this refusal as current.
+missing, and option 1 or 2 above was the fix. ✅ `.github/workflows/migrate.yml`'s header comment
+**no longer** describes this refusal as current — `TEN-2d` corrected it (2026-10-13).
 
 ## Rename / correct a seeded profile in prod
 
@@ -905,8 +905,10 @@ the fallback **already** minted is real data and outlives the code path; `db:ver
 never against production; and **`TEN-2c-1`'s split backfill creates (d)-shaped work on purpose** (the
 clone-and-repoint below is that split performed by hand). Measure it, do not assume it — the
 report-only correction `movements-ownership-2026-10-11` (`pnpm --filter @mat-plan/db db:correct`) prints
-this exact count against production, as aggregate counts only. `packages/db/src/schema.ts` → the
-`movements` docblock says the same. Nothing enforces it in the database.
+this exact count against production, as aggregate counts only. ✅ **It read ZERO on 2026-10-13** (the
+`TEN-2d` census: 0 `entries`, 0 `prescriptions`), so this pre-flight has nothing to repair today —
+⚠️ **a dated zero, not an invariant.** `packages/db/src/schema.ts` → the `movements` docblock says the
+same. Nothing enforces it in the database.
 
 ⚠️ **What to do on a non-zero (d) — because "do not proceed" is not an answer here.** The row is
 legitimate app data, not corruption, so it cannot simply be deleted:
@@ -922,10 +924,12 @@ legitimate app data, not corruption, so it cannot simply be deleted:
   correctly.
 - ⛔ **Never `UPDATE movements SET household_id = NULL`** to clear the block. See step 11.
 
-With one household the count is zero by arithmetic, which is why **`TEN-2d`** is the invite
-precondition — the arc's only mechanical production-side gate, and the row that `VALIDATE`s
-`movements_global_row_has_pattern` and deletes the `23505` fallback. (`TEN-2c` closed the window that
-minted these rows; it did not make a live database clean.)
+With one household the count is zero by arithmetic. ✅ **`TEN-2d` — the arc's only mechanical
+production-side gate, the row that `VALIDATE`d `movements_global_row_has_pattern` and deleted the
+`23505` fallback — landed 2026-10-13**, so it is no longer an outstanding invite precondition; the
+invite now waits on `AUTH-1` and the self-serve step ([beta-1](./milestones/beta-1.md)), plus
+`TEN-2c-1`'s pre-invite re-measure. (`TEN-2c` closed the window that minted these rows; it did not make
+a live database clean — which is why this repair step stays.)
 
 ⚠️ **(c) is the direction that actually exists.** `supersets` has no profile column — it is
 household-scoped by construction through its session — so "a superset owned by an outside profile" is
@@ -1017,7 +1021,8 @@ shapes survive a deletion the notice describes as complete, and **`TEN-2c-1`** i
    likewise unselected. Its removal is `TEN-2b-2` (the orphan correction).
 
 Both are also the **read** leak's residual while they sit there: global-first serves a global row to
-**every** household. `0017` only stops the set growing, via `movements_global_row_has_pattern`.
+**every** household. `0017` only stops the set growing, via `movements_global_row_has_pattern`
+(`VALIDATE`d by `TEN-2d`'s `0018`, 2026-10-13).
 
 🔴 **And a third, which is this step's own failure mode:** if pre-flight (d) found a ¬H row pointing at
 one of H's movements and it was **not** repointed, this `DELETE` raises **`23503`** and strands the
@@ -1026,8 +1031,12 @@ operator mid-procedure. ✅ **`db:verify` now asserts the `DELETE` COMPLETES** �
 the **writer** can no longer produce such a row, **not** that a live database holds none. Do the
 repoint in step 3 regardless.
 
-One household today, so none of the three can arise yet; they become real at the invite, which is why
-**`TEN-2d`** is the invite precondition and why `TEN-2c-1` must land before it.
+One household today, so none of the three can arise yet; they become real at the invite. ✅
+**`TEN-2d` landed 2026-10-13**, so the arc's mechanical gate is discharged and `TEN-2c-1` did not have
+to precede it — the census of 2026-10-13 found **zero** rows of all three shapes (35 `movements` rows,
+all global, all curated, none household-owned; 0 `TEN-2c-1` input, 0 `TEN-2b-2` input, 0 pre-flight
+(d)). `TEN-2c-1` stays open as a **pre-invite re-measure**,
+because a dated zero is not an invariant.
 
 **`deleted_at` appears in no `WHERE`.** This is the documented inversion of corrections README rules 2
 and 5: for a deletion, existence _is_ the guard, and soft-deleted rows are exactly what must go.

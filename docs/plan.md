@@ -1102,7 +1102,7 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   protection is **off**, and the only ruleset ("Protect Main") blocks deletion and force-push. So there are
   **no required checks** (a red PR can merge), no "require branches up to date" (a behind PR shows
   `clean`), and a direct push to `main` is possible. Separately, `skills:check`, `guards:test` and
-  `status:check` run only in local `pnpm verify`, never in CI. Today the `review-pr` shipit bar is the
+  `status:check` ran only in local `pnpm verify`, never in CI (**fixed by (b), 2026-10-13**). Today the `review-pr` shipit bar is the
   only gate. **Fix:** (a) a repo-admin settings change
   (required checks: `quality`, `gitleaks`, and `e2e` once PR 28's soak ends; require up-to-date; a
   `pull_request` rule on `main`); (b) a CI change to run `skills:check`, `guards:test` and
@@ -1328,12 +1328,22 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   non-partial `movements_slug_unique` forbade two households a row for one slug, so the second
   household to type a name was handed the first's row via a `23505` fallback — chosen over failing a
   child's session write. The constraint is gone, each household holds its own row, and the fallback is
-  unreachable (`TEN-2d` deletes it).
-  🔴 **The READ leak's RESIDUAL is still open, and `TEN-2c` closed none of it.** Every `movements`
-  row already sitting at `household_id IS NULL` that is not a curated catalog row is still resolved by
-  global-first for **every** household. Dropping the UNIQUE only _permitted_ two namespaces;
-  **`TEN-2c-1`** (the split backfill) is what moves those rows out of the global one, and `0017` only
-  stops the set growing, via `movements_global_row_has_pattern` (`NOT VALID` until `TEN-2d`).
+  **deleted as of TEN-2d** (migration `0018`, merged 2026-10-13), which also `VALIDATE`d the end-state
+  CHECK — the arc's only scan of real production rows.
+  🔴 **The READ leak's RESIDUAL is structurally open, but measures EMPTY.** Every `movements` row
+  sitting at `household_id IS NULL` that is not a curated catalog row is still resolved by global-first
+  for **every** household. Dropping the UNIQUE only _permitted_ two namespaces; **`TEN-2c-1`** (the
+  split backfill) is what moves such rows out of the global one, and `0017` only stops the set growing,
+  via `movements_global_row_has_pattern` (`NOT VALID` in `0017`, `VALIDATE`d by `TEN-2d`'s `0018`).
+  🔴 **The census, run 2026-10-13 against production:** 35 `movements` rows — **35 global, 0
+  household-owned**, and all 35 global rows are exact members of `MOVEMENT_SEED_PUBLIC_IDS`, so **0**
+  non-curated global rows, **0** `TEN-2c-1` input, **0** `TEN-2b-2` input, **0** pre-flight (d) rows
+  (0 `entries`, 0 `prescriptions`), **0** global rows with `pattern IS NULL`. `0 household-owned` means
+  **nobody has ever typed a free-text movement name in production** — every log resolved to a curated
+  row, so **the hazard was latent for the whole arc**. That is not the same as the work being
+  unnecessary: the defect was reachable the moment a second household existed, which is exactly what
+  the invite creates. ⚠️ **A dated zero is not an invariant** — `TEN-2c-1` re-measures before the
+  invite (see its row).
   ⚠️ **TEN-2b measured a price TEN-2a had asserted away:** that fallback leaves a cross-household
   `entries.movement_id`, which **aborts the household-deletion procedure** (`23503`). `schema.ts` no
   longer claims the reference is _"prevented by construction"_, and `runbooks.md` pre-flight (d) now
@@ -1347,8 +1357,11 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every write from code deployed before 2b; moving the writer into 2c just moves the boundary) — so the
   control was the sequencing rule plus 2b's `23505` fallback, which degraded the denial into the
   pre-existing read leak. `0017` removed it structurally, and it was never reachable in production (the
-  scope resolver throws on a second live household). 🔴 **The invite precondition that remains is
-  `TEN-2d`'s `VALIDATE`** — the arc's only mechanical production-side gate — with `TEN-2c-1` before it.
+  scope resolver throws on a second live household). ✅ **`TEN-2d`'s `VALIDATE` — the arc's only
+  mechanical production-side gate, and the last invite precondition this arc owned — is DISCHARGED**
+  (`0018`, 2026-10-13; its blocker count was measured zero first, so it could not wedge). What the
+  invite now waits on is **`AUTH-1`** and the self-serve step
+  ([beta-1](./milestones/beta-1.md)), plus `TEN-2c-1`'s re-measure.
   TEN-1 chunk 1d **proved**, in both directions against a real database, that one household is handed
   another's row; that whoever types a name **first** pins that slug's `name` / `is_bodyweight` /
   `unit_default` for everyone, including on the other household's own correctly-scoped Today card;
@@ -1362,7 +1375,10 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   slug conflict target and lookup onto them → contract (drop the global UNIQUE) → split the residual
   out of the global namespace → `VALIDATE` and delete the fallback. **FIVE rows, settled at TEN-2c**
   (`2a`, `2b`, `2c`, `2c-1`, `2d`); each carries a migration or a correction, so each needs its own
-  plan and panel.
+  plan and panel. ✅ **FOUR have landed** — `2a` (`0015`), `2b` (`0016`), `2c` (`0017`), `2d` (`0018`);
+  the fifth, **`2c-1`, is a measured no-op on current data and stays open as a conditional**:
+  re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` and `TEN-2b-2`
+  remain as their own deferred rows.
   **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
   two households before AUTH-1 (the resolver throws on a second live household), so the window opens
   the moment household #2 exists. Evidence, the alternative considered and the recommendation:
@@ -1595,13 +1611,25 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   internal id ([corrections/README.md](../packages/db/scripts/corrections/README.md) rule 3) — a fresh
   `newId()` `public_id` per clone, and every repoint through `inHousehold(scope)`. **Input measured
   zero** (`ten-2a` plan: zero `movements` rows outside `MOVEMENT_SEED_ROWS` in production, 2026-10-09),
-  which is why it is its own row and not a blocker on `TEN-2c`. ⚠️ **A dated zero is not an
-  invariant** — `TEN-2c`'s report-only correction re-measures before merge, and a non-zero count makes
-  this row block `TEN-2d`. The clone carries the **other** household's free text as `name`, so it owes
+  which is why it is its own row and not a blocker on `TEN-2c`.
+  🔴 **RE-MEASURED 2026-10-13 against production, by `TEN-2c`'s reporter — this row is a NO-OP on
+  current data.** 35 `movements` rows: **35 global** (`household_id IS NULL`) and **0 household-owned**;
+  of the 35 global, **35 curated** (exact members of `MOVEMENT_SEED_PUBLIC_IDS`) and **0 not curated**.
+  So the split backfill has nothing to split — **0** rows to assign (0 referenced by more than one
+  household, 0 by exactly one, 0 by none). ⚠️ **It is NOT closed: a dated zero is not an
+  invariant**, the discipline `TEN-2a` wrote for its own zero. The row becomes **"re-measure
+  immediately before the invite; implement only if non-zero"**; `0017`'s
+  `movements_global_row_has_pattern`, `VALIDATE`d by `TEN-2d`, now prevents new ones.
+  The clone carries the **other** household's free text as `name`, so it owes
   either a slug-derived name or a named residual in
   [data-inventory.md](./privacy/data-inventory.md) §9.
-- **TEN-2d — `VALIDATE` the end-state CHECK, and delete the `23505` fallback.** _(Beta 0; TEN-2's
-  fifth.)_ Two things that cannot ride `TEN-2c`. (1) `ALTER TABLE movements VALIDATE CONSTRAINT
+- ✅ **TEN-2d — `VALIDATE` the end-state CHECK, and delete the `23505` fallback.** _(Beta 0; TEN-2's
+  fifth; **merged 2026-10-13**.)_
+  ✅ **RESULT:** migration `0018` ran `VALIDATE CONSTRAINT movements_global_row_has_pattern` — the
+  arc's **only** scan of real production rows, since `db:verify` runs on PGlite and never against
+  prod — and deleted `findOrCreateMovement`'s `23505` `catch`; `db:verify`'s `convalidated` assertion
+  flipped `false → true`, and `migrate.yml`'s header no longer claims `db:seed` refuses.
+  Two things that cannot ride `TEN-2c`. (1) `ALTER TABLE movements VALIDATE CONSTRAINT
 movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDATE` be split across
   PRs** (measured: a same-file `VALIDATE` fires `constraint-missing-not-valid`), which is why TEN-2 is
   five rows. This is **the arc's only mechanical production-side gate**: it raises `23514` on any
@@ -1610,8 +1638,27 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   fire on the same push with no gate between them, so a catch-less resolver reaching a schema that
   still has the constraint raises a raw `23505` out of a child's session write (AGENTS.md's deploy
   order: the destructive contract runs _after_ the app that stopped depending on it).
-  **Precondition on acceptance:** `TEN-2c`'s reporter has returned zero against production, or
-  `TEN-2c-1` landed first.
+  ✅ **Precondition on acceptance — DISCHARGED.** `TEN-2c`'s reporter ran against production on
+  2026-10-13 and returned **zero** global rows with `pattern IS NULL`, measured **before** the
+  migration ran, so the `VALIDATE` could not wedge. `TEN-2c-1` did not need to land first.
+- **OBS-1 — production must assert the protections that are optional everywhere else.** _(Beta 0;
+  found by `PRIV-1`, 2026-10-15, and it is the SECOND instance.)_ `apps/web/lib/env.ts` splits its
+  variables the wrong way round for safety: `ACCESS_GATE_PASSWORD` and `DATABASE_URL` are **required**
+  and fail the build, while `SENTRY_DSN` and the `UPSTASH_REDIS_REST_*` pair are **`.optional()`** and
+  fail **silently** — `Sentry.init` becomes a no-op, the rate limiter returns `null` and the gate fails
+  **open**. So the two that would corrupt data are loud, and the two that protect users are quiet.
+  🔴 **Both were in fact unset in production and nobody knew:** `OPS-1` found production had no Upstash
+  database (`tech-debt.md`), and `PRIV-1` found `SENTRY_DSN` absent from Vercel's Production scope —
+  so nothing had ever observed the production app. ⚠️ **Optionality is not the defect.**
+  `rate-limit.ts` is right that unconfigured is "a FIRST-CLASS state" for local dev, CI and previews.
+  The defect is that **nothing distinguishes "legitimately unconfigured" from "production,
+  unconfigured"** — the exact collapse `check-audit.mjs` exists to prevent (_"collapsing them is how a
+  gate looks wired and checks nothing"_). Acceptance: a guard that fails when `VERCEL_ENV=production`
+  and either is missing, with the three-way verdict (`isolated` / `BROKEN` / `could not check`) the
+  other guards use. The precedent to copy is `check-preview-isolation.mjs`, which reads Vercel's env
+  API by **key and scope without decrypting anything** — exactly the call this needs, and its docblock
+  already explains why that token must not live in CI. _(Beta 0 because the invite is what makes an
+  unobserved, unlimited production app a real exposure rather than a latent one.)_
 - **DX-9 — `profiles.household_id` is nullable in Drizzle and NOT NULL in the database.** _(Small;
   found by `TEN-2c`'s panel.)_ `packages/db/src/schema.ts` declares the column with no `.notNull()`,
   while migration `0001:158-159` adds `profiles_household_id_not_null` as a `CHECK … NOT VALID` and
@@ -1648,7 +1695,18 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   far broader than `OSS-1`'s audit records — ~50 files, raised to **P0**, and `OSS-1`'s audit
   conclusion is now wrong. See `OSS-1` and [data-inventory.md](./privacy/data-inventory.md) §9.
 
-- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.** The real `AUTH-1` gate: the
+- **PRIV-2 — serve the notice at `/privacy`, on the app's own domain.**
+  ✅ **Planned** ([plan](./plans/priv-2-serve-the-notice.md), 2026-10-13), and the plan splits it into
+  **two PRs**. First a docs-only `docs(priv-1)` that fills the blanks — there are **five** `⏳`, not
+  four, and one of them is a _paragraph_ to delete rather than a cell to fill — and corrects **three
+  factual errors** in the notice: it says _"there are no public pages"_, which this row makes false
+  (and the notice's own re-review trigger is "anything is made publicly visible"); its 7-day restore
+  promise contradicts both `runbooks.md` and its own next paragraph, in the **only** place the notice
+  quantifies retention; and the sign-off is an unfilled blank form. Then `feat(priv-2)`, which opens
+  **green**. The six-lens panel killed the first draft's "one PR, with a red merge gate for the PR's
+  life": `.husky/pre-push` runs `pnpm test` with no `set -e`, and `verify` is one `&&` chain with
+  `test` **fourth of ten**, so **`audit:check` would never run** on the PR whose supply-chain argument
+  rests on it. Build-time generation with a byte-exact drift test stands. The real `AUTH-1` gate: the
   Clerk and Google consent screens need a reachable privacy-policy URL. A page, one entry in
   `PUBLIC_PATHS` (`apps/web/lib/access-gate.ts` — the single definition), a footer link, one UX
   reviewer. ⚠️ **Not a one-file PR:** there is **no markdown pipeline in the tree**, so it must
@@ -1656,7 +1714,8 @@ movements_global_row_has_pattern` — **Squawk requires `NOT VALID` and `VALIDAT
   keep two copies of a privacy notice — the recommendation is the former, and it is the maintainer's
   call ([plan](./plans/priv-1-privacy-review.md) → Alternatives). Static or generated only — never a
   file read keyed on a request param. **Its acceptance also carries PRIV-1's four unfilled blanks:**
-  the Neon / Sentry / Vercel retention windows and the contact route. _(Beta 0.)_
+  the Neon / Sentry / Vercel retention windows and the contact route — reassigned by the plan to the
+  **first** PR, so they are not a gate on the one that ships code. _(Beta 0.)_
 
 - **PRIV-3 — the household deletion as a guarded script, with a `db:verify` proof.** Wraps
   [runbooks.md](./runbooks.md)'s procedure so the dry run, the target-host print and the

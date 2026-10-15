@@ -84,7 +84,7 @@ The DUALS-1 tournament sheet shipped with an 8-slot bracket mis-paired, which tu
 into byes. They looked plausible on screen. The fix added a schema assertion
 (`duals == poolTeamCount - 1`, #154), so a lost dual failed the build instead of rendering. (The
 feature was later retired, in #167.) When the status log, hand-written from memory, had drifted from
-the merge history and had to be reconciled (#156), the answer was `pnpm status:check` (#177), a local
+the merge history and had to be reconciled (#156), the answer was `pnpm status:check` (#177), a
 check that a product branch touches the status record, rather than a note to be more careful. The pattern holds across the repo: a
 failure that costs more than one attempt becomes a [lessons](./lessons.md) entry or a check.
 

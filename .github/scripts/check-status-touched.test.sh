@@ -115,6 +115,13 @@ rm "$tmp/docs/changelog/2026-10-01-feat-y-3.md"
 
 branch feat/y-4; echo "$RANDOM" >>"$tmp/docs/status.md" && git -C "$tmp" commit -qam 'docs: status'
 check "status.md alone fails after DX-2" 1 'adds no changelog fragment'
+# The CI escape hatch: the failure names the label, from the script's own const, and ci.yml sets
+# STATUS_SKIP from that same literal — so the message, the const and the workflow cannot drift apart.
+label="$(grep -o "SKIP_LABEL = '[^']*'" "$guard" | cut -d"'" -f2)"
+[ -n "$label" ] && printf '✓ %s\n' "SKIP_LABEL is defined" || { printf '✗ SKIP_LABEL not found in the guard\n'; fails=$((fails + 1)); }
+check "the failure names the CI skip label" 1 "$label"
+grep -qF "'$label'" "$(dirname "$guard")/../workflows/ci.yml" && printf '✓ %s\n' "ci.yml sets STATUS_SKIP from the same label" \
+  || { printf '✗ ci.yml does not mention the %s label\n' "$label"; fails=$((fails + 1)); }
 
 branch feat/y-5; frag 2026-10-01-feat-other.md; git -C "$tmp" add -A && git -C "$tmp" commit -qm 'docs: entry'
 check "fragment named for another branch fails" 1 'not a valid entry'
