@@ -20,7 +20,10 @@ import { NoticeArticle } from './notice-article';
  * a scanner for no benefit: the audience is the invited family and the consent screen, and both
  * arrive by link.
  *
- * ⚠️ **It comes off at AUTH-1**, in the PR that arms real auth.
+ * ⚠️ **It comes off at AUTH-1 chunk 1d**, the chunk that retires the gate and makes the session the
+ * boundary — named precisely, because "at AUTH-1" was ambiguous the moment AUTH-1 became six chunks.
+ * 1a (Clerk wired and dark) is NOT it: the gate is still the only boundary and `lib/rate-limit.ts`
+ * still fails open with Upstash unconfigured, so every reason above still holds.
  */
 export const metadata: Metadata = {
   title: NOTICE_TITLE,

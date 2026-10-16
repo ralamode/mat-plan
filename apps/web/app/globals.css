@@ -1,3 +1,10 @@
+/* AUTH-1 1a — Clerk's style layer, declared BEFORE Tailwind's so it sits BELOW them.
+   Layer priority is declaration order, and `@layer` statements are the one thing CSS allows ahead of
+   `@import`. `<ClerkProvider appearance={{ cssLayerName: 'clerk' }}>` (app/layout.tsx) is what puts
+   Clerk's CSS in here; unlayered, it would beat every Tailwind utility this app uses to hold the
+   sign-in card to the 44px tap-target bar. Inert while 1a is dark: no provider, no Clerk CSS. */
+@layer clerk;
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';

@@ -19,6 +19,7 @@ import {
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PRIVACY_PATH,
+  SIGN_IN_PATH,
   THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
   PARTIAL_SETS_COPY,
@@ -812,6 +813,37 @@ test.describe('public routes', () => {
       await page.goto(PRIVACY_PATH, { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `privacy (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `privacy (${viewport.width}px)`);
+    });
+
+    /**
+     * AUTH-1 1a — the sign-in screen, the THIRD public route. This describe ENUMERATES routes, so a
+     * new one joins no gate until somebody adds it; `app/pages-are-gated.test.ts` globs, which is
+     * why that half is easy to assume covers this one.
+     *
+     * ⚠️ **This measures the DARK state, and nothing in this repo can measure the other one.** CI has
+     * no Clerk keys, so `/sign-in` renders the plain fallback panel here; the keys-present state is
+     * Clerk's own CDN-shipped DOM, at a FLOATING MAJOR (`@clerk/clerk-js@6`, `@clerk/ui@1` —
+     * `@clerk/shared/dist/versionSelector.mjs`), on a page this project cannot reach without an
+     * instance. So no a11y property of Clerk's card is pinned by anything here
+     * (`docs/tech-debt.md` carries the row). Naming that is the point: a test called "sign-in" that
+     * reported green over a vendor card it never loaded would be the gate-that-isn't this file exists
+     * to stop.
+     *
+     * ⚠️ `expectTapTargets` is NOT called, for the reason the notice above records: the fallback has
+     * no button, select, textarea or input — its one control is a `Button asChild` wrapping a `Link`,
+     * i.e. an `<a>` — so the selector would match nothing and fail its own "selector is wrong" guard.
+     * `expectLinkTapTargets` is the right helper, and the count is exact: ONE link in `<main>`, the
+     * way out to the gate. `/` and `PRIVACY_PATH` are deliberately absent from the page because the
+     * footer already carries them on every route.
+     */
+    test(`the sign-in screen at ${viewport.width}px: axe, no overflow, its one way out`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto(SIGN_IN_PATH, { waitUntil: 'networkidle' });
+      await expectNoAxeViolations(page, `sign-in, dark state (${viewport.width}px)`);
+      await expectNoHorizontalOverflow(page, `sign-in, dark state (${viewport.width}px)`);
+      await expectLinkTapTargets(page, `sign-in, dark state (${viewport.width}px)`, 1);
     });
   }
 });

@@ -46,10 +46,24 @@ export const APP_HOME_PATH = '/p';
  *
  * It lands HERE, beside `APP_HOME_PATH`, not in `lib/access-gate.ts`: that module is the one AUTH-1
  * splits and deletes, and `SIGN_IN_PATH` is settled the same way for the same reason. From here it
- * never moves — `access-gate.ts` imports it for `PUBLIC_PATHS` and the footer links to it, and the
- * Clerk and Google consent screens are configured with this path, so it is a PUBLISHED URL.
+ * never moves — `lib/public-paths.ts` imports it for `PUBLIC_PATHS` and the footer links to it, and
+ * the Clerk and Google consent screens are configured with this path, so it is a PUBLISHED URL.
  */
 export const PRIVACY_PATH = '/privacy';
+
+/**
+ * Clerk's prebuilt sign-in (AUTH-1 1a) — the `app/sign-in/[[...rest]]/` catch-all segment, and the
+ * root of the one subtree `lib/public-paths.ts` serves without a session.
+ *
+ * It lands HERE for the reason `PRIVACY_PATH` does: `lib/access-gate.ts` is the module 1a splits and
+ * 1d deletes, so a route constant placed there would have to move twice.
+ *
+ * ⚠️ **This and `APP_HOME_PATH` feed `<ClerkProvider>`'s `signInUrl` /
+ * `signInFallbackRedirectUrl` props** (`app/layout.tsx`) rather than a second copy in
+ * `NEXT_PUBLIC_CLERK_SIGN_IN_URL`. Clerk reads those env vars when they are set, which is exactly how
+ * the route would silently drift from this constant; passing props keeps one definition.
+ */
+export const SIGN_IN_PATH = '/sign-in';
 
 /**
  * The token-set preview harness (UI-4, built to serve UI-3). Named here because the a11y spec and the
@@ -112,6 +126,41 @@ export const GATE_COPY = {
   back: `About ${APP_NAME}`,
   /** A wrong code. */
   incorrect: 'Incorrect access code.',
+} as const;
+
+/**
+ * The sign-in screen's copy (AUTH-1 1a).
+ *
+ * `heading` is the ONE `<h1>` in BOTH of the screen's states — over Clerk's card and over the dark
+ * panel — and it names the MECHANISM rather than the product. `/gate`'s `<h1>` is `APP_NAME`, which
+ * works above a form whose subhead explains itself but tells a reader of this screen nothing (WCAG
+ * 2.4.6, which axe cannot evaluate). It also must not be a bare "Sign in": `LANDING_COPY.gateCta`
+ * already calls the access code "Household sign-in", so a screen saying "sign-in isn't switched on"
+ * would contradict the button the reader tapped one screen earlier. Naming Google separates them.
+ *
+ * `notYet` + `codeStillWorks` + `gateCta` are the dark state, which is the ONLY state that reaches
+ * production at 1a. It leads with the state rather than an imperative (the `PICKER_EMPTY_COPY.notYet`
+ * family), says "isn't switched on yet" — a configuration fact, so the maintainer verifying the
+ * deploy can tell dark from broken — and asks the reader for nothing. The exit points at `GATE_PATH`,
+ * not `/`: ONE control then serves both readers, because `proxy.ts` sends a caller who already holds
+ * the cookie straight on to `APP_HOME_PATH`. The footer already carries `/` and `PRIVACY_PATH` on
+ * every route, so the page adds neither — two same-href links in one document read as a duplicate
+ * destination in a screen-reader link list, and axe does not flag it.
+ *
+ * `processor` + `privacyLink` are the lit state only, and they are DISCLOSURE AT THE DECISION POINT:
+ * the footer's "Privacy notice" link is chrome below a vendor card, Google's own consent screen
+ * appears only AFTER the tap and is skipped for a returning account, and Clerk's "Secured by Clerk"
+ * badge is a vendor's branding, not our disclosure. The link is labelled by what it ANSWERS rather
+ * than by the document's title, which is also what keeps it distinct from the footer's.
+ */
+export const SIGN_IN_COPY = {
+  heading: 'Sign in with Google',
+  notYet: 'Signing in with Google isn’t switched on yet.',
+  codeStillWorks: 'The household access code is still the way in.',
+  gateCta: 'Enter the access code',
+  processor:
+    'This screen is run by Clerk. Signing in tells us the email address on your Google account — nothing else from it, and nothing about your athletes is sent to Google.',
+  privacyLink: 'What this app stores, and how to get it back or delete it',
 } as const;
 
 /**

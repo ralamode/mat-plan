@@ -10,6 +10,25 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+✅ **AUTH-1 chunk 1a has landed: Clerk is wired, and dark (2026-10-16).**
+`@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional**, no instance configured, and
+every caller sees exactly what they saw yesterday — and that is a branch in our own code
+(`apps/web/lib/clerk.ts`), not a vendor behaviour we hoped for, because at this version Clerk's
+provider **throws** on a missing publishable key when its keyless path is live. `next.config.ts` pins
+Clerk's telemetry **and** its keyless auto-provisioning off in code; the latter would have provisioned
+a live Clerk application from a `pnpm dev`. `/sign-in` is the third public route (`noindex`), ran a
+three-lens UX panel before it was written, and while dark it names the access code as the way in. The
+CSP is widened for Clerk **by exact origin derived from the publishable key, never a wildcard**, and
+**`style-src` is deliberately untouched** — the one CSP question that needs a real instance, now a
+runbook box rather than a guess. 1a also closed the **`/api` matcher hole** `SECURITY.md` and
+`tech-debt.md` carried, and split `lib/access-gate.ts` into `lib/safe-redirect.ts` +
+`lib/public-paths.ts` so chunk 1d is a pure delete. **What remains on the `AUTH-1` path:** chunk
+**1b-bis** (the action-enumeration guard, test-only) next, and the **console configuration** itself
+— whose first box is now _production keys stay unset until 1c_, because between 1a and 1c a completed
+Google sign-in would land on a shared-password prompt. ⚠️ Nothing in this repo can measure the LIT
+sign-in screen (no keys in CI, Clerk's DOM ships from a CDN at a floating major) —
+[tech-debt.md](./tech-debt.md) carries the row and the runbook carries the owed panel.
+
 ✅ **PRIV-2 has landed: the privacy notice is served at `/privacy`, and `AUTH-1`'s consent-screen URL
 now exists (2026-10-15).** The notice is rendered from
 [docs/privacy/notice.md](./privacy/notice.md) into a committed module by `pnpm privacy:generate`, with

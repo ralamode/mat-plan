@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { isPublicPath, isUngatedPath } from '@/lib/access-gate';
+import { isUngatedPath } from '@/lib/access-gate';
+import { isPublicPath } from '@/lib/public-paths';
 
 /**
  * SEC-1's invariant as a test, not a sentence (OSS-2). The proxy is NOT the boundary: every page and
@@ -56,6 +57,17 @@ describe('every page is gated or deliberately un-gated', () => {
 });
 
 describe('every Route Handler checks the gate itself', () => {
+  /**
+   * 🔴 AUTH-1 1a. The sibling page suite has had a non-vacuity floor since OSS-2; this one had none,
+   * so an empty glob would have passed it silently. 1a is the chunk that leans on it: removing the
+   * `api` exclusion from `proxy.ts`'s matcher closes the "/api hole", and `docs/tech-debt.md`'s own
+   * prescription for that hole was "do BOTH" — drop the exclusion AND prove a check per handler. A
+   * per-handler proof that can go vacuous is not the second half.
+   */
+  it('finds the handlers (an empty glob would pass everything below)', () => {
+    expect(handlers.length).toBeGreaterThan(0);
+  });
+
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
     expect(
       /\b(?:isValidGateCookie|hasGateAccess)\(/.test(code(file)),
@@ -128,5 +140,43 @@ describe('public pages pull no Server Action into their module graph', () => {
     expect(graph.length).toBeGreaterThan(2);
     const actions = graph.filter((f) => USE_SERVER_RE.test(code(f)));
     expect(actions.map((f) => relative(WEB_DIR, f))).toEqual([]);
+  });
+});
+
+/**
+ * 🔴 AUTH-1 1a — the limitation above, answered rather than restated.
+ *
+ * The suite follows LOCAL imports only, because "a package cannot contain this app's actions". 1a
+ * puts `<ClerkProvider>` in the root layout, so `@clerk/nextjs` is now in EVERY public page's module
+ * graph and is the first third-party package there — and it does ship `'use server'` modules, which
+ * the runbook's grep box predicted and which this pins so a bump cannot add a third unnoticed.
+ *
+ * Both are benign, and that is the statement the plan asked for in place of extending the crawler:
+ *
+ *  - `app-router/server-actions.js` → `invalidateCacheAction()` deletes a cookie named
+ *    `__clerk_invalidate_cache_cookie_${Date.now()}`, which by construction never exists. It reads
+ *    nothing, writes nothing durable and takes no arguments, so an unauthenticated POST to it
+ *    accomplishes nothing.
+ *  - `app-router/keyless-actions.js` → `deleteKeylessAction()` returns immediately unless
+ *    `canUseKeyless`, which `next.config.ts` pins OFF via `NEXT_PUBLIC_CLERK_KEYLESS_DISABLED`. Even
+ *    armed it only removes Clerk's own local development key file.
+ *
+ * ⚠️ **Re-verify on every `@clerk/nextjs` bump.** A red row here means Clerk added or renamed a
+ * Server Action reachable from every public page of this app, and that is an auth-path change to be
+ * reviewed by hand in its own PR — the treatment `.github/SECURITY.md` already gives
+ * `claude-code-action` — not routine Dependabot noise.
+ */
+describe('@clerk/nextjs is the first package in a public graph, so its Server Actions are pinned', () => {
+  const CLERK_ESM = resolve(WEB_DIR, 'node_modules/@clerk/nextjs/dist/esm');
+
+  it('is installed where this suite can read it', () => {
+    expect(existsSync(CLERK_ESM)).toBe(true);
+  });
+
+  it('ships exactly the two known, benign actions', () => {
+    const found = globSync('**/*.js', { cwd: CLERK_ESM })
+      .filter((f) => USE_SERVER_RE.test(readFileSync(join(CLERK_ESM, f), 'utf8')))
+      .sort();
+    expect(found).toEqual(['app-router/keyless-actions.js', 'app-router/server-actions.js']);
   });
 });
