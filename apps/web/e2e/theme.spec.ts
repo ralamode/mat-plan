@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { APP_HOME_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
+import { APP_HOME_PATH, SIGN_IN_PATH, THEME_COPY, THEME_STORAGE_KEY } from '../lib/constants';
 
 /**
  * UI-4 — the theme switch, proven at the only level that can prove it.
@@ -188,4 +188,55 @@ test('with no stored choice, Auto follows the device', async ({ page }) => {
 
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
+});
+
+/**
+ * AUTH-1 1a — `/sign-in`, the app's first route with a third-party runtime on it.
+ *
+ * ⚠️ **What each half of this test is worth, said plainly, because one of them is weaker than it
+ * looks.** The plan names the zero-`securitypolicyviolation` assertion as a proof that the Clerk CSP
+ * widening is right. With no Clerk keys it is **not** that proof and cannot be: `<ClerkProvider>` is
+ * not rendered at all and `ClerkScripts` returns `null` without a publishable key, so there is no
+ * Clerk asset on the page to violate anything. It is a REGRESSION GUARD for the lit state — it starts
+ * proving something the day an instance is configured, and until then it proves that adding the route
+ * and the provider branch broke nothing about the nonce pipeline. The first person to configure an
+ * instance still has to load this page and look (see `proxy.ts:buildCsp`'s `style-src` box).
+ *
+ * The second half IS load-bearing today, and it is the one assertion that makes "1a ships dark" a
+ * tested claim rather than a reading of vendor source: **with no keys, no request leaves the browser
+ * for a Clerk host, on any of the three ungated routes.** Note that this must be asserted BEFORE the
+ * CSP is widened for a real instance — once `connect-src` names the Frontend API, a live egress
+ * produces zero violations by construction, so the violation assertion could never catch it.
+ */
+test('sign-in renders with no Clerk keys: nothing CSP-blocked, and no Clerk egress', async ({
+  page,
+}) => {
+  const clerkRequests: string[] = [];
+  page.on('request', (request) => {
+    const { host } = new URL(request.url());
+    if (/(^|\.)clerk\.com$|clerk\.accounts\.dev$|clerk-telemetry\.com$/.test(host)) {
+      clerkRequests.push(request.url());
+    }
+  });
+
+  for (const path of ['/', SIGN_IN_PATH]) {
+    await recordFirstClassMutation(page);
+    const response = await page.goto(path, { waitUntil: 'networkidle' });
+    expect(response?.status(), `${path} did not render`).toBe(200);
+
+    const violations = await page.evaluate(
+      () => (window as unknown as { __cspViolations: string[] }).__cspViolations,
+    );
+    // Same narrowing as above: zod's JIT feature probe raises one pre-existing `script-src eval`
+    // report on every page in this app. An un-nonced inline script reports `inline`.
+    expect(
+      violations.filter((v) => v.startsWith('script-src inline')),
+      `${path}: inline script blocked by CSP. All violations: ${violations.join(' | ')}`,
+    ).toEqual([]);
+  }
+
+  expect(
+    clerkRequests,
+    `a Clerk host was contacted with no publishable key set — "1a ships dark" is false: ${clerkRequests.join(' | ')}`,
+  ).toEqual([]);
 });

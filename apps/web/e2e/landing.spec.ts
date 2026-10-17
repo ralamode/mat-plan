@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
 
-import { GATE_PATH, PUBLIC_PATHS } from '../lib/access-gate';
+import { GATE_PATH } from '../lib/access-gate';
+import { PUBLIC_PATHS } from '../lib/public-paths';
 import {
   APP_HOME_PATH,
   APP_NAME,

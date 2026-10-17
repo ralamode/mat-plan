@@ -6,15 +6,11 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import {
-  GATE_COOKIE_NAME,
-  gateTokenFor,
-  internalPathname,
-  safeInternalPath,
-} from '@/lib/access-gate';
+import { GATE_COOKIE_NAME, gateTokenFor } from '@/lib/access-gate';
 import { APP_HOME_PATH, COOKIE_MAX_AGE, GATE_COPY } from '@/lib/constants';
 import { env } from '@/lib/env';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { internalPathname, safeInternalPath } from '@/lib/safe-redirect';
 
 /**
  * Server Action for the access-gate stopgap. A Server Action is a PUBLIC POST

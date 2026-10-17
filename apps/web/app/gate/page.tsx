@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { safeInternalPath } from '@/lib/access-gate';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { APP_NAME, GATE_COPY, QUIET_LINK_CLASS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 

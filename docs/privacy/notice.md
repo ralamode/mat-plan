@@ -42,8 +42,11 @@ is usually typing.
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item so the same entry is not saved twice.
 
-**What we never ask for**: no email address _(until sign-in arrives — see "What is changing")_, no
-phone number, no address, no payment details, no photos, no location, and no date of birth.
+**What we never ask for**: no email address, no phone number, no address, no payment details, no
+photos, no location, and no date of birth. _Signing in with Google is being rolled out and is **not
+switched on yet** — when it is, Google will give Clerk the email address on your Google account. This
+app's own database will still never store it, no athlete's record will contain it, and **a child is
+never asked for one.** See "What is changing"._
 
 ## Children
 
@@ -70,9 +73,9 @@ still works.
 - **The maintainer.** The person who runs the app has direct access to the database and can see
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
 - **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
-  no analytics about you, and your data is never sold or shared for anyone else's purposes. The only
-  pages anyone can open without the code are the landing page and this notice, and neither one reads
-  your data.
+  no analytics about you, and your data is never sold or shared for anyone else's purposes. Three
+  pages can be opened without the code — the landing page, this notice, and the sign-in screen — and
+  none of the three reads your data.
 
 **Three honest limitations during the beta:**
 
@@ -91,23 +94,29 @@ still works.
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches           | What they get                                                                                                                                   |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**                 | The database — **everything stored**.                                                                                                           |
-| **Vercel**               | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested. |
-| **GitHub**               | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                              |
-| **Sentry**               | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                   |
-| **Upstash**              | **Your IP address only**, briefly, to stop someone guessing the access code.                                                                    |
-| **Clerk** and **Google** | _Not yet._ When sign-in arrives they will handle your email address and Google account — see "What is changing".                                |
-| **Anthropic**            | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                          |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                         |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                               |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                            |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                 |
+| **Upstash**    | **Your IP address only**, briefly, to stop someone guessing the access code.                                                                                                                                                                                                                                                                                  |
+| **Clerk**      | Runs the sign-in screen. **Its code ships with the app now, and sign-in is not switched on yet** — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data. |
+| **Google**     | _Only if you sign in with Google_, and not yet. Google is told that you signed in to this app, and gives Clerk the email address and account identifier on your Google account. Nothing about your athletes is ever sent to Google.                                                                                                                           |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                        |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
 recording anywhere. The honest version is **"designed and tested to carry none of your data"**, not
 "cannot" — an unexpected fragment in an error message is always possible.
 
-**No tracking.** No advertising network, no analytics product, no social buttons, no third-party fonts.
-Your browser talks to this app and nothing else.
+**No tracking.** No advertising network, no analytics product, no social buttons, no third-party
+fonts. **Today your browser talks to this app and nothing else** — the code for the sign-in screen
+ships with the app, but with sign-in switched off nothing of it runs and no request leaves for anyone
+else. When sign-in is switched on, **one** thing changes and it is not tracking: opening the sign-in
+screen loads Clerk's code and talks to Clerk's servers, so Clerk sees your IP address and your browser
+on **that screen**. Nothing about your athletes, their training or their weight is ever involved, and
+Clerk's own usage reporting is switched off in this app's code rather than left on by default.
 
 ## How long we keep it
 
@@ -115,7 +124,7 @@ Your browser talks to this app and nothing else.
 | ------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | Your training data                    | While you are using the app. Deleted when you ask, and we will ask you once when the beta ends. |
 | **Something you "delete" in the app** | ⚠️ **Hidden, not erased.** See below.                                                           |
-| Sign-in and timezone cookies          | One year                                                                                        |
+| Access-code and timezone cookies      | One year                                                                                        |
 | Your theme choice                     | In your browser, until you clear it                                                             |
 | The IP address used for rate limiting | Minutes                                                                                         |
 | Server error reports                  | 30 days                                                                                         |
@@ -139,9 +148,10 @@ named by an internal identifier, not by a person.
 activities, the daily readiness colour, the "how it felt" notes, and the per-athlete prescribed
 targets. The export covers your logged training; it is not yet a complete copy.
 
-**If you want everything, ask** and you will be sent a full copy. And **export before you delete
-anything** — once a profile is removed, its data can no longer be exported, even though it is still in
-the database.
+**If you want everything, ask** and you will be sent a full copy — including, once sign-in is switched
+on, what Clerk holds about your login: your email address, your Google account identifier, and when
+you signed in. And **export before you delete anything** — once a profile is removed, its data can no
+longer be exported, even though it is still in the database.
 
 ## Deleting your data
 
@@ -183,10 +193,16 @@ Because this cannot be undone and there is currently no per-person login to prov
 
 ## What is changing
 
-Sign-in with Google is being added. When it arrives you will have a personal login instead of a shared
-code, this notice will be updated before it goes live, and you will be asked to agree to it as part of
-signing up. At that point Clerk and Google will handle your email address and Google account
-identifier.
+**Sign-in with Google is being rolled out.** The code for it ships with the app today, which is why
+**Clerk is listed above as a processor from now on** — and it is **not switched on**: everyone still
+gets in with the shared household access code, nobody has an account, and nothing has been sent to
+Clerk or to Google. When it is switched on you will have a personal login instead of the shared code,
+Clerk and Google will handle your email address and your Google account identifier, and this notice
+will say so in the present tense on that day.
+
+**How your agreement is recorded.** Signing up is by invitation only, so the record of who was asked,
+and when, is the invitation itself — this app does not store a separate consent timestamp. If you would
+rather not have an account, say so and the shared code keeps working for you.
 
 ## Asking for anything
 
