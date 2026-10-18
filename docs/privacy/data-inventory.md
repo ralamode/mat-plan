@@ -222,13 +222,31 @@ a parent the consequence, this file links the cause.
 
 ## 5. "Deleted" does not mean deleted
 
-There is **no hard `DELETE` anywhere** in the app or the DAL. Soft delete is the only delete, it is
-written in exactly one place in the whole repo (a committed data correction), and every uniqueness
-arbiter is `WHERE deleted_at IS NULL` — so a soft-deleted row **stays in the database indefinitely**
-and a replacement coexists with it. Nothing purges them.
+There is **no hard `DELETE` anywhere** in the app or the DAL. Soft delete is the only delete, and it is
+written in exactly one place in the app tree (a committed data correction). **Nothing purges a
+soft-deleted row today**, so it stays in the database indefinitely and a replacement coexists with it.
+
+⚠️ **Correction (2026-10-18, [ADR 0008](../decisions/0008-deletion.md)):** this section previously said
+_"every uniqueness arbiter is `WHERE deleted_at IS NULL`"_. That is wrong, and it was wrong when written.
+**Fourteen are partial** on `deleted_at`, so a soft delete frees the **natural** key — `client_id`, the
+weigh-in day, the quantity arity, every ordinal-within-parent. **The `public_id` UNIQUE on all fifteen
+soft-deletable tables is not**, so a soft-deleted row **keeps its addressable id**; and `movements`' two
+arbiters are partial on `household_id` instead. The rule is _"a soft delete frees the natural key and keeps
+the public one"_, not _"it frees everything"_. Two consequences people were told the wrong version of:
+un-deleting a row can **fail** where a live row took the freed slot, and a hidden profile is still
+addressable, so restoring its export path needs no migration.
+
+**This is a description of the code today, not the policy.** [ADR 0008](../decisions/0008-deletion.md)
+decides that a per-item delete **hides, then purges at `N`**, and that a hidden row stays **restorable
+until it is purged** — so once `V1-9b` and `PRIV-3` land, "stays indefinitely" stops being true and this
+section is rewritten with them.
 
 Also: soft-deleting a _profile_ hides it from the picker **and from the export route**, so its data
 becomes un-exportable while remaining in the database. Get the export before anything is removed.
+⚠️ The export filters soft-deleted rows at **five** places (`packages/db/src/queries/export-month.ts` →
+`strengthMonthRows`, `bodyweightMonthRows`, `loggedMonths`), so this is **not** only a profile-level
+hazard: once a per-item delete exists, every hidden entry is data we hold and the person cannot export.
+ADR 0008 makes _"a hide must never remove the export path"_ a precondition on `V1-9b`.
 
 The only path that actually removes rows is the household deletion in
 [runbooks.md](../runbooks.md) → "Delete a household and everyone in it".
@@ -250,6 +268,10 @@ notes) and bodyweight (date, weight, context, notes).
   so a metric or check-in entry reaches **no file at all**.
 - `day_readiness.gate_color` · `ramp_targets.target_value` · `sessions.feel` ·
   `profiles.routine_config` · `prescription_targets` (folded only into a derived `prescribed` string).
+- **Soft-deleted ("hidden") rows.** Every export query filters `deleted_at IS NULL`, so a hidden entry
+  is absent from the zip while still held in the database. Invisible today because nothing user-facing
+  writes `deleted_at`; a standing property once `V1-9b` ships a Delete button
+  ([ADR 0008](../decisions/0008-deletion.md)).
 - A profile with readiness rows but no entries exports an **empty zip** (`loggedMonths` keys off
   `entries`).
 
