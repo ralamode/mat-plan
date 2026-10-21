@@ -1,7 +1,34 @@
 import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 
-const nextConfig: NextConfig = {/* config options here */};
+/**
+ * AUTH-1 1a — Clerk's two opt-outs, pinned HERE rather than left to an environment variable.
+ *
+ * `next.config.ts`'s `env` is inlined at build time into both bundles, so these hold for every build,
+ * every `next dev`, CI, and every preview — the runbook's requirement was *disable it in code, not
+ * only by env*, and an env var that has to be remembered in five places is the thing that gets
+ * forgotten in the sixth. Both names are read off the pinned `@clerk/nextjs@7.9.15`
+ * (`dist/esm/server/constants.js:24-26`), and both are `NEXT_PUBLIC_` because Clerk reads them in the
+ * browser as well as on the server — neither carries a secret.
+ *
+ * - **Telemetry.** `@clerk/nextjs` ships an anonymous collector that POSTs to
+ *   `clerk-telemetry.com`. This app holds minors' health data in a public repo; an SDK deciding on
+ *   its own what to send to a vendor endpoint is not a trade this project makes, and keeping it off
+ *   is also what keeps `clerk-telemetry.com` out of the CSP's `connect-src`
+ *   (`proxy.ts:buildCsp`) and out of `docs/privacy/data-inventory.md` § 7.
+ * - **Keyless.** With no publishable key in development, Clerk's keyless path
+ *   (`dist/esm/server/keyless-node.js` → `createAccountlessApplication`) would PROVISION A LIVE CLERK
+ *   APPLICATION from a developer's machine — a new processor relationship created by a `pnpm dev`,
+ *   writing keys to disk. 1a ships dark on purpose; "dark" must not mean "quietly signed up".
+ *   `lib/clerk.ts` independently refuses to render `<ClerkProvider>` without both keys, so this is
+ *   the second of two locks rather than the only one.
+ */
+const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_CLERK_TELEMETRY_DISABLED: '1',
+    NEXT_PUBLIC_CLERK_KEYLESS_DISABLED: '1',
+  },
+};
 
 /**
  * Sentry build-time wiring (V1-14a).

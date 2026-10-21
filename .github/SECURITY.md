@@ -12,8 +12,14 @@ real user of this system, and the in-app profile tiles are a **UX switch, never 
 A **coach** is a future cross-household grant (`COACH-1`, captured, not scoped). Two actors this file
 previously left unstated and should not: the **operator/maintainer**, who has direct database access,
 runs SQL by hand and leaves no audit trail — the most privileged actor here, and not a hypothetical
-one; and the **unauthenticated internet caller**, which is why the `/api` matcher hole
-([tech-debt](../docs/tech-debt.md)) is a live concern and not a tidy-up.
+one; and the **unauthenticated internet caller**, which is why every page, action and handler
+re-checks for itself and the proxy is never the boundary. ✅ **The `/api` matcher hole this paragraph
+used to point at is closed** (`AUTH-1` 1a): `apps/web/proxy.ts`'s matcher no longer excludes `api`, and
+`app/pages-are-gated.test.ts`'s handler suite gained the non-vacuity floor that makes its per-handler
+proof the other half — which is what `docs/tech-debt.md` always prescribed ("do both"). ⚠️ Read it as
+"no gap at any entry point that reads household data", **not** "no matcher-shaped gap":
+`_next/static/`, `_next/image` and `favicon.ico` are still excluded, and `/_next/image` is a live
+request-handling surface.
 
 **BOLA/IDOR is still the #1 risk**, and it is now **between families**, not only between profiles
 inside one household. **Kid bodyweight is still the one privileged field.** The future MCP/REST API is
