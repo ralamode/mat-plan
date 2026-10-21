@@ -2468,16 +2468,26 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
 
   **PLAN: [auth-1-clerk-google.md](./plans/auth-1-clerk-google.md)** — **six chunks** (Clerk wired dark
   → the enumeration guard → `household_members` + the claim correction dark → the Playwright session
-  story → the boundary moves → retire the gate), **hardened by a seven-lens panel**. The gate and the
-  session are **both** enforced across the cutover on purpose: AND-composition is what removes the
-  window in which neither holds. Three things the plan found that the milestone's prose does not say:
-  `beta-1.md` § 3's _"existing export-enumeration test"_ is an export-**shape** guard that would pass a
-  brand-new action with no auth check at all (the real coverage is a hand-maintained array nothing
-  cross-checks); `TEN-1` 1d's claim that the `cross_household` event _cannot fire_ before AUTH-1 is
-  over-stated (a profile pointing at a soft-deleted household reaches it today), so what AUTH-1 owes
-  is the row-level `db:verify` proof, not a first firing; and _"a new user gets a new, empty
-  household"_ is the clause that opens `TEN-2`'s proven catalog write, so the plan recommends it
-  **leave AUTH-1** for the invite row.
+  story → the boundary moves → retire the gate), **hardened by a seven-lens panel**.
+  ✅ **Chunk 1a is done (2026-10-16)** — `@clerk/nextjs@7.9.15` pinned, both keys **optional**, no
+  instance configured, so the app is unchanged for every caller; `/sign-in` exists and says so. It
+  also closed the **`/api` matcher hole** and split `lib/access-gate.ts` into `lib/safe-redirect.ts`
+  - `lib/public-paths.ts` so 1d is a pure delete. Three things it found that the plan could not:
+    Clerk's provider **throws** on a missing key when its keyless path is live (so `<ClerkProvider>` is
+    rendered conditionally, and the keyless switch — which would have provisioned a **live Clerk
+    application from a `pnpm dev`** — is pinned off in `next.config.ts` alongside telemetry); the
+    `'use server'` grep came back **non-empty** (two benign Clerk actions, now pinned by a test); and
+    `style-src` is the one CSP question an instance is needed to answer, so it was recorded as a
+    runbook box rather than guessed. **Next: 1b-bis**, the enumeration guard. The gate and the
+    session are **both** enforced across the cutover on purpose: AND-composition is what removes the
+    window in which neither holds. Three things the plan found that the milestone's prose does not say:
+    `beta-1.md` § 3's _"existing export-enumeration test"_ is an export-**shape** guard that would pass a
+    brand-new action with no auth check at all (the real coverage is a hand-maintained array nothing
+    cross-checks); `TEN-1` 1d's claim that the `cross_household` event _cannot fire_ before AUTH-1 is
+    over-stated (a profile pointing at a soft-deleted household reaches it today), so what AUTH-1 owes
+    is the row-level `db:verify` proof, not a first firing; and _"a new user gets a new, empty
+    household"_ is the clause that opens `TEN-2`'s proven catalog write, so the plan recommends it
+    **leave AUTH-1** for the invite row.
 
   **And what the panel changed, because the plan's decisions survived but several of its mechanisms did
   not.** It overturned no decision and no finding, but it rewrote the resolver's query (it dropped the

@@ -1055,9 +1055,11 @@ Every FK except the two cascades is `NO ACTION`, so a table this procedure misse
 the transaction rather than silently orphaning rows; that is a real safety property, not a hope — and
 `movements.household_id` is exactly that property firing, which is why step 11 exists.
 
-**6. Delete the Clerk users** (after `AUTH-1`). Clerk dashboard → each user id recorded at step 0b →
-Delete user. The database delete does not touch Clerk. Before `AUTH-1` there are no per-person
-accounts; the shared gate password is **rotated**, not deleted.
+**6. Delete the Clerk users** (once sign-in is switched on — chunk **1c**, not 1a). Clerk dashboard →
+each user id recorded at step 0b → Delete user. The database delete does not touch Clerk. ⚠️ **`AUTH-1`
+1a merged Clerk wired and DARK**, with no instance configured and no production keys, so there are
+still no per-person accounts and this step is still a no-op: the shared gate password is **rotated**,
+not deleted. It becomes live on the day the AUTH-1 checklist's first box is ticked.
 
 **7. Close out.** Record completion in the ledger, delete the held restore branch once the 7-day
 window has passed, and tell the household it is done — pointing them at
@@ -1142,3 +1144,106 @@ invite-only setting).
 - [ ] **Confirm the production `DATABASE_URL` carries an `sslmode` parameter.** `client.ts` upgrades
       one to `verify-full` but explicitly will not invent one, and nothing validates it — so TLS
       verification in production is an environment fact, not a code guarantee.
+
+### The dashboard half — added by `AUTH-1` chunk 1a
+
+1a merged with `@clerk/nextjs` **wired and dark**: both keys optional, no instance configured, nothing
+sent to Clerk. Everything below is what has to be true **before an instance is pointed at production**.
+Work it top to bottom with the console open; several boxes are one console read each and are owed as
+`data-inventory.md` rows, not as opinions.
+
+- [ ] 🔴 **Production keys stay UNSET until chunk 1c.** This is the one box that is about _not_ doing
+      something, and it is the UX panel's finding, not a precaution: between 1a and 1c a completed
+      Google sign-in grants nothing, lands on `APP_HOME_PATH`, and is bounced to `/gate` for the shared
+      password — so the reward for signing in is a password prompt, with no explanation on screen. Use
+      the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
+      correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
+      sends you; it does not require the app's `/sign-in` to be live in production.
+- [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
+- [ ] **Sign-up restricted to invited emails.** ⚠️ **Verify, do not assume, and record what you read:**
+      whether the setting exists at the pinned version, what it is called, and **whether it blocks
+      sign-up or only warns.** If it does not block, the "no household #2" question is re-opened before
+      1c ships. 📌 **Which half is vendor and which is code:** account **creation** can only be held by
+      the dashboard — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is public by design, so Clerk's Frontend API
+      is reachable without going through this app and no code here can sit in front of sign-up. The
+      exit criterion is narrower and **is** held in code: an uninvited Google account cannot create a
+      **household**. Record the residual even if the setting works — an unrestricted instance means
+      **Clerk holds uninvited people's email addresses**, which is a `data-inventory.md` §7 re-review
+      trigger, not merely an availability concern.
+- [ ] **The production instance's own Google OAuth credentials**, development instance kept separate.
+- [ ] 🔴 **The exact OAuth SCOPE list, pinned to the minimum that signs a user in.** A conventional
+      `openid email profile` request also returns `name`, `given_name`, `family_name` and `picture`,
+      while `data-inventory.md` §7 pins the claim to "an email address and a Google account identifier"
+      and [notice.md](./privacy/notice.md) claims **"no photos"**. If `profile`/`picture` is
+      unavoidable, both documents are edited in the chunk that configures the instance — and **nothing
+      may ever write `profiles.avatar` from Clerk** (§2 already flags that column: what it would hold is
+      a picture of a child).
+- [ ] 🔴 **Clerk's data region**, and whether it is selectable on the tier in use.
+- [ ] 🔴 **Clerk's retention** for user records and sign-in/session logs → a `data-inventory.md` §8 row.
+      `beta-1.md`'s exit criterion requires the notice to ship **with no blanks**, so read it while the
+      console is open for the free-tier box rather than adding a fourth "not confirmed".
+- [x] **Telemetry — answered at 1a, in code.** `@clerk/nextjs@7.9.15` reads
+      `NEXT_PUBLIC_CLERK_TELEMETRY_DISABLED` (`dist/esm/server/constants.js`) and
+      `apps/web/next.config.ts` pins it on, so it holds for every build, `pnpm dev`, CI and preview
+      without anyone remembering it. Keeping it off is also what keeps `clerk-telemetry.com` out of the
+      CSP. **Re-check on every `@clerk/nextjs` bump.**
+- [x] **Keyless auto-provisioning — answered at 1a, in code, and it mattered.** At the pinned version,
+      `pnpm dev` with no publishable key would have taken Clerk's keyless path
+      (`dist/esm/server/keyless-node.js` → `createAccountlessApplication`) and **provisioned a live
+      Clerk application from a developer's machine** — a new processor relationship created by a dev
+      server. `next.config.ts` pins `NEXT_PUBLIC_CLERK_KEYLESS_DISABLED`, and `lib/clerk.ts`
+      independently refuses to render `<ClerkProvider>` without both keys, so it is two locks.
+- [x] **The `'use server'` grep — run at 1a, non-empty, and pinned by a test.**
+      `grep -rl "use server" apps/web/node_modules/@clerk/nextjs/dist/esm` returns **two** modules:
+      `app-router/server-actions.js` (`invalidateCacheAction`, which deletes a cookie named
+      `__clerk_invalidate_cache_cookie_${Date.now()}` that by construction never exists — reads
+      nothing, takes no arguments) and `app-router/keyless-actions.js` (`deleteKeylessAction`, inert
+      because of the box above). Both are now reachable from every public page's module graph, because
+      `<ClerkProvider>` is in the root layout. `app/pages-are-gated.test.ts` asserts the set is
+      **exactly those two**, so a bump that adds a third turns CI red. **Give a Clerk bump its own
+      reviewed PR**, the treatment [SECURITY.md](../.github/SECURITY.md) already gives
+      `claude-code-action` — not routine Dependabot noise.
+- [x] **Clerk's CSP requirements — read at 1a and recorded.** Read off the pinned version's own
+      `dist/esm/server/content-security-policy.js` (`DEFAULT_DIRECTIVES`), then narrowed to what this
+      app uses: the instance's **Frontend API origin** in `connect-src` (derived from the publishable
+      key, exact, never a wildcard), `https://img.clerk.com` in `img-src`,
+      `https://challenges.cloudflare.com` in `frame-src`, and `worker-src 'self' blob:`. **No host is
+      added to `script-src`** — `'strict-dynamic'` makes browsers ignore host sources there, and Clerk's
+      script loads on this app's existing per-request nonce instead (`<ClerkProvider nonce dynamic>`;
+      the vendor's own type says the nonce "requires the `dynamic` prop to also be set"). Clerk's own
+      recommended policy is **not** adopted: it carries `'unsafe-inline' https: http:` in `script-src`
+      and two `*.protect.clerk.com` wildcards.
+- [ ] 🔴 **`style-src` — the one CSP question 1a could NOT answer, and the first thing to check with
+      an instance.** Production is `style-src 'self' 'nonce-…'`; Clerk's recommended policy is
+      `'self' 'unsafe-inline'`, and under CSP3 a nonce makes `'unsafe-inline'` inert — so there is no
+      "add it as well": relaxing `style-src` for Clerk means **deleting the nonce for the whole app, on
+      every route**. Whether Clerk's UI needs it is not answerable from the lockfile, because
+      `clerk-js` and `@clerk/ui` are fetched from Clerk's CDN at runtime. **Procedure:** configure the
+      development instance, load `/sign-in` with the production CSP live
+      (`pnpm --filter web exec playwright test --project=chromium`, which does NOT set `bypassCSP`),
+      and look for `style-src` violations and an unstyled card. An unstyled card loses contrast,
+      focus-visible and every tap target at once. If it is needed, the prepared remedy is to widen
+      `'unsafe-inline'` **scoped to the `SIGN_IN_PATH` subtree only**, pinned in `proxy.test.ts`
+      beside the existing assertions — and the cost to the app-wide nonce argument written down.
+- [ ] 🔴 **The lit sign-in screen owes its own UX panel, and 1a could not give it one.** With no keys,
+      Clerk renders nothing: every screenshot and every a11y assertion on the 1a PR measured the dark
+      fallback panel. CI has no Clerk keys, `screenshot:ephemeral` injects none, and the card's DOM
+      ships from Clerk's CDN at a **floating major** — so no a11y property of it is pinned by anything
+      in this repo. Before 1d retires the gate: run a **full three-lens panel on the lit screen**, with
+      Playwright captures at 360 / 390 / 820 / 1280 and a keyboard pass, against the development
+      instance.
+- [ ] 🔴 **Bot/abuse protection enabled**, and **the session lifetime actually configured.** Whether the
+      Cloudflare Turnstile widget appears decides whether the `frame-src` source above is load-bearing
+      or merely harmless.
+- [ ] 🔴 **The invitation record's spec** — where it lives, its fields, its retention. It is what makes
+      "the invitation is the record" an actual record rather than a phrase.
+- [ ] **Free-tier limits:** MAU, custom domain, Organizations.
+- [ ] **The Clerk keys into Vercel** — production and preview **separately**, per OPS-1 — and only once
+      the first box above says so.
+- [ ] **1b:** read the Clerk user id from the dashboard for the claim correction, and **clear it from
+      shell history** afterwards; never paste the dry-run output into a PR.
+- [ ] **1b:** the pre-1c check — **all three** of `gh run list` on the merge SHA,
+      `information_schema.columns` and `pg_get_constraintdef`.
+- [ ] **1d:** `ACCESS_GATE_PASSWORD` **removed** from Vercel (all environments), GitHub Actions and
+      `.env.local` — **after** the code that reads it is gone, never before.
+- [ ] **1d:** "Rotate a secret" loses the access-gate code.

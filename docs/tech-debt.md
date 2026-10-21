@@ -15,6 +15,42 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Clerk's browser runtime is fetched from a CDN at a floating major, so nothing in CI sees it (found 2026-10-16, AUTH-1 1a)
+
+- **What & why:** `@clerk/nextjs@7.9.15` is pinned in `pnpm-lock.yaml`, but the code that actually
+  renders the sign-in screen is **not in the lockfile at all**. `@clerk/shared`'s
+  `clerkJSScriptUrl` / `clerkUIScriptUrl` build
+  `https://<frontend-api-host>/npm/@clerk/clerk-js@<v>/dist/clerk.browser.js` and
+  `.../@clerk/ui@<v>/dist/ui.browser.js`, and with no explicit version prop `versionSelector` resolves
+  `<v>` to the **major** — `@clerk/clerk-js@6` and `@clerk/ui@1`. So the DOM, CSS, heading levels,
+  focus rings and control heights of `/sign-in` can change **in production, between two identical
+  deploys**, with no lockfile change, no PR and no CI run.
+- **Impact:** two distinct holes, and they are not the same one.
+  - **Supply chain:** `pnpm audit:check` is a CI gate (`.github/workflows/ci.yml`), and this is the one
+    third-party code path in the app it cannot see. Named in the AUTH-1 plan § Design 6b item 7.
+  - **A11y:** AGENTS.md requires ≥44px tap targets, focus-visible and a working 360px layout. For this
+    screen those are **ours to specify and nobody's to verify**: CI has no Clerk keys, so
+    `e2e/a11y.spec.ts` measures the dark fallback; `screenshot:ephemeral` injects no Clerk keys either;
+    and the `a11y` Playwright project sets `bypassCSP`, so even with keys it would not be measuring the
+    production policy. Not one a11y property of Clerk's card is pinned by anything in this repo.
+- **Why it was accepted:** the plan specifies Clerk's **prebuilt** component, the alternative
+  (`useSignIn` + `signIn.authenticateWithRedirect`, our own markup) is a real option at this version but
+  a different design decision, and 1a ships dark so nothing renders yet. Pinning `clerkJSVersion`
+  explicitly would narrow the drift, but the props that do it are `__internal_`-prefixed at this
+  version, which is its own debt.
+- **The mitigations that DID ship in 1a**, so this entry is not "we shrugged": `appearance.elements`
+  uses **class-name strings** (never a `CSSObject`, which the nonce'd `style-src` would drop silently),
+  `cssLayerName: 'clerk'` with `@layer clerk` declared first in `globals.css` so Tailwind's utilities
+  win the cascade, `min-h-11` on the Google button, and `app/pages-are-gated.test.ts` pinning the exact
+  set of `'use server'` modules `@clerk/nextjs` ships so a bump that adds one turns CI red.
+- **Proposed fix:** (a) a **full three-lens UX panel on the lit screen** against the development
+  instance, with captures at 360/390/820/1280 and a keyboard pass, before 1d retires the gate — it is a
+  box on [runbooks.md](./runbooks.md)'s AUTH-1 checklist; (b) treat every `@clerk/nextjs` bump as its
+  own reviewed PR, per [SECURITY.md](../.github/SECURITY.md)'s `claude-code-action` rule; (c) revisit
+  the headless `useSignIn` option if the vendor DOM fights the a11y bar.
+- **Severity:** medium (high for the a11y half once sign-in is live). **Payoff trigger:** configuring
+  the Clerk development instance — i.e. before chunk 1c.
+
 ### The `movements` catalog verdict is restated in ~12 places, and TEN-2 has to retract every one (found 2026-10-09, TEN-1 1d review)
 
 - **What & why:** TEN-1 1d's finding — `movements` has no `household_id`, so free-text catalog rows
@@ -183,40 +219,6 @@ success.` Harmless there — nothing referenced the files yet.
 - **Proposed fix:** exclude `apps/web/public/` from the inert allowlist (keep `.screenshots/` and
   `docs/` images inert). Scheduled in OSS-2 §B ([plan](./plans/oss-2-public-landing.md)).
 - **Severity:** medium. **Payoff trigger:** OSS-2 §B, or any earlier PR that renders a `public/` asset.
-
-### The access-gate matcher excludes `/api`, so any Route Handler there is ungated (found 2026-09-24)
-
-- **What & why:** `apps/web/proxy.ts` matches `'/((?!api|_next/static|_next/image|favicon.ico).*)'`.
-  The `api` exclusion is a copied Next default and has never been exercised, because **the repo has
-  no `/api` routes**. The moment one exists it is **completely ungated** — no access-gate cookie
-  required, nothing between the internet and the handler.
-- **Impact:** high, and **latent by construction** — it cannot be noticed until the first `/api`
-  route ships, at which point it is already live. AGENTS.md plans **`/api/sync`** explicitly ("reads
-  / external / batch → Route Handlers. `/api/sync` is a Route Handler"), which would be a
-  write endpoint for the entire offline replay graph.
-- **Found how:** V1-13b's CSV export was about to be `/api/export`. It ships at
-  `/p/[profileId]/export` instead — inside the matcher — and re-checks the gate in the handler anyway,
-  because middleware is not an authorization boundary. The e2e asserts a cookie-less request never
-  gets a 200.
-- **The fix, when `/api` is needed:** either drop `api` from the exclusion and let the gate cover it,
-  or require every handler to call the gate check itself and **prove it with a test per route**. The
-  first is one character and covers the class; the second is the AGENTS.md rule ("every Route Handler
-  is a PUBLIC endpoint") and does not depend on a matcher staying correct. Do both.
-- ⚠️ **Wider than this entry said (measured 2026-10-01, OSS-2 #208).** The lookahead is **unanchored at
-  its tail**, so the exclusion is a PREFIX match, not a segment match. Measured against the live
-  pattern: `/api` and `/api/x` skip (intended) — and so do **`/apiary`**, **`/apifoo`**,
-  **`/favicon.icon`** and **`/_next/imagex`**. So the hole is not confined to a future `/api` route:
-  any page whose path merely _starts_ with one of those strings is ungated by the matcher today.
-  Bounded in practice only because no such route exists and every page re-checks the gate itself.
-  This is the exact `startsWith` error DUALS-1's own lesson warns about
-  (`apps/web/lib/access-gate.ts`). **Fix:** `(?!api(?:/|$)|_next/static/|_next/image|favicon\.ico$)`,
-  with the four negatives pinned. Scheduled in OSS-2 §A
-  ([plan](./plans/oss-2-public-landing.md)), since that PR's thesis is segment-exact matching.
-- ✅ **The prefix half is fixed (OSS-2 §A).** Each exclusion in `config.matcher` (`apps/web/proxy.ts`)
-  now ends at a segment boundary, and `apps/web/proxy.test.ts` pins all four negatives against the
-  regex Next itself compiles. **The `/api` half stands:** `/api` and
-  `/api/x` are still excluded by design.
-- **Payoff trigger:** the first `/api` route — realistically `/api/sync` at v1.5.
 
 ### Test-time path overrides are ad-hoc, so gates quietly go vacuous (audit, 2026-09-24)
 

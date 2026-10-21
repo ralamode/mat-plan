@@ -51,8 +51,35 @@ export const env = createEnv({
     // disabled (see next.config.ts + the @sentry/cli note in pnpm-workspace.yaml), so no auth token,
     // org or project slug is required.
     SENTRY_DSN: z.string().url().optional(),
+
+    // --- AUTH-1 1a: Clerk, wired but DARK. BOTH OPTIONAL BY DESIGN. ---
+    // Same rationale as the V1-14a block above, and the same three environments: local dev, CI
+    // (`next build` runs with no external service) and un-wired previews legitimately run without
+    // these. Absent => `proxy.ts` composes no `clerkMiddleware()`, `app/layout.tsx` renders no
+    // `<ClerkProvider>`, and the app behaves exactly as it did before 1a. Making either REQUIRED
+    // would break `pnpm dev` and CI the day 1a merged, and `lib/clerk.ts` is where the "both keys
+    // present" predicate lives so the two call sites cannot disagree.
+    //
+    // ⚠️ Do NOT add a startup assertion that these exist. "Dark until the maintainer configures an
+    // instance" is the deliberate state of chunks 1a-1b; 1c is the PR that makes a session the
+    // boundary, and 1c is where `pnpm dev` starts needing dev keys in `.env.local`.
+    CLERK_SECRET_KEY: z.string().min(1).optional(),
   },
-  client: {},
+  // ⚠️ `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is the ONE legitimate `NEXT_PUBLIC_` in this repo.
+  // AGENTS.md forbids the prefix on SECRETS; Clerk's publishable key is public by design — it is
+  // shipped to every browser as the `data-clerk-publishable-key` attribute on Clerk's own script tag,
+  // and Clerk's Frontend API is reachable with it by anyone. The secret half is `CLERK_SECRET_KEY`
+  // above, which is server-only and never prefixed.
+  //
+  // Mechanical note: this module is `import 'server-only'`, so a client component cannot import
+  // `env`. Declaring the key here therefore buys VALIDATION ONLY — `<ClerkProvider>` still receives
+  // it through Next's build-time inlining of the `NEXT_PUBLIC_` prefix. Which means CI's `next build`
+  // (no keys) inlines `undefined` and produces an artifact whose auth would fail in the BROWSER
+  // rather than refusing on the server. That is exactly why `lib/clerk.ts` gates rendering on the
+  // key's presence server-side instead of trusting the client to cope.
+  client: {
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     ACCESS_GATE_PASSWORD: process.env.ACCESS_GATE_PASSWORD,
@@ -62,6 +89,8 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     SENTRY_DSN: process.env.SENTRY_DSN,
+    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
   emptyStringAsUndefined: true,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,

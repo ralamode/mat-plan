@@ -39,6 +39,10 @@ flowchart TB
   DAL --> DRIZZLE --> NEON
   ACT -.->|"auth()"| CLERK
   RH -.->|"auth()"| CLERK
+  PROXY["proxy.ts<br/>gate · nonce CSP · clerkMiddleware()"]
+  UI --> PROXY
+  PROXY -.->|"authenticateRequest()"| CLERK
+  UI ==>|"AUTH-1 1a: BROWSER egress — clerk-js + sign-in<br/>exact Frontend API origin in connect-src"| CLERK
   RH -->|"CSV export v1 · MCP+REST v3"| CLAUDE
   ACT -.->|"scrubbed errors"| SENTRY
   RSC -.->|"scrubbed errors"| SENTRY
@@ -51,6 +55,16 @@ now because each receives something, and **GitHub Actions holding the production
 is the edge people miss. But **Vercel is where every value entered actually passes through**, and its
 platform logs hold IP + path. The complete, cited list of who receives what is
 [privacy/data-inventory.md](./privacy/data-inventory.md) §7, which owns it.
+
+🔴 **`AUTH-1` 1a added the thick `UI ==> CLERK` edge, and it is the only BROWSER→third-party edge in
+this diagram.** Clerk was previously drawn as a dashed server-side `auth()` dependency only, which was
+the whole picture while `@clerk/nextjs` was not installed. It is now: the sign-in screen is a
+browser-side SDK, so once an instance is configured the browser fetches `clerk-js` from the instance's
+Frontend API host and talks to it for the sign-in exchange. **Today that edge is dormant** — both keys
+are optional and unset, `lib/clerk.ts` renders no provider without them, and the CSP is not widened at
+all; `e2e/theme.spec.ts` asserts zero requests to any Clerk host. The dashed `proxy.ts ⇢ Clerk` edge
+is the other half 1a wired: `clerkMiddleware()` is composed **inside** `proxy.ts` so `auth()` can
+answer at all, and 1a removed the `api` exclusion from its matcher for that reason.
 
 ## 2. Write path — logging one entry
 

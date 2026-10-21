@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-10-18. This is a beta."
+            "text": "Last updated: 2026-10-21. This is a beta."
           }
         ]
       }
@@ -297,20 +297,42 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": no email address "
+        "text": ": no email address, no phone number, no address, no payment details, no\nphotos, no location, and no date of birth. "
       },
       {
         "k": "em",
         "children": [
           {
             "k": "text",
-            "text": "(until sign-in arrives — see \"What is changing\")"
+            "text": "Signing in with Google is being rolled out and is "
+          },
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "not\nswitched on yet"
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": " — when it is, Google will give Clerk the email address on your Google account. This\napp's own database will still never store it, no athlete's record will contain it, and "
+          },
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "a child is\nnever asked for one."
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": " See \"What is changing\"."
           }
         ]
-      },
-      {
-        "k": "text",
-        "text": ", no\nphone number, no address, no payment details, no photos, no location, and no date of birth."
       }
     ]
   },
@@ -502,7 +524,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. The only\npages anyone can open without the code are the landing page and this notice, and neither one reads\nyour data."
+              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. Three\npages can be opened without the code — the landing page, this notice, and the sign-in screen — and\nnone of the three reads your data."
             }
           ]
         }
@@ -802,11 +824,30 @@ export const NOTICE_BLOCKS: readonly Block[] = [
                 "text": "Clerk"
               }
             ]
+          }
+        ],
+        "desc": [
+          {
+            "k": "text",
+            "text": "Runs the sign-in screen. "
+          },
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "Its code ships with the app now, and sign-in is not switched on yet"
+              }
+            ]
           },
           {
             "k": "text",
-            "text": " and "
-          },
+            "text": " — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
+          }
+        ]
+      },
+      {
+        "term": [
           {
             "k": "strong",
             "children": [
@@ -823,13 +864,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             "children": [
               {
                 "k": "text",
-                "text": "Not yet."
+                "text": "Only if you sign in with Google"
               }
             ]
           },
           {
             "k": "text",
-            "text": " When sign-in arrives they will handle your email address and Google account — see \"What is changing\"."
+            "text": ", and not yet. Google is told that you signed in to this app, and gives Clerk the email address and account identifier on your Google account. Nothing about your athletes is ever sent to Google."
           }
         ]
       },
@@ -899,7 +940,46 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " No advertising network, no analytics product, no social buttons, no third-party fonts.\nYour browser talks to this app and nothing else."
+        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Today your browser talks to this app and nothing else"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " — the code for the sign-in screen\nships with the app, but with sign-in switched off nothing of it runs and no request leaves for anyone\nelse. When sign-in is switched on, "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "one"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " thing changes and it is not tracking: opening the sign-in\nscreen loads Clerk's code and talks to Clerk's servers, so Clerk sees your IP address and your browser\non "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "that screen"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". Nothing about your athletes, their training or their weight is ever involved, and\nClerk's own usage reporting is switched off in this app's code rather than left on by default."
       }
     ]
   },
@@ -979,7 +1059,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "term": [
           {
             "k": "text",
-            "text": "Sign-in and timezone cookies"
+            "text": "Access-code and timezone cookies"
           }
         ],
         "desc": [
@@ -1285,20 +1365,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " and you will be sent a full copy. And "
+        "text": " and you will be sent a full copy — including, once sign-in is switched\non, what Clerk holds about your login: your email address, your Google account identifier, and when\nyou signed in. And "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "export before you delete\nanything"
+            "text": "export before you delete anything"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — once a profile is removed, its data can no longer be exported, even though it is still in\nthe database."
+        "text": " — once a profile is removed, its data can no\nlonger be exported, even though it is still in the database."
       }
     ]
   },
@@ -1652,8 +1732,61 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "k": "p",
     "children": [
       {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Sign-in with Google is being rolled out."
+          }
+        ]
+      },
+      {
         "k": "text",
-        "text": "Sign-in with Google is being added. When it arrives you will have a personal login instead of a shared\ncode, this notice will be updated before it goes live, and you will be asked to agree to it as part of\nsigning up. At that point Clerk and Google will handle your email address and Google account\nidentifier."
+        "text": " The code for it ships with the app today, which is why\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Clerk is listed above as a processor from now on"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " — and it is "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "not switched on"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ": everyone still\ngets in with the shared household access code, nobody has an account, and nothing has been sent to\nClerk or to Google. When it is switched on you will have a personal login instead of the shared code,\nClerk and Google will handle your email address and your Google account identifier, and this notice\nwill say so in the present tense on that day."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "How your agreement is recorded."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Signing up is by invitation only, so the record of who was asked,\nand when, is the invitation itself — this app does not store a separate consent timestamp. If you would\nrather not have an account, say so and the shared code keeps working for you."
       }
     ]
   },
@@ -1768,7 +1901,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-18."
+            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-21."
           }
         ]
       }

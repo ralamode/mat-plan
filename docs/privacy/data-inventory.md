@@ -7,6 +7,19 @@ walking `packages/db/src/schema.ts` and the third-party call sites — **not fro
 only way a notice about minors' health data is worth anything.
 
 > **Derived at `38f62de`, 2026-10-07** (PRIV-1, [plan](../plans/priv-1-privacy-review.md)).
+> **§7 re-read 2026-10-16** for `AUTH-1` chunk **1a** ([plan](../plans/auth-1-clerk-google.md)):
+> `@clerk/nextjs@7.9.15` is now a dependency of `apps/web`, deployed to production — so **Clerk is a
+> processor from this chunk**, on the inventory's own standard ("what the running system does"), and the
+> §7 egress paragraph is rewritten rather than annotated. Also read this date, and recorded because the
+> answers are not guessable: Clerk's SDK ships an anonymous **telemetry** collector that POSTs to
+> `clerk-telemetry.com`, and a **keyless** path that would PROVISION a live Clerk application from a
+> `pnpm dev` (`createAccountlessApplication`) — **both are pinned off in `apps/web/next.config.ts`**, in
+> code rather than by env, which is why neither appears in §7's table. ⚠️ **Still owed, and deliberately
+> not written as confirmed:** Clerk's **data region**, its **retention** for user records and sign-in
+> logs (a §8 row), and the exact **OAuth scope list** — all three are console reads on an instance that
+> does not exist yet, and they are boxes on [runbooks.md](../runbooks.md)'s AUTH-1 checklist. 1a holds
+> **no** Clerk-held personal data: sign-in is not switched on, no instance is configured, and the
+> keys-absent branch in `apps/web/lib/clerk.ts` is what makes that a property of this code.
 > **§9 re-derived 2026-10-08** when `OSS-1`'s sweep landed — the real surface was wider than §9 recorded
 > (two further classes), and §9 now says what is true after the sweep rather than what was owed before it.
 > **§8 re-read 2026-10-15** for `PRIV-1`: the three vendor retention windows are **confirmed and
@@ -45,7 +58,8 @@ only way a notice about minors' health data is worth anything.
 >
 > ```bash
 > git log --oneline 38f62de..HEAD -- packages/db/src/schema.ts apps/web/lib/dal \
->   apps/web/proxy.ts apps/web/lib/access-gate.ts apps/web/sentry.server.config.ts \
+>   apps/web/proxy.ts apps/web/lib/access-gate.ts apps/web/lib/public-paths.ts \
+>   apps/web/lib/clerk.ts apps/web/next.config.ts apps/web/sentry.server.config.ts \
 >   apps/web/lib/sentry-scrub.ts apps/web/lib/rate-limit.ts .github/workflows
 > ```
 >
@@ -53,6 +67,13 @@ only way a notice about minors' health data is worth anything.
 > the start: it is the file that **defines the public surface**, and until now the command that
 > watches the public surface did not watch it. `PRIV-2` — which added a second un-gated route —
 > would have printed nothing.
+>
+> ⚠️ **`AUTH-1` 1a added three more, and two of them are the same lesson again.** 1a **split**
+> `access-gate.ts`, moving the public-surface list to `apps/web/lib/public-paths.ts` — so watching only
+> the old path would have silently stopped watching the thing the warning above was added for, and 1d
+> deletes `access-gate.ts` outright. `apps/web/lib/clerk.ts` decides whether a third party runs in the
+> browser at all, and `apps/web/next.config.ts` is where this chunk pins Clerk's telemetry and keyless
+> switches off — a change to either is a processor change, which is exactly what this command is for.
 
 **Citation policy.** This file cites **path + symbol** (`access-gate.ts` → `PUBLIC_PATHS`), not
 `path:line`. Line cites rot on the next edit above them, which [ADR 0006](../decisions/0006-household-addressing.md)
@@ -285,21 +306,46 @@ request from the maintainer.
 their own copy, because two of those copies had already drifted when this was written (one omitted
 Google, both omitted GitHub).
 
-The CSP (`apps/web/proxy.ts`) sets `connect-src 'self'`, `font-src 'self'`,
-`img-src 'self' blob: data:` — **no data egress from the browser to any external host.** (Not the same
-as "no external hosts allowed": `script-src` carries `'strict-dynamic'`, which makes a host allowlist
-inoperative for scripts by design. The egress claim is the one that holds.)
+**The egress claim — rewritten at `AUTH-1` 1a, because the old one stops being true.** It used to read
+"no data egress from the browser to any external host", on the strength of the CSP's
+`connect-src 'self'`, `font-src 'self'`, `img-src 'self' blob: data:`. 1a ships `@clerk/nextjs` to
+production, and Clerk's sign-in screen is a browser-side SDK: once an instance is configured, the
+browser fetches `clerk.browser.js` and `ui.browser.js` from the instance's Frontend API host and talks
+to that host for the whole sign-in exchange. So the honest statement is now in **two** parts:
 
-| Processor     | Wired?               | What it receives                                                                                                                                                                                                                                                                                   |
-| ------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**      | yes                  | **Everything** — it is the database. Pooled at runtime (`packages/db/src/client.ts`), unpooled for migrations.                                                                                                                                                                                     |
-| **Vercel**    | yes                  | **The server that runs the app.** Every request and **every value entered** is handled inside a Vercel function. Separately it retains platform logs with IP, time and URL path — and `/p/<profileId>` puts a profile id in that path.                                                             |
-| **GitHub**    | yes, **two roles**   | (a) the **public repository** — source, fixtures, plans, and screenshot images on the `screenshots` branch; (b) **GitHub Actions holds the production database credential** (`DATABASE_URL_UNPOOLED`, `.github/workflows/migrate.yml`) and connects to the live database on every merge to `main`. |
-| **Sentry**    | yes, **server only** | Server and edge errors. **No client SDK is shipped**, so no visitor IP and no browser data. `dataCollection` is set off field by field (`apps/web/lib/sentry-scrub.ts`), `tracesSampleRate: 0`, no Session Replay, source maps off.                                                                |
-| **Upstash**   | yes, one endpoint    | The **visitor's IP address**, in the plaintext key `mat-plan:gate:<ip>`, on gate submits only. 10 attempts / 10 minutes. No training data.                                                                                                                                                         |
-| **Clerk**     | **not wired**        | Planned by `AUTH-1`: an email address and a Google account identifier. No `@clerk` dependency exists in any `package.json` today.                                                                                                                                                                  |
-| **Google**    | **not wired**        | Planned by `AUTH-1` (sign-in). **Fonts do not reach Google at runtime** — `next/font/google` self-hosts at build, and `font-src 'self'` would block a runtime fetch.                                                                                                                               |
-| **Anthropic** | CI only, conditional | A pull request's head and diff, **only if `CLAUDE_CODE_OAUTH_TOKEN` is configured** (`.github/workflows/claude-review.yml`); it is currently dormant by choice. Repository content — never the production database.                                                                                |
+1. **Today, with no Clerk instance configured, the old claim still holds exactly** — and as code, not
+   as a promise: `apps/web/lib/clerk.ts:clerkIsConfigured()` is false without both keys, so
+   `app/layout.tsx` renders no `<ClerkProvider>`, `proxy.ts` composes no `clerkMiddleware()`, **and the
+   CSP is not widened at all**. `apps/web/e2e/theme.spec.ts` asserts the consequence directly: zero
+   requests to any Clerk host from `/` or `/sign-in`.
+2. **Once an instance is configured, there is exactly one external host the browser talks to**, and it
+   is named by **exact origin** — derived from the publishable key, never a wildcard — in
+   `connect-src`, alongside `img-src https://img.clerk.com` (OAuth provider logos) and
+   `frame-src https://challenges.cloudflare.com` (Clerk's bot-protection widget). `proxy.test.ts` pins
+   each one and asserts the policy contains no `*` and no scheme-wide `https:`/`http:` source. What
+   leaves the browser is a sign-in exchange: Clerk sees the visitor's IP and browser on that screen,
+   and the email address and Google account identifier of whoever signs in. **No training, bodyweight
+   or athlete data is involved** — `/sign-in` reads none of it, by the same rule `/` and `/privacy`
+   follow.
+
+(Still not the same as "no external hosts allowed": `script-src` carries `'strict-dynamic'`, which
+makes a host allowlist inoperative for scripts by design — which is also why 1a adds **no** host to
+`script-src` and loads Clerk's script on the existing per-request nonce instead.)
+
+⚠️ **`clerk-js` and `@clerk/ui` are fetched from Clerk's CDN at runtime, so they are outside
+`pnpm-lock.yaml` and outside the `audit:check` gate** — the one third-party code path in this app that
+no supply-chain check in CI can see. [tech-debt.md](../tech-debt.md) carries the row.
+
+| Processor     | Wired?               | What it receives                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**      | yes                  | **Everything** — it is the database. Pooled at runtime (`packages/db/src/client.ts`), unpooled for migrations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Vercel**    | yes                  | **The server that runs the app.** Every request and **every value entered** is handled inside a Vercel function. Separately it retains platform logs with IP, time and URL path — and `/p/<profileId>` puts a profile id in that path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **GitHub**    | yes, **two roles**   | (a) the **public repository** — source, fixtures, plans, and screenshot images on the `screenshots` branch; (b) **GitHub Actions holds the production database credential** (`DATABASE_URL_UNPOOLED`, `.github/workflows/migrate.yml`) and connects to the live database on every merge to `main`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Sentry**    | yes, **server only** | Server and edge errors. **No client SDK is shipped**, so no visitor IP and no browser data. `dataCollection` is set off field by field (`apps/web/lib/sentry-scrub.ts`), `tracesSampleRate: 0`, no Session Replay, source maps off.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Upstash**   | yes, one endpoint    | The **visitor's IP address**, in the plaintext key `mat-plan:gate:<ip>`, on gate submits only. 10 attempts / 10 minutes. No training data.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Clerk**     | yes, **code only**   | **Runs the sign-in screen.** `@clerk/nextjs@7.9.15` is a dependency of `apps/web` from `AUTH-1` 1a and is deployed, so Clerk is a processor — but **sign-in is not switched on**: no instance is configured, so with both keys absent no `<ClerkProvider>` renders, no `clerkMiddleware()` runs and no request reaches a Clerk host (`lib/clerk.ts`; asserted in `e2e/theme.spec.ts`). Once configured, Clerk holds the email address, the Google account identifier and the sign-in sessions, and sees the visitor's IP and browser on the sign-in screen. **Never training or bodyweight data.** Its **telemetry** collector and its **keyless** auto-provisioning are pinned off in `next.config.ts`, so neither sends anything. ⏳ Region and retention are console reads owed on the instance — [runbooks.md](../runbooks.md). |
+| **Google**    | **not wired**        | Planned by `AUTH-1` **1c** (sign-in switched on): Google is told that someone signed in to this app, and gives Clerk the email address and account identifier on that Google account. ⏳ The exact **scope list** is a runbook box, and `no photos` in [notice.md](./notice.md) depends on its answer. **Fonts do not reach Google at runtime** — `next/font/google` self-hosts at build, and `font-src 'self'` would block a runtime fetch.                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Anthropic** | CI only, conditional | A pull request's head and diff, **only if `CLAUDE_CODE_OAUTH_TOKEN` is configured** (`.github/workflows/claude-review.yml`); it is currently dormant by choice. Repository content — never the production database.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 **Sentry is deliberately the thin case.** The scrubber strips cookies, denied headers, request bodies,
 query strings, Server-Action form data, stack-frame variables, and everything after a `params:` line
