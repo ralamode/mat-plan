@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-10-15. This is a beta.**
+**Last updated: 2026-10-21. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -133,10 +133,26 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | An export you have downloaded         | Yours — we cannot keep or delete it                                                             |
 | The public source code                | Permanently, including its history                                                              |
 
-⚠️ **"Delete" currently means "hidden".** The app has no way to permanently remove a single logged item
-yet. Removing something takes it out of your view, but the row stays in the database until your whole
-household is deleted. **Nothing automatically clears it.** Per-item deletion is being built; until then,
-this is how it works, and you should know that before you log something you might regret.
+⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. The only way anything comes
+out of the database today is deleting a whole athlete or household, and the one time a row has been
+removed from view, it stayed in the database. **Nothing automatically clears it.** You should know that
+before you log something you might regret.
+
+**What is being built, so you know what to expect.** A Delete button, per item, that works like this:
+deleting something **hides it, and then actually removes it** a set number of days later. Two things
+follow that are worth saying plainly.
+
+- **You can put it back** during that window. A deleted item shows up as a small "Hidden — Restore" row
+  on the day it was logged, so a mis-tap is fixable, and fixable by a parent rather than only by whoever
+  tapped it. Occasionally a restore will not be possible, because something else has since taken that
+  item's place in the day — when that happens the app will say so rather than fail quietly.
+- **It hides from everyone in your household, not just from the person who deleted it.** The app does
+  not record who deleted what, and anyone with your access code can open any athlete. So a child can
+  delete a weigh-in and a parent will not see it either, until they use Restore. That is the honest
+  shape of it today, and it is one of the things sign-in is meant to improve.
+
+There is still **no way to permanently remove one single item on demand** — the finest grain for a
+permanent removal is an athlete. Ask, and that is done.
 
 ## Getting your data out
 
@@ -223,7 +239,7 @@ Bodily measurements of a child may count as health data under some laws, with ob
 does not attempt to describe. **If you need that answered, it needs a lawyer, and this document is not
 one.**
 
-**Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-15.**
+**Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-21.**
 
 **This notice must be reviewed again when** a new company starts receiving data, a retention period
 changes, a new kind of information starts being stored, sign-in goes live, or anything is made

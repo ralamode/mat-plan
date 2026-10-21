@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-10-15. This is a beta."
+            "text": "Last updated: 2026-10-21. This is a beta."
           }
         ]
       }
@@ -1181,13 +1181,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "\"Delete\" currently means \"hidden\"."
+            "text": "Right now, \"delete\" means \"hidden\"."
           }
         ]
       },
       {
         "k": "text",
-        "text": " The app has no way to permanently remove a single logged item\nyet. Removing something takes it out of your view, but the row stays in the database until your whole\nhousehold is deleted. "
+        "text": " The app has no Delete button yet. The only way anything comes\nout of the database today is deleting a whole athlete or household, and the one time a row has been\nremoved from view, it stayed in the database. "
       },
       {
         "k": "strong",
@@ -1200,7 +1200,105 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Per-item deletion is being built; until then,\nthis is how it works, and you should know that before you log something you might regret."
+        "text": " You should know that\nbefore you log something you might regret."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "What is being built, so you know what to expect."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " A Delete button, per item, that works like this:\ndeleting something "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "hides it, and then actually removes it"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " a set number of days later. Two things\nfollow that are worth saying plainly."
+      }
+    ]
+  },
+  {
+    "k": "ul",
+    "items": [
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "You can put it back"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " during that window. A deleted item shows up as a small \"Hidden — Restore\" row\non the day it was logged, so a mis-tap is fixable, and fixable by a parent rather than only by whoever\ntapped it. Occasionally a restore will not be possible, because something else has since taken that\nitem's place in the day — when that happens the app will say so rather than fail quietly."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "It hides from everyone in your household, not just from the person who deleted it."
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " The app does\nnot record who deleted what, and anyone with your access code can open any athlete. So a child can\ndelete a weigh-in and a parent will not see it either, until they use Restore. That is the honest\nshape of it today, and it is one of the things sign-in is meant to improve."
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "text",
+        "text": "There is still "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "no way to permanently remove one single item on demand"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " — the finest grain for a\npermanent removal is an athlete. Ask, and that is done."
       }
     ]
   },
@@ -1803,7 +1901,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-15."
+            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-21."
           }
         ]
       }
