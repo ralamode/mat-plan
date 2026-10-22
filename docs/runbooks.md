@@ -1272,18 +1272,60 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the vendor's own type says the nonce "requires the `dynamic` prop to also be set"). Clerk's own
       recommended policy is **not** adopted: it carries `'unsafe-inline' https: http:` in `script-src`
       and two `*.protect.clerk.com` wildcards.
-- [ ] 🔴 **`style-src` — the one CSP question 1a could NOT answer, and the first thing to check with
-      an instance.** Production is `style-src 'self' 'nonce-…'`; Clerk's recommended policy is
-      `'self' 'unsafe-inline'`, and under CSP3 a nonce makes `'unsafe-inline'` inert — so there is no
-      "add it as well": relaxing `style-src` for Clerk means **deleting the nonce for the whole app, on
-      every route**. Whether Clerk's UI needs it is not answerable from the lockfile, because
-      `clerk-js` and `@clerk/ui` are fetched from Clerk's CDN at runtime. **Procedure:** configure the
-      development instance, load `/sign-in` with the production CSP live
-      (`pnpm --filter web exec playwright test --project=chromium`, which does NOT set `bypassCSP`),
-      and look for `style-src` violations and an unstyled card. An unstyled card loses contrast,
-      focus-visible and every tap target at once. If it is needed, the prepared remedy is to widen
-      `'unsafe-inline'` **scoped to the `SIGN_IN_PATH` subtree only**, pinned in `proxy.test.ts`
-      beside the existing assertions — and the cost to the app-wide nonce argument written down.
+- [ ] 🔴 **`style-src` — still open, and ⚠️ `pnpm dev` CANNOT close it.** Production is
+      `style-src 'self' 'nonce-…'`; Clerk's recommended policy is `'self' 'unsafe-inline'`, and under
+      CSP3 a nonce makes `'unsafe-inline'` inert — so there is no "add it as well": relaxing
+      `style-src` for Clerk means **deleting the nonce for the whole app, on every route**.
+      🔴 **The trap, paid for on 2026-10-22:** `proxy.ts:71` is
+      `style-src 'self' ${isDev ? "'unsafe-inline'" : `'nonce-…'`}` with
+      `isDev = env.NODE_ENV === 'development'`, so **a `pnpm dev` run allows `'unsafe-inline'` and
+      every JS-injected style passes trivially.** A clean console there says **nothing** about
+      production. The first attempt at this box was made against `pnpm dev`, saw zero `style-src`
+      violations, and proved nothing.
+      ✅ **What that run DID establish, and it rules out one of the two failure shapes:** at
+      `@clerk/ui@1.41.1` **no stylesheet is fetched at all** — every asset from Clerk's CDN is `.js`
+      (`ui.browser.js`, `signin_ui_*.js`, …), and styles are injected from JavaScript. So there is no
+      **host** to allowlist, and the only question left is the narrow one: **does `clerk-js`
+      propagate the nonce we pass (`<ClerkProvider nonce dynamic>`, `app/layout.tsx`) onto the
+      `<style>` elements it creates?** If it does, production needs no change at all. If it does not,
+      they are blocked under `'nonce-…'` and the card goes unstyled — losing contrast, focus-visible
+      and every tap target at once.
+      **Procedure — a PRODUCTION build, not `pnpm dev`:** `pnpm e2e:local` (which builds the prod app,
+      so `isDev` is false and the nonce branch is live) with the development Clerk keys injected, then
+      load `/sign-in` and look for `style-src` violations and an unstyled card. The prepared remedy is
+      unchanged: widen `'unsafe-inline'` **scoped to the `SIGN_IN_PATH` subtree only**, pinned in
+      `proxy.test.ts`, with the cost to the app-wide nonce argument written down.
+- [ ] 🔴 **Clerk's BOT PROTECTION breaks sign-up under our CSP — measured 2026-10-22, and this is the
+      box that actually bit.** `1a` allowed `https://challenges.cloudflare.com` in `frame-src`, read
+      off the pinned version's `DEFAULT_DIRECTIVES`. ⚠️ **At `clerk-js` 6.40.0 that is the wrong
+      mechanism and the allowance is dead weight:** bot protection now loads
+      `cdn.protect.clerk.com/<ins_…>/c/<id>/bootstrap.js`, which then `fetch()`es a probe on
+      `*.client.protect.clerk.com` across **five ports — 443, 8443, 18443, 2082 and 992**. Against
+      `connect-src 'self' ws: <frontend-api>` **all of them are blocked** (20 violations on one page
+      load). Clerk's [CSP guide](https://clerk.com/docs/guides/secure/best-practices/csp-headers)
+      documents the symptom: _"the challenge uses ephemeral ports. Without proper CSP configuration,
+      the challenge iframe is blocked silently and sign-in/sign-up fails."_
+      **The symptom is asymmetric, which is what makes it confusing:** the protection _"applies to
+      sign-ups only. It never challenges a sign-in"_, so the **sign-in card renders and works** while
+      the **sign-up consent step renders unstyled and its checkbox cannot be ticked**. Do not read
+      that as a `style-src` failure; the console shows **zero** style violations.
+      **Two ways out, and they are not equivalent:**
+  1. ✅ **Preferred — turn the protection OFF**: dashboard **Protect → Protections**
+     (`dashboard.clerk.com/~/protect/rules`; the page is titled _Protections_ while the URL still says
+     `rules`), row **"Challenge suspicious sign-ups"**, which is **on by default for new
+     applications**. Sign-up here is **Invite-only**, a strictly stronger gate than bot detection, so
+     this removes a redundant dependency rather than weakening anything — and it needs **no CSP
+     change**.
+  2. ⚠️ **Widen the CSP** to `connect-src https://*.protect.clerk.com:*` (plus `script-src`, per
+     Clerk). 🔴 **This breaks a rule the plan set deliberately** — `proxy.test.ts` pins each added CSP
+     source **by exact origin, never a wildcard** — and a wildcard subdomain on _any port_ would be
+     the widest source in the policy. Only if (1) proves impossible, scoped to the `SIGN_IN_PATH`
+     subtree and pinned in `proxy.test.ts` with the cost written down.
+     **Owed either way:** if (1) is taken, `CLERK_BOT_PROTECTION_ORIGIN`
+     (`lib/clerk.ts:112`) and its `frame-src` entry (`proxy.ts:82`) are **dead code for a mechanism
+     Clerk no longer uses** and should be removed by `1c` with a note saying why, not left to look
+     like working protection. **Re-check on every `@clerk/nextjs` bump** — this changed under us
+     between the pinned version's own docs and its runtime CDN build.
 - [ ] 🔴 **The lit sign-in screen owes its own UX panel, and 1a could not give it one.** With no keys,
       Clerk renders nothing: every screenshot and every a11y assertion on the 1a PR measured the dark
       fallback panel. CI has no Clerk keys, `screenshot:ephemeral` injects none, and the card's DOM
