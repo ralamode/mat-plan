@@ -1,9 +1,9 @@
 # CRUD-1 — Fix it yourself: a household corrects its own data without a script
 
-> **Status: draft for the maintainer's review, 2026-10-22. Not yet panelled.** Milestone this
+> **Status: draft for the maintainer's review, 2026-10-22. UX panel round 1 reconciled (log at the bottom); awaiting the maintainer's prototype review.** Milestone this
 > defines: **Fix it yourself** (`docs/milestones/crud-1-fix-it-yourself.md`, written after the
 > prototype is signed off, sequence step 5). Goal it serves: [beta-1](../milestones/beta-1.md) →
-> "The goal", item 4 — _"fix their own mistakes without asking Ray to run a script"_ — and Beta 1's
+> "The goal", item 4 — _"fix their own mistakes without asking [the maintainer] to run a script"_ — and Beta 1's
 > exit box _"Every logged thing can be corrected or deleted in the app."_ Prototype:
 > [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html). Procedure:
 > [`write-spec`](../../.claude/skills/write-spec/SKILL.md).
@@ -13,7 +13,7 @@
 Nine backlog rows each own a piece of "a household can create, change and remove what it put in the
 app", and no document connects them. A reader who asks _what is the path?_ has to read all nine,
 three ADRs, one spec and one plan. The rows disagree with each other in places (listed under
-[Where the rows disagree](#where-the-rows-disagree)) and four prerequisites belong to no row at all
+[Where the rows disagree](#where-the-rows-disagree)) and five prerequisites belong to no row at all
 ([Unowned work](#unowned-work-this-spec-found)).
 
 Today, measured on `origin/main@9d46547`:
@@ -82,7 +82,8 @@ flowchart LR
     V2[V1-22 ch 2-3] --> V4[V1-22 ch 4 · edit values]
     V4 --> V6[V1-22 ch 5-6 · add/remove/reorder]
     S[SCHED-1 1a-1d] --> AR[ASSIGN-READ · Today reads assignments · unfiled]
-    AR --> CL[CLONE-1]
+    AR --> AS[ASSIGN-1 · move / take off an athlete · unfiled]
+    AS --> CL[CLONE-1]
     V6 --> CL
     CL --> RT[RETIRE-1]
     CL --> HI[HIST-1]
@@ -114,7 +115,8 @@ flowchart LR
 | D2  | **V1-22 chunks 5 → 6** — the seed guard, then add/remove/reorder                                                                                                                                            | D1                                                                                          | That spec; chunk 6 owes the prescription-identity column.                                                                                                                                                                                                                                                                                                       |
 | D3  | **SCHED-1 1a → 1d** — assignments + weekday rows, seeded                                                                                                                                                    | **Beta 1's gate** (family #1, two weeks, a decision to widen) + ADR 0007 signed and amended | [roadmap](../roadmap.md) → Authoring & Scheduling. Its plan owns the order.                                                                                                                                                                                                                                                                                     |
 | D4  | **ASSIGN-READ** _(unfiled)_ — Today and the export read the athlete's **assignment**, not `programDayRows`' newest block                                                                                    | D3                                                                                          | CLONE-1's gate 2 names it; the SCHED-1 plan **excludes it** ("This is also why the one-block→N-assignments read is **not** in this plan") and ADR 0007 sends it to "its own plan and UX panel". **Byte-affecting** for the CSV (owner: Insight).                                                                                                                |
-| D5  | **CLONE-1** — copy a block, edit the copy, choose who moves                                                                                                                                                 | D1 (chunks 2–3) + D4 + D2 (the editor that edits the copy)                                  | Its row's own three gates, in that order.                                                                                                                                                                                                                                                                                                                       |
+| D4b | **ASSIGN-1** _(unfiled)_ — move an athlete to another program, or take them off one, with Undo                                                                                                              | D4                                                                                          | **Found by the UX panel (R1).** CLONE-1's "move the wrong kid back", RETIRE-1's "move them first" and both Undos need a plain assignment write, and no row or screen has one. CLONE-1's "who moves" is a special case of it, so it lands first and CLONE-1 reuses it.                                                                                           |
+| D5  | **CLONE-1** — "save as a copy" from the editor, choose who moves                                                                                                                                            | D1 (chunks 2–3) + D4b + D2 (the editor it saves from)                                       | Its row's own three gates, in that order.                                                                                                                                                                                                                                                                                                                       |
 | D6  | **RETIRE-1** — archive a program                                                                                                                                                                            | D5 + D3                                                                                     | CLONE-1 creates the pile; archive must compose with `active_to`.                                                                                                                                                                                                                                                                                                |
 | D7  | **HIST-1** — what program an athlete ran on a past date                                                                                                                                                     | D5                                                                                          | No assignment history exists before CLONE-1 moves someone.                                                                                                                                                                                                                                                                                                      |
 
@@ -154,7 +156,8 @@ one file.
 ## Acceptance
 
 Criteria for rows that already have a spec or ADR **cite** them; these are the ones nothing else
-writes. Each names the chunk that must carry its test.
+writes. Each names the chunk that must carry its test. Criteria marked **(R1)** were added or changed by
+the UX panel's first round; the log at the bottom says why.
 
 **Athletes (A1–A3)**
 
@@ -169,61 +172,91 @@ writes. Each names the chunk that must carry its test.
    **shall** respond as for an unknown profile (404 semantics, ADR 0006) and write nothing. _(A1, A2)_
 5. **While** an athlete is archived, the picker **shall not** list them, their history **shall** still
    export, and a parent **shall** be able to restore them from a list of archived athletes. _(A2)_
-6. **When** a parent confirms deleting an athlete, the system **shall** require the athlete's name typed
-   exactly and a fresh step-up, **shall** offer archive before delete, and **shall** hard-delete every
-   row the runbook's procedure deletes, soft-deleted ones included, and write a ledger entry. _(A3)_
+6. **When** a parent starts deleting an athlete, the system **shall** offer, in order, the athlete's
+   export, archive, then delete; **shall** enable delete only when the typed name matches the athlete's
+   name **ignoring case and surrounding spaces**; **shall** require a fresh step-up; and **shall**
+   hard-delete every row the runbook's procedure deletes, soft-deleted ones included, and write a ledger
+   entry. Its copy **shall not** claim more than `notice.md` does (removed from the app now, from
+   backups after their window). **(R1)** _(A3)_
 7. **When** PROF-1a ships, the empty state **shall not** link to GitHub. _(A1 — ONB-0 finding E23)_
+8. Rename **shall** be reachable from the athlete's own page; archive and delete **shall** live only in
+   household settings, never on the picker. **(R1)** _(A1, A2)_
 
 **Delete (B0–B2)** — ADR 0008 is the source; these make it testable.
 
-8. **If** an entry has been hidden and a submit replays its `client_id`, **then** the system **shall
+9. **If** an entry has been hidden and a submit replays its `client_id`, **then** the system **shall
    not** insert a second live row. _(B0 — `db:verify`, the inverse of today's partial arbiter)_
-9. **When** a person taps Delete on a logged entry, the entry **shall** disappear from the day's list
-   for **every** profile view in the household, and a `Hidden on this day (n)` row **shall** appear on
-   that athlete's day page, surviving a reload and a day change. _(B1)_
-10. **When** Restore is tapped and the entry's natural-key slot is free, the entry **shall** return; **if**
-    the slot is taken, **then** the system **shall** return a typed `slot_taken` result naming what
-    holds the slot, **never** a `23505` or a silent no-op. _(B1 — the fixture: hide a weigh-in, log a
-    new one that day, restore the first)_
-11. **When** focus is on a row's Delete control and the row is hidden, focus **shall** move to the next
-    row's Delete control, or to the Hidden row's Restore control if it was the last row; the live region
-    announcing it **shall** be mounted before its text changes. _(B1 — the `saved-announcer.tsx`
-    idiom)_
-12. **When** "Clear this day" is confirmed, the Clear control **shall** stay disabled until the input
-    equals `delete`, every live entry for that athlete and day **shall** be hidden in **one**
-    transaction, and the Hidden row **shall** offer to restore them as one event. A partial restore
-    **shall** report which entries could not come back and why. _(B2)_
-13. **When** a profile's every entry for a month is hidden, the export path the plan chose (ADR 0008
+10. **When** a person taps Delete on a logged entry, the entry **shall** disappear for **every** profile
+    view in the household, an untimed `<name> deleted · Undo` line **shall** take its place **in the same
+    position** until the page is left, and a `Hidden on this day (n)` section **shall** appear **above
+    the day's sections**, surviving a reload and a day change. Each hidden item **shall** state the date
+    it stops being restorable. **(R1)** _(B1)_
+11. **When** focus is on a Delete control and its row is hidden, focus **shall** move to that row's
+    in-place Undo — never to another Delete. **When** an entry is restored, focus **shall** move to the
+    restored row. The live region announcing either **shall** be mounted before its text changes.
+    **(R1)** _(B1 — the `saved-announcer.tsx` idiom)_
+12. **When** Restore is tapped and the entry's natural-key slot is free, the entry **shall** return to
+    its original position; **if** the slot is taken, **then** the system **shall** return a typed
+    `slot_taken` result naming what holds the slot, **never** a `23505` or a silent no-op, and **shall**
+    offer one atomic "keep this one instead" (hide the holder and restore this one in one transaction),
+    with leaving it as the default. **(R1)** _(B1 — the fixture: hide a weigh-in, log a new one that day,
+    restore the first)_
+13. **Where** the day page folds several entries into one row (calisthenics bouts, `page.tsx`), that
+    row's Delete **shall** name how many entries it hides and **shall** hide them as **one** event.
+    **Where** a strength session renders twice on the page, Delete **shall** appear on exactly one copy.
+    **(R1)** _(B1)_
+14. **When** "Clear this day" is confirmed, the Clear control **shall** stay disabled until the input
+    equals `delete` ignoring case and surrounding spaces, every live entry for that athlete and day
+    **shall** be hidden in **one** transaction, and the Hidden section **shall** offer to restore them
+    as one event. A partial restore **shall** report which entries could not come back and why. _(B2)_
+15. **While** an athlete has hidden entries on other days of the current week, the day page **shall**
+    say so and link to each day. **(R1)** _(B1)_
+16. **When** a profile's every entry for a month is hidden, the export path the plan chose (ADR 0008
     → "One constraint") **shall** still deliver the person their data. _(B1)_
 
 **Movements (C1–C4)**
 
-14. **When** an athlete picks a movement from the picker and submits a set, the stored entry **shall**
+17. **When** an athlete picks a movement from the picker and submits a set, the stored entry **shall**
     reference that movement's id — **no** call to `findOrCreateMovement` for it — and **no** magnitude
     shall arrive prefilled. _(C1 — PICK-1's own acceptance, verbatim intent)_
-15. The picker **shall** offer, in order: today's prescribed movements, the athlete's recent movements,
-    then the catalog grouped by the picker group; and **shall** be operable by keyboard alone, with every
-    option a ≥44px target at 360px. _(C1)_
-16. **When** the typed name has no exact catalog match but a near match exists, the system **shall**
-    show the near match and a spelling suggestion **before** creating a movement, and "use what I typed"
-    **shall** remain one tap. _(C2)_
-17. **When** `db:seed` runs twice after CAT-2, the movement count **shall** be the same as after once.
+18. The picker **shall** offer, in order: the athlete's recent movements, then the catalog grouped by
+    the picker group, with today's prescribed movements folded away (the form already fills them);
+    **shall not** raise the on-screen keyboard on open on a touch device; and **shall** be operable by
+    keyboard alone, with every option a ≥44px target at 360px. **(R1)** _(C1)_
+19. **When** the typed text is a known alias (`RDL`), the picker **shall** offer the movement it names.
+    **When** it has no exact match but a near match exists, the picker **shall** show the near match
+    and a spelling suggestion **before** creating a movement, and "use what I typed" **shall** stay
+    one tap and visible above the keyboard. A movement created that way **shall** be written when the set
+    is saved, not when it is picked. **(R1)** _(C2)_
+20. **When** `db:seed` runs twice after CAT-2, the movement count **shall** be the same as after once.
     _(C3)_
 
-**Programs (D4–D7)** — V1-22's 17 criteria stand for D1–D2.
+**Programs (ASSIGN-1, D4–D7)** — V1-22's 17 criteria stand for D1–D2.
 
-18. **When** a block is cloned, the copy **shall** carry every live prescription and per-athlete target
-    of the source with identical values, and the source **shall** be unchanged. _(D5)_
-19. **When** a parent moves an athlete to the copy, the system **shall** close their open assignment
-    (`active_to` = the day before) and open one on the copy (`active_from` = today, athlete-local), and
-    **shall not** change any already-exported byte for that athlete. _(D5)_
-20. **When** a clone is saved with no athletes selected, **no** assignment **shall** change. _(D5)_
-21. **While** a program is archived, it **shall not** appear in the editor's program list, the clone
-    source list, or the assign list, and every past entry against it **shall** render and export as
+21. **When** a parent moves an athlete from one program to another, or takes them off one, the system
+    **shall** close the open assignment (`active_to` = the day before) and, for a move, open one on the
+    target (`active_from` = today, athlete-local); **Undo** **shall** reverse exactly the rows it
+    changed. **(R1)** _(ASSIGN-1)_
+22. **When** a parent saves program edits and anyone else is on the program, the system **shall** ask
+    whether to change it for everyone on it or save it as a copy, naming who is on it. **(R1)** _(D5)_
+23. **When** a copy is saved, it **shall** carry every live prescription and per-athlete target of the
+    source with identical values, and the source **shall** be unchanged. _(D5)_
+24. **When** a parent moves an athlete to the copy, the system **shall** behave as criterion 21 and
+    **shall not** change any already-exported byte for that athlete. An athlete who was **not** on the
+    source **shall** be told which program(s) they stay on, and that they have no loads on the copy yet.
+    **(R1)** _(D5)_
+25. **When** a copy is saved with no athletes ticked, **no** assignment **shall** change. _(D5)_
+26. **While** anyone is on a program, archiving it **shall** first resolve each of them (move or take
+    off) in place — or, under Q3's other answer, close their assignments and say they have no program
+    in its place; **either way** Undo **shall** restore the archive **and** every assignment it closed
+    as one event. **(R1)** _(D6)_
+27. **While** a program is archived, it **shall not** appear in the editor's program list, the copy
+    source list, or the move-to list, and every past entry against it **shall** render and export as
     before. _(D6)_
-22. **When** a parent asks what program an athlete ran on a past date, the system **shall** return the
-    assignment(s) open on that date and that day's prescriptions as snapshotted, or a statement that
-    nothing was assigned. _(D7)_
+28. **When** a parent opens an athlete's program history, the system **shall** list their assignments
+    newest first with start and end dates, each opening the prescriptions as snapshotted and linking to
+    the days logged in that period; **and when** they pick a date, **shall** name the program(s) open on
+    it, or say nothing was assigned. **(R1)** _(D7)_
 
 ## The data contract
 
@@ -236,15 +269,20 @@ packages/shared
                               — kind REUSES enums.ts PROFILE_KINDS; PROFILE_NAME_MAX is new, one home
   hideEntrySchema            { profilePublicId, entryPublicId }
   restoreHiddenSchema        { profilePublicId, day, hiddenAt }       ← restores ONE hide event
-  clearDaySchema             { profilePublicId, day, confirm: z.literal('delete') }
+  clearDaySchema             { profilePublicId, day, confirm }  ← confirm is trimmed and lower-cased,
+                              THEN z.literal('delete') — the UI's matching rule and the server's agree
+  hideGroupSchema            { profilePublicId, day, entryPublicIds: string[] }  ← one folded row, ONE event
+  assignmentMoveSchema       { profilePublicId, fromBlockPublicId, toBlockPublicId | null }  ← null = take off
   MOVEMENT_PICKER_GROUPS     as const — the picker's groups; see the grouping finding
   programCloneSchema         { sourceBlockPublicId, name, moveProfilePublicIds: string[] (default []) }
 
 apps/web/lib  (DTOs, never raw rows)
-  HiddenOnDayDTO             { count, events: Array<{ hiddenAt, items: Array<{ entryPublicId, label }> }> }
-  RestoreResult              per item: { ok: true } | { ok: false, reason: 'slot_taken', heldBy: label }
+  HiddenOnDayDTO             { count, events: Array<{ hiddenAt, restorableUntil,
+                                                    items: Array<{ entryPublicId, label }> }> }
+                              ← restorableUntil = hiddenAt + N (PRIV-3); computed server-side, one home
+  RestoreResult              per item: { ok: true } | { ok: false, reason: 'slot_taken', heldBy: { entryPublicId, label } }
                                                      | { ok: false, reason: 'not_found' }
-  MovementOptionDTO          { publicId, name, group, owner: 'catalog' | 'household',
+  MovementOptionDTO          { publicId, name, group, aliases: string[], owner: 'catalog' | 'household',
                                prescribedToday: boolean }
   ProgramEditDTO             — V1-22 spec, unchanged
   AssignmentDTO              { blockPublicId, blockName, activeFrom, activeTo | null }
@@ -291,6 +329,14 @@ No backlog row owns these. Each needs a row (or a sentence in an existing one) b
    (`schema.ts` → `profiles`). ADR 0008's discriminator says archive is not a hide — a hide ends in
    erasure at `N` — so archiving an athlete with `deleted_at` would purge them. A2 owes a migration or a
    decision that athlete archive waits.
+5. **ASSIGN-1 — moving an athlete between programs, or off one.** _(Found by the UX panel, R1.)_ Three
+   recovery paths need it: undoing a copy that moved the wrong athlete, RETIRE-1's "move them first",
+   and the Undo of an archive. `program_assignments` (SCHED-1 1c) is the table; no row owns a screen or
+   an action that writes it outside CLONE-1's one-shot "who moves". It is chunk D4b.
+6. **An athlete added in the app never gets ramp targets.** `seed.ts` expands
+   `CALISTHENICS_RAMP_SCHEDULE` × **kid profiles that exist at seed time** into `ramp_targets`. The
+   schedule ships empty, so this is latent today; the day it is filled, a kid created by A1 silently has
+   none. A1's plan either expands targets on create or records why not.
 
 Also, from the roadmap's own membership rule: **V1-9b and PRIV-3 belong to no pillar** (roadmap.md →
 Pillars). This spec proposes Profiles & Tenancy for neither — V1-9b's files are `app/p/[profileId]/`
@@ -327,18 +373,24 @@ Said rather than silently resolved.
 ## Open decisions — for the maintainer, at prototype review
 
 Parallel-work gate 5: an approved prototype reads as approval of everything, so the cases it does not
-settle are listed, each needing a written answer before the plans split.
+settle are listed, each needing a written answer before the plans split. The **Panel (R1)** column is
+the UX panel's verdict; where it overturned the first recommendation, the prototype now shows the
+panel's answer.
 
-| #   | Question                                                                                 | Prototype shows                                                   | Recommendation                                                                                    |
-| --- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Q1  | Where does **delete athlete** live?                                                      | both: an Edit toggle on `/p`, or a household settings page        | **Settings.** Rare, irreversible, step-up-gated; the picker is where a kid taps.                  |
-| Q2  | Picker grouping (finding 2)                                                              | push / pull / legs / core / wrestling, with isolation hand-placed | A per-row group, set during chunk 0.                                                              |
-| Q3  | Archiving a program an athlete is still on: refuse, or close their assignment?           | both, behind a toggle                                             | **Close, with the names shown.** Refusing sends a parent to a second screen to do the same thing. |
-| Q4  | HIST-1's surface: timeline, or a date on the program page?                               | both                                                              | **The date on the program page** — it answers "what was she doing in March" in one step.          |
-| Q5  | Where does the household's program list live? (disagreement 4)                           | a `Programs` link at the bottom of `/p`                           | Household route, after AUTH-1.                                                                    |
-| Q6  | Who may delete an athlete after AUTH-1 — any member, or the owner?                       | not shown                                                         | Owner only (beta-1 → Roles already lists delete as an owner act).                                 |
-| Q7  | Does a hidden entry still count in the weekly adherence strip?                           | not shown                                                         | No — a hide is "this did not happen".                                                             |
-| Q8  | Athlete archive: a migration in A2, or defer archive and let delete offer only "cancel"? | archive shown                                                     | The migration; it is one nullable column and the PROF-1 row requires the archive offer.           |
+| #   | Question                                                                                    | Prototype v2 shows                                       | Recommendation                                                                                                                                                               | Panel (R1)                        |
+| --- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Q1  | Where do **archive and delete athlete** live?                                               | Household settings; rename also on the athlete's page    | **Settings.** Rare, irreversible, step-up-gated; the picker is where a kid taps.                                                                                             | agree ×3                          |
+| Q2  | Picker grouping (unowned 2)                                                                 | push / pull / legs / core / wrestling, isolation by hand | A per-row group **plus aliases** (`RDL`), both set during chunk 0.                                                                                                           | agree, add aliases                |
+| Q3  | Archiving a program someone is on                                                           | both, behind the bar's toggle                            | **Resolve in place** (Move / Take off beside each name, then archive). Undo restores the archive and the assignments as one event.                                           | **overturned** "close all" (I, T) |
+| Q4  | HIST-1's surface                                                                            | timeline first, date box underneath                      | **Timeline first**; each period opens the program as it was and links to the days logged in it.                                                                              | **overturned** "date only" (I)    |
+| Q5  | Where does the household's program list live? (disagreement 4)                              | under Household settings                                 | One Household settings page — athletes, programs, movements — and one link to it from the picker.                                                                            | agree, consolidated (I)           |
+| Q6  | Who may delete an athlete after AUTH-1?                                                     | not shown                                                | Owner only (beta-1 → Roles already lists delete as an owner act).                                                                                                            | agree (T)                         |
+| Q7  | Does a hidden entry count in the weekly adherence strip?                                    | not shown                                                | No — a hide is "this did not happen" — **and** the strip marks the day as having hidden entries (criterion 15's signal).                                                     | agree **with** the marker (I, T)  |
+| Q8  | Athlete archive: a migration in A2, or defer archive?                                       | archive shown                                            | The migration; one nullable column, and the PROF-1 row requires the archive offer.                                                                                           | agree                             |
+| Q9  | **New (R1).** Delete on a folded calisthenics row: all its bouts, or open the row first?    | all bouts, one event, the count in the label             | All bouts as one event. Entry grain holds — it is N entry hides in one transaction, restored together.                                                                       | raised (I)                        |
+| Q10 | **New (R1).** The words: "Delete" for the act, "Hidden on this day" for the list?           | yes, plus "restorable until {date}"                      | Keep both. The **published** notice already promises a `Hidden — Restore` row; changing the noun means editing a published notice for no gain. The date carries the honesty. | **partly declined** (I3)          |
+| Q11 | **New (R1).** Does the 7-day cancellable pause for household deletion apply to one athlete? | not shown                                                | Yes — the same notice, the same fraud reasoning. A3's plan decides and updates `notice.md` in the same PR.                                                                   | raised (T)                        |
+| Q12 | **New (R1).** Typed `delete` for clear-a-day, when clear-a-day is restorable?               | kept                                                     | Keep. The V1-9b row decided it _(maintainer)_; it is bulk, and on a phone a bulk mistake is the expensive one.                                                               | **declined** (I, NIT)             |
 
 ## Out of scope
 
@@ -365,6 +417,7 @@ settle are listed, each needing a written answer before the plans split.
 | Clone + move silently blanks an exported `prescribed` cell                                                                                | D4's byte-affecting decision is made by Insight before D5 (acceptance 19)                                                                                                                          |
 | A new household movement from the picker's "use what I typed" is a typo with no removal path                                              | C2 before the typo can be made cheaply; C4 (MOV-1) named so the gap is owned                                                                                                                       |
 | **LLM never authors loads** — a model-drafted movement list (CAT-2) or a clone carrying a load across                                     | CAT-2's list is definitions a human approves (chunk 0); a clone copies a **human-authored** target verbatim and the UI states it is a copy                                                         |
+| An athlete created in the app has no ramp targets when the ramp schedule is filled                                                        | Unowned 6; A1's plan decides                                                                                                                                                                       |
 | Four tracks queue on `actions.ts` and `write-path.md`                                                                                     | Shard `actions.ts` before A1 (see "The critical path")                                                                                                                                             |
 
 ## Context read
@@ -395,4 +448,47 @@ Opened, not recalled, at `origin/main@9d46547`:
 
 ## Review-response log
 
-_Empty until the panels run (sequence steps 3 and 5)._
+### UX panel, round 1 (2026-10-22) — against prototype v1
+
+Three `ux-reviewer` lenses, run in parallel against `docs/prototypes/crud-1/index.html` v1:
+**I** interaction + first-run, **A** a11y + 360px, **T** trust + data-entry burden. **8 BLOCKING, 18
+SHOULD** raised; every one was checked against the prototype source or the app file it cited before it
+was accepted or declined. Prototype v2 carries the accepted fixes, and every row marked _verified_ was
+exercised in Chromium at a 360px viewport after the change (no console errors, no horizontal overflow,
+no control under 44px on any of the 13 screens).
+
+| #   | Lens  | Finding                                                                                                                                                                                                               | Verdict             | Resolution                                                                                                                                                                                                               |
+| --- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| U1  | I     | **BLOCKING.** v1 drew one flat list; the real page has a bodyweight receipt, a strength receipt rendered **twice**, and calisthenics bouts folded into one row (`page.tsx`). "Where the control lives" was unanswered | accepted            | `vDay` rebuilt in the page's three shapes. Delete on the strength section's copy only (criterion 13); a folded row hides its bouts as one event (Q9). _Verified._                                                        |
+| U2  | I · T | **BLOCKING.** Restore sat a screen below the mis-tap, two taps deep; a sighted kid saw a row vanish and nothing else                                                                                                  | accepted            | An untimed in-place `deleted · Undo` line (still no toast — ADR 0008 decision 2 holds); the Hidden section moved under the day nav; one item shows without an expander (criterion 10). _Verified._                       |
+| U3  | A     | **BLOCKING.** Restore focused the **first** Delete in the list — a double Enter deleted an unseen row                                                                                                                 | accepted            | Restore focuses the restored row (criterion 11). _Verified:_ focus lands on `row-<id>`.                                                                                                                                  |
+| U4  | A     | **BLOCKING.** The picker's ARIA was wrong: permanent `aria-expanded`, `role=option` buttons, non-option children in a `listbox`, no status                                                                            | accepted            | Plain labelled `type=search`; groups are `<section aria-labelledby>` + `<ul>` of buttons; a `role=status` count mounted with the sheet. _Verified:_ "2 matches" announced for `rdl`.                                     |
+| U5  | A     | **BLOCKING.** Focus dropped to `<body>` after reorder, remove, archive, restore-program, merge; the archive card claimed `alertdialog` and never took focus; the flash status was mounted holding its text            | accepted            | Every handler names its focus target; confirms are native `<dialog>`s with focus on the title; flashes are static text announced through the one persistent live region.                                                 |
+| U6  | T     | **BLOCKING.** Archive-Undo, "move them first" and a wrong clone all needed a **move-an-athlete** action no screen had                                                                                                 | accepted            | Athlete chips on Programs open Move / Take off; Undo reopens exactly the closed rows; the copy's summary offers Undo. **New chunk D4b, ASSIGN-1** (unowned 5). _Verified._                                               |
+| U7  | T     | **BLOCKING.** "Delete that one first, then restore this" made a kid choose between two weigh-ins in two steps, with nothing logged between                                                                            | accepted            | One atomic "Keep 112.4 lb instead"; "Leave it" is the default (criterion 12). And the bodyweight receipt now has **Change** (V1-24 1a/1b shipped it), so correcting a weigh-in is no longer delete + re-log. _Verified._ |
+| U8  | T     | **BLOCKING.** Delete-athlete copy ("gone", "cannot be undone") over-promised against `notice.md` (7-day backups, a 7-day pause) and skipped its "export before you delete"                                            | accepted            | Step 1 is the export; the copy says "removed from the app now, from backups after 7 days"; the pause for one athlete is new Q11.                                                                                         |
+| U9  | I · T | No restore horizon on hidden items; the parent signal only works on the exact day                                                                                                                                     | accepted            | "Restorable until {date}" on every item (30 days is a **labelled placeholder** — `N` is PRIV-3's); an "Also hidden this week" line linking each day (criterion 15).                                                      |
+| U10 | T     | A double **tap** reflowed the next row under the finger                                                                                                                                                               | accepted            | Closed by U2: the in-place line keeps the row's height and position.                                                                                                                                                     |
+| U11 | A     | Focus on the **next** Delete after a hide is a held-Enter cascade                                                                                                                                                     | accepted            | Focus goes to the in-place Undo — a safe control to press twice (criterion 11). The spec's first criterion 11 was wrong and is rewritten.                                                                                |
+| U12 | I     | Delete / Hidden / Clear vocabulary mixed                                                                                                                                                                              | **partly declined** | Q10: the published notice already says `Hidden — Restore`; renaming the noun means editing a published notice for nothing. The date is what was missing, and it is added.                                                |
+| U13 | I     | Picker opened with the keyboard over half the sheet, led with Today's program (which the form already fills), hid "use as typed" under the keyboard, and could never reach `RDL`                                      | accepted            | No autofocus on a coarse pointer; Recent first; Today's program folded away; "use as typed" pinned in a sheet footer; aliases (Q2, criterion 19). Bottom sheet under 600px.                                              |
+| U14 | T     | "Use as typed" created the movement on pick, and did not say it cannot be removed                                                                                                                                     | accepted            | Created on save; the hint says it cannot be removed yet (criterion 19).                                                                                                                                                  |
+| U15 | I · T | Edit-in-place vs a 3-step clone wizard asked a parent to understand snapshots; the only hint that an edit hits a sibling was a muted "also …"                                                                         | accepted            | One editor. A banner names who the change reaches; **Save** asks "for everyone on it" vs "as a copy for [none ticked]" (criterion 22). The wizard is gone.                                                               |
+| U16 | T     | ✕ removed immediately while a Save button also existed                                                                                                                                                                | accepted            | Removal is staged until Save, with Undo in place; ✕ sits 8px from ↓.                                                                                                                                                     |
+| U17 | T     | A kid not on the source silently ended up on two programs with no loads                                                                                                                                               | accepted            | The row says "starts the copy and stays on …" and warns "no loads set yet"; no load is invented (criterion 24). _Verified._                                                                                              |
+| U18 | T     | One-tap Merge: irreversible, fuzzy target, changes past exports                                                                                                                                                       | accepted            | **Rename** first; Merge behind a confirm naming the count, the target and the export effect, flagged for Insight sign-off. Still not a row (unowned 3).                                                                  |
+| U19 | I · A | Type-the-name compared exactly while the field turned autocapitalize off — a phone never matched                                                                                                                      | accepted            | Case- and space-insensitive, `autocorrect=off`, a hint saying when the button turns on; the server schema normalizes the same way (contract).                                                                            |
+| U20 | A     | The refusal re-announced on every render, and was tied to nothing                                                                                                                                                     | accepted            | Static text with an id; the Restore button's `aria-describedby` points at it; only the live region announces.                                                                                                            |
+| U21 | A     | The clear-day dialog focused the input, skipping the consequence                                                                                                                                                      | accepted            | Focus on the dialog title; `aria-describedby` on the consequence.                                                                                                                                                        |
+| U22 | A     | Solid white-on-red fails 1.4.3 in dark mode, and the app has no solid destructive button                                                                                                                              | accepted            | The tinted destructive treatment `components/ui/button.tsx` already uses.                                                                                                                                                |
+| U23 | A     | Repeated "Edit / Archive / Restore" without the subject; `aria-pressed` plus a changing label                                                                                                                         | accepted            | Every repeated control names its athlete or program; the edit-mode toggle is gone with Q1.                                                                                                                               |
+| U24 | I     | Rename moved off `/p` in the Settings variant, against the PROF-1 row                                                                                                                                                 | accepted            | "→ Edit {name}" on the athlete's page (criterion 8).                                                                                                                                                                     |
+| U25 | I     | Q3 "close all" leaves a kid with an empty Today; Q4 date-only makes a parent guess dates                                                                                                                              | accepted            | Both recommendations overturned — see Open decisions.                                                                                                                                                                    |
+| U26 | I     | Typed `delete` for a restorable clear-a-day cheapens the one irreversible typed confirm                                                                                                                               | **declined**        | Q12: the V1-9b row decided it _(maintainer)_. Bulk on a phone is the expensive mistake.                                                                                                                                  |
+| U27 | A     | Names up to 40 characters with no break overflow the `h1` and tiles; day-nav buttons 42px wide                                                                                                                        | accepted            | `overflow-wrap: anywhere` + `min-width: 0`; `min-width: 44px`.                                                                                                                                                           |
+| U28 | A     | The `--ring` focus outline is under 3:1 on white                                                                                                                                                                      | **deferred**        | True of the app's own token, not this prototype. A design-token change is a seam (Product & Spec, UI-3), not a CRUD-1 chunk.                                                                                             |
+| U29 | I     | Kind radio defaulted to "kid" with no word on what it changes                                                                                                                                                         | accepted            | No default; a hint. Checking it found unowned 6 (`kind` drives ramp-target expansion at seed time).                                                                                                                      |
+
+**Not yet settled by this round:** the device probe the a11y lens asked for — whether a focus move and a
+polite announcement 60ms apart both survive VoiceOver on iOS and NVDA. A browser cannot answer it; B1's
+plan owes it, on a phone.

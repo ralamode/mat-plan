@@ -8,7 +8,7 @@
   href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
 />
 <!--
-  CRUD-1 prototype — docs/specs/crud-1-fix-it-yourself.md.
+  CRUD-1 prototype (v2, after UX panel round 1) — docs/specs/crud-1-fix-it-yourself.md.
   Standalone on purpose: NOT under apps/web/app/, so it cannot trip pages-are-gated.test.ts or
   collide with AUTH-1. No build, no dependencies, no data leaves the page. Every name is a fixture.
   Tokens mirror apps/web/app/globals.css (:root / .dark) so widths and contrast read like the app.
@@ -848,9 +848,146 @@
   }
 </style>
 
+<style>
+  /* v2 additions — from the UX panel, round 1 (see the spec's review-response log). */
+  .app h1,
+  .tile .name,
+  .entry .title,
+  .stack-xs {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .daynav .btn {
+    min-width: 44px;
+  }
+  /* The app has no solid red button (components/ui/button.tsx → destructive is tinted). */
+  .btn.danger {
+    background: color-mix(in oklch, var(--destructive) 12%, transparent);
+    color: var(--destructive);
+    border-color: color-mix(in oklch, var(--destructive) 30%, transparent);
+  }
+  .tomb {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 4px 4px 4px 16px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+  }
+  .hidden-bar {
+    border: 1px dashed color-mix(in oklch, var(--foreground) 25%, transparent);
+    border-radius: 10px;
+    padding: 8px 4px 8px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hidden-bar .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .receipt {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .receipt .mv {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  .receipt .mv:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .receipt .mv .body {
+    flex: 1;
+    min-width: 0;
+  }
+  .rx-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .rx.removed {
+    opacity: 0.6;
+  }
+  .rx.removed .rx-name {
+    text-decoration: line-through;
+  }
+  .chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--input);
+    background: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .sheet-foot {
+    border-top: 1px solid var(--border);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--background);
+  }
+  @media (max-width: 600px) {
+    dialog.sheet {
+      margin: auto 0 0;
+      width: 100%;
+      max-width: 100%;
+      border-radius: 16px 16px 0 0;
+    }
+  }
+  .radio-card {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px;
+    border: 1px solid var(--input);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .radio-card:has(input:checked) {
+    border-color: var(--foreground);
+  }
+  .radio-card input {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--primary);
+    flex: none;
+  }
+  .warn {
+    font-size: 13px;
+    color: var(--note-fg);
+    background: var(--note);
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+  [tabindex='-1']:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+</style>
+
 <details class="bar-wrap" id="bar-wrap" open>
   <summary class="bar-sum">
-    <strong>CRUD-1 prototype</strong> <span class="muted">· review controls</span>
+    <strong>CRUD-1 prototype · v2</strong> <span class="muted">· review controls</span>
   </summary>
   <div class="bar" role="region" aria-label="Prototype controls">
     <label for="screen-select"
@@ -866,25 +1003,11 @@
         <option value="1280">1280 · desktop</option>
       </select>
     </label>
-    <label for="v-delete"
-      >Q1 delete athlete
-      <select id="v-delete">
-        <option value="settings">in Settings</option>
-        <option value="picker">Edit toggle on /p</option>
-      </select>
-    </label>
     <label for="v-archive"
-      >Q3 archive in use
+      >Q3 archive a program in use
       <select id="v-archive">
-        <option value="close">close assignments</option>
-        <option value="refuse">refuse</option>
-      </select>
-    </label>
-    <label for="v-hist"
-      >Q4 history
-      <select id="v-hist">
-        <option value="date">date on program page</option>
-        <option value="timeline">timeline</option>
+        <option value="resolve">resolve in place</option>
+        <option value="close">close all, undo as one</option>
       </select>
     </label>
     <label class="chk" for="measure"><input type="checkbox" id="measure" /> Measure widths</label>
@@ -902,15 +1025,15 @@
 
 <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+<dialog id="dlg"></dialog>
 
 <script>
   (function () {
     'use strict';
 
     // ── fixtures ─────────────────────────────────────────────────────────────
-    // Names are fixtures (AGENTS.md: no personal names). Movements are the real 35-row catalog
-    // (packages/shared/src/catalog-movements.ts), grouped by HAND for Q2 — isolation is split three ways.
+    // Every name is a fixture (AGENTS.md: no personal names). Movements are the real 35-row catalog
+    // (packages/shared/src/catalog-movements.ts), hand-grouped for Q2: `isolation` splits three ways.
     var CATALOG = {
       Push: [
         'Push-Ups',
@@ -964,7 +1087,15 @@
         'Bridge',
       ],
     };
-    var PROPOSED = { Wrestling: true }; // pending chunk 0 (CAT-2's human pass)
+    // Gym shorthand edit distance can never reach (panel I5). Chunk 0 would add an aliases column.
+    var ALIASES = {
+      rdl: 'Romanian Deadlift',
+      bss: 'Bulgarian Split Squat',
+      ohp: 'Overhead Shoulder Press',
+      'db bench': 'Dumbbell Bench Press',
+      kb: 'KB Swings',
+      'hip thrust': 'Barbell Hip Thrust',
+    };
     var WORDS = [
       'bulgarian',
       'split',
@@ -991,44 +1122,94 @@
       'copenhagen',
       'plank',
     ];
-
     var TODAY = '2026-10-22';
+    var PURGE_DAYS = 30; // ⚠️ a placeholder: N is PRIV-3's to set (ADR 0008). Shown so the copy can be judged.
 
     function fresh() {
       return {
         route: { name: 'picker' },
-        editMode: false,
         athletes: [
           { id: 'a1', name: 'Athlete One', kind: 'kid', archived: false },
           { id: 'a2', name: 'Athlete Two', kind: 'kid', archived: false },
           { id: 'a3', name: 'The Parent', kind: 'adult', archived: false },
         ],
-        // entries keyed by athlete+day. `slot` models a natural-key arbiter (the weigh-in day index).
+        // One row per ENTRY (ADR 0008: entry grain). `where` mirrors the real page: the bodyweight
+        // receipt, the strength section's receipt, and the Logged-entries list. Calisthenics bouts are
+        // separate entries the list folds into one row by `group`, as page.tsx does.
         entries: {
           'a1|2026-10-22': [
-            { id: 'e1', title: 'Bodyweight', detail: '112.4 lb · 6:41 PM', slot: 'bw' },
-            { id: 'e2', title: 'Push-Ups', detail: '3 sets · 15, 12, 10' },
+            {
+              id: 'e1',
+              order: 1,
+              where: 'bw',
+              title: 'Bodyweight',
+              detail: '112.4 lb · 6:41 PM',
+              slot: 'bw',
+            },
+            {
+              id: 'e2',
+              order: 2,
+              where: 'strength',
+              title: 'Overhead Shoulder Press',
+              detail: '8 @ 65 lb · 8 @ 65 lb · 6 @ 65 lb',
+            },
             {
               id: 'e3',
-              title: 'Overhead Shoulder Press',
-              detail: '3 × 8 @ 65 lb · 8 @ 65 lb · 6 @ 65 lb',
+              order: 3,
+              where: 'strength',
+              title: 'Single-Leg Hip Thrusts',
+              detail: '10 · 10 · 10 per side · prescribed 3 × 10 per side',
             },
             {
               id: 'e4',
-              title: 'Single-Leg Hip Thrusts',
-              detail: '3 × 10 per side · prescribed 3 × 10 per side',
+              order: 4,
+              where: 'list',
+              group: 'Push-Ups',
+              title: 'Push-Ups',
+              detail: '15',
             },
-            { id: 'e5', title: 'Rice bucket', detail: 'Done' },
-            { id: 'e6', title: 'Practice', detail: '90 min' },
+            {
+              id: 'e5',
+              order: 5,
+              where: 'list',
+              group: 'Push-Ups',
+              title: 'Push-Ups',
+              detail: '12',
+            },
+            {
+              id: 'e6',
+              order: 6,
+              where: 'list',
+              group: 'Push-Ups',
+              title: 'Push-Ups',
+              detail: '10',
+            },
+            { id: 'e7', order: 7, where: 'list', title: 'Rice bucket', detail: 'Done' },
+            { id: 'e8', order: 8, where: 'list', title: 'Practice', detail: '90 min' },
           ],
           'a1|2026-10-21': [
-            { id: 'e7', title: 'Bodyweight', detail: '112.8 lb · 6:50 PM', slot: 'bw' },
-            { id: 'e8', title: 'Pull-Up', detail: '4 sets · 6, 5, 5, 4' },
+            {
+              id: 'e9',
+              order: 1,
+              where: 'bw',
+              title: 'Bodyweight',
+              detail: '112.8 lb · 6:50 PM',
+              slot: 'bw',
+            },
+            { id: 'e10', order: 2, where: 'list', title: 'Rice bucket', detail: 'Done' },
           ],
-          'a2|2026-10-22': [{ id: 'e9', title: 'Box Jump', detail: '3 × 5 @ 24 in' }],
+          'a2|2026-10-22': [
+            {
+              id: 'e11',
+              order: 1,
+              where: 'strength',
+              title: 'Box Jump',
+              detail: '5 @ 24 in · 5 @ 24 in · 5 @ 24 in',
+            },
+          ],
         },
-        hidden: {}, // athlete|day → [{ at, label, items:[entry] }]
-        restoreMsg: null,
+        hidden: {}, // athlete|day → [{ id, at, hiddenOn, items:[entry] }]
+        refusal: null, // { k, ev, text, heldBy, wanted }
         programs: [
           {
             id: 'b1',
@@ -1084,11 +1265,12 @@
           { name: 'Bulgarian Split Squats', uses: 2, near: 'Bulgarian Split Squat' },
           { name: 'RDL', uses: 1, near: 'Romanian Deadlift' },
         ],
-        clone: null,
+        edit: null, // the program editor's staged changes
         form: { movement: null },
-        histDate: '2026-07-15',
-        archivedOpen: false,
         flash: null,
+        undo: null,
+        histOpen: null,
+        histDate: '2026-07-15',
       };
     }
     function rx(name, sets, reps, loads) {
@@ -1102,9 +1284,10 @@
     }
 
     var S = load() || fresh();
+    var pageHidden = {}; // event ids hidden during THIS visit → drawn in place (not persisted: a reload folds them into the Hidden bar)
     function load() {
       try {
-        var raw = localStorage.getItem('crud1-proto');
+        var raw = localStorage.getItem('crud1-proto-v2');
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
         return null;
@@ -1112,7 +1295,7 @@
     }
     function save() {
       try {
-        localStorage.setItem('crud1-proto', JSON.stringify(S));
+        localStorage.setItem('crud1-proto-v2', JSON.stringify(S));
       } catch (e) {}
     }
 
@@ -1121,6 +1304,9 @@
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
+    }
+    function $(sel) {
+      return document.querySelector(sel);
     }
     function athlete(id) {
       return S.athletes.find(function (a) {
@@ -1149,25 +1335,42 @@
     function nowLabel() {
       return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     }
+    function names(list) {
+      return list.length < 2
+        ? list.join('')
+        : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
+    }
+    // The region is mounted once at load; only its text changes (saved-announcer.tsx idiom).
     function announce(msg) {
-      // The region is mounted at load and only its text changes (saved-announcer.tsx idiom).
-      var live = document.getElementById('live');
+      var live = $('#live');
       live.textContent = '';
       setTimeout(function () {
         live.textContent = msg;
-      }, 30);
+      }, 60);
+    }
+    function focus(sel) {
+      var el = typeof sel === 'string' ? $(sel) : sel;
+      if (el) el.focus({ preventScroll: false });
     }
     function go(route) {
       S.route = route;
-      S.restoreMsg = route.keepMsg ? S.restoreMsg : null;
+      S.flash = null;
+      S.undo = null;
+      S.refusal = null;
+      pageHidden = {};
       save();
       render();
-      var h = document.querySelector('#app h1');
+      var h = $('#app h1');
       if (h) {
         h.setAttribute('tabindex', '-1');
         h.focus({ preventScroll: true });
       }
-      document.getElementById('device').scrollIntoView({ block: 'start' });
+      $('#device').scrollIntoView({ block: 'start' });
+    }
+    function rerender(focusSel) {
+      save();
+      render();
+      if (focusSel) focus(focusSel);
     }
     function activeAssignments(aid, onDay) {
       var day = onDay || TODAY;
@@ -1175,93 +1378,117 @@
         return x.athlete === aid && x.from <= day && (!x.to || x.to >= day);
       });
     }
+    function onBlock(bid) {
+      return S.assignments
+        .filter(function (x) {
+          return x.block === bid && !x.to;
+        })
+        .map(function (x) {
+          return x.athlete;
+        });
+    }
+
+    // ── dialogs (native <dialog>; focus returns to the opener) ───────────────
+    var opener = null;
+    function openDialog(html, opts) {
+      var d = $('#dlg');
+      opener = document.activeElement;
+      d.className = opts && opts.sheet ? 'sheet' : '';
+      d.innerHTML = html;
+      d.setAttribute('aria-labelledby', 'dlg-title');
+      if (opts && opts.describedby) d.setAttribute('aria-describedby', opts.describedby);
+      else d.removeAttribute('aria-describedby');
+      d.style.width = Math.min(520, $('#device').getBoundingClientRect().width) + 'px';
+      if (window.innerWidth <= 600) d.style.width = '';
+      d.showModal();
+      var t = $('#dlg-title');
+      t.setAttribute('tabindex', '-1');
+      focus((opts && opts.focus) || t);
+    }
+    function closeDialog(returnFocus) {
+      var d = $('#dlg');
+      if (d.open) d.close();
+      if (returnFocus !== false && opener && document.body.contains(opener)) opener.focus();
+    }
+    $('#dlg').addEventListener('close', function () {
+      $('#dlg').innerHTML = '';
+    });
 
     // ── screens ──────────────────────────────────────────────────────────────
     var SCREENS = [
-      ['picker', 'PROF-1 · Picker + Add athlete tile'],
+      ['picker', 'PROF-1 · Picker + Add athlete'],
       ['add', 'PROF-1 · Add an athlete'],
-      ['edit', 'PROF-1 · Edit an athlete'],
-      ['settings', 'PROF-1 · Household settings (Q1)'],
-      ['del', 'PROF-1 · Delete an athlete'],
-      ['day', 'V1-9b · Athlete day: delete + Restore'],
+      ['day', 'V1-9b · Athlete day: delete + restore'],
       ['day-slot', 'V1-9b · Restore refused (slot taken)'],
       ['day-clear', 'V1-9b · Clear a day'],
+      ['edit', 'PROF-1 · Rename an athlete'],
+      ['settings', 'PROF-1 · Household settings'],
+      ['del', 'PROF-1 · Delete an athlete'],
       ['log', 'PICK-1/2 · Log: pick a movement'],
-      ['program', 'V1-22 · Edit the program'],
-      ['programs', 'RETIRE-1 · Household programs'],
-      ['clone', 'CLONE-1 · Copy and move athletes'],
-      ['history', 'HIST-1 · Program on a past date'],
+      ['program', 'V1-22 + CLONE-1 · Edit, or save as a copy'],
+      ['programs', 'RETIRE-1 · Programs + move an athlete'],
+      ['history', 'HIST-1 · Program history'],
       ['movements', 'MOV-1 (unfiled) · Household movements'],
     ];
     var NOTES = {
       picker: [
-        'Dashed tile is the add affordance (maintainer, 2026-09-28). It sits LAST in the list, where the eye already is.',
-        'Q1 variant "Edit toggle on /p" adds an Edit button that reveals per-tile Edit. Variant "in Settings" keeps tiles clean and puts athlete management behind the Settings link at the bottom.',
-        'Archived athletes are not listed. Is "Settings" findable enough for a parent who wants one back?',
+        'Dashed tile last in the list (maintainer, 2026-09-28).',
+        'One link for parents: Household settings. No edit mode on the kids’ screen (panel, Q1/Q5).',
       ],
       add: [
-        'Two fields only: name and kid/adult. Avatar, birthdate and PIN exist as columns and are deliberately absent (PROF-1 scope).',
-        'Error copy for a blank name is shown on submit, not while typing.',
-        "Lands on the new athlete's day page, not back on the picker: first value is logging.",
-      ],
-      edit: [
-        'Rename + kind. In the Settings variant this screen has no delete at all.',
-        'Archive is reversible and offered BEFORE delete (PROF-1 row).',
-      ],
-      settings: [
-        'Q1 recommendation: delete lives here — rare, irreversible, step-up gated (Beta 1).',
-        'Archived athletes get a restore path here (acceptance 5).',
-        'Q6 (owner-only after AUTH-1) is not shown.',
-      ],
-      del: [
-        'Step 1 offers archive. Step 2 is type-the-name. Step 3 is the step-up stand-in (Clerk reverification, Beta 1).',
-        'Copy states what goes: every entry, weigh-ins included; what stays: a ledger line with no values.',
-        'There is no undo after step 3 — OPS-3 restore is the only path, and it is unrehearsed.',
+        'Two fields. "Kid / adult" today only changes the label (kid profiles also get calisthenics ramp targets when that schedule is filled — it ships empty).',
+        'Lands on the new athlete’s day page: first value is logging.',
       ],
       day: [
-        "Tap Delete: the row leaves, focus moves to the next row's Delete (or to Restore if it was last), and the live region announces it.",
-        'Hidden row is NOT timed and survives a reload and a day change — try ‹ and › then come back.',
-        'Delete twice before restoring: the count goes to 2, each restorable separately.',
-        'A parent on any device sees the same Hidden row: there is no per-person hide (ADR 0008 decision 1).',
-        'Turn on "Measure widths" at 360 to read the row\'s real content width.',
+        'Delete leaves an in-place "deleted · Undo" line, so the row never vanishes from under a finger and the next row does not slide up into a double tap (panel T5, I2).',
+        'Focus lands on that Undo — a safe control to press twice. Restore focuses the restored row.',
+        'The Hidden bar sits under the day nav, not a screen below. One item shows directly; more expand.',
+        'Each item says when it stops being restorable. ⚠️ 30 days is a PLACEHOLDER — N is PRIV-3’s to set.',
+        'Strength: Delete is on the strength section’s receipt only; the list’s copy stays read-only (the "one Change per set" rule).',
+        'Push-Ups is three entries folded into one row. Its Delete hides all three as ONE event and says so (new decision Q9).',
+        '"Also hidden this week" under the header is the parent’s signal on other days (panel I4, T4).',
       ],
       'day-slot': [
-        'Pre-set: the weigh-in was hidden and a new one logged. Tap Restore on the hidden weigh-in.',
-        'The refusal names what holds the slot and the way out. Never a raw error, never silent.',
+        'A weigh-in was hidden, then a new one logged. Restore offers "Keep 112.4 lb instead": one atomic swap, the newer one becomes restorable. Leaving it is the default.',
+        'The refusal is static text tied to its button; only the live region announces it.',
       ],
       'day-clear': [
-        'Clear this day hides every entry in ONE event; Restore all brings it back as one.',
-        'The Clear button stays disabled until the field says delete.',
-        'Pre-set: a new weigh-in was logged after clearing, so Restore all is partial — read the report.',
+        'Typed "delete" kept: the V1-9b row decided it (maintainer). Matching ignores case and stray spaces.',
+        'Focus goes to the dialog heading, so the consequence is read before the field.',
+        'Restores as one event.',
+      ],
+      edit: [
+        'Rename + kind. Reached from the athlete’s page ("→ Edit Athlete One") and from Household settings. PROF-1: edit lives on /p.',
+      ],
+      settings: [
+        'Athletes, programs and movements in one place for parents.',
+        'Archive is one tap with Undo (reversible). Delete is the 3-step flow.',
+      ],
+      del: [
+        'Step 1 offers the export first, then archive, then delete (notice.md: "export before you delete anything").',
+        'Copy follows the notice: removed from the app now, from backups after 7 days.',
+        'Step-up is a stand-in for Clerk reverification (Beta 1). Whether the 7-day household pause applies to one athlete is open (A3’s plan).',
       ],
       log: [
-        "Tap the Movement field: today's program first, then recent, then the catalog by group (Q2: hand-grouped, isolation split).",
-        'Type "bulgarain split squats" — PICK-2 offers the catalog row and a spelling fix; "Use what I typed" stays one tap.',
-        'Wrestling rows are tagged "proposed": they exist only after chunk 0\'s human pass and CAT-2.',
-        'No number arrives prefilled after a pick (PICK-1 acceptance 2).',
+        'The sheet opens with no keyboard on a phone; Recent first. Today’s program is folded away — the form already fills it.',
+        'Try "rdl", "ohp", or "bulgarain split squats". Aliases come from chunk 0’s spreadsheet; spelling from a word list.',
+        '"Use as typed" is pinned above the keyboard and creates the movement only when the set is saved.',
       ],
       program: [
-        'V1-22 chunk 4 (values) and 6 (add/remove/reorder) on one screen. Loads are per athlete, verbatim text.',
-        'Each section names its block (V1-22 contract rule).',
-        '"Make a copy to change it" is CLONE-1\'s entry point; editing in place is still allowed.',
+        'One editor. Save asks: change it for everyone on it, or save as a copy for chosen athletes (none ticked). Replaces v1’s 3-step clone wizard (panel I6).',
+        'Remove is staged until Save, with Undo per row (panel T6).',
+        'Loads are typed by a person, verbatim. A copy copies them; nothing is generated.',
       ],
       programs: [
-        'Q5: a household list, reached from the picker. Today authoring is per athlete at /p/<id>/program.',
-        'Q3: archive a program someone is on — switch the variant to compare "close" vs "refuse".',
-        'Archived programs stay one tap away and restorable.',
-      ],
-      clone: [
-        'Step 1 names the copy; step 2 edits it; step 3 asks who moves, default none (decided 2026-10-07).',
-        'Each athlete row shows what they are on now and what happens to it.',
-        'Nothing is deleted: the summary says history stays.',
+        'Tap an athlete chip to move them to another program or take them off (panel T1 — the missing assign action; unowned row ASSIGN-1).',
+        'Q3: switch the variant. "Resolve in place" makes Archive wait until nobody is on it, with Move/Take off right there. "Close all" archives and closes, and Undo puts both back.',
       ],
       history: [
-        'Q4: switch the variant between a date on the program page and a timeline.',
-        'Past days show the prescription as snapshotted, not as it reads today.',
+        'Timeline first (panel I4/Q4 overturned): change points at a glance. Each period opens the program as it was, and links to the days logged in it.',
+        'A date box is underneath for "what about 15 July?".',
       ],
       movements: [
-        'NOT A ROW YET — the gap ADR 0008 leaves "by decision". Shown so the panel can argue whether merge is the answer.',
-        'Merge re-points entries to the catalog movement; the household row then needs the three-part lift at schema.ts to go.',
+        'NOT A ROW YET. Rename first: fixes the typo, keeps history, reversible. Merge needs a confirm and an Insight sign-off — past exports would change.',
       ],
     };
 
@@ -1272,7 +1499,7 @@
         case 'add':
           return { name: 'add' };
         case 'edit':
-          return { name: 'edit', id: 'a2' };
+          return { name: 'edit', id: 'a1' };
         case 'settings':
           return { name: 'settings' };
         case 'del':
@@ -1281,46 +1508,38 @@
           return { name: 'day', id: 'a1', day: TODAY };
         case 'day-slot':
           presetSlot();
-          return { name: 'day', id: 'a1', day: TODAY, openHidden: true };
+          return { name: 'day', id: 'a1', day: TODAY, scenario: 'day-slot' };
         case 'day-clear':
-          return { name: 'day', id: 'a1', day: TODAY, clear: true };
+          return { name: 'day', id: 'a1', day: TODAY, scenario: 'day-clear', clear: true };
         case 'log':
           return { name: 'log', id: 'a1' };
         case 'program':
           return { name: 'program', id: 'a1' };
         case 'programs':
           return { name: 'programs' };
-        case 'clone':
-          return { name: 'clone', step: 1 };
         case 'history':
           return { name: 'history', id: 'a1' };
         case 'movements':
           return { name: 'movements' };
       }
     }
-    function routeKey(r) {
-      if (r.name === 'day') return 'day';
-      return r.name;
-    }
     function presetSlot() {
       var k = 'a1|' + TODAY;
       var list = S.entries[k] || [];
       var bw = list.find(function (e) {
-        return e.slot === 'bw';
+        return e.slot === 'bw' && e.detail.indexOf('112.4') === 0;
       });
       if (bw) {
         S.entries[k] = list.filter(function (e) {
           return e !== bw;
         });
-        S.hidden[k] = (S.hidden[k] || []).concat([{ at: '6:44 PM', items: [bw] }]);
-      }
-      if (
-        !(S.entries[k] || []).some(function (e) {
-          return e.slot === 'bw';
-        })
-      ) {
-        S.entries[k].unshift({
+        S.hidden[k] = (S.hidden[k] || []).concat([
+          { id: 'h' + Date.now(), at: '6:44 PM', hiddenOn: TODAY, items: [bw] },
+        ]);
+        S.entries[k].push({
           id: 'e' + Date.now(),
+          order: 0,
+          where: 'bw',
           title: 'Bodyweight',
           detail: '112.0 lb · 6:52 PM',
           slot: 'bw',
@@ -1330,17 +1549,15 @@
 
     function render() {
       var r = S.route;
-      var app = document.getElementById('app');
       var html = '';
       var path = '/p';
       switch (r.name) {
         case 'picker':
           html = vPicker();
-          path = '/p';
           break;
         case 'add':
           html = vAdd();
-          path = '/p/new';
+          path = '/p (add athlete)';
           break;
         case 'edit':
           html = vEdit(r);
@@ -1360,46 +1577,38 @@
           break;
         case 'log':
           html = vLog(r);
-          path = '/p/' + r.id + ' (log strength)';
+          path = '/p/' + r.id + ' · strength form';
           break;
         case 'program':
           html = vProgram(r);
-          path = '/p/' + r.id + '/program';
+          path = r.block ? '/programs/' + r.block : '/p/' + r.id + '/program';
           break;
         case 'programs':
           html = vPrograms();
           path = '/programs';
           break;
-        case 'clone':
-          html = vClone(r);
-          path = '/programs/b1/copy';
-          break;
         case 'history':
           html = vHistory(r);
-          path = '/p/' + r.id + '/program?on=' + S.histDate;
+          path = '/p/' + r.id + '/program/history';
           break;
         case 'movements':
           html = vMovements();
           path = '/settings/movements';
           break;
       }
-      app.innerHTML = html;
-      document.getElementById('cap-route').textContent = path;
-      var key = routeKey(r);
-      var sel = document.getElementById('screen-select');
+      $('#app').innerHTML = html;
+      $('#cap-route').textContent = path;
+      var key = r.scenario || r.name;
+      var sel = $('#screen-select');
       if (
         [].some.call(sel.options, function (o) {
           return o.value === key;
         })
       )
         sel.value = key;
-      var n =
-        NOTES[
-          r.name === 'day' ? (r.clear ? 'day-clear' : r.openHidden ? 'day-slot' : 'day') : key
-        ] || [];
-      document.getElementById('notes').innerHTML =
+      $('#notes').innerHTML =
         '<h2>Review this screen</h2><ul>' +
-        n
+        (NOTES[key] || [])
           .map(function (t) {
             return '<li>' + esc(t) + '</li>';
           })
@@ -1411,123 +1620,105 @@
         openClear();
       }
     }
+    function flashHtml() {
+      if (!S.flash) return '';
+      // Visible text is static; the persistent live region is what announces it (a11y panel #3).
+      return (
+        '<div class="ok-msg row" style="justify-content:space-between">' +
+        '<span>' +
+        S.flash +
+        '</span>' +
+        (S.undo
+          ? '<button type="button" class="btn ghost" data-act="undo" id="undo-btn">Undo</button>'
+          : '') +
+        '</div>'
+      );
+    }
 
     // PROF-1 — picker
     function vPicker() {
-      var v = document.getElementById('v-delete').value;
       var live = S.athletes.filter(function (a) {
         return !a.archived;
       });
-      var tiles = live
-        .map(function (a) {
-          var tile =
-            '<button type="button" class="tile" data-go="day" data-id="' +
-            a.id +
-            '" data-m>' +
-            '<span class="avatar" aria-hidden="true">' +
-            esc(a.name.charAt(0)) +
-            '</span>' +
-            '<span class="stack-xs" style="gap:2px"><span class="name">' +
-            esc(a.name) +
-            '</span><span class="kind">' +
-            esc(a.kind) +
-            '</span></span></button>';
-          if (v === 'picker' && S.editMode) {
-            return (
-              '<li class="tile-wrap">' +
-              tile +
-              '<button type="button" class="btn outline tile-edit" data-go="edit" data-id="' +
-              a.id +
-              '" aria-label="Edit ' +
-              esc(a.name) +
-              '">Edit</button></li>'
-            );
-          }
-          return '<li>' + tile + '</li>';
-        })
-        .join('');
-      var add =
-        '<li><button type="button" class="tile add" data-go="add" data-m>' +
-        '<span class="avatar" aria-hidden="true">+</span>' +
-        '<span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A kid, or yourself</span></span></button></li>';
       return (
-        '<header class="stack-xs">' +
-        '<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h1>Who’s logging today?</h1>' +
-        (v === 'picker'
-          ? '<button type="button" class="btn ghost" id="edit-toggle" aria-pressed="' +
-            S.editMode +
-            '">' +
-            (S.editMode ? 'Done' : 'Edit') +
-            '</button>'
-          : '') +
-        '</div><p class="muted" style="margin:0">Pick a profile to start logging.</p></header>' +
+        '<header class="stack-xs"><h1>Who’s logging today?</h1><p class="muted" style="margin:0">Pick a profile to start logging.</p></header>' +
         '<ul class="plain stack">' +
-        tiles +
-        add +
-        '</ul>' +
-        '<nav aria-label="Household" class="stack-xs" style="margin-top:16px">' +
-        '<button type="button" class="textlink" data-go="programs">→ Programs</button>' +
-        '<button type="button" class="textlink" data-go="settings">→ Household settings</button>' +
-        '</nav>'
+        live
+          .map(function (a) {
+            return (
+              '<li><button type="button" class="tile" data-go="day" data-id="' +
+              a.id +
+              '" data-m><span class="avatar" aria-hidden="true">' +
+              esc(a.name.charAt(0)) +
+              '</span><span class="stack-xs" style="gap:2px"><span class="name">' +
+              esc(a.name) +
+              '</span><span class="kind">' +
+              esc(a.kind) +
+              '</span></span></button></li>'
+            );
+          })
+          .join('') +
+        '<li><button type="button" class="tile add" data-go="add" data-m><span class="avatar" aria-hidden="true">+</span><span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A kid, or yourself</span></span></button></li></ul>' +
+        '<button type="button" class="textlink" data-go="settings" style="margin-top:16px">→ Household settings</button>'
       );
     }
-
+    function kindFields(prefix, kind) {
+      return (
+        '<fieldset aria-describedby="' +
+        prefix +
+        '-kind-hint"><legend>Who is this?</legend><div class="seg">' +
+        '<label for="' +
+        prefix +
+        '-kid"><input type="radio" id="' +
+        prefix +
+        '-kid" name="' +
+        prefix +
+        'kind" value="kid"' +
+        (kind === 'kid' ? ' checked' : '') +
+        ' /> A kid</label>' +
+        '<label for="' +
+        prefix +
+        '-adult"><input type="radio" id="' +
+        prefix +
+        '-adult" name="' +
+        prefix +
+        'kind" value="adult"' +
+        (kind === 'adult' ? ' checked' : '') +
+        ' /> An adult</label>' +
+        '</div><p class="hint" id="' +
+        prefix +
+        '-kind-hint" style="margin:6px 0 0">Shown on their tile. You can change it later.</p></fieldset>'
+      );
+    }
     function vAdd() {
       return (
-        '<button type="button" class="back" data-go="picker">← All athletes</button>' +
-        '<h1>Add an athlete</h1>' +
+        '<button type="button" class="back" data-go="picker">← All athletes</button><h1>Add an athlete</h1>' +
         '<form class="stack" id="add-form" novalidate>' +
-        '<label class="field" for="add-name"><span>Name</span><input class="input" id="add-name" name="name" autocomplete="off" maxlength="40" /><span class="hint">What shows on their tile. You can change it later.</span><span class="err" id="add-err" hidden>Enter a name.</span></label>' +
-        '<fieldset><legend>Who is this?</legend><div class="seg">' +
-        '<label for="k-kid"><input type="radio" id="k-kid" name="kind" value="kid" checked /> A kid</label>' +
-        '<label for="k-adult"><input type="radio" id="k-adult" name="kind" value="adult" /> An adult</label>' +
-        '</div></fieldset>' +
-        '<button class="btn full" type="submit">Add athlete</button>' +
-        '</form>'
+        '<div class="field"><label for="add-name" style="font-size:14px;font-weight:500">Name</label><input class="input" id="add-name" autocomplete="off" maxlength="40" aria-describedby="add-err" /><span class="err" id="add-err" hidden>Enter a name.</span></div>' +
+        kindFields('add', '') +
+        '<button class="btn full" type="submit">Add athlete</button></form>'
       );
     }
-
     function vEdit(r) {
       var a = athlete(r.id);
-      var v = document.getElementById('v-delete').value;
       return (
-        '<button type="button" class="back" data-go="' +
-        (v === 'picker' ? 'picker' : 'settings') +
+        '<button type="button" class="back" data-go="day" data-id="' +
+        a.id +
         '">← ' +
-        (v === 'picker' ? 'All athletes' : 'Household settings') +
-        '</button>' +
-        '<h1>Edit ' +
+        esc(a.name) +
+        '</button><h1>Edit ' +
         esc(a.name) +
         '</h1>' +
         '<form class="stack" id="edit-form" data-id="' +
         a.id +
-        '" novalidate>' +
-        '<label class="field" for="edit-name"><span>Name</span><input class="input" id="edit-name" value="' +
+        '" novalidate><div class="field"><label for="edit-name" style="font-size:14px;font-weight:500">Name</label><input class="input" id="edit-name" value="' +
         esc(a.name) +
-        '" maxlength="40" /></label>' +
-        '<fieldset><legend>Who is this?</legend><div class="seg">' +
-        '<label for="ek-kid"><input type="radio" id="ek-kid" name="ekind" value="kid"' +
-        (a.kind === 'kid' ? ' checked' : '') +
-        ' /> A kid</label>' +
-        '<label for="ek-adult"><input type="radio" id="ek-adult" name="ekind" value="adult"' +
-        (a.kind === 'adult' ? ' checked' : '') +
-        ' /> An adult</label>' +
-        '</div></fieldset>' +
+        '" maxlength="40" /></div>' +
+        kindFields('ek', a.kind) +
         '<button class="btn full" type="submit">Save</button></form>' +
-        (v === 'picker'
-          ? '<section class="stack-sm" aria-labelledby="danger-h" style="border-top:1px solid var(--border);padding-top:16px"><h2 id="danger-h" class="small" style="font-size:14px">Stop tracking ' +
-            esc(a.name) +
-            '</h2>' +
-            '<button type="button" class="btn outline full" data-act="archive-athlete" data-id="' +
-            a.id +
-            '">Archive — hide, keep history</button>' +
-            '<button type="button" class="btn danger-ghost full" data-go="del" data-id="' +
-            a.id +
-            '">Delete permanently…</button></section>'
-          : '<p class="hint">To archive or delete an athlete, use Household settings.</p>')
+        '<p class="hint" style="margin:0">To archive or delete an athlete, use <button type="button" class="textlink" style="min-height:44px;display:inline-flex" data-go="settings">Household settings</button>.</p>'
       );
     }
-
     function vSettings() {
       var live = S.athletes.filter(function (a) {
         return !a.archived;
@@ -1536,31 +1727,38 @@
         return a.archived;
       });
       return (
-        '<button type="button" class="back" data-go="picker">← All athletes</button>' +
-        '<h1>Household settings</h1>' +
+        '<button type="button" class="back" data-go="picker">← All athletes</button><h1>Household settings</h1>' +
+        flashHtml() +
         '<section class="stack-sm" aria-labelledby="ath-h"><h2 id="ath-h">Athletes</h2><ul class="plain stack-sm">' +
         live
           .map(function (a) {
             return (
-              '<li class="card stack-sm" style="padding:12px 16px"><div class="row" style="justify-content:space-between"><span><span style="font-weight:500">' +
+              '<li class="card stack-sm" style="padding:12px 16px" id="ath-' +
+              a.id +
+              '" tabindex="-1"><span><span style="font-weight:500">' +
               esc(a.name) +
               '</span> <span class="muted small" style="text-transform:capitalize">· ' +
               a.kind +
-              '</span></span></div>' +
+              '</span></span>' +
               '<div class="row"><button type="button" class="btn outline" data-go="edit" data-id="' +
               a.id +
+              '" aria-label="Edit ' +
+              esc(a.name) +
               '">Edit</button>' +
               '<button type="button" class="btn outline" data-act="archive-athlete" data-id="' +
               a.id +
+              '" aria-label="Archive ' +
+              esc(a.name) +
               '">Archive</button>' +
               '<button type="button" class="btn danger-ghost" data-go="del" data-id="' +
               a.id +
-              '">Delete…</button></div></li>'
+              '" aria-label="Delete ' +
+              esc(a.name) +
+              '…">Delete…</button></div></li>'
             );
           })
           .join('') +
-        '</ul></section>' +
-        '<section class="stack-sm" aria-labelledby="arch-h"><h2 id="arch-h">Archived athletes</h2>' +
+        '</ul></section><section class="stack-sm" aria-labelledby="arch-h"><h2 id="arch-h">Archived athletes</h2>' +
         (arch.length
           ? '<ul class="plain stack-sm">' +
             arch
@@ -1570,50 +1768,48 @@
                   esc(a.name) +
                   ' <span class="muted small">· history kept</span></span><button type="button" class="btn ghost" data-act="unarchive" data-id="' +
                   a.id +
+                  '" aria-label="Restore ' +
+                  esc(a.name) +
                   '">Restore</button></li>'
                 );
               })
               .join('') +
             '</ul>'
           : '<p class="muted small" style="margin:0">None. Archiving hides an athlete from the picker and keeps everything they logged.</p>') +
-        '</section>' +
-        '<section class="stack-sm" aria-labelledby="mv-h"><h2 id="mv-h">Movements</h2><button type="button" class="textlink" data-go="movements">→ Movements your household added (' +
+        '</section><nav class="stack-xs" aria-label="More household settings"><button type="button" class="textlink" data-go="programs">→ Programs</button><button type="button" class="textlink" data-go="movements">→ Movements your household added (' +
         S.householdMovements.length +
-        ')</button></section>'
+        ')</button></nav>'
       );
     }
-
     function vDel(r) {
       if (r.step === 4)
         return (
-          '<h1>Deleted</h1><p>' +
+          '<h1>Deleted</h1><p style="margin:0">' +
           esc(r.deleted) +
-          ' and everything they logged is gone.</p><button type="button" class="btn full" data-go="picker">Back to athletes</button>'
+          ' is removed from the app. Backups still hold their data for 7 days, then it is gone from those too.</p><button type="button" class="btn full" data-go="picker">Back to athletes</button>'
         );
       var a = athlete(r.id);
       var back =
-        '<button type="button" class="back" data-go="' +
-        (document.getElementById('v-delete').value === 'picker' ? 'edit' : 'settings') +
-        '" data-id="' +
-        a.id +
-        '">← Back</button>';
+        '<button type="button" class="back" data-go="settings">← Household settings</button>';
       if (r.step === 1) {
         return (
           back +
           '<h1>Delete ' +
           esc(a.name) +
           '?</h1>' +
-          '<div class="card stack-sm"><h2 style="font-size:16px">Archive instead?</h2><p class="small" style="margin:0">Archiving hides ' +
+          '<div class="card stack-sm"><h2 style="font-size:16px">1 · Download their data first</h2><p class="small" style="margin:0">Once deleted, nothing can be exported.</p><button type="button" class="btn outline full" data-act="download">Download ' +
           esc(a.name) +
-          ' from the picker and keeps every entry. You can restore them any time from Household settings.</p>' +
-          '<button type="button" class="btn full" data-act="archive-athlete" data-id="' +
+          '’s data</button></div>' +
+          '<div class="card stack-sm"><h2 style="font-size:16px">2 · Or archive instead</h2><p class="small" style="margin:0">Hides ' +
+          esc(a.name) +
+          ' from the picker and keeps every entry. Restore any time from Household settings.</p><button type="button" class="btn full" data-act="archive-athlete" data-id="' +
           a.id +
           '">Archive ' +
           esc(a.name) +
           '</button></div>' +
-          '<div class="stack-sm"><h2 style="font-size:16px">Delete permanently</h2><p class="small" style="margin:0">Removes ' +
+          '<div class="stack-sm"><h2 style="font-size:16px">3 · Delete</h2><p class="small" style="margin:0">Removes ' +
           esc(a.name) +
-          ' and everything they logged: weigh-ins, sets, check-ins, including anything already hidden. <strong>This cannot be undone.</strong> We keep one line saying a deletion happened, with no values.</p>' +
+          ' and everything they logged from the app: weigh-ins, sets, check-ins, including anything hidden. Backups keep it for 7 more days, then it is gone from those too. You can’t undo this in the app.</p>' +
           '<button type="button" class="btn danger-ghost full" data-act="del-step" data-id="' +
           a.id +
           '" data-step="2">Continue to delete…</button></div>'
@@ -1624,146 +1820,347 @@
           back +
           '<h1>Delete ' +
           esc(a.name) +
-          '</h1>' +
-          '<form class="stack" id="del-form" data-id="' +
+          '</h1><form class="stack" id="del-form" data-id="' +
           a.id +
           '" novalidate>' +
-          '<label class="field" for="del-name"><span>Type <strong>' +
+          '<div class="field"><label for="del-name" style="font-size:14px;font-weight:500">Type <strong>' +
           esc(a.name) +
-          '</strong> to confirm</span><input class="input" id="del-name" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>' +
+          '</strong> to confirm</label><input class="input" id="del-name" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="del-hint" /><span class="hint" id="del-hint">The button turns on when the name matches. Capitals don’t matter.</span></div>' +
           '<button class="btn danger full" type="submit" id="del-go" disabled>Delete ' +
           esc(a.name) +
-          ' permanently</button></form>'
-        );
-      }
-      if (r.step === 3) {
-        return (
-          back +
-          '<h1>Confirm it’s you</h1><p class="proto-flag">Stand-in for Clerk reverification (Beta 1 step-up)</p>' +
-          '<p class="small" style="margin:0">Deleting an athlete needs the account owner to sign in again on this device.</p>' +
-          '<button type="button" class="btn outline full" data-act="del-final" data-id="' +
-          a.id +
-          '">Continue with Google</button>'
+          '</button></form>'
         );
       }
       return (
-        '<h1>Deleted</h1><p>' +
-        esc(r.deleted) +
-        ' and everything they logged is gone.</p><button type="button" class="btn full" data-go="picker">Back to athletes</button>'
+        back +
+        '<h1>Confirm it’s you</h1><p class="proto-flag">Stand-in for Clerk reverification (Beta 1 step-up)</p><p class="small" style="margin:0">Deleting an athlete needs the account owner to sign in again on this device.</p>' +
+        '<button type="button" class="btn outline full" data-act="del-final" data-id="' +
+        a.id +
+        '">Continue with Google</button>'
       );
     }
 
-    // V1-9b — the day page
+    // V1-9b — the day page, in the real page's shape
+    function untilLabel(hiddenOn) {
+      return fmtDay(shift(hiddenOn, PURGE_DAYS));
+    }
+    function hiddenItemLabel(ev) {
+      if (ev.items.length > 1) {
+        var g = ev.items[0].group;
+        if (
+          g &&
+          ev.items.every(function (e) {
+            return e.group === g;
+          })
+        )
+          return g + ' · ' + ev.items.length + ' sets';
+        return 'Cleared this day · ' + ev.items.length + ' entries';
+      }
+      var it = ev.items[0];
+      if (it.where === 'strength')
+        return (
+          it.title +
+          ' · ' +
+          it.detail.split(' · ').filter(function (x) {
+            return x.indexOf('prescribed') !== 0;
+          }).length +
+          ' sets'
+        );
+      return it.title + ' · ' + it.detail.split(' · ')[0];
+    }
+    function vHiddenBar(r, k) {
+      var hid = (S.hidden[k] || []).filter(function (ev) {
+        return !pageHidden[ev.id];
+      });
+      var all = S.hidden[k] || [];
+      if (!all.length) return '';
+      var n = all.reduce(function (c, ev) {
+        return c + ev.items.length;
+      }, 0);
+      var items = all
+        .map(function (ev) {
+          var refused = S.refusal && S.refusal.ev === ev.id;
+          return (
+            '<li class="hidden-item" style="flex-wrap:wrap"><div class="body"><div style="font-weight:500">' +
+            esc(hiddenItemLabel(ev)) +
+            '</div><div class="detail small muted">Hidden ' +
+            esc(ev.at) +
+            ' · restorable until ' +
+            untilLabel(ev.hiddenOn) +
+            '</div></div>' +
+            '<button type="button" class="btn outline" data-act="restore" data-ev="' +
+            ev.id +
+            '" id="restore-' +
+            ev.id +
+            '"' +
+            (refused ? ' aria-describedby="ref-' + ev.id + '"' : '') +
+            '>Restore' +
+            (ev.items.length > 1 ? ' all' : '') +
+            '</button>' +
+            (refused
+              ? '<div class="refusal stack-sm" id="ref-' +
+                ev.id +
+                '" style="flex-basis:100%">' +
+                S.refusal.text +
+                (S.refusal.swap
+                  ? '<div class="row"><button type="button" class="btn outline" data-act="swap" data-ev="' +
+                    ev.id +
+                    '">Keep ' +
+                    esc(S.refusal.wanted) +
+                    ' instead</button><button type="button" class="btn ghost" data-act="leave">Leave it</button></div>'
+                  : '') +
+                '</div>'
+              : '') +
+            '</li>'
+          );
+        })
+        .join('');
+      var open = r.openHidden || all.length === 1;
+      return (
+        '<section class="hidden-bar" aria-labelledby="hid-label"><div class="head"><h2 class="small" id="hid-label" style="font-size:14px;font-weight:500">Hidden on this day (' +
+        n +
+        ')</h2>' +
+        (all.length > 1
+          ? '<button type="button" class="btn ghost" id="hid-toggle" aria-expanded="' +
+            !!open +
+            '" aria-controls="hid-list" data-act="toggle-hidden">' +
+            (open ? 'Close' : 'Show') +
+            '</button>'
+          : '') +
+        '</div><ul class="plain hidden-list" id="hid-list"' +
+        (open ? '' : ' hidden') +
+        ' style="padding:0 12px 4px 0">' +
+        items +
+        '</ul></section>'
+      );
+    }
+    function tomb(ev) {
+      return (
+        '<li class="tomb" id="tomb-' +
+        ev.id +
+        '"><span>' +
+        esc(hiddenItemLabel(ev)) +
+        ' deleted</span><button type="button" class="btn ghost" data-act="restore" data-ev="' +
+        ev.id +
+        '" id="undo-' +
+        ev.id +
+        '" aria-label="Undo delete of ' +
+        esc(hiddenItemLabel(ev)) +
+        '">Undo</button></li>'
+      );
+    }
+    function placed(list, k, where) {
+      // Live entries plus the in-place tombstones of this visit, in their original order.
+      var out = list
+        .filter(function (e) {
+          return e.where === where;
+        })
+        .map(function (e) {
+          return { o: e.order, e: e };
+        });
+      (S.hidden[k] || []).forEach(function (ev) {
+        if (pageHidden[ev.id] && ev.items[0].where === where)
+          out.push({ o: ev.items[0].order, t: ev });
+      });
+      return out.sort(function (a, b) {
+        return a.o - b.o;
+      });
+    }
+    function weekHidden(aid, day) {
+      var out = [];
+      for (var i = 1; i <= 6; i++) {
+        var d = shift(day, -i);
+        var hid = S.hidden[aid + '|' + d];
+        if (hid && hid.length)
+          out.push([
+            d,
+            hid.reduce(function (c, ev) {
+              return c + ev.items.length;
+            }, 0),
+          ]);
+      }
+      return out;
+    }
+    function delBtn(k, e, label) {
+      return (
+        '<button type="button" class="btn ghost del" data-act="hide" data-k="' +
+        k +
+        '" data-eid="' +
+        e.id +
+        '" aria-label="Delete ' +
+        esc(label || e.title) +
+        '" data-m>Delete</button>'
+      );
+    }
     function vDay(r) {
       var a = athlete(r.id);
       var k = r.id + '|' + r.day;
       var list = S.entries[k] || [];
-      var hid = S.hidden[k] || [];
-      var hiddenCount = hid.reduce(function (n, ev) {
-        return n + ev.items.length;
-      }, 0);
-      var items = list
-        .map(function (e, i) {
+      var bwRows = placed(list, k, 'bw');
+      var stRows = placed(list, k, 'strength');
+      var lsRows = placed(list, k, 'list');
+      var wk = weekHidden(r.id, r.day);
+
+      var bw = bwRows.length
+        ? '<ul class="plain stack-sm">' +
+          bwRows
+            .map(function (x) {
+              return x.t
+                ? tomb(x.t)
+                : '<li class="entry" id="row-' +
+                    x.e.id +
+                    '" tabindex="-1" data-m><div class="body"><div class="title tabular">' +
+                    esc(x.e.detail.split(' · ')[0]) +
+                    '</div><div class="detail">Logged ' +
+                    esc(x.e.detail.split(' · ')[1] || '') +
+                    '</div></div><div class="rx-actions"><button type="button" class="btn ghost del" aria-label="Change bodyweight">Change</button>' +
+                    delBtn(k, x.e, 'bodyweight ' + x.e.detail.split(' · ')[0]) +
+                    '</div></li>';
+            })
+            .join('') +
+          '</ul>'
+        : '<form class="row" id="bw-form" data-k="' +
+          k +
+          '" style="flex-wrap:nowrap"><label class="sr-only" for="bw-in">Bodyweight in pounds</label><input class="input" id="bw-in" inputmode="decimal" placeholder="lb" style="max-width:140px" /><button class="btn" type="submit">Log</button></form>';
+
+      var st = stRows.length
+        ? '<div class="receipt"><div class="small muted">Day A · saved ' +
+          (r.day === TODAY ? '6:58 PM' : '') +
+          '</div><ul class="plain stack-sm">' +
+          stRows
+            .map(function (x) {
+              return x.t
+                ? tomb(x.t)
+                : '<li class="mv" id="row-' +
+                    x.e.id +
+                    '" tabindex="-1" data-m><div class="body"><div class="title" style="font-weight:500">' +
+                    esc(x.e.title) +
+                    '</div><div class="detail small muted tabular">' +
+                    esc(x.e.detail) +
+                    '</div></div>' +
+                    delBtn(k, x.e) +
+                    '</li>';
+            })
+            .join('') +
+          '</ul></div>'
+        : '<p class="muted small" style="margin:0">Nothing logged.</p>';
+
+      // Calisthenics bouts fold into one row per exercise (page.tsx); its Delete hides the group as ONE event (Q9).
+      var seen = {};
+      var ls = lsRows
+        .map(function (x) {
+          if (x.t) return tomb(x.t);
+          var e = x.e;
+          if (e.group) {
+            if (seen[e.group]) return '';
+            seen[e.group] = true;
+            var bouts = list.filter(function (y) {
+              return y.group === e.group;
+            });
+            var tot = bouts.reduce(function (c, y) {
+              return c + (+y.detail || 0);
+            }, 0);
+            return (
+              '<li class="entry" id="row-' +
+              e.id +
+              '" tabindex="-1" data-m><div class="body"><div class="title">' +
+              esc(e.group) +
+              ' — ' +
+              bouts
+                .map(function (y) {
+                  return y.detail;
+                })
+                .join(', ') +
+              '</div><div class="detail tabular">' +
+              bouts.length +
+              ' sets · ' +
+              tot +
+              '</div></div>' +
+              '<button type="button" class="btn ghost del" data-act="hide-group" data-k="' +
+              k +
+              '" data-group="' +
+              esc(e.group) +
+              '" aria-label="Delete ' +
+              esc(e.group) +
+              ', all ' +
+              bouts.length +
+              ' sets" data-m>Delete</button></li>'
+            );
+          }
           return (
-            '<li class="entry" data-m id="row-' +
+            '<li class="entry" id="row-' +
             e.id +
-            '"><div class="body"><div class="title">' +
+            '" tabindex="-1" data-m><div class="body"><div class="title">' +
             esc(e.title) +
-            '</div><div class="detail tabular">' +
+            '</div><div class="detail">' +
             esc(e.detail) +
             '</div></div>' +
-            '<button type="button" class="btn ghost del" data-act="hide" data-k="' +
-            k +
-            '" data-eid="' +
-            e.id +
-            '" aria-label="Delete ' +
-            esc(e.title) +
-            '" data-m>Delete</button></li>'
+            delBtn(k, e) +
+            '</li>'
           );
         })
         .join('');
-      var hiddenHtml = '';
-      if (hiddenCount) {
-        hiddenHtml =
-          '<li class="hidden-row"><div class="head"><span class="small muted" id="hid-label">Hidden on this day (' +
-          hiddenCount +
-          ')</span>' +
-          '<button type="button" class="btn ghost" id="hid-toggle" aria-expanded="' +
-          !!r.openHidden +
-          '" aria-controls="hid-list" data-act="toggle-hidden">' +
-          (r.openHidden ? 'Close' : 'Restore…') +
-          '</button></div>' +
-          '<div class="hidden-list" id="hid-list"' +
-          (r.openHidden ? '' : ' hidden') +
-          '>' +
-          (S.restoreMsg ? S.restoreMsg : '') +
-          hid
-            .map(function (ev, ei) {
-              if (ev.items.length > 1) {
-                return (
-                  '<div class="hidden-item"><div class="body"><div style="font-weight:500">Cleared this day</div><div class="detail small muted">' +
-                  ev.items.length +
-                  ' entries · ' +
-                  esc(ev.at) +
-                  '</div></div>' +
-                  '<button type="button" class="btn outline" data-act="restore" data-k="' +
-                  k +
-                  '" data-ei="' +
-                  ei +
-                  '">Restore all</button></div>'
-                );
-              }
-              var e = ev.items[0];
-              return (
-                '<div class="hidden-item"><div class="body"><div style="font-weight:500">' +
-                esc(e.title) +
-                '</div><div class="detail small muted">' +
-                esc(e.detail) +
-                ' · hidden ' +
-                esc(ev.at) +
-                '</div></div>' +
-                '<button type="button" class="btn outline" data-act="restore" data-k="' +
-                k +
-                '" data-ei="' +
-                ei +
-                '" aria-label="Restore ' +
-                esc(e.title) +
-                '">Restore</button></div>'
-              );
-            })
-            .join('') +
-          '</div></li>';
-      }
-      var hasBw = list.some(function (e) {
-        return e.slot === 'bw';
-      });
+      var anyLive = list.length > 0;
       return (
         '<header class="stack-sm"><button type="button" class="back" data-go="picker">← All athletes</button><h1>' +
         esc(a.name) +
         '</h1>' +
-        '<nav class="daynav" aria-label="Day"><button type="button" class="btn outline" data-act="day" data-n="-1" aria-label="Previous day">‹</button>' +
-        '<span class="day">' +
+        '<nav class="daynav" aria-label="Day"><button type="button" class="btn outline" data-act="day" data-n="-1" aria-label="Previous day">‹</button><span class="day">' +
         (r.day === TODAY ? 'Today · ' : '') +
         fmtDay(r.day, true) +
         '</span>' +
         '<button type="button" class="btn outline" data-act="day" data-n="1" aria-label="Next day"' +
         (r.day >= TODAY ? ' disabled' : '') +
-        '>›</button></nav></header>' +
+        '>›</button></nav>' +
+        (wk.length
+          ? '<p class="small muted" style="margin:0">Also hidden this week: ' +
+            wk
+              .map(function (w) {
+                return (
+                  '<button type="button" class="textlink" style="display:inline-flex;min-height:44px" data-act="goto-day" data-d="' +
+                  w[0] +
+                  '">' +
+                  fmtDay(w[0]) +
+                  ' (' +
+                  w[1] +
+                  ')</button>'
+                );
+              })
+              .join(', ') +
+            '</p>'
+          : '') +
+        '</header>' +
+        vHiddenBar(r, k) +
         '<section class="stack-sm" aria-labelledby="bw-h"><h2 id="bw-h">Bodyweight</h2>' +
-        (hasBw
-          ? '<p class="muted small" style="margin:0">Logged today. Change it from the list below.</p>'
-          : '<form class="row" id="bw-form" data-k="' +
-            k +
-            '" style="flex-wrap:nowrap"><label class="sr-only" for="bw-in">Bodyweight in pounds</label><input class="input" id="bw-in" inputmode="decimal" placeholder="lb" style="max-width:140px" /><button class="btn" type="submit">Log</button></form>') +
+        bw +
         '</section>' +
-        '<section class="stack-sm" aria-labelledby="ent-h"><div class="row" style="justify-content:space-between"><h2 id="ent-h">Logged entries</h2></div>' +
-        (list.length || hiddenCount
-          ? '<ul class="plain stack-sm" id="entries">' + items + hiddenHtml + '</ul>'
-          : '<p class="muted small" style="margin:0">Nothing logged on ' +
+        '<section class="stack-sm" aria-labelledby="st-h"><h2 id="st-h">Strength</h2>' +
+        st +
+        '</section>' +
+        '<section class="stack-sm" aria-labelledby="ent-h"><h2 id="ent-h">Logged entries</h2>' +
+        (ls || stRows.length
+          ? '<ul class="plain stack-sm" id="entries">' +
+            ls +
+            (stRows.some(function (x) {
+              return x.e;
+            })
+              ? '<li class="entry" style="color:var(--muted-foreground)"><div class="body small">Strength · ' +
+                stRows.filter(function (x) {
+                  return x.e;
+                }).length +
+                (stRows.filter(function (x) {
+                  return x.e;
+                }).length === 1
+                  ? ' movement'
+                  : ' movements') +
+                ' — change or delete them above</div></li>'
+              : '') +
+            '</ul>'
+          : '<p class="muted small" style="margin:0">Nothing else logged on ' +
             fmtDay(r.day) +
             '.</p>') +
-        (list.length > 1
-          ? '<button type="button" class="textlink" data-act="clear-open">Clear this day…</button>'
+        (anyLive
+          ? '<button type="button" class="textlink" data-act="clear-open" id="clear-open">Clear this day…</button>'
           : '') +
         '</section>' +
         '<nav aria-label="' +
@@ -1776,32 +2173,37 @@
         '">→ Edit ' +
         esc(a.name) +
         '’s program</button>' +
+        '<button type="button" class="textlink" data-go="edit" data-id="' +
+        a.id +
+        '">→ Edit ' +
+        esc(a.name) +
+        '</button>' +
         '<button type="button" class="textlink">→ Edit ' +
         esc(a.name) +
         '’s routine</button></nav>'
       );
     }
-
     function openClear() {
       var r = S.route;
       var k = r.id + '|' + r.day;
       var n = (S.entries[k] || []).length;
-      var d = document.getElementById('dlg');
-      d.innerHTML =
+      openDialog(
         '<form class="sheet-in" id="clear-form" data-k="' +
-        k +
-        '" method="dialog"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Clear ' +
-        fmtDay(r.day, true) +
-        '?</h2></div>' +
-        '<div class="sheet-body"><p style="margin:0">This hides all <strong>' +
-        n +
-        ' entries</strong> for ' +
-        esc(athlete(r.id).name) +
-        ' on this day, for everyone in the household. You can restore them together from <em>Hidden on this day</em>.</p>' +
-        '<label class="field" for="clear-in"><span>Type <strong>delete</strong> to confirm</span><input class="input" id="clear-in" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>' +
-        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn danger" id="clear-go" disabled>Clear day</button></div></div></form>';
-      d.showModal();
-      document.getElementById('clear-in').focus();
+          k +
+          '"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Clear ' +
+          fmtDay(r.day, true) +
+          '?</h2></div>' +
+          '<div class="sheet-body"><p id="clear-desc" style="margin:0">This hides all <strong>' +
+          n +
+          ' entries</strong> for ' +
+          esc(athlete(r.id).name) +
+          ' on this day, for everyone in your household. You can put them all back from <em>Hidden on this day</em> until ' +
+          untilLabel(TODAY) +
+          '.</p>' +
+          '<div class="field"><label for="clear-in" style="font-size:14px;font-weight:500">Type <strong>delete</strong> to confirm</label><input class="input" id="clear-in" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="clear-hint" /><span class="hint" id="clear-hint">The button turns on when it matches.</span></div>' +
+          '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn danger" id="clear-go" disabled>Clear day</button></div></div></form>',
+        { describedby: 'clear-desc' },
+      );
     }
 
     // PICK-1 / PICK-2
@@ -1814,32 +2216,30 @@
         '">← ' +
         esc(a.name) +
         '</button><h1>Log strength</h1>' +
-        '<fieldset class="card stack" data-m><legend class="sr-only">Movement 1</legend>' +
-        '<div class="field"><span id="mv-label">Movement</span><button type="button" class="movement-btn" data-act="open-picker" aria-labelledby="mv-label mv-val" aria-haspopup="dialog"><span id="mv-val" class="' +
+        '<fieldset class="card stack" data-m><legend class="sr-only">Movement 1</legend><div class="field"><span id="mv-label" style="font-size:14px;font-weight:500">Movement</span>' +
+        '<button type="button" class="movement-btn" data-act="open-picker" id="mv-btn" aria-labelledby="mv-label mv-val" aria-haspopup="dialog"><span id="mv-val" class="' +
         (m ? '' : 'placeholder') +
         '">' +
         esc(m ? m.name : 'Choose a movement') +
         '</span><span aria-hidden="true">▾</span></button>' +
         (m && m.created
-          ? '<span class="hint">New movement — only your household sees it.</span>'
+          ? '<span class="hint">New movement — added to your household’s list when you save.</span>'
           : '') +
         '</div>' +
         '<div class="setrow" data-m><span class="idx">1</span><label class="sr-only" for="r1">Reps, set 1</label><input class="input num" id="r1" inputmode="numeric" placeholder="reps" data-m /><span aria-hidden="true">×</span><label class="sr-only" for="w1">Weight, set 1</label><input class="input num" id="w1" inputmode="decimal" placeholder="weight" data-m /><span class="small muted">lb</span></div>' +
         '<button type="button" class="btn outline" style="width:fit-content">+ Add set</button></fieldset>' +
-        '<button type="button" class="btn outline" style="width:fit-content">+ Add movement</button>' +
-        '<button type="button" class="btn full">Save</button>'
+        '<button type="button" class="btn outline" style="width:fit-content">+ Add movement</button><button type="button" class="btn full">Save</button>'
       );
     }
-
     function openPicker() {
-      var d = document.getElementById('dlg');
-      d.innerHTML =
+      openDialog(
         '<div class="sheet-in"><div class="sheet-head"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2 id="dlg-title" style="margin:0;font-size:18px">Choose a movement</h2><button type="button" class="btn ghost" data-act="dlg-close">Close</button></div>' +
-        '<label class="sr-only" for="pk-q">Search movements</label><input class="input" id="pk-q" type="search" placeholder="Search or type a new name" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="pk-list" aria-autocomplete="list" /></div>' +
-        '<div class="sheet-body" id="pk-list" role="listbox" aria-label="Movements"></div></div>';
-      d.showModal();
+          '<label class="sr-only" for="pk-q">Search movements</label><input class="input" id="pk-q" type="search" placeholder="Search, or type a new name" autocomplete="off" autocorrect="off" aria-describedby="pk-status" />' +
+          '<p class="sr-only" id="pk-status" role="status"></p></div>' +
+          '<div class="sheet-body" id="pk-list"></div><div class="sheet-foot" id="pk-foot" hidden></div></div>',
+        { sheet: true, focus: matchMedia('(pointer: coarse)').matches ? null : '#pk-q' },
+      );
       drawPicker('');
-      document.getElementById('pk-q').focus();
     }
     function lev(a, b) {
       var m = [];
@@ -1863,17 +2263,32 @@
     }
     function opt(name, tag) {
       return (
-        '<button type="button" role="option" class="opt" data-act="pick" data-name="' +
+        '<li><button type="button" class="opt" data-act="pick" data-name="' +
         esc(name) +
         '"><span>' +
         esc(name) +
         '</span>' +
         (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
-        '</button>'
+        '</button></li>'
       );
     }
+    function group(id, label, inner) {
+      return (
+        '<section aria-labelledby="g-' +
+        id +
+        '"><h3 class="group-label" id="g-' +
+        id +
+        '">' +
+        esc(label) +
+        '</h3><ul class="plain">' +
+        inner +
+        '</ul></section>'
+      );
+    }
+    var lastStatus = '';
     function drawPicker(q) {
-      var list = document.getElementById('pk-list');
+      var list = $('#pk-list');
+      var foot = $('#pk-foot');
       var all = [];
       Object.keys(CATALOG).forEach(function (g) {
         CATALOG[g].forEach(function (n) {
@@ -1881,72 +2296,80 @@
         });
       });
       S.householdMovements.forEach(function (h) {
-        all.push({ name: h.name, group: 'Added by your household', hh: true });
+        all.push({ name: h.name, group: 'Your household', hh: true });
       });
       var html = '';
+      var status = '';
       if (!q) {
-        var prog = program('b1').days['Day A'].map(function (p) {
-          return p.name;
-        });
-        html +=
-          '<div><div class="group-label">Today’s program · Day A</div>' +
-          prog
+        html += group(
+          'recent',
+          'Recent',
+          ['Overhead Shoulder Press', 'Back Squat', 'Pull-Up']
             .map(function (n) {
               return opt(n);
             })
-            .join('') +
-          '</div>';
-        html +=
-          '<div><div class="group-label">Recent</div>' +
-          ['Overhead Shoulder Press', 'Back Squat']
-            .map(function (n) {
-              return opt(n);
-            })
-            .join('') +
-          '</div>';
+            .join(''),
+        );
         Object.keys(CATALOG).forEach(function (g) {
-          html +=
-            '<div><div class="group-label">' +
-            g +
-            (PROPOSED[g] ? ' · proposed' : '') +
-            '</div>' +
+          html += group(
+            g,
+            g,
             CATALOG[g]
               .map(function (n) {
-                return opt(n, PROPOSED[g] ? 'pending review' : '');
+                return opt(n);
               })
-              .join('') +
-            '</div>';
+              .join(''),
+          );
         });
-        html +=
-          '<div><div class="group-label">Added by your household</div>' +
+        html += group(
+          'hh',
+          'Added by your household',
           S.householdMovements
             .map(function (h) {
               return opt(h.name, 'household');
             })
+            .join(''),
+        );
+        html +=
+          '<details class="collapse"><summary>Today’s program (already on your form)</summary><ul class="plain">' +
+          program('b1')
+            .days['Day A'].map(function (p) {
+              return opt(p.name);
+            })
             .join('') +
-          '</div>';
+          '</ul></details>';
         list.innerHTML = html;
+        foot.hidden = true;
         return;
       }
       var nq = norm(q);
+      var alias = ALIASES[q.toLowerCase().trim()];
       var hits = all.filter(function (x) {
         return norm(x.name).indexOf(nq) !== -1;
       });
+      if (
+        alias &&
+        !hits.some(function (x) {
+          return x.name === alias;
+        })
+      )
+        hits.unshift({ name: alias, group: 'also called ' + q.toUpperCase() });
       var exact = all.some(function (x) {
         return norm(x.name) === nq;
       });
       if (hits.length) {
-        html +=
-          '<div><div class="group-label">Matches</div>' +
+        html += group(
+          'm',
+          'Matches',
           hits
             .map(function (x) {
               return opt(x.name, x.hh ? 'household' : x.group);
             })
-            .join('') +
-          '</div>';
+            .join(''),
+        );
+        status = hits.length + (hits.length === 1 ? ' match' : ' matches');
       }
       if (!exact) {
-        // PICK-2: nearest catalog rows + spelling fixes, shown BEFORE create; never blocking.
         var near = all
           .filter(function (x) {
             return !x.hh;
@@ -1955,7 +2378,12 @@
             return { x: x, d: lev(norm(x.name), nq) };
           })
           .filter(function (o) {
-            return o.d <= Math.max(3, Math.floor(nq.length / 4));
+            return (
+              o.d <= Math.max(3, Math.floor(nq.length / 4)) &&
+              !hits.some(function (h) {
+                return h.name === o.x.name;
+              })
+            );
           })
           .sort(function (a, b) {
             return a.d - b.d;
@@ -1974,13 +2402,12 @@
             if (best && best.d > 0 && best.d <= 2) fixes.push([w, best.c]);
           });
         if (near.length || fixes.length) {
-          html +=
-            '<div class="suggest" role="group" aria-label="Did you mean"><div class="group-label" style="margin:0">Did you mean</div>' +
-            near
-              .map(function (o) {
-                return opt(o.x.name, 'catalog');
-              })
-              .join('');
+          var inner = near
+            .map(function (o) {
+              return opt(o.x.name, 'catalog');
+            })
+            .join('');
+          var fixNote = '';
           if (fixes.length) {
             var fixed = q.toLowerCase();
             fixes.forEach(function (f) {
@@ -1992,142 +2419,161 @@
             var known = all.find(function (x) {
               return norm(x.name) === norm(fixed);
             });
-            html +=
-              '<p class="small" style="margin:0">Spelling: ' +
+            fixNote =
+              '<p class="small" style="margin:4px 12px">Spelling: ' +
               fixes
                 .map(function (f) {
                   return '<s>' + esc(f[0]) + '</s> → <strong>' + esc(f[1]) + '</strong>';
                 })
                 .join(', ') +
-              '</p>' +
-              (known
-                ? opt(known.name, known.hh ? 'household' : 'catalog')
-                : '<button type="button" role="option" class="opt" data-act="pick-new" data-name="' +
-                  esc(fixed) +
-                  '"><span>' +
-                  esc(fixed) +
-                  '</span><span class="tag">new · fixed spelling</span></button>');
+              '</p>';
+            inner += known
+              ? opt(known.name, known.hh ? 'household' : 'catalog')
+              : '<li><button type="button" class="opt" data-act="pick-new" data-name="' +
+                esc(fixed) +
+                '"><span>' +
+                esc(fixed) +
+                '</span><span class="tag">new · spelling fixed</span></button></li>';
           }
-          html += '</div>';
+          html +=
+            '<section aria-labelledby="g-dym" class="suggest"><h3 class="group-label" id="g-dym" style="margin:0">Did you mean</h3>' +
+            fixNote +
+            '<ul class="plain">' +
+            inner +
+            '</ul></section>';
+          status =
+            (status ? status + '. ' : '') +
+            'Did you mean ' +
+            (near[0]
+              ? near[0].x.name
+              : fixes
+                  .map(function (f) {
+                    return f[1];
+                  })
+                  .join(' ')) +
+            '?';
         }
-        html +=
+        if (!hits.length && !near.length && !fixes.length) status = 'No matches.';
+        foot.hidden = false;
+        foot.innerHTML =
           '<button type="button" class="btn outline full" data-act="pick-new" data-name="' +
           esc(q) +
           '">Use “' +
           esc(q) +
-          '” as typed</button><p class="hint" style="margin:0">Creates a new movement only your household sees.</p>';
+          '” as typed</button><p class="hint" style="margin:0">Added to your household’s list when you save the set. It can’t be removed afterwards yet.</p>';
+      } else {
+        foot.hidden = true;
       }
       list.innerHTML = html;
+      if (status !== lastStatus) {
+        lastStatus = status;
+        $('#pk-status').textContent = status;
+      }
     }
 
-    // V1-22 — program editor (+ CLONE-1 entry, HIST-1 date variant)
-    function blocksFor(aid) {
-      return activeAssignments(aid).map(function (x) {
-        return program(x.block);
+    // V1-22 + CLONE-1 — one editor; Save asks "for everyone, or as a copy"
+    function startEdit(blocks) {
+      S.edit = { blocks: {} };
+      blocks.forEach(function (b) {
+        S.edit.blocks[b.id] = JSON.parse(JSON.stringify(b.days));
       });
     }
-    function rxCard(p, blockId, day, idx, n, aid, readonly) {
-      var whoBlock = blockId === 'copy' ? S.clone.src : blockId;
-      var loads = S.athletes
+    function rxCard(p, bid, day, idx, n) {
+      var who = onBlock(bid)
+        .map(athlete)
         .filter(function (a) {
-          return !a.archived && (p.loads[a.id] != null || !readonly);
-        })
-        .filter(function (a) {
-          return activeAssignments(a.id).some(function (x) {
-            return x.block === whoBlock;
-          });
-        })
+          return a && !a.archived;
+        });
+      var hasLoad = Object.keys(p.loads).some(function (k) {
+        return p.loads[k];
+      });
+      var loads = who
         .map(function (a) {
-          return readonly
-            ? '<li class="small">' + esc(a.name) + ': ' + esc(p.loads[a.id] || '—') + '</li>'
-            : '<label class="field" for="ld-' +
-                p.id +
-                a.id +
-                '"><span class="small" style="font-weight:400">' +
-                esc(a.name) +
-                '’s load</span><input class="input" id="ld-' +
-                p.id +
-                a.id +
-                '" value="' +
-                esc(p.loads[a.id] || '') +
-                '" placeholder="none" data-act="load" data-b="' +
-                blockId +
-                '" data-day="' +
-                esc(day) +
-                '" data-pid="' +
-                p.id +
-                '" data-aid="' +
-                a.id +
-                '" /></label>';
+          return (
+            '<div class="field"><label for="ld-' +
+            p.id +
+            a.id +
+            '" class="small">' +
+            esc(a.name) +
+            '’s load</label><input class="input" id="ld-' +
+            p.id +
+            a.id +
+            '" value="' +
+            esc(p.loads[a.id] || '') +
+            '" placeholder="none" data-act="load" data-b="' +
+            bid +
+            '" data-day="' +
+            esc(day) +
+            '" data-pid="' +
+            p.id +
+            '" data-aid="' +
+            a.id +
+            '" /></div>'
+          );
         })
         .join('');
-      if (readonly) {
+      var base = 'data-b="' + bid + '" data-day="' + esc(day) + '" data-i="' + idx + '"';
+      if (p.removed) {
         return (
-          '<li class="rx"><div style="font-weight:500">' +
+          '<li class="rx removed" id="rx-' +
+          p.id +
+          '"><div class="rx-head"><div class="rx-name" style="font-weight:500">' +
           esc(p.name) +
-          '</div><div class="small muted">' +
-          (p.sets ? p.sets + ' × ' + esc(p.reps || '?') : 'Open — log what you did') +
-          '</div>' +
-          (loads ? '<ul class="plain">' + loads + '</ul>' : '') +
-          '</li>'
+          '</div><button type="button" class="btn ghost" data-act="unrm" ' +
+          base +
+          ' id="unrm-' +
+          p.id +
+          '" aria-label="Undo remove ' +
+          esc(p.name) +
+          '">Undo</button></div><div class="small">Removed when you save.</div></li>'
         );
       }
       return (
-        '<li class="rx" data-m><div class="rx-head"><div style="font-weight:500;min-width:0">' +
+        '<li class="rx" id="rx-' +
+        p.id +
+        '" data-m><div class="rx-head"><div class="rx-name" style="font-weight:500;min-width:0">' +
         esc(p.name) +
-        '</div>' +
-        '<div class="row" style="flex-wrap:nowrap;gap:4px"><button type="button" class="icon-btn" data-act="mv" data-d="-1" data-b="' +
-        blockId +
-        '" data-day="' +
-        esc(day) +
-        '" data-i="' +
-        idx +
+        '</div><div class="rx-actions">' +
+        '<button type="button" class="icon-btn" data-act="mv" data-d="-1" ' +
+        base +
+        ' id="up-' +
+        p.id +
         '" aria-label="Move ' +
         esc(p.name) +
         ' up"' +
         (idx === 0 ? ' disabled' : '') +
         '>↑</button>' +
-        '<button type="button" class="icon-btn" data-act="mv" data-d="1" data-b="' +
-        blockId +
-        '" data-day="' +
-        esc(day) +
-        '" data-i="' +
-        idx +
+        '<button type="button" class="icon-btn" data-act="mv" data-d="1" ' +
+        base +
+        ' id="dn-' +
+        p.id +
         '" aria-label="Move ' +
         esc(p.name) +
         ' down"' +
         (idx === n - 1 ? ' disabled' : '') +
         '>↓</button>' +
-        '<button type="button" class="icon-btn" data-act="rm" data-b="' +
-        blockId +
-        '" data-day="' +
-        esc(day) +
-        '" data-i="' +
-        idx +
-        '" aria-label="Remove ' +
+        '<button type="button" class="icon-btn" data-act="rm" ' +
+        base +
+        ' aria-label="Remove ' +
         esc(p.name) +
-        '">✕</button></div></div>' +
-        '<div class="rx-grid"><label class="field" for="s-' +
+        '" style="margin-left:8px">✕</button></div></div>' +
+        '<div class="rx-grid"><div class="field"><label for="s-' +
         p.id +
-        '"><span class="small" style="font-weight:400">Sets</span><input class="input" id="s-' +
+        '" class="small">Sets</label><input class="input" id="s-' +
         p.id +
         '" inputmode="numeric" value="' +
         (p.sets || '') +
-        '" placeholder="open" /></label>' +
-        '<label class="field" for="t-' +
+        '" placeholder="open" /></div>' +
+        '<div class="field"><label for="t-' +
         p.id +
-        '"><span class="small" style="font-weight:400">Reps</span><input class="input" id="t-' +
+        '" class="small">Reps</label><input class="input" id="t-' +
         p.id +
         '" value="' +
         esc(p.reps || '') +
-        '" placeholder="open" /></label></div>' +
+        '" placeholder="open" /></div></div>' +
         (loads
           ? '<details class="collapse"' +
-            (Object.keys(p.loads).some(function (k) {
-              return p.loads[k];
-            })
-              ? ' open'
-              : '') +
+            (hasLoad ? ' open' : '') +
             '><summary>Loads per athlete</summary><div class="stack-sm">' +
             loads +
             '</div></details>'
@@ -2135,151 +2581,278 @@
         '</li>'
       );
     }
+    function blockSection(b) {
+      var days = S.edit.blocks[b.id];
+      var who = onBlock(b.id).map(function (id) {
+        return athlete(id).name;
+      });
+      return (
+        '<section class="stack" aria-labelledby="blk-' +
+        b.id +
+        '"><h2 id="blk-' +
+        b.id +
+        '">' +
+        esc(b.name) +
+        '</h2>' +
+        '<p class="banner" style="margin:0">' +
+        (who.length
+          ? 'Changes apply from today to <strong>' + esc(names(who)) + '</strong>.'
+          : 'Nobody is on this program.') +
+        ' Days already logged keep what was prescribed then. To change it for only some of them, save as a copy.</p>' +
+        Object.keys(days)
+          .map(function (day) {
+            var rows = days[day];
+            var live = rows.filter(function (p) {
+              return !p.removed;
+            }).length;
+            return (
+              '<div class="stack-sm"><h3>' +
+              esc(day) +
+              ' <span class="muted small" style="font-weight:400">· ' +
+              live +
+              ' of 12</span></h3><ol class="plain stack-sm">' +
+              rows
+                .map(function (p, i) {
+                  return rxCard(p, b.id, day, i, rows.length);
+                })
+                .join('') +
+              '</ol>' +
+              '<button type="button" class="btn outline" style="width:fit-content" data-act="add-rx" data-b="' +
+              b.id +
+              '" data-day="' +
+              esc(day) +
+              '"' +
+              (live >= 12 ? ' disabled' : '') +
+              '>+ Add a movement to ' +
+              esc(day) +
+              '</button></div>'
+            );
+          })
+          .join('') +
+        '<button type="button" class="btn full" data-act="save-prog" data-b="' +
+        b.id +
+        '">Save ' +
+        esc(b.name) +
+        '</button></section>'
+      );
+    }
     function vProgram(r) {
-      var a = athlete(r.id);
-      var blocks = blocksFor(r.id);
-      var html =
-        '<header class="stack-sm"><button type="button" class="back" data-go="day" data-id="' +
-        a.id +
-        '">← ' +
-        esc(a.name) +
-        '</button><h1>' +
-        esc(a.name) +
-        '’s program</h1>' +
-        '<p class="small muted" style="margin:0">Blank sets or reps mean open: log what you did. Loads are typed by a coach or parent, exactly as written.</p></header>';
-      html += blocks
-        .map(function (b) {
-          var since = activeAssignments(r.id).find(function (x) {
-            return x.block === b.id;
-          }).from;
-          return (
-            '<section class="stack" aria-labelledby="blk-' +
-            b.id +
-            '"><div class="stack-xs"><h2 id="blk-' +
-            b.id +
-            '">' +
-            esc(b.name) +
-            '</h2><p class="small muted" style="margin:0">Since ' +
-            fmtDay(since) +
-            ' · also ' +
-            S.assignments
-              .filter(function (x) {
-                return x.block === b.id && !x.to && x.athlete !== r.id;
-              })
-              .map(function (x) {
-                return esc(athlete(x.athlete).name);
-              })
-              .join(', ') +
-            '</p>' +
-            '<div class="row"><button type="button" class="btn outline" data-go="clone" data-b="' +
-            b.id +
-            '">Make a copy to change it</button></div></div>' +
-            Object.keys(b.days)
-              .map(function (day) {
-                var rows = b.days[day];
-                return (
-                  '<div class="stack-sm"><h3>' +
-                  esc(day) +
-                  ' <span class="muted small" style="font-weight:400">· ' +
-                  rows.length +
-                  ' of 12</span></h3><ol class="plain stack-sm">' +
-                  rows
-                    .map(function (p, i) {
-                      return rxCard(p, b.id, day, i, rows.length, r.id);
-                    })
-                    .join('') +
-                  '</ol><button type="button" class="btn outline" style="width:fit-content"' +
-                  (rows.length >= 12 ? ' disabled' : '') +
-                  ' data-act="add-rx" data-b="' +
-                  b.id +
-                  '" data-day="' +
-                  esc(day) +
-                  '">+ Add a movement to ' +
-                  esc(day) +
-                  '</button></div>'
-                );
-              })
-              .join('') +
-            '</section>'
-          );
-        })
-        .join('');
-      html += '<div class="row"><button type="button" class="btn full">Save changes</button></div>';
-      html +=
-        '<button type="button" class="textlink" data-go="history" data-id="' +
-        a.id +
-        '">→ What was ' +
-        esc(a.name) +
-        ' doing on a past date?</button>';
-      return html;
+      var blocks = r.block
+        ? [program(r.block)]
+        : activeAssignments(r.id).map(function (x) {
+            return program(x.block);
+          });
+      if (!S.edit || S.edit.key !== (r.block || r.id)) {
+        startEdit(blocks);
+        S.edit.key = r.block || r.id;
+      }
+      var a = r.id && athlete(r.id);
+      return (
+        (a
+          ? '<header class="stack-sm"><button type="button" class="back" data-go="day" data-id="' +
+            a.id +
+            '">← ' +
+            esc(a.name) +
+            '</button><h1>' +
+            esc(a.name) +
+            '’s program</h1>'
+          : '<header class="stack-sm"><button type="button" class="back" data-go="programs">← Programs</button><h1>' +
+            esc(blocks[0].name) +
+            '</h1>') +
+        '<p class="small muted" style="margin:0">Blank sets or reps mean open: log what you did. Loads are typed by a coach or parent, exactly as written.</p></header>' +
+        flashHtml() +
+        blocks.map(blockSection).join('') +
+        (a
+          ? '<button type="button" class="textlink" data-go="history" data-id="' +
+            a.id +
+            '">→ What was ' +
+            esc(a.name) +
+            ' doing before?</button>'
+          : '')
+      );
+    }
+    function openSaveProg(bid) {
+      var b = program(bid);
+      var who = onBlock(bid);
+      var others = S.athletes.filter(function (a) {
+        return !a.archived;
+      });
+      openDialog(
+        '<form class="sheet-in" id="save-form" data-b="' +
+          bid +
+          '"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Save changes to ' +
+          esc(b.name) +
+          '</h2></div><div class="sheet-body">' +
+          '<fieldset class="stack-sm"><legend class="sr-only">How to save</legend>' +
+          '<label class="radio-card" for="sv-all"><input type="radio" name="sv" id="sv-all" value="all" checked /><span><strong>Change it for everyone on it</strong><br /><span class="small muted">' +
+          (who.length
+            ? esc(
+                names(
+                  who.map(function (i) {
+                    return athlete(i).name;
+                  }),
+                ),
+              ) + ', from today.'
+            : 'Nobody is on it.') +
+          '</span></span></label>' +
+          '<label class="radio-card" for="sv-copy"><input type="radio" name="sv" id="sv-copy" value="copy" /><span><strong>Save as a copy</strong><br /><span class="small muted">The original stays as it is. Choose who moves to the copy.</span></span></label></fieldset>' +
+          '<div class="stack-sm" id="copy-opts" hidden><div class="field"><label for="cp-name" class="small" style="font-weight:500">Name of the copy</label><input class="input" id="cp-name" value="' +
+          esc(b.name) +
+          ' (v2)" /></div>' +
+          '<fieldset class="stack-sm"><legend>Who moves to the copy? Nobody moves unless you tick them.</legend>' +
+          others
+            .map(function (a) {
+              var on = who.indexOf(a.id) !== -1;
+              var cur = activeAssignments(a.id).map(function (x) {
+                return program(x.block).name;
+              });
+              var noLoads =
+                !on &&
+                Object.keys(S.edit.blocks[bid]).some(function (d) {
+                  return S.edit.blocks[bid][d].some(function (p) {
+                    return p.sets && Object.keys(p.loads).length;
+                  });
+                });
+              return (
+                '<label class="checkrow" for="mv-' +
+                a.id +
+                '"><input type="checkbox" id="mv-' +
+                a.id +
+                '" value="' +
+                a.id +
+                '" /><span class="stack-xs" style="gap:0"><span style="font-weight:500">' +
+                esc(a.name) +
+                '</span><span class="small muted">' +
+                (on
+                  ? 'Stops ' + esc(b.name) + ' today, starts the copy.'
+                  : 'Starts the copy today' +
+                    (cur.length ? ' and stays on ' + esc(names(cur)) : '') +
+                    '.') +
+                '</span>' +
+                (noLoads
+                  ? '<span class="warn">No loads set for ' +
+                    esc(a.name) +
+                    ' yet — add them after saving.</span>'
+                  : '') +
+                '</span></label>'
+              );
+            })
+            .join('') +
+          '</fieldset></div>' +
+          '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">Save</button></div></div></form>',
+      );
     }
 
-    // RETIRE-1 — household programs
+    // RETIRE-1 + the missing assign action
     function vPrograms() {
-      var pol = document.getElementById('v-archive').value;
+      var pol = $('#v-archive').value;
       var act = S.programs.filter(function (p) {
         return !p.archived;
       });
       var arch = S.programs.filter(function (p) {
         return p.archived;
       });
-      function who(b) {
-        return S.assignments
-          .filter(function (x) {
-            return x.block === b.id && !x.to;
-          })
-          .map(function (x) {
-            return athlete(x.athlete).name;
-          });
-      }
-      var html =
-        '<button type="button" class="back" data-go="picker">← All athletes</button><h1>Programs</h1>' +
-        (S.flash ? '<p class="ok-msg" role="status">' + S.flash + '</p>' : '') +
+      return (
+        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Programs</h1>' +
+        flashHtml() +
         '<ul class="plain stack">' +
         act
           .map(function (b) {
-            var w = who(b);
+            var w = onBlock(b.id);
+            var confirming = S.route.confirmArchive === b.id;
             return (
-              '<li class="card stack-sm"><div style="font-weight:500">' +
+              '<li class="card stack-sm" id="prog-' +
+              b.id +
+              '" tabindex="-1"><h2 style="font-size:16px">' +
               esc(b.name) +
-              '</div>' +
+              '</h2>' +
               '<div class="row">' +
               (w.length
                 ? w
-                    .map(function (n) {
-                      return '<span class="chip">' + esc(n) + '</span>';
+                    .map(function (id) {
+                      return (
+                        '<button type="button" class="chip-btn" data-act="assign" data-a="' +
+                        id +
+                        '" data-b="' +
+                        b.id +
+                        '" aria-label="' +
+                        esc(athlete(id).name) +
+                        ' on ' +
+                        esc(b.name) +
+                        ': move or take off">' +
+                        esc(athlete(id).name) +
+                        ' <span aria-hidden="true">▾</span></button>'
+                      );
                     })
                     .join('')
                 : '<span class="small muted">Nobody is on this program</span>') +
               '</div>' +
-              '<div class="row"><button type="button" class="btn outline" data-go="clone" data-b="' +
+              '<div class="row"><button type="button" class="btn outline" data-go="program" data-b="' +
               b.id +
-              '">Copy</button><button type="button" class="btn ghost" data-act="archive-prog" data-b="' +
+              '" aria-label="Edit ' +
+              esc(b.name) +
+              '">Edit</button><button type="button" class="btn ghost" data-act="archive-prog" data-b="' +
+              b.id +
+              '" aria-label="Archive ' +
+              esc(b.name) +
+              '…" id="arch-' +
               b.id +
               '">Archive…</button></div>' +
-              (S.route.confirmArchive === b.id
-                ? w.length
-                  ? pol === 'refuse'
-                    ? '<div class="refusal" role="alert">' +
-                      esc(w.join(' and ')) +
-                      (w.length > 1 ? ' are' : ' is') +
-                      ' still on ' +
-                      esc(b.name) +
-                      '. Move them to another program first, then archive it.</div>'
-                    : '<div class="card stack-sm" role="alertdialog" aria-labelledby="ap-' +
-                      b.id +
-                      '"><p id="ap-' +
-                      b.id +
-                      '" style="margin:0"><strong>' +
-                      esc(w.join(' and ')) +
-                      '</strong> will stop getting ' +
-                      esc(b.name) +
-                      ' from today. Everything they logged on it stays.</p><div class="row"><button type="button" class="btn" data-act="archive-go" data-b="' +
-                      b.id +
-                      '">Archive and stop it</button><button type="button" class="btn ghost" data-act="archive-cancel">Cancel</button></div></div>'
-                  : '<div class="card stack-sm"><p style="margin:0">Archive ' +
-                    esc(b.name) +
-                    '? Nobody is on it. You can restore it later.</p><div class="row"><button type="button" class="btn" data-act="archive-go" data-b="' +
+              (confirming
+                ? pol === 'resolve' && w.length
+                  ? '<div class="refusal stack-sm" id="archq-' +
+                    b.id +
+                    '" tabindex="-1"><p style="margin:0"><strong>' +
+                    esc(
+                      names(
+                        w.map(function (i) {
+                          return athlete(i).name;
+                        }),
+                      ),
+                    ) +
+                    (w.length > 1 ? ' are' : ' is') +
+                    ' still on it.</strong> Move them or take them off, then archive.</p>' +
+                    w
+                      .map(function (id) {
+                        return (
+                          '<div class="row"><span style="min-width:0;flex:1">' +
+                          esc(athlete(id).name) +
+                          '</span><button type="button" class="btn outline" data-act="assign" data-a="' +
+                          id +
+                          '" data-b="' +
+                          b.id +
+                          '" aria-label="Move ' +
+                          esc(athlete(id).name) +
+                          '">Move…</button><button type="button" class="btn ghost" data-act="takeoff" data-a="' +
+                          id +
+                          '" data-b="' +
+                          b.id +
+                          '" aria-label="Take ' +
+                          esc(athlete(id).name) +
+                          ' off ' +
+                          esc(b.name) +
+                          '">Take off</button></div>'
+                        );
+                      })
+                      .join('') +
+                    '<button type="button" class="btn ghost" data-act="archive-cancel" style="width:fit-content">Cancel</button></div>'
+                  : '<div class="card stack-sm" id="archq-' +
+                    b.id +
+                    '" tabindex="-1"><p style="margin:0">' +
+                    (w.length
+                      ? '<strong>' +
+                        esc(
+                          names(
+                            w.map(function (i) {
+                              return athlete(i).name;
+                            }),
+                          ),
+                        ) +
+                        '</strong> will stop getting ' +
+                        esc(b.name) +
+                        ' today and have no program in its place until you move them. Everything logged stays.'
+                      : 'Archive ' + esc(b.name) + '? Nobody is on it.') +
+                    '</p><div class="row"><button type="button" class="btn" data-act="archive-go" data-b="' +
                     b.id +
                     '">Archive</button><button type="button" class="btn ghost" data-act="archive-cancel">Cancel</button></div></div>'
                 : '') +
@@ -2287,10 +2860,7 @@
             );
           })
           .join('') +
-        '</ul>' +
-        '<details class="collapse"' +
-        (S.archivedOpen ? ' open' : '') +
-        ' id="arch-d"><summary>Archived programs (' +
+        '</ul><details class="collapse"><summary>Archived programs (' +
         arch.length +
         ')</summary><ul class="plain stack-sm">' +
         arch
@@ -2300,244 +2870,184 @@
               esc(b.name) +
               '</span><button type="button" class="btn ghost" data-act="unarchive-prog" data-b="' +
               b.id +
+              '" aria-label="Restore ' +
+              esc(b.name) +
               '">Restore</button></li>'
             );
           })
           .join('') +
-        '</ul></details>';
-      return html;
+        '</ul></details>'
+      );
     }
-
-    // CLONE-1
-    function vClone(r) {
-      if (!S.clone || S.clone.src !== (r.b || S.clone.src)) {
-        var src = program(r.b || 'b1');
-        S.clone = {
-          src: src.id,
-          name: src.name + ' (v2)',
-          days: JSON.parse(JSON.stringify(src.days)),
-          move: {},
-        };
-      }
-      var c = S.clone;
-      var src = program(c.src);
-      var steps = '<p class="small muted" style="margin:0">Step ' + r.step + ' of 3</p>';
-      if (r.step === 1) {
-        return (
-          '<button type="button" class="back" data-go="programs">← Programs</button><h1>Copy ' +
-          esc(src.name) +
-          '</h1>' +
-          steps +
-          '<form class="stack" id="clone-1" novalidate><label class="field" for="cl-name"><span>Name the copy</span><input class="input" id="cl-name" value="' +
-          esc(c.name) +
-          '" /><span class="hint">The original stays as it is, for everyone on it.</span></label>' +
-          '<button class="btn full" type="submit">Next: change the copy</button></form>'
-        );
-      }
-      if (r.step === 2) {
-        return (
-          '<button type="button" class="back" data-act="clone-step" data-step="1">← Back</button><h1>Change ' +
-          esc(c.name) +
-          '</h1>' +
-          steps +
-          '<p class="banner" style="margin:0">You are editing the copy. Nobody is on it yet.</p>' +
-          Object.keys(c.days)
-            .map(function (day) {
-              return (
-                '<section class="stack-sm"><h2>' +
-                esc(day) +
-                '</h2><ol class="plain stack-sm">' +
-                c.days[day]
-                  .map(function (p, i) {
-                    return rxCard(p, 'copy', day, i, c.days[day].length, null, false);
-                  })
-                  .join('') +
-                '</ol></section>'
-              );
+    function openAssign(aid, bid) {
+      var a = athlete(aid);
+      var b = program(bid);
+      var targets = S.programs.filter(function (p) {
+        return !p.archived && p.id !== bid;
+      });
+      openDialog(
+        '<form class="sheet-in" id="assign-form" data-a="' +
+          aid +
+          '" data-b="' +
+          bid +
+          '"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">' +
+          esc(a.name) +
+          ' on ' +
+          esc(b.name) +
+          '</h2></div><div class="sheet-body">' +
+          '<div class="field"><label for="as-to" class="small" style="font-weight:500">Move to</label><select class="input" id="as-to">' +
+          targets
+            .map(function (p) {
+              return '<option value="' + p.id + '">' + esc(p.name) + '</option>';
             })
             .join('') +
-          '<button type="button" class="btn full" data-act="clone-step" data-step="3">Next: who moves to it?</button>'
-        );
-      }
-      if (r.step === 3) {
-        var on = S.athletes.filter(function (a) {
-          return !a.archived;
-        });
-        return (
-          '<button type="button" class="back" data-act="clone-step" data-step="2">← Back</button><h1>Who moves to ' +
-          esc(c.name) +
-          '?</h1>' +
-          steps +
-          '<form class="stack" id="clone-3"><fieldset class="stack-sm"><legend>Choose athletes. Nobody moves unless you tick them.</legend>' +
-          on
-            .map(function (a) {
-              var cur = activeAssignments(a.id).filter(function (x) {
-                return x.block === c.src;
-              });
-              return (
-                '<label class="checkrow" for="mv-' +
-                a.id +
-                '"><input type="checkbox" id="mv-' +
-                a.id +
-                '" value="' +
-                a.id +
-                '"' +
-                (c.move[a.id] ? ' checked' : '') +
-                ' />' +
-                '<span class="stack-xs" style="gap:0"><span style="font-weight:500">' +
-                esc(a.name) +
-                '</span><span class="small muted">' +
-                (cur.length
-                  ? 'On ' + esc(src.name) + ' since ' + fmtDay(cur[0].from) + ' — stops today'
-                  : 'Not on ' + esc(src.name) + ' — starts the copy today') +
-                '</span></span></label>'
-              );
-            })
-            .join('') +
-          '</fieldset><p class="small muted" style="margin:0">Moving is from today. Every past entry keeps the program it was logged against.</p>' +
-          '<button class="btn full" type="submit">Save the copy</button></form>'
-        );
-      }
-      return (
-        '<h1>' +
-        esc(c.name) +
-        ' saved</h1><div class="ok-msg" role="status">' +
-        (c.summary || 'Nobody moved. The copy is ready when you are.') +
-        '</div>' +
-        '<button type="button" class="btn full" data-go="programs">Back to programs</button>'
+          '</select><span class="hint">From today. Days already logged keep the program they were logged against.</span></div>' +
+          '<div class="row" style="justify-content:space-between"><button type="button" class="btn ghost" data-act="takeoff" data-a="' +
+          aid +
+          '" data-b="' +
+          bid +
+          '">Take off ' +
+          esc(b.name) +
+          '</button><span class="row"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">Move</button></span></div></div></form>',
       );
     }
 
-    // HIST-1
+    // HIST-1 — timeline first, date box underneath
     function vHistory(r) {
       var a = athlete(r.id);
-      var v = document.getElementById('v-hist').value;
-      var head =
+      var rows = S.assignments
+        .filter(function (x) {
+          return x.athlete === r.id;
+        })
+        .slice()
+        .sort(function (x, y) {
+          return y.from < x.from ? -1 : 1;
+        });
+      var on = activeAssignments(r.id, S.histDate);
+      return (
         '<button type="button" class="back" data-go="program" data-id="' +
         a.id +
         '">← ' +
         esc(a.name) +
         '’s program</button><h1>' +
         esc(a.name) +
-        '’s program history</h1>';
-      if (v === 'timeline') {
-        var rows = S.assignments
-          .filter(function (x) {
-            return x.athlete === r.id;
+        '’s programs over time</h1>' +
+        '<ol class="timeline">' +
+        rows
+          .map(function (x, i) {
+            var b = program(x.block);
+            return (
+              '<li class="' +
+              (x.to ? 'past' : '') +
+              '"><details' +
+              (i === S.histOpen ? ' open' : '') +
+              '><summary style="cursor:pointer;min-height:44px;display:flex;flex-direction:column;justify-content:center"><span style="font-weight:500">' +
+              esc(b.name) +
+              (b.archived ? ' <span class="tag">archived</span>' : '') +
+              '</span><span class="small muted tabular">' +
+              fmtDay(x.from) +
+              ' – ' +
+              (x.to ? fmtDay(x.to) : 'now') +
+              '</span></summary>' +
+              '<div class="stack-sm" style="padding-top:8px">' +
+              Object.keys(b.days)
+                .map(function (d) {
+                  return (
+                    '<div class="small"><strong>' +
+                    esc(d) +
+                    ':</strong> ' +
+                    b.days[d]
+                      .map(function (p) {
+                        return (
+                          esc(p.name) +
+                          (p.sets
+                            ? ' ' +
+                              p.sets +
+                              '×' +
+                              esc(p.reps) +
+                              (p.loads[r.id] ? ' @ ' + esc(p.loads[r.id]) : '')
+                            : '')
+                        );
+                      })
+                      .join(', ') +
+                    '</div>'
+                  );
+                })
+                .join('') +
+              '<p class="small muted" style="margin:0">As prescribed then.</p><button type="button" class="textlink" data-act="goto-day" data-d="' +
+              (x.to || TODAY) +
+              '">See days logged in this period →</button></div></details></li>'
+            );
           })
-          .slice()
-          .sort(function (x, y) {
-            return y.from < x.from ? -1 : 1;
-          });
-        return (
-          head +
-          '<ol class="timeline">' +
-          rows
-            .map(function (x) {
-              var b = program(x.block);
-              return (
-                '<li class="' +
-                (x.to ? 'past' : '') +
-                '"><div style="font-weight:500">' +
-                esc(b.name) +
-                (b.archived ? ' <span class="tag">archived</span>' : '') +
-                '</div><div class="small muted tabular">' +
-                fmtDay(x.from) +
-                ' – ' +
-                (x.to ? fmtDay(x.to) : 'now') +
-                '</div><button type="button" class="textlink" data-act="hist-pick" data-d="' +
-                x.from +
-                '">See that program</button></li>'
-              );
-            })
-            .join('') +
-          '</ol>'
-        );
-      }
-      var on = activeAssignments(r.id, S.histDate);
-      return (
-        head +
-        '<label class="field" for="hist-d"><span>Show the program on</span><input class="input" type="date" id="hist-d" value="' +
+          .join('') +
+        '</ol><div class="field"><label for="hist-d" class="small" style="font-weight:500">Or pick a date</label><input class="input" type="date" id="hist-d" value="' +
         S.histDate +
         '" max="' +
         TODAY +
-        '" /></label>' +
+        '" /></div>' +
+        '<p class="banner" style="margin:0" id="hist-ans">' +
         (on.length
-          ? on
-              .map(function (x) {
-                var b = program(x.block);
-                return (
-                  '<section class="stack-sm"><p class="banner" style="margin:0">On ' +
-                  fmtDay(S.histDate, true) +
-                  ', ' +
-                  esc(a.name) +
-                  ' was on <strong>' +
-                  esc(b.name) +
-                  '</strong> (' +
-                  fmtDay(x.from) +
-                  ' – ' +
-                  (x.to ? fmtDay(x.to) : 'now') +
-                  ').</p>' +
-                  Object.keys(b.days)
-                    .map(function (day) {
-                      return (
-                        '<h2>' +
-                        esc(day) +
-                        '</h2><ol class="plain stack-sm">' +
-                        b.days[day]
-                          .map(function (p) {
-                            return rxCard(p, b.id, day, 0, 1, r.id, true);
-                          })
-                          .join('') +
-                        '</ol>'
-                      );
-                    })
-                    .join('') +
-                  '<p class="small muted" style="margin:0">Shown as prescribed then. Logged days keep the prescription they were logged against.</p></section>'
-                );
-              })
-              .join('')
-          : '<p class="banner" style="margin:0">Nothing was assigned to ' +
-            esc(a.name) +
-            ' on ' +
+          ? 'On ' +
             fmtDay(S.histDate, true) +
-            '.</p>')
+            ', ' +
+            esc(a.name) +
+            ' was on ' +
+            on
+              .map(function (x) {
+                return '<strong>' + esc(program(x.block).name) + '</strong>';
+              })
+              .join(' and ') +
+            '.'
+          : 'Nothing was assigned to ' + esc(a.name) + ' on ' + fmtDay(S.histDate, true) + '.') +
+        '</p>'
       );
     }
 
     // MOV-1 (unfiled)
     function vMovements() {
       return (
-        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Movements your household added</h1>' +
-        '<p class="proto-flag">Not a backlog row yet — the gap ADR 0008 leaves by decision</p>' +
+        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Movements your household added</h1><p class="proto-flag">Not a backlog row yet — the gap ADR 0008 leaves by decision</p>' +
+        flashHtml() +
         '<ul class="plain stack-sm">' +
         S.householdMovements
           .map(function (m, i) {
             return (
-              '<li class="card stack-sm" style="padding:12px 16px"><div><div style="font-weight:500">' +
+              '<li class="card stack-sm" style="padding:12px 16px" id="hm-' +
+              i +
+              '" tabindex="-1"><div><div style="font-weight:500">' +
               esc(m.name) +
               '</div><div class="small muted">Logged ' +
               m.uses +
               (m.uses === 1 ? ' time' : ' times') +
-              ' · looks like <strong>' +
-              esc(m.near) +
-              '</strong></div></div>' +
-              '<button type="button" class="btn outline" data-act="merge" data-i="' +
+              '</div></div>' +
+              '<div class="row"><button type="button" class="btn outline" data-act="rename-mv" data-i="' +
               i +
-              '">Merge into ' +
-              esc(m.near) +
-              '</button></li>'
+              '" aria-label="Rename ' +
+              esc(m.name) +
+              '">Rename</button>' +
+              (m.near && m.near !== '—'
+                ? '<button type="button" class="btn ghost" data-act="merge" data-i="' +
+                  i +
+                  '" aria-label="Merge ' +
+                  esc(m.name) +
+                  ' into ' +
+                  esc(m.near) +
+                  '…">Same as ' +
+                  esc(m.near) +
+                  '?</button>'
+                : '') +
+              '</div></li>'
             );
           })
           .join('') +
-        '</ul><p class="small muted" style="margin:0">Merging moves every entry to the catalog movement, so history charts in one place. There is no plain delete: entries would lose their movement.</p>'
+        '</ul>'
       );
     }
 
     // ── measurement overlay ──────────────────────────────────────────────────
     function measure() {
-      var on = document.getElementById('measure').checked;
-      var app = document.getElementById('app');
+      var on = $('#measure').checked;
+      var app = $('#app');
       app.classList.toggle('measuring', on);
       app.querySelectorAll('.m-tag').forEach(function (t) {
         t.remove();
@@ -2564,322 +3074,38 @@
       });
     }
 
-    // ── events ───────────────────────────────────────────────────────────────
-    document.addEventListener('click', function (ev) {
-      var t = ev.target.closest('[data-go],[data-act]');
-      if (!t) return;
-      var go_ = t.getAttribute('data-go');
-      if (go_) {
-        if (go_ === 'day')
-          return go({ name: 'day', id: t.dataset.id || 'a1', day: TODAY, keepMsg: false });
-        if (go_ === 'edit') return go({ name: 'edit', id: t.dataset.id });
-        if (go_ === 'del') return go({ name: 'del', id: t.dataset.id, step: 1 });
-        if (go_ === 'log' || go_ === 'program' || go_ === 'history')
-          return go({ name: go_, id: t.dataset.id || 'a1' });
-        if (go_ === 'clone') {
-          S.clone = null;
-          return go({ name: 'clone', step: 1, b: t.dataset.b || 'b1' });
-        }
-        if (go_ === 'programs') S.flash = null;
-        return go({ name: go_ });
-      }
-      var act = t.getAttribute('data-act');
-      var r = S.route;
-      if (act === 'hide') return hide(t.dataset.k, t.dataset.eid);
-      if (act === 'restore') return restore(t.dataset.k, +t.dataset.ei);
-      if (act === 'toggle-hidden') {
-        r.openHidden = !r.openHidden;
-        save();
-        render();
-        document.getElementById('hid-toggle').focus();
-        return;
-      }
-      if (act === 'day') {
-        r.day = shift(r.day, +t.dataset.n);
-        S.restoreMsg = null;
-        r.openHidden = false;
-        save();
-        render();
-        var b = document.querySelector('[data-act="day"][data-n="' + t.dataset.n + '"]');
-        if (b && !b.disabled) b.focus();
-        return;
-      }
-      if (act === 'clear-open') return openClear();
-      if (act === 'dlg-close') {
-        document.getElementById('dlg').close();
-        return;
-      }
-      if (act === 'open-picker') return openPicker();
-      if (act === 'pick' || act === 'pick-new') {
-        S.form.movement = { name: t.dataset.name, created: act === 'pick-new' };
-        if (act === 'pick-new')
-          S.householdMovements.push({ name: t.dataset.name, uses: 0, near: '—' });
-        document.getElementById('dlg').close();
-        save();
-        render();
-        document.querySelector('.movement-btn').focus();
-        announce('Movement: ' + t.dataset.name);
-        return;
-      }
-      if (act === 'archive-athlete') {
-        athlete(t.dataset.id).archived = true;
-        announce(athlete(t.dataset.id).name + ' archived.');
-        return go({ name: 'settings' });
-      }
-      if (act === 'unarchive') {
-        athlete(t.dataset.id).archived = false;
-        save();
-        render();
-        announce('Restored.');
-        return;
-      }
-      if (act === 'del-step') return go({ name: 'del', id: t.dataset.id, step: +t.dataset.step });
-      if (act === 'del-final') {
-        var nm = athlete(t.dataset.id).name;
-        S.athletes = S.athletes.filter(function (a) {
-          return a.id !== t.dataset.id;
-        });
-        return go({ name: 'del', step: 4, deleted: nm });
-      }
-      if (act === 'mv' || act === 'rm') {
-        var rows =
-          t.dataset.b === 'copy'
-            ? S.clone.days[t.dataset.day]
-            : program(t.dataset.b).days[t.dataset.day];
-        var i = +t.dataset.i;
-        var label = rows[i].name;
-        if (act === 'rm') rows.splice(i, 1);
-        else {
-          var j = i + +t.dataset.d;
-          var tmp = rows[i];
-          rows[i] = rows[j];
-          rows[j] = tmp;
-        }
-        save();
-        render();
-        announce(act === 'rm' ? label + ' removed.' : label + ' moved.');
-        return;
-      }
-      if (act === 'add-rx') {
-        program(t.dataset.b).days[t.dataset.day].push(rx('Bulgarian Split Squat'));
-        save();
-        render();
-        return;
-      }
-      if (act === 'archive-prog') {
-        r.confirmArchive = t.dataset.b;
-        save();
-        render();
-        return;
-      }
-      if (act === 'archive-cancel') {
-        r.confirmArchive = null;
-        save();
-        render();
-        return;
-      }
-      if (act === 'archive-go') {
-        var b = program(t.dataset.b);
-        b.archived = true;
-        var closed = [];
-        S.assignments.forEach(function (x) {
-          if (x.block === b.id && !x.to) {
-            x.to = shift(TODAY, -1);
-            closed.push(athlete(x.athlete).name);
-          }
-        });
-        S.flash =
-          esc(b.name) +
-          ' archived.' +
-          (closed.length ? ' ' + esc(closed.join(' and ')) + ' stopped getting it today.' : '') +
-          ' <button type="button" class="btn ghost" data-act="unarchive-prog" data-b="' +
-          b.id +
-          '">Undo</button>';
-        r.confirmArchive = null;
-        save();
-        render();
-        return;
-      }
-      if (act === 'unarchive-prog') {
-        program(t.dataset.b).archived = false;
-        S.flash =
-          esc(program(t.dataset.b).name) +
-          ' restored. Re-assign athletes from the program if they should be on it again.';
-        save();
-        render();
-        return;
-      }
-      if (act === 'clone-step') return go({ name: 'clone', step: +t.dataset.step, b: S.clone.src });
-      if (act === 'hist-pick') {
-        S.histDate = t.dataset.d;
-        document.getElementById('v-hist').value = 'date';
-        return go({ name: 'history', id: r.id });
-      }
-      if (act === 'merge') {
-        var m = S.householdMovements.splice(+t.dataset.i, 1)[0];
-        save();
-        render();
-        announce(m.name + ' merged into ' + m.near + '.');
-        return;
-      }
-    });
-
-    document.addEventListener('input', function (ev) {
-      if (ev.target.id === 'pk-q') drawPicker(ev.target.value.trim());
-      if (ev.target.id === 'clear-in')
-        document.getElementById('clear-go').disabled =
-          ev.target.value.trim().toLowerCase() !== 'delete';
-      if (ev.target.id === 'del-name')
-        document.getElementById('del-go').disabled = ev.target.value !== athlete(S.route.id).name;
-      if (ev.target.dataset && ev.target.dataset.act === 'load') {
-        var p = (ev.target.dataset.b === 'copy' ? S.clone : program(ev.target.dataset.b)).days[
-          ev.target.dataset.day
-        ].find(function (x) {
-          return x.id === ev.target.dataset.pid;
-        });
-        if (p) p.loads[ev.target.dataset.aid] = ev.target.value;
-        save();
-      }
-    });
-    document.addEventListener('change', function (ev) {
-      if (ev.target.id === 'hist-d') {
-        S.histDate = ev.target.value || S.histDate;
-        save();
-        render();
-        document.getElementById('hist-d').focus();
-      }
-      if (ev.target.closest && ev.target.closest('#clone-3') && ev.target.type === 'checkbox') {
-        S.clone.move[ev.target.value] = ev.target.checked;
-        save();
-      }
-    });
-
-    document.addEventListener('submit', function (ev) {
-      ev.preventDefault();
-      var f = ev.target;
-      if (f.id === 'add-form') {
-        var name = document.getElementById('add-name').value.trim();
-        if (!name) {
-          document.getElementById('add-err').hidden = false;
-          document.getElementById('add-name').setAttribute('aria-invalid', 'true');
-          document.getElementById('add-name').setAttribute('aria-describedby', 'add-err');
-          document.getElementById('add-name').focus();
-          return;
-        }
-        var id = 'a' + Date.now();
-        S.athletes.push({
-          id: id,
-          name: name,
-          kind: f.querySelector('input[name=kind]:checked').value,
-          archived: false,
-        });
-        announce(name + ' added.');
-        return go({ name: 'day', id: id, day: TODAY });
-      }
-      if (f.id === 'edit-form') {
-        var a = athlete(f.dataset.id);
-        var nm = document.getElementById('edit-name').value.trim();
-        if (nm) a.name = nm;
-        a.kind = f.querySelector('input[name=ekind]:checked').value;
-        announce('Saved.');
-        return go({
-          name: document.getElementById('v-delete').value === 'picker' ? 'picker' : 'settings',
-        });
-      }
-      if (f.id === 'del-form') return go({ name: 'del', id: f.dataset.id, step: 3 });
-      if (f.id === 'clear-form') return clearDay(f.dataset.k);
-      if (f.id === 'bw-form') {
-        var v = document.getElementById('bw-in').value.trim();
-        if (!v) return;
-        S.entries[f.dataset.k] = [
-          {
-            id: 'e' + Date.now(),
-            title: 'Bodyweight',
-            detail: v + ' lb · ' + nowLabel(),
-            slot: 'bw',
-          },
-        ].concat(S.entries[f.dataset.k] || []);
-        save();
-        render();
-        announce('Bodyweight saved.');
-        return;
-      }
-      if (f.id === 'clone-1') {
-        S.clone.name = document.getElementById('cl-name').value.trim() || S.clone.name;
-        return go({ name: 'clone', step: 2, b: S.clone.src });
-      }
-      if (f.id === 'clone-3') {
-        var c = S.clone;
-        var nb = { id: 'b' + Date.now(), name: c.name, archived: false, days: c.days };
-        S.programs.push(nb);
-        var moved = [];
-        Object.keys(c.move).forEach(function (aid) {
-          if (!c.move[aid]) return;
-          S.assignments.forEach(function (x) {
-            if (x.athlete === aid && x.block === c.src && !x.to) x.to = shift(TODAY, -1);
-          });
-          S.assignments.push({ athlete: aid, block: nb.id, from: TODAY, to: null });
-          moved.push(athlete(aid).name);
-        });
-        c.summary = moved.length
-          ? esc(moved.join(' and ')) +
-            (moved.length > 1 ? ' move' : ' moves') +
-            ' to ' +
-            esc(c.name) +
-            ' from today. ' +
-            esc(program(c.src).name) +
-            ' keeps everything logged on it.'
-          : null;
-        return go({ name: 'clone', step: 4, b: c.src });
-      }
-    });
-
-    function hide(k, eid) {
+    // ── actions ──────────────────────────────────────────────────────────────
+    function hideEvent(k, items) {
       var list = S.entries[k];
-      var i = list.findIndex(function (e) {
-        return e.id === eid;
+      items.forEach(function (e) {
+        list.splice(list.indexOf(e), 1);
       });
-      var e = list.splice(i, 1)[0];
-      S.hidden[k] = (S.hidden[k] || []).concat([{ at: nowLabel(), items: [e] }]);
-      S.restoreMsg = null;
-      save();
-      render();
-      // Focus: the next row's Delete, else the Hidden row's control (acceptance 11). Never the previous
-      // row's Delete: a second Enter would hide a row the person never looked at.
-      var dels = document.querySelectorAll('#entries [data-act="hide"]');
-      var target = dels[i] || document.getElementById('hid-toggle');
-      if (target) target.focus();
-      announce(e.title + ' deleted. Restore it from Hidden on this day.');
+      var ev = {
+        id: 'h' + Date.now() + Math.random().toString(36).slice(2, 5),
+        at: nowLabel(),
+        hiddenOn: TODAY,
+        items: items,
+      };
+      S.hidden[k] = (S.hidden[k] || []).concat([ev]);
+      pageHidden[ev.id] = true;
+      S.refusal = null;
+      rerender('#undo-' + ev.id);
+      announce(hiddenItemLabel(ev) + ' deleted. Undo is in its place, and in Hidden on this day.');
     }
-    function clearDay(k) {
-      var list = S.entries[k] || [];
-      S.hidden[k] = (S.hidden[k] || []).concat([{ at: nowLabel(), items: list.slice() }]);
-      S.entries[k] = [];
-      document.getElementById('dlg').close();
-      S.route.openHidden = true;
-      // The prototype's partial-restore case: a weigh-in logged after clearing takes the slot.
-      if (
-        list.some(function (e) {
-          return e.slot === 'bw';
-        })
-      )
-        S.entries[k].push({
-          id: 'e' + Date.now(),
-          title: 'Bodyweight',
-          detail: '111.9 lb · logged after clearing',
-          slot: 'bw',
-        });
-      save();
-      render();
-      var b = document.querySelector('[data-act="restore"]');
-      if (b) b.focus();
-      announce(
-        'Day cleared. ' + list.length + ' entries hidden. Restore them from Hidden on this day.',
-      );
-    }
-    function restore(k, ei) {
-      var ev = S.hidden[k][ei];
+    function restore(k, evId, swap) {
+      var evs = S.hidden[k];
+      var ev = evs.find(function (x) {
+        return x.id === evId;
+      });
       var live = S.entries[k] || (S.entries[k] = []);
+      if (swap) {
+        // One atomic act: hide the newer weigh-in, restore the older (trust panel T2).
+        var held = live.find(function (x) {
+          return x.slot === ev.items[0].slot;
+        });
+        live.splice(live.indexOf(held), 1);
+        evs.push({ id: 'h' + Date.now(), at: nowLabel(), hiddenOn: TODAY, items: [held] });
+      }
       var back = [];
       var refused = [];
       ev.items.forEach(function (e) {
@@ -2894,57 +3120,547 @@
       back.forEach(function (e) {
         live.push(e);
       });
-      if (refused.length)
+      live.sort(function (a, b) {
+        return a.order - b.order;
+      });
+      delete pageHidden[ev.id];
+      if (refused.length) {
         ev.items = refused.map(function (p) {
           return p[0];
         });
-      else S.hidden[k].splice(ei, 1);
-      if (!S.hidden[k].length) delete S.hidden[k];
-      if (refused.length) {
         var f = refused[0];
-        S.restoreMsg =
-          '<div class="refusal" role="alert">' +
-          (back.length
-            ? 'Restored ' + back.length + ' of ' + (back.length + refused.length) + '. '
-            : '') +
-          '<strong>' +
-          esc(f[0].title) +
-          ' (' +
-          esc(f[0].detail.split(' · ')[0]) +
-          ')</strong> can’t come back: ' +
-          esc(f[1].detail.split(' · ')[0]) +
-          ' is already logged for this day. Delete that one first, then restore this.</div>';
+        S.refusal = {
+          ev: ev.id,
+          swap: true,
+          wanted: f[0].detail.split(' · ')[0],
+          text:
+            '<p style="margin:0">' +
+            (back.length
+              ? 'Restored ' + back.length + ' of ' + (back.length + refused.length) + '. '
+              : '') +
+            '<strong>' +
+            esc(f[0].title) +
+            ' ' +
+            esc(f[0].detail.split(' · ')[0]) +
+            '</strong> can’t come back while <strong>' +
+            esc(f[1].detail.split(' · ')[0]) +
+            '</strong> is logged for this day — one weigh-in per day.</p>',
+        };
+        rerender('#restore-' + ev.id);
+        announce(
+          (back.length ? 'Restored ' + back.length + '. ' : '') +
+            'Could not restore ' +
+            f[0].title +
+            ': ' +
+            f[1].detail.split(' · ')[0] +
+            ' is logged for this day.',
+        );
       } else {
-        S.restoreMsg = null;
-        S.route.openHidden = !!S.hidden[k];
+        S.hidden[k] = evs.filter(function (x) {
+          return x !== ev;
+        });
+        if (!S.hidden[k].length) delete S.hidden[k];
+        S.refusal = null;
+        rerender('#row-' + back[0].id);
+        announce(
+          'Restored ' +
+            (back.length > 1 ? back.length + ' entries' : hiddenItemLabel({ items: back })) +
+            '.',
+        );
       }
-      save();
-      render();
-      var focusEl = document.querySelector('.refusal')
-        ? document.querySelector('[data-act="restore"]')
-        : document.querySelector('#entries [data-act="hide"]');
-      if (focusEl) focusEl.focus();
-      announce(
-        refused.length
-          ? 'Could not restore ' +
-              refused
-                .map(function (p) {
-                  return p[0].title;
-                })
-                .join(', ') +
-              '.'
-          : 'Restored ' +
-              back
-                .map(function (e) {
-                  return e.title;
-                })
-                .join(', ') +
-              '.',
-      );
     }
 
+    document.addEventListener('click', function (ev) {
+      var t = ev.target.closest('[data-go],[data-act]');
+      if (!t) return;
+      var g = t.getAttribute('data-go');
+      var r = S.route;
+      if (g) {
+        closeDialog(false);
+        if (g === 'day') return go({ name: 'day', id: t.dataset.id || 'a1', day: TODAY });
+        if (g === 'edit' || g === 'log' || g === 'history')
+          return go({ name: g, id: t.dataset.id || 'a1' });
+        if (g === 'del') return go({ name: 'del', id: t.dataset.id, step: 1 });
+        if (g === 'program') {
+          S.edit = null;
+          return go(
+            t.dataset.b
+              ? { name: 'program', block: t.dataset.b }
+              : { name: 'program', id: t.dataset.id || 'a1' },
+          );
+        }
+        return go({ name: g });
+      }
+      var act = t.getAttribute('data-act');
+      var k = r.id + '|' + r.day;
+      switch (act) {
+        case 'hide': {
+          var e = S.entries[t.dataset.k].find(function (x) {
+            return x.id === t.dataset.eid;
+          });
+          return hideEvent(t.dataset.k, [e]);
+        }
+        case 'hide-group':
+          return hideEvent(
+            t.dataset.k,
+            S.entries[t.dataset.k].filter(function (x) {
+              return x.group === t.dataset.group;
+            }),
+          );
+        case 'restore':
+          return restore(k, t.dataset.ev);
+        case 'swap':
+          return restore(k, t.dataset.ev, true);
+        case 'leave': {
+          var keepEv = S.refusal && S.refusal.ev;
+          S.refusal = null;
+          return rerender('#restore-' + keepEv);
+        }
+        case 'toggle-hidden':
+          r.openHidden = !r.openHidden;
+          return rerender('#hid-toggle');
+        case 'day':
+          r.day = shift(r.day, +t.dataset.n);
+          r.openHidden = false;
+          pageHidden = {};
+          S.refusal = null;
+          return rerender(
+            $('[data-act="day"][data-n="' + t.dataset.n + '"]') &&
+              shift(r.day, +t.dataset.n) <= TODAY
+              ? '[data-act="day"][data-n="' + t.dataset.n + '"]'
+              : '[data-act="day"][data-n="-1"]',
+          );
+        case 'goto-day':
+          return go({ name: 'day', id: r.id || 'a1', day: t.dataset.d });
+        case 'clear-open':
+          return openClear();
+        case 'dlg-close':
+          return closeDialog();
+        case 'open-picker':
+          return openPicker();
+        case 'pick':
+        case 'pick-new':
+          S.form.movement = { name: t.dataset.name, created: act === 'pick-new' };
+          closeDialog(false);
+          rerender('#mv-btn');
+          return announce('Movement: ' + t.dataset.name + (act === 'pick-new' ? ', new' : ''));
+        case 'download':
+          return announce('Prototype: the download would start here.');
+        case 'archive-athlete': {
+          var a = athlete(t.dataset.id);
+          a.archived = true;
+          S.route = { name: 'settings' };
+          S.flash = esc(a.name) + ' archived. Everything they logged is kept.';
+          S.undo = { kind: 'athlete', id: a.id };
+          rerender('#undo-btn');
+          return announce(a.name + ' archived.');
+        }
+        case 'unarchive':
+          athlete(t.dataset.id).archived = false;
+          S.flash = esc(athlete(t.dataset.id).name) + ' restored.';
+          S.undo = null;
+          rerender('#ath-' + t.dataset.id);
+          return announce(athlete(t.dataset.id).name + ' restored.');
+        case 'undo':
+          return doUndo();
+        case 'del-step':
+          return go({ name: 'del', id: t.dataset.id, step: +t.dataset.step });
+        case 'del-final': {
+          var nm = athlete(t.dataset.id).name;
+          S.athletes = S.athletes.filter(function (x) {
+            return x.id !== t.dataset.id;
+          });
+          return go({ name: 'del', step: 4, deleted: nm });
+        }
+        case 'mv':
+        case 'rm':
+        case 'unrm': {
+          var rows = S.edit.blocks[t.dataset.b][t.dataset.day];
+          var i = +t.dataset.i;
+          var p = rows[i];
+          if (act === 'rm') {
+            p.removed = true;
+            rerender('#unrm-' + p.id);
+            return announce(p.name + ' will be removed when you save. Undo is in its place.');
+          }
+          if (act === 'unrm') {
+            p.removed = false;
+            rerender('#rx-' + p.id + ' [data-act="rm"]');
+            return announce(p.name + ' kept.');
+          }
+          var j = i + +t.dataset.d;
+          rows[i] = rows[j];
+          rows[j] = p;
+          var keep = (t.dataset.d === '-1' ? '#up-' : '#dn-') + p.id;
+          rerender(keep);
+          if (document.activeElement && document.activeElement.disabled !== false)
+            focus((t.dataset.d === '-1' ? '#dn-' : '#up-') + p.id);
+          return announce(p.name + ' moved to position ' + (j + 1) + ' of ' + rows.length + '.');
+        }
+        case 'add-rx': {
+          var n = rx('Bulgarian Split Squat');
+          S.edit.blocks[t.dataset.b][t.dataset.day].push(n);
+          rerender('#s-' + n.id);
+          return announce('Bulgarian Split Squat added. Set its sets and reps.');
+        }
+        case 'save-prog':
+          return openSaveProg(t.dataset.b);
+        case 'assign':
+          return openAssign(t.dataset.a, t.dataset.b);
+        case 'takeoff': {
+          var asg = S.assignments.find(function (x) {
+            return x.athlete === t.dataset.a && x.block === t.dataset.b && !x.to;
+          });
+          asg.to = shift(TODAY, -1);
+          closeDialog(false);
+          S.flash =
+            esc(athlete(t.dataset.a).name) +
+            ' is off ' +
+            esc(program(t.dataset.b).name) +
+            ' from today.';
+          S.undo = { kind: 'assign', reopen: [asg] };
+          rerender(r.confirmArchive ? '#archq-' + r.confirmArchive : '#undo-btn');
+          if (r.confirmArchive && !onBlock(r.confirmArchive).length) {
+            var bid = r.confirmArchive;
+            r.confirmArchive = null;
+            program(bid).archived = true;
+            S.flash = esc(program(bid).name) + ' archived. Nobody was left on it.';
+            S.undo = { kind: 'archive', block: bid, reopen: [asg] };
+            rerender('#undo-btn');
+          }
+          return announce($('.ok-msg span') ? $('.ok-msg span').textContent : 'Done.');
+        }
+        case 'archive-prog':
+          r.confirmArchive = t.dataset.b;
+          return rerender('#archq-' + t.dataset.b);
+        case 'archive-cancel': {
+          var was = r.confirmArchive;
+          r.confirmArchive = null;
+          return rerender('#arch-' + was);
+        }
+        case 'archive-go': {
+          var b = program(t.dataset.b);
+          var closed = [];
+          S.assignments.forEach(function (x) {
+            if (x.block === b.id && !x.to) {
+              x.to = shift(TODAY, -1);
+              closed.push(x);
+            }
+          });
+          b.archived = true;
+          r.confirmArchive = null;
+          S.flash =
+            esc(b.name) +
+            ' archived.' +
+            (closed.length
+              ? ' ' +
+                esc(
+                  names(
+                    closed.map(function (x) {
+                      return athlete(x.athlete).name;
+                    }),
+                  ),
+                ) +
+                ' stopped getting it today.'
+              : '');
+          S.undo = { kind: 'archive', block: b.id, reopen: closed };
+          rerender('#undo-btn');
+          return announce($('.ok-msg span').textContent);
+        }
+        case 'unarchive-prog':
+          program(t.dataset.b).archived = false;
+          S.flash =
+            esc(program(t.dataset.b).name) +
+            ' restored. Nobody is on it until you move someone to it.';
+          S.undo = null;
+          rerender('#prog-' + t.dataset.b);
+          return announce(program(t.dataset.b).name + ' restored.');
+        case 'rename-mv': {
+          var m = S.householdMovements[+t.dataset.i];
+          var li = $('#hm-' + t.dataset.i);
+          li.innerHTML =
+            '<form class="stack-sm" id="rename-form" data-i="' +
+            t.dataset.i +
+            '"><div class="field"><label for="rn-in" class="small" style="font-weight:500">New name</label><input class="input" id="rn-in" value="' +
+            esc(m.name) +
+            '" /></div><span class="hint">Every entry keeps pointing at this movement. Only the name changes.</span><div class="row"><button class="btn" type="submit">Save name</button><button type="button" class="btn ghost" data-act="cancel-rename">Cancel</button></div></form>';
+          return focus('#rn-in');
+        }
+        case 'cancel-rename':
+          return rerender('#hm-0');
+        case 'merge': {
+          var mm = S.householdMovements[+t.dataset.i];
+          return openDialog(
+            '<div class="sheet-in"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Merge into ' +
+              esc(mm.near) +
+              '?</h2></div><div class="sheet-body"><p id="mg-desc" style="margin:0">The ' +
+              mm.uses +
+              ' ' +
+              (mm.uses === 1 ? 'entry' : 'entries') +
+              ' logged as <strong>' +
+              esc(mm.name) +
+              '</strong> will count as <strong>' +
+              esc(mm.near) +
+              '</strong>, and ' +
+              esc(mm.name) +
+              ' leaves your list. Past months you already exported will differ from a new export.</p><p class="proto-flag">Needs Insight sign-off (CSV contract) before it is a row</p>' +
+              '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="button" class="btn" data-act="merge-go" data-i="' +
+              t.dataset.i +
+              '">Merge</button></div></div></div>',
+            { describedby: 'mg-desc' },
+          );
+        }
+        case 'merge-go': {
+          var gone = S.householdMovements.splice(+t.dataset.i, 1)[0];
+          closeDialog(false);
+          S.flash = esc(gone.name) + ' merged into ' + esc(gone.near) + '.';
+          rerender('h1');
+          return announce(gone.name + ' merged.');
+        }
+      }
+    });
+    function doUndo() {
+      var u = S.undo;
+      if (!u) return;
+      if (u.kind === 'athlete') {
+        athlete(u.id).archived = false;
+        S.flash = esc(athlete(u.id).name) + ' is back.';
+      }
+      if (u.kind === 'archive' || u.kind === 'assign') {
+        // ONE event: the archive and every assignment it closed come back together (a11y/interaction Q3).
+        if (u.block) program(u.block).archived = false;
+        u.reopen.forEach(function (x) {
+          var live = S.assignments.find(function (y) {
+            return y.athlete === x.athlete && y.block === x.block && y.from === x.from;
+          });
+          if (live) live.to = null;
+        });
+        S.flash = 'Undone.';
+      }
+      if (u.kind === 'copy') {
+        u.moved.forEach(function (m) {
+          S.assignments = S.assignments.filter(function (y) {
+            return !(y.athlete === m.athlete && y.block === u.copy);
+          });
+          var old = S.assignments.find(function (y) {
+            return y.athlete === m.athlete && y.block === u.src && y.from === m.from;
+          });
+          if (old) old.to = null;
+        });
+        S.flash =
+          'Moved back to ' + esc(program(u.src).name) + '. The copy is kept, with nobody on it.';
+      }
+      S.undo = null;
+      rerender('h1');
+      announce($('.ok-msg span').textContent);
+    }
+
+    document.addEventListener('input', function (ev) {
+      var id = ev.target.id;
+      if (id === 'pk-q') drawPicker(ev.target.value.trim());
+      if (id === 'clear-in')
+        $('#clear-go').disabled = ev.target.value.trim().toLowerCase() !== 'delete';
+      if (id === 'del-name')
+        $('#del-go').disabled =
+          ev.target.value.trim().toLowerCase() !== athlete(S.route.id).name.toLowerCase();
+      if (ev.target.dataset && ev.target.dataset.act === 'load') {
+        var p = S.edit.blocks[ev.target.dataset.b][ev.target.dataset.day].find(function (x) {
+          return x.id === ev.target.dataset.pid;
+        });
+        if (p) p.loads[ev.target.dataset.aid] = ev.target.value;
+      }
+    });
+    document.addEventListener('change', function (ev) {
+      if (ev.target.id === 'hist-d') {
+        S.histDate = ev.target.value || S.histDate;
+        rerender('#hist-d');
+        announce($('#hist-ans').textContent);
+      }
+      if (ev.target.name === 'sv') $('#copy-opts').hidden = ev.target.value !== 'copy';
+    });
+    document.addEventListener(
+      'toggle',
+      function (ev) {
+        var li = ev.target.closest && ev.target.closest('.timeline li');
+        if (li && ev.target.open) S.histOpen = [].indexOf.call(li.parentNode.children, li);
+      },
+      true,
+    );
+
+    document.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      if (f.id === 'add-form') {
+        var name = $('#add-name').value.trim();
+        if (!name) {
+          $('#add-err').hidden = false;
+          $('#add-name').setAttribute('aria-invalid', 'true');
+          return focus('#add-name');
+        }
+        var kind = f.querySelector('input[name=addkind]:checked');
+        if (!kind) {
+          announce('Choose kid or adult.');
+          return focus('#add-kid');
+        }
+        var id = 'a' + Date.now();
+        S.athletes.push({ id: id, name: name, kind: kind.value, archived: false });
+        announce(name + ' added.');
+        return go({ name: 'day', id: id, day: TODAY });
+      }
+      if (f.id === 'edit-form') {
+        var a = athlete(f.dataset.id);
+        var nm = $('#edit-name').value.trim();
+        if (nm) a.name = nm;
+        a.kind = f.querySelector('input[name=ekkind]:checked').value;
+        announce('Saved.');
+        return go({ name: 'day', id: a.id, day: TODAY });
+      }
+      if (f.id === 'del-form') return go({ name: 'del', id: f.dataset.id, step: 3 });
+      if (f.id === 'clear-form') {
+        var k = f.dataset.k;
+        var items = (S.entries[k] || []).slice();
+        closeDialog(false);
+        var evc = { id: 'h' + Date.now(), at: nowLabel(), hiddenOn: TODAY, items: items };
+        S.entries[k] = [];
+        S.hidden[k] = (S.hidden[k] || []).concat([evc]);
+        rerender('#restore-' + evc.id);
+        return announce(
+          'Day cleared. ' +
+            items.length +
+            ' entries hidden. Restore all is under Hidden on this day.',
+        );
+      }
+      if (f.id === 'bw-form') {
+        var v = $('#bw-in').value.trim();
+        if (!v) return;
+        S.entries[f.dataset.k].push({
+          id: 'e' + Date.now(),
+          order: 0,
+          where: 'bw',
+          title: 'Bodyweight',
+          detail: v + ' lb · ' + nowLabel(),
+          slot: 'bw',
+        });
+        S.entries[f.dataset.k].sort(function (x, y) {
+          return x.order - y.order;
+        });
+        rerender('#bw-h');
+        return announce('Bodyweight saved.');
+      }
+      if (f.id === 'save-form') {
+        var bid = f.dataset.b;
+        var mode = f.querySelector('input[name=sv]:checked').value;
+        var staged = S.edit.blocks[bid];
+        Object.keys(staged).forEach(function (d) {
+          staged[d] = staged[d].filter(function (p) {
+            return !p.removed;
+          });
+        });
+        closeDialog(false);
+        if (mode === 'all') {
+          program(bid).days = JSON.parse(JSON.stringify(staged));
+          S.flash =
+            esc(program(bid).name) +
+            ' saved for ' +
+            esc(
+              names(
+                onBlock(bid).map(function (i) {
+                  return athlete(i).name;
+                }),
+              ),
+            ) +
+            '.';
+          S.undo = null;
+        } else {
+          var cp = {
+            id: 'b' + Date.now(),
+            name: $('#cp-name')
+              ? $('#cp-name').value.trim() || program(bid).name + ' (v2)'
+              : program(bid).name + ' (v2)',
+            archived: false,
+            days: JSON.parse(JSON.stringify(staged)),
+          };
+          var ticked = [].map.call(
+            f.querySelectorAll('#copy-opts input[type=checkbox]:checked'),
+            function (c) {
+              return c.value;
+            },
+          );
+          S.programs.push(cp);
+          var moved = [];
+          ticked.forEach(function (aid) {
+            var cur = S.assignments.find(function (x) {
+              return x.athlete === aid && x.block === bid && !x.to;
+            });
+            if (cur) {
+              cur.to = shift(TODAY, -1);
+              moved.push({ athlete: aid, from: cur.from });
+            }
+            S.assignments.push({ athlete: aid, block: cp.id, from: TODAY, to: null });
+          });
+          startEdit(
+            S.route.block
+              ? [program(bid)]
+              : activeAssignments(S.route.id).map(function (x) {
+                  return program(x.block);
+                }),
+          );
+          S.edit.key = S.route.block || S.route.id;
+          S.flash =
+            esc(cp.name) +
+            ' saved.' +
+            (ticked.length
+              ? ' ' +
+                esc(
+                  names(
+                    ticked.map(function (i) {
+                      return athlete(i).name;
+                    }),
+                  ),
+                ) +
+                ' moved to it from today.'
+              : ' Nobody moved.');
+          S.undo = moved.length ? { kind: 'copy', copy: cp.id, src: bid, moved: moved } : null;
+        }
+        rerender(S.undo ? '#undo-btn' : 'h1');
+        return announce($('.ok-msg span').textContent);
+      }
+      if (f.id === 'assign-form') {
+        var aid = f.dataset.a;
+        var from = f.dataset.b;
+        var to = $('#as-to').value;
+        var cur2 = S.assignments.find(function (x) {
+          return x.athlete === aid && x.block === from && !x.to;
+        });
+        cur2.to = shift(TODAY, -1);
+        var already = S.assignments.find(function (x) {
+          return x.athlete === aid && x.block === to && !x.to;
+        });
+        if (!already) S.assignments.push({ athlete: aid, block: to, from: TODAY, to: null });
+        closeDialog(false);
+        S.flash =
+          esc(athlete(aid).name) +
+          ' moved from ' +
+          esc(program(from).name) +
+          ' to ' +
+          esc(program(to).name) +
+          '.';
+        S.undo = { kind: 'assign', reopen: [cur2] };
+        rerender(S.route.confirmArchive ? '#archq-' + S.route.confirmArchive : '#undo-btn');
+        return announce($('.ok-msg span').textContent);
+      }
+      if (f.id === 'rename-form') {
+        var mv = S.householdMovements[+f.dataset.i];
+        var nn = $('#rn-in').value.trim();
+        if (nn) mv.name = nn;
+        S.flash = 'Renamed to ' + esc(mv.name) + '.';
+        rerender('#hm-' + f.dataset.i);
+        return announce('Renamed to ' + mv.name + '.');
+      }
+    });
+
     // ── bar ──────────────────────────────────────────────────────────────────
-    var sel = document.getElementById('screen-select');
+    var sel = $('#screen-select');
     SCREENS.forEach(function (s) {
       var o = document.createElement('option');
       o.value = s[0];
@@ -2952,46 +3668,29 @@
       sel.appendChild(o);
     });
     sel.addEventListener('change', function () {
+      S.edit = null;
       go(screenToRoute(sel.value));
     });
-    function setWidth() {
-      var w = document.getElementById('width-select').value;
-      document.getElementById('device').style.width = w + 'px';
-      document.getElementById('cap-w').textContent = w + 'px';
+    $('#width-select').addEventListener('change', function () {
+      var w = $('#width-select').value;
+      $('#device').style.width = w + 'px';
+      $('#cap-w').textContent = w + 'px';
       measure();
-    }
-    document.getElementById('width-select').addEventListener('change', setWidth);
-    ['v-delete', 'v-archive', 'v-hist'].forEach(function (id) {
-      document.getElementById(id).addEventListener('change', function () {
-        S.editMode = false;
-        render();
-      });
     });
-    document.getElementById('measure').addEventListener('change', measure);
-    document.getElementById('reset').addEventListener('click', function () {
+    $('#v-archive').addEventListener('change', function () {
+      S.route.confirmArchive = null;
+      render();
+    });
+    $('#measure').addEventListener('change', measure);
+    $('#reset').addEventListener('click', function () {
       S = fresh();
+      pageHidden = {};
       save();
       render();
       announce('Prototype data reset.');
     });
-    document.getElementById('app').addEventListener('click', function (ev) {
-      if (ev.target.id === 'edit-toggle') {
-        S.editMode = !S.editMode;
-        save();
-        render();
-        document.getElementById('edit-toggle').focus();
-      }
-    });
-    document.addEventListener(
-      'toggle',
-      function (ev) {
-        if (ev.target.id === 'arch-d') S.archivedOpen = ev.target.open;
-      },
-      true,
-    );
     window.addEventListener('resize', measure);
-
-    if (window.innerWidth <= 600) document.getElementById('bar-wrap').open = false;
+    if (window.innerWidth <= 600) $('#bar-wrap').open = false;
 
     // Open the view named by a plain #anchor (artifact viewers pass only bare tokens).
     var start = (location.hash || '').replace('#', '');
