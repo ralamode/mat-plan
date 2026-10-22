@@ -57,7 +57,7 @@ import {
  *   2. migrate + seed it by invoking the EXISTING `packages/db` scripts;
  *   3. optionally seed fixture rows for a named `--state` (e.g. `already-logged`);
  *   4. boot the prod Next server (`next start`) with the embedded DB in its env;
- *   5. capture the route via the shared Playwright/gate-login path;
+ *   5. capture the route via the shared Playwright/login path;
  *   6. tear EVERYTHING down in `finally` (server + embedded PG + temp dir).
  *
  * Next 16 env precedence (verified against node_modules/@next/env `processEnv`): a

@@ -3,7 +3,7 @@ import { captureScreenshot, routeSlug } from './capture';
 
 /**
  * Capture a full-page screenshot of a mat-plan route for a PR, using the SAME
- * gate-login helper the E2E smoke uses. This is the committed graduation of the
+ * login helper the E2E smoke uses. This is the committed graduation of the
  * `ui-screenshot` MCP procedure — no MCP required.
  *
  * Assumes a prod server is ALREADY running (this script does not manage one) and

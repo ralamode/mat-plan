@@ -13,6 +13,18 @@ import { pickerHeading } from './contexts';
  * `setup` project (to mint a reusable `storageState`) and by the screenshot
  * script — one helper, two consumers. Driving the actual form (rather than
  * injecting a cookie) keeps this an honest smoke of the gate itself.
+ *
+ * ⚠️ **The file is `login.ts`, not `gate-login.ts`, on purpose (AUTH-1 1c-pre).** The export keeps
+ * the `gate` in its name because that is what it drives; the MODULE does not, because at 1c it also
+ * holds `sessionLogin` and at 1d the gate half is deleted. A name that is true in all three worlds
+ * costs one rename now instead of one inside 1c's one-way-door PR and another inside 1d's.
+ *
+ * 🔴 **1c adds `sessionLogin` HERE and each consumer calls the two halves explicitly — it does NOT
+ * add a combined `login()`.** A single wrapper would have to branch on ambient env, which is the same
+ * branch moved out of sight, and it would drag `@clerk/testing` into `capture.ts`'s module graph —
+ * breaking the offline, no-credential property that is the whole reason `screenshot:ephemeral`
+ * exists. Two explicit calls also put the 1c switch in the consumer's diff, where it is reviewable.
+ * _(Settled by the 1c-pre panel, 2026-10-22; see docs/plans/auth-1c-pre-login-seam.md.)_
  */
 export async function gateLogin(page: Page): Promise<void> {
   const password = process.env.ACCESS_GATE_PASSWORD;

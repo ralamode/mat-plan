@@ -3,7 +3,7 @@ import { test as setup } from '@playwright/test';
 
 import { STORAGE_STATE } from '../playwright.config';
 import { APP_HOME_PATH } from '../lib/constants';
-import { gateLogin } from './gate-login';
+import { gateLogin } from './login';
 import { logBodyweight, selectProfile, submitCheckins, WARMUP_BODYWEIGHT } from './steps';
 
 // Runs once before the chromium project (its `dependencies: ['setup']`). Two jobs:

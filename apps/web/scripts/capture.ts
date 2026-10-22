@@ -2,12 +2,12 @@ import { mkdir } from 'node:fs/promises';
 
 import { chromium, type Page } from '@playwright/test';
 
-import { gateLogin } from '../e2e/gate-login';
+import { gateLogin } from '../e2e/login';
 import { isUngatedPath } from '../lib/access-gate';
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
- * Shared Playwright capture: log through the access gate (the SAME `gate-login.ts`
+ * Shared Playwright capture: log through the access gate (the SAME `login.ts`
  * helper the E2E smoke uses), navigate to a route, and write a full-page PNG PER
  * VIEWPORT to the gitignored `.screenshots/` folder. ONE capture path, two callers —
  * the plain `screenshot.ts` (server already running) and `screenshot-ephemeral.ts`
