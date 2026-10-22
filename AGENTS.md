@@ -470,7 +470,7 @@ across two or more packages, it earns one. Today: strength logging, the write pa
   **publish with `pnpm --filter web screenshots:publish --pr <n> --comment`** — never commit them to a
   source branch. The repeatable procedure is the `ui-screenshot` skill, which runs the committed
   `pnpm --filter web screenshot:ephemeral <route>` script (since V0-11, on the shared
-  `e2e/gate-login.ts` helper); the Playwright-MCP path is the fallback.
+  `e2e/login.ts` helper); the Playwright-MCP path is the fallback.
   - **Screenshots go in a COMMENT, not the description.** A **second** round on the same PR **requires**
     `--note "<what changed>"` — the script refuses without it, because a reviewer should not have to
     diff two images by eye to work out what moved.

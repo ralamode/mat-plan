@@ -1,11 +1,11 @@
 import type { Page } from '@playwright/test';
 
-// Relative imports only: `gate-login.ts` imports this, and the tsx-run screenshot scripts import that.
+// Relative imports only: `login.ts` imports this, and the tsx-run screenshot scripts import that.
 import { PICKER_COPY } from '../lib/constants';
 
 /**
  * Shared e2e context values (OSS-2). Kept dependency-light (no `@mat-plan/db`, unlike `steps.ts`) so the
- * gate-login helper can use it.
+ * login helper can use it.
  */
 
 /** A browser context with NO gate cookie. The premise of every un-gated assertion: with the project's

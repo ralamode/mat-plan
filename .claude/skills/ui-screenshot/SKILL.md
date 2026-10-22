@@ -14,7 +14,7 @@ committed**.
 ## Procedure — the ephemeral-DB script (primary)
 
 Playwright is a real dev dependency and the capture is a committed script built on the **same**
-gate-login helper the E2E smoke uses (`apps/web/e2e/gate-login.ts`). No MCP needed.
+login helper the E2E smoke uses (`apps/web/e2e/login.ts`). No MCP needed.
 
 **Default flow — self-contained, never touches live Neon.** `screenshot:ephemeral` boots a throwaway
 **`embedded-postgres`** (a real Postgres binary on an ephemeral TCP port — no Docker, no creds),

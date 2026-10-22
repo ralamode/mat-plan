@@ -544,7 +544,7 @@ run** before the next can be written".
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1a**     | Clerk wired and dark: dependency, env (both keys **optional**, composed only when present), **the CSP widening** (§ Design 6b), `clerkMiddleware` composed into `proxy.ts` behind the gate with a stated order and response merge, `/sign-in`, the `access-gate.ts` split, the `/api` matcher fix + its tech-debt strike, the privacy-doc edits (Q3) | ~350–450                                               | —                                                                                                                                                                                                                                                                                       |
 | **1b-bis** | The **enumeration guard alone**, asserted against `hasGateAccess` — plus `apps/web/test/source-scan.ts` and the single-source action list (§ Design 7)                                                                                                                                                                                               | ~150                                                   | Needs only 1a's merge, and nothing at all in principle. **Landed early on purpose**: it is inert, revert-safe, and it turns 1c's biggest unknown into a verified fact before 1c is written.                                                                                             |
-| **1b**     | `household_members` (migration `0015`), the `insertHouseholdMember` writer, the claim correction, the seed's existence check (Q4/Q5), the constraint + membership proofs, the deletion-order runbook edit — all dark                                                                                                                                 | ~300–400                                               | **The maintainer cannot be bound to a household until they have a Clerk user id**, and they get one by signing in — which needs 1a deployed. A correction cannot name a user that does not exist.                                                                                       |
+| **1b**     | `household_members` (migration **`0019`** — ⚠️ `0015` was taken by `0015_ten2a_movements_household.sql`; corrected 2026-10-22), the `insertHouseholdMember` writer, the claim correction, the seed's existence check (Q4/Q5), the constraint + membership proofs, the deletion-order runbook edit — all dark                                         | ~300–400                                               | **The maintainer cannot be bound to a household until they have a Clerk user id**, and they get one by signing in — which needs 1a deployed. A correction cannot name a user that does not exist.                                                                                       |
 | **1c-pre** | § Design 10's answer: the Playwright/screenshot session story, **landed while the gate still works**                                                                                                                                                                                                                                                 | ~200, **or its own plan**                              | **It must exist before 1c, because 1c breaks the smoke and `screenshot:ephemeral` the moment `requireSession()` lands** (above). Landing it while the gate still works is the AND-composition argument again.                                                                           |
 | **1c**     | The boundary moves: `getCurrentUser()` + `householdState()`, `getHouseholdScope()`'s new body, `requireSession` across **12** entry points (7 actions + 4 pages + 1 Route Handler), the mutation limiter, the no-household screen, `pages-are-gated.test.ts`'s conversion, the ≥2-household alert                                                    | ~500–700                                               | **The membership row must exist in production before any code reads it.** A resolver deployed ahead of `0015` is `42P01` on every route — a total outage, not a dark app. TEN-1 § Design 1a paid for this hazard once already and the answer was "land the column dark, read it later". |
 | **1d**     | Retire the gate: delete `/gate`, `lib/dal/gate.ts`, the gate half of `access-gate.ts`, `ACCESS_GATE_PASSWORD` from **all 19 sites**, `GATE_COPY`, the gate's e2e specs; `mp_gate` deleted on the next response                                                                                                                                       | ~400–500                                               | **Deleting the gate before the session is enforced is the window where neither holds.** This is the whole ordering constraint of Q2.                                                                                                                                                    |
@@ -830,7 +830,9 @@ It adds `event.user` (and `contexts.user`) deletion to `scrubSentryEvent` with a
 that this app's `userId`/`householdId` context is deliberately **not** set, and why. Otherwise the two
 documents contradict each other and the next action author resolves it the wrong way.
 
-### 4 · `household_members` — migration `0015`
+### 4 · `household_members` — migration `0019`
+
+> ⚠️ **Renumbered 2026-10-22.** This section said `0015`, which TEN-2a took. Next free is `0019`.
 
 Latest migration is `0014_household_synthetic` (`packages/db/migrations/meta/_journal.json`, 15
 entries, `idx: 14`) — **re-confirmed against `main` by the DB-safety lens**, so `0015` is still the
@@ -1498,6 +1500,14 @@ flow against a real Google account in CI, and should not try. The options, with 
 | **Inject a session cookie / stub `auth()` behind a test-only env flag**                       | No network, no secret — but a test-only auth bypass in the auth PR, which is the single worst place in this repo to put one. Rejected unless the above proves unworkable, and then only with the flag unreadable in production.                                                                                                  |
 | **Drop e2e coverage of authenticated screens**                                                | `e2e` becomes required at PR 28 and the smoke's whole job is proving the pieces are wired. Rejected.                                                                                                                                                                                                                             |
 
+🔴 **RESOLVED 2026-10-22 — and not by picking one of these three.** The 1c-pre panel found the
+option table assumes a single global choice, and that the choice cannot be made here at all: the
+bypass has nothing to live in until 1c, Clerk keys in the PR-triggered `e2e` job would **irreversibly
+destroy `theme.spec.ts`'s "1a ships dark" proof**, and a lit smoke would turn the **public** failure
+artifacts into a credential leak (the testing token travels as a query parameter, and traces record
+those). See [auth-1c-pre-login-seam.md](./auth-1c-pre-login-seam.md) → "Where the rest of the chunk
+went". The option table below stands as the analysis; it is no longer the decision.
+
 ⚠️ **`screenshot:ephemeral` is the sharper problem**, because it boots a **throwaway embedded
 Postgres** with no network and no credentials by design — that is why UI screenshots are local-runnable
 at all. A Clerk dependency makes every future UI PR's screenshot step need a Clerk instance. If the
@@ -1671,6 +1681,16 @@ Open question 4 is about — it may need its own plan**, and if it does, that pl
 | `apps/web/scripts/screenshot-ephemeral.ts`                    | EDIT   | ⚠️ **The sharper half.** It boots a throwaway embedded Postgres with **no network and no credentials** by design. It must also **seed a membership row the seed itself is forbidden to write** — most likely via `insertHouseholdMember` from the already-allowlisted fixture path. |
 | `packages/db/src/scope.test.ts`                               | EDIT   | If the fixture path grows, its `FIXTURE_DERIVES_SCOPE` allowlist is the file that must say so.                                                                                                                                                                                      |
 | `docs/runbooks.md` / `docs/tech-debt.md`                      | EDIT   | Whichever of § Design 10's three options is taken, **with the three bars written down** if it is the test-only one.                                                                                                                                                                 |
+
+🔴 **REVISED 2026-10-22 — this table is the FIRST draft and was withdrawn.** A five-lens panel found
+that the session half **cannot be planned here**: the module that would _accept_ a minted session
+lands in `apps/web/lib/` and does not exist until **1c** creates it, and the membership row needs
+`household_members` + `insertHouseholdMember`, which **1b** has not yet shipped. The acceptance
+criteria could also not fail, because pre-1c the gate authenticates in both arms.
+**1c-pre is now the login seam only** — a rename to `apps/web/e2e/login.ts`, a name true in all three
+worlds — and the rest is reassigned to 1b, 1c and a row of its own. The reassignment table, and four
+findings the reassigned work must carry, are in
+[auth-1c-pre-login-seam.md](./auth-1c-pre-login-seam.md).
 
 ### 1c — the boundary moves · `feat/auth-1c-session-is-the-boundary`
 
