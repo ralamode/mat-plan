@@ -1,0 +1,3007 @@
+<meta charset="utf-8" />
+<title>Fix It Yourself prototype</title>
+<meta name="claude:viewport-fit-sides" content="cover" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+/>
+<!--
+  CRUD-1 prototype — docs/specs/crud-1-fix-it-yourself.md.
+  Standalone on purpose: NOT under apps/web/app/, so it cannot trip pages-are-gated.test.ts or
+  collide with AUTH-1. No build, no dependencies, no data leaves the page. Every name is a fixture.
+  Tokens mirror apps/web/app/globals.css (:root / .dark) so widths and contrast read like the app.
+-->
+<style>
+  /* Layout: a review bar on top, then the app rendered inside a device frame of a chosen width. */
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --stage: oklch(0.955 0.004 250);
+    --note: oklch(0.97 0.03 85);
+    --note-fg: oklch(0.38 0.06 70);
+    --measure: oklch(0.6 0.2 300);
+    --radius: 0.625rem;
+    --font-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --card: oklch(0.205 0 0);
+      --primary: oklch(0.922 0 0);
+      --primary-foreground: oklch(0.205 0 0);
+      --secondary: oklch(0.269 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-foreground: oklch(0.708 0 0);
+      --accent: oklch(0.269 0 0);
+      --destructive: oklch(0.704 0.191 22.216);
+      --border: oklch(1 0 0 / 10%);
+      --input: oklch(1 0 0 / 15%);
+      --ring: oklch(0.556 0 0);
+      --stage: oklch(0.1 0.004 250);
+      --note: oklch(0.27 0.03 85);
+      --note-fg: oklch(0.88 0.06 85);
+      --measure: oklch(0.72 0.17 300);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --stage: oklch(0.1 0.004 250);
+    --note: oklch(0.27 0.03 85);
+    --note-fg: oklch(0.88 0.06 85);
+    --measure: oklch(0.72 0.17 300);
+    color-scheme: dark;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--stage);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* ── review bar ─────────────────────────────────────────────── */
+  .bar-wrap {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar-sum {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  @media (max-width: 600px) {
+    .bar-wrap {
+      position: static;
+    }
+  }
+  .bar {
+    padding-block: 0 8px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: center;
+    font-size: 13px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 30;
+    background: var(--background);
+  }
+  .bar strong {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .bar label {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .bar select {
+    min-height: 32px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--background);
+    padding: 0 6px;
+    max-width: 230px;
+  }
+  .bar .chk {
+    min-height: 32px;
+  }
+  .bar button {
+    min-height: 32px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--background);
+    padding: 0 10px;
+    cursor: pointer;
+  }
+  .stage {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-start;
+    padding-block: 24px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .device {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    max-width: 100%;
+    min-height: 640px;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 1px 2px oklch(0 0 0 / 6%),
+      0 12px 32px oklch(0 0 0 / 8%);
+  }
+  .device-cap {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted-foreground);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  @media (max-width: 480px) {
+    .stage {
+      padding-left: 0;
+      padding-right: 0;
+      padding-block: 0 48px;
+    }
+    .device {
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
+      width: 100% !important;
+    }
+  }
+  .notes {
+    width: 340px;
+    max-width: 100%;
+    background: var(--note);
+    color: var(--note-fg);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 14px;
+  }
+  .notes h2 {
+    margin: 0 0 8px;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .notes ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .notes code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  /* ── the app, mirroring apps/web classes ────────────────────── */
+  .app {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 32px 16px 48px; /* main: px-4 py-12, trimmed */
+  }
+  .app h1 {
+    margin: 0;
+    font-size: 30px;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .app h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .app h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .stack-sm {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stack-xs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .muted {
+    color: var(--muted-foreground);
+  }
+  .small {
+    font-size: 14px;
+  }
+  .xs {
+    font-size: 12px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  ul.plain {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    width: fit-content;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    text-decoration: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  .back:hover,
+  .textlink:hover {
+    color: var(--foreground);
+  }
+  .textlink {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    width: fit-content;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .btn[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .btn.outline {
+    background: var(--background);
+    color: var(--foreground);
+    border-color: var(--input);
+  }
+  .btn.ghost {
+    background: transparent;
+    color: var(--foreground);
+    padding: 0 12px;
+  }
+  .btn.ghost:hover,
+  .btn.outline:hover {
+    background: var(--accent);
+  }
+  .btn.danger {
+    background: var(--destructive);
+    color: oklch(0.985 0 0);
+  }
+  .btn.danger-ghost {
+    background: transparent;
+    color: var(--destructive);
+    padding: 0 12px;
+  }
+  .btn.full {
+    width: 100%;
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+    padding: 16px;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field > span {
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .input {
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--input);
+    background: var(--background);
+    padding: 0 12px;
+    font-size: 16px;
+    width: 100%;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--muted-foreground);
+  }
+  .err {
+    font-size: 13px;
+    color: var(--destructive);
+  }
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+  legend {
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0;
+    margin-bottom: 6px;
+  }
+  .seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .seg label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--input);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .seg input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+  .seg label:has(input:checked) {
+    border-color: var(--foreground);
+  }
+
+  /* picker tiles — profile-tile.tsx */
+  .tile {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 96px;
+    padding: 16px 20px;
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+    color: inherit;
+    text-decoration: none;
+    width: 100%;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+  }
+  .tile:hover {
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 22%, transparent);
+  }
+  .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 600;
+    flex: none;
+  }
+  .tile .name {
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .tile .kind {
+    font-size: 14px;
+    color: var(--muted-foreground);
+    text-transform: capitalize;
+  }
+  .tile.add {
+    box-shadow: none;
+    border: 2px dashed color-mix(in oklch, var(--foreground) 28%, transparent);
+    background: transparent;
+  }
+  .tile.add .avatar {
+    background: transparent;
+    color: var(--foreground);
+    border: 2px dashed color-mix(in oklch, var(--foreground) 28%, transparent);
+    font-weight: 400;
+  }
+  .tile-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .tile-wrap .tile {
+    flex: 1;
+    min-width: 0;
+  }
+  .tile-edit {
+    min-width: 72px;
+  }
+
+  /* day page */
+  .daynav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .daynav .day {
+    font-weight: 500;
+    font-size: 15px;
+    text-align: center;
+    flex: 1;
+  }
+  .entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px; /* px-4 py-3 */
+  }
+  .entry .body {
+    flex: 1;
+    min-width: 0;
+  }
+  .entry .title {
+    font-weight: 500;
+  }
+  .entry .detail {
+    font-size: 14px;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .entry .del {
+    margin: -8px -10px -8px 0;
+  }
+  .hidden-row {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 4px 4px 4px 16px;
+  }
+  .hidden-row > .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .hidden-list {
+    padding: 4px 12px 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hidden-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+  }
+  .hidden-item .body {
+    min-width: 0;
+    flex: 1;
+  }
+  .refusal {
+    border-left: 3px solid var(--destructive);
+    padding: 8px 12px;
+    background: color-mix(in oklch, var(--destructive) 8%, transparent);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+  }
+  .ok-msg {
+    border-left: 3px solid var(--foreground);
+    padding: 8px 12px;
+    background: var(--muted);
+    border-radius: 0 8px 8px 0;
+    font-size: 14px;
+  }
+  .setrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .setrow .idx {
+    width: 20px;
+    font-size: 14px;
+    color: var(--muted-foreground);
+    text-align: right;
+  }
+  .setrow .num {
+    width: 96px;
+  }
+  .movement-btn {
+    height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--input);
+    background: var(--background);
+    padding: 0 12px;
+    text-align: left;
+    width: 100%;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .movement-btn .placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* sheet (picker) */
+  dialog {
+    border: 0;
+    padding: 0;
+    background: var(--background);
+    color: var(--foreground);
+    border-radius: 16px;
+    width: min(520px, calc(100vw - 16px));
+    max-height: calc(100dvh - 32px);
+  }
+  dialog::backdrop {
+    background: oklch(0 0 0 / 45%);
+  }
+  .sheet-in {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 32px);
+  }
+  .sheet-head {
+    padding: 16px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-body {
+    overflow-y: auto;
+    padding: 8px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .group-label {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    font-weight: 600;
+    margin: 4px 0;
+  }
+  .opt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+  .opt:hover,
+  .opt[aria-selected='true'] {
+    background: var(--accent);
+  }
+  .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .suggest {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* program editor */
+  .rx {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .rx-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .rx-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 8px;
+    border: 1px solid var(--input);
+    background: var(--background);
+    cursor: pointer;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--muted);
+  }
+  .banner {
+    border: 1px solid var(--border);
+    background: var(--muted);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+  }
+  .timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 16px;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .timeline li {
+    position: relative;
+  }
+  .timeline li::before {
+    content: '';
+    position: absolute;
+    left: -23px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: var(--background);
+    border: 2px solid var(--foreground);
+  }
+  .timeline li.past::before {
+    border-color: var(--muted-foreground);
+  }
+  .checkrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .checkrow input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--primary);
+    flex: none;
+  }
+  .checkrow:has(input:checked) {
+    border-color: var(--foreground);
+  }
+  details.collapse > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--muted-foreground);
+    font-size: 14px;
+  }
+  .proto-flag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--note-fg);
+    background: var(--note);
+    border-radius: 6px;
+    padding: 2px 6px;
+    width: fit-content;
+  }
+
+  /* measurement overlay */
+  .measuring [data-m] {
+    outline: 1px dashed var(--measure);
+    outline-offset: -1px;
+    position: relative;
+  }
+  .m-tag {
+    position: absolute;
+    right: 0;
+    top: -14px;
+    font: 500 10px/1 var(--font-mono);
+    color: var(--background);
+    background: var(--measure);
+    padding: 2px 4px;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .flash {
+      animation: flash 1.2s ease-out;
+    }
+    @keyframes flash {
+      from {
+        background: var(--accent);
+      }
+    }
+  }
+</style>
+
+<details class="bar-wrap" id="bar-wrap" open>
+  <summary class="bar-sum">
+    <strong>CRUD-1 prototype</strong> <span class="muted">· review controls</span>
+  </summary>
+  <div class="bar" role="region" aria-label="Prototype controls">
+    <label for="screen-select"
+      >Screen
+      <select id="screen-select"></select>
+    </label>
+    <label for="width-select"
+      >Width
+      <select id="width-select">
+        <option value="360">360 · small phone</option>
+        <option value="390">390 · phone</option>
+        <option value="820">820 · tablet</option>
+        <option value="1280">1280 · desktop</option>
+      </select>
+    </label>
+    <label for="v-delete"
+      >Q1 delete athlete
+      <select id="v-delete">
+        <option value="settings">in Settings</option>
+        <option value="picker">Edit toggle on /p</option>
+      </select>
+    </label>
+    <label for="v-archive"
+      >Q3 archive in use
+      <select id="v-archive">
+        <option value="close">close assignments</option>
+        <option value="refuse">refuse</option>
+      </select>
+    </label>
+    <label for="v-hist"
+      >Q4 history
+      <select id="v-hist">
+        <option value="date">date on program page</option>
+        <option value="timeline">timeline</option>
+      </select>
+    </label>
+    <label class="chk" for="measure"><input type="checkbox" id="measure" /> Measure widths</label>
+    <button type="button" id="reset">Reset data</button>
+  </div>
+</details>
+
+<div class="stage">
+  <div class="device" id="device" style="width: 360px">
+    <div class="device-cap"><span id="cap-route">/p</span><span id="cap-w">360px</span></div>
+    <div id="app" class="app"></div>
+  </div>
+  <aside class="notes" id="notes" aria-label="What this screen asks the reviewer"></aside>
+</div>
+
+<div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+
+<script>
+  (function () {
+    'use strict';
+
+    // ── fixtures ─────────────────────────────────────────────────────────────
+    // Names are fixtures (AGENTS.md: no personal names). Movements are the real 35-row catalog
+    // (packages/shared/src/catalog-movements.ts), grouped by HAND for Q2 — isolation is split three ways.
+    var CATALOG = {
+      Push: [
+        'Push-Ups',
+        'BB Bench',
+        'Dumbbell Bench Press',
+        'Dips',
+        'Overhead Shoulder Press',
+        'Tricep Extensions',
+        'Lateral Raises',
+      ],
+      Pull: [
+        'Pull-Up',
+        'Inverted Rows',
+        'Bent-over Rows',
+        '1-Arm DB Row',
+        'Barbell Curls',
+        'Hammer Curls',
+        'Rear Delt Raises',
+      ],
+      Legs: [
+        'Back Squat',
+        'Front Squat',
+        'Bulgarian Split Squat',
+        'Walking Lunge',
+        'Romanian Deadlift',
+        'Trap-Bar Deadlift',
+        'Nordic Ham Curl',
+        'Barbell Hip Thrust',
+        'Single-Leg Hip Thrusts',
+        'KB Swings',
+        'Box Jump',
+        'Broad Jump',
+        'Calf Raises',
+        'Sled Push',
+      ],
+      Core: [
+        'Leg Raises',
+        'V-Sit Crunches',
+        'Hollow-Body Hold',
+        'Ab Rollout',
+        'Pallof Press',
+        'Med-Ball Slam',
+        'Farmer Carry',
+      ],
+      Wrestling: [
+        'Stance-in-motion',
+        'Penetration step',
+        'Sprawl',
+        'Hip heist',
+        'Sit-out',
+        'Bridge',
+      ],
+    };
+    var PROPOSED = { Wrestling: true }; // pending chunk 0 (CAT-2's human pass)
+    var WORDS = [
+      'bulgarian',
+      'split',
+      'squat',
+      'squats',
+      'romanian',
+      'deadlift',
+      'overhead',
+      'shoulder',
+      'press',
+      'lateral',
+      'raises',
+      'hammer',
+      'curls',
+      'inverted',
+      'rows',
+      'single',
+      'thrusts',
+      'nordic',
+      'pallof',
+      'hollow',
+      'rollout',
+      'zercher',
+      'copenhagen',
+      'plank',
+    ];
+
+    var TODAY = '2026-10-22';
+
+    function fresh() {
+      return {
+        route: { name: 'picker' },
+        editMode: false,
+        athletes: [
+          { id: 'a1', name: 'Athlete One', kind: 'kid', archived: false },
+          { id: 'a2', name: 'Athlete Two', kind: 'kid', archived: false },
+          { id: 'a3', name: 'The Parent', kind: 'adult', archived: false },
+        ],
+        // entries keyed by athlete+day. `slot` models a natural-key arbiter (the weigh-in day index).
+        entries: {
+          'a1|2026-10-22': [
+            { id: 'e1', title: 'Bodyweight', detail: '112.4 lb · 6:41 PM', slot: 'bw' },
+            { id: 'e2', title: 'Push-Ups', detail: '3 sets · 15, 12, 10' },
+            {
+              id: 'e3',
+              title: 'Overhead Shoulder Press',
+              detail: '3 × 8 @ 65 lb · 8 @ 65 lb · 6 @ 65 lb',
+            },
+            {
+              id: 'e4',
+              title: 'Single-Leg Hip Thrusts',
+              detail: '3 × 10 per side · prescribed 3 × 10 per side',
+            },
+            { id: 'e5', title: 'Rice bucket', detail: 'Done' },
+            { id: 'e6', title: 'Practice', detail: '90 min' },
+          ],
+          'a1|2026-10-21': [
+            { id: 'e7', title: 'Bodyweight', detail: '112.8 lb · 6:50 PM', slot: 'bw' },
+            { id: 'e8', title: 'Pull-Up', detail: '4 sets · 6, 5, 5, 4' },
+          ],
+          'a2|2026-10-22': [{ id: 'e9', title: 'Box Jump', detail: '3 × 5 @ 24 in' }],
+        },
+        hidden: {}, // athlete|day → [{ at, label, items:[entry] }]
+        restoreMsg: null,
+        programs: [
+          {
+            id: 'b1',
+            name: 'Youth Daily Program',
+            archived: false,
+            days: {
+              'Day A': [
+                rx('Push-Ups'),
+                rx('Pull-Up'),
+                rx('Leg Raises'),
+                rx('V-Sit Crunches'),
+                rx('Box Jump'),
+                rx('Inverted Rows'),
+                rx('Single-Leg Hip Thrusts', 3, '10 per side'),
+              ],
+              'Day B': [
+                rx('Push-Ups'),
+                rx('Pull-Up'),
+                rx('Leg Raises'),
+                rx('V-Sit Crunches'),
+                rx('KB Swings'),
+                rx('Single-Leg Hip Thrusts', 3, '10 per side'),
+              ],
+            },
+          },
+          {
+            id: 'b2',
+            name: 'Off-season S&C',
+            archived: false,
+            days: {
+              'Strength A': [
+                rx('Back Squat', 4, '5', { a1: '95 lb', a2: '75 lb' }),
+                rx('BB Bench', 3, '8', { a1: '65 lb', a2: '55 lb' }),
+                rx('Romanian Deadlift', 3, '8', { a1: '85 lb' }),
+              ],
+            },
+          },
+          {
+            id: 'b3',
+            name: 'Summer S&C',
+            archived: true,
+            days: { 'Strength A': [rx('Trap-Bar Deadlift', 3, '5', { a1: '115 lb' })] },
+          },
+        ],
+        assignments: [
+          { athlete: 'a1', block: 'b3', from: '2026-06-01', to: '2026-08-31' },
+          { athlete: 'a1', block: 'b1', from: '2026-09-01', to: null },
+          { athlete: 'a1', block: 'b2', from: '2026-10-01', to: null },
+          { athlete: 'a2', block: 'b1', from: '2026-09-01', to: null },
+          { athlete: 'a2', block: 'b2', from: '2026-10-01', to: null },
+        ],
+        householdMovements: [
+          { name: 'Bulgarian Split Squats', uses: 2, near: 'Bulgarian Split Squat' },
+          { name: 'RDL', uses: 1, near: 'Romanian Deadlift' },
+        ],
+        clone: null,
+        form: { movement: null },
+        histDate: '2026-07-15',
+        archivedOpen: false,
+        flash: null,
+      };
+    }
+    function rx(name, sets, reps, loads) {
+      return {
+        id: 'p' + Math.random().toString(36).slice(2, 8),
+        name: name,
+        sets: sets || null,
+        reps: reps || null,
+        loads: loads || {},
+      };
+    }
+
+    var S = load() || fresh();
+    function load() {
+      try {
+        var raw = localStorage.getItem('crud1-proto');
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    function save() {
+      try {
+        localStorage.setItem('crud1-proto', JSON.stringify(S));
+      } catch (e) {}
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function athlete(id) {
+      return S.athletes.find(function (a) {
+        return a.id === id;
+      });
+    }
+    function program(id) {
+      return S.programs.find(function (p) {
+        return p.id === id;
+      });
+    }
+    function fmtDay(iso, long) {
+      var d = new Date(iso + 'T12:00:00');
+      return d.toLocaleDateString(
+        'en-US',
+        long
+          ? { weekday: 'long', month: 'long', day: 'numeric' }
+          : { month: 'short', day: 'numeric' },
+      );
+    }
+    function shift(iso, n) {
+      var d = new Date(iso + 'T12:00:00');
+      d.setDate(d.getDate() + n);
+      return d.toISOString().slice(0, 10);
+    }
+    function nowLabel() {
+      return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    function announce(msg) {
+      // The region is mounted at load and only its text changes (saved-announcer.tsx idiom).
+      var live = document.getElementById('live');
+      live.textContent = '';
+      setTimeout(function () {
+        live.textContent = msg;
+      }, 30);
+    }
+    function go(route) {
+      S.route = route;
+      S.restoreMsg = route.keepMsg ? S.restoreMsg : null;
+      save();
+      render();
+      var h = document.querySelector('#app h1');
+      if (h) {
+        h.setAttribute('tabindex', '-1');
+        h.focus({ preventScroll: true });
+      }
+      document.getElementById('device').scrollIntoView({ block: 'start' });
+    }
+    function activeAssignments(aid, onDay) {
+      var day = onDay || TODAY;
+      return S.assignments.filter(function (x) {
+        return x.athlete === aid && x.from <= day && (!x.to || x.to >= day);
+      });
+    }
+
+    // ── screens ──────────────────────────────────────────────────────────────
+    var SCREENS = [
+      ['picker', 'PROF-1 · Picker + Add athlete tile'],
+      ['add', 'PROF-1 · Add an athlete'],
+      ['edit', 'PROF-1 · Edit an athlete'],
+      ['settings', 'PROF-1 · Household settings (Q1)'],
+      ['del', 'PROF-1 · Delete an athlete'],
+      ['day', 'V1-9b · Athlete day: delete + Restore'],
+      ['day-slot', 'V1-9b · Restore refused (slot taken)'],
+      ['day-clear', 'V1-9b · Clear a day'],
+      ['log', 'PICK-1/2 · Log: pick a movement'],
+      ['program', 'V1-22 · Edit the program'],
+      ['programs', 'RETIRE-1 · Household programs'],
+      ['clone', 'CLONE-1 · Copy and move athletes'],
+      ['history', 'HIST-1 · Program on a past date'],
+      ['movements', 'MOV-1 (unfiled) · Household movements'],
+    ];
+    var NOTES = {
+      picker: [
+        'Dashed tile is the add affordance (maintainer, 2026-09-28). It sits LAST in the list, where the eye already is.',
+        'Q1 variant "Edit toggle on /p" adds an Edit button that reveals per-tile Edit. Variant "in Settings" keeps tiles clean and puts athlete management behind the Settings link at the bottom.',
+        'Archived athletes are not listed. Is "Settings" findable enough for a parent who wants one back?',
+      ],
+      add: [
+        'Two fields only: name and kid/adult. Avatar, birthdate and PIN exist as columns and are deliberately absent (PROF-1 scope).',
+        'Error copy for a blank name is shown on submit, not while typing.',
+        "Lands on the new athlete's day page, not back on the picker: first value is logging.",
+      ],
+      edit: [
+        'Rename + kind. In the Settings variant this screen has no delete at all.',
+        'Archive is reversible and offered BEFORE delete (PROF-1 row).',
+      ],
+      settings: [
+        'Q1 recommendation: delete lives here — rare, irreversible, step-up gated (Beta 1).',
+        'Archived athletes get a restore path here (acceptance 5).',
+        'Q6 (owner-only after AUTH-1) is not shown.',
+      ],
+      del: [
+        'Step 1 offers archive. Step 2 is type-the-name. Step 3 is the step-up stand-in (Clerk reverification, Beta 1).',
+        'Copy states what goes: every entry, weigh-ins included; what stays: a ledger line with no values.',
+        'There is no undo after step 3 — OPS-3 restore is the only path, and it is unrehearsed.',
+      ],
+      day: [
+        "Tap Delete: the row leaves, focus moves to the next row's Delete (or to Restore if it was last), and the live region announces it.",
+        'Hidden row is NOT timed and survives a reload and a day change — try ‹ and › then come back.',
+        'Delete twice before restoring: the count goes to 2, each restorable separately.',
+        'A parent on any device sees the same Hidden row: there is no per-person hide (ADR 0008 decision 1).',
+        'Turn on "Measure widths" at 360 to read the row\'s real content width.',
+      ],
+      'day-slot': [
+        'Pre-set: the weigh-in was hidden and a new one logged. Tap Restore on the hidden weigh-in.',
+        'The refusal names what holds the slot and the way out. Never a raw error, never silent.',
+      ],
+      'day-clear': [
+        'Clear this day hides every entry in ONE event; Restore all brings it back as one.',
+        'The Clear button stays disabled until the field says delete.',
+        'Pre-set: a new weigh-in was logged after clearing, so Restore all is partial — read the report.',
+      ],
+      log: [
+        "Tap the Movement field: today's program first, then recent, then the catalog by group (Q2: hand-grouped, isolation split).",
+        'Type "bulgarain split squats" — PICK-2 offers the catalog row and a spelling fix; "Use what I typed" stays one tap.',
+        'Wrestling rows are tagged "proposed": they exist only after chunk 0\'s human pass and CAT-2.',
+        'No number arrives prefilled after a pick (PICK-1 acceptance 2).',
+      ],
+      program: [
+        'V1-22 chunk 4 (values) and 6 (add/remove/reorder) on one screen. Loads are per athlete, verbatim text.',
+        'Each section names its block (V1-22 contract rule).',
+        '"Make a copy to change it" is CLONE-1\'s entry point; editing in place is still allowed.',
+      ],
+      programs: [
+        'Q5: a household list, reached from the picker. Today authoring is per athlete at /p/<id>/program.',
+        'Q3: archive a program someone is on — switch the variant to compare "close" vs "refuse".',
+        'Archived programs stay one tap away and restorable.',
+      ],
+      clone: [
+        'Step 1 names the copy; step 2 edits it; step 3 asks who moves, default none (decided 2026-10-07).',
+        'Each athlete row shows what they are on now and what happens to it.',
+        'Nothing is deleted: the summary says history stays.',
+      ],
+      history: [
+        'Q4: switch the variant between a date on the program page and a timeline.',
+        'Past days show the prescription as snapshotted, not as it reads today.',
+      ],
+      movements: [
+        'NOT A ROW YET — the gap ADR 0008 leaves "by decision". Shown so the panel can argue whether merge is the answer.',
+        'Merge re-points entries to the catalog movement; the household row then needs the three-part lift at schema.ts to go.',
+      ],
+    };
+
+    function screenToRoute(key) {
+      switch (key) {
+        case 'picker':
+          return { name: 'picker' };
+        case 'add':
+          return { name: 'add' };
+        case 'edit':
+          return { name: 'edit', id: 'a2' };
+        case 'settings':
+          return { name: 'settings' };
+        case 'del':
+          return { name: 'del', id: 'a2', step: 1 };
+        case 'day':
+          return { name: 'day', id: 'a1', day: TODAY };
+        case 'day-slot':
+          presetSlot();
+          return { name: 'day', id: 'a1', day: TODAY, openHidden: true };
+        case 'day-clear':
+          return { name: 'day', id: 'a1', day: TODAY, clear: true };
+        case 'log':
+          return { name: 'log', id: 'a1' };
+        case 'program':
+          return { name: 'program', id: 'a1' };
+        case 'programs':
+          return { name: 'programs' };
+        case 'clone':
+          return { name: 'clone', step: 1 };
+        case 'history':
+          return { name: 'history', id: 'a1' };
+        case 'movements':
+          return { name: 'movements' };
+      }
+    }
+    function routeKey(r) {
+      if (r.name === 'day') return 'day';
+      return r.name;
+    }
+    function presetSlot() {
+      var k = 'a1|' + TODAY;
+      var list = S.entries[k] || [];
+      var bw = list.find(function (e) {
+        return e.slot === 'bw';
+      });
+      if (bw) {
+        S.entries[k] = list.filter(function (e) {
+          return e !== bw;
+        });
+        S.hidden[k] = (S.hidden[k] || []).concat([{ at: '6:44 PM', items: [bw] }]);
+      }
+      if (
+        !(S.entries[k] || []).some(function (e) {
+          return e.slot === 'bw';
+        })
+      ) {
+        S.entries[k].unshift({
+          id: 'e' + Date.now(),
+          title: 'Bodyweight',
+          detail: '112.0 lb · 6:52 PM',
+          slot: 'bw',
+        });
+      }
+    }
+
+    function render() {
+      var r = S.route;
+      var app = document.getElementById('app');
+      var html = '';
+      var path = '/p';
+      switch (r.name) {
+        case 'picker':
+          html = vPicker();
+          path = '/p';
+          break;
+        case 'add':
+          html = vAdd();
+          path = '/p/new';
+          break;
+        case 'edit':
+          html = vEdit(r);
+          path = '/p/' + r.id + '/edit';
+          break;
+        case 'settings':
+          html = vSettings();
+          path = '/settings';
+          break;
+        case 'del':
+          html = vDel(r);
+          path = '/settings/athletes/' + r.id + '/delete';
+          break;
+        case 'day':
+          html = vDay(r);
+          path = '/p/' + r.id + (r.day === TODAY ? '' : '?day=' + r.day);
+          break;
+        case 'log':
+          html = vLog(r);
+          path = '/p/' + r.id + ' (log strength)';
+          break;
+        case 'program':
+          html = vProgram(r);
+          path = '/p/' + r.id + '/program';
+          break;
+        case 'programs':
+          html = vPrograms();
+          path = '/programs';
+          break;
+        case 'clone':
+          html = vClone(r);
+          path = '/programs/b1/copy';
+          break;
+        case 'history':
+          html = vHistory(r);
+          path = '/p/' + r.id + '/program?on=' + S.histDate;
+          break;
+        case 'movements':
+          html = vMovements();
+          path = '/settings/movements';
+          break;
+      }
+      app.innerHTML = html;
+      document.getElementById('cap-route').textContent = path;
+      var key = routeKey(r);
+      var sel = document.getElementById('screen-select');
+      if (
+        [].some.call(sel.options, function (o) {
+          return o.value === key;
+        })
+      )
+        sel.value = key;
+      var n =
+        NOTES[
+          r.name === 'day' ? (r.clear ? 'day-clear' : r.openHidden ? 'day-slot' : 'day') : key
+        ] || [];
+      document.getElementById('notes').innerHTML =
+        '<h2>Review this screen</h2><ul>' +
+        n
+          .map(function (t) {
+            return '<li>' + esc(t) + '</li>';
+          })
+          .join('') +
+        '</ul>';
+      measure();
+      if (r.clear) {
+        r.clear = false;
+        openClear();
+      }
+    }
+
+    // PROF-1 — picker
+    function vPicker() {
+      var v = document.getElementById('v-delete').value;
+      var live = S.athletes.filter(function (a) {
+        return !a.archived;
+      });
+      var tiles = live
+        .map(function (a) {
+          var tile =
+            '<button type="button" class="tile" data-go="day" data-id="' +
+            a.id +
+            '" data-m>' +
+            '<span class="avatar" aria-hidden="true">' +
+            esc(a.name.charAt(0)) +
+            '</span>' +
+            '<span class="stack-xs" style="gap:2px"><span class="name">' +
+            esc(a.name) +
+            '</span><span class="kind">' +
+            esc(a.kind) +
+            '</span></span></button>';
+          if (v === 'picker' && S.editMode) {
+            return (
+              '<li class="tile-wrap">' +
+              tile +
+              '<button type="button" class="btn outline tile-edit" data-go="edit" data-id="' +
+              a.id +
+              '" aria-label="Edit ' +
+              esc(a.name) +
+              '">Edit</button></li>'
+            );
+          }
+          return '<li>' + tile + '</li>';
+        })
+        .join('');
+      var add =
+        '<li><button type="button" class="tile add" data-go="add" data-m>' +
+        '<span class="avatar" aria-hidden="true">+</span>' +
+        '<span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A kid, or yourself</span></span></button></li>';
+      return (
+        '<header class="stack-xs">' +
+        '<div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h1>Who’s logging today?</h1>' +
+        (v === 'picker'
+          ? '<button type="button" class="btn ghost" id="edit-toggle" aria-pressed="' +
+            S.editMode +
+            '">' +
+            (S.editMode ? 'Done' : 'Edit') +
+            '</button>'
+          : '') +
+        '</div><p class="muted" style="margin:0">Pick a profile to start logging.</p></header>' +
+        '<ul class="plain stack">' +
+        tiles +
+        add +
+        '</ul>' +
+        '<nav aria-label="Household" class="stack-xs" style="margin-top:16px">' +
+        '<button type="button" class="textlink" data-go="programs">→ Programs</button>' +
+        '<button type="button" class="textlink" data-go="settings">→ Household settings</button>' +
+        '</nav>'
+      );
+    }
+
+    function vAdd() {
+      return (
+        '<button type="button" class="back" data-go="picker">← All athletes</button>' +
+        '<h1>Add an athlete</h1>' +
+        '<form class="stack" id="add-form" novalidate>' +
+        '<label class="field" for="add-name"><span>Name</span><input class="input" id="add-name" name="name" autocomplete="off" maxlength="40" /><span class="hint">What shows on their tile. You can change it later.</span><span class="err" id="add-err" hidden>Enter a name.</span></label>' +
+        '<fieldset><legend>Who is this?</legend><div class="seg">' +
+        '<label for="k-kid"><input type="radio" id="k-kid" name="kind" value="kid" checked /> A kid</label>' +
+        '<label for="k-adult"><input type="radio" id="k-adult" name="kind" value="adult" /> An adult</label>' +
+        '</div></fieldset>' +
+        '<button class="btn full" type="submit">Add athlete</button>' +
+        '</form>'
+      );
+    }
+
+    function vEdit(r) {
+      var a = athlete(r.id);
+      var v = document.getElementById('v-delete').value;
+      return (
+        '<button type="button" class="back" data-go="' +
+        (v === 'picker' ? 'picker' : 'settings') +
+        '">← ' +
+        (v === 'picker' ? 'All athletes' : 'Household settings') +
+        '</button>' +
+        '<h1>Edit ' +
+        esc(a.name) +
+        '</h1>' +
+        '<form class="stack" id="edit-form" data-id="' +
+        a.id +
+        '" novalidate>' +
+        '<label class="field" for="edit-name"><span>Name</span><input class="input" id="edit-name" value="' +
+        esc(a.name) +
+        '" maxlength="40" /></label>' +
+        '<fieldset><legend>Who is this?</legend><div class="seg">' +
+        '<label for="ek-kid"><input type="radio" id="ek-kid" name="ekind" value="kid"' +
+        (a.kind === 'kid' ? ' checked' : '') +
+        ' /> A kid</label>' +
+        '<label for="ek-adult"><input type="radio" id="ek-adult" name="ekind" value="adult"' +
+        (a.kind === 'adult' ? ' checked' : '') +
+        ' /> An adult</label>' +
+        '</div></fieldset>' +
+        '<button class="btn full" type="submit">Save</button></form>' +
+        (v === 'picker'
+          ? '<section class="stack-sm" aria-labelledby="danger-h" style="border-top:1px solid var(--border);padding-top:16px"><h2 id="danger-h" class="small" style="font-size:14px">Stop tracking ' +
+            esc(a.name) +
+            '</h2>' +
+            '<button type="button" class="btn outline full" data-act="archive-athlete" data-id="' +
+            a.id +
+            '">Archive — hide, keep history</button>' +
+            '<button type="button" class="btn danger-ghost full" data-go="del" data-id="' +
+            a.id +
+            '">Delete permanently…</button></section>'
+          : '<p class="hint">To archive or delete an athlete, use Household settings.</p>')
+      );
+    }
+
+    function vSettings() {
+      var live = S.athletes.filter(function (a) {
+        return !a.archived;
+      });
+      var arch = S.athletes.filter(function (a) {
+        return a.archived;
+      });
+      return (
+        '<button type="button" class="back" data-go="picker">← All athletes</button>' +
+        '<h1>Household settings</h1>' +
+        '<section class="stack-sm" aria-labelledby="ath-h"><h2 id="ath-h">Athletes</h2><ul class="plain stack-sm">' +
+        live
+          .map(function (a) {
+            return (
+              '<li class="card stack-sm" style="padding:12px 16px"><div class="row" style="justify-content:space-between"><span><span style="font-weight:500">' +
+              esc(a.name) +
+              '</span> <span class="muted small" style="text-transform:capitalize">· ' +
+              a.kind +
+              '</span></span></div>' +
+              '<div class="row"><button type="button" class="btn outline" data-go="edit" data-id="' +
+              a.id +
+              '">Edit</button>' +
+              '<button type="button" class="btn outline" data-act="archive-athlete" data-id="' +
+              a.id +
+              '">Archive</button>' +
+              '<button type="button" class="btn danger-ghost" data-go="del" data-id="' +
+              a.id +
+              '">Delete…</button></div></li>'
+            );
+          })
+          .join('') +
+        '</ul></section>' +
+        '<section class="stack-sm" aria-labelledby="arch-h"><h2 id="arch-h">Archived athletes</h2>' +
+        (arch.length
+          ? '<ul class="plain stack-sm">' +
+            arch
+              .map(function (a) {
+                return (
+                  '<li class="row" style="justify-content:space-between;border:1px dashed var(--border);border-radius:10px;padding:4px 4px 4px 16px"><span>' +
+                  esc(a.name) +
+                  ' <span class="muted small">· history kept</span></span><button type="button" class="btn ghost" data-act="unarchive" data-id="' +
+                  a.id +
+                  '">Restore</button></li>'
+                );
+              })
+              .join('') +
+            '</ul>'
+          : '<p class="muted small" style="margin:0">None. Archiving hides an athlete from the picker and keeps everything they logged.</p>') +
+        '</section>' +
+        '<section class="stack-sm" aria-labelledby="mv-h"><h2 id="mv-h">Movements</h2><button type="button" class="textlink" data-go="movements">→ Movements your household added (' +
+        S.householdMovements.length +
+        ')</button></section>'
+      );
+    }
+
+    function vDel(r) {
+      if (r.step === 4)
+        return (
+          '<h1>Deleted</h1><p>' +
+          esc(r.deleted) +
+          ' and everything they logged is gone.</p><button type="button" class="btn full" data-go="picker">Back to athletes</button>'
+        );
+      var a = athlete(r.id);
+      var back =
+        '<button type="button" class="back" data-go="' +
+        (document.getElementById('v-delete').value === 'picker' ? 'edit' : 'settings') +
+        '" data-id="' +
+        a.id +
+        '">← Back</button>';
+      if (r.step === 1) {
+        return (
+          back +
+          '<h1>Delete ' +
+          esc(a.name) +
+          '?</h1>' +
+          '<div class="card stack-sm"><h2 style="font-size:16px">Archive instead?</h2><p class="small" style="margin:0">Archiving hides ' +
+          esc(a.name) +
+          ' from the picker and keeps every entry. You can restore them any time from Household settings.</p>' +
+          '<button type="button" class="btn full" data-act="archive-athlete" data-id="' +
+          a.id +
+          '">Archive ' +
+          esc(a.name) +
+          '</button></div>' +
+          '<div class="stack-sm"><h2 style="font-size:16px">Delete permanently</h2><p class="small" style="margin:0">Removes ' +
+          esc(a.name) +
+          ' and everything they logged: weigh-ins, sets, check-ins, including anything already hidden. <strong>This cannot be undone.</strong> We keep one line saying a deletion happened, with no values.</p>' +
+          '<button type="button" class="btn danger-ghost full" data-act="del-step" data-id="' +
+          a.id +
+          '" data-step="2">Continue to delete…</button></div>'
+        );
+      }
+      if (r.step === 2) {
+        return (
+          back +
+          '<h1>Delete ' +
+          esc(a.name) +
+          '</h1>' +
+          '<form class="stack" id="del-form" data-id="' +
+          a.id +
+          '" novalidate>' +
+          '<label class="field" for="del-name"><span>Type <strong>' +
+          esc(a.name) +
+          '</strong> to confirm</span><input class="input" id="del-name" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>' +
+          '<button class="btn danger full" type="submit" id="del-go" disabled>Delete ' +
+          esc(a.name) +
+          ' permanently</button></form>'
+        );
+      }
+      if (r.step === 3) {
+        return (
+          back +
+          '<h1>Confirm it’s you</h1><p class="proto-flag">Stand-in for Clerk reverification (Beta 1 step-up)</p>' +
+          '<p class="small" style="margin:0">Deleting an athlete needs the account owner to sign in again on this device.</p>' +
+          '<button type="button" class="btn outline full" data-act="del-final" data-id="' +
+          a.id +
+          '">Continue with Google</button>'
+        );
+      }
+      return (
+        '<h1>Deleted</h1><p>' +
+        esc(r.deleted) +
+        ' and everything they logged is gone.</p><button type="button" class="btn full" data-go="picker">Back to athletes</button>'
+      );
+    }
+
+    // V1-9b — the day page
+    function vDay(r) {
+      var a = athlete(r.id);
+      var k = r.id + '|' + r.day;
+      var list = S.entries[k] || [];
+      var hid = S.hidden[k] || [];
+      var hiddenCount = hid.reduce(function (n, ev) {
+        return n + ev.items.length;
+      }, 0);
+      var items = list
+        .map(function (e, i) {
+          return (
+            '<li class="entry" data-m id="row-' +
+            e.id +
+            '"><div class="body"><div class="title">' +
+            esc(e.title) +
+            '</div><div class="detail tabular">' +
+            esc(e.detail) +
+            '</div></div>' +
+            '<button type="button" class="btn ghost del" data-act="hide" data-k="' +
+            k +
+            '" data-eid="' +
+            e.id +
+            '" aria-label="Delete ' +
+            esc(e.title) +
+            '" data-m>Delete</button></li>'
+          );
+        })
+        .join('');
+      var hiddenHtml = '';
+      if (hiddenCount) {
+        hiddenHtml =
+          '<li class="hidden-row"><div class="head"><span class="small muted" id="hid-label">Hidden on this day (' +
+          hiddenCount +
+          ')</span>' +
+          '<button type="button" class="btn ghost" id="hid-toggle" aria-expanded="' +
+          !!r.openHidden +
+          '" aria-controls="hid-list" data-act="toggle-hidden">' +
+          (r.openHidden ? 'Close' : 'Restore…') +
+          '</button></div>' +
+          '<div class="hidden-list" id="hid-list"' +
+          (r.openHidden ? '' : ' hidden') +
+          '>' +
+          (S.restoreMsg ? S.restoreMsg : '') +
+          hid
+            .map(function (ev, ei) {
+              if (ev.items.length > 1) {
+                return (
+                  '<div class="hidden-item"><div class="body"><div style="font-weight:500">Cleared this day</div><div class="detail small muted">' +
+                  ev.items.length +
+                  ' entries · ' +
+                  esc(ev.at) +
+                  '</div></div>' +
+                  '<button type="button" class="btn outline" data-act="restore" data-k="' +
+                  k +
+                  '" data-ei="' +
+                  ei +
+                  '">Restore all</button></div>'
+                );
+              }
+              var e = ev.items[0];
+              return (
+                '<div class="hidden-item"><div class="body"><div style="font-weight:500">' +
+                esc(e.title) +
+                '</div><div class="detail small muted">' +
+                esc(e.detail) +
+                ' · hidden ' +
+                esc(ev.at) +
+                '</div></div>' +
+                '<button type="button" class="btn outline" data-act="restore" data-k="' +
+                k +
+                '" data-ei="' +
+                ei +
+                '" aria-label="Restore ' +
+                esc(e.title) +
+                '">Restore</button></div>'
+              );
+            })
+            .join('') +
+          '</div></li>';
+      }
+      var hasBw = list.some(function (e) {
+        return e.slot === 'bw';
+      });
+      return (
+        '<header class="stack-sm"><button type="button" class="back" data-go="picker">← All athletes</button><h1>' +
+        esc(a.name) +
+        '</h1>' +
+        '<nav class="daynav" aria-label="Day"><button type="button" class="btn outline" data-act="day" data-n="-1" aria-label="Previous day">‹</button>' +
+        '<span class="day">' +
+        (r.day === TODAY ? 'Today · ' : '') +
+        fmtDay(r.day, true) +
+        '</span>' +
+        '<button type="button" class="btn outline" data-act="day" data-n="1" aria-label="Next day"' +
+        (r.day >= TODAY ? ' disabled' : '') +
+        '>›</button></nav></header>' +
+        '<section class="stack-sm" aria-labelledby="bw-h"><h2 id="bw-h">Bodyweight</h2>' +
+        (hasBw
+          ? '<p class="muted small" style="margin:0">Logged today. Change it from the list below.</p>'
+          : '<form class="row" id="bw-form" data-k="' +
+            k +
+            '" style="flex-wrap:nowrap"><label class="sr-only" for="bw-in">Bodyweight in pounds</label><input class="input" id="bw-in" inputmode="decimal" placeholder="lb" style="max-width:140px" /><button class="btn" type="submit">Log</button></form>') +
+        '</section>' +
+        '<section class="stack-sm" aria-labelledby="ent-h"><div class="row" style="justify-content:space-between"><h2 id="ent-h">Logged entries</h2></div>' +
+        (list.length || hiddenCount
+          ? '<ul class="plain stack-sm" id="entries">' + items + hiddenHtml + '</ul>'
+          : '<p class="muted small" style="margin:0">Nothing logged on ' +
+            fmtDay(r.day) +
+            '.</p>') +
+        (list.length > 1
+          ? '<button type="button" class="textlink" data-act="clear-open">Clear this day…</button>'
+          : '') +
+        '</section>' +
+        '<nav aria-label="' +
+        esc(a.name) +
+        ' setup" class="stack-xs"><button type="button" class="textlink" data-go="log" data-id="' +
+        a.id +
+        '">→ Log strength (picker demo)</button>' +
+        '<button type="button" class="textlink" data-go="program" data-id="' +
+        a.id +
+        '">→ Edit ' +
+        esc(a.name) +
+        '’s program</button>' +
+        '<button type="button" class="textlink">→ Edit ' +
+        esc(a.name) +
+        '’s routine</button></nav>'
+      );
+    }
+
+    function openClear() {
+      var r = S.route;
+      var k = r.id + '|' + r.day;
+      var n = (S.entries[k] || []).length;
+      var d = document.getElementById('dlg');
+      d.innerHTML =
+        '<form class="sheet-in" id="clear-form" data-k="' +
+        k +
+        '" method="dialog"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Clear ' +
+        fmtDay(r.day, true) +
+        '?</h2></div>' +
+        '<div class="sheet-body"><p style="margin:0">This hides all <strong>' +
+        n +
+        ' entries</strong> for ' +
+        esc(athlete(r.id).name) +
+        ' on this day, for everyone in the household. You can restore them together from <em>Hidden on this day</em>.</p>' +
+        '<label class="field" for="clear-in"><span>Type <strong>delete</strong> to confirm</span><input class="input" id="clear-in" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>' +
+        '<div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn danger" id="clear-go" disabled>Clear day</button></div></div></form>';
+      d.showModal();
+      document.getElementById('clear-in').focus();
+    }
+
+    // PICK-1 / PICK-2
+    function vLog(r) {
+      var a = athlete(r.id);
+      var m = S.form.movement;
+      return (
+        '<button type="button" class="back" data-go="day" data-id="' +
+        a.id +
+        '">← ' +
+        esc(a.name) +
+        '</button><h1>Log strength</h1>' +
+        '<fieldset class="card stack" data-m><legend class="sr-only">Movement 1</legend>' +
+        '<div class="field"><span id="mv-label">Movement</span><button type="button" class="movement-btn" data-act="open-picker" aria-labelledby="mv-label mv-val" aria-haspopup="dialog"><span id="mv-val" class="' +
+        (m ? '' : 'placeholder') +
+        '">' +
+        esc(m ? m.name : 'Choose a movement') +
+        '</span><span aria-hidden="true">▾</span></button>' +
+        (m && m.created
+          ? '<span class="hint">New movement — only your household sees it.</span>'
+          : '') +
+        '</div>' +
+        '<div class="setrow" data-m><span class="idx">1</span><label class="sr-only" for="r1">Reps, set 1</label><input class="input num" id="r1" inputmode="numeric" placeholder="reps" data-m /><span aria-hidden="true">×</span><label class="sr-only" for="w1">Weight, set 1</label><input class="input num" id="w1" inputmode="decimal" placeholder="weight" data-m /><span class="small muted">lb</span></div>' +
+        '<button type="button" class="btn outline" style="width:fit-content">+ Add set</button></fieldset>' +
+        '<button type="button" class="btn outline" style="width:fit-content">+ Add movement</button>' +
+        '<button type="button" class="btn full">Save</button>'
+      );
+    }
+
+    function openPicker() {
+      var d = document.getElementById('dlg');
+      d.innerHTML =
+        '<div class="sheet-in"><div class="sheet-head"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2 id="dlg-title" style="margin:0;font-size:18px">Choose a movement</h2><button type="button" class="btn ghost" data-act="dlg-close">Close</button></div>' +
+        '<label class="sr-only" for="pk-q">Search movements</label><input class="input" id="pk-q" type="search" placeholder="Search or type a new name" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="pk-list" aria-autocomplete="list" /></div>' +
+        '<div class="sheet-body" id="pk-list" role="listbox" aria-label="Movements"></div></div>';
+      d.showModal();
+      drawPicker('');
+      document.getElementById('pk-q').focus();
+    }
+    function lev(a, b) {
+      var m = [];
+      for (var i = 0; i <= b.length; i++) m[i] = [i];
+      for (var j = 0; j <= a.length; j++) m[0][j] = j;
+      for (i = 1; i <= b.length; i++)
+        for (j = 1; j <= a.length; j++)
+          m[i][j] =
+            b[i - 1] === a[j - 1]
+              ? m[i - 1][j - 1]
+              : Math.min(m[i - 1][j - 1] + 1, m[i][j - 1] + 1, m[i - 1][j] + 1);
+      return m[b.length][a.length];
+    }
+    function norm(s) {
+      return s
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, ' ')
+        .replace(/s\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    function opt(name, tag) {
+      return (
+        '<button type="button" role="option" class="opt" data-act="pick" data-name="' +
+        esc(name) +
+        '"><span>' +
+        esc(name) +
+        '</span>' +
+        (tag ? '<span class="tag">' + esc(tag) + '</span>' : '') +
+        '</button>'
+      );
+    }
+    function drawPicker(q) {
+      var list = document.getElementById('pk-list');
+      var all = [];
+      Object.keys(CATALOG).forEach(function (g) {
+        CATALOG[g].forEach(function (n) {
+          all.push({ name: n, group: g });
+        });
+      });
+      S.householdMovements.forEach(function (h) {
+        all.push({ name: h.name, group: 'Added by your household', hh: true });
+      });
+      var html = '';
+      if (!q) {
+        var prog = program('b1').days['Day A'].map(function (p) {
+          return p.name;
+        });
+        html +=
+          '<div><div class="group-label">Today’s program · Day A</div>' +
+          prog
+            .map(function (n) {
+              return opt(n);
+            })
+            .join('') +
+          '</div>';
+        html +=
+          '<div><div class="group-label">Recent</div>' +
+          ['Overhead Shoulder Press', 'Back Squat']
+            .map(function (n) {
+              return opt(n);
+            })
+            .join('') +
+          '</div>';
+        Object.keys(CATALOG).forEach(function (g) {
+          html +=
+            '<div><div class="group-label">' +
+            g +
+            (PROPOSED[g] ? ' · proposed' : '') +
+            '</div>' +
+            CATALOG[g]
+              .map(function (n) {
+                return opt(n, PROPOSED[g] ? 'pending review' : '');
+              })
+              .join('') +
+            '</div>';
+        });
+        html +=
+          '<div><div class="group-label">Added by your household</div>' +
+          S.householdMovements
+            .map(function (h) {
+              return opt(h.name, 'household');
+            })
+            .join('') +
+          '</div>';
+        list.innerHTML = html;
+        return;
+      }
+      var nq = norm(q);
+      var hits = all.filter(function (x) {
+        return norm(x.name).indexOf(nq) !== -1;
+      });
+      var exact = all.some(function (x) {
+        return norm(x.name) === nq;
+      });
+      if (hits.length) {
+        html +=
+          '<div><div class="group-label">Matches</div>' +
+          hits
+            .map(function (x) {
+              return opt(x.name, x.hh ? 'household' : x.group);
+            })
+            .join('') +
+          '</div>';
+      }
+      if (!exact) {
+        // PICK-2: nearest catalog rows + spelling fixes, shown BEFORE create; never blocking.
+        var near = all
+          .filter(function (x) {
+            return !x.hh;
+          })
+          .map(function (x) {
+            return { x: x, d: lev(norm(x.name), nq) };
+          })
+          .filter(function (o) {
+            return o.d <= Math.max(3, Math.floor(nq.length / 4));
+          })
+          .sort(function (a, b) {
+            return a.d - b.d;
+          })
+          .slice(0, 2);
+        var fixes = [];
+        q.toLowerCase()
+          .split(/\s+/)
+          .forEach(function (w) {
+            if (!w || WORDS.indexOf(w) !== -1) return;
+            var best = WORDS.map(function (c) {
+              return { c: c, d: lev(c, w) };
+            }).sort(function (a, b) {
+              return a.d - b.d;
+            })[0];
+            if (best && best.d > 0 && best.d <= 2) fixes.push([w, best.c]);
+          });
+        if (near.length || fixes.length) {
+          html +=
+            '<div class="suggest" role="group" aria-label="Did you mean"><div class="group-label" style="margin:0">Did you mean</div>' +
+            near
+              .map(function (o) {
+                return opt(o.x.name, 'catalog');
+              })
+              .join('');
+          if (fixes.length) {
+            var fixed = q.toLowerCase();
+            fixes.forEach(function (f) {
+              fixed = fixed.replace(f[0], f[1]);
+            });
+            fixed = fixed.replace(/\b\w/g, function (c) {
+              return c.toUpperCase();
+            });
+            var known = all.find(function (x) {
+              return norm(x.name) === norm(fixed);
+            });
+            html +=
+              '<p class="small" style="margin:0">Spelling: ' +
+              fixes
+                .map(function (f) {
+                  return '<s>' + esc(f[0]) + '</s> → <strong>' + esc(f[1]) + '</strong>';
+                })
+                .join(', ') +
+              '</p>' +
+              (known
+                ? opt(known.name, known.hh ? 'household' : 'catalog')
+                : '<button type="button" role="option" class="opt" data-act="pick-new" data-name="' +
+                  esc(fixed) +
+                  '"><span>' +
+                  esc(fixed) +
+                  '</span><span class="tag">new · fixed spelling</span></button>');
+          }
+          html += '</div>';
+        }
+        html +=
+          '<button type="button" class="btn outline full" data-act="pick-new" data-name="' +
+          esc(q) +
+          '">Use “' +
+          esc(q) +
+          '” as typed</button><p class="hint" style="margin:0">Creates a new movement only your household sees.</p>';
+      }
+      list.innerHTML = html;
+    }
+
+    // V1-22 — program editor (+ CLONE-1 entry, HIST-1 date variant)
+    function blocksFor(aid) {
+      return activeAssignments(aid).map(function (x) {
+        return program(x.block);
+      });
+    }
+    function rxCard(p, blockId, day, idx, n, aid, readonly) {
+      var whoBlock = blockId === 'copy' ? S.clone.src : blockId;
+      var loads = S.athletes
+        .filter(function (a) {
+          return !a.archived && (p.loads[a.id] != null || !readonly);
+        })
+        .filter(function (a) {
+          return activeAssignments(a.id).some(function (x) {
+            return x.block === whoBlock;
+          });
+        })
+        .map(function (a) {
+          return readonly
+            ? '<li class="small">' + esc(a.name) + ': ' + esc(p.loads[a.id] || '—') + '</li>'
+            : '<label class="field" for="ld-' +
+                p.id +
+                a.id +
+                '"><span class="small" style="font-weight:400">' +
+                esc(a.name) +
+                '’s load</span><input class="input" id="ld-' +
+                p.id +
+                a.id +
+                '" value="' +
+                esc(p.loads[a.id] || '') +
+                '" placeholder="none" data-act="load" data-b="' +
+                blockId +
+                '" data-day="' +
+                esc(day) +
+                '" data-pid="' +
+                p.id +
+                '" data-aid="' +
+                a.id +
+                '" /></label>';
+        })
+        .join('');
+      if (readonly) {
+        return (
+          '<li class="rx"><div style="font-weight:500">' +
+          esc(p.name) +
+          '</div><div class="small muted">' +
+          (p.sets ? p.sets + ' × ' + esc(p.reps || '?') : 'Open — log what you did') +
+          '</div>' +
+          (loads ? '<ul class="plain">' + loads + '</ul>' : '') +
+          '</li>'
+        );
+      }
+      return (
+        '<li class="rx" data-m><div class="rx-head"><div style="font-weight:500;min-width:0">' +
+        esc(p.name) +
+        '</div>' +
+        '<div class="row" style="flex-wrap:nowrap;gap:4px"><button type="button" class="icon-btn" data-act="mv" data-d="-1" data-b="' +
+        blockId +
+        '" data-day="' +
+        esc(day) +
+        '" data-i="' +
+        idx +
+        '" aria-label="Move ' +
+        esc(p.name) +
+        ' up"' +
+        (idx === 0 ? ' disabled' : '') +
+        '>↑</button>' +
+        '<button type="button" class="icon-btn" data-act="mv" data-d="1" data-b="' +
+        blockId +
+        '" data-day="' +
+        esc(day) +
+        '" data-i="' +
+        idx +
+        '" aria-label="Move ' +
+        esc(p.name) +
+        ' down"' +
+        (idx === n - 1 ? ' disabled' : '') +
+        '>↓</button>' +
+        '<button type="button" class="icon-btn" data-act="rm" data-b="' +
+        blockId +
+        '" data-day="' +
+        esc(day) +
+        '" data-i="' +
+        idx +
+        '" aria-label="Remove ' +
+        esc(p.name) +
+        '">✕</button></div></div>' +
+        '<div class="rx-grid"><label class="field" for="s-' +
+        p.id +
+        '"><span class="small" style="font-weight:400">Sets</span><input class="input" id="s-' +
+        p.id +
+        '" inputmode="numeric" value="' +
+        (p.sets || '') +
+        '" placeholder="open" /></label>' +
+        '<label class="field" for="t-' +
+        p.id +
+        '"><span class="small" style="font-weight:400">Reps</span><input class="input" id="t-' +
+        p.id +
+        '" value="' +
+        esc(p.reps || '') +
+        '" placeholder="open" /></label></div>' +
+        (loads
+          ? '<details class="collapse"' +
+            (Object.keys(p.loads).some(function (k) {
+              return p.loads[k];
+            })
+              ? ' open'
+              : '') +
+            '><summary>Loads per athlete</summary><div class="stack-sm">' +
+            loads +
+            '</div></details>'
+          : '') +
+        '</li>'
+      );
+    }
+    function vProgram(r) {
+      var a = athlete(r.id);
+      var blocks = blocksFor(r.id);
+      var html =
+        '<header class="stack-sm"><button type="button" class="back" data-go="day" data-id="' +
+        a.id +
+        '">← ' +
+        esc(a.name) +
+        '</button><h1>' +
+        esc(a.name) +
+        '’s program</h1>' +
+        '<p class="small muted" style="margin:0">Blank sets or reps mean open: log what you did. Loads are typed by a coach or parent, exactly as written.</p></header>';
+      html += blocks
+        .map(function (b) {
+          var since = activeAssignments(r.id).find(function (x) {
+            return x.block === b.id;
+          }).from;
+          return (
+            '<section class="stack" aria-labelledby="blk-' +
+            b.id +
+            '"><div class="stack-xs"><h2 id="blk-' +
+            b.id +
+            '">' +
+            esc(b.name) +
+            '</h2><p class="small muted" style="margin:0">Since ' +
+            fmtDay(since) +
+            ' · also ' +
+            S.assignments
+              .filter(function (x) {
+                return x.block === b.id && !x.to && x.athlete !== r.id;
+              })
+              .map(function (x) {
+                return esc(athlete(x.athlete).name);
+              })
+              .join(', ') +
+            '</p>' +
+            '<div class="row"><button type="button" class="btn outline" data-go="clone" data-b="' +
+            b.id +
+            '">Make a copy to change it</button></div></div>' +
+            Object.keys(b.days)
+              .map(function (day) {
+                var rows = b.days[day];
+                return (
+                  '<div class="stack-sm"><h3>' +
+                  esc(day) +
+                  ' <span class="muted small" style="font-weight:400">· ' +
+                  rows.length +
+                  ' of 12</span></h3><ol class="plain stack-sm">' +
+                  rows
+                    .map(function (p, i) {
+                      return rxCard(p, b.id, day, i, rows.length, r.id);
+                    })
+                    .join('') +
+                  '</ol><button type="button" class="btn outline" style="width:fit-content"' +
+                  (rows.length >= 12 ? ' disabled' : '') +
+                  ' data-act="add-rx" data-b="' +
+                  b.id +
+                  '" data-day="' +
+                  esc(day) +
+                  '">+ Add a movement to ' +
+                  esc(day) +
+                  '</button></div>'
+                );
+              })
+              .join('') +
+            '</section>'
+          );
+        })
+        .join('');
+      html += '<div class="row"><button type="button" class="btn full">Save changes</button></div>';
+      html +=
+        '<button type="button" class="textlink" data-go="history" data-id="' +
+        a.id +
+        '">→ What was ' +
+        esc(a.name) +
+        ' doing on a past date?</button>';
+      return html;
+    }
+
+    // RETIRE-1 — household programs
+    function vPrograms() {
+      var pol = document.getElementById('v-archive').value;
+      var act = S.programs.filter(function (p) {
+        return !p.archived;
+      });
+      var arch = S.programs.filter(function (p) {
+        return p.archived;
+      });
+      function who(b) {
+        return S.assignments
+          .filter(function (x) {
+            return x.block === b.id && !x.to;
+          })
+          .map(function (x) {
+            return athlete(x.athlete).name;
+          });
+      }
+      var html =
+        '<button type="button" class="back" data-go="picker">← All athletes</button><h1>Programs</h1>' +
+        (S.flash ? '<p class="ok-msg" role="status">' + S.flash + '</p>' : '') +
+        '<ul class="plain stack">' +
+        act
+          .map(function (b) {
+            var w = who(b);
+            return (
+              '<li class="card stack-sm"><div style="font-weight:500">' +
+              esc(b.name) +
+              '</div>' +
+              '<div class="row">' +
+              (w.length
+                ? w
+                    .map(function (n) {
+                      return '<span class="chip">' + esc(n) + '</span>';
+                    })
+                    .join('')
+                : '<span class="small muted">Nobody is on this program</span>') +
+              '</div>' +
+              '<div class="row"><button type="button" class="btn outline" data-go="clone" data-b="' +
+              b.id +
+              '">Copy</button><button type="button" class="btn ghost" data-act="archive-prog" data-b="' +
+              b.id +
+              '">Archive…</button></div>' +
+              (S.route.confirmArchive === b.id
+                ? w.length
+                  ? pol === 'refuse'
+                    ? '<div class="refusal" role="alert">' +
+                      esc(w.join(' and ')) +
+                      (w.length > 1 ? ' are' : ' is') +
+                      ' still on ' +
+                      esc(b.name) +
+                      '. Move them to another program first, then archive it.</div>'
+                    : '<div class="card stack-sm" role="alertdialog" aria-labelledby="ap-' +
+                      b.id +
+                      '"><p id="ap-' +
+                      b.id +
+                      '" style="margin:0"><strong>' +
+                      esc(w.join(' and ')) +
+                      '</strong> will stop getting ' +
+                      esc(b.name) +
+                      ' from today. Everything they logged on it stays.</p><div class="row"><button type="button" class="btn" data-act="archive-go" data-b="' +
+                      b.id +
+                      '">Archive and stop it</button><button type="button" class="btn ghost" data-act="archive-cancel">Cancel</button></div></div>'
+                  : '<div class="card stack-sm"><p style="margin:0">Archive ' +
+                    esc(b.name) +
+                    '? Nobody is on it. You can restore it later.</p><div class="row"><button type="button" class="btn" data-act="archive-go" data-b="' +
+                    b.id +
+                    '">Archive</button><button type="button" class="btn ghost" data-act="archive-cancel">Cancel</button></div></div>'
+                : '') +
+              '</li>'
+            );
+          })
+          .join('') +
+        '</ul>' +
+        '<details class="collapse"' +
+        (S.archivedOpen ? ' open' : '') +
+        ' id="arch-d"><summary>Archived programs (' +
+        arch.length +
+        ')</summary><ul class="plain stack-sm">' +
+        arch
+          .map(function (b) {
+            return (
+              '<li class="row" style="justify-content:space-between;border:1px dashed var(--border);border-radius:10px;padding:4px 4px 4px 16px"><span>' +
+              esc(b.name) +
+              '</span><button type="button" class="btn ghost" data-act="unarchive-prog" data-b="' +
+              b.id +
+              '">Restore</button></li>'
+            );
+          })
+          .join('') +
+        '</ul></details>';
+      return html;
+    }
+
+    // CLONE-1
+    function vClone(r) {
+      if (!S.clone || S.clone.src !== (r.b || S.clone.src)) {
+        var src = program(r.b || 'b1');
+        S.clone = {
+          src: src.id,
+          name: src.name + ' (v2)',
+          days: JSON.parse(JSON.stringify(src.days)),
+          move: {},
+        };
+      }
+      var c = S.clone;
+      var src = program(c.src);
+      var steps = '<p class="small muted" style="margin:0">Step ' + r.step + ' of 3</p>';
+      if (r.step === 1) {
+        return (
+          '<button type="button" class="back" data-go="programs">← Programs</button><h1>Copy ' +
+          esc(src.name) +
+          '</h1>' +
+          steps +
+          '<form class="stack" id="clone-1" novalidate><label class="field" for="cl-name"><span>Name the copy</span><input class="input" id="cl-name" value="' +
+          esc(c.name) +
+          '" /><span class="hint">The original stays as it is, for everyone on it.</span></label>' +
+          '<button class="btn full" type="submit">Next: change the copy</button></form>'
+        );
+      }
+      if (r.step === 2) {
+        return (
+          '<button type="button" class="back" data-act="clone-step" data-step="1">← Back</button><h1>Change ' +
+          esc(c.name) +
+          '</h1>' +
+          steps +
+          '<p class="banner" style="margin:0">You are editing the copy. Nobody is on it yet.</p>' +
+          Object.keys(c.days)
+            .map(function (day) {
+              return (
+                '<section class="stack-sm"><h2>' +
+                esc(day) +
+                '</h2><ol class="plain stack-sm">' +
+                c.days[day]
+                  .map(function (p, i) {
+                    return rxCard(p, 'copy', day, i, c.days[day].length, null, false);
+                  })
+                  .join('') +
+                '</ol></section>'
+              );
+            })
+            .join('') +
+          '<button type="button" class="btn full" data-act="clone-step" data-step="3">Next: who moves to it?</button>'
+        );
+      }
+      if (r.step === 3) {
+        var on = S.athletes.filter(function (a) {
+          return !a.archived;
+        });
+        return (
+          '<button type="button" class="back" data-act="clone-step" data-step="2">← Back</button><h1>Who moves to ' +
+          esc(c.name) +
+          '?</h1>' +
+          steps +
+          '<form class="stack" id="clone-3"><fieldset class="stack-sm"><legend>Choose athletes. Nobody moves unless you tick them.</legend>' +
+          on
+            .map(function (a) {
+              var cur = activeAssignments(a.id).filter(function (x) {
+                return x.block === c.src;
+              });
+              return (
+                '<label class="checkrow" for="mv-' +
+                a.id +
+                '"><input type="checkbox" id="mv-' +
+                a.id +
+                '" value="' +
+                a.id +
+                '"' +
+                (c.move[a.id] ? ' checked' : '') +
+                ' />' +
+                '<span class="stack-xs" style="gap:0"><span style="font-weight:500">' +
+                esc(a.name) +
+                '</span><span class="small muted">' +
+                (cur.length
+                  ? 'On ' + esc(src.name) + ' since ' + fmtDay(cur[0].from) + ' — stops today'
+                  : 'Not on ' + esc(src.name) + ' — starts the copy today') +
+                '</span></span></label>'
+              );
+            })
+            .join('') +
+          '</fieldset><p class="small muted" style="margin:0">Moving is from today. Every past entry keeps the program it was logged against.</p>' +
+          '<button class="btn full" type="submit">Save the copy</button></form>'
+        );
+      }
+      return (
+        '<h1>' +
+        esc(c.name) +
+        ' saved</h1><div class="ok-msg" role="status">' +
+        (c.summary || 'Nobody moved. The copy is ready when you are.') +
+        '</div>' +
+        '<button type="button" class="btn full" data-go="programs">Back to programs</button>'
+      );
+    }
+
+    // HIST-1
+    function vHistory(r) {
+      var a = athlete(r.id);
+      var v = document.getElementById('v-hist').value;
+      var head =
+        '<button type="button" class="back" data-go="program" data-id="' +
+        a.id +
+        '">← ' +
+        esc(a.name) +
+        '’s program</button><h1>' +
+        esc(a.name) +
+        '’s program history</h1>';
+      if (v === 'timeline') {
+        var rows = S.assignments
+          .filter(function (x) {
+            return x.athlete === r.id;
+          })
+          .slice()
+          .sort(function (x, y) {
+            return y.from < x.from ? -1 : 1;
+          });
+        return (
+          head +
+          '<ol class="timeline">' +
+          rows
+            .map(function (x) {
+              var b = program(x.block);
+              return (
+                '<li class="' +
+                (x.to ? 'past' : '') +
+                '"><div style="font-weight:500">' +
+                esc(b.name) +
+                (b.archived ? ' <span class="tag">archived</span>' : '') +
+                '</div><div class="small muted tabular">' +
+                fmtDay(x.from) +
+                ' – ' +
+                (x.to ? fmtDay(x.to) : 'now') +
+                '</div><button type="button" class="textlink" data-act="hist-pick" data-d="' +
+                x.from +
+                '">See that program</button></li>'
+              );
+            })
+            .join('') +
+          '</ol>'
+        );
+      }
+      var on = activeAssignments(r.id, S.histDate);
+      return (
+        head +
+        '<label class="field" for="hist-d"><span>Show the program on</span><input class="input" type="date" id="hist-d" value="' +
+        S.histDate +
+        '" max="' +
+        TODAY +
+        '" /></label>' +
+        (on.length
+          ? on
+              .map(function (x) {
+                var b = program(x.block);
+                return (
+                  '<section class="stack-sm"><p class="banner" style="margin:0">On ' +
+                  fmtDay(S.histDate, true) +
+                  ', ' +
+                  esc(a.name) +
+                  ' was on <strong>' +
+                  esc(b.name) +
+                  '</strong> (' +
+                  fmtDay(x.from) +
+                  ' – ' +
+                  (x.to ? fmtDay(x.to) : 'now') +
+                  ').</p>' +
+                  Object.keys(b.days)
+                    .map(function (day) {
+                      return (
+                        '<h2>' +
+                        esc(day) +
+                        '</h2><ol class="plain stack-sm">' +
+                        b.days[day]
+                          .map(function (p) {
+                            return rxCard(p, b.id, day, 0, 1, r.id, true);
+                          })
+                          .join('') +
+                        '</ol>'
+                      );
+                    })
+                    .join('') +
+                  '<p class="small muted" style="margin:0">Shown as prescribed then. Logged days keep the prescription they were logged against.</p></section>'
+                );
+              })
+              .join('')
+          : '<p class="banner" style="margin:0">Nothing was assigned to ' +
+            esc(a.name) +
+            ' on ' +
+            fmtDay(S.histDate, true) +
+            '.</p>')
+      );
+    }
+
+    // MOV-1 (unfiled)
+    function vMovements() {
+      return (
+        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Movements your household added</h1>' +
+        '<p class="proto-flag">Not a backlog row yet — the gap ADR 0008 leaves by decision</p>' +
+        '<ul class="plain stack-sm">' +
+        S.householdMovements
+          .map(function (m, i) {
+            return (
+              '<li class="card stack-sm" style="padding:12px 16px"><div><div style="font-weight:500">' +
+              esc(m.name) +
+              '</div><div class="small muted">Logged ' +
+              m.uses +
+              (m.uses === 1 ? ' time' : ' times') +
+              ' · looks like <strong>' +
+              esc(m.near) +
+              '</strong></div></div>' +
+              '<button type="button" class="btn outline" data-act="merge" data-i="' +
+              i +
+              '">Merge into ' +
+              esc(m.near) +
+              '</button></li>'
+            );
+          })
+          .join('') +
+        '</ul><p class="small muted" style="margin:0">Merging moves every entry to the catalog movement, so history charts in one place. There is no plain delete: entries would lose their movement.</p>'
+      );
+    }
+
+    // ── measurement overlay ──────────────────────────────────────────────────
+    function measure() {
+      var on = document.getElementById('measure').checked;
+      var app = document.getElementById('app');
+      app.classList.toggle('measuring', on);
+      app.querySelectorAll('.m-tag').forEach(function (t) {
+        t.remove();
+      });
+      if (!on) return;
+      app.querySelectorAll('[data-m]').forEach(function (el) {
+        var w = el.getBoundingClientRect().width;
+        var cs = getComputedStyle(el);
+        var inner =
+          w -
+          parseFloat(cs.paddingLeft) -
+          parseFloat(cs.paddingRight) -
+          parseFloat(cs.borderLeftWidth) -
+          parseFloat(cs.borderRightWidth);
+        var tag = document.createElement('span');
+        tag.className = 'm-tag';
+        tag.setAttribute('aria-hidden', 'true');
+        tag.textContent =
+          Math.round(w) +
+          (Math.round(inner) !== Math.round(w) ? ' / ' + Math.round(inner) + ' in' : '') +
+          'px';
+        if (cs.position === 'static') el.style.position = 'relative';
+        el.appendChild(tag);
+      });
+    }
+
+    // ── events ───────────────────────────────────────────────────────────────
+    document.addEventListener('click', function (ev) {
+      var t = ev.target.closest('[data-go],[data-act]');
+      if (!t) return;
+      var go_ = t.getAttribute('data-go');
+      if (go_) {
+        if (go_ === 'day')
+          return go({ name: 'day', id: t.dataset.id || 'a1', day: TODAY, keepMsg: false });
+        if (go_ === 'edit') return go({ name: 'edit', id: t.dataset.id });
+        if (go_ === 'del') return go({ name: 'del', id: t.dataset.id, step: 1 });
+        if (go_ === 'log' || go_ === 'program' || go_ === 'history')
+          return go({ name: go_, id: t.dataset.id || 'a1' });
+        if (go_ === 'clone') {
+          S.clone = null;
+          return go({ name: 'clone', step: 1, b: t.dataset.b || 'b1' });
+        }
+        if (go_ === 'programs') S.flash = null;
+        return go({ name: go_ });
+      }
+      var act = t.getAttribute('data-act');
+      var r = S.route;
+      if (act === 'hide') return hide(t.dataset.k, t.dataset.eid);
+      if (act === 'restore') return restore(t.dataset.k, +t.dataset.ei);
+      if (act === 'toggle-hidden') {
+        r.openHidden = !r.openHidden;
+        save();
+        render();
+        document.getElementById('hid-toggle').focus();
+        return;
+      }
+      if (act === 'day') {
+        r.day = shift(r.day, +t.dataset.n);
+        S.restoreMsg = null;
+        r.openHidden = false;
+        save();
+        render();
+        var b = document.querySelector('[data-act="day"][data-n="' + t.dataset.n + '"]');
+        if (b && !b.disabled) b.focus();
+        return;
+      }
+      if (act === 'clear-open') return openClear();
+      if (act === 'dlg-close') {
+        document.getElementById('dlg').close();
+        return;
+      }
+      if (act === 'open-picker') return openPicker();
+      if (act === 'pick' || act === 'pick-new') {
+        S.form.movement = { name: t.dataset.name, created: act === 'pick-new' };
+        if (act === 'pick-new')
+          S.householdMovements.push({ name: t.dataset.name, uses: 0, near: '—' });
+        document.getElementById('dlg').close();
+        save();
+        render();
+        document.querySelector('.movement-btn').focus();
+        announce('Movement: ' + t.dataset.name);
+        return;
+      }
+      if (act === 'archive-athlete') {
+        athlete(t.dataset.id).archived = true;
+        announce(athlete(t.dataset.id).name + ' archived.');
+        return go({ name: 'settings' });
+      }
+      if (act === 'unarchive') {
+        athlete(t.dataset.id).archived = false;
+        save();
+        render();
+        announce('Restored.');
+        return;
+      }
+      if (act === 'del-step') return go({ name: 'del', id: t.dataset.id, step: +t.dataset.step });
+      if (act === 'del-final') {
+        var nm = athlete(t.dataset.id).name;
+        S.athletes = S.athletes.filter(function (a) {
+          return a.id !== t.dataset.id;
+        });
+        return go({ name: 'del', step: 4, deleted: nm });
+      }
+      if (act === 'mv' || act === 'rm') {
+        var rows =
+          t.dataset.b === 'copy'
+            ? S.clone.days[t.dataset.day]
+            : program(t.dataset.b).days[t.dataset.day];
+        var i = +t.dataset.i;
+        var label = rows[i].name;
+        if (act === 'rm') rows.splice(i, 1);
+        else {
+          var j = i + +t.dataset.d;
+          var tmp = rows[i];
+          rows[i] = rows[j];
+          rows[j] = tmp;
+        }
+        save();
+        render();
+        announce(act === 'rm' ? label + ' removed.' : label + ' moved.');
+        return;
+      }
+      if (act === 'add-rx') {
+        program(t.dataset.b).days[t.dataset.day].push(rx('Bulgarian Split Squat'));
+        save();
+        render();
+        return;
+      }
+      if (act === 'archive-prog') {
+        r.confirmArchive = t.dataset.b;
+        save();
+        render();
+        return;
+      }
+      if (act === 'archive-cancel') {
+        r.confirmArchive = null;
+        save();
+        render();
+        return;
+      }
+      if (act === 'archive-go') {
+        var b = program(t.dataset.b);
+        b.archived = true;
+        var closed = [];
+        S.assignments.forEach(function (x) {
+          if (x.block === b.id && !x.to) {
+            x.to = shift(TODAY, -1);
+            closed.push(athlete(x.athlete).name);
+          }
+        });
+        S.flash =
+          esc(b.name) +
+          ' archived.' +
+          (closed.length ? ' ' + esc(closed.join(' and ')) + ' stopped getting it today.' : '') +
+          ' <button type="button" class="btn ghost" data-act="unarchive-prog" data-b="' +
+          b.id +
+          '">Undo</button>';
+        r.confirmArchive = null;
+        save();
+        render();
+        return;
+      }
+      if (act === 'unarchive-prog') {
+        program(t.dataset.b).archived = false;
+        S.flash =
+          esc(program(t.dataset.b).name) +
+          ' restored. Re-assign athletes from the program if they should be on it again.';
+        save();
+        render();
+        return;
+      }
+      if (act === 'clone-step') return go({ name: 'clone', step: +t.dataset.step, b: S.clone.src });
+      if (act === 'hist-pick') {
+        S.histDate = t.dataset.d;
+        document.getElementById('v-hist').value = 'date';
+        return go({ name: 'history', id: r.id });
+      }
+      if (act === 'merge') {
+        var m = S.householdMovements.splice(+t.dataset.i, 1)[0];
+        save();
+        render();
+        announce(m.name + ' merged into ' + m.near + '.');
+        return;
+      }
+    });
+
+    document.addEventListener('input', function (ev) {
+      if (ev.target.id === 'pk-q') drawPicker(ev.target.value.trim());
+      if (ev.target.id === 'clear-in')
+        document.getElementById('clear-go').disabled =
+          ev.target.value.trim().toLowerCase() !== 'delete';
+      if (ev.target.id === 'del-name')
+        document.getElementById('del-go').disabled = ev.target.value !== athlete(S.route.id).name;
+      if (ev.target.dataset && ev.target.dataset.act === 'load') {
+        var p = (ev.target.dataset.b === 'copy' ? S.clone : program(ev.target.dataset.b)).days[
+          ev.target.dataset.day
+        ].find(function (x) {
+          return x.id === ev.target.dataset.pid;
+        });
+        if (p) p.loads[ev.target.dataset.aid] = ev.target.value;
+        save();
+      }
+    });
+    document.addEventListener('change', function (ev) {
+      if (ev.target.id === 'hist-d') {
+        S.histDate = ev.target.value || S.histDate;
+        save();
+        render();
+        document.getElementById('hist-d').focus();
+      }
+      if (ev.target.closest && ev.target.closest('#clone-3') && ev.target.type === 'checkbox') {
+        S.clone.move[ev.target.value] = ev.target.checked;
+        save();
+      }
+    });
+
+    document.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      if (f.id === 'add-form') {
+        var name = document.getElementById('add-name').value.trim();
+        if (!name) {
+          document.getElementById('add-err').hidden = false;
+          document.getElementById('add-name').setAttribute('aria-invalid', 'true');
+          document.getElementById('add-name').setAttribute('aria-describedby', 'add-err');
+          document.getElementById('add-name').focus();
+          return;
+        }
+        var id = 'a' + Date.now();
+        S.athletes.push({
+          id: id,
+          name: name,
+          kind: f.querySelector('input[name=kind]:checked').value,
+          archived: false,
+        });
+        announce(name + ' added.');
+        return go({ name: 'day', id: id, day: TODAY });
+      }
+      if (f.id === 'edit-form') {
+        var a = athlete(f.dataset.id);
+        var nm = document.getElementById('edit-name').value.trim();
+        if (nm) a.name = nm;
+        a.kind = f.querySelector('input[name=ekind]:checked').value;
+        announce('Saved.');
+        return go({
+          name: document.getElementById('v-delete').value === 'picker' ? 'picker' : 'settings',
+        });
+      }
+      if (f.id === 'del-form') return go({ name: 'del', id: f.dataset.id, step: 3 });
+      if (f.id === 'clear-form') return clearDay(f.dataset.k);
+      if (f.id === 'bw-form') {
+        var v = document.getElementById('bw-in').value.trim();
+        if (!v) return;
+        S.entries[f.dataset.k] = [
+          {
+            id: 'e' + Date.now(),
+            title: 'Bodyweight',
+            detail: v + ' lb · ' + nowLabel(),
+            slot: 'bw',
+          },
+        ].concat(S.entries[f.dataset.k] || []);
+        save();
+        render();
+        announce('Bodyweight saved.');
+        return;
+      }
+      if (f.id === 'clone-1') {
+        S.clone.name = document.getElementById('cl-name').value.trim() || S.clone.name;
+        return go({ name: 'clone', step: 2, b: S.clone.src });
+      }
+      if (f.id === 'clone-3') {
+        var c = S.clone;
+        var nb = { id: 'b' + Date.now(), name: c.name, archived: false, days: c.days };
+        S.programs.push(nb);
+        var moved = [];
+        Object.keys(c.move).forEach(function (aid) {
+          if (!c.move[aid]) return;
+          S.assignments.forEach(function (x) {
+            if (x.athlete === aid && x.block === c.src && !x.to) x.to = shift(TODAY, -1);
+          });
+          S.assignments.push({ athlete: aid, block: nb.id, from: TODAY, to: null });
+          moved.push(athlete(aid).name);
+        });
+        c.summary = moved.length
+          ? esc(moved.join(' and ')) +
+            (moved.length > 1 ? ' move' : ' moves') +
+            ' to ' +
+            esc(c.name) +
+            ' from today. ' +
+            esc(program(c.src).name) +
+            ' keeps everything logged on it.'
+          : null;
+        return go({ name: 'clone', step: 4, b: c.src });
+      }
+    });
+
+    function hide(k, eid) {
+      var list = S.entries[k];
+      var i = list.findIndex(function (e) {
+        return e.id === eid;
+      });
+      var e = list.splice(i, 1)[0];
+      S.hidden[k] = (S.hidden[k] || []).concat([{ at: nowLabel(), items: [e] }]);
+      S.restoreMsg = null;
+      save();
+      render();
+      // Focus: the next row's Delete, else the Hidden row's control (acceptance 11). Never the previous
+      // row's Delete: a second Enter would hide a row the person never looked at.
+      var dels = document.querySelectorAll('#entries [data-act="hide"]');
+      var target = dels[i] || document.getElementById('hid-toggle');
+      if (target) target.focus();
+      announce(e.title + ' deleted. Restore it from Hidden on this day.');
+    }
+    function clearDay(k) {
+      var list = S.entries[k] || [];
+      S.hidden[k] = (S.hidden[k] || []).concat([{ at: nowLabel(), items: list.slice() }]);
+      S.entries[k] = [];
+      document.getElementById('dlg').close();
+      S.route.openHidden = true;
+      // The prototype's partial-restore case: a weigh-in logged after clearing takes the slot.
+      if (
+        list.some(function (e) {
+          return e.slot === 'bw';
+        })
+      )
+        S.entries[k].push({
+          id: 'e' + Date.now(),
+          title: 'Bodyweight',
+          detail: '111.9 lb · logged after clearing',
+          slot: 'bw',
+        });
+      save();
+      render();
+      var b = document.querySelector('[data-act="restore"]');
+      if (b) b.focus();
+      announce(
+        'Day cleared. ' + list.length + ' entries hidden. Restore them from Hidden on this day.',
+      );
+    }
+    function restore(k, ei) {
+      var ev = S.hidden[k][ei];
+      var live = S.entries[k] || (S.entries[k] = []);
+      var back = [];
+      var refused = [];
+      ev.items.forEach(function (e) {
+        var held =
+          e.slot &&
+          live.find(function (x) {
+            return x.slot === e.slot;
+          });
+        if (held) refused.push([e, held]);
+        else back.push(e);
+      });
+      back.forEach(function (e) {
+        live.push(e);
+      });
+      if (refused.length)
+        ev.items = refused.map(function (p) {
+          return p[0];
+        });
+      else S.hidden[k].splice(ei, 1);
+      if (!S.hidden[k].length) delete S.hidden[k];
+      if (refused.length) {
+        var f = refused[0];
+        S.restoreMsg =
+          '<div class="refusal" role="alert">' +
+          (back.length
+            ? 'Restored ' + back.length + ' of ' + (back.length + refused.length) + '. '
+            : '') +
+          '<strong>' +
+          esc(f[0].title) +
+          ' (' +
+          esc(f[0].detail.split(' · ')[0]) +
+          ')</strong> can’t come back: ' +
+          esc(f[1].detail.split(' · ')[0]) +
+          ' is already logged for this day. Delete that one first, then restore this.</div>';
+      } else {
+        S.restoreMsg = null;
+        S.route.openHidden = !!S.hidden[k];
+      }
+      save();
+      render();
+      var focusEl = document.querySelector('.refusal')
+        ? document.querySelector('[data-act="restore"]')
+        : document.querySelector('#entries [data-act="hide"]');
+      if (focusEl) focusEl.focus();
+      announce(
+        refused.length
+          ? 'Could not restore ' +
+              refused
+                .map(function (p) {
+                  return p[0].title;
+                })
+                .join(', ') +
+              '.'
+          : 'Restored ' +
+              back
+                .map(function (e) {
+                  return e.title;
+                })
+                .join(', ') +
+              '.',
+      );
+    }
+
+    // ── bar ──────────────────────────────────────────────────────────────────
+    var sel = document.getElementById('screen-select');
+    SCREENS.forEach(function (s) {
+      var o = document.createElement('option');
+      o.value = s[0];
+      o.textContent = s[1];
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function () {
+      go(screenToRoute(sel.value));
+    });
+    function setWidth() {
+      var w = document.getElementById('width-select').value;
+      document.getElementById('device').style.width = w + 'px';
+      document.getElementById('cap-w').textContent = w + 'px';
+      measure();
+    }
+    document.getElementById('width-select').addEventListener('change', setWidth);
+    ['v-delete', 'v-archive', 'v-hist'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', function () {
+        S.editMode = false;
+        render();
+      });
+    });
+    document.getElementById('measure').addEventListener('change', measure);
+    document.getElementById('reset').addEventListener('click', function () {
+      S = fresh();
+      save();
+      render();
+      announce('Prototype data reset.');
+    });
+    document.getElementById('app').addEventListener('click', function (ev) {
+      if (ev.target.id === 'edit-toggle') {
+        S.editMode = !S.editMode;
+        save();
+        render();
+        document.getElementById('edit-toggle').focus();
+      }
+    });
+    document.addEventListener(
+      'toggle',
+      function (ev) {
+        if (ev.target.id === 'arch-d') S.archivedOpen = ev.target.open;
+      },
+      true,
+    );
+    window.addEventListener('resize', measure);
+
+    if (window.innerWidth <= 600) document.getElementById('bar-wrap').open = false;
+
+    // Open the view named by a plain #anchor (artifact viewers pass only bare tokens).
+    var start = (location.hash || '').replace('#', '');
+    if (
+      start &&
+      SCREENS.some(function (s) {
+        return s[0] === start;
+      })
+    )
+      S.route = screenToRoute(start);
+    render();
+  })();
+</script>
