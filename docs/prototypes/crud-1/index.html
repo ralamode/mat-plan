@@ -1082,8 +1082,8 @@
     <label for="v-rotation"
       >Q13 rotation counts
       <select id="v-rotation">
-        <option value="scheduled">scheduled days (proposed)</option>
-        <option value="calendar">calendar days (today)</option>
+        <option value="scheduled">scheduled days (approved)</option>
+        <option value="calendar">calendar days (before)</option>
       </select>
     </label>
     <label class="chk" for="measure"><input type="checkbox" id="measure" /> Measure widths</label>
@@ -1720,7 +1720,7 @@
         'v4: full screen on a phone — title and actions pinned, only the middle scrolls; a capped dialog from 600px. "None of these? Create a new program" sits under the list when putting someone on.',
         'ASSIGN-1 owns the days (maintainer, 2026-10-22). One sheet: program, then which days, then a preview of the next six sessions.',
         'Weekdays only — ADR 0007 decision 1. The grey line shows the same choice as an RRULE (FREQ=WEEKLY;BYDAY=…); see the spec’s Recurrence section.',
-        'Q13: switch to Youth Daily Program and untick to Mon/Wed/Fri. With the bar on "scheduled days" (proposed) it alternates B, A, B, A. Switch the bar to "calendar days" (how the app counts today) to see B, B, B, then A, A, A, and the warning.',
+        'Q13: switch to Youth Daily Program and untick to Mon/Wed/Fri. With the bar on "scheduled days" (approved, Q13b) it alternates B, A, B, A. Switch the bar to "calendar days" (how the app counted before) to see B, B, B, then A, A, A, and the warning.',
         'Either way a skipped session never shifts the program: both counts come from the date and the schedule, never from what was logged (maintainer, 2026-10-22). With every day ticked they are identical.',
         'At 360px seven 44px toggles need 308px against 294px of content, so they sit 4 + 3; seven across from 480px.',
         'A change of days closes the old period and opens a new one, so HIST-1’s timeline shows it.',

@@ -1,6 +1,6 @@
 # CRUD-1 — Fix it yourself: a household corrects its own data without a script
 
-> **Status: draft for the maintainer's review, 2026-10-22. UX panel round 1 and the maintainer's rounds 1–3 reconciled (logs at the bottom); prototype v5 awaiting the maintainer's review — one decision open (Q13b).** Milestone this
+> **Status: draft for the maintainer's review, 2026-10-22. UX panel round 1 and the maintainer's rounds 1–3 reconciled (logs at the bottom); prototype v5 awaiting the maintainer's sign-off; Q1–Q15 answered.** Milestone this
 > defines: **Fix it yourself** (`docs/milestones/crud-1-fix-it-yourself.md`, written after the
 > prototype is signed off, sequence step 5). Goal it serves: [beta-1](../milestones/beta-1.md) →
 > "The goal", item 4 — _"fix their own mistakes without asking [the maintainer] to run a script"_ — and Beta 1's
@@ -311,10 +311,11 @@ the UX panel's first round; the log at the bottom says why.
     **(M10)** _(A1)_
 40. **Whatever** was or was not logged, the workout due on a day **shall** be a pure function of the
     date, the program's rotation and the athlete's weekday set — a skipped session **shall never**
-    shift what comes next _(maintainer, 2026-10-22, Q13)_. **If Q13b is approved**, the rotation
-    **shall** advance one workout per **scheduled** day, and **when** all seven days are scheduled the
-    result **shall** equal today's calendar count for every date (SCHED-1 1b's equivalence proof, run
-    against the seven-day set). **(M16)** _(SCHED-1 1b + ASSIGN-1)_
+    shift what comes next _(maintainer, 2026-10-22, Q13)_. The rotation **shall** advance one workout
+    per **scheduled** day _(maintainer, 2026-10-22, Q13b)_, and **when** all seven days are scheduled
+    the result **shall** equal today's calendar count for every date — SCHED-1 1b's 60,000-date
+    equivalence proof, run again against the scheduled-day count with the seven-day set. **(M16, M20)**
+    _(ASSIGN-1)_
 41. The day page **shall not** link to the routine editor. A parent **shall** reach it from the
     athlete's edit page, under "Activities on their page", beside the athlete's program and days, and
     the page **shall** be titled "Activities". **(M17)** _(A1)_
@@ -409,21 +410,22 @@ day ran. With a weekday set they interact: on Mon/Wed/Fri the gaps are 2, 2 and 
 Youth Daily Program runs **B, B, B, then A, A, A**.
 
 **What the maintainer decided (Q13, 2026-10-22):** _a skipped day must not shift the program._ That is
-the property calendar-indexing was chosen for, and it holds. **What is proposed (Q13b):** count
-**scheduled** days instead of calendar days. Both counts are pure functions of the date and the
+the property calendar-indexing was chosen for, and it holds. **What the maintainer approved (Q13b,
+2026-10-22):** count **scheduled** days instead of calendar days. Both counts are pure functions of the date and the
 schedule, so neither ever looks at what was logged and a skip never shifts anything; but on Mon/Wed/Fri
 the scheduled count alternates **B, A, B, A**. With all seven days scheduled the two are **identical**,
-so today's Youth Daily Program does not change. The prototype puts both behind a switch in the review
-bar. ⚠️ **It amends a signed-off decision, so it is the maintainer's to approve, not this spec's to
-adopt:**
+so today's Youth Daily Program does not change. (The prototype keeps both behind a review-bar switch
+for comparison.) What the approval amends, and where each change lands:
 
 - ADR 0007 decision 2 says the rotation stays calendar-indexed **and** that phase is _"a property of the
   program's calendar"_, not of enrollment. Under Q13b the phase depends on the athlete's weekday set,
   which lives on the **assignment** — so the resolver takes the weekdays as an input, and two athletes
   on one program with different days can be on different workouts on the same date. (They already are on
   different **days**, so this follows from decision 1.)
-- SCHED-1 1b's resolver signature gains the weekday set. Its 60,000-date equivalence proof still
-  holds, because 1d seeds the YDP with all seven days.
+- **The change lands in ASSIGN-1, not SCHED-1 1b.** Until ASSIGN-1 nothing can store fewer than seven
+  weekdays (1d seeds seven; there is no writer before D4b), and on seven days the two counts are
+  identical. So SCHED-1 1b ships as planned, and ASSIGN-1 — the first chunk that can save a shorter set
+  — makes the resolver take the weekday set, with 1b's equivalence proof re-run against the new count.
 - **Changing days mid-program needs a rule.** If the count runs from the anchor with the new set, the
   next workout can jump. Recommended: a new assignment period carries on from the workout that would
   have come next. ASSIGN-1's plan proves it.
@@ -548,6 +550,13 @@ Said rather than silently resolved.
    writer (1c) and seeds seven weekdays (1d), so after it the days can only change by a correction.
    **Resolved by the maintainer (M2, 2026-10-22): the editor lives in ASSIGN-1 (D4b).** The SCHED-1 plan
    and the ADR's "Backlog impact" should point at D4b when this spec lands.
+8. **Four records say the rotation is calendar-indexed, and Q13b changes that for any schedule of fewer
+   than seven days.** `apps/web/lib/programming/day-role-schedule.ts` (the maintainer's 2026-09-24
+   quote), `docs/plan.md` → YDP-1, `docs/features/programming.md` invariant 3b, and the SCHED-1 plan's
+   `YDP_ROTATION` docblock ("CALENDAR-INDEXED, DELIBERATELY"). All stay **true** until ASSIGN-1, since
+   every athlete runs seven days until then. ASSIGN-1's PR updates all four in the same PR, keeping the
+   2026-09-24 quote and adding the 2026-10-22 amendment beside it. The "do not fix the rotation"
+   obligation in SCHED-1 1b is unaffected.
 
 ## Open decisions — for the maintainer, at prototype review
 
@@ -571,7 +580,7 @@ panel's answer.
 | Q11  | **New (R1).** Does the 7-day cancellable pause for household deletion apply to one athlete?                                                                               | not shown                                                           | Yes — the same notice, the same fraud reasoning. A3's plan decides and updates `notice.md` in the same PR.                                                                                                                                                            | raised (T)                        |
 | Q12  | **New (R1).** Typed `delete` for clear-a-day, when clear-a-day is restorable?                                                                                             | kept                                                                | Keep. The V1-9b row decided it _(maintainer)_; it is bulk, and on a phone a bulk mistake is the expensive one.                                                                                                                                                        | **declined** (I, NIT)             |
 | Q13  | **New (M2).** Calendar-indexed A/B on a weekday set: on Mon/Wed/Fri the YDP runs B, B, B, then A, A, A. Does the 2026-09-24 decision still hold once days can be skipped? | v3 warns in the sheet and shows the next six sessions               | **Decided (maintainer, 2026-10-22): a skipped day must not shift the program.** Criterion 40.                                                                                                                                                                         | decided                           |
-| Q13b | **New (M16).** Count **scheduled** days instead of calendar days? Same no-shift property; Mon/Wed/Fri alternates; identical when every day runs                           | v5: a switch in the review bar, "scheduled days" first              | **Yes.** It amends ADR 0007 decision 2 and SCHED-1 1b's resolver signature, and needs a rule for a change of days mid-program ([Recurrence](#recurrence-the-weekday-set-rrule-and-the-rotation)). **Open: the maintainer's to approve.**                              | not yet panelled                  |
+| Q13b | **New (M16).** Count **scheduled** days instead of calendar days? Same no-shift property; Mon/Wed/Fri alternates; identical when every day runs                           | v5: a switch in the review bar, "scheduled days" first              | **Approved (maintainer, 2026-10-22).** Lands in ASSIGN-1; amends ADR 0007 decision 2 with the SCHED-1 1c sign-off; a change of days carries on from the next workout ([Recurrence](#recurrence-the-weekday-set-rrule-and-the-rotation), disagreement 8).              | decided                           |
 | Q14  | **New (M1).** The shipped "→ Edit {name}'s routine" link reads as scheduling                                                                                              | v5: gone from the day page; "Activities" on the athlete's edit page | **Decided (maintainer, 2026-10-22): remove it from the day page**, since another way exists. The editor itself stays — it is the only way to choose what an athlete logs besides the program — reached from "→ Edit {name}" and retitled "Activities" (criterion 41). | decided                           |
 | Q15  | **New (M5).** A1 before D4: an adult added in the app is shown the household's newest block, the kids' program. Guard or wait?                                            | v3 assumes assignments exist                                        | **Decided (maintainer, 2026-10-22): the kid-only guard.** No live adult profile reads the YDP card today. The maintainer will add their own adult profile to track their own workout: it logs freely until D4c lets it have a program.                                | decided                           |
 
@@ -593,7 +602,7 @@ panel's answer.
   `.ics` export. ADR 0007 decision 1; the trigger and the path are in
   [Recurrence](#recurrence-the-weekday-set-rrule-and-the-rotation).
 - **Session-indexed rotation** (YDP-1, deferred by the maintainer) — Q13 keeps "a skip never shifts the
-  program". Q13b's scheduled-day count is a different thing, and is in scope only if approved.
+  program". Q13b's scheduled-day count is a different thing: it is in scope, in ASSIGN-1.
 - **An adult default program** — unowned 7 says there is none; authoring one is a product question.
 - **Scheduling a routine item by weekday** (e.g. Practice Mon–Fri only) and **the practice minutes
   input** — Practice is a routine item, not a program movement (M14); the minutes field is **V1-7a**,
@@ -729,3 +738,4 @@ no horizontal overflow on any of the 15 screens, no control under 44px.
 | M17 | Q14: _"Do you mean this link? why do you suggest removing it? Currently it doesn't work."_ Remove it if there are other ways to edit routines | **decided: remove from the day page** | The spec suggested a **rename**, not a removal. The link works in the app (`page.tsx:360-363`, the shipped V1-23 editor). It looked dead only because the prototype could not open a page outside itself. The routine editor is the **only** way to choose what an athlete can log besides the program (Practice, wake, habits), so the editor stays and its entry point moves to the athlete's edit page as "Activities", beside their program and days. v5 adds a stub of the page so the link lands somewhere (criterion 41). _Verified._ |
 | M18 | Q15: no live adult profile reads the YDP card; the maintainer will add one to track their own workout                                         | **decided: kid-only guard**           | A1 stays in Beta 0. The maintainer's adult profile logs freely without a program until D4c ("Create a program") ships behind D4.                                                                                                                                                                                                                                                                                                                                                                                                             |
 | M19 | Comparing children: _"This is not comparing as in competition, we should have no emotions about stats/weight, this isn't that kind of app."_  | **decided**                           | Recorded as a product stance under [Later milestones](#later-milestones-this-must-not-get-in-the-way-of); which stats surface is decided later. One standing constraint carried, and it is privacy, not tone: a child's bodyweight is privileged (`SECURITY.md:118`).                                                                                                                                                                                                                                                                        |
+| M20 | Q13b: _"approved, count scheduled days"_                                                                                                      | **decided**                           | Criterion 40 drops its condition. Placement: the change lands in **ASSIGN-1**, the first chunk that can store fewer than seven days; SCHED-1 1b ships as planned, since the counts are identical on seven days. Disagreement 8 lists the four "calendar-indexed" records ASSIGN-1's PR must update. ADR 0007 decision 2's amendment rides the SCHED-1 1c sign-off already owed.                                                                                                                                                              |
