@@ -118,20 +118,27 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   touches either file.
 - **Severity:** low.
 
-### The comment-stripping `code()` test helper has five copies (found 2026-10-09, TEN-1 1d review)
+### The comment-stripping `code()` test helper has TWO copies left (found 2026-10-09, TEN-1 1d review; narrowed 2026-10-22, AUTH-1 1b-bis)
 
-- **What & why:** the same "comments out, strings kept" `code(file)` helper is defined separately in
-  `apps/web/lib/dal/scoped.test.ts`, `apps/web/app/pages-are-gated.test.ts`,
-  `apps/web/app/tenancy-is-not-cached.test.ts`, `apps/web/lib/household-synthetic-is-dark.test.ts`
-  and `packages/db/src/scope.test.ts` (and `apps/web/app/design/tokens/token-sets.test.ts` carries the
-  same block-comment regex inline). AGENTS.md makes the second copy the trigger to extract; this is
-  the fifth.
+- **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
+  **five** places. `AUTH-1` 1b-bis extracted it to **`apps/web/test/source-scan.ts`** and converted the
+  three copies it touched — `apps/web/app/pages-are-gated.test.ts`,
+  `apps/web/app/tenancy-is-not-cached.test.ts` and `apps/web/lib/dal/scoped.test.ts`.
+- **What is left, and why each is still standing:**
+  - `apps/web/lib/household-synthetic-is-dark.test.ts` — a straight conversion, but 1b-bis did not
+    touch that file and converting it would have put an unrelated file in an auth PR. **Free for
+    whoever next edits it.**
+  - `packages/db/src/scope.test.ts` — ⚠️ **not a straight conversion**: it is in another package and
+    cannot import `apps/web/test/`. It needs either its own copy (which is the status quo) or a shared
+    home under `packages/shared`, which means shipping test support in a published package. **Decide
+    that when a third package wants it**, not before.
+  - `apps/web/app/design/tokens/token-sets.test.ts` carries the same block-comment regex inline, which
+    is a near-miss rather than a copy.
 - **Impact:** these are the structural guards. A fix to the stripping (a `//` inside a string, a
   template literal) lands in one copy and not the others, so two guards can disagree about what is
-  code.
-- **Proposed fix:** extract once into a small test-support module (one per package, or one shared
-  under `packages/shared` if a cross-package import of test support is acceptable) and import it from
-  every guard, in one mechanical PR.
+  code. **Narrowed from five to two, so the blast radius is now one package boundary wide.**
+- **Proposed fix:** convert `household-synthetic-is-dark.test.ts` opportunistically; leave
+  `packages/db` alone until a second consumer there justifies the shared module.
 - **Severity:** low.
 
 ### The light-mode focus ring misses SC 1.4.11, and the test that looks like it checks this skips the shipping palette (found 2026-10-07, ONB-0 UX panel)

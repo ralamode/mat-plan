@@ -1,3 +1,6 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import {
   ACTIVITY_TYPE_KEYS,
   BLANK_SET_MESSAGE,
@@ -79,12 +82,9 @@ function localDay(offsetDays = 0): string {
   return shifted.toISOString().slice(0, 10);
 }
 
-import {
-  AMEND_ERROR_COPY,
-  BODYWEIGHT_COPY,
-  NO_PROFILE_LOG,
-  NO_PROFILE_SAVE,
-} from '@/lib/constants';
+// `NO_PROFILE_LOG` / `NO_PROFILE_SAVE` are no longer imported here: they reach this suite through
+// `MUTATING_ACTIONS`, which is now the single source for both the action names and their refusal copy.
+import { AMEND_ERROR_COPY, BODYWEIGHT_COPY } from '@/lib/constants';
 import { type ActionState } from './action-state';
 import {
   editBodyweightAction,
@@ -95,6 +95,8 @@ import {
   logLifeActivitiesAction,
   logStrengthSessionAction,
 } from './actions';
+import { MUTATING_ACTIONS, type MutatingActionName } from './mutating-actions';
+import { code, exportedActionNames, USE_SERVER_RE } from '@/test/source-scan';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
 // the action must thread it through to both the ownership check and revalidate path.
@@ -129,15 +131,27 @@ beforeEach(() => vi.clearAllMocks());
  * learns nothing a stale id wouldn't. Asserting through the const makes that identity structural;
  * asserting through two copies of a string only makes it likely.
  */
-const ALL_ACTIONS: [string, (s: ActionState, f: FormData) => Promise<ActionState>, string][] = [
-  ['logBodyweightAction', logBodyweightAction, NO_PROFILE_LOG],
-  ['logCheckinsAction', logCheckinsAction, NO_PROFILE_LOG],
-  ['logStrengthSessionAction', logStrengthSessionAction, NO_PROFILE_LOG],
-  ['logLifeActivitiesAction', logLifeActivitiesAction, NO_PROFILE_LOG],
-  ['editStrengthSetAction', editStrengthSetAction, NO_PROFILE_LOG],
-  ['editBodyweightAction', editBodyweightAction, NO_PROFILE_LOG],
-  ['editRoutineAction', editRoutineAction, NO_PROFILE_SAVE],
-];
+type ActionFn = (s: ActionState, f: FormData) => Promise<ActionState>;
+
+/**
+ * AUTH-1 1b-bis: the NAMES and the refusal copy now come from `MUTATING_ACTIONS`, so this list cannot
+ * silently fall behind `actions.ts`. This map only binds each name to its imported function — and
+ * because it is a `Record<MutatingActionName, ActionFn>`, **forgetting an entry is a TYPE error**, not
+ * a quietly thinner suite. The filesystem cross-check below closes the remaining direction.
+ */
+const ACTION_FNS: Record<MutatingActionName, ActionFn> = {
+  logBodyweightAction,
+  logCheckinsAction,
+  logStrengthSessionAction,
+  logLifeActivitiesAction,
+  editStrengthSetAction,
+  editBodyweightAction,
+  editRoutineAction,
+};
+
+const ALL_ACTIONS: [string, ActionFn, string][] = (
+  Object.keys(MUTATING_ACTIONS) as MutatingActionName[]
+).map((name) => [name, ACTION_FNS[name], MUTATING_ACTIONS[name]]);
 
 /** Every writer the DAL exposes — none may run when an action refuses. */
 const ALL_WRITERS = [
@@ -1589,5 +1603,31 @@ describe('every Server Action — wrong household → the same refusal as not-fo
       );
       expect(foreign.error).toBe(notFound);
     }
+  });
+});
+
+/**
+ * AUTH-1 1b-bis. `ACTION_FNS` being a `Record<MutatingActionName, ActionFn>` means the suite cannot
+ * SKIP an action in `MUTATING_ACTIONS` — that is a type error. This closes the other direction: an
+ * action added to `actions.ts` and never added to `MUTATING_ACTIONS` would be invisible to every
+ * boundary suite in this file, which is exactly the hole `docs/features/write-path.md` invariant 1
+ * admitted in writing ("only if you add it to that suite: do").
+ *
+ * It reads the module's SOURCE rather than its exports because `actions.ts` is mocked to the eyeballs
+ * in this file — importing it for reflection would return the mocks, not the real surface.
+ */
+describe('the action list matches the module on disk (AUTH-1 1b-bis)', () => {
+  const ACTIONS_TS = join(dirname(fileURLToPath(import.meta.url)), 'actions.ts');
+
+  it('actions.ts is a Server Action module, so the scan is looking at the right file', () => {
+    expect(USE_SERVER_RE.test(code(ACTIONS_TS))).toBe(true);
+  });
+
+  it('exports exactly the actions MUTATING_ACTIONS names', () => {
+    expect(exportedActionNames(ACTIONS_TS).sort()).toEqual(Object.keys(MUTATING_ACTIONS).sort());
+  });
+
+  it('the detector is not vacuous — it finds a name that is really there', () => {
+    expect(exportedActionNames(ACTIONS_TS)).toContain('logBodyweightAction');
   });
 });

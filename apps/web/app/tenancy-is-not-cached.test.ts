@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { code } from '@/test/source-scan';
+
 /**
  * **ADR 0006 obligation 2** — nothing household-scoped may enter a cache without the household id in
  * the key, and `force-dynamic` is now load-bearing for TENANCY.
@@ -30,13 +32,6 @@ import { describe, expect, it } from 'vitest';
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = resolve(APP_DIR, '..');
-
-/** Comments out, strings kept — so a `// TODO: force-dynamic` cannot satisfy this. */
-function code(file: string): string {
-  return readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-}
 
 const webSources = globSync('**/*.{ts,tsx}', { cwd: WEB_DIR })
   .filter((f) => !f.includes('node_modules') && !f.startsWith('.next'))
