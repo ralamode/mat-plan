@@ -78,8 +78,24 @@ flowchart LR
    anyone can craft. Re-authenticate, re-authorize ownership, and zod-validate **inside** each one.
    Re-authenticating means `hasGateAccess()` (`lib/dal/gate.ts`) as the action's **first** line,
    returning the action's not-found copy. Until SEC-1 no action did, and requests carrying a prefetch
-   header skipped the proxy, so every action was reachable without the gate cookie. A new action
-   without it fails the unauth suite in `actions.test.ts` only if you add it to that suite: do.
+   header skipped the proxy, so every action was reachable without the gate cookie.
+
+   ✅ **This is now enforced, not requested** (`AUTH-1` 1b-bis). The old wording here —
+   _"a new action without it fails the unauth suite only if you add it to that suite: do"_ — was an
+   invariant that depended on remembering, which is not an invariant. Two guards close it from both
+   sides, and **neither alone is sufficient**:
+   - `app/pages-are-gated.test.ts` → _"every Server Action re-checks the boundary itself"_ enumerates
+     every `'use server'` module **under `apps/web`** (not just `app/`) and asserts the call appears
+     **inside each exported function**, sliced per function so one check cannot cover the module. It is
+     a **source-text** guard: it proves the call is present, not that it runs before the DAL.
+   - `app/p/[profileId]/actions.test.ts` proves the ordering — `getProfileByPublicId` is not called
+     when the action refuses — and cross-checks its own list against the module on disk.
+
+   The action list has one source, `app/p/[profileId]/mutating-actions.ts`. Adding an action to
+   `actions.ts` without adding it there turns the cross-check red; adding it there without binding a
+   function is a **type** error. ⚠️ **1c switches the asserted call from `hasGateAccess` to the session
+   check; it must never widen the regex to an alternation** — one matching either passes on either and
+   proves neither.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take

@@ -1,8 +1,10 @@
-import { globSync, readFileSync } from 'node:fs';
+import { globSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+
+import { code } from '@/test/source-scan';
 
 /**
  * **TEN-1 1d — the DAL-side structural guard.** It catches the common forms; `db:verify` is the proof.
@@ -65,16 +67,6 @@ import { describe, expect, it } from 'vitest';
  */
 
 const DAL_DIR = dirname(fileURLToPath(import.meta.url));
-
-/**
- * Comments out, strings kept — matching calls and identifiers in this app's source. ⚠️ One of five
- * copies of this helper (docs/tech-debt.md → "the comment-stripping `code()` helper").
- */
-function code(file: string): string {
-  return readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-}
 
 const dalFiles = globSync('*.ts', { cwd: DAL_DIR })
   .filter((f) => !f.endsWith('.test.ts'))

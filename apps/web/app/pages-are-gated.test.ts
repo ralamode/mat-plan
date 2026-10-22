@@ -6,6 +6,14 @@ import { describe, expect, it } from 'vitest';
 
 import { isUngatedPath } from '@/lib/access-gate';
 import { isPublicPath } from '@/lib/public-paths';
+import {
+  code,
+  exportedActionNames,
+  serverActionModules,
+  USE_SERVER_MENTION_RE,
+  USE_SERVER_RE,
+  WEB_DIR,
+} from '@/test/source-scan';
 
 /**
  * SEC-1's invariant as a test, not a sentence (OSS-2). The proxy is NOT the boundary: every page and
@@ -17,14 +25,6 @@ import { isPublicPath } from '@/lib/public-paths';
  */
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
-const WEB_DIR = resolve(APP_DIR, '..');
-
-/** Comments out, strings kept — good enough for matching calls and directives in this app's source. */
-function code(file: string): string {
-  return readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
-}
 
 /** `app/p/[profileId]/page.tsx` → `/p/[profileId]`; route groups `(x)` add no segment. */
 function routeOf(file: string): string {
@@ -87,7 +87,6 @@ describe('every Route Handler checks the gate itself', () => {
  */
 const SPECIFIER_RE =
   /(?:^\s*(?:import|export)\s[^'"]*?from\s*|^\s*import\s*|\bimport\(\s*)['"]([^'"]+)['"]/gm;
-const USE_SERVER_RE = /['"]use server['"]/;
 
 function resolveLocal(spec: string, from: string): string | null {
   const base = spec.startsWith('@/')
@@ -131,14 +130,14 @@ describe('public pages pull no Server Action into their module graph', () => {
   });
 
   it('can see an action module (the detector is not vacuous)', () => {
-    expect(USE_SERVER_RE.test(code(join(APP_DIR, 'gate', 'actions.ts')))).toBe(true);
+    expect(USE_SERVER_MENTION_RE.test(code(join(APP_DIR, 'gate', 'actions.ts')))).toBe(true);
   });
 
   it.each(publicPages.map((f) => [routeOf(f), f]))('%s (with its segment files)', (_r, file) => {
     // The root segment's files render with EVERY page, so they are always in the graph.
     const graph = localGraph([file, ...segmentFiles(APP_DIR), ...segmentFiles(dirname(file))]);
     expect(graph.length).toBeGreaterThan(2);
-    const actions = graph.filter((f) => USE_SERVER_RE.test(code(f)));
+    const actions = graph.filter((f) => USE_SERVER_MENTION_RE.test(code(f)));
     expect(actions.map((f) => relative(WEB_DIR, f))).toEqual([]);
   });
 });
@@ -175,8 +174,99 @@ describe('@clerk/nextjs is the first package in a public graph, so its Server Ac
 
   it('ships exactly the two known, benign actions', () => {
     const found = globSync('**/*.js', { cwd: CLERK_ESM })
-      .filter((f) => USE_SERVER_RE.test(readFileSync(join(CLERK_ESM, f), 'utf8')))
+      .filter((f) => USE_SERVER_MENTION_RE.test(readFileSync(join(CLERK_ESM, f), 'utf8')))
       .sort();
     expect(found).toEqual(['app-router/keyless-actions.js', 'app-router/server-actions.js']);
+  });
+});
+
+/**
+ * AUTH-1 1b-bis — **every Server Action re-checks the boundary itself.**
+ *
+ * `beta-1.md` § 3 asked for this by "extending the existing export-enumeration test". That test
+ * (`p/[profileId]/use-server-exports.test.ts`) is an export-SHAPE guard — it would happily pass
+ * `export async function evilAction()` with no auth, no zod and no gate check. The shape guard stays
+ * where it is; the auth assertion lands here, in the file whose job already is "every entry point
+ * re-checks the boundary itself".
+ *
+ * ⚠️ **This is a source-text guard.** It proves the call is PRESENT, not that it runs BEFORE the DAL —
+ * that is `actions.test.ts`'s `expect(getProfileByPublicId).not.toHaveBeenCalled()`. Both halves
+ * together are the claim; neither alone is.
+ *
+ * **Three things it deliberately does not cover**, named here rather than left to be discovered:
+ * an **inline** `'use server'` closure inside a page or component (not an export, so neither half sees
+ * it); an **anonymous default export** (no name to enumerate); and Route Handlers, which the second
+ * `describe` in this file covers separately. **Re-exports are NOT a gap** — `use-server-exports.test.ts`
+ * fails any export that is not `export (default )?async function`, so `export { x } from './y'` is
+ * already a red build.
+ */
+describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', () => {
+  /**
+   * The gate action issues the gate; it cannot require the thing it is about to grant. ⚠️ The
+   * dead-entry assertion below means **1d deleting this file forces the allowlist entry to go with
+   * it** — an allowlist that outlives its subject silently excuses a file somebody may recreate.
+   */
+  const ALLOWLIST = ['app/gate/actions.ts'];
+
+  /**
+   * 🔴 **1c SWITCHES this, it does not WIDEN it.** A regex matching `hasGateAccess|requireSession`
+   * passes on either and therefore proves neither — and that is precisely the edit an author reaches
+   * for when the suite goes red under time pressure. 1b-bis asserts the gate call because that is what
+   * ships today, which is what makes this chunk inert and revert-safe.
+   */
+  const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
+
+  /** Every `'use server'` module under `apps/web`, by path relative to it. */
+  const modules = serverActionModules().map((f) => relative(WEB_DIR, f));
+
+  /**
+   * The discovered set must EQUAL this list, so a Server Action module appearing anywhere in the app
+   * is a visible test edit rather than a silent gap. ⚠️ Pre-1b-bis the only enumeration was rooted at
+   * `app/`, so a `'use server'` module under `components/` or `lib/` was invisible to everything.
+   */
+  it('finds exactly the Server Action modules this app is known to have', () => {
+    expect(modules.sort()).toEqual(['app/gate/actions.ts', 'app/p/[profileId]/actions.ts']);
+  });
+
+  it('the scan is not vacuous', () => {
+    expect(modules.length).toBeGreaterThan(0);
+  });
+
+  it('does not mistake a module that merely mentions the directive for an action module', () => {
+    // `action-state.ts` says `'use server'` inside a docblock and exports a type and a const.
+    const actionState = join(APP_DIR, 'p', '[profileId]', 'action-state.ts');
+    expect(USE_SERVER_MENTION_RE.test(readFileSync(actionState, 'utf8'))).toBe(true);
+    expect(USE_SERVER_RE.test(code(actionState))).toBe(false);
+  });
+
+  it.each(ALLOWLIST)('%s is allowlisted and still exists (no dead entries)', (rel) => {
+    expect(existsSync(join(WEB_DIR, rel))).toBe(true);
+  });
+
+  const guarded = modules.filter((rel) => !ALLOWLIST.includes(rel));
+
+  it('something is actually being guarded after the allowlist is subtracted', () => {
+    expect(guarded.length).toBeGreaterThan(0);
+  });
+
+  it.each(guarded)('%s — every exported action checks the boundary', (rel) => {
+    const src = code(join(WEB_DIR, rel));
+    const names = exportedActionNames(join(WEB_DIR, rel));
+    expect(names.length).toBeGreaterThan(0);
+
+    // Slice each exported function from its declaration to the next one (or EOF) and look inside it,
+    // so a single check in ONE action cannot satisfy the whole module.
+    const starts = names.map((n) => ({
+      name: n,
+      at: src.search(new RegExp(`^export\\s+async\\s+function\\s+${n}\\b`, 'm')),
+    }));
+    const missing = starts
+      .filter(({ at }, i) => {
+        const next = starts[i + 1]?.at ?? src.length;
+        return !BOUNDARY_CALL.test(src.slice(at, next));
+      })
+      .map(({ name }) => name);
+
+    expect(missing).toEqual([]);
   });
 });
