@@ -16,16 +16,21 @@ export const metadata: Metadata = {
 export default async function GatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; locked?: string }>;
 }) {
-  const { from } = await searchParams;
+  const { from, locked } = await searchParams;
   const safeFrom = safeInternalPath(from);
+  // `?locked=1` is set only by the picker's lock control. A bare presence check: the value is
+  // untrusted, carries nothing, and the worst case of a hand-typed one is a true sentence.
+  const wasLocked = locked !== undefined;
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-8 px-4 py-12">
       <header className="flex flex-col gap-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
-        <p className="text-muted-foreground text-sm">{GATE_COPY.subhead}</p>
+        <p className="text-muted-foreground text-sm">
+          {wasLocked ? GATE_COPY.signedOut : GATE_COPY.subhead}
+        </p>
       </header>
       <GateForm from={safeFrom} />
       <Link href="/" className={cn(QUIET_LINK_CLASS, 'self-center')}>

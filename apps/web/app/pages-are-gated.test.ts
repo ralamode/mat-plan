@@ -225,7 +225,14 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * `app/`, so a `'use server'` module under `components/` or `lib/` was invisible to everything.
    */
   it('finds exactly the Server Action modules this app is known to have', () => {
-    expect(modules.sort()).toEqual(['app/gate/actions.ts', 'app/p/[profileId]/actions.ts']);
+    expect(modules.sort()).toEqual([
+      'app/gate/actions.ts',
+      // The picker's "Lock this device" control. It is NOT in the allowlist below: the gate action
+      // is excused because it cannot require the thing it is about to grant, and this one can —
+      // it re-checks `hasGateAccess()` before clearing the cookie. Deleted at AUTH-1 1d.
+      'app/p/[profileId]/actions.ts',
+      'app/p/lock-device-action.ts',
+    ]);
   });
 
   it('the scan is not vacuous', () => {

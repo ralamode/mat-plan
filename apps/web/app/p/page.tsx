@@ -2,8 +2,10 @@ import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { ProfileTile } from '@/components/profiles/profile-tile';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireGatedPage } from '@/lib/dal/gate';
-import { PICKER_COPY, PICKER_EMPTY_COPY } from '@/lib/constants';
+import { Button } from '@/components/ui/button';
+import { GATE_COPY, PICKER_COPY, PICKER_EMPTY_COPY } from '@/lib/constants';
 import { listProfiles } from '@/lib/dal/profiles';
+import { lockDeviceAction } from './lock-device-action';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -54,10 +56,58 @@ export default async function ProfilePickerPage() {
         </ul>
       )}
 
-      {/* `mt-auto`: the switch sits at the BOTTOM of the page, below the thing the screen is for. */}
-      <div className="mt-auto">
+      {/*
+        `mt-auto`: device-grade controls sit at the BOTTOM of the page, below the thing the screen is
+        for. UI-4 put the theme switch here and `docs/design.md` generalised the reason — "the control
+        lives on the profile picker, and only there … a settings-grade preference set once per device".
+        A device lock is the same category by the same argument, so it joins the theme rather than
+        starting a second settings group somewhere else. **This IS the proto-settings area**, which is
+        what makes "later move it into settings" a move of two JSX nodes in one file.
+      */}
+      <section aria-labelledby="this-device" className="mt-auto flex flex-col gap-3">
+        <h2 id="this-device" className="text-muted-foreground text-xs font-medium tracking-wide">
+          {PICKER_COPY.thisDevice}
+        </h2>
         <ThemeToggle />
-      </div>
+
+        {/*
+          Two steps, server-rendered: the destructive tap is never the FIRST tap, and `<details>`
+          needs no client JS (the `Today's program` card's idiom). A native `confirm()` was rejected —
+          unstyled, unthemed, and it would make this a client component.
+
+          The cost is stated in the second person BEFORE the tap, not after it, because the person most
+          likely to mis-tap is a child who does not hold the code and so cannot undo it.
+
+          ⚠️ The `<form>` carries NO accessible name on purpose: a named form maps to role `form`, a
+          second landmark, and `landmark-unique` is a `best-practice` rule that this repo's axe scan
+          (`wcag2a`/`wcag2aa`) would NOT catch. The button's text carries the meaning.
+        */}
+        <details className="group">
+          {/*
+            `list-none` + the webkit pseudo kills the default marker, the same way
+            `program-reference.tsx` does — and like that card, this one then supplies its OWN
+            affordance. Without the chevron this reads as muted body text sitting under a muted hint,
+            which is exactly what the first screenshot showed. A BORDERED control in the
+            `ThemeToggle`'s register, not `destructive`: the act is reversible (re-enter the code), and
+            a red button for a reversible act is the confirm-fatigue problem one level up.
+          */}
+          <summary className="border-input hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-md border px-3 text-sm outline-none focus-visible:ring-3 [&::-webkit-details-marker]:hidden">
+            <span
+              aria-hidden="true"
+              className="text-muted-foreground transition-transform group-open:rotate-90"
+            >
+              ›
+            </span>
+            {GATE_COPY.lock}
+          </summary>
+          <form action={lockDeviceAction} className="mt-2 flex flex-col items-start gap-2">
+            <p className="text-muted-foreground text-sm">{GATE_COPY.lockHint}</p>
+            <Button type="submit" variant="outline" size="sm">
+              {GATE_COPY.lockConfirm}
+            </Button>
+          </form>
+        </details>
+      </section>
     </main>
   );
 }

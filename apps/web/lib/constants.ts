@@ -78,6 +78,8 @@ export const TOKEN_SETS_PATH = '/design/tokens';
 
 /** The profile picker's copy — one source for the page and the specs that land on it. */
 export const PICKER_COPY = {
+  /** The proto-settings group at the bottom of the picker (theme + device lock). */
+  thisDevice: 'This device',
   heading: 'Who’s logging today?',
   subhead: 'Pick a profile to start logging.',
 } as const;
@@ -126,6 +128,23 @@ export const GATE_COPY = {
   back: `About ${APP_NAME}`,
   /** A wrong code. */
   incorrect: 'Incorrect access code.',
+  /**
+   * The lock control on the picker, and the gate's explanation after it is used. **Deliberately NOT
+   * "Log out".** There is one access code for the whole household and profile tiles are "a UX switch,
+   * not a security boundary" — so this does not end *a person's* session, it locks *the device* for
+   * everyone. "Log out" would read to an 8-year-old as "finish my turn", and the next kid on the gym
+   * floor could not log a set. The label names the object it acts on; the hint states the cost in the
+   * second person, before the tap rather than after it.
+   *
+   * ⚠️ Lives in `GATE_COPY` because it is gate-shaped: it dies with the gate at AUTH-1 1d, when a real
+   * per-person sign-out replaces it.
+   */
+  lock: 'Lock this device',
+  lockHint: 'Anyone using this phone will need the household code to log again.',
+  lockConfirm: 'Lock it',
+  /** Shown on the gate after the lock control is used, so the screen explains itself. The recovery
+   *  names a parent, mirroring `AMEND_COPY.lockedRecovery` — a child cannot fix this alone. */
+  signedOut: 'This device is locked. Ask a parent for the household code.',
 } as const;
 
 /**

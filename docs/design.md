@@ -70,6 +70,16 @@ and why the no-flash test asserts a mechanism rather than an end state — is in
 
 - **The control lives on the profile picker, and only there.** A theme is a settings-grade preference
   set once per device, and the logging screens cannot spare the vertical space.
+  📌 **This generalised into the picker's `This device` group** _(2026-10-22)_: the `mt-auto` block is
+  now the app's **proto-settings area**, and a second device-grade control — **Lock this device**, which
+  clears the access-gate cookie — joined the theme there rather than starting a second settings group
+  elsewhere. The same argument carries it: device-scoped, set-once, not a task. A logout control was
+  first proposed for the global `<footer>` and the UX panel rejected that placement on two grounds —
+  `app/layout.tsx` renders the footer on every route, so a Server Action imported there lands in the
+  module graph of `/`, `/privacy`, `/sign-in` and `/gate` and turns
+  `pages-are-gated.test.ts`'s public-page scan red; and a destructive control does not belong in chrome
+  that also renders on the public landing. **When a real settings screen exists, this group moves to it
+  whole** — which is what putting both controls in one container buys.
 - **Per device, not per profile.** One phone, one theme, whichever profile is open — a theme is a
   property of the room, and the gym is lit differently from the kitchen. It is stored in
   `localStorage` (`THEME_STORAGE_KEY`), so it never leaves the device and **it clears with site

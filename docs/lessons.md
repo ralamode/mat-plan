@@ -198,6 +198,17 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
+  OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
+  `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script
+  succeeds, writes three PNGs, and they are **byte-identical to the previous run** — so the edit looks
+  like it did nothing, and the obvious next move is to go and "fix" code that was already correct.
+  Deleting `.screenshots/` does not help; it is `.next` that is stale. **Fix:** pass `--build` on any
+  capture taken after the first one in a session (`pnpm --filter web screenshot:ephemeral <route>
+--build`). Found while adding the picker's device-lock control — the first capture showed the
+  control, the second was taken after restyling it and showed the unstyled version, which read as "my
+  change did not apply". _(2026-10-22.)_
+
 - **A Playwright `addInitScript` silently does nothing from one line onward, and the symptom is a
   later assertion reading `null` ("the theme never applied at all").** → The script runs at
   **document-start**, where `document.documentElement` can still be null, so
