@@ -1125,16 +1125,30 @@ go in a runbook checklist". This is that checklist's privacy half, written by `P
 not have to invent it. `AUTH-1` owns the rest (the Google OAuth credentials, the domain, the
 invite-only setting).
 
-- [ ] **The privacy-policy URL.** Point it at `/privacy` on the app's own domain — which means
-      **`PRIV-2` lands first**. ⚠️ **Verify, do not assume:** whether Google's OAuth consent screen
-      accepts a URL that is not on a verified domain must be read off Google's console at the time you
-      configure it. This checklist assumes it does not, because that is the assumption that is safe if
-      wrong.
-- [ ] **A consent step at sign-up, before the first write.** Clerk's dashboard has a legal-consent
-      setting; **confirm against Clerk's own docs at the pinned version** whether it exists, what it is
-      called, and — the part that matters — **whether it blocks sign-up until ticked.** If it does
-      neither, `AUTH-1` adds an in-app consent step instead. Do not ship sign-in on the assumption that
-      a vendor checkbox is doing this.
+- [x] **The privacy-policy URL — answered 2026-10-21.** Point it at `/privacy` on the app's own
+      domain; **`PRIV-2` landed** (#291), so the URL exists. It is set on the Clerk **Legal** page
+      alongside the consent setting in the next box, not on Google's console.
+      📌 **The verified-domain worry is a PRODUCTION-only question.** A **development** instance never
+      touches Google's OAuth consent screen at all — Clerk's docs: _"For development instances, Clerk
+      uses preconfigured shared OAuth credentials and redirect URIs — no other configuration is
+      needed."_ So there is no Google console to read until the production instance is configured, and
+      the original assumption (safe if wrong) still stands for that day.
+- [ ] **A consent step at sign-up, before the first write. Two thirds answered 2026-10-21; the third
+      is the one that matters and is deliberately still open.**
+      ✅ **It exists and it is named** _"Require express consent to legal documents"_, on the Clerk
+      dashboard's **Legal** page, with Terms-of-Service and Privacy-Policy URL fields beside it.
+      ✅ **It needs no code here**: enabling it renders the checkbox inside the prebuilt `<SignUp />`
+      and the Account Portal, and Clerk handles the acceptance flow. (A **custom** sign-up UI would
+      have to handle it by hand — relevant only if 1c stops using the prebuilt component.)
+      🔴 **Whether it BLOCKS sign-up until ticked is NOT stated by the docs.** Clerk's
+      [changelog](https://clerk.com/changelog/2024-11-11-legal-consent) says users are _"required to
+      accept your legal documents before they are allowed to create an account"_; the current
+      [legal-compliance guide](https://clerk.com/docs/guides/secure/legal-compliance) describes only
+      that a checkbox appears and never states the mechanism. A changelog entry from 2024 is not a
+      behavioural guarantee at 7.9.15. **So test it, in the development instance, which is the whole
+      reason to have one:** enable the setting, open `/sign-in`, attempt a Google sign-up **without**
+      ticking the box, and record here what happened. If it does not block, `AUTH-1` adds an in-app
+      consent step. Do not ship sign-in on the assumption that a vendor checkbox is doing this.
 - [ ] **What records the consent.** Beta 0 has no account table and no consent column, so the
       **invitation is the record** — sign-up is invitation-only, so who was asked and when is known.
       Storing a consent timestamp is a Beta 1 item. Say which of these is true in the notice.
@@ -1152,6 +1166,13 @@ sent to Clerk. Everything below is what has to be true **before an instance is p
 Work it top to bottom with the console open; several boxes are one console read each and are owed as
 `data-inventory.md` rows, not as opinions.
 
+📌 **There is no separate "create a development instance" step, which is why this list never had one.**
+Creating the application at [dashboard.clerk.com](https://dashboard.clerk.com) **is** creating the
+development instance — an app is born with one and it is the default context. A **production** instance
+is a later, explicit act from the instance dropdown, and the first box below is what says not to do it
+yet. Navigation paths in this list are the dashboard's **current** ones (verified 2026-10-21); Clerk
+moves them, so treat a path that does not resolve as a renamed page, not a missing feature.
+
 - [ ] 🔴 **Production keys stay UNSET until chunk 1c.** This is the one box that is about _not_ doing
       something, and it is the UX panel's finding, not a precaution: between 1a and 1c a completed
       Google sign-in grants nothing, lands on `APP_HOME_PATH`, and is bounced to `/gate` for the shared
@@ -1160,9 +1181,23 @@ Work it top to bottom with the console open; several boxes are one console read 
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
 - [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
-- [ ] **Sign-up restricted to invited emails.** ⚠️ **Verify, do not assume, and record what you read:**
-      whether the setting exists at the pinned version, what it is called, and **whether it blocks
-      sign-up or only warns.** If it does not block, the "no household #2" question is re-opened before
+      **Path (verified 2026-10-21):** **SSO connections → Add connection → For all users → Google.**
+      Disable email/password and every other strategy in the same pass; the point of the box is that
+      invite-only governs one door only if there is one door.
+- [x] **Sign-up restricted to invited emails — verified 2026-10-21.** ✅ **It exists, it is called
+      `Invite-only`** (API value `restricted`), on the **Access mode** page
+      (`dashboard.clerk.com/~/user-authentication/access-mode`), one of three modes with `Open`
+      (`public`) and `Waitlist` (`waitlist`). ✅ **It blocks**, per Clerk's
+      [access-control docs](https://clerk.com/docs/guides/secure/restricting-access): _"The
+      `<SignUp />` is accessible only to users who have been invited and have a valid invitation link.
+      Users who don't have access will see a message indicating that they need an invitation to sign
+      up."_ So the "no household #2" question does **not** re-open on this setting.
+      🔴 **But there is no second layer, which this checklist assumed there might be.** Allowlist and
+      blocklist **apply only in `Open` mode** — in `Invite-only` they do not apply at all, because
+      sign-ups are already restricted. So this is **one** mechanism, not belt-and-braces, and a
+      misconfiguration of it has no backstop. (Allowlist also needs a paid plan in production, so it
+      was never the cheap fallback either.) The code-side exit criterion below is therefore load-bearing,
+      not redundant. If it does not block, the "no household #2" question is re-opened before
       1c ships. 📌 **Which half is vendor and which is code:** account **creation** can only be held by
       the dashboard — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is public by design, so Clerk's Frontend API
       is reachable without going through this app and no code here can sit in front of sign-up. The
@@ -1171,13 +1206,37 @@ Work it top to bottom with the console open; several boxes are one console read 
       **Clerk holds uninvited people's email addresses**, which is a `data-inventory.md` §7 re-review
       trigger, not merely an availability concern.
 - [ ] **The production instance's own Google OAuth credentials**, development instance kept separate.
-- [ ] 🔴 **The exact OAuth SCOPE list, pinned to the minimum that signs a user in.** A conventional
-      `openid email profile` request also returns `name`, `given_name`, `family_name` and `picture`,
-      while `data-inventory.md` §7 pins the claim to "an email address and a Google account identifier"
-      and [notice.md](./privacy/notice.md) claims **"no photos"**. If `profile`/`picture` is
-      unavoidable, both documents are edited in the chunk that configures the instance — and **nothing
-      may ever write `profiles.avatar` from Clerk** (§2 already flags that column: what it would hold is
-      a picture of a child).
+      ✅ **The separation is automatic, not a discipline to maintain** (verified 2026-10-21): a
+      development instance uses _"preconfigured shared OAuth credentials and redirect URIs"_ of
+      Clerk's, so it **cannot** use this app's credentials and no Google Cloud Console work exists for
+      dev at all. This box is entirely a production-instance box; the custom-credentials toggle
+      (**Use custom credentials**, with **Enable for sign-up and sign-in**) is where it is done.
+- [ ] 🔴 **The exact OAuth SCOPE list — answered 2026-10-21, and the answer is NOT the one this box
+      was hoping for. It is now a named obligation on the chunk that configures the instance, not an
+      open question.**
+      **What was read:** Clerk's default Google scopes are exactly the conventional
+      **`openid email profile`**, and the dashboard's **Scopes** field _only appears when **Use custom
+      credentials** is enabled_. Two consequences:
+  1. **On a development instance the scopes cannot be narrowed at all**, because dev runs on Clerk's
+     shared credentials and the custom-credentials toggle is what reveals the field.
+  2. **Even on production, `profile` cannot be dropped.** Clerk pre-configures and automatically
+     includes the essential scopes each provider needs to authenticate; the Scopes field **adds**
+     scopes, it does not subtract them. So _"pinned to the minimum that signs a user in"_ **is**
+     `openid email profile`, and this box's premise — that a narrower list exists to pin — is false.
+     🔴 **Therefore `picture` arrives from Google whatever we do**, and the conditional in the
+     original box (_"if `profile`/`picture` is unavoidable"_) has resolved to **unavoidable**. The
+     documents are edited **in the chunk that configures the instance**, as that conditional already
+     required: [notice.md](./privacy/notice.md)'s **"no photos"** claim and
+     [data-inventory.md](./privacy/data-inventory.md) §7's pin to _"an email address and a Google
+     account identifier"_ are both too narrow for what is **received**.
+     📌 **The honest edit distinguishes RECEIVING a claim from STORING it**, which is a real and
+     defensible distinction and the only one that makes the notice true without overstating the
+     exposure: Clerk receives a name and a picture URL in the ID token; this app reads neither and
+     persists neither. **Nothing may ever write `profiles.avatar` from Clerk** (§2 already flags that
+     column: what it would hold is a picture of a child), and that prohibition is now the load-bearing
+     control rather than a scope setting. ⚠️ Do **not** write "Google sends us nothing but an email
+     address" — it is false at the token, and a privacy notice that is false in a checkable way is
+     worse than one that is wordy.
 - [ ] 🔴 **Clerk's data region**, and whether it is selectable on the tier in use.
 - [ ] 🔴 **Clerk's retention** for user records and sign-in/session logs → a `data-inventory.md` §8 row.
       `beta-1.md`'s exit criterion requires the notice to ship **with no blanks**, so read it while the
