@@ -1056,7 +1056,7 @@
 
 <details class="bar-wrap" id="bar-wrap" open>
   <summary class="bar-sum">
-    <strong>CRUD-1 prototype · v4</strong> <span class="muted">· review controls</span>
+    <strong>CRUD-1 prototype · v5</strong> <span class="muted">· review controls</span>
   </summary>
   <div class="bar" role="region" aria-label="Prototype controls">
     <label for="screen-select"
@@ -1077,6 +1077,13 @@
       <select id="v-archive">
         <option value="resolve">resolve in place</option>
         <option value="close">close all, undo as one</option>
+      </select>
+    </label>
+    <label for="v-rotation"
+      >Q13 rotation counts
+      <select id="v-rotation">
+        <option value="scheduled">scheduled days (proposed)</option>
+        <option value="calendar">calendar days (today)</option>
       </select>
     </label>
     <label class="chk" for="measure"><input type="checkbox" id="measure" /> Measure widths</label>
@@ -1399,7 +1406,7 @@
     var pageHidden = {}; // event ids hidden during THIS visit → drawn in place (not persisted: a reload folds them into the Hidden bar)
     function load() {
       try {
-        var raw = localStorage.getItem('crud1-proto-v4');
+        var raw = localStorage.getItem('crud1-proto-v5');
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
         return null;
@@ -1407,7 +1414,7 @@
     }
     function save() {
       try {
-        localStorage.setItem('crud1-proto-v4', JSON.stringify(S));
+        localStorage.setItem('crud1-proto-v5', JSON.stringify(S));
       } catch (e) {}
     }
 
@@ -1555,22 +1562,41 @@
           .join(',')
       );
     }
-    // resolveRotationSlot: floorMod(isoDayDiff(day, anchor), slots.length) — counts CALENDAR days.
-    function slotOn(b, iso) {
+    // Q13. "calendar": today's resolveRotationSlot — floorMod(isoDayDiff(day, anchor), n). "scheduled"
+    // (proposed): count the athlete's SCHEDULED days from the anchor instead. Both are pure functions of
+    // the date and the schedule, so a skipped session never shifts the program (the maintainer's rule,
+    // 2026-10-22). With all seven days scheduled the two are identical, which is today's YDP.
+    function slotFor(b, days, iso) {
       var rot = b.rotation || { anchor: '2026-09-24', slots: Object.keys(b.days) };
-      var diff = Math.round((Date.parse(iso) - Date.parse(rot.anchor)) / 864e5);
       var n = rot.slots.length;
-      return rot.slots[((diff % n) + n) % n];
+      var c;
+      if ($('#v-rotation').value === 'calendar') {
+        c = Math.round((Date.parse(iso) - Date.parse(rot.anchor)) / 864e5);
+      } else {
+        c = 0;
+        var d = rot.anchor;
+        if (iso >= d) {
+          for (; d < iso; d = shift(d, 1)) if (days.indexOf(weekday(d)) !== -1) c++;
+        } else {
+          while (d > iso) {
+            d = shift(d, -1);
+            if (days.indexOf(weekday(d)) !== -1) c--;
+          }
+        }
+      }
+      return rot.slots[((c % n) + n) % n];
     }
     function workoutOn(asg, iso) {
-      return asg.days.indexOf(weekday(iso)) !== -1 ? slotOn(program(asg.block), iso) : null;
+      return asg.days.indexOf(weekday(iso)) !== -1
+        ? slotFor(program(asg.block), asg.days, iso)
+        : null;
     }
     // The next `n` due days for a program on a weekday set, and whether a repeat breaks the alternation.
     function upcoming(b, days, n) {
       var out = [];
       for (var i = 0; i < 28 && out.length < n; i++) {
         var iso = shift(TODAY, i);
-        if (days.indexOf(weekday(iso)) !== -1) out.push([iso, slotOn(b, iso)]);
+        if (days.indexOf(weekday(iso)) !== -1) out.push([iso, slotFor(b, days, iso)]);
       }
       var slots = (b.rotation && b.rotation.slots) || Object.keys(b.days);
       var repeats =
@@ -1646,7 +1672,7 @@
       ],
       day: [
         'NEW (v3): the Strength section says what the program has today ("Today: Youth Daily Program · Day B"), "No program today" on a rest day, or "No program yet · Choose a program".',
-        '"Edit routine" is the SHIPPED link, unchanged. Its page picks which activities show here, not workout days; the hint under it says so. Renaming it is Q14.',
+        'v5 (Q14, maintainer): the "Edit routine" link is gone from this page. What it opened is now "Activities", reached from "→ Edit {name}" beside the program.',
         'Delete leaves an in-place "deleted · Undo" line, so the row never vanishes from under a finger and the next row does not slide up into a double tap (panel T5, I2).',
         'Focus lands on that Undo — a safe control to press twice. Restore focuses the restored row.',
         'The Hidden bar sits under the day nav, not a screen below. One item shows directly; more expand.',
@@ -1665,6 +1691,7 @@
         'Restores as one event.',
       ],
       edit: [
+        'v5 (Q14): one place to set an athlete up — name and kind, then their program and days, then "Activities on their page" (the shipped routine editor, retitled). Nothing else links to the routine page.',
         'Rename + kind. Reached from the athlete’s page ("→ Edit Athlete One") and from Household settings. PROF-1: edit lives on /p.',
       ],
       settings: [
@@ -1693,7 +1720,8 @@
         'v4: full screen on a phone — title and actions pinned, only the middle scrolls; a capped dialog from 600px. "None of these? Create a new program" sits under the list when putting someone on.',
         'ASSIGN-1 owns the days (maintainer, 2026-10-22). One sheet: program, then which days, then a preview of the next six sessions.',
         'Weekdays only — ADR 0007 decision 1. The grey line shows the same choice as an RRULE (FREQ=WEEKLY;BYDAY=…); see the spec’s Recurrence section.',
-        'Try: switch to Youth Daily Program and untick to Mon/Wed/Fri. It warns and the preview shows Day B three times, then Day A: the rotation counts calendar days (2026-09-24 decision). That is Q13.',
+        'Q13: switch to Youth Daily Program and untick to Mon/Wed/Fri. With the bar on "scheduled days" (proposed) it alternates B, A, B, A. Switch the bar to "calendar days" (how the app counts today) to see B, B, B, then A, A, A, and the warning.',
+        'Either way a skipped session never shifts the program: both counts come from the date and the schedule, never from what was logged (maintainer, 2026-10-22). With every day ticked they are identical.',
         'At 360px seven 44px toggles need 308px against 294px of content, so they sit 4 + 3; seven across from 480px.',
         'A change of days closes the old period and opens a new one, so HIST-1’s timeline shows it.',
       ],
@@ -1793,6 +1821,10 @@
         case 'add':
           html = vAdd(r);
           path = r.step === 2 ? '/p/' + r.id + ' (add athlete · last step)' : '/p (add athlete)';
+          break;
+        case 'routine':
+          html = vRoutine(r);
+          path = '/p/' + r.id + '/routine';
           break;
         case 'start':
           html = vStart(r);
@@ -1964,7 +1996,75 @@
         '" maxlength="40" /></div>' +
         kindFields('ek', a.kind) +
         '<button class="btn full" type="submit">Save</button></form>' +
+        // Q14 (maintainer, 2026-10-22): one place to set an athlete up. The routine link left the day page.
+        '<section class="stack-sm" aria-labelledby="ed-prog"><h2 id="ed-prog">Program</h2><p class="small muted" style="margin:0">' +
+        (activeAssignments(a.id).length
+          ? esc(
+              activeAssignments(a.id)
+                .map(function (x) {
+                  return program(x.block).name + ', ' + daysLabel(x.days);
+                })
+                .join(' · '),
+            )
+          : 'No program yet.') +
+        '</p><button type="button" class="btn outline" style="width:fit-content" data-go="program" data-id="' +
+        a.id +
+        '">' +
+        esc(a.name) +
+        '’s program and days</button></section>' +
+        '<section class="stack-sm" aria-labelledby="ed-act"><h2 id="ed-act">Activities on their page</h2><p class="small muted" style="margin:0">What ' +
+        esc(a.name) +
+        ' can log besides the program — practice, wake time, habits — and in what order.</p><button type="button" class="btn outline" style="width:fit-content" data-go="routine" data-id="' +
+        a.id +
+        '">Edit activities</button></section>' +
         '<p class="hint" style="margin:0">To archive or delete an athlete, use <button type="button" class="textlink" style="min-height:44px;display:inline-flex" data-go="settings">Household settings</button>.</p>'
+      );
+    }
+    // The SHIPPED routine editor (/p/[id]/routine, V1-23), stubbed so the link lands somewhere. Only its
+    // entry point and its title change in CRUD-1 (Q14); the checklist and ▲▼ order are as shipped.
+    function vRoutine(r) {
+      var a = athlete(r.id);
+      var items = [
+        ['Strength', true],
+        ['Wrestling practice', true],
+        ['Wake time', false],
+        ['Rice bucket', true],
+        ['Brain rep', false],
+        ['Splits', false],
+      ];
+      return (
+        '<header class="stack-sm"><button type="button" class="back" data-go="edit" data-id="' +
+        a.id +
+        '">← Edit ' +
+        esc(a.name) +
+        '</button><h1>Activities</h1><p class="muted" style="margin:0">Choose ' +
+        esc(a.name) +
+        '’s activities and the order they log them in.</p><p class="proto-flag">Stub of the shipped page — only the title ("Edit routine" today) and how you reach it change</p></header>' +
+        '<ul class="plain stack-sm">' +
+        items
+          .map(function (it, i) {
+            return (
+              '<li class="row" style="justify-content:space-between;border:1px solid var(--border);border-radius:10px;padding:0 4px 0 12px"><label class="checkrow" style="border:0;flex:1" for="rt-' +
+              i +
+              '"><input type="checkbox" id="rt-' +
+              i +
+              '"' +
+              (it[1] ? ' checked' : '') +
+              ' /> ' +
+              it[0] +
+              '</label><span class="row" style="gap:4px"><button type="button" class="icon-btn" aria-label="Move ' +
+              it[0] +
+              ' up"' +
+              (i === 0 ? ' disabled' : '') +
+              '>↑</button><button type="button" class="icon-btn" aria-label="Move ' +
+              it[0] +
+              ' down"' +
+              (i === items.length - 1 ? ' disabled' : '') +
+              '>↓</button></span></li>'
+            );
+          })
+          .join('') +
+        '</ul><button type="button" class="btn full">Save</button>'
       );
     }
     function vSettings() {
@@ -2456,10 +2556,7 @@
         '">→ Edit ' +
         esc(a.name) +
         '</button>' +
-        // The SHIPPED link (page.tsx:363), unchanged. Its page picks activities, not workout days (Q14).
-        '<button type="button" class="textlink" data-act="routine" aria-describedby="rt-hint">→ Edit ' +
-        esc(a.name) +
-        '’s routine</button><span class="hint" id="rt-hint" style="margin:-4px 0 0 0">Which activities show on this page, and their order. Not workouts — those come from the program.</span></nav>'
+        '</nav>'
       );
     }
     function openClear() {
@@ -3383,7 +3480,7 @@
           ? '<p class="warn" style="margin:0">On these days ' +
             esc(b.name) +
             ' won’t alternate: the workout follows the calendar date, not how many sessions were done. See the list.</p>' +
-            '<p class="proto-flag">Q13 — calendar-indexed by the maintainer’s decision (2026-09-24), made when every day ran</p>'
+            '<p class="proto-flag">Q13 — this is the calendar count. Switch the bar to "scheduled days" to see the proposal</p>'
           : '') +
         '<p class="small" style="margin:0;font-weight:500">Next ' +
         u.days.length +
@@ -3857,7 +3954,7 @@
       if (g) {
         closeDialog(false);
         if (g === 'day') return go({ name: 'day', id: t.dataset.id || 'a1', day: TODAY });
-        if (g === 'edit' || g === 'log' || g === 'history')
+        if (g === 'edit' || g === 'log' || g === 'history' || g === 'routine')
           return go({ name: g, id: t.dataset.id || 'a1' });
         if (g === 'del') return go({ name: 'del', id: t.dataset.id, step: 1 });
         if (g === 'program') {
@@ -4064,10 +4161,6 @@
           S.edit = null;
           return go({ name: 'program', block: nb.id, forAthlete: t.dataset.a || null });
         }
-        case 'routine':
-          return announce(
-            'Prototype: opens the existing routine page, unchanged by this milestone.',
-          );
         case 'takeoff': {
           var asg = S.assignments.find(function (x) {
             return x.athlete === t.dataset.a && x.block === t.dataset.b && !x.to;
@@ -4534,6 +4627,10 @@
     $('#v-archive').addEventListener('change', function () {
       S.route.confirmArchive = null;
       render();
+    });
+    $('#v-rotation').addEventListener('change', function () {
+      render();
+      if ($('#assign-form')) drawAssignPreview($('#assign-form'));
     });
     $('#measure').addEventListener('change', measure);
     $('#reset').addEventListener('click', function () {
