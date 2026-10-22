@@ -259,6 +259,8 @@
     flex-direction: column;
     gap: 32px;
     padding: 32px 16px 48px; /* main: px-4 py-12, trimmed */
+    max-width: 42rem; /* max-w-2xl, as p/page.tsx and [profileId]/page.tsx use (CD-8) */
+    margin: 0 auto;
   }
   .app h1 {
     margin: 0;
@@ -920,7 +922,8 @@
     font-size: 14px;
   }
   .hidden-bar {
-    border: 1px dashed color-mix(in oklch, var(--foreground) 25%, transparent);
+    border: 1px dashed var(--border);
+    font-size: 14px;
     border-radius: 10px;
     padding: 8px 4px 8px 16px;
     display: flex;
@@ -962,7 +965,8 @@
     flex-wrap: nowrap;
   }
   .rx.removed {
-    opacity: 0.6;
+    color: var(--muted-foreground);
+    border-style: dashed;
   }
   .rx.removed .rx-name {
     text-decoration: line-through;
@@ -975,7 +979,7 @@
     padding: 0 12px;
     border-radius: 999px;
     border: 1px solid var(--input);
-    background: var(--muted);
+    background: var(--background);
     cursor: pointer;
     font-size: 14px;
   }
@@ -1019,8 +1023,9 @@
   }
   .sheet-foot.actions {
     flex-direction: row;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
+    flex-wrap: wrap;
   }
   .radio-card {
     display: flex;
@@ -1041,12 +1046,75 @@
     accent-color: var(--primary);
     flex: none;
   }
+  /* CD-2/CD-3: no amber the app has no token for. A caution is the information callout, with a mark. */
   .warn {
-    font-size: 13px;
-    color: var(--note-fg);
-    background: var(--note);
-    border-radius: 6px;
-    padding: 4px 8px;
+    font-size: 14px;
+    color: var(--foreground);
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+  .warn::before {
+    content: '⚠ ';
+  }
+  /* CD-5/CD-12, A11Y-11: navigation is a link, drawn as a row ending in › — never a button or a card. */
+  .navlist {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .navrow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 16px;
+    color: inherit;
+    text-decoration: none;
+    font-size: 15px;
+  }
+  .navlist li + li .navrow {
+    border-top: 1px solid var(--border);
+  }
+  .navrow:hover {
+    background: var(--muted);
+  }
+  .navrow .sub {
+    display: block;
+    font-size: 14px;
+    color: var(--muted-foreground);
+  }
+  .navrow > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    padding: 8px 0;
+  }
+  a.back,
+  a.btn,
+  a.textlink {
+    text-decoration: none;
+  }
+  /* A11Y-9: long names wrap instead of overflowing. */
+  #dlg h2,
+  .radio-card,
+  .chip-btn,
+  .tomb span {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  /* A11Y-10: the focus ring goes round the whole card, not the 20px control inside it. */
+  .radio-card:has(input:focus-visible),
+  .checkrow:has(input:focus-visible),
+  .days label:has(input:focus-visible) {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .err-near {
+    color: var(--destructive);
+    font-size: 14px;
+    margin: 0;
   }
   [tabindex='-1']:focus {
     outline: 2px solid var(--ring);
@@ -1056,7 +1124,7 @@
 
 <details class="bar-wrap" id="bar-wrap" open>
   <summary class="bar-sum">
-    <strong>CRUD-1 prototype · v5</strong> <span class="muted">· review controls</span>
+    <strong>CRUD-1 + PROG-1 prototype · v6</strong> <span class="muted">· review controls</span>
   </summary>
   <div class="bar" role="region" aria-label="Prototype controls">
     <label for="screen-select"
@@ -1209,36 +1277,34 @@
     var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     var WD_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     var WD_RRULE = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-    // The program the app ships (PROGRAM_SEED). A default is copied into the household with NO loads:
-    // the loads in the seed are per-kid fixtures, and nothing in the app authors a load (AGENTS.md).
+    // The default is The Daily Five (ONB-2, docs/programs/daily-five-default.md), never PROGRAM_SEED:
+    // ONB-2 seeds it when a household is created, so this path is only for a household that has since
+    // archived every program. Bodyweight only, no loads, no targets. One workout; ONB-2 stores it under
+    // both day roles (the A/B stopgap) until SCHED-1, which the person never sees.
     var DEFAULTS = [
       {
-        id: 'ydp',
-        name: 'Youth Daily Program',
+        id: 'daily_five',
+        name: 'The Daily Five',
         about:
-          'Ships with the app. Six or seven movements a day, alternating Day A and Day B. Built for children.',
-        rotation: { anchor: '2026-09-24', slots: ['Day B', 'Day A'] },
+          'Ships with the app. Eight bodyweight movements, about 10 minutes, every day. No set goes to failure. Written for young athletes.',
+        rotation: { anchor: '2026-09-24', slots: ['Daily Five'] },
         days: {
-          'Day A': [
-            'Push-Ups',
-            'Pull-Up',
-            'Leg Raises',
-            'V-Sit Crunches',
-            'Box Jump',
-            'Inverted Rows',
-            'Single-Leg Hip Thrusts',
-          ],
-          'Day B': [
-            'Push-Ups',
-            'Pull-Up',
-            'Leg Raises',
-            'V-Sit Crunches',
-            'KB Swings',
-            'Single-Leg Hip Thrusts',
+          'Daily Five': [
+            ['Neck Isometric', 8, '10s'],
+            ['Pull-Up', 3, '2'],
+            ['Push-Ups', 2, '8'],
+            ['Bodyweight Squat', 1, '15'],
+            ['Deep-Squat Hold', 1, '45s'],
+            ['Cossack Squat', 1, '5 per side'],
+            ['Hollow-Body Hold', 3, '20s'],
+            ['Side Plank', 2, '20s per side'],
           ],
         },
       },
     ];
+    // A program has WORKOUTS; a "day" is only ever a weekday (panel PUX-1, maintainer 2026-10-22). Three
+    // workouts is DAY_ROLES' length today (strength_a/b/c), so a created program needs no CHECK change.
+    var MAX_WORKOUTS = 3;
 
     function fresh() {
       return {
@@ -1330,10 +1396,10 @@
             id: 'b1',
             name: 'Youth Daily Program',
             archived: false,
-            // The real one: YDP_ROTATION (SCHED-1 1b). Calendar-indexed from an anchor that is a B day.
-            rotation: { anchor: '2026-09-24', slots: ['Day B', 'Day A'] },
+            // The real one: YDP_ROTATION (SCHED-1 1b), anchored on a B day. Labels are DAY_ROLE_LABELS.
+            rotation: { anchor: '2026-09-24', slots: ['Strength B', 'Strength A'] },
             days: {
-              'Day A': [
+              'Strength A': [
                 rx('Push-Ups'),
                 rx('Pull-Up'),
                 rx('Leg Raises'),
@@ -1342,7 +1408,7 @@
                 rx('Inverted Rows'),
                 rx('Single-Leg Hip Thrusts', 3, '10 per side'),
               ],
-              'Day B': [
+              'Strength B': [
                 rx('Push-Ups'),
                 rx('Pull-Up'),
                 rx('Leg Raises'),
@@ -1403,10 +1469,11 @@
     }
 
     var S = load() || fresh();
+    var pendingGo = null;
     var pageHidden = {}; // event ids hidden during THIS visit → drawn in place (not persisted: a reload folds them into the Hidden bar)
     function load() {
       try {
-        var raw = localStorage.getItem('crud1-proto-v5');
+        var raw = localStorage.getItem('crud1-proto-v6');
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
         return null;
@@ -1414,7 +1481,7 @@
     }
     function save() {
       try {
-        localStorage.setItem('crud1-proto-v5', JSON.stringify(S));
+        localStorage.setItem('crud1-proto-v6', JSON.stringify(S));
       } catch (e) {}
     }
 
@@ -1459,6 +1526,16 @@
         ? list.join('')
         : list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1];
     }
+    // Every typed comparison folds the same way: a phone keyboard types ’ for ', and names carry accents.
+    function fold(s) {
+      return String(s || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\u2018\u2019\u02bc]/g, "'")
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+    }
     // The region is mounted once at load; only its text changes (saved-announcer.tsx idiom).
     function announce(msg) {
       var live = $('#live');
@@ -1472,8 +1549,21 @@
       if (el) el.focus({ preventScroll: false });
     }
     function go(route) {
+      if (
+        S.edit &&
+        S.edit.dirty &&
+        S.route.name === 'program' &&
+        (route.name !== 'program' || editKey(route) !== editKey(S.route))
+      ) {
+        pendingGo = route;
+        return openDialog(
+          '<div class="sheet-in"><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Leave without saving?</h2></div><div class="sheet-body"><p id="lv-desc" style="margin:0">Your changes to this program aren’t saved yet.</p><div class="row" style="justify-content:flex-end"><button type="button" class="btn ghost" data-act="leave-discard">Discard changes</button><button type="button" class="btn" data-act="dlg-close">Keep editing</button></div></div></div>',
+          { describedby: 'lv-desc' },
+        );
+      }
       S.route = route;
       S.flash = null;
+      S.flashAt = null;
       S.undo = null;
       S.refusal = null;
       pageHidden = {};
@@ -1573,18 +1663,26 @@
       if ($('#v-rotation').value === 'calendar') {
         c = Math.round((Date.parse(iso) - Date.parse(rot.anchor)) / 864e5);
       } else {
-        c = 0;
-        var d = rot.anchor;
-        if (iso >= d) {
-          for (; d < iso; d = shift(d, 1)) if (days.indexOf(weekday(d)) !== -1) c++;
-        } else {
-          while (d > iso) {
-            d = shift(d, -1);
-            if (days.indexOf(weekday(d)) !== -1) c--;
-          }
-        }
+        c = scheduledBetween(rot.anchor, iso, days);
       }
       return rot.slots[((c % n) + n) % n];
+    }
+    // FE-4: closed form — full weeks × |set|, plus the remainder — never a day-by-day walk, so the
+    // 60,000-date proof stays cheap. Signed: negative before the anchor.
+    function scheduledBetween(from, to, days) {
+      var n = Math.round((Date.parse(to) - Date.parse(from)) / 864e5);
+      var sign = 1;
+      if (n < 0) {
+        var t = from;
+        from = to;
+        to = t;
+        n = -n;
+        sign = -1;
+      }
+      var c = Math.floor(n / 7) * days.length;
+      var w0 = weekday(from);
+      for (var i = 0; i < n % 7; i++) if (days.indexOf((w0 + i) % 7) !== -1) c++;
+      return sign * c;
     }
     function workoutOn(asg, iso) {
       return asg.days.indexOf(weekday(iso)) !== -1
@@ -1611,7 +1709,7 @@
     var opener = null;
     function openDialog(html, opts) {
       var d = $('#dlg');
-      opener = document.activeElement;
+      if (!d.open) opener = document.activeElement;
       d.className = (opts && opts.sheet ? 'sheet' : '') + (opts && opts.full ? ' full' : '');
       d.innerHTML = html;
       d.setAttribute('aria-labelledby', 'dlg-title');
@@ -1619,7 +1717,7 @@
       else d.removeAttribute('aria-describedby');
       d.style.width = Math.min(520, $('#device').getBoundingClientRect().width) + 'px';
       if (window.innerWidth <= 600) d.style.width = '';
-      d.showModal();
+      if (!d.open) d.showModal();
       var t = $('#dlg-title');
       t.setAttribute('tabindex', '-1');
       focus((opts && opts.focus) || t);
@@ -1636,107 +1734,100 @@
 
     // ── screens ──────────────────────────────────────────────────────────────
     var SCREENS = [
-      ['picker', 'PROF-1 · Picker + Add athlete'],
-      ['add', 'PROF-1 + ASSIGN-1 · Add an athlete (then a program)'],
-      ['add-empty', 'PROF-1 + ASSIGN-1 · Add an athlete, no programs yet'],
-      ['day', 'V1-9b · Athlete day: delete + restore'],
-      ['day-slot', 'V1-9b · Restore refused (slot taken)'],
-      ['day-clear', 'V1-9b · Clear a day'],
-      ['edit', 'PROF-1 · Rename an athlete'],
-      ['settings', 'PROF-1 · Household settings'],
-      ['del', 'PROF-1 · Delete an athlete'],
-      ['log', 'PICK-1/2 · Log: pick a movement'],
-      ['program', 'V1-22 + CLONE-1 · Edit, or save as a copy'],
-      ['programs', 'RETIRE-1 · Programs + move an athlete'],
-      ['assign', 'ASSIGN-1 · Program + which days'],
-      ['history', 'HIST-1 · Program history'],
-      ['movements', 'MOV-1 (unfiled) · Household movements'],
+      ['picker', 'CRUD-1 · PROF-1 · Picker + Add athlete'],
+      ['add', 'CRUD-1 + PROG-1 · Add an athlete (then a program)'],
+      ['add-empty', 'PROG-1 · Add an athlete, every program archived'],
+      ['day', 'CRUD-1 · V1-9b · Athlete day: delete + restore'],
+      ['day-slot', 'CRUD-1 · V1-9b · Restore refused (slot taken)'],
+      ['day-clear', 'CRUD-1 · V1-9b · Clear a day'],
+      ['edit', 'CRUD-1 · PROF-1 · Edit an athlete'],
+      ['settings', 'CRUD-1 · PROF-1 · Household settings'],
+      ['del', 'later · PROF-1c · Delete an athlete'],
+      ['log', 'CRUD-1 · PICK-1 (+ PICK-2 later) · Pick a movement'],
+      ['movements', 'CRUD-1 · MOV-1 rename (merge later)'],
+      ['program', 'PROG-1 · V1-22 + CLONE-1 · Edit, or save as a copy'],
+      ['programs', 'PROG-1 · RETIRE-1 · Programs + who is on them'],
+      ['assign', 'PROG-1 · ASSIGN-1 · Change days, or move'],
+      ['history', 'PROG-1 · HIST-1 · Program history'],
     ];
     var NOTES = {
       picker: [
-        'Dashed tile last in the list (maintainer, 2026-09-28).',
-        'One link for parents: Household settings. No edit mode on the kids’ screen (panel, Q1/Q5).',
+        'v6: the work is two milestones. CRUD-1 "Fix it yourself" = athletes (add, rename, archive), delete + restore, the picker, renaming a mis-typed movement, and correcting a logged value (V1-24). PROG-1 "Programs & scheduling" = everything about programs and days. The screen list says which each screen belongs to.',
+        'What this prototype does NOT approve (panel PM-5): movement merge, the history page’s layout, and the settings shell. Each gets its own panel when its row is planned.',
+        'Dashed tile last in the list (maintainer, 2026-09-28). One link for parents: Household settings.',
       ],
       add: [
-        'Two fields. "Child / Adult" are display words; the stored value stays `kid` / `adult` (PROFILE_KINDS). Today it only changes the label (child profiles also get calisthenics ramp targets when that schedule is filled — it ships empty).',
-        'NEW (v3, maintainer): a last step, "Put {name} on a program?". Nothing is preselected: a wrong default would hand an adult the kids’ program. Days start at every day.',
-        '"Not now" lands on the day page, whose Strength section says "No program yet · Choose a program".',
+        '"Child / Adult" are display words; the stored value stays `kid` / `adult` (PROFILE_KINDS).',
+        'v6: a name already in the household (archived athletes included) gets a warning and a second tap, not a block. A missing kind is a visible error next to the choice.',
+        'The last step, "Put {name} on a program?": nothing preselected, every day chosen. "Not now" lands on their page with a line saying where to choose one later.',
         'Try: add "Test" as an adult → pick Off-season S&C → untick to Mon/Wed/Fri → Put on program.',
       ],
       'add-empty': [
-        'The same flow in a household with NO programs (a new family after self-serve). The last step becomes "No program yet" with two choices (maintainer, 2026-10-22).',
-        '"Choose a default program": the one program the app ships (PROGRAM_SEED, the Youth Daily Program), copied in with NO loads. For an adult it warns there is no adult default.',
-        '"Create a program": an empty editor. Add movements with the real picker, add Day B, save. Saving puts the athlete on it every day; Day A is the save day.',
-        'Both are gated on ASSIGN-READ (ADR 0007 decision 4: a block can be created only once Today reads assignments).',
+        'v6 (maintainer, 2026-10-22): the default is The Daily Five. ONB-2 already seeds it when a household is created, so this screen is a household that has since ARCHIVED every program — rare.',
+        '"Start from The Daily Five": copied into the household; it has no loads and no targets by construction. For an adult it says it was written for young athletes.',
+        '"Create a program": an empty editor that asks for a name, the workouts and the days. Workouts are named ("Workout A" until you rename it); "+ Add another workout" allows up to three.',
         'This screen EMPTIES the household’s programs so the state is real everywhere. Picking any other screen, or "Reset data", puts them back.',
       ],
       day: [
-        'NEW (v3): the Strength section says what the program has today ("Today: Youth Daily Program · Day B"), "No program today" on a rest day, or "No program yet · Choose a program".',
-        'v5 (Q14, maintainer): the "Edit routine" link is gone from this page. What it opened is now "Activities", reached from "→ Edit {name}" beside the program.',
-        'Delete leaves an in-place "deleted · Undo" line, so the row never vanishes from under a finger and the next row does not slide up into a double tap (panel T5, I2).',
-        'Focus lands on that Undo — a safe control to press twice. Restore focuses the restored row.',
-        'The Hidden bar sits under the day nav, not a screen below. One item shows directly; more expand.',
-        'Each item says when it stops being restorable. ⚠️ 30 days is a PLACEHOLDER — N is PRIV-3’s to set.',
-        'Strength: Delete is on the strength section’s receipt only; the list’s copy stays read-only (the "one Change per set" rule).',
-        'Push-Ups is three entries folded into one row. Its Delete hides all three as ONE event and says so (new decision Q9).',
-        '"Also hidden this week" under the header is the parent’s signal on other days (panel I4, T4).',
+        'v6 (panel IXD-2): a delete never moves anything above the row you tapped. This visit’s deletes stay as in-place "deleted · Undo" lines; the Hidden list at the top only holds what was hidden before you opened the page. Reload (pick this screen again) to see them move into it.',
+        'The Strength section names today’s workout: "Today: Youth Daily Program · Strength B". Workouts keep the app’s own labels (Strength A / B); "day" now only ever means a weekday.',
+        'v6 (CD-4): "Log strength" is a real button in the Strength section; the Hidden list is quieter.',
+        'Each hidden item says when it stops being restorable. ⚠️ 30 days is a PLACEHOLDER — N is PRIV-3’s to set.',
+        '"Also hidden" now covers the whole restore window, not just six days (PUX-6, IXD-13).',
+        'Push-Ups is three entries folded into one row. Its Delete hides all three as ONE event and says so (Q9).',
       ],
       'day-slot': [
         'A weigh-in was hidden, then a new one logged. Restore offers "Keep 112.4 lb instead": one atomic swap, the newer one becomes restorable. Leaving it is the default.',
-        'The refusal is static text tied to its button; only the live region announces it.',
+        'The refusal is the only red callout in the prototype: red means "your action failed" (CD-3).',
       ],
       'day-clear': [
         'Typed "delete" kept: the V1-9b row decided it (maintainer). Matching ignores case and stray spaces.',
-        'Focus goes to the dialog heading, so the consequence is read before the field.',
+        'v6 (IXD-12): the count matches what you see — 6 items, with Push-Ups’ three sets counted as one.',
         'Restores as one event.',
       ],
       edit: [
-        'v5 (Q14): one place to set an athlete up — name and kind, then their program and days, then "Activities on their page" (the shipped routine editor, retitled). Nothing else links to the routine page.',
-        'Rename + kind. Reached from the athlete’s page ("→ Edit Athlete One") and from Household settings. PROF-1: edit lives on /p.',
+        'One place to set an athlete up: name and kind, their program and days, and "Activities" (the shipped routine editor, retitled, Q14).',
+        'v6: a blank name is an error, not "Saved." (IXD-7). Save sits under the fields it saves (CD-6). Navigation is rows ending in › (CD-5, A11Y-11).',
       ],
       settings: [
         'Athletes, programs and movements in one place for parents.',
-        'Archive is one tap with Undo (reversible). Delete is the 3-step flow.',
+        'v6 (IXD-5): archiving an athlete also takes them off their programs, so they stop appearing as "on it"; Undo puts both back.',
       ],
       del: [
-        'Step 1 offers the export first, then archive, then delete (notice.md: "export before you delete anything").',
-        'Copy follows the notice: removed from the app now, from backups after 7 days.',
-        'Step-up is a stand-in for Clerk reverification (Beta 1). Whether the 7-day household pause applies to one athlete is open (A3’s plan).',
+        'Not in either milestone (A3 waits for Beta 1 step-up and PRIV-3’s runner); kept so the flow stays reviewed.',
+        'v6 (SUX-1): step 1 says what the download leaves out — check-ins, readiness, notes and targets — as the privacy notice does.',
       ],
       log: [
         'The sheet opens with no keyboard on a phone; Recent first. Today’s program is folded away — the form already fills it.',
-        'Try "rdl", "ohp", or "bulgarain split squats". Aliases come from chunk 0’s spreadsheet; spelling from a word list.',
+        'Try "rdl", "ohp", "bulgarain split squats". v6: tags say "in the app" / "added by you" (SUX-11); a name with no letters can’t be used as typed.',
         '"Use as typed" is pinned above the keyboard and creates the movement only when the set is saved.',
       ],
       program: [
-        'NEW (v3): "+ Add a movement to …" opens the same picker as logging. Type to search; aliases, spelling fixes and "Use as typed" all work.',
-        'Try in the picker: "rdl" (alias → Romanian Deadlift), "bulgarain split squats" (spelling fix), "Push-Ups" (tagged "already in" this day), "Banded Face Pull" (not in the list → Use as typed → marked new).',
-        '"Change days" beside each program opens the ASSIGN-1 sheet for this athlete.',
-        'One editor. Save asks: change it for everyone on it, or save as a copy for chosen athletes (none ticked). Replaces v1’s 3-step clone wizard (panel I6).',
-        'Remove is staged until Save, with Undo per row (panel T6).',
-        'Loads are typed by a person, verbatim. A copy copies them; nothing is generated.',
+        'v6 (PUX-3): an athlete on two programs sees one card per program and edits one at a time — no stacked editors with two Save buttons.',
+        'v6 (FE-14): leaving with unsaved changes asks first.',
+        '"+ Add a movement to …" opens the same picker as logging (M4).',
+        'Save asks: change it for everyone on it, or save as a copy. v6: "for everyone" now has Undo (SUX-4).',
       ],
       assign: [
-        'v4: full screen on a phone — title and actions pinned, only the middle scrolls; a capped dialog from 600px. "None of these? Create a new program" sits under the list when putting someone on.',
-        'ASSIGN-1 owns the days (maintainer, 2026-10-22). One sheet: program, then which days, then a preview of the next six sessions.',
-        'Weekdays only — ADR 0007 decision 1. The grey line shows the same choice as an RRULE (FREQ=WEEKLY;BYDAY=…); see the spec’s Recurrence section.',
-        'Q13: switch to Youth Daily Program and untick to Mon/Wed/Fri. With the bar on "scheduled days" (approved, Q13b) it alternates B, A, B, A. Switch the bar to "calendar days" (how the app counted before) to see B, B, B, then A, A, A, and the warning.',
-        'Either way a skipped session never shifts the program: both counts come from the date and the schedule, never from what was logged (maintainer, 2026-10-22). With every day ticked they are identical.',
-        'At 360px seven 44px toggles need 308px against 294px of content, so they sit 4 + 3; seven across from 480px.',
-        'A change of days closes the old period and opens a new one, so HIST-1’s timeline shows it.',
+        'v6 (panel IXD-1): "Change days" shows ONE program. Moving to another program is its own step ("Move to another program…"), and the list leaves out programs they are already on — so a tap can no longer silently move an athlete or overwrite their other days.',
+        'v6 (A11Y-7, IXD-14): "Take off" is out of the footer, styled as the destructive act it is.',
+        'v6 (A11Y-1): the preview is announced from a status line INSIDE the sheet — a live region outside an open modal is silent.',
+        'Weekdays only — ADR 0007 decision 1. The grey line shows the same choice as an RRULE.',
+        'Q13b (approved): the rotation counts scheduled days. Try Youth Daily Program on Mon/Wed/Fri: Strength B, A, B, A. The bar can still switch to the old calendar count for comparison.',
+        'Changing days twice on the same day replaces that day’s period instead of closing it (FE-1).',
       ],
       programs: [
-        'Tap an athlete chip to change their days, move them, or take them off (ASSIGN-1). Each chip shows the days.',
-        '"+ New program" is the same create path as the no-program page (gated on ASSIGN-READ).',
-        'v4: after Take off, "+ Add athlete" on each program puts someone (back) on it; the athlete’s program page has "+ Put {name} on another program". Undo still covers the moment.',
-        'Q3: switch the variant. "Resolve in place" makes Archive wait until nobody is on it, with Move/Take off right there. "Close all" archives and closes, and Undo puts both back.',
+        'Tap an athlete chip to change their days, move them, or take them off (ASSIGN-1). v6: chips sit on the page background so the days pass contrast (CD-1).',
+        'v6 (PUX-2): "+ Put someone on it" — "+ Add athlete" already means creating one on the picker.',
+        'v6: the result of an action shows in that program’s card, next to what changed (PUX-7).',
+        'Q3: switch the variant. "Resolve in place" makes Archive wait until nobody is on it, with Move/Take off right there.',
       ],
       history: [
-        'Timeline first (panel I4/Q4 overturned): change points at a glance. Each period opens the program as it was, and links to the days logged in it.',
-        'A date box is underneath for "what about 15 July?".',
+        'Timeline first (Q4): change points at a glance. Each period opens the program as it was, and links to the days logged in it.',
+        'Not approved by this prototype (PM-5): its layout gets a panel when HIST-1 is planned.',
       ],
       movements: [
-        'NOT A ROW YET. Rename first: fixes the typo, keeps history, reversible. Merge needs a confirm and an Insight sign-off — past exports would change.',
+        'v6: in CRUD-1, RENAME only — fixes the typo, keeps history, reversible. Merge is later: it changes past exports and needs Insight’s sign-off.',
       ],
     };
 
@@ -1868,6 +1959,7 @@
           break;
       }
       $('#app').innerHTML = html;
+      linkify($('#app'));
       $('#cap-route').textContent = path;
       var key = r.scenario || r.name;
       var sel = $('#screen-select');
@@ -1897,16 +1989,37 @@
         openAssign(sh[0], sh[1]);
       }
     }
+    function linkify(root) {
+      root.querySelectorAll('button[data-go]').forEach(function (b) {
+        var a = document.createElement('a');
+        a.href = '#' + b.getAttribute('data-go');
+        [].forEach.call(b.attributes, function (at) {
+          if (at.name !== 'type') a.setAttribute(at.name, at.value);
+        });
+        a.innerHTML = b.innerHTML;
+        b.replaceWith(a);
+      });
+    }
+    function navRow(label, sub, attrs) {
+      return (
+        '<li><a href="#" class="navrow" ' +
+        attrs +
+        '><span>' +
+        label +
+        (sub ? '<span class="sub">' + sub + '</span>' : '') +
+        '</span><span aria-hidden="true">›</span></a></li>'
+      );
+    }
     function flashHtml() {
       if (!S.flash) return '';
       // Visible text is static; the persistent live region is what announces it (a11y panel #3).
       return (
         '<div class="ok-msg row" style="justify-content:space-between">' +
-        '<span>' +
+        '<span id="flash-msg">' +
         S.flash +
         '</span>' +
         (S.undo
-          ? '<button type="button" class="btn ghost" data-act="undo" id="undo-btn">Undo</button>'
+          ? '<button type="button" class="btn ghost" data-act="undo" id="undo-btn" aria-describedby="flash-msg">Undo</button>'
           : '') +
         '</div>'
       );
@@ -1918,7 +2031,7 @@
         return !a.archived;
       });
       return (
-        '<header class="stack-xs"><h1>Who’s logging today?</h1><p class="muted" style="margin:0">Pick a profile to start logging.</p></header>' +
+        '<header class="stack-xs"><h1>Who’s logging today?</h1><p class="muted" style="margin:0">Tap your name to start logging.</p></header>' +
         '<ul class="plain stack">' +
         live
           .map(function (a) {
@@ -1936,14 +2049,18 @@
           })
           .join('') +
         '<li><button type="button" class="tile add" data-go="add" data-m><span class="avatar" aria-hidden="true">+</span><span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A child, or yourself</span></span></button></li></ul>' +
-        '<button type="button" class="textlink" data-go="settings" style="margin-top:16px">→ Household settings</button>'
+        '<ul class="plain navlist">' +
+        navRow('Household settings', 'Athletes, programs, movements', 'data-go="settings"') +
+        '</ul>'
       );
     }
     function kindFields(prefix, kind) {
       return (
         '<fieldset aria-describedby="' +
         prefix +
-        '-kind-hint"><legend>Who is this?</legend><div class="seg">' +
+        '-kind-hint ' +
+        prefix +
+        '-kind-err"><legend>Who is this?</legend><div class="seg">' +
         '<label for="' +
         prefix +
         '-kid"><input type="radio" id="' +
@@ -1964,7 +2081,9 @@
         ' /> Adult</label>' +
         '</div><p class="hint" id="' +
         prefix +
-        '-kind-hint" style="margin:6px 0 0">Shown on their tile. You can change it later.</p></fieldset>'
+        '-kind-hint" style="margin:6px 0 0">Shown on their tile, and used when suggesting a program. You can change it later.</p><p class="err-near" id="' +
+        prefix +
+        '-kind-err" hidden>Choose Child or Adult.</p></fieldset>'
       );
     }
     function vAdd(r) {
@@ -1993,9 +2112,9 @@
         a.id +
         '" novalidate><div class="field"><label for="edit-name" style="font-size:14px;font-weight:500">Name</label><input class="input" id="edit-name" value="' +
         esc(a.name) +
-        '" maxlength="40" /></div>' +
+        '" maxlength="40" aria-describedby="edit-err" /><span class="err" id="edit-err" hidden>Enter a name.</span></div>' +
         kindFields('ek', a.kind) +
-        '<button class="btn full" type="submit">Save</button></form>' +
+        '<button class="btn" type="submit" style="width:fit-content">Save name and kind</button></form>' +
         // Q14 (maintainer, 2026-10-22): one place to set an athlete up. The routine link left the day page.
         '<section class="stack-sm" aria-labelledby="ed-prog"><h2 id="ed-prog">Program</h2><p class="small muted" style="margin:0">' +
         (activeAssignments(a.id).length
@@ -2007,16 +2126,23 @@
                 .join(' · '),
             )
           : 'No program yet.') +
-        '</p><button type="button" class="btn outline" style="width:fit-content" data-go="program" data-id="' +
-        a.id +
-        '">' +
-        esc(a.name) +
-        '’s program and days</button></section>' +
-        '<section class="stack-sm" aria-labelledby="ed-act"><h2 id="ed-act">Activities on their page</h2><p class="small muted" style="margin:0">What ' +
-        esc(a.name) +
-        ' can log besides the program — practice, wake time, habits — and in what order.</p><button type="button" class="btn outline" style="width:fit-content" data-go="routine" data-id="' +
-        a.id +
-        '">Edit activities</button></section>' +
+        '</p><ul class="plain navlist">' +
+        navRow(
+          esc(a.name) + '’s program and days',
+          '',
+          'data-go="program" data-id="' + a.id + '"',
+        ) +
+        navRow('All household programs', '', 'data-go="programs"') +
+        '</ul></section>' +
+        '<section class="stack-sm" aria-labelledby="ed-act"><h2 id="ed-act">Activities</h2><ul class="plain navlist">' +
+        navRow(
+          'Edit activities',
+          'What ' +
+            esc(a.name) +
+            ' can log besides the program — practice, wake time, habits — and in what order',
+          'data-go="routine" data-id="' + a.id + '"',
+        ) +
+        '</ul></section>' +
         '<p class="hint" style="margin:0">To archive or delete an athlete, use <button type="button" class="textlink" style="min-height:44px;display:inline-flex" data-go="settings">Household settings</button>.</p>'
       );
     }
@@ -2124,9 +2250,14 @@
               .join('') +
             '</ul>'
           : '<p class="muted small" style="margin:0">None. Archiving hides an athlete from the picker and keeps everything they logged.</p>') +
-        '</section><nav class="stack-xs" aria-label="More household settings"><button type="button" class="textlink" data-go="programs">→ Programs</button><button type="button" class="textlink" data-go="movements">→ Movements your household added (' +
-        S.householdMovements.length +
-        ')</button></nav>'
+        '</section><nav aria-label="More household settings"><ul class="plain navlist">' +
+        navRow('Programs', livePrograms().length + ' in use', 'data-go="programs"') +
+        navRow(
+          'Movements your household added',
+          S.householdMovements.length + ' — rename a typo',
+          'data-go="movements"',
+        ) +
+        '</ul></nav>'
       );
     }
     function vDel(r) {
@@ -2145,9 +2276,9 @@
           '<h1>Delete ' +
           esc(a.name) +
           '?</h1>' +
-          '<div class="card stack-sm"><h2 style="font-size:16px">1 · Download their data first</h2><p class="small" style="margin:0">Once deleted, nothing can be exported.</p><button type="button" class="btn outline full" data-act="download">Download ' +
+          '<div class="card stack-sm"><h2 style="font-size:16px">1 · Download their training log first</h2><p class="small" style="margin:0">The download has their sets and weigh-ins, month by month. It doesn’t include check-ins, readiness, “how it felt” notes or targets — the privacy notice says how to ask for a full copy. Once deleted, nothing can be downloaded.</p><button type="button" class="btn outline full" data-act="download">Download ' +
           esc(a.name) +
-          '’s data</button></div>' +
+          '’s training log</button></div>' +
           '<div class="card stack-sm"><h2 style="font-size:16px">2 · Or archive instead</h2><p class="small" style="margin:0">Hides ' +
           esc(a.name) +
           ' from the picker and keeps every entry. Restore any time from Household settings.</p><button type="button" class="btn full" data-act="archive-athlete" data-id="' +
@@ -2202,7 +2333,7 @@
           })
         )
           return g + ' · ' + ev.items.length + ' sets';
-        return 'Cleared this day · ' + ev.items.length + ' entries';
+        return 'Cleared this day · ' + rowCount(ev.items) + ' items';
       }
       var it = ev.items[0];
       if (it.where === 'strength')
@@ -2216,11 +2347,21 @@
         );
       return it.title + ' · ' + it.detail.split(' · ')[0];
     }
+    // What a person sees as one row: folded calisthenics sets count once (IXD-12).
+    function rowCount(items) {
+      var g = {};
+      return items.filter(function (e) {
+        if (!e.group) return true;
+        if (g[e.group]) return false;
+        return (g[e.group] = true);
+      }).length;
+    }
     function vHiddenBar(r, k) {
-      var hid = (S.hidden[k] || []).filter(function (ev) {
+      // Panel IXD-2: this visit's deletes stay in place as Undo lines. Only what was hidden before the page
+      // loaded is listed here, so a delete never inserts anything above the row that was tapped.
+      var all = (S.hidden[k] || []).filter(function (ev) {
         return !pageHidden[ev.id];
       });
-      var all = S.hidden[k] || [];
       if (!all.length) return '';
       var n = all.reduce(function (c, ev) {
         return c + ev.items.length;
@@ -2271,9 +2412,9 @@
         (all.length > 1
           ? '<button type="button" class="btn ghost" id="hid-toggle" aria-expanded="' +
             !!open +
-            '" aria-controls="hid-list" data-act="toggle-hidden">' +
-            (open ? 'Close' : 'Show') +
-            '</button>'
+            '" aria-controls="hid-list" data-act="toggle-hidden">See all <span aria-hidden="true">' +
+            (open ? '▴' : '▾') +
+            '</span></button>'
           : '') +
         '</div><ul class="plain hidden-list" id="hid-list"' +
         (open ? '' : ' hidden') +
@@ -2316,7 +2457,7 @@
     }
     function weekHidden(aid, day) {
       var out = [];
-      for (var i = 1; i <= 6; i++) {
+      for (var i = 1; i <= PURGE_DAYS; i++) {
         var d = shift(day, -i);
         var hid = S.hidden[aid + '|' + d];
         if (hid && hid.length)
@@ -2376,11 +2517,12 @@
       var due = asgs
         .map(function (x) {
           var w = workoutOn(x, r.day);
-          return w ? program(x.block).name + ' · ' + w : null;
+          var one = Object.keys(program(x.block).days).length === 1;
+          return w ? program(x.block).name + (one ? '' : ' · ' + w) : null;
         })
         .filter(Boolean);
       var progLine = !asgs.length
-        ? '<div class="card stack-sm" id="noprog"><p style="margin:0"><strong>No program yet.</strong> A program puts a workout here each day it runs. You can still log anything below.</p><div class="row"><button type="button" class="btn outline" data-act="choose-prog" data-a="' +
+        ? '<div class="card stack-sm" id="noprog"><p style="margin:0"><strong>No program yet.</strong> A program puts a workout here on the days it runs. You can still log anything.</p><div class="row"><button type="button" class="btn outline" data-act="choose-prog" data-a="' +
           a.id +
           '" data-m>Choose a program</button><button type="button" class="btn ghost" data-act="start-create" data-a="' +
           a.id +
@@ -2399,6 +2541,10 @@
               '.') +
           '</p>';
 
+      var logBtn =
+        '<button type="button" class="btn" style="width:fit-content" data-go="log" data-id="' +
+        a.id +
+        '">Log strength</button>';
       var st = stRows.length
         ? '<div class="receipt"><div class="small muted">Saved ' +
           (r.day === TODAY ? '6:58 PM' : '') +
@@ -2489,7 +2635,7 @@
         (r.day >= TODAY ? ' disabled' : '') +
         '>›</button></nav>' +
         (wk.length
-          ? '<p class="small muted" style="margin:0">Also hidden this week: ' +
+          ? '<p class="small muted" style="margin:0">Also hidden, still restorable: ' +
             wk
               .map(function (w) {
                 return (
@@ -2514,6 +2660,7 @@
         '<section class="stack-sm" aria-labelledby="st-h"><h2 id="st-h">Strength</h2>' +
         progLine +
         st +
+        logBtn +
         '</section>' +
         '<section class="stack-sm" aria-labelledby="ent-h"><h2 id="ent-h">Logged entries</h2>' +
         (ls || stRows.length
@@ -2543,26 +2690,24 @@
         '</section>' +
         '<nav aria-label="' +
         esc(a.name) +
-        ' setup" class="stack-xs"><button type="button" class="textlink" data-go="log" data-id="' +
-        a.id +
-        '">→ Log strength (picker demo)</button>' +
-        '<button type="button" class="textlink" data-go="program" data-id="' +
-        a.id +
-        '">→ Edit ' +
-        esc(a.name) +
-        '’s program</button>' +
-        '<button type="button" class="textlink" data-go="edit" data-id="' +
-        a.id +
-        '">→ Edit ' +
-        esc(a.name) +
-        '</button>' +
-        '</nav>'
+        ' setup"><ul class="plain navlist">' +
+        navRow(
+          esc(a.name) + '’s program and days',
+          '',
+          'data-go="program" data-id="' + a.id + '"',
+        ) +
+        navRow(
+          'Edit ' + esc(a.name),
+          'Name, kind, activities',
+          'data-go="edit" data-id="' + a.id + '"',
+        ) +
+        '</ul></nav>'
       );
     }
     function openClear() {
       var r = S.route;
       var k = r.id + '|' + r.day;
-      var n = (S.entries[k] || []).length;
+      var n = rowCount(S.entries[k] || []);
       openDialog(
         '<form class="sheet-in" id="clear-form" data-k="' +
           k +
@@ -2571,7 +2716,7 @@
           '?</h2></div>' +
           '<div class="sheet-body"><p id="clear-desc" style="margin:0">This hides all <strong>' +
           n +
-          ' entries</strong> for ' +
+          ' items</strong> logged for ' +
           esc(athlete(r.id).name) +
           ' on this day, for everyone in your household. You can put them all back from <em>Hidden on this day</em> until ' +
           untilLabel(TODAY) +
@@ -2636,10 +2781,9 @@
       return m[b.length][a.length];
     }
     function norm(s) {
-      return s
-        .toLowerCase()
+      return fold(s)
         .replace(/[^a-z0-9 ]/g, ' ')
-        .replace(/s\b/g, '')
+        .replace(/(\w{3,})s\b/g, '$1')
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -2721,7 +2865,7 @@
           'Added by your household',
           S.householdMovements
             .map(function (h) {
-              return opt(h.name, 'household');
+              return opt(h.name, 'added by you');
             })
             .join(''),
         );
@@ -2729,7 +2873,7 @@
           html +=
             '<details class="collapse"><summary>Today’s program (already on your form)</summary><ul class="plain">' +
             program('b1')
-              .days['Day B'].map(function (p) {
+              .days['Strength B'].map(function (p) {
                 return opt(p.name);
               })
               .join('') +
@@ -2759,7 +2903,7 @@
           'Matches',
           hits
             .map(function (x) {
-              return opt(x.name, x.hh ? 'household' : x.group);
+              return opt(x.name, x.hh ? 'added by you' : x.group);
             })
             .join(''),
         );
@@ -2800,7 +2944,7 @@
         if (near.length || fixes.length) {
           var inner = near
             .map(function (o) {
-              return opt(o.x.name, 'catalog');
+              return opt(o.x.name, 'in the app');
             })
             .join('');
           var fixNote = '';
@@ -2824,7 +2968,7 @@
                 .join(', ') +
               '</p>';
             inner += known
-              ? opt(known.name, known.hh ? 'household' : 'catalog')
+              ? opt(known.name, known.hh ? 'added by you' : 'in the app')
               : '<li><button type="button" class="opt" data-act="pick-new" data-name="' +
                 esc(fixed) +
                 '"><span>' +
@@ -2851,14 +2995,22 @@
         }
         if (!hits.length && !near.length && !fixes.length) status = 'No matches.';
         foot.hidden = false;
+        // SUX-11: a name needs a letter, or an emoji becomes a permanent movement.
+        var usable = /\p{L}/u.test(q);
         foot.innerHTML =
           '<button type="button" class="btn outline full" data-act="pick-new" data-name="' +
           esc(q) +
-          '">Use “' +
+          '"' +
+          (usable ? '' : ' disabled aria-describedby="pk-foot-hint"') +
+          '>Use “' +
           esc(q) +
-          '” as typed</button><p class="hint" style="margin:0">Added to your household’s list when you save the ' +
-          (pickCtx ? 'program' : 'set') +
-          '. It can’t be removed afterwards yet.</p>';
+          '” as typed</button><p class="hint" id="pk-foot-hint" style="margin:0">' +
+          (usable
+            ? 'Added to your household’s list when you save the ' +
+              (pickCtx ? 'program' : 'set') +
+              '. You can rename it later in Household settings.'
+            : 'A movement name needs at least one letter.') +
+          '</p>';
       } else {
         foot.hidden = true;
       }
@@ -2960,14 +3112,18 @@
           : '') +
         '<div class="rx-grid"><div class="field"><label for="s-' +
         p.id +
-        '" class="small">Sets</label><input class="input" id="s-' +
+        '" class="small">Sets<span class="sr-only"> for ' +
+        esc(p.name) +
+        '</span></label><input class="input" id="s-' +
         p.id +
         '" inputmode="numeric" value="' +
         (p.sets || '') +
         '" placeholder="open" /></div>' +
         '<div class="field"><label for="t-' +
         p.id +
-        '" class="small">Reps</label><input class="input" id="t-' +
+        '" class="small">Reps<span class="sr-only"> for ' +
+        esc(p.name) +
+        '</span></label><input class="input" id="t-' +
         p.id +
         '" value="' +
         esc(p.reps || '') +
@@ -3000,13 +3156,20 @@
             '" class="sr-only">New program</h2><div class="field"><label for="pn-name" style="font-size:14px;font-weight:500">Program name</label><input class="input" id="pn-name" maxlength="60" value="' +
             esc(b.name) +
             '" /></div>' +
-            '<p class="banner" style="margin:0">' +
+            // IXD-11: the create path asks for days too, with the same fields and preview as ASSIGN-1.
             (forA
-              ? 'Saving puts <strong>' +
+              ? '<form class="stack-sm" id="new-days" data-pre="nw" novalidate><input type="radio" name="nwprog" value="' +
+                b.id +
+                '" checked hidden /><p class="small" style="margin:0">Saving puts <strong>' +
                 esc(forA.name) +
-                '</strong> on it, every day. Change the days afterwards from their program page.'
-              : 'Nobody is on it until you put someone on it.') +
-            ' Days alternate in order: Day A, then Day B, from the day you save.</p>'
+                '</strong> on it.</p>' +
+                assignFields('nw', [], null, S.edit.newDays || ALL_DAYS).replace(
+                  /^<fieldset class="stack-sm"><legend>Program<\/legend><\/fieldset>/,
+                  '',
+                ) +
+                '</form>'
+              : '<p class="banner" style="margin:0">Nobody is on it until you put someone on it.</p>') +
+            '<p class="hint" style="margin:0">A program has one or more workouts. With more than one, they take turns: one per scheduled day, in order, starting the day you save.</p>'
           : '<h2 id="blk-' +
             b.id +
             '">' +
@@ -3025,7 +3188,7 @@
                 esc(athlete(r.id).name) +
                 '’s days for ' +
                 esc(b.name) +
-                '">Change days</button></div>'
+                '" aria-haspopup="dialog">Change days</button></div>'
               : '') +
             '<p class="banner" style="margin:0">' +
             (who.length
@@ -3033,17 +3196,33 @@
               : 'Nobody is on this program.') +
             ' Days already logged keep what was prescribed then. To change it for only some of them, save as a copy.</p>') +
         Object.keys(days)
-          .map(function (day) {
+          .map(function (day, wi) {
             var rows = days[day];
             var live = rows.filter(function (p) {
               return !p.removed;
             }).length;
             return (
-              '<div class="stack-sm"><h3>' +
-              esc(day) +
-              ' <span class="muted small" style="font-weight:400">· ' +
-              live +
-              ' of 12</span></h3><ol class="plain stack-sm">' +
+              '<div class="stack-sm">' +
+              (b.fresh
+                ? '<div class="field"><label for="wl-' +
+                  wi +
+                  '" style="font-size:14px;font-weight:500">Workout ' +
+                  (wi + 1) +
+                  ' name</label><input class="input" id="wl-' +
+                  wi +
+                  '" data-wk="' +
+                  esc(day) +
+                  '" value="' +
+                  esc(day) +
+                  '" maxlength="30" /><span class="small muted">' +
+                  live +
+                  ' of 12 movements</span></div>'
+                : '<h3>' +
+                  esc(day) +
+                  ' <span class="muted small" style="font-weight:400">· ' +
+                  live +
+                  ' of 12</span></h3>') +
+              '<ol class="plain stack-sm">' +
               rows
                 .map(function (p, i) {
                   return rxCard(p, b.id, day, i, rows.length);
@@ -3064,9 +3243,17 @@
           })
           .join('') +
         (b.fresh
-          ? '<button type="button" class="btn outline" style="width:fit-content" data-act="add-day" data-b="' +
+          ? '<div class="stack-xs"><button type="button" class="btn outline" style="width:fit-content" data-act="add-day" data-b="' +
             b.id +
-            '">+ Add another day</button>'
+            '"' +
+            (Object.keys(days).length >= MAX_WORKOUTS
+              ? ' disabled aria-describedby="wk-max"'
+              : '') +
+            '>+ Add another workout</button>' +
+            (Object.keys(days).length >= MAX_WORKOUTS
+              ? '<span class="hint" id="wk-max">Up to ' + MAX_WORKOUTS + ' workouts for now.</span>'
+              : '') +
+            '</div><p class="err-near" id="save-err" hidden></p>'
           : '') +
         '<button type="button" class="btn full" data-act="save-prog" data-b="' +
         b.id +
@@ -3075,15 +3262,92 @@
         '</button></section>'
       );
     }
+    function editKey(r) {
+      return r.block || r.id + '|' + (r.sel || '');
+    }
+    function editBlocks(r) {
+      if (r.block) return [program(r.block)];
+      if (r.sel) return [program(r.sel)];
+      return activeAssignments(r.id).map(function (x) {
+        return program(x.block);
+      });
+    }
+    // An athlete on several programs: one card each, then one editor at a time (panel PUX-3).
+    function vProgramCards(a, asgs) {
+      return (
+        '<header class="stack-sm"><button type="button" class="back" data-go="day" data-id="' +
+        a.id +
+        '">← ' +
+        esc(a.name) +
+        '</button><h1>' +
+        esc(a.name) +
+        '’s programs</h1></header>' +
+        flashHtml() +
+        '<ul class="plain stack">' +
+        asgs
+          .map(function (x) {
+            var b = program(x.block);
+            var w = workoutOn(x, TODAY);
+            return (
+              '<li class="card stack-sm" id="pc-' +
+              b.id +
+              '" tabindex="-1"><h2 style="font-size:16px">' +
+              esc(b.name) +
+              '</h2><p class="small" style="margin:0">' +
+              esc(a.name) +
+              ' does it <strong>' +
+              esc(onDays(x.days)) +
+              '</strong>. ' +
+              (w ? 'Today: ' + esc(w) + '.' : 'Not today.') +
+              '</p><div class="row"><button type="button" class="btn outline" data-act="sel-prog" data-b="' +
+              b.id +
+              '" aria-label="Edit ' +
+              esc(b.name) +
+              '">Edit program</button><button type="button" class="btn ghost" data-act="assign" data-a="' +
+              a.id +
+              '" data-b="' +
+              b.id +
+              '" aria-haspopup="dialog" aria-label="Change ' +
+              esc(a.name) +
+              '’s days for ' +
+              esc(b.name) +
+              '">Change days</button></div></li>'
+            );
+          })
+          .join('') +
+        '</ul>' +
+        progFooter(a)
+      );
+    }
+    function progFooter(a) {
+      var past = S.assignments.some(function (x) {
+        return x.athlete === a.id && x.to;
+      });
+      return (
+        '<button type="button" class="btn outline" style="width:fit-content" data-act="choose-prog" data-a="' +
+        a.id +
+        '" aria-haspopup="dialog">+ Put ' +
+        esc(a.name) +
+        ' on another program</button>' +
+        (past
+          ? '<ul class="plain navlist">' +
+            navRow(
+              'Program history',
+              'What ' + esc(a.name) + ' was on before',
+              'data-go="history" data-id="' + a.id + '"',
+            ) +
+            '</ul>'
+          : '')
+      );
+    }
     function vProgram(r) {
-      var blocks = r.block
-        ? [program(r.block)]
-        : activeAssignments(r.id).map(function (x) {
-            return program(x.block);
-          });
-      if (!S.edit || S.edit.key !== (r.block || r.id)) {
+      var a0 = r.id && !r.block && athlete(r.id);
+      var asgs0 = a0 ? activeAssignments(a0.id) : [];
+      if (a0 && asgs0.length > 1 && !r.sel) return vProgramCards(a0, asgs0);
+      var blocks = editBlocks(r);
+      if (!S.edit || S.edit.key !== editKey(r)) {
         startEdit(blocks);
-        S.edit.key = r.block || r.id;
+        S.edit.key = editKey(r);
       }
       var a = r.id && athlete(r.id);
       var back = r.forAthlete
@@ -3109,19 +3373,24 @@
           a.id +
           '">Choose a program</button><button type="button" class="btn ghost" data-act="start-create" data-a="' +
           a.id +
-          '">Create a program</button></div></div>'
+          '">Create a program</button></div></div>' +
+          progFooter(a).replace(/^<button[\s\S]*?<\/button>/, '')
         );
       return (
         (a
-          ? '<header class="stack-sm"><button type="button" class="back" data-go="day" data-id="' +
-            a.id +
-            '">← ' +
+          ? '<header class="stack-sm">' +
+            (r.sel
+              ? '<button type="button" class="back" data-act="sel-prog" data-b="">← ' +
+                esc(a.name) +
+                '’s programs</button>'
+              : '<button type="button" class="back" data-go="day" data-id="' +
+                a.id +
+                '">← ' +
+                esc(a.name) +
+                '</button>') +
+            '<h1>' +
             esc(a.name) +
-            '</button><h1>' +
-            esc(a.name) +
-            '’s program' +
-            (blocks.length > 1 ? 's' : '') +
-            '</h1>'
+            '’s program</h1>'
           : '<header class="stack-sm">' +
             back +
             '<h1>' +
@@ -3130,20 +3399,7 @@
         '<p class="small muted" style="margin:0">Blank sets or reps mean open: log what you did. Loads are typed by a coach or parent, exactly as written.</p></header>' +
         flashHtml() +
         blocks.map(blockSection).join('') +
-        (a
-          ? '<button type="button" class="btn outline" style="width:fit-content" data-act="choose-prog" data-a="' +
-            a.id +
-            '">+ Put ' +
-            esc(a.name) +
-            ' on another program</button>'
-          : '') +
-        (a
-          ? '<button type="button" class="textlink" data-go="history" data-id="' +
-            a.id +
-            '">→ What was ' +
-            esc(a.name) +
-            ' doing before?</button>'
-          : '')
+        (a && !r.sel ? progFooter(a) : '')
       );
     }
     function openSaveProg(bid) {
@@ -3173,7 +3429,7 @@
           '<label class="radio-card" for="sv-copy"><input type="radio" name="sv" id="sv-copy" value="copy" /><span><strong>Save as a copy</strong><br /><span class="small muted">The original stays as it is. Choose who moves to the copy.</span></span></label></fieldset>' +
           '<div class="stack-sm" id="copy-opts" hidden><div class="field"><label for="cp-name" class="small" style="font-weight:500">Name of the copy</label><input class="input" id="cp-name" value="' +
           esc(b.name) +
-          ' (v2)" /></div>' +
+          ' (copy)" /></div>' +
           '<fieldset class="stack-sm"><legend>Who moves to the copy? Nobody moves unless you tick them.</legend>' +
           others
             .map(function (a) {
@@ -3227,7 +3483,7 @@
       });
       return (
         '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Programs</h1>' +
-        flashHtml() +
+        (S.flashAt && program(S.flashAt) && !program(S.flashAt).archived ? '' : flashHtml()) +
         '<button type="button" class="btn outline" style="width:fit-content" data-act="start-create">+ New program</button>' +
         '<ul class="plain stack">' +
         act
@@ -3240,6 +3496,8 @@
               '" tabindex="-1"><h2 style="font-size:16px">' +
               esc(b.name) +
               '</h2>' +
+              // PUX-7: the result shows in the card that changed, not at the top of the page.
+              (S.flashAt === b.id ? flashHtml() : '') +
               '<div class="row">' +
               (w.length
                 ? w
@@ -3255,7 +3513,7 @@
                         esc(b.name) +
                         ', ' +
                         esc(onDays(liveAssignment(id, b.id).days)) +
-                        ': change days, move or take off">' +
+                        ': change days, move or take off" aria-haspopup="dialog">' +
                         esc(athlete(id).name) +
                         ' <span class="small muted" aria-hidden="true">· ' +
                         esc(daysLabel(liveAssignment(id, b.id).days)) +
@@ -3266,9 +3524,9 @@
                 : '<span class="small muted">Nobody is on this program</span>') +
               '<button type="button" class="chip-btn" data-act="assign-to" data-b="' +
               b.id +
-              '" aria-label="Put someone on ' +
+              '" aria-haspopup="dialog" aria-label="Put someone on ' +
               esc(b.name) +
-              '">+ Add athlete</button>' +
+              '">+ Put someone on it</button>' +
               '</div>' +
               '<div class="row"><button type="button" class="btn outline" data-go="program" data-b="' +
               b.id +
@@ -3283,7 +3541,7 @@
               '">Archive…</button></div>' +
               (confirming
                 ? pol === 'resolve' && w.length
-                  ? '<div class="refusal stack-sm" id="archq-' +
+                  ? '<div class="banner stack-sm" id="archq-' +
                     b.id +
                     '" tabindex="-1"><p style="margin:0"><strong>' +
                     esc(
@@ -3306,7 +3564,7 @@
                           b.id +
                           '" aria-label="Move ' +
                           esc(athlete(id).name) +
-                          '">Move…</button><button type="button" class="btn ghost" data-act="takeoff" data-a="' +
+                          '">Move…</button><button type="button" class="btn danger-ghost" data-act="takeoff" data-a="' +
                           id +
                           '" data-b="' +
                           b.id +
@@ -3407,6 +3665,9 @@
           })
           .join('') +
         '</fieldset>' +
+        '<p class="err-near" id="' +
+        pre +
+        '-err" hidden></p>' +
         '<fieldset aria-describedby="' +
         pre +
         '-sum"><legend>Which days?</legend><div class="days">' +
@@ -3440,7 +3701,11 @@
         '"></span></p></fieldset>' +
         '<div id="' +
         pre +
-        '-prev" class="stack-xs"></div>'
+        '-prev" class="stack-xs"></div>' +
+        // A11Y-1: inside the form, so inside the modal — a live region outside an open dialog is inert.
+        '<p class="sr-only" role="status" id="' +
+        pre +
+        '-live"></p>'
       );
     }
     function readAssign(f) {
@@ -3453,14 +3718,17 @@
         }),
       };
     }
-    function drawAssignPreview(f) {
+    function drawAssignPreview(f, speak) {
       var pre = f.dataset.pre;
       var v = readAssign(f);
       var sum = $('#' + pre + '-sum');
       var prev = $('#' + pre + '-prev');
+      var live = $('#' + pre + '-live');
+      sum.classList.toggle('err-near', !v.days.length);
       if (!v.days.length) {
         sum.textContent = 'Pick at least one day.';
         prev.innerHTML = '';
+        if (speak && live) live.textContent = 'No days chosen. Pick at least one day.';
         return;
       }
       sum.textContent =
@@ -3474,7 +3742,26 @@
         return;
       }
       var b = findProg(v.bid);
+      // A program being created previews the workouts as they are being typed.
+      if (b.fresh && S.edit && S.edit.blocks[b.id])
+        b = {
+          name: ($('#pn-name') && $('#pn-name').value) || b.name,
+          rotation: { anchor: TODAY, slots: workoutLabels(b.id) },
+          days: S.edit.blocks[b.id],
+        };
       var u = upcoming(b, v.days, 6);
+      if (speak && live)
+        live.textContent =
+          'Runs ' +
+          daysLabel(v.days) +
+          '. Next: ' +
+          u.days
+            .slice(0, 3)
+            .map(function (x) {
+              return (x[0] === TODAY ? 'today' : WD_LONG[weekday(x[0])]) + ', ' + x[1];
+            })
+            .join('; ') +
+          '.';
       prev.innerHTML =
         (u.repeats
           ? '<p class="warn" style="margin:0">On these days ' +
@@ -3498,7 +3785,15 @@
           .join('') +
         '</dl>';
     }
+    // The labels as typed in the create editor, falling back to the key.
+    function workoutLabels(bid) {
+      return Object.keys(S.edit.blocks[bid]).map(function (k, i) {
+        var el = $('#wl-' + i);
+        return (el && el.value.trim()) || k;
+      });
+    }
     // Close-and-open, never edit in place: HIST-1 reads the periods, so a change of days is a new period.
+    // A period opened TODAY is replaced instead (FE-1): closing it would leave to < from.
     function applyAssign(aid, from, to, days) {
       var closed = [];
       function close(x) {
@@ -3524,45 +3819,90 @@
       S.assignments.push({ athlete: aid, block: to, from: TODAY, to: null, days: sortDays(days) });
       return { kind: 'assign', reopen: closed, drop: { athlete: aid, block: to } };
     }
-    function openAssign(aid, bid) {
+    // Panel IXD-1: "change days" shows ONE program, so no tap can silently move an athlete. Moving is its
+    // own step, and every list leaves out programs the athlete is already on (no overwrite).
+    function openAssign(aid, bid, move) {
       var a = athlete(aid);
       var cur = bid && liveAssignment(aid, bid);
-      var list = livePrograms();
-      if (!list.length) return go({ name: 'start', id: aid });
+      var notOn = livePrograms().filter(function (p) {
+        return !liveAssignment(aid, p.id);
+      });
+      if (!cur && !livePrograms().length) return go({ name: 'start', id: aid });
+      var mode = cur ? (move ? 'move' : 'change') : 'put';
+      var list = mode === 'change' ? [program(bid)] : notOn;
+      var title =
+        mode === 'change'
+          ? esc(a.name) + ' on ' + esc(program(bid).name)
+          : mode === 'move'
+            ? 'Move ' + esc(a.name) + ' off ' + esc(program(bid).name)
+            : 'Put ' + esc(a.name) + ' on a program';
+      var intro =
+        mode === 'change'
+          ? '<p class="small muted" style="margin:0">Change which days ' +
+            esc(a.name) +
+            ' does it, from today. Days already logged keep what they were logged against.</p>'
+          : mode === 'move'
+            ? '<p class="small muted" style="margin:0">' +
+              esc(a.name) +
+              ' stops ' +
+              esc(program(bid).name) +
+              ' today and starts the one you choose, on the days below.</p>'
+            : '';
+      var body = list.length
+        ? mode === 'change'
+          ? '<input type="radio" name="asprog" value="' +
+            bid +
+            '" checked hidden />' +
+            assignFields('as', [], null, cur.days).replace(
+              /^<fieldset class="stack-sm"><legend>Program<\/legend><\/fieldset>/,
+              '',
+            )
+          : assignFields('as', list, null, cur ? cur.days : ALL_DAYS)
+        : '<p class="banner" style="margin:0">' +
+          esc(a.name) +
+          ' is already on every program. Create a new one, or change days on the one they have.</p>';
       openDialog(
         '<form class="sheet-in" id="assign-form" data-pre="as" data-a="' +
           aid +
           '" data-b="' +
           (cur ? bid : '') +
           '" novalidate><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">' +
-          (cur
-            ? esc(a.name) + ' on ' + esc(program(bid).name)
-            : 'Put ' + esc(a.name) + ' on a program') +
+          title +
           '</h2></div><div class="sheet-body">' +
-          (cur
-            ? '<p class="small muted" style="margin:0">Pick another program to move them, or change their days. From today: days already logged keep what they were logged against.</p>'
-            : '') +
-          assignFields('as', list, cur ? bid : null, cur ? cur.days : ALL_DAYS) +
-          (cur
-            ? ''
-            : '<button type="button" class="textlink" data-act="start-create" data-a="' +
-              aid +
-              '" style="min-height:44px;display:inline-flex">None of these? Create a new program</button>') +
-          '<span class="err" id="as-err" role="alert" hidden></span></div>' +
-          '<div class="sheet-foot actions">' +
-          (cur
-            ? '<button type="button" class="btn ghost" data-act="takeoff" data-a="' +
+          intro +
+          body +
+          (mode === 'change'
+            ? '<div class="stack-sm" style="border-top:1px solid var(--border);padding-top:12px">' +
+              (notOn.length
+                ? '<button type="button" class="btn outline" style="width:fit-content" data-act="assign-move" data-a="' +
+                  aid +
+                  '" data-b="' +
+                  bid +
+                  '">Move to another program…</button>'
+                : '') +
+              '<button type="button" class="btn danger-ghost" style="width:fit-content" data-act="takeoff" data-a="' +
               aid +
               '" data-b="' +
               bid +
-              '">Take off</button>'
-            : '<span></span>') +
-          '<span class="row"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">' +
-          (cur ? 'Save' : 'Put on program') +
-          '</button></span></div></form>',
+              '">Take ' +
+              esc(a.name) +
+              ' off ' +
+              esc(program(bid).name) +
+              '</button></div>'
+            : '<p class="small" style="margin:0">None of these fit? <button type="button" class="textlink" data-act="start-create" data-a="' +
+              aid +
+              '" style="display:inline-flex">Create a new program</button></p>') +
+          '</div>' +
+          '<div class="sheet-foot actions"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button>' +
+          (list.length
+            ? '<button type="submit" class="btn">' +
+              (mode === 'change' ? 'Save days' : mode === 'move' ? 'Move' : 'Put on program') +
+              '</button>'
+            : '') +
+          '</div></form>',
         { sheet: true, full: true },
       );
-      drawAssignPreview($('#assign-form'));
+      if (list.length) drawAssignPreview($('#assign-form'));
     }
 
     // The same write from the program's side (Programs → "+ Add athlete"): the athlete is the choice.
@@ -3576,7 +3916,7 @@
         '<form class="sheet-in" id="assign-form" data-pre="as" data-to="1" novalidate><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Put someone on ' +
           esc(b.name) +
           '</h2></div><div class="sheet-body">' +
-          '<fieldset class="stack-sm"><legend>Who?</legend>' +
+          '<fieldset class="stack-sm" aria-describedby="as-err"><legend>Who?</legend>' +
           off
             .map(function (a) {
               return (
@@ -3612,8 +3952,8 @@
             /^<fieldset class="stack-sm"><legend>Program<\/legend><\/fieldset>/,
             '',
           ) +
-          '<span class="err" id="as-err" role="alert" hidden></span></div>' +
-          '<div class="sheet-foot actions"><span></span><span class="row"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">Put on program</button></span></div></form>',
+          '</div>' +
+          '<div class="sheet-foot actions"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">Put on program</button></div></form>',
         { sheet: true, full: true },
       );
       drawAssignPreview($('#assign-form'));
@@ -3636,20 +3976,21 @@
         a.id +
         '" novalidate>' +
         assignFields('fp', list, null, ALL_DAYS) +
-        '<span class="err" id="fp-err" role="alert" hidden></span>' +
         '<button class="btn full" type="submit">Put on program</button>' +
         '<button type="button" class="btn outline full" data-act="start-create" data-a="' +
         a.id +
-        '">None of these? Create a new program</button>' +
+        '">Create a new program instead</button>' +
         '<button type="button" class="btn ghost full" data-act="first-skip" data-a="' +
         a.id +
         '">Not now</button></form>'
       );
     }
-    // No programs in the household: "Choose a default program" OR "Create a program" (maintainer, 2026-10-22).
+    // No live program in the household. ONB-2 seeds The Daily Five at household creation, so this is a
+    // household that archived every program. Default = The Daily Five (maintainer, 2026-10-22), or create.
     function vStart(r) {
       var a = athlete(r.id);
       var inFlow = S.route.name === 'add';
+      var open = r.pick === 'default';
       return (
         '<header class="stack-sm">' +
         (inFlow
@@ -3659,29 +4000,34 @@
             '">← ' +
             esc(a.name) +
             '</button>') +
-        '<h1>No program yet</h1><p class="muted" style="margin:0">Your household has no programs. Pick where ' +
+        '<h1>No program yet</h1><p class="muted" style="margin:0">Your household has no programs in use. Pick where ' +
         esc(a.name) +
         '’s workouts come from.</p></header>' +
-        '<ul class="plain stack-sm">' +
-        '<li><button type="button" class="radio-card" style="width:100%;text-align:left" data-act="start-default" data-a="' +
+        '<ul class="plain navlist">' +
+        '<li><button type="button" class="navrow" style="width:100%;background:none;border:0;cursor:pointer;text-align:left" data-act="start-default" data-a="' +
         a.id +
         '" aria-expanded="' +
-        (r.pick === 'default') +
-        '" id="st-default"><span><strong>Choose a default program</strong><br /><span class="small muted">Start from a program that ships with the app. It is copied into your household with no loads: you type those in.</span></span></button></li>' +
-        (r.pick === 'default'
-          ? '<li><form class="card stack" id="default-form" data-pre="df" data-a="' +
+        open +
+        '" aria-controls="default-form" id="st-default"><span>Start from The Daily Five<span class="sub">Ships with the app: eight bodyweight movements, about 10 minutes a day. No loads to set.</span></span><span aria-hidden="true">' +
+        (open ? '▴' : '▾') +
+        '</span></button>' +
+        (open
+          ? '<form class="stack" id="default-form" data-pre="df" data-a="' +
             a.id +
-            '" novalidate>' +
+            '" novalidate style="padding:0 16px 16px">' +
             (a.kind === 'adult'
-              ? '<p class="warn" style="margin:0">There is no default for adults yet. The one below is built for children.</p>'
+              ? '<p class="warn" id="df-warn" tabindex="-1" style="margin:0">The Daily Five was written for young athletes. There is no adult default yet.</p>'
               : '') +
             assignFields('df', DEFAULTS, null, ALL_DAYS) +
-            '<span class="err" id="df-err" role="alert" hidden></span>' +
-            '<button class="btn full" type="submit">Use this program</button></form></li>'
+            '<button class="btn full" type="submit">Use The Daily Five</button></form>'
           : '') +
-        '<li><button type="button" class="radio-card" style="width:100%;text-align:left" data-act="start-create" data-a="' +
-        a.id +
-        '"><span><strong>Create a program</strong><br /><span class="small muted">Start empty and add the movements yourself.</span></span></button></li></ul>' +
+        '</li>' +
+        navRow(
+          'Create a program',
+          'Start empty and add the movements yourself',
+          'data-act="start-create" data-a="' + a.id + '"',
+        ) +
+        '</ul>' +
         '<button type="button" class="btn ghost full" data-act="first-skip" data-a="' +
         a.id +
         '">Not now</button>'
@@ -3707,7 +4053,7 @@
         esc(a.name) +
         '’s program</button><h1>' +
         esc(a.name) +
-        '’s programs over time</h1>' +
+        '’s program history</h1>' +
         '<ol class="timeline">' +
         rows
           .map(function (x, i) {
@@ -3782,7 +4128,7 @@
     // MOV-1 (unfiled)
     function vMovements() {
       return (
-        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Movements your household added</h1><p class="proto-flag">Not a backlog row yet — the gap ADR 0008 leaves by decision</p>' +
+        '<button type="button" class="back" data-go="settings">← Household settings</button><h1>Movements your household added</h1><p class="proto-flag">CRUD-1 ships Rename (MOV-1, unfiled). Merge is later: it changes past exports</p>' +
         flashHtml() +
         '<ul class="plain stack-sm">' +
         S.householdMovements
@@ -3808,9 +4154,9 @@
                   esc(m.name) +
                   ' into ' +
                   esc(m.near) +
-                  '…">Same as ' +
+                  '…">Merge into ' +
                   esc(m.near) +
-                  '?</button>'
+                  '… <span class="tag">later</span></button>'
                 : '') +
               '</div></li>'
             );
@@ -3949,6 +4295,8 @@
     document.addEventListener('click', function (ev) {
       var t = ev.target.closest('[data-go],[data-act]');
       if (!t) return;
+      if (t.tagName === 'A') ev.preventDefault();
+      if (t.disabled) return;
       var g = t.getAttribute('data-go');
       var r = S.route;
       if (g) {
@@ -4012,6 +4360,20 @@
           return openClear();
         case 'dlg-close':
           return closeDialog();
+        case 'leave-discard': {
+          var dest = pendingGo;
+          pendingGo = null;
+          S.edit = null;
+          S.programs = S.programs.filter(function (p) {
+            return !p.fresh;
+          });
+          closeDialog(false);
+          return go(dest);
+        }
+        case 'sel-prog':
+          return go(Object.assign({}, r, { sel: t.dataset.b || null }));
+        case 'assign-move':
+          return openAssign(t.dataset.a, t.dataset.b, true);
         case 'open-picker':
           return openPicker();
         case 'pick':
@@ -4021,6 +4383,7 @@
             var nrx = rx(t.dataset.name);
             nrx.created = act === 'pick-new';
             S.edit.blocks[pc.b][pc.day].push(nrx);
+            S.edit.dirty = true;
             closeDialog(false);
             rerender('#s-' + nrx.id);
             return announce(
@@ -4040,9 +4403,19 @@
         case 'archive-athlete': {
           var a = athlete(t.dataset.id);
           a.archived = true;
+          var offs = [];
+          S.assignments.forEach(function (x) {
+            if (x.athlete === a.id && !x.to) {
+              x.to = shift(TODAY, -1);
+              offs.push(x);
+            }
+          });
           S.route = { name: 'settings' };
-          S.flash = esc(a.name) + ' archived. Everything they logged is kept.';
-          S.undo = { kind: 'athlete', id: a.id };
+          S.flash =
+            esc(a.name) +
+            ' archived. Everything they logged is kept' +
+            (offs.length ? ', and they are off their programs from today.' : '.');
+          S.undo = { kind: 'athlete', id: a.id, reopen: offs };
           rerender('#undo-btn');
           return announce(a.name + ' archived.');
         }
@@ -4069,6 +4442,7 @@
           var rows = S.edit.blocks[t.dataset.b][t.dataset.day];
           var i = +t.dataset.i;
           var p = rows[i];
+          S.edit.dirty = true;
           if (act === 'rm') {
             p.removed = true;
             rerender('#unrm-' + p.id);
@@ -4092,49 +4466,87 @@
           return openPicker({ b: t.dataset.b, day: t.dataset.day });
         case 'add-day': {
           var ds = S.edit.blocks[t.dataset.b];
-          var nd = 'Day ' + String.fromCharCode(65 + Object.keys(ds).length);
+          if (Object.keys(ds).length >= MAX_WORKOUTS) return;
+          // Keep what was typed in the label fields across the re-render.
+          workoutLabels(t.dataset.b).forEach(function (l, i) {
+            var k = Object.keys(ds)[i];
+            if (l !== k && !ds[l]) {
+              ds[l] = ds[k];
+              delete ds[k];
+            }
+          });
+          var nd = 'Workout ' + String.fromCharCode(65 + Object.keys(ds).length);
           ds[nd] = [];
-          rerender('[data-act="add-rx"][data-day="' + nd + '"]');
-          return announce(nd + ' added. Add its movements.');
+          S.edit.dirty = true;
+          rerender('#wl-' + (Object.keys(ds).length - 1));
+          return announce(nd + ' added. Name it, then add its movements.');
         }
         case 'save-prog': {
           var sb = program(t.dataset.b);
           if (!sb.fresh) return openSaveProg(t.dataset.b);
           var staged = S.edit.blocks[sb.id];
-          Object.keys(staged).forEach(function (d) {
-            staged[d] = staged[d].filter(function (p) {
+          var labels = workoutLabels(sb.id);
+          var saveErr = $('#save-err');
+          function refuse(msg, where) {
+            saveErr.textContent = msg;
+            saveErr.hidden = false;
+            announce(msg);
+            return focus(where);
+          }
+          var keys = Object.keys(staged);
+          var count = keys.reduce(function (c, d) {
+            return (
+              c +
+              staged[d].filter(function (p) {
+                return !p.removed;
+              }).length
+            );
+          }, 0);
+          if (!count) return refuse('Add at least one movement first.', '[data-act="add-rx"]');
+          var dup = labels.find(function (l, i) {
+            return labels.indexOf(l) !== i;
+          });
+          if (dup)
+            return refuse(
+              'Two workouts are called “' + dup + '”. Give each its own name.',
+              '#wl-0',
+            );
+          var fa = r.forAthlete;
+          var nd = fa && readAssign($('#new-days'));
+          if (fa && !nd.days.length) return refuse('Pick at least one day.', 'input[name=nwday]');
+          var days = {};
+          keys.forEach(function (k, i) {
+            days[labels[i]] = staged[k].filter(function (p) {
               return !p.removed;
             });
           });
-          var count = Object.keys(staged).reduce(function (c, d) {
-            return c + staged[d].length;
-          }, 0);
-          if (!count) {
-            announce('Add at least one movement first.');
-            return focus('[data-act="add-rx"]');
-          }
           sb.name = ($('#pn-name').value || '').trim() || sb.name;
-          sb.days = JSON.parse(JSON.stringify(staged));
-          // Created programs anchor their rotation on the day they are saved: the first day is Day A.
-          sb.rotation = { anchor: TODAY, slots: Object.keys(sb.days) };
+          sb.days = days;
+          // Created programs anchor on the day they are saved, so the first workout is today's (crit. 35).
+          sb.rotation = { anchor: TODAY, slots: labels };
           delete sb.fresh;
-          var fa = r.forAthlete;
-          if (fa) applyAssign(fa, null, sb.id, ALL_DAYS);
+          if (fa) applyAssign(fa, null, sb.id, nd.days);
           S.edit = null;
-          S.undo = { kind: 'start', block: sb.id, athlete: fa || null };
+          S.flashAt = null;
+          // SUX-3: Undo takes the athlete off and KEEPS the program the parent just typed.
+          S.undo = fa
+            ? { kind: 'assign', reopen: [], drop: { athlete: fa, block: sb.id }, keep: sb.id }
+            : null;
           if (fa) {
             S.route = { name: 'day', id: fa, day: TODAY };
             S.flash =
               esc(sb.name) +
               ' saved. ' +
               esc(athlete(fa).name) +
-              ' is on it every day, from today.';
+              ' is on it ' +
+              esc(onDays(nd.days)) +
+              ', from today.';
           } else {
             S.route = { name: 'programs' };
             S.flash = esc(sb.name) + ' saved. Nobody is on it yet.';
           }
-          rerender('#undo-btn');
-          return announce($('.ok-msg span').textContent);
+          rerender(S.undo ? '#undo-btn' : 'h1');
+          return announce($('#flash-msg').textContent);
         }
         case 'assign':
           return openAssign(t.dataset.a, t.dataset.b);
@@ -4143,11 +4555,17 @@
         case 'assign-to':
           return openAssignTo(t.dataset.b);
         case 'first-skip':
-          S.flash = null;
-          return go({ name: 'day', id: t.dataset.a, day: TODAY });
+          go({ name: 'day', id: t.dataset.a, day: TODAY });
+          S.flash =
+            esc(athlete(t.dataset.a).name) +
+            ' is added, with no program. Choose one any time from this page.';
+          rerender('h1');
+          return announce($('#flash-msg').textContent);
         case 'start-default':
           r.pick = r.pick === 'default' ? null : 'default';
-          return rerender(r.pick ? '#df-p-ydp' : '#st-default');
+          // A11Y-4: focus the adult caution first when there is one, so it is never skipped.
+          rerender();
+          return focus(r.pick ? $('#df-warn') || $('#df-p-daily_five') : '#st-default');
         case 'start-create': {
           closeDialog(false);
           var nb = {
@@ -4155,7 +4573,7 @@
             name: t.dataset.a ? athlete(t.dataset.a).name + '’s program' : 'New program',
             archived: false,
             fresh: true,
-            days: { 'Day A': [] },
+            days: { 'Workout A': [] },
           };
           S.programs.push(nb);
           S.edit = null;
@@ -4167,6 +4585,7 @@
           });
           asg.to = shift(TODAY, -1);
           closeDialog(false);
+          S.flashAt = r.name === 'programs' && !r.confirmArchive ? t.dataset.b : null;
           S.flash =
             esc(athlete(t.dataset.a).name) +
             ' is off ' +
@@ -4223,6 +4642,7 @@
         }
         case 'unarchive-prog':
           program(t.dataset.b).archived = false;
+          S.flashAt = null;
           S.flash =
             esc(program(t.dataset.b).name) +
             ' restored. Nobody is on it until you move someone to it.';
@@ -4278,7 +4698,18 @@
       if (!u) return;
       if (u.kind === 'athlete') {
         athlete(u.id).archived = false;
-        S.flash = esc(athlete(u.id).name) + ' is back.';
+        (u.reopen || []).forEach(function (x) {
+          x.to = null;
+        });
+        S.flash =
+          esc(athlete(u.id).name) +
+          ' is back' +
+          ((u.reopen || []).length ? ', on the same programs.' : '.');
+      }
+      if (u.kind === 'edit') {
+        program(u.block).days = u.prev;
+        S.edit = null;
+        S.flash = 'Undone. ' + esc(program(u.block).name) + ' is as it was.';
       }
       if (u.kind === 'start') {
         S.programs = S.programs.filter(function (p) {
@@ -4319,20 +4750,30 @@
           });
           if (live) live.to = null;
         });
-        S.flash = 'Undone.';
+        S.flash = u.keep
+          ? 'Undone. ' +
+            esc(athlete(u.drop.athlete).name) +
+            ' is off it; ' +
+            esc(program(u.keep).name) +
+            ' is kept in Programs.'
+          : 'Undone.';
       }
       if (u.kind === 'copy') {
+        // SUX-2: newcomers come off the copy too, not only the athletes who moved from the original.
         u.moved.forEach(function (m) {
           S.assignments = S.assignments.filter(function (y) {
             return !(y.athlete === m.athlete && y.block === u.copy);
           });
+          if (m.newcomer) return;
           var old = S.assignments.find(function (y) {
             return y.athlete === m.athlete && y.block === u.src && y.from === m.from;
           });
           if (old) old.to = null;
         });
         S.flash =
-          'Moved back to ' + esc(program(u.src).name) + '. The copy is kept, with nobody on it.';
+          'Undone. Everyone is back where they were; ' +
+          esc(program(u.copy).name) +
+          ' is kept, with nobody on it.';
       }
       S.undo = null;
       rerender('h1');
@@ -4345,8 +4786,11 @@
       if (id === 'clear-in')
         $('#clear-go').disabled = ev.target.value.trim().toLowerCase() !== 'delete';
       if (id === 'del-name')
-        $('#del-go').disabled =
-          ev.target.value.trim().toLowerCase() !== athlete(S.route.id).name.toLowerCase();
+        $('#del-go').disabled = fold(ev.target.value) !== fold(athlete(S.route.id).name);
+      if (S.edit && ev.target.closest && ev.target.closest('#app .rx, #pn-name, [data-wk]'))
+        S.edit.dirty = true;
+      if ((id === 'pn-name' || /^wl-/.test(id)) && $('#new-days'))
+        drawAssignPreview($('#new-days'));
       if (ev.target.dataset && ev.target.dataset.act === 'load') {
         var p = S.edit.blocks[ev.target.dataset.b][ev.target.dataset.day].find(function (x) {
           return x.id === ev.target.dataset.pid;
@@ -4363,7 +4807,8 @@
       if (ev.target.name === 'sv') $('#copy-opts').hidden = ev.target.value !== 'copy';
       var af = ev.target.closest && ev.target.closest('form[data-pre]');
       if (af) {
-        drawAssignPreview(af);
+        drawAssignPreview(af, true);
+        if (af.id === 'new-days' && S.edit) S.edit.newDays = readAssign(af).days;
         var err = $('#' + af.dataset.pre + '-err');
         if (err) err.hidden = true;
       }
@@ -4389,8 +4834,22 @@
         }
         var kind = f.querySelector('input[name=addkind]:checked');
         if (!kind) {
-          announce('Choose kid or adult.');
+          $('#add-kind-err').hidden = false;
           return focus('#add-kid');
+        }
+        // IXD-7: a name already in the household — archived athletes included — warns once, never blocks.
+        var same = S.athletes.find(function (x) {
+          return fold(x.name) === fold(name);
+        });
+        if (same && f.dataset.dupOk !== fold(name)) {
+          f.dataset.dupOk = fold(name);
+          $('#add-err').textContent =
+            'There is already an athlete called ' +
+            same.name +
+            (same.archived ? ' (archived — restore them from Household settings)' : '') +
+            '. Tap Add athlete again to add another.';
+          $('#add-err').hidden = false;
+          return focus('#add-name');
         }
         var id = 'a' + Date.now();
         S.athletes.push({ id: id, name: name, kind: kind.value, archived: false });
@@ -4400,7 +4859,12 @@
       if (f.id === 'edit-form') {
         var a = athlete(f.dataset.id);
         var nm = $('#edit-name').value.trim();
-        if (nm) a.name = nm;
+        if (!nm) {
+          $('#edit-err').hidden = false;
+          $('#edit-name').setAttribute('aria-invalid', 'true');
+          return focus('#edit-name');
+        }
+        a.name = nm;
         a.kind = f.querySelector('input[name=ekkind]:checked').value;
         announce('Saved.');
         return go({ name: 'day', id: a.id, day: TODAY });
@@ -4416,8 +4880,8 @@
         rerender('#restore-' + evc.id);
         return announce(
           'Day cleared. ' +
-            items.length +
-            ' entries hidden. Restore all is under Hidden on this day.',
+            rowCount(items) +
+            ' items hidden. Restore all is under Hidden on this day.',
         );
       }
       if (f.id === 'bw-form') {
@@ -4448,25 +4912,23 @@
         });
         closeDialog(false);
         if (mode === 'all') {
+          var prevDays = JSON.parse(JSON.stringify(program(bid).days));
           program(bid).days = JSON.parse(JSON.stringify(staged));
+          var whoAll = onBlock(bid).map(function (i) {
+            return athlete(i).name;
+          });
           S.flash =
             esc(program(bid).name) +
-            ' saved for ' +
-            esc(
-              names(
-                onBlock(bid).map(function (i) {
-                  return athlete(i).name;
-                }),
-              ),
-            ) +
+            ' saved' +
+            (whoAll.length ? ' for ' + esc(names(whoAll)) : '') +
             '.';
-          S.undo = null;
+          S.undo = { kind: 'edit', block: bid, prev: prevDays };
         } else {
           var cp = {
             id: 'b' + Date.now(),
             name: $('#cp-name')
-              ? $('#cp-name').value.trim() || program(bid).name + ' (v2)'
-              : program(bid).name + ' (v2)',
+              ? $('#cp-name').value.trim() || program(bid).name + ' (copy)'
+              : program(bid).name + ' (copy)',
             archived: false,
             days: JSON.parse(JSON.stringify(staged)),
           };
@@ -4485,7 +4947,7 @@
             if (cur) {
               cur.to = shift(TODAY, -1);
               moved.push({ athlete: aid, from: cur.from });
-            }
+            } else moved.push({ athlete: aid, newcomer: true });
             // A move to the copy keeps the athlete's days; a newcomer starts on every day.
             S.assignments.push({
               athlete: aid,
@@ -4495,14 +4957,8 @@
               days: cur ? cur.days.slice() : ALL_DAYS.slice(),
             });
           });
-          startEdit(
-            S.route.block
-              ? [program(bid)]
-              : activeAssignments(S.route.id).map(function (x) {
-                  return program(x.block);
-                }),
-          );
-          S.edit.key = S.route.block || S.route.id;
+          startEdit(editBlocks(S.route));
+          S.edit.key = editKey(S.route);
           S.flash =
             esc(cp.name) +
             ' saved.' +
@@ -4522,6 +4978,7 @@
         rerender(S.undo ? '#undo-btn' : 'h1');
         return announce($('.ok-msg span').textContent);
       }
+      if (f.id === 'new-days') return; // read by the program's own Save
       if (f.dataset.pre) {
         // ASSIGN-1: the sheet (assign-form), the add flow's last step (first-form), a default (default-form).
         var aid = f.dataset.a;
@@ -4558,7 +5015,7 @@
           };
           Object.keys(tpl.days).forEach(function (d) {
             copy.days[d] = tpl.days[d].map(function (n) {
-              return rx(n);
+              return rx(n[0], n[1], n[2]);
             });
           });
           S.programs.push(copy);
@@ -4570,7 +5027,7 @@
             esc(nm2) +
             ' is on it ' +
             esc(onDays(v.days)) +
-            ', from today. It has no loads yet: add them in the program.';
+            ', from today.';
           S.route = { name: 'day', id: aid, day: TODAY };
           rerender('#undo-btn');
           return announce($('.ok-msg span').textContent);
@@ -4578,6 +5035,7 @@
         var cur2 = from && liveAssignment(aid, from);
         if (cur2 && v.bid === from && sameSet(cur2.days, v.days)) return closeDialog();
         S.undo = applyAssign(aid, from, v.bid, v.days);
+        S.flashAt = S.route.name === 'programs' && !S.route.confirmArchive ? v.bid : null;
         var toName = esc(program(v.bid).name);
         S.flash = !from
           ? esc(nm2) + ' is on ' + toName + ' ' + esc(onDays(v.days)) + ', from today.'
@@ -4615,6 +5073,7 @@
       sel.appendChild(o);
     });
     sel.addEventListener('change', function () {
+      closeDialog(false);
       S.edit = null;
       go(screenToRoute(sel.value));
     });

@@ -16,6 +16,6 @@ variants the spec's open decisions ask about.
 **Lifecycle.** A prototype is frozen once its spec is signed off; the implementation PRs copy decisions
 from the spec, not markup from here. Delete the folder when its milestone closes.
 
-| Prototype                        | Spec                                                           |
-| -------------------------------- | -------------------------------------------------------------- |
-| [`crud-1/`](./crud-1/index.html) | [CRUD-1 — Fix it yourself](../specs/crud-1-fix-it-yourself.md) |
+| Prototype                        | Spec                                                    |
+| -------------------------------- | ------------------------------------------------------- |
+| [`crud-1/`](./crud-1/index.html) | [CRUD-1 and PROG-1](../specs/crud-1-fix-it-yourself.md) |
