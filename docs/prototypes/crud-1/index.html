@@ -458,16 +458,13 @@
     border-color: var(--foreground);
   }
   /* Weekday toggles. 7 × 44px = 308px > the 294px of content at 360px, so one row cannot hold them
-     at a legal tap size: 4 + 3 on a phone, 7 across from 480px up. */
+     at a legal tap size. auto-fill on a 64px minimum sizes to the CONTAINER, not the viewport: 4 + 3 in
+     294px, 7 across from 496px. (v3 keyed this on a viewport media query and overflowed inside the
+     360px device frame on a wide screen — the real sheet is narrower than the window too.) */
   .days {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
     gap: 8px;
-  }
-  @media (min-width: 480px) {
-    .days {
-      grid-template-columns: repeat(7, 1fr);
-    }
   }
   .days label {
     display: flex;
@@ -997,6 +994,33 @@
       max-width: 100%;
       border-radius: 16px 16px 0 0;
     }
+    /* A long form (ASSIGN-1) is a full-screen page on a phone: no backdrop to mis-tap, the title and
+       the actions pinned, only the middle scrolls. */
+    dialog.sheet.full {
+      margin: 0;
+      height: 100dvh;
+      max-height: 100dvh;
+      border-radius: 0;
+    }
+    dialog.sheet.full .sheet-in {
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+  }
+  .sheet-in > form,
+  form.sheet-in {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sheet-body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .sheet-foot.actions {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
   }
   .radio-card {
     display: flex;
@@ -1032,7 +1056,7 @@
 
 <details class="bar-wrap" id="bar-wrap" open>
   <summary class="bar-sum">
-    <strong>CRUD-1 prototype · v3</strong> <span class="muted">· review controls</span>
+    <strong>CRUD-1 prototype · v4</strong> <span class="muted">· review controls</span>
   </summary>
   <div class="bar" role="region" aria-label="Prototype controls">
     <label for="screen-select"
@@ -1170,6 +1194,9 @@
     var TODAY = '2026-10-22';
     var PURGE_DAYS = 30; // ⚠️ a placeholder: N is PRIV-3’s to set (ADR 0008). Shown so the copy can be judged.
     // Weekdays as `localWeekday` numbers them (0 = Sunday), shown Monday-first.
+    // Display labels for PROFILE_KINDS. The stored value stays `kid` (enums.ts); only the words change,
+    // from one map, so the tile, settings and the form cannot disagree (M10).
+    var KIND_LABEL = { kid: 'Child', adult: 'Adult' };
     var ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
     var WD_SHOWN = [1, 2, 3, 4, 5, 6, 0];
     var WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -1182,7 +1209,7 @@
         id: 'ydp',
         name: 'Youth Daily Program',
         about:
-          'Ships with the app. Six or seven movements a day, alternating Day A and Day B. Built for kids.',
+          'Ships with the app. Six or seven movements a day, alternating Day A and Day B. Built for children.',
         rotation: { anchor: '2026-09-24', slots: ['Day B', 'Day A'] },
         days: {
           'Day A': [
@@ -1372,7 +1399,7 @@
     var pageHidden = {}; // event ids hidden during THIS visit → drawn in place (not persisted: a reload folds them into the Hidden bar)
     function load() {
       try {
-        var raw = localStorage.getItem('crud1-proto-v3');
+        var raw = localStorage.getItem('crud1-proto-v4');
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
         return null;
@@ -1380,7 +1407,7 @@
     }
     function save() {
       try {
-        localStorage.setItem('crud1-proto-v3', JSON.stringify(S));
+        localStorage.setItem('crud1-proto-v4', JSON.stringify(S));
       } catch (e) {}
     }
 
@@ -1559,7 +1586,7 @@
     function openDialog(html, opts) {
       var d = $('#dlg');
       opener = document.activeElement;
-      d.className = opts && opts.sheet ? 'sheet' : '';
+      d.className = (opts && opts.sheet ? 'sheet' : '') + (opts && opts.full ? ' full' : '');
       d.innerHTML = html;
       d.setAttribute('aria-labelledby', 'dlg-title');
       if (opts && opts.describedby) d.setAttribute('aria-describedby', opts.describedby);
@@ -1605,7 +1632,7 @@
         'One link for parents: Household settings. No edit mode on the kids’ screen (panel, Q1/Q5).',
       ],
       add: [
-        'Two fields. "Kid / adult" today only changes the label (kid profiles also get calisthenics ramp targets when that schedule is filled — it ships empty).',
+        'Two fields. "Child / Adult" are display words; the stored value stays `kid` / `adult` (PROFILE_KINDS). Today it only changes the label (child profiles also get calisthenics ramp targets when that schedule is filled — it ships empty).',
         'NEW (v3, maintainer): a last step, "Put {name} on a program?". Nothing is preselected: a wrong default would hand an adult the kids’ program. Days start at every day.',
         '"Not now" lands on the day page, whose Strength section says "No program yet · Choose a program".',
         'Try: add "Test" as an adult → pick Off-season S&C → untick to Mon/Wed/Fri → Put on program.',
@@ -1663,6 +1690,7 @@
         'Loads are typed by a person, verbatim. A copy copies them; nothing is generated.',
       ],
       assign: [
+        'v4: full screen on a phone — title and actions pinned, only the middle scrolls; a capped dialog from 600px. "None of these? Create a new program" sits under the list when putting someone on.',
         'ASSIGN-1 owns the days (maintainer, 2026-10-22). One sheet: program, then which days, then a preview of the next six sessions.',
         'Weekdays only — ADR 0007 decision 1. The grey line shows the same choice as an RRULE (FREQ=WEEKLY;BYDAY=…); see the spec’s Recurrence section.',
         'Try: switch to Youth Daily Program and untick to Mon/Wed/Fri. It warns and the preview shows Day B three times, then Day A: the rotation counts calendar days (2026-09-24 decision). That is Q13.',
@@ -1672,6 +1700,7 @@
       programs: [
         'Tap an athlete chip to change their days, move them, or take them off (ASSIGN-1). Each chip shows the days.',
         '"+ New program" is the same create path as the no-program page (gated on ASSIGN-READ).',
+        'v4: after Take off, "+ Add athlete" on each program puts someone (back) on it; the athlete’s program page has "+ Put {name} on another program". Undo still covers the moment.',
         'Q3: switch the variant. "Resolve in place" makes Archive wait until nobody is on it, with Move/Take off right there. "Close all" archives and closes, and Undo puts both back.',
       ],
       history: [
@@ -1869,12 +1898,12 @@
               '</span><span class="stack-xs" style="gap:2px"><span class="name">' +
               esc(a.name) +
               '</span><span class="kind">' +
-              esc(a.kind) +
+              esc(KIND_LABEL[a.kind]) +
               '</span></span></button></li>'
             );
           })
           .join('') +
-        '<li><button type="button" class="tile add" data-go="add" data-m><span class="avatar" aria-hidden="true">+</span><span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A kid, or yourself</span></span></button></li></ul>' +
+        '<li><button type="button" class="tile add" data-go="add" data-m><span class="avatar" aria-hidden="true">+</span><span class="stack-xs" style="gap:2px"><span class="name">Add athlete</span><span class="kind" style="text-transform:none">A child, or yourself</span></span></button></li></ul>' +
         '<button type="button" class="textlink" data-go="settings" style="margin-top:16px">→ Household settings</button>'
       );
     }
@@ -1891,7 +1920,7 @@
         prefix +
         'kind" value="kid"' +
         (kind === 'kid' ? ' checked' : '') +
-        ' /> A kid</label>' +
+        ' /> Child</label>' +
         '<label for="' +
         prefix +
         '-adult"><input type="radio" id="' +
@@ -1900,7 +1929,7 @@
         prefix +
         'kind" value="adult"' +
         (kind === 'adult' ? ' checked' : '') +
-        ' /> An adult</label>' +
+        ' /> Adult</label>' +
         '</div><p class="hint" id="' +
         prefix +
         '-kind-hint" style="margin:6px 0 0">Shown on their tile. You can change it later.</p></fieldset>'
@@ -1956,8 +1985,8 @@
               a.id +
               '" tabindex="-1"><span><span style="font-weight:500">' +
               esc(a.name) +
-              '</span> <span class="muted small" style="text-transform:capitalize">· ' +
-              a.kind +
+              '</span> <span class="muted small">· ' +
+              KIND_LABEL[a.kind] +
               '</span></span>' +
               '<div class="row"><button type="button" class="btn outline" data-go="edit" data-id="' +
               a.id +
@@ -2251,9 +2280,11 @@
         })
         .filter(Boolean);
       var progLine = !asgs.length
-        ? '<div class="card stack-sm" id="noprog"><p style="margin:0"><strong>No program yet.</strong> A program puts a workout here each day it runs. You can still log anything below.</p><button type="button" class="btn outline" style="width:fit-content" data-act="choose-prog" data-a="' +
+        ? '<div class="card stack-sm" id="noprog"><p style="margin:0"><strong>No program yet.</strong> A program puts a workout here each day it runs. You can still log anything below.</p><div class="row"><button type="button" class="btn outline" data-act="choose-prog" data-a="' +
           a.id +
-          '" data-m>Choose a program</button></div>'
+          '" data-m>Choose a program</button><button type="button" class="btn ghost" data-act="start-create" data-a="' +
+          a.id +
+          '">Create a program</button></div></div>'
         : '<p class="small muted" style="margin:0">' +
           (due.length
             ? (r.day === TODAY ? 'Today: ' : 'This day: ') + esc(due.join(' and '))
@@ -2975,9 +3006,13 @@
           esc(a.name) +
           '’s program</h1></header>' +
           flashHtml() +
-          '<div class="card stack-sm"><p style="margin:0"><strong>No program yet.</strong></p><button type="button" class="btn outline" style="width:fit-content" data-act="choose-prog" data-a="' +
+          '<div class="card stack-sm"><p style="margin:0"><strong>No program yet.</strong> A program puts a workout on ' +
+          esc(a.name) +
+          '’s page each day it runs.</p><div class="row"><button type="button" class="btn outline" data-act="choose-prog" data-a="' +
           a.id +
-          '">Choose a program</button></div>'
+          '">Choose a program</button><button type="button" class="btn ghost" data-act="start-create" data-a="' +
+          a.id +
+          '">Create a program</button></div></div>'
         );
       return (
         (a
@@ -2998,6 +3033,13 @@
         '<p class="small muted" style="margin:0">Blank sets or reps mean open: log what you did. Loads are typed by a coach or parent, exactly as written.</p></header>' +
         flashHtml() +
         blocks.map(blockSection).join('') +
+        (a
+          ? '<button type="button" class="btn outline" style="width:fit-content" data-act="choose-prog" data-a="' +
+            a.id +
+            '">+ Put ' +
+            esc(a.name) +
+            ' on another program</button>'
+          : '') +
         (a
           ? '<button type="button" class="textlink" data-go="history" data-id="' +
             a.id +
@@ -3125,6 +3167,11 @@
                     })
                     .join('')
                 : '<span class="small muted">Nobody is on this program</span>') +
+              '<button type="button" class="chip-btn" data-act="assign-to" data-b="' +
+              b.id +
+              '" aria-label="Put someone on ' +
+              esc(b.name) +
+              '">+ Add athlete</button>' +
               '</div>' +
               '<div class="row"><button type="button" class="btn outline" data-go="program" data-b="' +
               b.id +
@@ -3399,8 +3446,13 @@
             ? '<p class="small muted" style="margin:0">Pick another program to move them, or change their days. From today: days already logged keep what they were logged against.</p>'
             : '') +
           assignFields('as', list, cur ? bid : null, cur ? cur.days : ALL_DAYS) +
-          '<span class="err" id="as-err" role="alert" hidden></span>' +
-          '<div class="row" style="justify-content:space-between">' +
+          (cur
+            ? ''
+            : '<button type="button" class="textlink" data-act="start-create" data-a="' +
+              aid +
+              '" style="min-height:44px;display:inline-flex">None of these? Create a new program</button>') +
+          '<span class="err" id="as-err" role="alert" hidden></span></div>' +
+          '<div class="sheet-foot actions">' +
           (cur
             ? '<button type="button" class="btn ghost" data-act="takeoff" data-a="' +
               aid +
@@ -3410,8 +3462,62 @@
             : '<span></span>') +
           '<span class="row"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">' +
           (cur ? 'Save' : 'Put on program') +
-          '</button></span></div></div></form>',
-        { sheet: true },
+          '</button></span></div></form>',
+        { sheet: true, full: true },
+      );
+      drawAssignPreview($('#assign-form'));
+    }
+
+    // The same write from the program's side (Programs → "+ Add athlete"): the athlete is the choice.
+    function openAssignTo(bid) {
+      var b = program(bid);
+      var off = S.athletes.filter(function (a) {
+        return !a.archived && !liveAssignment(a.id, bid);
+      });
+      if (!off.length) return announce('Everyone is already on ' + b.name + '.');
+      openDialog(
+        '<form class="sheet-in" id="assign-form" data-pre="as" data-to="1" novalidate><div class="sheet-head"><h2 id="dlg-title" style="margin:0;font-size:18px">Put someone on ' +
+          esc(b.name) +
+          '</h2></div><div class="sheet-body">' +
+          '<fieldset class="stack-sm"><legend>Who?</legend>' +
+          off
+            .map(function (a) {
+              return (
+                '<label class="radio-card" for="at-' +
+                a.id +
+                '"><input type="radio" name="asath" id="at-' +
+                a.id +
+                '" value="' +
+                a.id +
+                '" /><span><strong>' +
+                esc(a.name) +
+                '</strong><br /><span class="small muted">' +
+                esc(
+                  activeAssignments(a.id).length
+                    ? 'On ' +
+                        names(
+                          activeAssignments(a.id).map(function (x) {
+                            return program(x.block).name;
+                          }),
+                        )
+                    : 'No program',
+                ) +
+                '</span></span></label>'
+              );
+            })
+            .join('') +
+          '</fieldset>' +
+          // The program is fixed here: one pre-checked, hidden radio keeps readAssign() one function.
+          '<input type="radio" name="asprog" value="' +
+          bid +
+          '" checked hidden />' +
+          assignFields('as', [], null, ALL_DAYS).replace(
+            /^<fieldset class="stack-sm"><legend>Program<\/legend><\/fieldset>/,
+            '',
+          ) +
+          '<span class="err" id="as-err" role="alert" hidden></span></div>' +
+          '<div class="sheet-foot actions"><span></span><span class="row"><button type="button" class="btn ghost" data-act="dlg-close">Cancel</button><button type="submit" class="btn">Put on program</button></span></div></form>',
+        { sheet: true, full: true },
       );
       drawAssignPreview($('#assign-form'));
     }
@@ -3435,6 +3541,9 @@
         assignFields('fp', list, null, ALL_DAYS) +
         '<span class="err" id="fp-err" role="alert" hidden></span>' +
         '<button class="btn full" type="submit">Put on program</button>' +
+        '<button type="button" class="btn outline full" data-act="start-create" data-a="' +
+        a.id +
+        '">None of these? Create a new program</button>' +
         '<button type="button" class="btn ghost full" data-act="first-skip" data-a="' +
         a.id +
         '">Not now</button></form>'
@@ -3467,7 +3576,7 @@
             a.id +
             '" novalidate>' +
             (a.kind === 'adult'
-              ? '<p class="warn" style="margin:0">There is no default for adults yet. The one below is built for kids.</p>'
+              ? '<p class="warn" style="margin:0">There is no default for adults yet. The one below is built for children.</p>'
               : '') +
             assignFields('df', DEFAULTS, null, ALL_DAYS) +
             '<span class="err" id="df-err" role="alert" hidden></span>' +
@@ -3934,6 +4043,8 @@
           return openAssign(t.dataset.a, t.dataset.b);
         case 'choose-prog':
           return openAssign(t.dataset.a, null);
+        case 'assign-to':
+          return openAssignTo(t.dataset.b);
         case 'first-skip':
           S.flash = null;
           return go({ name: 'day', id: t.dataset.a, day: TODAY });
@@ -3941,6 +4052,7 @@
           r.pick = r.pick === 'default' ? null : 'default';
           return rerender(r.pick ? '#df-p-ydp' : '#st-default');
         case 'start-create': {
+          closeDialog(false);
           var nb = {
             id: 'b' + Date.now(),
             name: t.dataset.a ? athlete(t.dataset.a).name + '’s program' : 'New program',
@@ -4320,6 +4432,15 @@
       if (f.dataset.pre) {
         // ASSIGN-1: the sheet (assign-form), the add flow's last step (first-form), a default (default-form).
         var aid = f.dataset.a;
+        if (f.dataset.to) {
+          var who = f.querySelector('input[name=asath]:checked');
+          if (!who) {
+            $('#as-err').textContent = 'Choose who.';
+            $('#as-err').hidden = false;
+            return focus(f.querySelector('input[name=asath]'));
+          }
+          aid = who.value;
+        }
         var nm2 = athlete(aid).name;
         var v = readAssign(f);
         var errEl = $('#' + f.dataset.pre + '-err');

@@ -1,6 +1,6 @@
 # CRUD-1 — Fix it yourself: a household corrects its own data without a script
 
-> **Status: draft for the maintainer's review, 2026-10-22. UX panel round 1 and the maintainer's round 1 reconciled (logs at the bottom); prototype v3 awaiting the maintainer's review.** Milestone this
+> **Status: draft for the maintainer's review, 2026-10-22. UX panel round 1 and the maintainer's rounds 1–2 reconciled (logs at the bottom); prototype v4 awaiting the maintainer's review.** Milestone this
 > defines: **Fix it yourself** (`docs/milestones/crud-1-fix-it-yourself.md`, written after the
 > prototype is signed off, sequence step 5). Goal it serves: [beta-1](../milestones/beta-1.md) →
 > "The goal", item 4 — _"fix their own mistakes without asking [the maintainer] to run a script"_ — and Beta 1's
@@ -293,6 +293,22 @@ the UX panel's first round; the log at the bottom says why.
     **(M4)** _(D2)_
 35. **When** a created program is saved, its rotation anchor **shall** be the save day, so its first
     workout falls on that day. **(M6)** _(D4c)_
+36. **Wherever** a parent is asked to choose a program — the assignment sheet, the add flow's last step,
+    and the "No program yet" state on the athlete's day page and program page — "Create a program"
+    **shall** be one tap away, so "none of these fit" is never a dead end. **(M8, M9)** _(ASSIGN-1,
+    D4c)_
+37. **Below 600px** the assignment sheet **shall** fill the screen with its title and its actions
+    pinned and only the middle scrolling; **from 600px** it **shall** be a dialog capped at the viewport
+    height with the same pinned actions. The weekday toggles **shall** size to their container, not the
+    viewport — four then three in 294px, seven across from 496px — each ≥44 × 44px. **(M11, M12)**
+    _(ASSIGN-1)_
+38. **When** an athlete has been taken off a program, a parent **shall** be able to put them back on it
+    from **both** sides: "+ Put {name} on another program" on the athlete's program page, and "+ Add
+    athlete" on the program in the household's program list (choose who, then days). **(M13)**
+    _(ASSIGN-1)_
+39. The picker tile, the athlete form and household settings **shall** show `kind` as **Child** /
+    **Adult**, from one display map beside `PROFILE_KINDS`; the stored values stay `kid` / `adult`.
+    **(M10)** _(A1)_
 
 ## The data contract
 
@@ -303,6 +319,9 @@ schemas in `packages/shared`, DTOs beside their DAL in `apps/web/lib`.
 packages/shared
   profileUpsertSchema        { name: string (trimmed, 1..PROFILE_NAME_MAX), kind: profileKindSchema }
                               — kind REUSES enums.ts PROFILE_KINDS; PROFILE_NAME_MAX is new, one home
+  PROFILE_KIND_LABEL         { kid: 'Child', adult: 'Adult' } as const satisfies Record<ProfileKind, string>
+                              — beside PROFILE_KINDS in enums.ts; replaces profile-tile.tsx's
+                                `capitalize {profile.kind}`, which renders "Kid" (M10)
   hideEntrySchema            { profilePublicId, entryPublicId }
   restoreHiddenSchema        { profilePublicId, day, hiddenAt }       ← restores ONE hide event
   clearDaySchema             { profilePublicId, day, confirm }  ← confirm is trimmed and lower-cased,
@@ -391,6 +410,30 @@ SECURITY.md requires. An `.ics` export would be lossless from the rows today; no
 **What this asks of ASSIGN-1 now:** the days are **one field** in the sheet, so a "Custom…" can sit
 beside them later without a redesign; and the weekday origin comes from `WEEKDAYS` alone, the trap
 SCHED-1's plan documents (ISO `1 = Monday` vs `localWeekday`'s `0 = Sunday`).
+
+## Later milestones this must not get in the way of
+
+_(The maintainer's aside, M15: a dashboard is a future milestone, kept in mind while building this.)_
+Household metrics — streaks, PRs, trends, comparisons between athletes, a household view, reports —
+already have homes in the backlog, all in the **Insight** pillar ([roadmap.md](../roadmap.md) →
+Pillars): **V1-16** (the per-athlete progress dashboard), **MOT-1** (the one daily streak), **DASH-1**
+(streaks, week/month/year-over-year, PRs, leaderboards within a household or across athletes a coach
+can see) and **SOCIAL-1** (comparing with other households). None is designed here. What CRUD-1 owes
+them:
+
+- **ASSIGN-1's weekday rows are the streak's input.** DASH-1 says a streak _"needs to know which days
+  were scheduled"_, and MOT-1's streak _"needs to know what is DUE today, or it breaks on a correctly-taken
+  rest day"_. A day outside the weekday set must read as a rest day, never as a miss — so the
+  weekday set is stored as rows and resolved by the one shared resolver (criteria 29–31), not computed
+  in a screen.
+- **A hidden entry never counts** (Q7) — in the strip now, in every aggregate later. Risks → the
+  `deleted_at` reader audit is the same list a dashboard will read from.
+- **An archived athlete keeps their history** (criterion 5), so a household view must decide whether
+  archived athletes appear. A2's plan records the marker the dashboard will filter on.
+- **Comparison is a product decision first.** DASH-1 already warns that ranking siblings by
+  bodyweight or load has obvious failure modes. "Who did the most", "max weight", "longest streak"
+  across children wait for that decision, opt-in and household-only by default; nothing in CRUD-1 ranks
+  anyone.
 
 ## Unowned work this spec found
 
@@ -517,6 +560,12 @@ panel's answer.
 - **Changing the rotation** — calendar-indexed by the maintainer's decision; Q13 asks, it does not
   change it.
 - **An adult default program** — unowned 7 says there is none; authoring one is a product question.
+- **Scheduling a routine item by weekday** (e.g. Practice Mon–Fri only) and **the practice minutes
+  input** — Practice is a routine item, not a program movement (M14); the minutes field is **V1-7a**,
+  already filed and deferred. A routine item has no weekday set today; if streaks need one, that is
+  MOT-1's question.
+- **Dashboards, streaks, comparisons and reports** — V1-16, MOT-1, DASH-1, SOCIAL-1; see
+  [Later milestones](#later-milestones-this-must-not-get-in-the-way-of).
 - **Workout versioning, a version-compare screen** — CLONE-1 → Out of scope.
 
 ## Risks
@@ -619,3 +668,20 @@ script error, no horizontal overflow at 360/820/1280, no control under 44px).
 | M5  | How does a newly added athlete get a program?                                                      | **decided: a last step**     | Today it would get the household's newest block whatever its kind — an adult gets the kids' program. v3: "Put {name} on a program?", nothing preselected, every day chosen, "Not now" → "No program yet · Choose a program" on their page (criterion 32). The A1-before-D4 gap is Q15. _Verified._                                                 |
 | M6  | With no programs, the last step is "No program yet — Choose a default program OR Create a program" | **decided** (maintainer)     | Both built (criteria 33, 35). "Create a program" was out of scope; it is now **D4c** (V1-22 A4), behind D4 as ADR 0007 decision 4 requires. The default needs a request-scoped writer and there is no adult default (unowned 7). _Verified:_ default → undo → create → save.                                                                       |
 | M7  | _(found while building M2)_ v2's strength receipt said "Day A" on 2026-10-22                       | fixed                        | The real resolver makes 2026-10-22 a **B** day (anchor 2026-09-24 is B; 28 days later is B). v3 computes it, and the Strength section says "Today: Youth Daily Program · Day B", or "No program today" on a rest day (criterion 30).                                                                                                               |
+
+### The maintainer, round 2 (2026-10-22) — against prototype v3
+
+Prototype v4 carries every change. _Verified_ rows were exercised in Chromium twice: a 1280px window
+with the 360px device frame (the maintainer's setup) and a real 360 × 740 viewport — no script error,
+no horizontal overflow on any of the 15 screens, no control under 44px.
+
+| #   | Raised                                                                                                 | Verdict                | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M8  | After "Choose a program", someone who wants none of those should be able to create one                 | accepted               | "None of these? Create a new program" under the list in the sheet and on the add flow's last step; it closes the sheet and opens the empty editor with the athlete named in its banner (criterion 36). _Verified._                                                                                                                                                                                                                                                                                                                                             |
+| M9  | The empty program page offers "Choose a program" only                                                  | accepted               | "Create a program" beside it, on the program page **and** the day page's "No program yet" card (criterion 36). _Verified._                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| M10 | Say "Child" instead of "A kid"?                                                                        | accepted               | **Child / Adult** everywhere a kind is shown — the form, the tile (which today renders `capitalize {kind}` → "Kid", `profile-tile.tsx:30`) and settings — from one display map, `PROFILE_KIND_LABEL`. The stored value stays `kid` (`enums.ts:22`): changing a stored enum is a migration for a word (criterion 39). _Verified._                                                                                                                                                                                                                               |
+| M11 | The weekday toggles overflow                                                                           | **a real bug**, fixed  | Not just prototype roughness: v3 switched to seven across on a **viewport** media query (≥480px), so inside the 360px frame on a wide window the row was 7 × 76px. The real sheet is narrower than the window on a tablet too. Now `repeat(auto-fill, minmax(64px, 1fr))` sizes to the container (criterion 37). _Verified:_ two rows in the 360px frame on a 1280px window.                                                                                                                                                                                   |
+| M12 | The sheet gets long; how does it handle screen sizes — full screen in some cases?                      | accepted               | Yes. **Below 600px: full screen**, title and actions pinned, only the middle scrolls, so Save is always reachable and there is no backdrop to mis-tap. **From 600px:** a dialog capped at the viewport height, the same pinned actions. The short confirms (clear a day, merge) stay small dialogs (criterion 37). _Verified:_ 360 × 740 sheet, footer at 740. Alternative weighed: a route (`/p/[id]/program/assign`) — better back-button behaviour, but it loses the context the sheet sits on; the implementation plan can choose it if the panel prefers. |
+| M13 | After "Take off", how is the athlete added back?                                                       | accepted               | Undo covers the moment. After that, both sides: "+ Put {name} on another program" on the athlete's program page, and "+ Add athlete" on every program in Programs (choose who — each option says what they are on now — then days) (criterion 38). _Verified:_ take off → add back on six days.                                                                                                                                                                                                                                                                |
+| M14 | Practice is logged — is it a movement with a minutes field, assigned by the parent, loggable any time? | answered               | **Not a movement.** It is the `wrestling_practice` activity (`catalog-activity-types.ts:53`, category `skill`, minutes), a **routine item** (`life:wrestling_practice`): the parent adds it to an athlete's Today through **Edit routine** — the page M1 asked about — and it is loggable any day with one tap that writes `DEFAULT_PRACTICE_MINUTES = 90` (`lib/life/life-activities.ts:32`). The minutes input is **V1-7a**, filed and deferred. Routine = what can be logged; program = which workout is due. Out of scope here.                            |
+| M15 | Where will household metrics live — streaks, insights, comparing athletes, a household view?           | recorded, not designed | Future milestone. The backlog already holds it in the **Insight** pillar: V1-16, MOT-1, DASH-1, SOCIAL-1. New section [Later milestones](#later-milestones-this-must-not-get-in-the-way-of) lists what CRUD-1 owes them — chiefly that ASSIGN-1's weekday rows are the streak's "what was due" input.                                                                                                                                                                                                                                                          |
