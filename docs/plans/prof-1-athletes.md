@@ -2,13 +2,16 @@
 
 > Backlog: [plan.md](../plan.md) row PROF-1 · Spec: [crud-1-fix-it-yourself.md](../specs/crud-1-fix-it-yourself.md)
 > chunks **A1** (PROF-1a) and **A2** (PROF-1b) · Milestone: [CRUD-1](../milestones/crud-1-fix-it-yourself.md)
-> (steps 1–2) · Branches: one per PR,
-> listed under [Staging](#staging) (`db/prof-1a-0-profile-lifecycle-columns`, `fix/prof-1a-g-kid-only-program-read`,
-> `feat/prof-1a-1-add-athlete`, `feat/prof-1a-2-rename-athlete`, `feat/prof-1b-archive-athlete`).
+> (steps 1–2) · Branches: one per PR, listed under [Staging](#staging).
 > Approved prototype: [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html) v9 →
 > screens **picker** (`vPicker`, `:2078`), **add** (`vAdd`, `:2138`; submit handler `:5043-5072`),
 > **edit** (`vEdit`, `:2150`; submit `:5074-5085`), **settings** (`vSettings`, `:2239`; archive/restore
 > `:4587-4611`).
+>
+> **Revised after round 1 of both panels** (engineering: correctness, scope, architecture, reuse,
+> DB-safety, privacy; UX: lenses 1–3). The [review-response log](#review-response-log) records every
+> material finding. This plan uses **post-AUTH-1-1c names only** (`sessionUserOrNull`, `requireSession`,
+> `pages-need-a-session.test.ts`), because no PR here starts before 1c is live.
 
 ## Goal
 
@@ -23,37 +26,48 @@ the first profile-**creating** endpoint, so it carries the full boundary-test se
 the session (AUTH-1 1c) is what says whose household an athlete joins.
 
 Two things ship with it because the spec ties them to A1: the **kid-only guard** on every reader of the
-household's newest block (Q15, FE-5), so an adult added here is not shown the kids' program; and the
-removal of the last link to the routine editor (criterion 41, M30).
+household's newest block (Q15, FE-5), so an adult is not shown the kids' program; and the removal of the
+last link to the routine editor (criterion 41, M30).
 
 ## Acceptance
 
-Copied from the spec ([Acceptance](../specs/crud-1-fix-it-yourself.md#acceptance)), criteria tagged A1/A2:
+From the spec ([Acceptance](../specs/crud-1-fix-it-yourself.md#acceptance)), by the spec's own numbers:
 
 1. **When** a parent submits a new athlete with a non-blank name and a `kind` from `PROFILE_KINDS`, the
    system **shall** create one profile in the **session's** household and the picker **shall** list it
    on the next render. _(A1)_
 2. **If** the name is blank after trimming, longer than the limit the plan sets, or `kind` is not in
    `PROFILE_KINDS`, **then** the system **shall** return a typed field error and write nothing. _(A1)_
+   — the limit is `PROFILE_NAME_MAX = 40`.
 3. **When** an "add athlete" submit is replayed with the same idempotency key, the system **shall**
    create exactly one profile and return the same result. _(A1)_
 4. **If** a rename or archive names a profile outside the session's household, **then** the system
    **shall** respond as for an unknown profile (404 semantics, ADR 0006) and write nothing. _(A1, A2)_
 5. **While** an athlete is archived, the picker **shall not** list them, their history **shall** still
    export, and a parent **shall** be able to restore them from a list of archived athletes. _(A2)_
-6. _(A3 — out of scope here; sketched under [Out-of-scope](#out-of-scope--deferred).)_
+6. _(A3 — out of scope; sketched under [Out-of-scope](#out-of-scope--deferred).)_
 7. **When** PROF-1a ships, the empty state **shall not** link to GitHub. _(A1)_
 8. Rename **shall** be reachable from the athlete's own page; archive and delete **shall** live only in
-   household settings, never on the picker. _(A1, A2)_
+   household settings, never on the picker. **(R1)** _(A1, A2)_
 9. The picker tile, the athlete form and household settings **shall** show `kind` as **Child** /
-   **Adult**, from one display map beside `PROFILE_KINDS`; the stored values stay `kid` / `adult`. _(A1)_
-10. The app **shall not** link to the routine editor from anywhere … until ACT-1 replaces it. A routine
-    already saved **shall** keep rendering and logging on the day page; a profile with none **shall**
-    keep the neutral default (`apps/web/lib/routine/catalog.ts`, `NEUTRAL_DEFAULT_KEYS`). The
-    `/p/[profileId]/routine` route stays in code, unlinked. _(A1)_
-11. **When** an athlete is archived while on a program, their open assignments **shall** close the day
-    before … and Undo **shall** reopen exactly those assignments. Before D3 there is nothing to close.
-    _(A2)_
+   **Adult**, from one display map beside `PROFILE_KINDS`; the stored values stay `kid` / `adult`.
+   **(M10)** _(A1)_
+10. _(not this plan)_
+11. The app **shall not** link to the routine editor from anywhere — not the day page, not the
+    athlete's edit page — until ACT-1 replaces it. A routine already saved **shall** keep rendering and
+    logging on the day page; a profile with none **shall** keep the neutral default (Strength only,
+    `apps/web/lib/routine/catalog.ts`, `NEUTRAL_DEFAULT_KEYS`). The `/p/[profileId]/routine` route stays
+    in code, unlinked, as it was before V1-23 PR 2. **(M17, amended by M30)** _(A1)_
+12. _(not this plan)_
+13. _(not this plan)_
+14. _(not this plan)_
+15. _(not this plan)_
+16. _(not this plan)_
+17. **When** an athlete is archived while on a program, their open assignments **shall** close the day
+    before, the archived athlete **shall** drop out of every "who's on it" list, and Undo **shall**
+    reopen exactly those assignments. Before D3 there is nothing to close. **(R2 — IXD-5)** _(A2)_ —
+    this plan delivers the "before D3" half and the seam; [ASSIGN-1](./assign-1-assignments.md) D-5
+    owns the close.
 
 Plus the decisions this plan executes: **Q1** (archive and delete in settings), **Q8** (archive is a
 migration, one nullable column), **Q15** (the kid-only guard, covering the card, the form's scaffold and
@@ -61,512 +75,641 @@ prefill, and the export's `prescribedFor`).
 
 **Done when** (observable):
 
-- `/p` lists the household's live, unarchived athletes, then a dashed "+ Add athlete" tile, then (from
-  A2) one "Household settings" row. With zero athletes it shows the empty-state copy and the same tile,
-  and no GitHub link anywhere (`grep -r GITHUB_REPO_URL apps/web/components/onboarding` is empty).
-- Add → `/p/new` → name + Child/Adult → lands on the new athlete's page with `history.replace`
-  semantics (IXD-10), so Back returns to `/p`, not to the filled form.
-- A name already in the household (archived included, folded for case, spaces, accents and curly
-  apostrophes) warns once next to the field; a second submit adds it anyway (IXD-7, prototype `:5056-5066`).
+- `/p` lists the household's live, unarchived athletes, then a dashed "+ Add athlete" tile, then one
+  "Household settings ›" row. With zero athletes it shows the empty-state copy and the same tile; no
+  GitHub link anywhere.
+- Add → `/p/new` → name + Child/Adult → lands on the new athlete's page; Back returns to `/p`, not to
+  the filled form (IXD-10).
+- A name already in the household (archived included, folded by `foldName`) gets a **warning** callout
+  with explicit choices, never a field error; rename runs the same check, excluding the athlete itself.
 - The day page's "→ Edit {name}'s routine" link (`apps/web/app/p/[profileId]/page.tsx:359-364`) is gone,
-  replaced by "→ Edit {name}" to `/p/<id>/edit` (name + kind); no file under `apps/web/app` or
-  `apps/web/components` links to `/routine`.
-- An **adult** profile's day page shows no program card, no prescribed prefill, no "Strength A/B" role
-  label, and a "Not a programmed day" default; its CSV `prescribed` cells are empty. A **kid's** are
-  byte-identical to today.
-- `/settings` lists athletes with Edit and Archive, and archived athletes with Restore; archive shows an
-  in-place "{name} archived. Everything they logged is kept." line with **Undo**; an archived athlete's
-  `/p/<id>/export` still returns their zip.
+  replaced by "→ Edit {name}"; nothing in `apps/web/app` or `apps/web/components` links to `/routine`.
+- An **adult**'s day page shows no program card, no prescribed prefill, no "Strength A/B" label, a "Not
+  a programmed day" default, and (when the household has a program) one muted line saying why; their
+  CSV `prescribed` cells are empty. A **kid's** are byte-identical to today.
+- `/settings` lists athletes (Edit, Archive) and archived athletes (Restore, Download history); archive
+  shows an in-place result line with **Undo**; an archived athlete's export still returns their zip.
+- A 40-character unbroken name renders without horizontal overflow at 360px on `/p`, `/p/<id>`,
+  `/p/<id>/edit` and `/settings`.
 
 ## Staging
 
-Five PRs. The spec's chunk table counts A1 + A2 as two; the extra three are a migration that must not
-share review with UI (one migration per PR; spec → B0's row states the same rule), a guard that must be
-**live before** the first adult can be created, and a split that keeps each PR under ~400 lines.
+Six PRs, **reordered by round 1** (UX1 B2, scope S1) so there is never a window in which a parent can
+add an athlete and has no way to fix or retire one: the edit and archive paths ship first, on the seeded
+athletes, and **add** comes last.
 
-| PR      | Branch                                   | What                                                                                                                                              | ~lines | Gate                                                                                                              |
-| ------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| **a-0** | `db/prof-1a-0-profile-lifecycle-columns` | Migration `00NN`: `profiles.client_id uuid` (nullable) + **non-partial** `uq_profiles_client_id`, and `profiles.archived_at timestamptz`. Dark.   | ~180   | AUTH-1 1b's migration (`0019`, `household_members`) merged — migration numbers are serial                         |
-| **a-g** | `fix/prof-1a-g-kid-only-program-read`    | Q15's guard in `programDayRows`, plus the adult's day-role label/default on the day page. `db:verify`                                             | ~140   | none in code; **must be deployed before a-1 merges**                                                              |
-| **a-1** | `feat/prof-1a-1-add-athlete`             | Add: shared schema + labels, writer, DAL, `addAthleteAction`, `/p/new`, the dashed tile, the empty state without GitHub, `Child`/`Adult`          | ~400   | **AUTH-1 1c observed live** (below) + **WP-1a merged** + a-0 applied in prod + a-g deployed + UX panel reconciled |
-| **a-2** | `feat/prof-1a-2-rename-athlete`          | Rename/kind: writer, `renameAthleteAction`, `/p/[id]/edit`, "→ Edit {name}" replacing the routine link (criterion 41)                             | ~260   | a-1                                                                                                               |
-| **b**   | `feat/prof-1b-archive-athlete`           | Archive/restore: writers, two actions, `/settings`, picker filter + settings row, archived-page banner, criterion 47 tripwire, notice + inventory | ~380   | a-2 (shares `athlete-actions.ts`) + UX panel's settings-shell verdict (PM-5)                                      |
+| #   | PR       | Branch                                   | What                                                                                                                                                                                                 | ~lines (hand-written, incl. tests)                                                                                                                             | Gate                                                                                                                        |
+| --- | -------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **a-0**  | `db/prof-1a-0-profile-lifecycle-columns` | Migration: `profiles.client_id` (nullable, **non-partial** UNIQUE) + `profiles.archived_at`. Dark. AGENTS.md convention line + `db-migration` skill pointer                                          | ~210 (+ generated `meta/` JSON)                                                                                                                                | AUTH-1 1b's migration on `main` (numbers are serial; see [migration order](#migration-order))                               |
+| 2   | **a-g**  | `fix/prof-1a-g-kid-only-program-read`    | `readsHouseholdProgram(kind)` in shared; the guard in `programDayRows`; the adult's role label/default and muted line on the day page; positive/negative/flip `db:verify`; two mutation patches      | ~260                                                                                                                                                           | none in code. **Deployed before a-r merges** (a-r can flip a kid to adult)                                                  |
+| 3   | **a-r**  | `feat/prof-1a-r-rename-athlete`          | `foldName` + the name schema; `app/p/profile-actions.ts` (first module); rename/kind writer, DAL, action; `/p/[id]/edit`; "→ Edit {name}" replaces the routine link; `PROFILE_KIND_LABELS`; wrapping | ~400                                                                                                                                                           | **AUTH-1 1c observed live** + **WP-1 merged** + a-0 applied in prod + a-g deployed + UX panel reconciled + notice re-signed |
+| 4   | **b**    | `feat/prof-1b-archive-athlete`           | Archive/restore writers, DAL, actions; `/settings` shell + athlete sections; picker filter + settings row; archived banner; notice + inventory                                                       | ~430 incl. the shared `UndoLine` + `Announcer` (~90); if the count runs over, those two ship first as `feat/prof-1b-0-undo-line` (unmounted, with their tests) | a-r + the settings-shell verdict (PM-5) + notice re-signed                                                                  |
+| 5   | **a-1**  | `feat/prof-1a-1-add-athlete`             | `createProfile` (replay-first, in `packages/db`), `addAthleteAction`, `/p/new`, the dashed tile, the empty state without GitHub, README; notice                                                      | ~390                                                                                                                                                           | b + notice re-signed                                                                                                        |
+| 6   | **a-1d** | `feat/prof-1a-1d-duplicate-warning`      | The duplicate warning for add **and** rename, archived rows included from day one; "Restore {name}" for an archived match                                                                            | ~260                                                                                                                                                           | a-1                                                                                                                         |
+
+Each PR carries its changelog fragment, its `docs/status.md` pointer move and its `docs/roadmap.md` move
+in the same PR (AGENTS.md → Status rides with the work); that line is not repeated per PR below.
 
 ```mermaid
 flowchart LR
-  A1b[AUTH-1 1b · 0019] --> P0[a-0 · columns, dark]
-  G[a-g · kid-only guard ✦ deploy first] --> P1
-  AU[AUTH-1 1c observed live] --> P1[a-1 · add]
-  W[WP-1a · one registry, every module] --> P1
-  P0 --> P1
-  P1 --> P2[a-2 · rename + Edit link]
-  P2 --> PB[b · archive + settings]
-  PB --> A3[A3 · delete — later]
-  PB -. criterion 47 tripwire .-> D3[D3 · SCHED-1 1c]
+  A1b[AUTH-1 1b migration] --> P0[1 · a-0 columns, dark]
+  G[2 · a-g kid-only guard] --> PR
+  AU[AUTH-1 1c observed live] --> PR[3 · a-r rename + Edit link]
+  W[WP-1 merged] --> PR
+  P0 --> PR
+  PR --> PB[4 · b archive + settings]
+  PB --> P1[5 · a-1 add]
+  P1 --> PD[6 · a-1d duplicate warning]
+  PB -. seam: setProfileArchived .-> AS[ASSIGN-1 1b closes assignments, D-5]
   P1 -. last step lands with .-> D4b[D4b · ASSIGN-1]
+  PB --> A3[A3 · delete — later]
 ```
 
-**Why a-g goes first and alone.** It changes the one security-load-bearing program read
-(`packages/db/src/queries/program-day.ts:52`) and nothing else needs it to exist, so it can merge now; it
-must be **in production** before a-1 can create an adult, or the first adult created sees the kids'
-program for one deploy. It touches no AUTH-1 file (the 1c file table names `household.ts`, `actions.ts`,
-four `page.tsx` files — `docs/plans/auth-1-clerk-google.md:1695-1722`); ⚠️ a-g edits
-`apps/web/app/p/[profileId]/page.tsx`, which **is** one of 1c's four pages, so a-g and 1c must not be
-open at once — whichever opens second merges `main` first (gate 1, [parallel-work.md](../parallel-work.md)).
+**Why a-g is alone and early.** It changes a security-load-bearing program read
+(`packages/db/src/queries/program-day.ts:52`) and nothing else needs it; it must be **in production**
+before the first PR that can make an adult (a-r, by flipping kind). ⚠️ It edits
+`apps/web/app/p/[profileId]/page.tsx`, one of 1c's files (`auth-1-clerk-google.md:1708`), so a-g and 1c
+must not be open at once; whichever opens second merges `main` first (gate 1,
+[parallel-work.md](../parallel-work.md)).
 
-**Why a-0 can precede 1c.** Two nullable columns with no reader or writer; the 0006/0013/0014 dark idiom
-(`packages/db/migrations/0014_household_synthetic.sql:21-26`). It only has to follow 1b's `0019` in
-number.
+### Migration order
+
+a-0 and B0 (V1-9b-0, [plan](./v1-9b-delete-and-restore.md) Staging row B0) both queue behind AUTH-1 1b's
+`household_members` migration (`auth-1-clerk-google.md:833`). **Whichever of a-0 and B0 merges second
+regenerates its migration from a fresh `origin/main` (`drizzle-kit generate`), never by hand-renumbering a
+file**; the journal is append-only and CI-enforced. (V1-24 1d is not in this queue: it shipped as
+`0012_bodyweight_one_per_day.sql`.) "**a-0 applied in prod**" means the runbook's check, not a green
+`migrate.yml`: `information_schema.columns` lists `profiles.client_id` and `profiles.archived_at`, and
+`pg_indexes` lists `uq_profiles_client_id` with no `WHERE` — the same three-check shape
+`docs/runbooks.md:116` ("A pending migration wedges prod and the seed with it") is the recovery for.
 
 ## Design decisions (with the alternatives rejected)
 
-### D1 · Idempotency for "add": a new `profiles.client_id`, **non-partial** UNIQUE, nullable
+### D1 · Idempotency for "add": `profiles.client_id`, **non-partial** UNIQUE, nullable
 
-Criterion 3 needs an idempotency key, and **`profiles` has none**: its columns are `id`, `public_id`,
-`name`, `kind`, `household_id`, `birthdate`, `avatar`, `pin_hash`, `routine_config` and the timestamps
-(`packages/db/src/schema.ts:147-172`), and the schema calls authored household content "the profiles
-idiom … Config data → NO client_id" (`schema.ts:780`). That was true while only the seed wrote profiles.
-⚠️ **The spec's contract (`profileUpsertSchema { name, kind }`) carries no key either**, which
-contradicts its own criterion 3 — this plan adds one (see [Contract](#the-contract-this-plan-adds)).
+Criterion 3 needs a key, and **`profiles` has none**: `schema.ts:147-172`; the schema calls authored
+household content "the profiles idiom … Config data → NO client_id" (`schema.ts:780`). ⚠️ The spec's
+contract `profileUpsertSchema { name, kind }` carries no key either, against its own criterion 3.
 
-- **Chosen:** `client_id uuid` **nullable**, with `uq_profiles_client_id` **non-partial** (no
-  `WHERE deleted_at IS NULL`). The insert is `ON CONFLICT (client_id) DO NOTHING`, then a re-select by
-  `client_id` **inside the scope** (`inHousehold`). NULLs are distinct in a unique index, so the seed's
-  rows (`seed.ts:163-184`, which never set it) and any correction-made row coexist without a backfill.
-  - **Non-partial on purpose — ADR 0008 decision 3.4's lesson applied at birth.** Every existing
-    `client_id` arbiter is partial, so a hidden row is not an `ON CONFLICT` target and a replay inserts a
-    second row (`docs/decisions/0008-deletion.md:127`); B0 exists to re-predicate five of them. A new
-    arbiter should not be the sixth. An archived (or later soft-deleted) profile keeps its slot, so a
-    replayed add can never mint a twin of an athlete who was archived in between.
-  - **Nullable, against AGENTS.md's "client_id NOT NULL"**, because not every profile has a client: the
-    seed and `db:correct` create profiles server-side. Making it NOT NULL would need a backfill and the
-    NOT VALID → VALIDATE split across two PRs (AGENTS.md → Database rules), i.e. two more migrations, to
-    store a fabricated key on rows no client ever retries. The column's docblock says so, and the
-    add action's zod schema makes it required for **every app-created** row.
-- **Rejected — the client supplies `public_id` and the insert arbitrates on it.** No migration, but it
-  turns the anti-IDOR id into a client-chosen value, and a crafted body naming another household's
-  known `public_id` gets a refusal where a fresh id gets success — a liveness oracle for a leaked id,
-  which is the exact thing ADR 0006's 404-not-403 rule exists to deny (`profiles.ts:81-86`).
-- **Rejected — an app-level "does a profile with this name exist?" check.** AGENTS.md forbids it by name
-  (write-path invariant 5); it races, and names may legitimately repeat (the prototype warns, never
-  blocks).
-- **Rejected — an `Idempotency-Key` table persisting the first response** (backend rule 6's literal
-  form). No such table exists; a client UUID + DB UNIQUE is how every other create in this repo meets the
-  rule (`write-path.md` invariant 5).
+- **Chosen:** `client_id uuid`, **nullable**, `uq_profiles_client_id` **non-partial**.
+  - **Non-partial — ADR 0008 decision 3.4 applied at birth.** Every existing `client_id` arbiter is
+    partial, so a hidden row is not an `ON CONFLICT` target and a replay inserts a twin
+    (`docs/decisions/0008-deletion.md:127`); B0 exists to re-predicate five of them. An archived or later
+    deleted profile keeps its slot.
+  - **Nullable**, because the seed and `db:correct` create profiles with no client; NOT NULL would need
+    a backfill plus the NOT VALID → VALIDATE split (two more migrations) to store a fabricated key. NULLs
+    are distinct in a unique index, so seeded rows coexist. `addAthleteSchema` requires it for every
+    app-created row.
+  - **a-0 amends AGENTS.md's convention line** ("`client_id = UUIDv7, NOT NULL, UNIQUE (partial: WHERE
+deleted_at IS NULL)`", AGENTS.md → Schema & migration conventions) to: _new_ `client_id` arbiters are
+    **non-partial** (ADR 0008 3.4); nullable only where server-side creators exist, said in the column's
+    docblock. The `db-migration` skill's §1 gains a one-line pointer to it. Otherwise the next
+    migration copies the old line.
+- **Rejected — client-supplied `public_id` as the key.** It makes the anti-IDOR id client-chosen, and a
+  body naming another household's known `public_id` gets a refusal where a fresh one succeeds: a
+  liveness oracle ADR 0006's 404 rule exists to deny (`profiles.ts:81-86`).
+- **Rejected — an app-level "does it exist?" check** (write-path invariant 5) and **an
+  Idempotency-Key table** (none exists; a client UUID + DB UNIQUE is how every create here meets rule 6).
 
-### D2 · The archive marker: `profiles.archived_at timestamptz NULL` (Q8)
+### D2 · Replay first, then duplicates, then insert — one `packages/db` function owns the order
 
-- **Chosen:** one nullable column, `NULL` = live. Archive sets `now()`, restore sets `NULL`. ADR 0008:
-  _"archive is a lifecycle state a parent can see and restore from, orthogonal to existence; hide is
-  invisible and ends in erasure"_ (`0008-deletion.md:77`), so it cannot be `deleted_at` — a profile
-  hidden with `deleted_at` drops out of `isLiveProfile` (`packages/db/src/writers/ownership.ts:118-124`)
-  and therefore out of the export route, and would be purged at `N` once PRIV-3 exists.
-- **`archived_at` is NOT added to `isLiveProfile`.** That predicate is the BOLA seam every action, page
-  and the export resolve through (`profiles.ts:75-92`); an archived athlete must stay resolvable so
-  criterion 5's "their history shall still export" holds without a second resolver. Archive filters
-  only the **lists** (picker, "who's on it" later).
-- **Rejected — a `status text CHECK (status in ('active','archived'))`.** It loses the date (the
-  settings list and a future dashboard filter want "archived since"), and a second lifecycle value later
-  is a CHECK migration either way.
-- **Rejected — defer archive to Beta 1** (Q8's other answer): a typo'd or test athlete would have no exit
-  until step-up exists (PM-6).
-- **Bundled into a-0 with `client_id`**, one migration: both are additive, nullable, unread and
-  unwritten when they land, and migration numbers are a serial resource that AUTH-1 1b, B0 and V1-24 1d
-  also queue on. The alternative (archive's column in PR b) costs a second migration PR and a second DB
-  review for one `ADD COLUMN`.
+_(Correctness B1.)_ The first draft ran the duplicate check before the insert, so a replay of a
+**successful** add would find its own row by name and answer "duplicate" instead of the same result —
+criterion 3 broken. The sequence now lives in **one** writer, `createProfile` in
+`packages/db/src/writers/profile.ts`, so `db:verify` proves the order on the shipped SQL:
 
-### D3 · Where the kid-only guard lives: inside `programDayRows`, once (Q15, FE-5)
+1. **Look up by `client_id` inside the scope** (`profileByClientId(exec, scope, clientId)`, built on
+   `inHousehold`). Found and not deleted → `{ ok: true, id }`, **before any duplicate logic**.
+2. _(from a-1d)_ Unless `acknowledgedDuplicate` equals `foldName(name)`, look for a household name that
+   folds equal (live **and** archived, not deleted) → `{ ok: false, reason: 'duplicate', match }`.
+3. `insertProfileOwnedBy(exec, scope, row)` → `ON CONFLICT (client_id) DO NOTHING`.
+4. Re-select by `client_id` **and** `inHousehold(scope)` **and** `deleted_at IS NULL` → `{ ok: true, id }`;
+   no row (the key is another household's, or the row was deleted) → `{ ok: false, reason: 'refused' }`.
 
-Every reader of the newest block goes through one query: the day page's card and the form's scaffold and
-prefill via `getProgramDay` (`apps/web/lib/dal/programming.ts:29-41`, called once at
-`apps/web/app/p/[profileId]/page.tsx:85-89` and handed to `StrengthSection` as `programDay`), and the
-export's `prescribedFor` (`apps/web/lib/dal/export.ts:113-129`, `programDayRows` at `:121`).
+A concurrent double-submit both pass step 1, one inserts, the other's step 3 is a no-op and step 4
+returns the same id. The DAL wraps it and has a unit test asserting step 1's query is emitted **before**
+step 2's (recording-db idiom, `apps/web/lib/dal/recording-db.ts`).
 
-- **Chosen:** add `eq(schema.profiles.kind, PROGRAM_READ_KIND)` to the **block subquery**
-  (`packages/db/src/queries/program-day.ts:71-86`), whose `profiles` join is already pinned to this
-  profile by `isThisProfile`. For an adult the subquery yields no block, `blockId` is NULL, and the outer
-  query returns `[]` — the same "nothing programmed" shape a household with no block returns today
-  (`programming.ts:17-18`), so the card does not render (`strength-section.tsx:46-50`) and `prescribed`
-  is empty. `PROGRAM_READ_KIND = PROFILE_KIND.kid` is a named, exported const in `program-day.ts` with a
-  docblock: _"Q15 stopgap (maintainer, 2026-10-22). ASSIGN-READ (D4) deletes this: from D4 an athlete
-  reads their assignment, never the household's newest block."_
-- **Rejected — guard in `getProgramDay` and `prescribedFor` separately.** Two copies of one rule in two
-  files; the second is exactly the drift `programDayRows`' docblock exists to prevent (`program-day.ts:10-13`),
-  and `db:verify` would prove neither, since it runs the query, not the DAL.
-- **Rejected — guard in the page.** It would cover the card and not the export.
+### D3 · The archive marker: `profiles.archived_at timestamptz NULL` (Q8)
 
-**Beyond the spec's list, and proposed for the panel:** two more things read the **calendar rotation**
-for an adult, and both write or show "the kids' program" by another route.
+- **Chosen:** one nullable column. ADR 0008: archive is _"a lifecycle state a parent can see and
+  restore from, orthogonal to existence; hide is invisible and ends in erasure"_ (`0008-deletion.md:77`).
+  `deleted_at` would drop the profile out of `isLiveProfile` (`writers/ownership.ts:118-124`) — and so
+  out of the export — and into PRIV-3's purge.
+- **Archive sets `COALESCE(archived_at, now())`** _(DB S3, correctness S4)_, so a replayed archive keeps
+  the first date; restore sets `NULL`. Accepted risk: a replay of "archive" that arrives **after** an Undo
+  re-archives — a double tap followed by an Undo within one network retry window. The visible result line
+  and Restore make it recoverable; recorded, not engineered away.
+- **Not added to `isLiveProfile`** (the BOLA seam every action, page and the export resolve through,
+  `profiles.ts:75-92`). Archive filters **lists** only.
+- **Rejected:** a `status` text+CHECK (loses the date, still a CHECK migration later); deferring archive
+  to Beta 1 (a typo'd athlete with no exit; PM-6).
+- **Bundled into a-0 with `client_id`:** both additive, nullable and dark; migration numbers are a serial
+  resource (AUTH-1 1b and B0 queue on them).
 
-1. The header's role label: `DayNav dayRoleLabel={DAY_ROLE_LABELS[dayRole]}` (`page.tsx:152-158`), so an
-   adult's page says "Strength B".
-2. The form's "Which day is this?" default: `defaultDayRole={dayRole}` (`strength-section.tsx:79`) seeds
-   the select (`strength-form.tsx:597-612`), whose value is stored as `sessions.day_role` — documented as
-   **provenance** ("a non-null day_role must mean a human asserted it", `strength-form.tsx:589-595`). A
-   pre-selected "Strength A" on an adult's unprogrammed day is a guess frozen into a row.
+### D4 · The kid-only rule, defined once (Q15, FE-5)
 
-The fix is one line in `page.tsx`: `const roleForPage = profile.kind === PROFILE_KIND.kid ? dayRole : null`,
-passed to both `DayNav` (label omitted when null) and `StrengthSection` (`dayRole: DayRole | null` is
-already its type, `strength-section.tsx:40`, and `null` already means "Not a programmed day"). `page.tsx`
-is not owned by `strength-logging.md`, so this stays out of that guide's files. The export keys
-`prescribed` by the **stored** `day_role` (`export.ts:155-159`) and writes `session_type` from its own
-column (`:55`), so an adult's session saved with no role gets an empty `prescribed` and keeps the
-`session_type` it was logged with. `DayNav`'s `dayRoleLabel` is already optional and omitted when
-falsy (`day-nav.tsx:31`, `:64`), so `day-nav.tsx` does not change.
-
-**No live bytes change.** The spec records that no live adult profile reads the program today (Q15,
-`crud-1-fix-it-yourself.md:859`); the seed writes only kids (`seed.ts:170`, `:179`). The plan cannot
-query production, so this rests on that statement; a-g's PR body says so.
-
-### D4 · Where the actions live: a new `apps/web/app/p/athlete-actions.ts`, not `actions.ts`
-
-- **Chosen:** a second `'use server'` module, `apps/web/app/p/athlete-actions.ts` — the household-level
-  form of the convention the sibling [WP-1 plan](./wp-1-shard-actions.md) writes into `write-path.md`
-  (`app/p/<feature>-actions.ts` for a household-level action). Add has no `profileId` route segment, and
-  the spec warns that every mutating chunk queues on `app/p/[profileId]/actions.ts` (spec → "The
-  critical path", ⚠️ paragraph). Its actions are registered in the **one** `MUTATING_ACTIONS` registry
-  (`apps/web/app/p/[profileId]/mutating-actions.ts:24-32`), grouped under a `// app/p/athlete-actions.ts`
-  comment, so `actions.test.ts`'s central unauth and wrong-household matrices cover them — the
-  byte-identical-refusal argument is strongest where one place asserts it for every action.
-- **Gate: WP-1a merged** (milestone step 0). Its cross-check reads the **union** of every `'use server'`
-  module's exports against `MUTATING_ACTIONS`; before it, `actions.test.ts:1619-1628` reads
-  `actions.ts` alone, so a new module's actions would be invisible to that half of the guard. If WP-1a
-  is not merged when a-1 is ready, a-1 waits rather than inventing a second registry.
-- **What that costs, and the plan pays it in a-1:**
-  - `apps/web/app/pages-are-gated.test.ts:227-229` asserts the discovered `'use server'` set **equals**
-    `['app/gate/actions.ts', 'app/p/[profileId]/actions.ts']`; it gains `app/p/athlete-actions.ts`. The
-    per-function boundary-call check (`:255-271`) then covers the new module automatically.
-  - `actions.test.ts`'s `ACTION_FNS` and `VALID_BODY` gain one entry per new action (the
-    `Record<MutatingActionName, ActionFn>` type forces the binding).
-  - `docs/features/write-path.md` `owns:` gains `app/p/athlete-actions.ts` (so `guides:check` covers
-    it).
-- **Rejected — a separate `athlete-mutating-actions.ts` registry.** A second registry is a second matrix
-  and a second place the refusal copy can drift; WP-1a exists to make one registry span modules.
-- **Rejected — append to `app/p/[profileId]/actions.ts`.** Collides with B1, C1, E on one file under one
-  guide; and a household-level action in a module whose every other action takes a `profileId` is
-  misplaced.
-- **Not needed — WP-1b's full split of `actions.ts`.** This plan touches none of the seven existing
-  actions. ⚠️ The **guide** collision remains whatever the module layout: every PR here edits
-  `lib/dal/` and `writers/`, both owned by `write-path.md`, so a-1, a-2 and b serialize with B1, C1 and
-  E on that guide (WP-1 plan, finding 2).
-- ⚠️ **`mutating-actions.ts` sits under `[profileId]/` and will now name a `/p`-level action.** The WP-1
-  plan defers moving it to "the first `/p`-level action's plan … once 1c has landed"; this plan
-  **leaves it in place** (moving it re-points AUTH-1 1c's plan text) and raises it for the panel.
-
-### D5 · Navigation after a write: `redirect(..., RedirectType.replace)` outside the Sentry wrapper
-
-IXD-10 asks that Back after an add not return to the filled form. In a Server Action `redirect` defaults
-to **push** and takes `RedirectType.replace` (`apps/web/node_modules/next/dist/docs/01-app/03-api-reference/04-functions/redirect.md:29-31`,
-Next 16.4.1), and must be called outside any `try` (`:51`). So the action is:
+_(Reuse B2, architecture S2.)_ One predicate in `packages/shared/src/programming.ts`:
 
 ```ts
-export async function addAthleteAction(_: ActionState, formData: FormData): Promise<ActionState> {
-  const result = await Sentry.withServerActionInstrumentation('addAthleteAction', async () => { … });
-  if (result.ok && result.savedId) redirect(`${APP_HOME_PATH}/${result.savedId}`, RedirectType.replace);
-  return result;
+/** Q15 stopgap (maintainer, 2026-10-22): until ASSIGN-READ (D4) an athlete reads the household's
+ *  newest block only if they are a child. D4 deletes this and both of its callers' uses. */
+export const PROGRAM_READ_KIND = PROFILE_KIND.kid;
+export function readsHouseholdProgram(kind: ProfileKind): boolean {
+  return kind === PROGRAM_READ_KIND;
 }
 ```
 
-`redirect` is called **after** the wrapper resolves, so Sentry never sees `NEXT_REDIRECT`, and it serves
-a 303 to a no-JS submit (`redirect.md:215`). **Rejected — return `savedId` and `router.replace` in
-`useOnActionSuccess`:** that hook may only touch the caller's own state during render
-(`apps/web/app/p/[profileId]/use-on-action-success.ts:20-21`), and a navigation is not that. ⚠️ The
-pages-are-gated per-function slice (`pages-are-gated.test.ts:261-268`) still finds the boundary call,
-because it slices from the `export async function` line, and the call sits inside the wrapper.
+- **`programDayRows`** (`program-day.ts:71-86`) adds `eq(schema.profiles.kind, PROGRAM_READ_KIND)` to the
+  block subquery, whose `profiles` row is already pinned by `isThisProfile`. For an adult `blockId` is
+  NULL and the query returns `[]` — the "nothing programmed" shape (`apps/web/lib/dal/programming.ts:17-18`).
+  That covers the card and the scaffold/prefill (`getProgramDay`, called once at `page.tsx:85-89`) and
+  the export's `prescribedFor` (`apps/web/lib/dal/export.ts:113-129`, `programDayRows` at `:121`), which
+  builds its map only from those rows (`:119-128`).
+- **`page.tsx`** calls `readsHouseholdProgram(profile.kind)`: role label and form default are `null` for
+  an adult. `DayNav`'s `dayRoleLabel` is already optional and omitted when falsy (`day-nav.tsx:31`,
+  `:64`); `StrengthSection` already takes `dayRole: DayRole | null` (`strength-section.tsx:40`) and
+  passes it as the form default (`:79`), where `null` is "Not a programmed day" — the provenance the
+  form documents (`strength-form.tsx:589-612`). The export keys `prescribed` by the **stored** `day_role`
+  (`export.ts:155-159`) and writes `session_type` from its own column (`:55`).
+- **The adult line** _(UX3 B1, UX1 S3)_: when the household has a live block and the athlete is an
+  adult, a muted line under the Strength heading: "Programs are for children for now. {name} logs freely;
+  their own program comes later." It needs one read: `householdHasProgram(db, { scope })` in
+  `program-day.ts`, through a new prefixed helper `programBlockInHousehold(scope)` in
+  `writers/ownership.ts` (the only module allowed to read `scope.householdId`, `scope.test.ts:55-56`;
+  the prefixed-helper convention, `ownership.ts:152-156`).
+- **Kind is read at export time** _(correctness S5)_. Flipping a kid to adult empties `prescribed` in
+  **every past month** of their export; flipping back restores it. Stated as a `programming.md`
+  invariant, proved by a `db:verify` flip case, and said on the edit form (D7).
+- **Rejected:** guarding in `getProgramDay` and `prescribedFor` separately (two copies; `db:verify` runs
+  the query, not the DAL); guarding in the page (misses the export).
+- **No live bytes change:** the spec records that no live adult profile reads the program (Q15,
+  `crud-1-fix-it-yourself.md:859`); the seed writes only kids (`seed.ts:170`, `:179`). The plan cannot
+  query production; a-g's PR body says so.
 
-### D6 · Routes
+### D5 · Where the actions live: `apps/web/app/p/profile-actions.ts` (WP-1)
 
-| Route                 | What                                    | Why here                                                                                                                                                                                                                                             |
-| --------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/p/new`              | Add an athlete                          | The PROF-1 row: "create, read and edit live on `/p`" (`plan.md:2566`). A static segment beats `[profileId]` in App Router matching, and `new` is never a UUID, so `getProfileByPublicId` would 404 it anyway (`profiles.ts:100`). Back goes to `/p`. |
-| `/p/[profileId]/edit` | Rename + kind                           | The prototype's path (`index.html:1975`); criterion 8 puts rename on the athlete's own page. Resolves through `getProfileByPublicId` → `notFound()` for unknown/foreign ids (ADR 0006).                                                              |
-| `/settings`           | Household settings (athletes, archived) | The prototype's path (`index.html:1979`). Session-scoped like everything (ADR 0006: the household is never in the URL). ⚠️ The prototype's banner says the **settings shell is not approved** (PM-5, `index.html:1805`); PR b's UX panel decides it. |
+The revised [WP-1 plan](./wp-1-shard-actions.md) names the module set and the registry shape, and this
+plan follows it exactly. **Gate: WP-1 merged.**
 
-Each path is a named const in `apps/web/lib/constants.ts` beside `APP_HOME_PATH` (`:42`):
-`ADD_ATHLETE_PATH`, `SETTINGS_PATH`, and `athleteEditPath(id)`. All three pages are gated by the proxy's
-default deny (`apps/web/lib/public-paths.ts` → `PUBLIC_PATHS` is `/` and `/privacy` only) **and** call the
-page-level check, which `pages-are-gated.test.ts:50-57` enforces for every `page.tsx` automatically.
+- **Module:** `apps/web/app/p/profile-actions.ts`, the household-level athlete module in WP-1's fixed
+  set (`wp-1-shard-actions.md:171`). a-r creates it.
+- **Registry:** `MUTATING_ACTIONS` entries become `{ refusal, scope }` (`wp-1-shard-actions.md:68-70`,
+  `:180-184`). `addAthleteAction` is **`scope: 'household'`**; `renameAthleteAction`,
+  `archiveAthleteAction` and `restoreAthleteAction` are **`scope: 'profile'`** (they resolve a profile by
+  public id and refuse a foreign one byte-identically).
+- **Bindings:** profile entries `{ fn, writers }`; the household entry
+  `{ fn, writers, scopeMiss }` (`:73-87`). `addAthleteAction`'s `scopeMiss` makes `createAthlete` return
+  the no-household result.
+- **One refusal for add:** `NO_ATHLETE_ADD = 'Couldn’t add this athlete.'` in `lib/constants.ts`, used
+  **byte-identically** for (a) no session, (b) no household scope (state C/D), and (c) `createProfile`'s
+  `refused` (a foreign or deleted key). Rename/archive/restore use `NO_ATHLETE_SAVE = 'No athlete found
+to save.'` for unauth, foreign and unknown alike (PUX-8: "athlete", never "profile").
+- **Test plumbing** (`actions.test.ts`): `vi.mock('next/navigation')` (for `redirect`); the profiles DAL
+  mock gains `renameAthlete`, `archiveAthlete`, `restoreAthlete`, `createAthlete`; `VALID_BODY` gains
+  one entry per action; the pinned module list gains `app/p/profile-actions.ts`; `write-path.md`
+  `owns:` gains it.
+- ⚠️ The **guide** collision remains: every PR here edits `lib/dal/` and `writers/` under
+  `write-path.md`, so they take turns with B1, C1 and E (`wp-1-shard-actions.md:171`, item 5).
+- **Note for the panel:** `mutating-actions.ts` and `action-state.ts` sit under `[profileId]/` and are
+  now imported by a `/p`-level module. Moving them re-points AUTH-1 1c's plan text; this plan leaves them
+  and records the move as a candidate for after 1c.
 
-### D7 · The neutral default, ramp targets, and The Daily Five — what "create" does NOT write
+### D6 · Navigation after a write
 
-- **`routine_config` stays NULL** on create. NULL **is** the neutral default and is never written
-  (`plan.md:2797-2801`); `resolveProfileRoutine` maps it to `NEUTRAL_DEFAULT_KEYS = [STRENGTH_KEY]`
-  (`apps/web/lib/routine/catalog.ts:60`, `:76-78`). So a new athlete's day is a weigh-in and Strength —
-  and with criterion 41 there is no link to change that until ACT-1, which is the intended outcome (M30).
-- **No ramp targets are expanded (spec unowned 6).** The schedule is empty
-  (`packages/shared/src/ramp-schedule.ts:49`). ⚠️ **The spec's "a kid created by A1 silently has none"
-  is only half right:** `seed.ts:262-264` selects **every** `kind = 'kid'` profile with **no household
-  predicate**, and `migrate.yml:81` runs `db:seed` against production on every push to `main`. So the day
-  the schedule is filled, the next deploy expands targets for app-created kids too — **and for every
-  household's kids**, applying one family's ramp numbers to all of them. That is the real hazard, and it
-  belongs to whoever fills the schedule; this plan records it in `write-path.md`'s Traps rather than
-  writing targets on create. (A kind change kid→adult leaves existing targets in place; adult→kid gets
-  them on the next seed. Both latent while the schedule is empty.)
-- **No program assignment, no program copy.** The Daily Five is seeded at **household** creation by
-  ONB-2 (`beta-1.md:346-354`), never per athlete and never via `PROGRAM_SEED`. Before D4 a kid reads the
-  household's newest block through `programDayRows`; an adult reads nothing (D3). The add flow's last
-  step ("Put {name} on a program?", prototype `vFirst` `:4124`) arrives with ASSIGN-1 (D4b) and is not
-  built here.
-- **Never a household.** AUTH-1 Q5: no request path may create a household before TEN-2b
-  (`auth-1-clerk-google.md:423-480`). A null scope → the action refuses; it never inserts.
+- **Add** (a-1): `redirect(athletePath(id), RedirectType.replace)` **after** the Sentry wrapper resolves
+  (in a Server Action `redirect` defaults to `push`, takes `RedirectType.replace`, and must sit outside
+  any `try`:
+  `apps/web/node_modules/next/dist/docs/01-app/03-api-reference/04-functions/redirect.md:29-31`, `:51`;
+  Next 16.4.1). History `[/p, /p/new]` becomes `[/p, /p/<id>]`, so Back is `/p` (IXD-10). Sentry never
+  sees `NEXT_REDIRECT`; a no-JS submit gets a 303 (`:215`). Before redirecting it calls
+  `revalidatePath(APP_HOME_PATH)` and `revalidatePath(SETTINGS_PATH)` (the new tile and the settings
+  list). **Because add redirects instead of returning `{ ok: true }`, its WP-1 binding carries the
+  optional `succeeded(result, mocks)` predicate WP-1 adds (default `result.ok`)**: it asserts
+  `redirect` was called with `(athletePath(id), RedirectType.replace)` and both `revalidatePath` calls
+  came first, so WP-1's "valid body succeeds" guard holds for add.
+- **Rename** (a-r) _(UX1 S4)_: return to where the parent came from without a duplicate history entry.
+  The two in-app entries link with `?from=` set to `athletePath(id)` or `SETTINGS_PATH`; the page
+  allowlists it to exactly those two values (anything else → `athletePath(id)`). The action returns
+  `{ ok: true }` (no server redirect). The form's island, in an **effect** (never during render —
+  `use-on-action-success.ts:20-21`), calls `router.back()` when the edit page was reached in-app (a
+  `from` param is present and `window.history.length > 1`), else `router.replace(from)`. A replace-
+  redirect would turn `[day, edit]` into `[day, day]`. No-JS: the page re-renders with a "Saved" status
+  and a link back.
+- **Archive/restore** (b): no navigation; the settings page updates in place.
+
+### D7 · The form — controlled, kind made consequential, warnings not errors
+
+- **Controlled state** _(UX1 B1)_: name and kind are React state, as are `clientId` (UUIDv7 minted once
+  per mount) and `acknowledgedDuplicate`. React 19 resets uncontrolled fields when a form action settles,
+  even on `{ ok:false }` (`docs/features/write-path.md:341`), which would empty the name under its own
+  warning.
+- **Kind hint names the effect** _(UX3 B1)_: "A child sees the household's program on their page. An adult
+  logs without one for now. You can change this later." The edit form adds a line, shown only when the
+  checked kind differs from the saved one: "Changing {name} to Adult hides the household program from
+  their page and from what their export shows was prescribed." (and the reverse wording). Static text,
+  referenced by the radio group's `aria-describedby`.
+- **Duplicate = warning** _(UX1 S5, UX2 4, UX3 3; a-1d)_: a callout (amber, the spec's warning token,
+  CD-2) under the field, referenced by the input's `aria-describedby`, **no** `aria-invalid`, **not** in
+  `fieldErrors`. Choices as buttons, never "tap again": **"Add another {name}"** (submits with
+  `acknowledgedDuplicate`) and **"Open {name}"** (link to the match). For an **archived** match the
+  primary is **"Restore {name}"** _(UX3 2)_ (posts `restoreAthleteAction`, then opens them), with "Add
+  another" secondary. Rename runs the same check **excluding the athlete being renamed** _(UX1 S8, UX3 4;
+  closes the old open question 2)_, with "Save anyway" / "Cancel".
+- **Form results** are announced through a persistent `role="status"` mounted with the form (UX2); errors
+  sit beside their field with `aria-describedby`, focus moves to the first invalid field (A11Y-2).
+- **Radios:** native inputs; the label shows focus-visible and checked states; each radio carries the
+  hint's `aria-describedby`; the input uses `INPUT_CLASS` (`lib/constants.ts:287`).
+
+### D8 · Routes, titles and path helpers
+
+| Route                 | What                                    | Title                | Why here                                                                                                                                                                    |
+| --------------------- | --------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/p/new`              | Add an athlete                          | "Add an athlete"     | The PROF-1 row: "create, read and edit live on `/p`" (`plan.md:2566`). A static segment beats `[profileId]`; `new` is never a UUID (`profiles.ts:100`).                     |
+| `/p/[profileId]/edit` | Rename + kind                           | "Edit athlete"       | The prototype's path (`index.html:1975`); criterion 8. `getProfileByPublicId` → `notFound()`.                                                                               |
+| `/settings`           | Household settings (athletes, archived) | "Household settings" | The prototype's path (`index.html:1979`); session-scoped (ADR 0006). The prototype does **not** approve the settings shell (PM-5, `index.html:1805`): PR b's UX panel does. |
+
+Static `metadata.title` per page (UX2) — never a name, which is personal data in a browser history
+entry. Helpers in `apps/web/lib/constants.ts`, built from `APP_HOME_PATH` (`:42`) _(reuse S2)_:
+`athletePath(id)`, `athleteEditPath(id)`, `ADD_ATHLETE_PATH`, `SETTINGS_PATH`. Every new page calls
+`requireSession()`, which `pages-need-a-session.test.ts` enforces per `page.tsx`.
+
+### D9 · `/settings` is PROF-1b's, and an append point for others
+
+_(Reuse S4, architecture S4.)_ PR b owns `apps/web/app/settings/page.tsx`: the Athletes and Archived
+athletes sections, then a `<nav aria-label="More household settings">` list of `›` rows (CD-5) that later
+chunks append to (Programs, Movements — MOV-1 adds the first). `SETTINGS_PATH` is the base for any
+sub-page (`${SETTINGS_PATH}/movements`). Islands colocate with their routes, not `components/`; the one exception is the shared `UndoLine` and its announcer, which PR b builds for every plan that shows an Undo (spec seams table, `crud-1-fix-it-yourself.md:548-549`). The settings page's `<nav>` of sub-page rows is that table's second seam: other chunks append a row and their page under `SETTINGS_PATH`, and never edit the athlete sections.
+
+**No `docs/features/household-settings.md` now.** The guide test is "four or more files across two or
+more packages" (AGENTS.md → Feature guides); PR b's settings is one route, one island and a DAL function
+in `apps/web`. The append rule lives in the page's docblock. Revisit when a second chunk adds a sub-page
+with its own DAL (MOV-1 follows this decision).
+
+### D10 · What "create" does NOT write
+
+- **`routine_config` stays NULL** — the neutral default, never written (`plan.md:2797-2801`);
+  `resolveProfileRoutine` maps it to `NEUTRAL_DEFAULT_KEYS = [STRENGTH_KEY]` (`catalog.ts:60`, `:76-78`).
+- **No ramp targets (spec unowned 6).** The schedule is empty (`packages/shared/src/ramp-schedule.ts:49`).
+  ⚠️ The spec's "a kid created by A1 silently has none" is half right: `seed.ts:262-264` selects every
+  `kind = 'kid'` profile **with no household predicate**, and `migrate.yml:81` seeds production on every
+  push. The day the schedule is filled, every household's kids get one family's ramp numbers. Recorded in
+  `write-path.md` Traps for whoever fills it.
+- **No program, no assignment, never a household.** The Daily Five is seeded at household creation by
+  ONB-2 (`beta-1.md:346-354`), never via `PROGRAM_SEED`. The add flow's last step arrives with ASSIGN-1
+  (D4b). AUTH-1 Q5: no request path creates a household (`auth-1-clerk-google.md:423-480`).
+
+### D11 · Names, folding and wrapping
+
+- **`foldName`** lives in `packages/shared/src/text.ts`, created by **a-r** (the first PROF-1 app PR, and
+  the first of the three consumers to land); PICK-1 and MOV-1 import it. **NFKD**, then strip combining
+  marks (`\p{M}`), map `‘ ’ ʼ` to `'`, collapse whitespace, trim, lower-case. **NFKD over NFD** because
+  compatibility forms must match what a person sees: the ligature `ﬁ` and full-width letters fold to
+  `fi` and ASCII under NFKD and stay distinct under NFD, so two names a parent reads as identical would
+  not warn. Pinned tests: `Zoë`→`zoe`, `O’Neil`→`o'neil`, `Crème`→`creme`, `ﬁona`→`fiona`, full-width `Ｚｏｅ`→`zoe`, a
+  name of only combining marks → `''`.
+- **The name schema** trims, **collapses interior whitespace** (so the stored name, the warning and
+  A3's typed match agree), rejects a line break (`hasLineBreak`, `text.ts:27-29`), rejects a name that
+  folds to `''` ("Enter a name"), and caps at `PROFILE_NAME_MAX = 40` (the prototype's `maxlength`,
+  `index.html:2145`, `:2164`).
+- **Wrapping** _(UX2 B1)_: `overflow-wrap:anywhere` + `min-w-0` on **every** element that renders
+  `profile.name`: the tile, the day page `<h1>`, the edit `<h1>`, back links, the duplicate callout, the
+  archived banner, the settings rows and the result line.
 
 ## The contract this plan adds
 
 ```
 packages/shared/src/enums.ts
-  PROFILE_KIND_LABEL   { kid: 'Child', adult: 'Adult' } as const satisfies Record<ProfileKind, string>
-                       — beside PROFILE_KINDS (enums.ts:21-25); spec contract, criterion 39
-packages/shared/src/profiles.ts                                   (NEW — re-exported from index.ts)
-  PROFILE_NAME_MAX     40   — the prototype's maxlength (index.html:2145, :2164); one home
-  athleteNameSchema    z.string().trim().min(1).max(PROFILE_NAME_MAX)
-                         .refine(v => !hasLineBreak(v))           — reuses text.ts:27-29
-  profileUpsertSchema  { name: athleteNameSchema, kind: profileKindSchema }       (the spec's shape)
-  addAthleteSchema     profileUpsertSchema.extend({ clientId: uuidSchema,
-                         acknowledgedDuplicate: z.string().optional() })          ← the key criterion 3 needs
-  renameAthleteSchema  profileUpsertSchema.extend({ profileId: uuidSchema })
-  archiveAthleteSchema { profileId: uuidSchema }      — archive and restore both
+  PROFILE_KIND_LABELS  { kid: 'Child', adult: 'Adult' } as const satisfies Record<ProfileKind, string>
+packages/shared/src/programming.ts
+  PROGRAM_READ_KIND, readsHouseholdProgram(kind)                          (a-g; D4)
 packages/shared/src/text.ts
-  foldName(s)          NFKD → strip combining marks → curly ’ ‘ ʼ → ' → collapse spaces → trim → lowercase
-                       — the prototype's `fold` (index.html:1577-1584); A3's typed-name match reuses it (SUX-9)
+  foldName(s)                                                             (a-r; D11)
+packages/shared/src/profiles.ts                       (NEW, a-r; re-exported from index.ts)
+  PROFILE_NAME_MAX     40
+  athleteNameSchema    trim → collapse whitespace → 1..40 → no line break → foldName(v) !== ''
+  profileUpsertSchema  { name: athleteNameSchema, kind: profileKindSchema }        (the spec's shape)
+  renameAthleteSchema  profileUpsertSchema.extend({ profileId: uuidSchema,
+                         acknowledgedDuplicate: z.string().optional() })           (a-r; a-1d uses it)
+  archiveAthleteSchema { profileId: uuidSchema }                                    (b)
+  addAthleteSchema     profileUpsertSchema.extend({ clientId: uuidSchema,
+                         acknowledgedDuplicate: z.string().optional() })           (a-1)
 apps/web/lib/dal/profiles.ts (DTOs)
-  ProfileDTO           unchanged: { id, name, kind, avatar }
-  ProfileWithRoutineDTO + { archived: boolean }        (PR b — the page banner)
-  HouseholdAthletesDTO { live: ProfileDTO[], archived: ProfileDTO[] }               (PR b — /settings)
-  AddAthleteResult     { ok: true, id } | { ok: false, reason: 'no_household' | 'duplicate',
-                                             duplicateOf?: { name, archived } }
+  ProfileWithRoutineDTO + { archived: boolean }                                     (b)
+  HouseholdAthletesDTO { live: ProfileDTO[], archived: ProfileDTO[] }               (b)
+  CreateAthleteResult  { ok: true, id } | { ok: false, reason: 'no_household' | 'refused' }
+                       | { ok: false, reason: 'duplicate', match: { id, name, archived } }   (a-1, a-1d)
 ```
-
-`acknowledgedDuplicate` carries the **folded** name the person already saw the warning for (the
-prototype's `dataset.dupOk`, `:5059-5060`), so a changed name re-warns. The duplicate lookup is a read of
-the household's own names through the existing picker query — a **warning**, never an arbiter; two
-concurrent adds of the same name both succeed, which is the decided behaviour (warn, never block).
 
 ## File-by-file changes
 
 ### PR a-0 — `db/prof-1a-0-profile-lifecycle-columns`
 
-| Path                                                 | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/schema.ts`                          | EDIT   | `profiles` (`:147-172`): `clientId: uuid('client_id')` (nullable) + `archivedAt: timestamp('archived_at', { withTimezone: true })`; `uniqueIndex('uq_profiles_client_id').on(t.clientId)` **with no `.where`**. Docblocks: D1's three reasons (nullable, non-partial, ADR 0008 3.4) and D2's "not `deleted_at`, not in `isLiveProfile`". Replace the "profiles idiom … NO client_id" wording at `:780` so it stops describing profiles.                                                                                                                                                                                                                                |
-| `packages/db/migrations/00NN_profiles_lifecycle.sql` | NEW    | Generated, then hand-hardened per the `db-migration` skill: header comment (why, plan link, dark); `SET lock_timeout = '5s'`, `SET statement_timeout = '60s'`; two `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS …` (nullable, no default → catalog-only); `CREATE UNIQUE INDEX "uq_profiles_client_id" ON "profiles" ("client_id")` — **not CONCURRENTLY**, on the 0012 precedent (`0012_bodyweight_one_per_day.sql:21-23`, `.squawk.toml` excludes the rule because no transaction-stripping runner exists). `profiles` holds a handful of rows. No `IF NOT EXISTS` on the index (0012's reason: it would silently keep a same-named index with another predicate). |
-| `packages/db/migrations/meta/*`                      | NEW    | drizzle-kit's snapshot + journal entry (append-only, CI-enforced).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `packages/db/scripts/verify.ts`                      | EDIT   | **Appended** after the existing blocks (fail-fast ordering, `auth-1-clerk-google.md` Test plan): (1) two inserts with one `client_id` → the second `ON CONFLICT DO NOTHING` returns no row and the count stays 1; (2) the same `client_id` survives an `archived_at` and a `deleted_at` on the first row (the non-partial property — the inverse of today's partial arbiters); (3) two `NULL` `client_id` rows coexist; (4) `archived_at` defaults to `NULL` for a seeded row.                                                                                                                                                                                         |
-| `docs/privacy/data-inventory.md`                     | EDIT   | §1a `profiles` row (`:120`): add `client_id` ("device-generated idempotency key — technical, but device-linkable", the `entries` wording) and `archived_at`. §2 + re-review trigger 3 (`:90-91`): both listed as columns with **no writer yet**, owner PROF-1a / PROF-1b, so the PR that wakes each one must edit this file.                                                                                                                                                                                                                                                                                                                                           |
-| `docs/architecture.md`                               | EDIT   | The ERD's `profiles` entity gains the two columns (AGENTS.md → Diagrams). The PR description embeds it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Path                                                 | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/schema.ts`                          | EDIT   | `profiles` (`:147-172`): `clientId` (nullable), `archivedAt`; `uniqueIndex('uq_profiles_client_id').on(t.clientId)` with **no** `.where`. Docblocks per D1/D3. Reword `:780` so "the profiles idiom … NO client_id" stops describing profiles.                                                                                                                                                                                                                      |
+| `packages/db/migrations/00NN_profiles_lifecycle.sql` | NEW    | Generated, hand-hardened (`db-migration` skill): header (why, plan, dark, the [order rule](#migration-order)); `SET lock_timeout = '5s'`; `SET statement_timeout = '60s'`; two `ADD COLUMN IF NOT EXISTS` (nullable, no default → catalog-only); `CREATE UNIQUE INDEX "uq_profiles_client_id" …` non-concurrent on the 0012 precedent (`0012_bodyweight_one_per_day.sql:21-23`; `.squawk.toml` excludes the rule). No `IF NOT EXISTS` on the index (0012's reason). |
+| `packages/db/migrations/meta/*`                      | NEW    | drizzle-kit snapshot + journal (append-only, CI-enforced).                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `packages/db/scripts/verify.ts`                      | EDIT   | **Appended** after every existing block, each section in its **own throwaway household** _(DB N3)_: `expectRejectedBy` a plain second `INSERT` with a used `client_id` on `uq_profiles_client_id` _(DB N2)_; the slot survives `archived_at` **and** `deleted_at` on the first row (the non-partial property); two `NULL` keys coexist; a seeded row's `archived_at` is `NULL`.                                                                                     |
+| `AGENTS.md`                                          | EDIT   | The `client_id` line under Schema & migration conventions (D1) _(architecture S5, DB N4)_.                                                                                                                                                                                                                                                                                                                                                                          |
+| `.claude/skills/db-migration/SKILL.md`               | EDIT   | §1: one-line pointer — new `client_id` arbiters are non-partial (ADR 0008 3.4). `skills:check` verifies the cite.                                                                                                                                                                                                                                                                                                                                                   |
+| `docs/privacy/data-inventory.md`                     | EDIT   | Banner line (the dated `> **… re-read …**` list, `data-inventory.md:9-40`) for PROF-1a-0. §1a `profiles` row (`:120`): `client_id` ("device-generated idempotency key — technical, but device-linkable", the `entries` wording) and `archived_at`. §2 + re-review trigger 3 (`:90-91`): both as columns with **no writer yet**, owners PROF-1a-1 / PROF-1b. Cites by symbol (`schema.ts` → `profiles`), not line.                                                   |
+| `docs/architecture.md`                               | EDIT   | ERD `profiles` gains both columns; the PR description embeds it.                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### PR a-g — `fix/prof-1a-g-kid-only-program-read`
 
-| Path                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/queries/program-day.ts`         | EDIT   | `export const PROGRAM_READ_KIND = PROFILE_KIND.kid` + docblock (D3); `eq(schema.profiles.kind, PROGRAM_READ_KIND)` in the block subquery's `where` (`:85`). The function's docblock gains a "Q15 stopgap" shape note naming D4 as the remover.                                                                                                                                      |
-| `packages/db/scripts/verify.ts`                  | EDIT   | Appended: an adult profile in the seeded household (which holds the YDP block) → `programDayRows` returns `[]` for `strength_a` **and** `strength_b`; the existing kid assertions (`:3939-3990`, 7 and 6 rows) unchanged and re-run after the adult exists.                                                                                                                         |
-| `apps/web/app/p/[profileId]/page.tsx`            | EDIT   | `roleForPage` (D3): `DayNav` gets `dayRoleLabel` only for a kid; `StrengthSection` gets `dayRole={roleForPage}`. Comment cites Q15.                                                                                                                                                                                                                                                 |
-| `apps/web/lib/dal/export.ts`                     | —      | **No change.** `prescribedFor` builds its map only from `programDayRows`' rows (`:119-128`), so the guard empties an adult's `prescribed` with no edit here. No unit test covers `buildExportEntries` today (none references it outside `export.ts` and `household.ts`); the proof is the `db:verify` case above plus `export-csv.spec.ts`'s existing kid assertions staying green. |
-| `docs/features/programming.md`                   | EDIT   | **CI-forced** (owns `program-day.ts`). An invariant: "until D4 only `kind = kid` reads the household's newest block; an adult reads nothing and is not offered a role", with the D4 removal obligation.                                                                                                                                                                             |
-| `docs/changelog/<fragment>.md`, `docs/status.md` | EDIT   | Per AGENTS.md → Status rides with the work.                                                                                                                                                                                                                                                                                                                                         |
+| Path                                                                 | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/programming.ts` (+ test)                        | EDIT   | `PROGRAM_READ_KIND`, `readsHouseholdProgram` (D4). Owned by `programming.md`.                                                                                                                                                                                                                                                                                                                                   |
+| `packages/db/src/queries/program-day.ts`                             | EDIT   | The kind conjunct in the block subquery (`:85`); `householdHasProgram(db, { scope })`. Docblock: "Q15 stopgap; D4 removes".                                                                                                                                                                                                                                                                                     |
+| `packages/db/src/writers/ownership.ts`                               | EDIT   | `programBlockInHousehold(scope)` (prefixed helper, D4).                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/db/scripts/verify.ts`                                      | EDIT   | Appended, own household with a block: **positive** — a kid gets the block's rows for `strength_a` and `strength_b`; **negative** — an adult in the **same** household, same block, gets `[]` for both _(correctness S6, DB S1)_; **flip** — the kid updated to adult reads `[]`, back to kid reads the rows again; `householdHasProgram` true here, false in a household with none and false across households. |
+| `packages/db/scripts/mutations/06-drop-kind-conjunct.{patch,expect}` | NEW    | Removes the kind conjunct; `db:verify` must go **RED** at the negative case. Numbered after the existing five.                                                                                                                                                                                                                                                                                                  |
+| `apps/web/lib/dal/programming.ts`                                    | EDIT   | `getHouseholdHasProgram()` (scoped, `[]`-safe).                                                                                                                                                                                                                                                                                                                                                                 |
+| `apps/web/app/p/[profileId]/page.tsx`                                | EDIT   | `readsHouseholdProgram(profile.kind)` → role label and form default `null` for an adult; the muted adult line when the household has a program (D4). Wrapping on the `<h1>` (D11).                                                                                                                                                                                                                              |
+| `docs/features/programming.md`                                       | EDIT   | **CI-forced.** Invariants: only `readsHouseholdProgram` kinds read the newest block until D4; **kind is read at export time**, so a kind change rewrites past `prescribed` cells.                                                                                                                                                                                                                               |
+| `docs/features/write-path.md`                                        | EDIT   | CI-forced (`writers/ownership.ts`): the new prefixed helper.                                                                                                                                                                                                                                                                                                                                                    |
 
-### PR a-1 — `feat/prof-1a-1-add-athlete`
+`apps/web/lib/dal/export.ts` does not change: `prescribedFor` builds only from `programDayRows`' rows
+(`:119-128`). No unit test covers `buildExportEntries` today (it is referenced only by `export.ts` and
+`household.ts`); the proof is the `db:verify` cases plus `e2e/export-csv.spec.ts`'s kid assertions.
 
-| Path                                                                                  | Change      | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/enums.ts`                                                        | EDIT        | `PROFILE_KIND_LABEL` beside `PROFILE_KINDS` (`:21-25`). Reword the `:21` docblock, which names a person, to "a child or an adult" (AGENTS.md: no personal names).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `packages/shared/src/profiles.ts` + `index.ts`                                        | NEW         | `PROFILE_NAME_MAX`, `athleteNameSchema`, `profileUpsertSchema`, `addAthleteSchema` (contract above). Unit tests beside it: blank/space-only, 41 chars, an interior newline, an unknown kind, a missing `clientId` — each rejected.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `packages/shared/src/text.ts`                                                         | EDIT        | `foldName` + tests (`Zoë` = `zoe`, `O’Neil` = `o'neil`, ` Ana   Lu` = `ana lu`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `packages/db/src/writers/ownership.ts`                                                | EDIT        | `insertProfileOwnedBy(exec, scope, row)` — the `insertMovementOwnedBy` precedent (`:187-200`): it **performs** the insert so `scope.householdId` never leaves the one module `scope.test.ts` allows to unwrap it (`packages/db/src/scope.test.ts:55-56`). `ON CONFLICT (client_id) DO NOTHING`, no `where` (the index is non-partial). Returns `void`.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `packages/db/src/writers/profile.ts`                                                  | NEW         | `createProfile(exec, scope, { clientId, name, kind })` → `{ id: publicId } \| null`: mints `publicId = newId()`, calls `insertProfileOwnedBy`, then re-selects `public_id` **by `client_id` AND `inHousehold(scope)` AND `deleted_at IS NULL`** — the bodyweight writer's lesson that a replay lookup must be scoped (`write-path.md` invariant 6 (b)). `null` = the key belongs to another household or a deleted row; never another household's id. Exported from the barrel.                                                                                                                                                                                                                                                                                                                    |
-| `packages/db/scripts/verify.ts`                                                       | EDIT        | Appended, two households: create in A lands with A's `household_id`; replay returns the **same** `public_id` and the row count is 1; the same `client_id` replayed under B's scope returns `null` and B gains no row; the picker query for B does not list it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/lib/dal/profiles.ts`                                                        | EDIT        | `createAthlete({ clientId, name, kind, acknowledgedDuplicate })`: scope (null → `{ ok:false, reason:'no_household' }`), the duplicate check over `householdProfileRows` **plus archived** (PR b adds the column to that select; in a-1 archived does not yet exist, so live rows only), then `createProfile`. Returns the `AddAthleteResult` DTO.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `apps/web/lib/dal/profiles.test.ts`                                                   | EDIT        | Emitted SQL: the insert carries the scope's household and `on conflict ("client_id") do nothing`; the re-select carries the household conjunct.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `apps/web/app/p/athlete-actions.ts`                                                   | NEW         | `'use server'`; `addAthleteAction` per D5: boundary call first line (`hasGateAccess` until 1c, then `sessionUserOrNull` + `checkMutationLimit(user.userId)` — see [AUTH-1 1c](#gated-on-auth-1-1c--what-to-re-verify)) → `addAthleteSchema.safeParse` → `fieldErrors` → `createAthlete` → `revalidatePath(APP_HOME_PATH)` → `redirect(..., replace)`. No `formData`/`headers` to Sentry (`actions.ts:60-67`: a name is personal data).                                                                                                                                                                                                                                                                                                                                                             |
-| `apps/web/app/p/athlete-actions.test.ts`                                              | NEW         | The per-action behaviour suites (bad body, duplicate warning, replay, redirect). The unauth and wrong-household rows come from the central matrix in `app/p/[profileId]/actions.test.ts` (WP-1a), which gains `ACTION_FNS`/`VALID_BODY` entries — see [Test plan](#test-plan).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/app/pages-are-gated.test.ts`                                                | EDIT        | `:228` expected module list gains `app/p/athlete-actions.ts`. ⚠️ After 1c this file is `pages-need-a-session.test.ts` (`auth-1-clerk-google.md:1710`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `apps/web/app/p/new/page.tsx`                                                         | NEW         | RSC, gated; `<main>` `max-w-2xl px-4 py-12` (the picker's shell, `apps/web/app/p/page.tsx:31`); "← All athletes" `Link`; `<h1>Add an athlete</h1>`; renders `AddAthleteForm`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `apps/web/components/profiles/athlete-form.tsx`                                       | NEW         | `'use client'`. One form for add and (a-2) edit: `useActionState`; `<form>`; `<label htmlFor>` Name `<input>` (`maxLength={PROFILE_NAME_MAX}`, `autoComplete="off"`, `autoCapitalize="words"`, `spellCheck={false}`, `text-base`, `aria-describedby` → hint + error, `aria-invalid` on error); a `<fieldset><legend>Who is this?</legend>` of two native radios labelled from `PROFILE_KIND_LABEL`, **no default** (U29), each label `min-h-11`; the kind hint ("Shown on their tile. You can change it later." — IXD-8's corrected claim; "used when suggesting a program" waits for D4b); a hidden `clientId` (UUIDv7 minted once per mount, kept across a duplicate-warning resubmit); a hidden `acknowledgedDuplicate`; errors beside their field and focus to the first invalid one (A11Y-2). |
-| `apps/web/components/profiles/add-athlete-tile.tsx`                                   | NEW         | A `Link` to `ADD_ATHLETE_PATH` with the `ProfileTile` geometry (`profile-tile.tsx:20`: `min-h-24 px-5 py-4 rounded-xl`), `border-2 border-dashed` at a contrast the UX panel measures (see Risks), a dashed `+` avatar (`aria-hidden`), "Add athlete" + "A child, or yourself" (prototype `:2100`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `apps/web/components/profiles/profile-tile.tsx`                                       | EDIT        | `:30` `capitalize {profile.kind}` → `PROFILE_KIND_LABEL[profile.kind]` ("Kid" → "Child", M10).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/app/p/page.tsx`                                                             | EDIT        | The tile list always renders, ending in `<li><AddAthleteTile/></li>`; the empty state renders above it when there are no athletes. ⚠️ After 1c this page branches on `householdState()` (`auth-1-clerk-google.md:1711`): the tile renders **only** in the resolved state, never in "this account has no household".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `apps/web/components/onboarding/picker-empty-state.tsx`                               | EDIT        | Drop the `Button`/`GitHubMark` link (`:47-52`) and `notYet`; the dashed tile below it is the CTA. Docblock updated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `apps/web/lib/constants.ts`                                                           | EDIT        | `PICKER_COPY.subhead` → "Tap your name to start logging." (PUX-8; prototype `:2083`). `PICKER_EMPTY_COPY`: delete `notYet`, `setupCta`, `setupAnchor`; rewrite **`next`**, which says "you add the rest from their routine editor" (`:203`) — false once criterion 41 removes the link. `ADD_ATHLETE_PATH`, `ATHLETE_FORM_COPY`, `NO_ATHLETE_SAVE` ("No athlete found to save." — "athlete", never "profile", PUX-8).                                                                                                                                                                                                                                                                                                                                                                              |
-| `apps/web/lib/constants.test.ts`                                                      | EDIT        | Remove the `setupAnchor` → README heading test (`:63-68`); pin `PROFILE_NAME_MAX` and `NO_ATHLETE_SAVE` once each.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `apps/web/components/onboarding/picker-empty-state.test.tsx`, `profile-tile.test.tsx` | EDIT        | No link; "Child"/"Adult" through the const.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `apps/web/app/design/tokens/inventory.tsx`                                            | EDIT        | It renders `PickerEmptyState` as the only axe-scanned empty picker (`:181-201`); add `AddAthleteTile` beside it so the dashed border is scanned in both themes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `README.md`                                                                           | EDIT        | `## Adding an athlete` (`:63-75`) → one paragraph: "Use **+ Add athlete** at the bottom of the athlete list." The PROF-1 row assigns this removal (`plan.md:2805-2806`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `apps/web/e2e/add-athlete.spec.ts` + `a11y.spec.ts`                                   | NEW/EDIT    | Add an athlete with a **unique** name (a run-scoped suffix), assert the tile and the landing page; `/p/new` added to the a11y route list (spec unowned 8). ⚠️ The shared e2e DB keeps the row; tiles append at the end (`household-profiles.ts:31-32`, `asc(id)`), so the indexed tiles other specs use do not move.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `docs/features/write-path.md`                                                         | EDIT        | **CI-forced** (owns `lib/dal/`, `writers/`). `owns:` += the two action modules; Files table: `writers/profile.ts`, `insertProfileOwnedBy`; invariant 1 says "the action modules"; invariant 5 notes `profiles.client_id` is the one **non-partial** `client_id` arbiter and why; Traps: D7's ramp-target hazard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `docs/privacy/data-inventory.md`                                                      | EDIT        | §2: `client_id` leaves the "no writer" list. **§3:** `profiles.name` becomes the **third** UI-reachable free-text box (`:186-190` says two), typed by a parent or a child, never exported (§6, `:278`), never sent to Sentry. §1a `profiles` note: "written in the app since PROF-1a".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `docs/privacy/notice.md`                                                              | — (checked) | "A name for each athlete … whatever you type" (`:23-24`) and "adult or a child" (`:25`) are already true; no edit. The privacy lens confirms.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+### PR a-r — `feat/prof-1a-r-rename-athlete`
 
-### PR a-2 — `feat/prof-1a-2-rename-athlete`
-
-| Path                                                                          | Change | What & why                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/profiles.ts`                                             | EDIT   | `renameAthleteSchema`.                                                                                                                                                                                                                                                                                                                                                                   |
-| `packages/db/src/writers/profile.ts`                                          | EDIT   | `updateProfileIdentity(exec, scope, publicId, { name, kind })` → one guarded `UPDATE profiles SET name, kind, updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id`; `null` = unknown/foreign/deleted. Idempotent by construction (same values). Archived athletes **can** be renamed (a parent fixing a name in settings).                                       |
-| `packages/db/scripts/verify.ts`                                               | EDIT   | Appended: B's scope renaming A's profile updates 0 rows and A's name is unchanged; a deleted profile updates 0 rows.                                                                                                                                                                                                                                                                     |
-| `apps/web/lib/dal/profiles.ts`                                                | EDIT   | `renameAthlete(publicId, input)` → `{ id } \| null`.                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/app/p/athlete-actions.ts` (+ `MUTATING_ACTIONS`, `actions.test.ts`) | EDIT   | `renameAthleteAction`: boundary → zod → `getProfileByPublicId` (the gate, `profiles.ts:75-92`) → `renameAthlete` → `revalidatePath` (`/p`, `/p/<id>`, `/p/<id>/edit`) → `redirect('/p/<id>', replace)` (the prototype returns to the day page, `:5083`). Foreign or unknown id → `NO_ATHLETE_SAVE`, byte-identical.                                                                      |
-| `apps/web/app/p/[profileId]/edit/page.tsx`                                    | NEW    | RSC, gated; `getProfileByPublicId` → `notFound()`; "← {name}" back link; `<h1>Edit {name}</h1>`; `AthleteForm` in edit mode (name prefilled, kind checked, Save labelled "Save name and kind" under the fields — CD-6). **No** Activities link (M30); **no** Program section (D4b). From PR b, the hint "To archive an athlete, use Household settings" with a link (prototype `:2188`). |
-| `apps/web/app/p/[profileId]/page.tsx`                                         | EDIT   | `:350-364`: the routine link and its comment are **replaced** by "→ Edit {name}" (`athleteEditPath`), same class (`min-h-11`, the unguarded tap-target note kept). Criterion 41: no other link to `/routine` exists (`grep` above found only this one in app code). `← All profiles` (`:136`) → `← All athletes` (PUX-8).                                                                |
-| `apps/web/lib/constants.ts`                                                   | EDIT   | `athleteEditPath`; edit copy.                                                                                                                                                                                                                                                                                                                                                            |
-| `apps/web/e2e/add-athlete.spec.ts`, `a11y.spec.ts`                            | EDIT   | Rename the athlete the spec added; `/p/<seed>/edit` in the a11y list; the `a11y.spec.ts:91` comment's "Edit routine" example updated.                                                                                                                                                                                                                                                    |
-| `docs/features/write-path.md`                                                 | EDIT   | CI-forced (writers, DAL). The rename writer's row.                                                                                                                                                                                                                                                                                                                                       |
-| `docs/features/programming.md`                                                | EDIT   | Not CI-forced (`page.tsx` is unowned) but its "Routine" axis describes the editor's entry point; it must say the route is unlinked until ACT-1 (M30), so the next reader does not "restore" the link.                                                                                                                                                                                    |
+| Path                                                                                        | Change   | What & why                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/text.ts` (+ test)                                                      | EDIT     | `foldName` and its pinned cases (D11).                                                                                                                                                                                                                                                                                                                                                                    |
+| `packages/shared/src/profiles.ts` (+ test), `index.ts`                                      | NEW      | `PROFILE_NAME_MAX`, `athleteNameSchema`, `profileUpsertSchema`, `renameAthleteSchema`. Tests: blank, spaces-only, ` a   b` stored as `a b`, 41 chars, interior newline, combining-marks-only, bad kind.                                                                                                                                                                                                   |
+| `packages/shared/src/enums.ts`                                                              | EDIT     | `PROFILE_KIND_LABELS` beside `PROFILE_KINDS` (`:21-25`); reword the `:21` docblock, which names a person, to "a child or an adult".                                                                                                                                                                                                                                                                       |
+| `packages/db/src/writers/profile.ts`                                                        | NEW      | `updateProfileIdentity(exec, scope, publicId, { name, kind })` → one guarded `UPDATE … SET name, kind, updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id`; `null` = unknown/foreign/deleted. Archived athletes can be renamed. Barrel export.                                                                                                                                   |
+| `packages/db/scripts/verify.ts`                                                             | EDIT     | Appended, own households: B renaming A's profile updates 0 rows; a deleted profile updates 0 rows.                                                                                                                                                                                                                                                                                                        |
+| `apps/web/lib/dal/profiles.ts` (+ test)                                                     | EDIT     | `renameAthlete(publicId, input)` → `{ id } \| null`. Emitted-SQL test carries `isLiveProfile`'s three conjuncts.                                                                                                                                                                                                                                                                                          |
+| `apps/web/app/p/profile-actions.ts`                                                         | NEW      | `'use server'`. `renameAthleteAction`: `sessionUserOrNull()` → `checkMutationLimit(user.userId)` → zod → `getProfileByPublicId` → `renameAthlete` → `revalidatePath(APP_HOME_PATH, athletePath(id), athleteEditPath(id))` → `{ ok: true }`. No `formData`/`headers` to Sentry (`actions.ts:60-67`: names are personal data).                                                                              |
+| `apps/web/app/p/[profileId]/mutating-actions.ts`, `actions.test.ts`, the pinned module list | EDIT     | Per D5 (WP-1's shape): entry `{ refusal: NO_ATHLETE_SAVE, scope: 'profile' }`, binding with `writers: [renameAthlete]`, `VALID_BODY`, `next/navigation` mock, profiles mock fns.                                                                                                                                                                                                                          |
+| `apps/web/app/p/profile-actions.test.ts`                                                    | NEW      | Per-action behaviour (bad bodies, success, revalidation), beside its module (WP-1's convention).                                                                                                                                                                                                                                                                                                          |
+| `apps/web/app/p/[profileId]/edit/page.tsx`                                                  | NEW      | RSC; `requireSession()`; `getProfileByPublicId` → `notFound()`; static title; back link (`min-h-11`, wraps) to the allowlisted `from`; `<h1>Edit {name}</h1>`; the form. **No** Activities link (M30), **no** Program section (D4b).                                                                                                                                                                      |
+| `apps/web/app/p/[profileId]/edit/athlete-form.tsx`                                          | NEW      | `'use client'`; colocated with its route; the add page imports it in a-1. D7: controlled state, kind hint, changed-kind line, `role="status"`, D6 navigation effect.                                                                                                                                                                                                                                      |
+| `apps/web/app/p/[profileId]/page.tsx`                                                       | EDIT     | `:350-364`: the routine link → "→ Edit {name}" (`athleteEditPath(id)?from=…`), same `min-h-11` class. `← All profiles` (`:136`) → `← All athletes` (PUX-8), `min-h-11`.                                                                                                                                                                                                                                   |
+| `apps/web/components/profiles/profile-tile.tsx` (+ test)                                    | EDIT     | `:30` `capitalize {profile.kind}` → `PROFILE_KIND_LABELS[profile.kind]`; wrapping on the name (D11).                                                                                                                                                                                                                                                                                                      |
+| `apps/web/lib/constants.ts` (+ test)                                                        | EDIT     | `athletePath`, `athleteEditPath`, `NO_ATHLETE_SAVE`, `ATHLETE_FORM_COPY`; `PICKER_COPY.subhead` → "Tap your name to start logging." (prototype `:2083`); **`PICKER_EMPTY_COPY.next`** (`:203`) rewritten — it sends people to the routine editor criterion 41 hides. Pin each const once.                                                                                                                 |
+| `apps/web/e2e/athletes.spec.ts`, `a11y.spec.ts`                                             | NEW/EDIT | Rename a seeded athlete and back, **exact** locators, retry-safe (restores the original name in `afterEach`) _(correctness S7)_; NARROW overflow + link tap-target checks on `/p/<id>` and `/p/<id>/edit`; edit route in the axe list; the `a11y.spec.ts:91` comment's "Edit routine" example.                                                                                                            |
+| `docs/features/write-path.md`                                                               | EDIT     | CI-forced. `owns:` += `app/p/profile-actions.ts`; Files: `writers/profile.ts`; invariant 5: `profiles.client_id` is the one non-partial `client_id` arbiter and why; Traps: D10's ramp hazard; `updateProfileRoutine` (`profiles.ts:159-173`) noted as the pre-PROF-1 DAL-local writer, kept.                                                                                                             |
+| `docs/features/programming.md`                                                              | EDIT     | The routine editor is unlinked until ACT-1 (M30), so nobody "restores" the link.                                                                                                                                                                                                                                                                                                                          |
+| `docs/privacy/data-inventory.md`, `notice.md`                                               | EDIT     | Inventory banner line; §3: `profiles.name` is now **UI-editable** (rename) — the third free-text box (`:186-190` says two), typed by a parent or child, never exported (`:278`), never sent to Sentry. Notice: the "About the people" bullets (`:23-26`) say names can be changed in the app; bump **Last updated** (`:3`); `pnpm privacy:generate` regenerates `apps/web/lib/privacy/notice-content.ts`. |
 
 ### PR b — `feat/prof-1b-archive-athlete`
 
-| Path                                                                          | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/profile.ts`                                          | EDIT   | `setProfileArchived(exec, scope, publicId, archived: boolean)` → one guarded `UPDATE … SET archived_at = (archived ? now() : NULL), updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id, archived_at`. Not conditional on the current value, so a replayed archive is a no-op that still returns the row (idempotent; the replay test asserts one effect). **The criterion 47 seam:** the function's docblock says D3 adds "close open `program_assignments` (`active_to` = athlete-local yesterday) in the same transaction, return the closed ids for Undo", and the tripwire below fails until it does. |
-| `packages/db/src/writers/profile.test.ts`                                     | NEW    | **The criterion 47 tripwire:** `if ('programAssignments' in schema)` then `profile.ts`'s source must reference `programAssignments` — so SCHED-1 1c cannot merge the table while archive silently leaves an archived athlete "on" a program. A vacuity check asserts the source is read.                                                                                                                                                                                                                                                                                                                                           |
-| `packages/db/src/queries/household-profiles.ts`                               | EDIT   | Select `archivedAt` as well (`:39-44`); **the predicate is not touched** — it is the isolation boundary (`:14-25`) and archive is not a tenancy fact. Docblock: "callers split live from archived".                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `packages/db/scripts/verify.ts`                                               | EDIT   | Appended: archive in A → `householdProfileRows` still returns it with `archivedAt` set; B archiving A's profile updates 0 rows; restore clears it; an archived profile still resolves through `isLiveProfile` (so the export path is intact — criterion 5); `buildExportEntries`' month query returns the archived athlete's rows (via the `export-month.ts` query `db:verify` already runs).                                                                                                                                                                                                                                      |
-| `apps/web/lib/dal/profiles.ts`                                                | EDIT   | `listProfiles` filters `archivedAt === null` (the picker — criterion 5); `listHouseholdAthletes()` → `HouseholdAthletesDTO`; `archiveAthlete` / `restoreAthlete`; `getProfileByPublicId` adds `archived`; `createAthlete`'s duplicate check now includes archived (IXD-7).                                                                                                                                                                                                                                                                                                                                                         |
-| `apps/web/app/p/athlete-actions.ts` (+ `MUTATING_ACTIONS`, `actions.test.ts`) | EDIT   | `archiveAthleteAction`, `restoreAthleteAction`: boundary → zod → `getProfileByPublicId` → DAL → `revalidatePath` (`/p`, `/settings`, `/p/<id>`) → `{ ok: true, savedId }` (no redirect: the settings page updates in place).                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `apps/web/app/settings/page.tsx`                                              | NEW    | RSC, gated. `<h1>Household settings</h1>`; `<section aria-labelledby>` "Athletes": a `<ul>`, each `<li>` the name, "· Child/Adult", an **Edit** `Link` and an **Archive** button, each `aria-label`led with the athlete's name (U23); `<section>` "Archived athletes": rows with **Restore**, or the empty line "None. Archiving hides an athlete from the athlete list and keeps everything they logged." (prototype `:2295`). No Programs/Movements rows: those chunks add theirs.                                                                                                                                               |
-| `apps/web/components/profiles/archive-controls.tsx`                           | NEW    | `'use client'` island: the two forms, the in-place static result line ("{name} archived. Everything they logged is kept." + **Undo**, which posts `restoreAthleteAction`), focus to Undo after archive and to the restored row after restore (prototype `:4603`, `:4610`), announced through **one** persistent live region mounted before its text changes (the `saved-announcer.tsx` idiom; criterion 11's rule).                                                                                                                                                                                                                |
-| `apps/web/app/p/page.tsx`                                                     | EDIT   | A `<nav aria-label="Household">` with one row, "Household settings ›", **below** the tiles (prototype `:2102`; Q5). Never an archive control on the picker (criterion 8).                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `apps/web/app/p/[profileId]/page.tsx`                                         | EDIT   | If `profile.archived`: a notice "{name} is archived. Restore them from Household settings." with a link, and the forms off (`writable && !profile.archived`). See Open question 1.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `apps/web/app/p/[profileId]/edit/page.tsx`                                    | EDIT   | The settings hint + link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `apps/web/lib/constants.ts`                                                   | EDIT   | `SETTINGS_PATH`, `SETTINGS_COPY`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `apps/web/e2e/add-athlete.spec.ts`, `a11y.spec.ts`                            | EDIT   | Archive the athlete the spec added (which also tidies the shared DB), assert it leaves the picker and appears under Archived, Undo, archive again; `/settings` in the a11y list.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `docs/features/write-path.md`                                                 | EDIT   | CI-forced (`household-profiles.ts`, writers, DAL). Archive is a lifecycle column read by lists, **never** by `isLiveProfile`; the tripwire.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `docs/privacy/data-inventory.md`                                              | EDIT   | §1a/§2: `archived_at` now written. **§5:** "Archive is not deletion: an archived athlete's rows are kept in full, still export, and are restorable; nothing is purged." §4 unchanged (any household member can archive — Q6 governs only delete).                                                                                                                                                                                                                                                                                                                                                                                  |
-| `docs/privacy/notice.md`                                                      | EDIT   | One sentence under "Deleting your data" (`:172`): archiving an athlete hides them from the athlete list and **deletes nothing**; ask, or (later) delete, to remove them. A parent who reads "archive" as "remove" has been told something false by omission.                                                                                                                                                                                                                                                                                                                                                                       |
+| Path                                                          | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/shared/src/profiles.ts`                             | EDIT   | `archiveAthleteSchema`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `packages/db/src/writers/profile.ts`                          | EDIT   | `setProfileArchived(exec, scope, publicId, archived)` → `SET archived_at = (archived ? COALESCE(archived_at, now()) : NULL), updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id, archived_at`. **Seam docblock** _(scope S2)_: "[ASSIGN-1](../plans/assign-1-assignments.md) D-5 adds `closeOpenAssignments` here, in the same transaction, and returns the closed ids for Undo (criterion 47)." No tripwire test.                                                                                                                                                                                                                                                                                    |
+| `packages/db/src/queries/household-profiles.ts`               | EDIT   | Select `archivedAt` too (`:39-44`); **predicate untouched** — it is the isolation boundary (`:14-25`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/db/scripts/verify.ts`                               | EDIT   | Appended, own households: archive → row has `archived_at`; **archive replayed keeps the first date** (COALESCE); B archiving A's updates 0 rows; restore clears; an archived profile still resolves through `isLiveProfile` and its month rows come back from the `export-month.ts` query (criterion 5).                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/web/lib/dal/profiles.ts` (+ test)                       | EDIT   | `listProfiles` drops archived (criterion 5); `listHouseholdAthletes()`; `archiveAthlete`, `restoreAthlete`; `getProfileByPublicId` adds `archived`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/web/app/p/profile-actions.ts` + registry/bindings/tests | EDIT   | `archiveAthleteAction`, `restoreAthleteAction` (`scope: 'profile'`, `NO_ATHLETE_SAVE`) → `revalidatePath(APP_HOME_PATH, SETTINGS_PATH, athletePath(id))` → `{ ok: true, savedId }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `apps/web/app/settings/page.tsx`                              | NEW    | D9. `requireSession()`; static title; `<h1>Household settings</h1>`; Athletes `<section>`: each `<li>` the name (wraps), "Child/Adult", **Edit** (`Button asChild` + `Link`, `athleteEditPath(id)?from=/settings`) and **Archive**, each `aria-label`led with the name (U23). Archived `<section>`: name, **Restore**, **Download history** (`/p/<id>/export`) _(privacy 3, UX3 5)_; the empty line (prototype `:2295`). Then the `<nav>` of sub-page rows.                                                                                                                                                                                                                                                                    |
+| `apps/web/app/settings/athlete-list.tsx`                      | NEW    | `'use client'`, **one** page-level island _(UX1 S7, UX2 6)_: mounts `<Announcer>` and renders `UndoLine` for the result line ("{name} archived. Everything they logged is kept and still exports." + **Undo**), a persistent `role="status"` region mounted before its text changes, and focus moved **in an effect** — to Undo after archive, to the restored row after restore (prototype `:4603`, `:4610`).                                                                                                                                                                                                                                                                                                                 |
+| `apps/web/components/undo-line.tsx` (+ test)                  | NEW    | **The shared Undo line** (spec → "Seams the plans settled", `crud-1-fix-it-yourself.md:548`); PROF-1 is the first to ship one, and V1-9b, ASSIGN-1, V1-22 A4, RETIRE-1 and CLONE-1 import it. Props: `message`, `undoLabel` (names what it undoes, A11Y-5), `onUndo`, `restoredFocusId`. Behaviour: static message text; Undo button `min-h-11`, `aria-describedby` → the message; focus to Undo when it mounts and to `restoredFocusId` after a successful undo, both **in effects**; announces through `announce()` below, never its own region. It owns no state the caller cannot reset, so a caller keys it (FE-6: V1-9b keys by athlete and day). Lives in `components/` (not colocated) because it is genuinely shared. |
+| `apps/web/components/announcer.tsx` (+ test)                  | NEW    | The one announce helper: an `<Announcer>` that mounts a persistent `role="status"` region **before** any text, and an `announce(text)` from its context. A page that already has an announcer (the weigh-in's `SavedAnnouncer`, `apps/web/app/p/[profileId]/saved-announcer.tsx`) states in its docblock which one owns a restore; `/settings` has none, so it mounts this one.                                                                                                                                                                                                                                                                                                                                                |
+| `apps/web/app/p/page.tsx`                                     | EDIT   | A `<nav aria-label="Household">` with "Household settings ›", sub-line showing the archived count when non-zero ("2 archived") _(UX3 6)_, below the tiles (prototype `:2102`). Never an archive control on the picker (criterion 8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/app/p/[profileId]/page.tsx`                         | EDIT   | If `profile.archived`: a notice "{name} is archived. Restore them in Household settings." (wraps) and the forms off (`writable && !profile.archived`); the export link stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/app/p/[profileId]/edit/page.tsx`                    | EDIT   | "To archive an athlete, use Household settings" + link (prototype `:2188`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `apps/web/lib/constants.ts`                                   | EDIT   | `SETTINGS_PATH`, `SETTINGS_COPY`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/e2e/athletes.spec.ts`, `a11y.spec.ts`               | EDIT   | Archive → leaves the picker, appears under Archived → **Undo** → back on the picker _(UX1 S7)_; restore; NARROW overflow + tap targets on `/settings`; axe list.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `docs/features/write-path.md`                                 | EDIT   | CI-forced. Archive is a list filter, never in `isLiveProfile`; the D-5 seam.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `docs/privacy/data-inventory.md`, `notice.md`                 | EDIT   | Inventory banner; §1a/§2 `archived_at` written; **§5**: archive is not deletion. Notice _(privacy 4–6)_: a **retention** row ("An archived athlete: kept in full until you restore or delete them"); under "Deleting your data", archiving **deletes nothing** and **does not hide** the athlete from anyone who opens their link or Household settings — any household member can archive and restore; under "Getting your data out", an archived athlete is exported from Household settings. Bump Last updated; regenerate `notice-content.ts`.                                                                                                                                                                             |
+
+### PR a-1 — `feat/prof-1a-1-add-athlete`
+
+| Path                                                                       | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/profiles.ts`                                          | EDIT   | `addAthleteSchema`.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `packages/db/src/writers/ownership.ts`                                     | EDIT   | `insertProfileOwnedBy(exec, scope, row)` (the `insertMovementOwnedBy` precedent, `:187-200`: it performs the insert so `scope.householdId` never leaves the module) and `profileByClientId(exec, scope, clientId)`.                                                                                                                                                                                                                                       |
+| `packages/db/src/writers/profile.ts`                                       | EDIT   | `createProfile` — D2's steps 1, 3, 4 (step 2 arrives in a-1d).                                                                                                                                                                                                                                                                                                                                                                                            |
+| `packages/db/scripts/verify.ts`                                            | EDIT   | Appended, own households: create lands with A's `household_id`; **replay returns the same `public_id`** and count stays 1; replay after the row is archived still returns it; the same key under B's scope → `refused`, B gains no row.                                                                                                                                                                                                                   |
+| `packages/db/scripts/mutations/07-reselect-drops-household.{patch,expect}` | NEW    | Removes `inHousehold` from the re-select / `profileByClientId`; `db:verify` must go RED at the cross-household case.                                                                                                                                                                                                                                                                                                                                      |
+| `apps/web/lib/dal/profiles.ts` (+ test)                                    | EDIT   | `createAthlete(input)`: no scope → `no_household`; else `createProfile`. Unit test: the `client_id` lookup is emitted before the insert.                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/app/p/profile-actions.ts` + registry/bindings/tests              | EDIT   | `addAthleteAction` (`scope: 'household'`, `NO_ATHLETE_ADD`, binding with `scopeMiss` **and** `succeeded` asserting `redirect(athletePath(id), RedirectType.replace)` after `revalidatePath(APP_HOME_PATH)` and `revalidatePath(SETTINGS_PATH)`); D6 redirect. `no_household` and `refused` return `NO_ATHLETE_ADD` byte-identically to the unauth refusal. Rate-limited like every mutation after 1c.                                                     |
+| `apps/web/app/p/new/page.tsx`                                              | NEW    | RSC; `requireSession()`; static title; the picker's shell (`p/page.tsx:31`); `← All athletes`; `<h1>Add an athlete</h1>`; the form in add mode. If the scope does not resolve, `notFound()`.                                                                                                                                                                                                                                                              |
+| `apps/web/app/p/add-athlete-tile.tsx`                                      | NEW    | Colocated with `/p`. A `Link` to `ADD_ATHLETE_PATH` with `ProfileTile`'s geometry (`profile-tile.tsx:20`), `border-2 border-dashed` at a measured ≥3:1 foreground mix, dashed `+` avatar (`aria-hidden`), "Add athlete" / "A child, or yourself" (prototype `:2100`).                                                                                                                                                                                     |
+| `apps/web/app/p/page.tsx`                                                  | EDIT   | The list always ends in the add tile; the empty state above it at zero athletes. Rendered only in 1c's resolved household state (`householdState()`), never in "no household".                                                                                                                                                                                                                                                                            |
+| `apps/web/components/onboarding/picker-empty-state.tsx` (+ test)           | EDIT   | Drop the GitHub link (`:47-52`) and `notYet`. **Copy** _(UX1 S6)_: heading "No athletes yet"; `what` unchanged; `next` → "Add the first athlete below — a child, or yourself. Their page starts with a weigh-in and strength."                                                                                                                                                                                                                            |
+| `apps/web/lib/constants.ts` (+ test)                                       | EDIT   | `ADD_ATHLETE_PATH`, `NO_ATHLETE_ADD`; delete `PICKER_EMPTY_COPY.notYet`, `setupCta`, `setupAnchor`, and the README-anchor test (`constants.test.ts:63-68`).                                                                                                                                                                                                                                                                                               |
+| `apps/web/app/design/tokens/inventory.tsx`                                 | EDIT   | Render the add tile beside `PickerEmptyState` (`:181-201`), the only axe-scanned empty picker, so the dashed border is measured in both themes.                                                                                                                                                                                                                                                                                                           |
+| `README.md`                                                                | EDIT   | `## Adding an athlete` (`:63-75`) → "Use **+ Add athlete** at the bottom of the athlete list." (`plan.md:2805-2806`).                                                                                                                                                                                                                                                                                                                                     |
+| `apps/web/e2e/athletes.spec.ts`, `a11y.spec.ts`                            | EDIT   | Add an athlete with a **per-attempt** unique name (run id + `testInfo.retry`), exact locators, then archive it in `afterEach` _(correctness S7)_; add one with a **40-character unbroken** name and check NARROW overflow on `/p`, `/p/<id>`, edit and `/settings` _(UX2 B1)_, archived at the end; `/p/new` in the axe list. ⚠️ `a11y.spec.ts:761`'s picker overflow test shares the DB and may see this row mid-run; wrapping makes it pass either way. |
+| `docs/features/write-path.md`                                              | EDIT   | CI-forced: `createProfile`'s replay-first order (D2) and the a-1 sequence diagram (below).                                                                                                                                                                                                                                                                                                                                                                |
+| `docs/privacy/data-inventory.md`, `notice.md`                              | EDIT   | Inventory banner; §2: `client_id` leaves "no writer"; §3: names now **created** in the app. Notice _(privacy 1, 2)_: "Technical bits" (`:42-43`) — the per-item device identifier now also covers each athlete added; bump Last updated; regenerate `notice-content.ts`.                                                                                                                                                                                  |
+
+```mermaid
+sequenceDiagram
+  participant F as athlete-form (client)
+  participant A as addAthleteAction
+  participant D as createAthlete (DAL)
+  participant W as createProfile (packages/db)
+  F->>A: FormData {name, kind, clientId}
+  A->>A: sessionUserOrNull → checkMutationLimit → zod
+  A->>D: input
+  D->>D: getHouseholdScope() — null → no_household
+  D->>W: scope, input
+  W->>W: 1 profileByClientId (scoped) — found → ok, id
+  W->>W: 2 duplicate fold (a-1d)
+  W->>W: 3 insertProfileOwnedBy ON CONFLICT (client_id) DO NOTHING
+  W->>W: 4 re-select by client_id ∧ household ∧ live
+  W-->>A: ok, id | refused
+  A-->>F: redirect(athletePath(id), replace) | NO_ATHLETE_ADD
+```
+
+### PR a-1d — `feat/prof-1a-1d-duplicate-warning`
+
+| Path                                                           | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/profile.ts`                           | EDIT   | D2 step 2 in `createProfile`; `findNameMatch(exec, scope, folded, { exclude?, clientId })` (live **and** archived, not deleted), which **excludes any row whose `client_id` is the caller's own key** — so a concurrent same-key request that loses the race to step 1 but wins it to step 2 is not answered "duplicate" by the row its twin just inserted; it falls through to steps 3–4 and returns `{ ok, id }`. `updateProfileIdentity`'s caller path runs it excluding the athlete itself. |
+| `packages/db/scripts/verify.ts`                                | EDIT   | Appended: a replay of a **successful** add whose name now matches returns `ok` with the same id, not `duplicate` (correctness B1's regression); **insert a row, then run step 2 with the same `client_id` and the same name → no match** (the concurrent case); an archived `Zoë` matches `zoe`; rename to one's own name does not warn.                                                                                                                                                        |
+| `apps/web/lib/dal/profiles.ts`, `profile-actions.ts` (+ tests) | EDIT   | Thread `acknowledgedDuplicate` and the `duplicate` result.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/web/app/p/[profileId]/edit/athlete-form.tsx`             | EDIT   | The warning callout and its choices (D7), including **Restore {name}** for an archived match.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/web/e2e/athletes.spec.ts`                                | EDIT   | The warning keeps both fields filled (UX1 B1), "Add another" adds, "Restore" restores.                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Gated on AUTH-1 1c — what to re-verify
 
 AUTH-1 1a, 1b-bis and 1c-pre have shipped; **1b and 1c have not, and 1c is a one-way door**
-(`auth-1-clerk-google.md:1695-1700`). a-1, a-2 and b start only once 1c is **observed live**. At that
-point, before writing code, re-read and re-verify:
+(`auth-1-clerk-google.md:1695-1700`). a-r, b, a-1 and a-1d start only once 1c is **observed live**.
+Then, before writing code:
 
-1. **The boundary call.** 1c switches every action's first line from `hasGateAccess` to
-   `sessionUserOrNull()` and follows it with `checkMutationLimit(user.userId)` (`:1707`, `:1715`; Design
-   §2, §8). The new actions use exactly that pair, and `addAthleteAction` **must** be rate-limited — it is
-   the one endpoint that grows a table without bound. Confirm the enumeration test's `BOUNDARY_CALL` was
-   **switched, not widened** (`pages-are-gated.test.ts:211-217`).
-2. **The page check.** `requireGatedPage` → `requireSession` on `/p/new`, `/p/[id]/edit`, `/settings`, and
-   the test file's new name (`pages-need-a-session.test.ts`).
-3. **`getHouseholdScope()`'s five outcomes** (Design §3.2). `addAthleteAction` must refuse — never insert —
-   in every non-resolved state, including **C** (signed in, no membership) and **D** (ambiguous), and
-   `createProfile` must never be reachable with a scope minted outside `household.ts`. Re-read
-   `householdState()` and render the add tile only in state A.
-4. **No household creation.** Re-confirm Q5 held: no request path creates a household
-   (`:423-480`); PROF-1 adds profiles to an existing household only.
-5. **The ≥2-household alert** (Q5) exists, because from the moment household #2 is real, "add an
-   athlete" writes into a session-resolved household and `movements` remains the one carve-out.
-6. **Roles.** Who may add, rename and archive. beta-1 lists step-up only for delete
-   (`beta-1.md:425`); the spec's Q6 makes delete owner-only. If 1c ships a role on
-   `household_members`, the panel decides whether archive is owner-only too; this plan assumes **any
-   member** for add, rename and archive.
-7. **Sentry context.** 1c's AGENTS.md line says the app does not set `userId`/`householdId` context
-   (`:1720`); the new actions keep that, and pass no `formData`.
-8. **`p/page.tsx` and `p/[profileId]/page.tsx` are 1c files** (`:1708`, `:1711`): merge `main` and re-read
-   both before editing.
+1. **Boundary call:** `sessionUserOrNull()` then `checkMutationLimit(user.userId)` (`:1707`, `:1715`;
+   Design §2, §8). `addAthleteAction` grows a table without bound, so it must be limited. Confirm the
+   enumeration test was **switched, not widened** (`pages-are-gated.test.ts:211-217`, the pre-1c text).
+2. **Page check:** `requireSession()` on `/p/new`, `/p/[id]/edit`, `/settings`.
+3. **`getHouseholdScope()`'s five outcomes** (Design §3.2): add refuses with `NO_ATHLETE_ADD` in every
+   non-resolved state, and the tile renders only in state A (`householdState()`).
+4. **No household creation** (Q5, `:423-480`).
+5. **The ≥2-household alert** exists (Q5).
+6. **Roles.** Step-up is listed only for delete (`beta-1.md:425`); Q6 makes delete owner-only. This plan
+   assumes **any member** may add, rename, archive and restore; if 1c ships a role, the panel decides.
+7. **Sentry context** stays unset (`:1720`); no `formData`.
+8. **`p/page.tsx` and `p/[profileId]/page.tsx` are 1c files** (`:1708`, `:1711`): merge `main` first.
 
 ## Test plan
 
-**Boundary tests (AGENTS.md → Backend rules; every mutating action, verified by tests):**
+**Boundary tests (AGENTS.md → Backend rules):**
 
-| Case                                    | add                                                                                                                 | rename                                 | archive / restore                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| unauth → reject before any DAL call     | ✓ (from `MUTATING_ACTIONS`, never re-typed)                                                                         | ✓                                      | ✓                                                   |
-| wrong owner → same refusal as unknown   | n/a — instead: **no scope → refuse, no insert**                                                                     | foreign id → `NO_ATHLETE_SAVE`, 0 rows | foreign id → same, 0 rows                           |
-| bad body → zod field error, no write    | blank, 41 chars, newline, bad kind, missing/garbage `clientId`                                                      | same + garbage `profileId`             | garbage `profileId`                                 |
-| replay → one effect, identical response | same `clientId` twice → 1 row, same `savedId`                                                                       | same values twice → same state         | archive twice → archived once; restore twice → live |
-| duplicate name                          | warns once (`fieldErrors.name`), second submit with `acknowledgedDuplicate` succeeds; a **different** name re-warns | —                                      | —                                                   |
+| Case                                    | add (`household`)                                                                     | rename (`profile`)                     | archive / restore (`profile`)                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
+| unauth → reject before any DAL call     | central matrix (`MUTATING_ACTIONS`), `NO_ATHLETE_ADD`                                 | central matrix, `NO_ATHLETE_SAVE`      | central matrix                                                     |
+| wrong owner / no scope                  | household suite via `scopeMiss` → `NO_ATHLETE_ADD`, byte-identical; `refused` → same  | foreign id → `NO_ATHLETE_SAVE`, 0 rows | foreign id → same, 0 rows                                          |
+| bad body → zod reject, no write         | blank, 41 chars, newline, combining-only, bad kind, missing/garbage `clientId`        | same + garbage `profileId`             | garbage `profileId`                                                |
+| replay → one effect, identical response | same `clientId` → 1 row, same id (also after archive; also when the name now matches) | same values → same state               | archive twice → one row, **first date kept**; restore twice → live |
+| duplicate (a-1d)                        | warning, not `fieldErrors`; acknowledged → adds; changed name re-warns                | same, excluding itself                 | —                                                                  |
 
-Actions are tested as plain async functions with the DAL mocked (`actions.test.ts` idiom), plus an
-entry in `actions.test.ts`'s central matrix (WP-1a's union cross-check proves the module's exports equal the registry). `redirect` is mocked and asserted with
-`RedirectType.replace`, and asserted **not** called on any failure.
-
-**`db:verify` (PGlite):** the cases listed per PR above — all **appended** to the end of `verify.ts`.
-They run the real writers (`createProfile`, `updateProfileIdentity`, `setProfileArchived`) and the real
-`programDayRows` / `householdProfileRows`, so the proof covers the shipped SQL (write-path invariant 3).
-
-**Unit:** `foldName`; the shared schemas; `PROFILE_KIND_LABEL` exhaustive over `PROFILE_KINDS`;
-`ProfileTile` renders "Child"; the empty state renders no link; the criterion 47 tripwire.
-
-**e2e:** `pnpm e2e:local` before a-1, a-2 and b (each touches a flow the smoke covers). The axe scan
-gains each new route (unowned 8). Screenshots via the `ui-screenshot` skill at 390/820/1280 for the
-picker (empty and populated), `/p/new` (empty, error, duplicate warning), `/p/<id>/edit`, `/settings`
-(with and without archived).
-
-**Local:** `pnpm verify` (format → lint → typecheck → test → `db:verify` → `db:mutations` → …) and
-`pnpm guides:check` on every PR.
+Actions are plain async functions with the DAL mocked; `next/navigation` mocked and `redirect` asserted
+with `RedirectType.replace` on success only — for add, through the binding's `succeeded` predicate, which also asserts `revalidatePath(APP_HOME_PATH)` and `revalidatePath(SETTINGS_PATH)` ran before it. **`db:verify`** runs the real writers and queries, every new
+section appended after the existing assertions in its own throwaway household; **`db:mutations`** gains
+patches 06 and 07. **Unit:** `foldName`, the schemas, `PROFILE_KIND_LABELS` exhaustive, `readsHouseholdProgram`,
+the tile label, the empty state without a link. **e2e:** `pnpm e2e:local` before a-r, b, a-1, a-1d;
+NARROW overflow and link tap-target checks per new route; screenshots (`ui-screenshot`) at
+390/820/1280. **Local:** `pnpm verify` and `pnpm guides:check` on every PR.
 
 ## 360px width math
 
-Viewport 360 − `px-4` × 2 = **328px** content (the picker's shell, `p/page.tsx:31`).
+360 − `px-4` × 2 = **328px** content (`p/page.tsx:31`).
 
-- **Dashed tile:** 328 − `px-5` × 2 = 288; − avatar 56 − `gap-4` 16 = **216px** for "Add athlete"
-  (`text-lg`, ≈100px) and "A child, or yourself" (`text-sm`, ≈140px). Fits; at 200% text the sub-line
-  wraps inside the 216px column, and the tile grows (`min-h-24`, not `h-24`).
-- **Kind radios:** two labels side by side, (328 − `gap-2` 8) / 2 = **160px** each, `min-h-11`. At 200%
-  text "Child" ≈ 2 × 40px + the 20px radio + padding fits; the row is `flex-wrap` with
-  `min-w-[8rem]` labels so it stacks rather than overflows.
-- **Settings athlete row:** card `px-4` → 296px. Name on its own line (`overflow-wrap:anywhere`,
-  `min-w-0`, so a 40-character name wraps — U27/A11Y-9); buttons below: Edit (≈64) + Archive (≈88) +
-  `gap-2` = **160px**, leaving 136px for A3's "Delete…" (≈84) later. Each `min-h-11`.
-- **Archived row:** 296 − Restore (≈88) − gap 8 = **200px** for the name and "· history kept", which wraps.
-- **Name input:** full width, `text-base` (16px — iOS does not zoom a focused input at ≥16px).
+- **Dashed tile:** 328 − `px-5` × 2 = 288 − avatar 56 − `gap-4` 16 = **216px** for "Add athlete"
+  (≈100px) and "A child, or yourself" (≈140px). The tile grows (`min-h-24`).
+- **A 40-character unbroken name in a tile:** 216px at `text-lg` holds ≈18 characters, so it breaks
+  across 3 lines with `overflow-wrap:anywhere` + `min-w-0`; without them it overflows by ≈280px — the
+  reason for D11.
+- **Kind radios:** (328 − 8) / 2 = **160px** each, `min-h-11`; `flex-wrap` with `min-w-[8rem]` so 200%
+  text stacks.
+- **Duplicate callout choices:** "Add another {name}" can be ~40 characters; buttons are full-width and
+  stacked (`CTA_CLASS`, `constants.ts:100`), never side by side.
+- **Settings athlete row:** card `px-4` → 296px; name on its own line; Edit (≈64) + Archive (≈88) + gap =
+  **160px**, leaving 136px for A3's "Delete…" (≈84).
+- **Archived row:** Restore (≈88) and Download history (≈150) do not fit beside a name in 296px; they
+  sit on their own line below it, wrapping (88 + 8 + 150 = 246 ≤ 296).
 
 ## Risks / rollback
 
-| Risk                                                                                                                               | Mitigation                                                                                                                                                                                                                                |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **An adult is created before the guard is live** and sees (and logs against, and exports) the kids' program                        | a-g is its own PR and a-1's gate says **deployed**, not merged. a-1's PR body links the a-g deploy.                                                                                                                                       |
-| **A replay mints a second athlete** (double tap, flaky network, an archive in between)                                             | `client_id` + **non-partial** UNIQUE + `ON CONFLICT DO NOTHING`; `db:verify` proves replay-after-archive and replay-after-delete keep the slot. The form keeps one `clientId` per mount, including across the duplicate-warning resubmit. |
-| **A crafted `clientId` that belongs to another household** returns that household's athlete                                        | The re-select is scoped (`inHousehold`) and returns `null` → refusal; `db:verify` case. The `client_id` never leaves the server, so guessing one is the only route.                                                                       |
-| **Archive drops the export path** (a parent archives, then cannot get the data)                                                    | `archived_at` is deliberately **not** in `isLiveProfile`; `db:verify` asserts an archived profile resolves and its months export. Notice + inventory say so.                                                                              |
-| **D3 lands and archive leaves athletes "on" programs** (criterion 47)                                                              | The tripwire test in `packages/db` fails the build the moment `schema.programAssignments` exists without `profile.ts` touching it.                                                                                                        |
-| **The dashed border is invisible** — the app's `border` token measures 1.26:1 and fails SC 1.4.11 (`picker-empty-state.tsx:15-18`) | The tile's text identifies it, so the border is not the only cue; still, the UX panel picks a `foreground`-mix value and the token-sets page measures it in both themes (the inventory edit above).                                       |
-| **Names are personal data, and many are children's**                                                                               | Never in Sentry (no `formData`, `actions.ts:60-67`), never in a CSV (`data-inventory.md:278`), never in a log line; inventory §3 lists the new free-text box.                                                                             |
-| **The e2e DB accumulates athletes** across runs of `add-athlete.spec.ts`                                                           | Run-scoped unique names; tiles append at the end (`asc(id)`), so indexed tiles are stable; PR b's spec archives what it added.                                                                                                            |
-| **The ramp schedule is later filled** and every household's kids get one family's targets (D7)                                     | Recorded in `write-path.md` Traps by a-1; not this plan's fix.                                                                                                                                                                            |
-| **"LLM never authors loads"**                                                                                                      | Untouched: nothing here writes or reads a load; the guard only **removes** prescribed text from an adult's surfaces.                                                                                                                      |
-| **CSV byte-faithfulness**                                                                                                          | Names are not exported; archive changes no query; the guard changes `prescribed` only for `kind = adult`, of which none is live (Q15). `db:verify`'s existing kid assertions and the e2e export spec pin a kid's bytes unchanged.         |
+| Risk                                                                                             | Mitigation                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| An adult (new, or a kid flipped by rename) sees the kids' program                                | a-g is deployed before a-r; the rule lives once (`readsHouseholdProgram`); mutation patch 06 proves the conjunct is tested.                    |
+| A kind flip silently rewrites past `prescribed` cells                                            | Stated on the edit form, in `programming.md`, and proved by the flip case.                                                                     |
+| A replay mints a twin, or a replay of a success is answered "duplicate"                          | Non-partial UNIQUE; replay-first in one `packages/db` function (D2); `db:verify` + DAL order test.                                             |
+| A crafted key returns another household's athlete                                                | Scoped lookup and re-select; patch 07 proves the conjunct is tested; `refused` is byte-identical to the unauth refusal.                        |
+| Archive drops the export path                                                                    | `archived_at` not in `isLiveProfile`; `db:verify`; Download history on the archived row; notice says so.                                       |
+| A replay of "archive" lands after Undo                                                           | **Accepted** (D3): rare, visible, one tap to restore.                                                                                          |
+| Assignments stay open on archive after D3                                                        | ASSIGN-1 D-5 owns it (`assign-1-assignments.md:111-119`, `:736`); the seam docblock names it.                                                  |
+| A long name breaks a 360px layout                                                                | D11 on every name renderer; NARROW e2e across four routes.                                                                                     |
+| The dashed border fails SC 1.4.11 (the `border` token is 1.26:1, `picker-empty-state.tsx:15-18`) | A measured foreground mix, scanned on `/design/tokens`; the text also identifies the tile.                                                     |
+| Names (often children's) leak                                                                    | Never in Sentry, a CSV (`data-inventory.md:278`) or a page title; inventory §3.                                                                |
+| The notice goes stale                                                                            | a-r, b and a-1 each edit `notice.md`, regenerate, bump the date; the maintainer re-signs as a PR gate.                                         |
+| The ramp schedule is filled and every household's kids get one family's targets                  | `write-path.md` Traps (D10); not this plan's fix.                                                                                              |
+| "LLM never authors loads"; CSV byte-faithfulness                                                 | Nothing here writes a load. Names are not exported; archive changes no query; the guard changes `prescribed` only for adults, none live (Q15). |
 
-**Rollback.** a-0 is additive and dark: revert the app code, leave the columns (forward-only; never edit
-the applied migration). a-g reverts cleanly (one predicate, one page line). a-1/a-2/b revert as code; rows
-they created stay valid profiles (they are ordinary rows with a `client_id`), and an archived athlete is
-restorable by reverting to a build that has Restore or by a guarded correction setting `archived_at = NULL`.
+**Rollback.** a-0 is additive and dark: revert code, keep the columns (never edit an applied
+migration). a-g reverts cleanly. a-r/b/a-1/a-1d revert as code; rows they created are ordinary profiles;
+an archived athlete is restorable by a build with Restore or a guarded correction.
 
 ## Out-of-scope / deferred
 
-- **A3 — delete an athlete** _[later]_. Sketch only, so nothing here blocks it: a "Delete…" button in the
-  settings athlete row (room budgeted in the width math), a flow at `/settings/athletes/<id>/delete`
-  (prototype `vDel`, `:2306`) offering export (naming what it leaves out — `notice.md:163-165`), archive,
-  then typed-name confirm matched with `foldName` (SUX-9) and a fresh step-up; the delete itself is
-  PRIV-3's runner (the runbook's statements as code) plus a ledger entry, owner-only (Q6), with the 7-day
-  pause decided by Q11 and `notice.md` updated in the same PR. Gated on A2, PRIV-3's runner and Beta 1
-  step-up. Nothing in this plan writes `deleted_at` on a profile.
-- **The add flow's last step** ("Put {name} on a program?", "No program yet") — ASSIGN-1 (D4b).
-- **Closing assignments on archive** — D3 has not created the table; the tripwire hands it over.
-- **Avatars, birthdate, PIN** — `profiles.avatar`/`birthdate`/`pin_hash` stay unwritten
-  (`data-inventory.md:179-181`); a writer for any of them is re-review trigger 3.
-- **Ramp-target expansion on create** — D7.
-- **The rest of Household settings** (Programs, Movements) — their chunks add their rows.
-- **Duplicate warning on rename** — see Open question 2.
-- **Reordering athletes** — tile order stays creation order (`household-profiles.ts:31-32`).
+- **A3 — delete an athlete** _[later]_. Sketch: "Delete…" in the settings row (room budgeted above), a
+  flow at `${SETTINGS_PATH}/athletes/<id>/delete` (prototype `vDel`, `:2306`) offering export (naming what
+  it leaves out, `notice.md:163-165`), archive, then a typed name matched with `foldName` (SUX-9) and a
+  fresh step-up; PRIV-3's runner plus a ledger entry; owner-only (Q6); the pause per Q11, with
+  `notice.md` in the same PR. Gated on A2, PRIV-3's runner and Beta 1 step-up.
+- **The add flow's last step** and "No program yet" — ASSIGN-1 (D4b).
+- **Closing assignments on archive** — ASSIGN-1 D-5.
+- **Avatars, birthdate, PIN** — stay unwritten (`data-inventory.md:179-181`).
+- **Ramp-target expansion on create** — D10.
+- **Programs and Movements in settings** — their chunks append rows (D9).
+- **Reordering athletes** — creation order stays (`household-profiles.ts:31-32`).
+- **Moving `mutating-actions.ts` / `action-state.ts`** out of `[profileId]/` — after 1c (D5).
 
 ## Open questions
 
-1. **An archived athlete's own page.** The picker hides them, but a bookmarked tablet can still open
-   `/p/<id>`. Recommendation: render the page with a notice and the forms off (`writable && !archived`),
-   keep the export link, and **do not** add an archived check to the seven existing actions (archive is
-   not a security boundary, and touching `actions.ts` re-opens the collision D4 avoids). Alternative:
-   404 it — rejected, since the export must stay reachable (criterion 5). _For the UX panel._
-2. **Rename and duplicates.** IXD-7 reads "duplicate names warned, archived included, and a blank rename
-   refused"; the prototype warns only on add (`:5056-5066`) and checks only blank on edit (`:5076-5081`).
-   This plan follows the prototype. _For the maintainer._
-3. **Archive authority after AUTH-1.** Any member, or owner only? (Re-verify item 6.)
-4. **The adult's day-role label and form default** (D3, beyond the spec's FE-5 list). Recommended in;
-   _for the engineering panel_.
-5. **beta-1 vs the spec on archive's release.** `beta-1.md:65` and `:419` put "rename + archive" in
-   Beta 1; the spec puts rename in A1 and says A2 "ships in Beta 0 beside A1" (PM-6), while its
-   disagreement 1 says "beta-1's Beta 0 / Beta 1 split stays the release cut". The spec contradicts
-   itself; this plan stages b to ship whenever it is ready, and the milestone doc settles the release.
+1. **An archived athlete's own page** — recommended: notice + forms off, export link kept, no new check
+   in the existing actions (archive is not a security boundary). _For the UX panel's re-review._
+2. **Archive authority after AUTH-1** — any member, or owner only? (Re-verify item 6.) _For the
+   maintainer._
+3. **The notice wording** in a-r, b and a-1 needs the maintainer's re-sign before each merges.
+
+_Closed by round 1:_ rename duplicates (the same check, excluding itself — D7); the adult's role label
+and default (accepted into a-g — D4); archive's release (the milestone puts PROF-1b in **Beta 0**,
+`docs/milestones/crud-1-fix-it-yourself.md:88`, `:97`; `beta-1.md:419`'s Beta 1 placement and the
+spec's disagreement 1 should be updated when `plan.md` opens).
 
 ## Review-response log
 
-_Pending: engineering panel + UX panel (round 1)._
+### Engineering panel, round 1
+
+| #     | Lens          | Finding                                                                                                         | Verdict  | Resolution                                                                                                        |
+| ----- | ------------- | --------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| B1    | correctness   | **BLOCKING.** Duplicate check before insert: a replay of a successful add is answered "duplicate" (criterion 3) | accepted | D2: `client_id` lookup first, in one `packages/db` function; `db:verify` regression case in a-1d; DAL order test. |
+| B2    | correctness   | **BLOCKING.** Add's refusals were three shapes (unauth, no scope, foreign key)                                  | accepted | One `NO_ATHLETE_ADD`, byte-identical for all three; `refused` maps to it (D5).                                    |
+| S3    | correctness   | Add's binding needs a scope-miss path                                                                           | accepted | `scope: 'household'` with `scopeMiss` (WP-1).                                                                     |
+| S4    | correctness   | Re-archive overwrote the archive date                                                                           | accepted | `COALESCE(archived_at, now())` + replay test; replay-after-Undo recorded as accepted risk (D3).                   |
+| S5    | correctness   | Kind is read at export time, so a flip rewrites history                                                         | accepted | Invariant, flip case, edit-form line (D4, D7).                                                                    |
+| S6    | correctness   | The guard had only a negative proof                                                                             | accepted | Positive and negative on the same block, plus mutation patch 06.                                                  |
+| S7    | correctness   | e2e not retry-safe                                                                                              | accepted | Per-attempt names, exact locators, cleanup in `afterEach`.                                                        |
+| N     | correctness   | Interior whitespace not normalised                                                                              | accepted | Collapsed in the schema (D11).                                                                                    |
+| S1    | scope         | Add shipped before any exit (rename/archive)                                                                    | accepted | Reordered: a-0, a-g, a-r, b, a-1, a-1d.                                                                           |
+| S2    | scope         | The criterion 47 tripwire is machinery for another plan's job                                                   | accepted | Dropped; seam docblock pointing at ASSIGN-1 D-5.                                                                  |
+| N1–N5 | scope         | Pre/post-1c names mixed; criterion numbers; per-PR status lines; line counts; OQ5                               | accepted | Post-1c names only; spec numbers, 41 and 47 in full; one staging line; recounted; OQ5 closed on the milestone.    |
+| B1    | architecture  | **BLOCKING.** A second registry beside WP-1's                                                                   | accepted | `app/p/profile-actions.ts`, `{ refusal, scope }`, bindings (D5); gate "WP-1 merged".                              |
+| S2    | architecture  | The kid rule in two places                                                                                      | accepted | `readsHouseholdProgram` in shared (D4).                                                                           |
+| S4    | architecture  | `/settings` ownership undefined                                                                                 | accepted | D9; no guide yet, with the reason.                                                                                |
+| S5    | architecture  | AGENTS.md's `client_id` line contradicts D1                                                                     | accepted | Amended in a-0, with the skill pointer.                                                                           |
+| N     | architecture  | `action-state.ts` placement; a sequence diagram; `updateProfileRoutine`                                         | accepted | D5 note; diagram under a-1; write-path note.                                                                      |
+| B2    | reuse         | **BLOCKING.** The kid rule duplicated (query + page)                                                            | accepted | As architecture S2.                                                                                               |
+| S1    | reuse         | Separate registry / refusal copies                                                                              | accepted | WP-1 registry; two named refusals.                                                                                |
+| S2    | reuse         | Path strings rebuilt                                                                                            | accepted | `athletePath`, `athleteEditPath` from `APP_HOME_PATH`.                                                            |
+| S3    | reuse         | Paraphrased criteria                                                                                            | accepted | Spec numbers and text.                                                                                            |
+| S4    | reuse         | Settings as an append point                                                                                     | accepted | D9.                                                                                                               |
+| N2    | reuse         | `PROFILE_KIND_LABEL` singular against the repo's plural maps                                                    | accepted | `PROFILE_KIND_LABELS`.                                                                                            |
+| —     | reuse (orch.) | Three folds across PROF-1, PICK-1, MOV-1                                                                        | accepted | One `foldName`, created in a-r, NFKD with the reason and pinned cases (D11).                                      |
+| S1    | db-safety     | One-sided kind proof                                                                                            | accepted | As correctness S6.                                                                                                |
+| S2    | db-safety     | Migration order vs B0 unstated; V1-24 1d already shipped                                                        | accepted | [Migration order](#migration-order): the second regenerates from fresh `main`; 1d dropped.                        |
+| S3    | db-safety     | Archive replay                                                                                                  | accepted | COALESCE.                                                                                                         |
+| N1    | db-safety     | "Applied in prod" undefined                                                                                     | accepted | `information_schema` / `pg_indexes` checks; `runbooks.md:116`.                                                    |
+| N2–N4 | db-safety     | `expectRejectedBy`; shared fixtures; the skill pointer                                                          | accepted | All in a-0.                                                                                                       |
+| —     | db-safety     | Re-select's household conjunct untested                                                                         | accepted | Mutation patch 07.                                                                                                |
+| 1, 2  | privacy       | Notice not edited for the third free-text box and the device identifier                                         | accepted | a-r and a-1 notice edits; regenerate; date bump; re-sign gate.                                                    |
+| 3     | privacy       | An archived athlete's data has no visible way out                                                               | accepted | Download history on the archived row.                                                                             |
+| 4–6   | privacy       | Archive retention, authority and "does not hide" unsaid                                                         | accepted | PR b's notice edits.                                                                                              |
+| 7     | privacy       | Inventory banner lines; line cites rot                                                                          | accepted | Banner line per PR; symbol cites in the inventory.                                                                |
+| —     | privacy       | (author's pushback, none)                                                                                       | —        | No finding was contradicted by the code.                                                                          |
+
+### UX panel, round 1
+
+| #          | Lens                 | Finding                                                                                                                                | Verdict  | Resolution                                                                                                                                                      |
+| ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1         | 1 interaction        | **BLOCKING.** Uncontrolled fields empty under the duplicate warning (`write-path.md:341`)                                              | accepted | Controlled state incl. `clientId`/`acknowledgedDuplicate`; e2e keeps the fields (D7).                                                                           |
+| B2         | 1 interaction        | **BLOCKING.** Add before any way to fix or retire                                                                                      | accepted | Reordered staging.                                                                                                                                              |
+| S3         | 1 interaction        | Kind's consequence invisible                                                                                                           | accepted | Hint, changed-kind line, adult day-page line.                                                                                                                   |
+| S4         | 1 interaction        | Rename's return and history                                                                                                            | accepted | Allowlisted `from`, `router.back()` in an effect, no replace duplicate (D6).                                                                                    |
+| S5         | 1 interaction        | Duplicate shown as an error                                                                                                            | accepted | Warning callout, explicit choices.                                                                                                                              |
+| S6         | 1 interaction        | Empty-state copy unwritten                                                                                                             | accepted | Written in a-1.                                                                                                                                                 |
+| S7         | 1 interaction        | Archive island, Undo, focus                                                                                                            | accepted | One page-level island using the shared `UndoLine` + `Announcer` (PR b builds both for the other plans; spec seams table); effect-based focus; e2e archive→Undo. |
+| S8         | 1 interaction        | Rename skipped the duplicate check                                                                                                     | accepted | Same check, excluding itself.                                                                                                                                   |
+| B1         | 2 a11y + 360px       | **BLOCKING.** Long names overflow at 360px                                                                                             | accepted | D11 on every renderer; NARROW e2e with a 40-character name across four routes.                                                                                  |
+| 2, 3, 5, 7 | 2 a11y + 360px       | Per-route overflow/tap tests; back links 44px; settings Edit semantics; result announcements; radio focus/checked; input class; titles | accepted | All in the file tables (D7, D8).                                                                                                                                |
+| 4          | 2 a11y + 360px       | Warning tied by `aria-invalid`                                                                                                         | accepted | `aria-describedby`, no `aria-invalid`.                                                                                                                          |
+| 6          | 2 a11y + 360px       | Live region mounted with its text                                                                                                      | accepted | Persistent region in the island.                                                                                                                                |
+| B1         | 3 trust + data entry | **BLOCKING.** Kind asks a parent to choose without saying what it changes                                                              | accepted | As UX1 S3.                                                                                                                                                      |
+| 2          | 3 trust + data entry | An archived duplicate should offer Restore first                                                                                       | accepted | "Restore {name}" primary.                                                                                                                                       |
+| 3, 4       | 3 trust + data entry | Warning copy; rename duplicates                                                                                                        | accepted | D7.                                                                                                                                                             |
+| 5          | 3 trust + data entry | Archived athletes' data out                                                                                                            | accepted | Download history.                                                                                                                                               |
+| 6          | 3 trust + data entry | Archived athletes invisible from the picker                                                                                            | accepted | Archived count on the settings row.                                                                                                                             |
+| N7         | 3 trust + data entry | Archive date on replay                                                                                                                 | accepted | COALESCE.                                                                                                                                                       |
+
+**Pushbacks:** none. Every finding was checked against the cited code; none was contradicted by it.
+
+### Re-review (round 2)
+
+8 of 9 round-1 blockers confirmed resolved; the remaining one and three new items:
+
+| #   | Severity | Finding                                                                                         | Verdict  | Resolution                                                                                                                                      |
+| --- | -------- | ----------------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | BLOCKING | `addAthleteAction` redirects, so WP-1's "valid body succeeds" (default `result.ok`) cannot pass | accepted | Add's binding carries WP-1's optional `succeeded(result, mocks)`, asserting the replace redirect to `athletePath(id)` (D6, a-1 row, Test plan). |
+| 2   | SHOULD   | Concurrent same-key requests: step 2 can match the twin's fresh row and answer "duplicate"      | accepted | `findNameMatch` excludes rows carrying the caller's `client_id`; `db:verify` insert → step 2 with the same key → no match (a-1d).               |
+| 3   | SHOULD   | Add did not revalidate before redirecting                                                       | accepted | `revalidatePath(APP_HOME_PATH)` and `(SETTINGS_PATH)` before `redirect`, asserted in `succeeded`.                                               |
+| 4   | NIT      | Full-width `foldName` case unpinned                                                             | accepted | `Ｚｏｅ` → `zoe` pinned (D11).                                                                                                                  |

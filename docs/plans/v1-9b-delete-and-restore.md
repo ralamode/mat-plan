@@ -2,320 +2,298 @@
 
 > Backlog: [plan.md](../plan.md) row `V1-9b` (`plan.md:115`) · Spec:
 > [crud-1-fix-it-yourself.md](../specs/crud-1-fix-it-yourself.md) chunks **B0, B1, B2** · Milestone:
-> [CRUD-1](../milestones/crud-1-fix-it-yourself.md) _(the milestone file is written after the spec's
-> sign-off, sequence step 5)_ · Branches: `db/v1-9b-0-client-id-arbiters`,
-> `feat/v1-9b-1-hide-restore` (three PRs, suffixed `-1a`/`-1b`/`-1c`), `feat/v1-9b-2-clear-day`.
+> [CRUD-1](../milestones/crud-1-fix-it-yourself.md) · Branches: `db/v1-9b-0-client-id-arbiters`,
+> `feat/v1-9b-1-1-hide-core`, `feat/v1-9b-1-2-entry-actions`, `feat/v1-9b-1-3-hide-ui`,
+> `feat/v1-9b-2-clear-day`.
 >
 > Contract: [ADR 0008](../decisions/0008-deletion.md) (signed 2026-10-18), read in full. Prototype:
 > [`docs/prototypes/crud-1/index.html`](../prototypes/crud-1/index.html) v9 (the maintainer approved
-> v8, M32; v9 changes only target fields), screens **`day`**, **`day-slot`**, **`day-clear`**.
+> v8, M32; v9 changes only target fields), screens **`day`**, **`day-slot`**, **`day-clear`**. Seams:
+> the spec's "Seams the plans settled (2026-10-23)" (`crud-1-fix-it-yourself.md:525-547`) and
+> [WP-1](./wp-1-shard-actions.md).
 
 ## Goal
 
 A person who mis-logs something can remove it from the day themselves, see that it was removed, put
-it back for a bounded window, and clear a whole day behind a typed confirm — without the maintainer
-running `db:correct`. It closes the "deleted" half of Beta 1's exit box _"Every logged thing can be
-corrected or deleted in the app"_ (`beta-1.md:441`) and makes the published notice's _"per-item
-deletion is being built"_ (`docs/privacy/notice.md:136-152`) a description of what was built.
+it back, and clear a whole day behind a typed confirm — without the maintainer running `db:correct`.
+It closes the "deleted" half of Beta 1's exit box _"Every logged thing can be corrected or deleted in
+the app"_ (`beta-1.md:441`) and turns the published notice's _"per-item deletion is being built"_
+(`docs/privacy/notice.md:136-152`) into a description of what was built.
 
 ADR 0008 fixes the meaning: a Delete **hides from the whole household**, is **restorable until it is
-purged at `N`**, restore is **fallible** with a typed `slot_taken` refusal, clear-a-day restores as
-**one** event, the grain is the **entry**, and the freed `client_id` is a migration owed before the
-first volume write of `deleted_at`. This plan does not reopen any of that; it builds it.
+purged**, restore is **fallible** with a typed `slot_taken` refusal, clear-a-day restores as **one**
+event, the grain is the **entry**, and the freed `client_id` is a migration owed before the first
+volume write of `deleted_at`. This plan builds that; it does not reopen it.
 
-**Decided by the maintainer and binding here:** logs are shown **in place, in their own section**;
-there is no "Logged entries" list (criterion 48, M26, disagreement 12). Delete, the in-place Undo and
-Restore act on the row where it sits, and the Hidden bar lists only what was hidden **before the page
-loaded** (IXD-2, criterion 10).
+**Binding decisions from the maintainer:** logs are shown **in place, in their own section**, with no
+"Logged entries" list (criterion 48, M26, disagreement 12). Delete, the in-place Undo and Restore act
+on the row where it sits. The Hidden bar lists only what was hidden **before the page loaded** (IXD-2,
+criterion 10).
 
-## Where the gates stand today (measured on this branch, 2026-10-23)
+**Restore window: one clock, and it starts with the purge** _(orchestrator decision A, round 1)_. ADR
+0008 decision 2 says _"The restore window is the purge window … One number, not two."_ Until PRIV-3's
+purge job is **live**, nothing removes a hidden row, so nothing here enforces a window: a hidden item
+stays restorable until it is removed, and the bar says **"Restorable until removed"**. The purge PR
+brings `N`, the window, and the dated "restorable until {date}" copy **together**. So `N` gates no
+V1-9b PR.
 
-| Gate (spec chunk table)                          | State                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **V1-24 1e lands before B1**                     | ✅ **Already met.** 1d is `9336554` (#210, migration `0012_bodyweight_one_per_day.sql`), 1e is `b625a23` (#214), 3a is `bb56c62` + `cefd500` (#211, #212), all on `origin/main`. The spec still lists 1d and 1e as future work (see [Contradictions](#contradictions-with-the-spec-and-the-rows)).                                                                            |
-| **B0 before any B1 code**                        | Not started. Serial with AUTH-1 1b by migration number: AUTH-1's plan claims `0019` for `household_members` (`docs/plans/auth-1-clerk-google.md:833`); the last migration on main is `0018_ten2d_validate_global_row_has_pattern.sql`. B0 takes the next free number at merge time.                                                                                           |
-| **AUTH-1 1c observed live**                      | Not shipped (1a, 1b-bis, 1c-pre have; 1b, 1c, 1d have not). **1c is a one-way door.** B1-2 and B1-3 wait for it; B0 and B1-1 do not (they touch no AUTH-1 file).                                                                                                                                                                                                              |
-| **PRIV-3's plan has chosen `N`**                 | 🔴 **Not met, and nothing has started it.** `docs/plans/` has no PRIV-3 plan; the row (`plan.md:1735-1770`) says `N` is "bounded below by the restore window … this row's plan sets **both, together**". Every PR from B1-1 on reads `N` as a constant, so **B1-1 is blocked on that number, not on code**. The spec already calls this the milestone's critical path (PM-9). |
-| **V1-24 3b** (removes the "Logged entries" list) | Not shipped; no file-by-file exists yet (the V1-24 plan defers it: `docs/plans/v1-24-form-is-the-day.md:206-208`). Both 3b and B1-3 edit `apps/web/app/p/[profileId]/page.tsx` and `movement-line.tsx`, so they serialize under parallel-work gate 1. **This plan handles both orders** — see [Both orders against V1-24 3b](#both-orders-against-v1-24-3b).                  |
-| Prod already holds hidden rows                   | Yes. The V1-24 1c correction soft-deleted two weigh-ins (`packages/db/scripts/corrections/registry.ts:214-217`; `docs/runbooks.md:62`). So B0's prod proof is **not vacuous**, and the claim "nothing writes `deleted_at`" is true of shipped **app code** only.                                                                                                              |
+## Where the gates stand (measured on this branch, 2026-10-23)
+
+| Gate                                         | State                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **V1-24 1e lands before B1**                 | ✅ **Already met.** 1d is `9336554` (#210, migration `0012_bodyweight_one_per_day.sql`), 1e is `b625a23` (#214), and 3a is `bb56c62` + `cefd500` (#211, #212). All are on `origin/main`. The spec still lists 1d and 1e as future work (Contradiction 1).                                                                                                                                                                 |
+| **B0 before any write of `deleted_at`**      | Not started. B0 and AUTH-1 1b are serial by migration **number**: AUTH-1 claims `0019` (`auth-1-clerk-google.md:833`), and the last migration on main is `0018`. B0 is also **serial on `write-path.md`** with AUTH-1 1b and 1c. B0 edits that guide (invariant 6), and so do they. Under parallel-work gate 1, two tracks under one guide collide even when their code files differ (AGENTS.md → Git & branch workflow). |
+| **AUTH-1 1c observed live** (a one-way door) | Not shipped. B1-2 waits for it: its actions start from 1c's `sessionUserOrNull()` + `checkMutationLimit` (`auth-1-clerk-google.md:657-663`). B1-1 touches no file in 1c's table (`:1704-1715`), but it does edit `write-path.md`, so it **serializes after 1c** on the guide.                                                                                                                                             |
+| **PRIV-3 / `N`**                             | **Gates nothing here** (decision A). PRIV-3 has no plan yet (`plan.md:1735-1770`). This plan sets **three requirements on PRIV-3's purge PR** (see [Requirements this plan places on PRIV-3](#requirements-this-plan-places-on-priv-3)).                                                                                                                                                                                  |
+| **V1-24 3b merged**                          | **B1-3 is gated on it** _(decision D)_. 3b removes the Logged-entries list and gives each entry its section. B1-3 then puts Delete on the row in that section. 3b and B1-3 both edit `page.tsx` and `movement-line.tsx`. The milestone gets the edge `E3b → B1-3`.                                                                                                                                                        |
+| Prod already holds hidden rows               | Yes. The V1-24 1c correction soft-deleted two weigh-ins (`packages/db/scripts/corrections/registry.ts:214-217`; `docs/runbooks.md:62`). So B0's prod read is **not vacuous**, and "nothing writes `deleted_at`" is true only of shipped **app code**.                                                                                                                                                                     |
 
 ## Staging
 
-Five PRs. One migration (B0), in its own PR, never sharing review with a UI PR.
+Five PRs. B0 holds the one migration, in its own PR, and never shares a review with a UI PR.
 
-| PR       | What                                                                                                                                                                                                              | ~lines (hand-written, tests incl.) | Gate                                                                                                                                                                       |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B0**   | The prod read (aggregate counts, committed in the PR), then **one migration** making the five `client_id` UNIQUEs non-partial; schema, `db:verify` proof of criterion 9, a mutation patch, docs whose claims flip | ~170                               | The read returns zero duplicate `client_id`s (any liveness) in all five tables, re-run immediately before merge; AUTH-1 1b's migration numbered first if it is ready first |
-| **B1-1** | `packages/` only: shared schemas + `HIDDEN_RESTORE_DAYS`; the hide/restore writer; the day-scoped hidden read; the replay-of-hidden outcomes in the two create writers; `db:verify` proofs                        | ~390                               | B0's `migrate.yml` run green **on B0's merge SHA** (the `runbooks.md:63` "check both" rule); **`N` chosen**                                                                |
-| **B1-2** | `apps/web`: DAL wrappers + DTOs, two Server Actions, `MUTATING_ACTIONS`, boundary tests; `data-inventory.md` §1/§5                                                                                                | ~330                               | B1-1 + **AUTH-1 1c observed live** (the actions start from 1c's `sessionUserOrNull()` + `checkMutationLimit`)                                                              |
-| **B1-3** | The UI: Delete on each row, the in-place Undo line, the Hidden bar, the `slot_taken` refusal and "Keep X instead", "Also hidden"; **`notice.md`**; §4/§6/§8 of the inventory; e2e + a11y scan                     | ~400                               | B1-2; UX panel round on this plan; **merge B1-2 and B1-3 within days of each other** (B1-2 is reachable by a crafted POST, see Risks)                                      |
-| **B2**   | Clear a day: typed `delete`, one transaction, restores as one event — reusing B1's writer, read and Hidden bar                                                                                                    | ~230                               | B1-3                                                                                                                                                                       |
+| PR       | What                                                                                                                                                                                                                                                      | ~lines | Gate                                                                                                                                                                                                |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B0**   | The prod read (aggregate counts only), then **one migration** making the five `client_id` UNIQUEs non-partial. Schema, `db:verify` proof of criterion 9, mutation 07, the docs whose claims flip, the ERD.                                                | ~190   | The read returns zero duplicates in all five tables, re-run just before merge. Migration number taken at merge (journal `when` must increase). Serial with AUTH-1 1b on `write-path.md`.            |
+| **B1-1** | `packages/` only. The shared schemas. The `hideEntries`/`restoreHidden` writer. The check-in/life insert moved into `packages/db/src/writers/` with a typed own-hidden result. The day-scoped hidden read. The `db:verify` proofs.                        | ~390   | B0's migration **observed in prod**: `migrate.yml` is green on B0's merge SHA **and** `pg_indexes.indexdef` for the five indexes in prod has no `WHERE`. Serial after AUTH-1 1c on `write-path.md`. |
+| **B1-2** | `apps/web`. `entry-actions.ts` (hide + restore over one private `runHide`), registered in WP-1's matrix. The DAL wrapper (`listDayWithHidden`). The life/check-in mapping and the `LifeButton` key fix. `data-inventory.md` §1/§5.                        | ~350   | B1-1, and AUTH-1 1c observed live.                                                                                                                                                                  |
+| **B1-3** | The UI under `app/p/[profileId]/hidden/`. Delete on each row, the shared Undo line, the Hidden bar, the `slot_taken` refusal and "Use {value} instead", "Hidden on other days". **`notice.md`**, inventory §4/§6/§8, the new feature guide, e2e and a11y. | ~400   | B1-2, **V1-24 3b merged**, and the UX panel reconciled on this plan. Merge it right after B1-2 (Risks: crafted POST).                                                                               |
+| **B2**   | Clear a day. Typed `delete`, through the same `runHide`, so it is one transaction and one bar event, "Cleared this day · n items".                                                                                                                        | ~230   | B1-3.                                                                                                                                                                                               |
 
-**Why B1 is three PRs, not one.** Priced as one it is ~1,100 lines across three packages, the size the
-V1-24 panel split into seven (`v1-24-form-is-the-day.md:172`). The split follows the seams the repo
-already has: `packages/db` (proved by `db:verify` on PGlite, no app), the app's write boundary (proved
-by `actions.test.ts`), and the screen (proved by Playwright). B1-1 is also the only part of B1 that
-can land **before AUTH-1 1c** — it touches no file in 1c's table (`auth-1-clerk-google.md:1704-1715`).
+**Why B1 is three PRs.** As one PR it is ~1,100 lines across three packages, the size the V1-24 panel
+split into seven (`v1-24-form-is-the-day.md:172`). The split follows the seams the repo already has:
+`packages/db` (proved by `db:verify` on PGlite), the write boundary (`entry-actions.test.ts`), and the
+screen (Playwright).
 
 ## Acceptance
 
 From the backlog row (`plan.md:115`), verbatim: _"Delete a mistaken entry → gone from Today; 'Clear
 day' → type 'delete' → the day empties."_
 
-Spec criteria this plan carries (text in [the spec](../specs/crud-1-fix-it-yourself.md) → Acceptance;
-each line names the PR that carries its test):
+Spec criteria carried. The text is in the spec → Acceptance; each criterion names the PR that carries its test:
 
-- **9** — a replayed `client_id` of a hidden entry never inserts a second live row. **B0** (`db:verify`,
-  the inverse of today's partial arbiter), plus **B1-1** for the writers' typed answer.
-- **10** — Delete removes the entry for every viewer; an untimed `<name> deleted · Undo` line takes its
-  place in the same position until the page is left; `Hidden on this day (n)` sits above the day's
-  sections, survives reload and day change, lists only hides made **before this page loaded**, and
-  each item states the date it stops being restorable. **B1-3.**
-- **11** — focus to that row's in-place Undo after a hide, to the restored row after a restore; the
-  live region mounted before its text changes. **B1-3.**
-- **12** — restore returns the entry to its original position; a taken slot returns a typed
-  `slot_taken` naming the holder, never a `23505` or a silent no-op, with one atomic "keep this one
-  instead" and "Leave it" as the default. Fixture: hide a weigh-in, log a new one that day, restore the
-  first. **B1-1** (writer), **B1-2** (action), **B1-3** (UI).
-- **13** — a folded row (calisthenics bouts) names its count and hides as one event; a strength session
-  rendered twice shows Delete on exactly one copy. **B1-3.**
-- **14** — Clear stays disabled until the input equals `delete` ignoring case and surrounding spaces;
-  one transaction; restores as one event; a partial restore says which entries could not come back
-  and why. **B2.**
-- **15** — hidden entries on other days are signposted with a link to each day. **B1-3** (scope: see
-  Contradiction 3).
-- **16** — a profile whose every entry in a month is hidden can still get its data. **B1-1** (proof),
-  **B1-3** (notice). The chosen path is below ([Decision 4](#decision-4--the-export-omits-hidden-rows-the-person-gets-them-back-by-restore-or-by-asking)).
-- **48** (owned by V1-24 3b) — this plan's controls sit on the row in its section; in the pre-3b order
-  they sit where the row renders today.
+- **9.** A replayed `client_id` of a hidden entry never inserts a second live row. **B0** proves it
+  through the shipped writers. **B1-1** adds the check-in/life typed result. **B1-2** maps it to a
+  refusal, never `ok`.
+- **10.** Delete removes the entry for every viewer. An untimed `<label> deleted · Undo` line takes its
+  place until the page is left. `Hidden on this day (n)` sits above the sections, survives reload and
+  day change, and lists only hides made before this load. Criterion 10 also wants each item to state
+  the date it stops being restorable. Under decision A that is **"Restorable until removed"** until the
+  purge ships, and the dated copy comes with the purge. **B1-3.**
+- **11.** After a hide, focus goes to the row's Undo; after a restore, to the restored row. The live
+  region is mounted before its text changes. **B1-3**, using the seams table's shared Undo line.
+- **12.** Restore puts the entry back in its original position. A taken slot returns a typed
+  `slot_taken` naming the holder, never `23505` and never a silent no-op. One atomic
+  "use this one instead" is offered, and "Leave it" is the default. **B1-1** (writer), **B1-2**
+  (action), **B1-3** (UI).
+- **13.** A folded calisthenics row names its count and hides as one event. A strength session shows
+  Delete on exactly one copy. With 3b merged it renders once. **B1-3.**
+- **14.** Clear is disabled until the input equals `delete`, ignoring case and surrounding spaces. It
+  runs in one transaction and restores as one event. A partial restore says which items could not
+  come back and why. **B2.**
+- **15.** Hidden entries on other days are signposted, with links. Per decision E this is a one-line
+  summary. **B1-3.**
+- **16.** A profile whose every entry in a month is hidden can still get its data. **B1-1** (proof),
+  **B1-3** (notice). See [Decision 4](#decision-4--the-export-omits-hidden-rows-restore-or-the-full-copy-gets-them-back).
 
-Not carried: **45** is D4c/D5's Undo (programs); this plan's Undo is criteria 10–12 plus FE-7.
+Not carried here:
 
-Open decisions this plan implements: **Q7** (a hidden entry does not count toward adherence, and the
-day is signposted), **Q9** (a folded row hides all its bouts as one event), **Q10** (the words
-"Delete", "Hidden on this day", "restorable until {date}"), **Q12** (typed `delete` for clear-a-day).
+- **48** is V1-24 3b's. B1-3 consumes it.
+- **45** is the Undo for D4c and D5, not this one.
 
-Done when, per PR:
+Q7, Q9, Q10 and Q12 are implemented as the spec's Open decisions record them.
 
-- **B0:** `pg_indexes.indexdef` for the five `uq_*_client_id` indexes carries no `WHERE`; `db:verify`
-  replays a hidden entry's `client_id` through the shipped writers and finds one row, not two; the
-  mutation patch that re-partials `uq_entries_client_id` turns `db:verify` red.
-- **B1-1:** every reader of `entries` / `entry_sets` / `entry_set_quantities` has a `db:verify` case
-  showing a hidden entry and its children absent; restore round-trips the strength and bodyweight
-  month rows **deep-equal** to before the hide; `slot_taken` is a typed value in every path.
-- **B1-2:** both actions pass the four mandatory boundary tests through `MUTATING_ACTIONS`.
-- **B1-3:** the `day` and `day-slot` prototype screens are reproduced at 390/820/1280 with
-  screenshots; `notice.md` no longer says "The app has no Delete button yet".
-- **B2:** the `day-clear` screen; one `deleted_at` value across every row the clear hid.
+## Decisions (with the alternatives rejected)
 
-## Decisions this plan makes (with the alternatives rejected)
+### Decision 1 — B0 re-predicates all five `client_id` arbiters, keeps their names, and changes no app code
 
-### Decision 1 — B0 re-predicates all five `client_id` arbiters; it does not "record why not"
+The five indexes are each `WHERE deleted_at IS NULL`:
 
-The five are `uq_entries_client_id` (`packages/db/src/schema.ts:258-260`), `uq_entry_sets_client_id`
-(`:321-323`), `uq_entry_set_quantities_client_id` (`:390-392`), `uq_sessions_client_id`
-(`:665-667`) and `uq_supersets_client_id` (`:710-712`), each `WHERE deleted_at IS NULL`. B0 drops the
-predicate from all five, keeping their names.
+- `uq_entries_client_id` (`packages/db/src/schema.ts:258-260`)
+- `uq_entry_sets_client_id` (`:321-323`)
+- `uq_entry_set_quantities_client_id` (`:390-392`)
+- `uq_sessions_client_id` (`:665-667`)
+- `uq_supersets_client_id` (`:710-712`)
 
-Why all five when B1 hides only `entries`: the hazard is per table and the fix is identical. Sessions
-and supersets carry **client-minted** ids from the strength form, so a correction that hides a session
-today arms the same inversion; `entry_sets` / `entry_set_quantities` ids are server-minted (`newId()`,
-`packages/db/src/writers/strength-session.ts:216`, `:252`) and only matter at sync, but leaving two of
-five partial makes the rule "it depends on the table", which is how `data-inventory.md` §5 came to
-state the wrong version once already.
+B0 drops the predicate from all five. Why all five when B1 hides only `entries`: sessions and supersets
+carry **client-minted** ids, so a correction that hides one arms the same hazard. Leaving two of the
+five partial would make the rule "it depends on the table", which is how `data-inventory.md` §5 came
+to state the wrong version once already.
+
+**The writers keep `where: isNull(deletedAt)` on their arbiters.** Postgres infers a non-partial
+unique index for `ON CONFLICT (client_id) WHERE …` (the `INSERT` reference, `index_predicate`), so the
+shipped statements work against **both** index shapes. Dropping the `where:` in the same PR would race
+`migrate.yml` against the Vercel deploy (`.github/workflows/migrate.yml:6-7`). Against the old partial
+index, a bare `ON CONFLICT (client_id)` fails inference on every insert (`docs/lessons.md:19-22`).
+Removing the redundant `where:` is a later cleanup, not owed here.
 
 **Rejected:**
 
-- **Record why not and keep the partial arbiters.** Then B1's first hide makes a stale tab's replay
-  insert a **second live row** under the same `client_id` — criterion 9's failure — and the weigh-in
-  form would answer `{ id }` for a row nobody can see. ADR 0008 decision 3.4.
-- **An app-level "is this `client_id` hidden?" pre-check.** Races, and AGENTS.md forbids it by name
-  ("Idempotency … NOT an app-level check").
-- **Rewrite a hidden row's `client_id` on hide** (stash the original elsewhere). Needs a column ADR
-  0008 does not authorize, and breaks restore's identity.
-- **New index names** (`uq_entries_client_id_all`). The names appear in `verify.ts`
-  (`expectRejectedBy('uq_supersets_client_id', …)` at `:1908`), in `bodyweight.ts:214` and in
-  `write-path.md:182`; the predicate is the only thing changing, and "client_id is unique" is still
-  what the name says.
+- **Keep the partial indexes and record why.** Criterion 9 fails, because the first hide lets a replay
+  insert a second live row (ADR 0008 decision 3.4).
+- **An app-level pre-check.** It races, and AGENTS.md forbids it by name.
+- **Rewrite a hidden row's `client_id`.** It needs a column the ADR does not authorize.
+- **New index names.** `verify.ts:1908`, `bodyweight.ts:214` and `write-path.md:182` name the current
+  indexes, and only the predicate changes.
 
-**The writers keep `where: isNull(deletedAt)` on their arbiters in B0 — deliberately.** Postgres infers
-a **non-partial** unique index for `ON CONFLICT (client_id) WHERE deleted_at IS NULL` (an index that
-satisfies the predicate "need not actually be partial" — the `INSERT` reference, `index_predicate`),
-so the shipped statements work against both index shapes. Dropping the `where:` in the same PR would
-deploy app code that **only** infers the new index; Vercel's deploy races `migrate.yml`
-(`.github/workflows/migrate.yml:6-7`), and against the old partial index a bare `ON CONFLICT
-(client_id)` fails inference on **every insert** — the `docs/lessons.md:19-22` symptom, as a total
-outage of logging. The `where:` clauses become redundant-but-harmless; removing them is a later
-cleanup, after B0's migration is observed live, and is not owed by this plan.
+### Decision 2 — a hide event is `(profile, day, deleted_at)`, carried as fixed-format UTC text
 
-### Decision 2 — a hide event's identity is `(profile, day, deleted_at)`, carried as **text**
+The spec's proposal ("The data contract" → rules) is adopted with one correction: the token **never
+passes through a JS `Date`**. Postgres stores microseconds and a `Date` holds milliseconds, so a token
+mapped through drizzle compares unequal to its own row. The repo has paid for this trap before
+(`registry.ts:209-212`).
 
-The spec's proposal ("The data contract" → rules) is adopted with one correction it did not foresee:
-the `hiddenAt` token **must never pass through a JS `Date`**. Postgres stores microseconds; a `Date`
-holds milliseconds, so a token serialised from drizzle's `Date` mapping compares unequal to the row it
-came from and every restore would return `not_found`. The repo has paid for this exact trap:
-`registry.ts:209-212` (_"a token crossing a DTO, a form field and drizzle's `Date` mapping loses the
-microseconds Postgres stores"_). So the read selects `sql<string>\`${entries.deletedAt}::text\``and
-the writer compares`${entries.deletedAt} = ${token}::timestamptz`— a bound parameter, not`sql.raw`.
+The read selects
+`to_char(deleted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`. That is one fixed format,
+independent of the session `DateStyle` and `TimeZone` that `::text` would depend on. The writer
+compares `deleted_at = $token::timestamptz`, a bound parameter, never `sql.raw`.
 
-Every row a single transaction hides shares one `now()` (transaction start), so a folded row, a
-clear-a-day and a swap are each one event without a new column. The writer **must** use `now()`,
-never `clock_timestamp()`; a `db:verify` case pins it (three rows, one transaction, one token).
+One transaction shares one `now()`, so a folded row, a clear and a swap's hide are each one event.
+The writer uses `now()`, never `clock_timestamp()`, and `db:verify` pins it (Test plan, B1-1 case 2).
 
-**Rejected:** an `event_id` column (unauthorized by ADR 0008; nothing needs it before sync — see
-Decision 6); grouping by `deleted_at` rounded to the second (two taps in one second merge).
+**Rejected:** an `event_id` column (unauthorized, and nothing needs it before sync, Decision 6), and
+rounding to the second (two taps in one second would merge).
+
+**One sentence, decided (UX lens 3, N8):** re-hiding a restored item is a **new** event with a new
+token, so once the purge exists its clock restarts. That is correct: the person deleted it again.
 
 ### Decision 3 — restore names the items as well as the event
 
-The spec's `restoreHiddenSchema { profilePublicId, day, hiddenAt }` cannot tell three cases apart that
-the UI must render differently, because once an item is live its `deleted_at` is gone:
+Once an item is live its `deleted_at` is gone, so `{ profilePublicId, day, hiddenAt }` alone cannot
+tell the cases apart. B1-1 sends `{ profilePublicId, day, hiddenAt, entryPublicIds, keepInsteadOf? }`,
+and `RestoreResult` gains `'changed'`:
 
-| Item state when Restore arrives            | Meaning                                                | Answer                                                                    |
-| ------------------------------------------ | ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| hidden, `deleted_at = token`, within `N`   | the normal case                                        | restore (or `slot_taken`)                                                 |
-| live                                       | this restore already ran — a **replay**                | `{ ok: true }` — one effect, identical response                           |
-| hidden under a **different** token         | restored and re-hidden elsewhere since the page loaded | `{ ok: false, reason: 'changed' }` → `AMEND_ERROR_COPY.staleWrite` (FE-7) |
-| absent, foreign, or hidden longer than `N` | —                                                      | `{ ok: false, reason: 'not_found' }`                                      |
+| The item when Restore arrives      | Answer                                                    |
+| ---------------------------------- | --------------------------------------------------------- |
+| hidden under `token`               | restore, or `slot_taken`                                  |
+| live                               | `ok`: a replay, with one effect and an identical response |
+| hidden under a **different** token | `changed` → `AMEND_ERROR_COPY.staleWrite` (FE-7)          |
+| absent or foreign                  | `not_found`                                               |
 
-So B1-1 sends `{ profilePublicId, day, hiddenAt, entryPublicIds }`, and `RestoreResult` gains
-`'changed'`. Both are **additive** contract amendments, flagged for the spec
-([Contradictions](#contradictions-with-the-spec-and-the-rows) 4).
+These are additive amendments to the spec's contract (Contradiction 4).
 
-### Decision 4 — the export omits hidden rows; the person gets them back by Restore or by asking
+### Decision 4 — the export omits hidden rows; Restore or the full copy gets them back
 
-ADR 0008 ("One constraint") makes this V1-9b's choice: a deleted-tolerant export path, or
-**export-before-hide**. **Chosen: the latter, with no code change to the export.**
+ADR 0008 ("One constraint") asks V1-9b to choose between a deleted-tolerant export and
+export-before-hide. **Chosen: the latter, with no change to the export queries.**
 
-- The routine export keeps filtering hidden rows at its five places
-  (`packages/db/src/queries/export-month.ts:88, :94, :100, :143, :170`). A mis-logged set that a person
-  deleted must not keep flowing into the Claude workflow the CSV feeds — that would make Delete mean
-  nothing for the one consumer the export exists for. It is also **zero-risk to byte-faithfulness**:
-  the queries do not change.
-- Criterion 16 is met two ways, both stated in `notice.md`: **Restore**, self-serve, on the athlete's
-  page, for `N` days (after which the row is purged — the notice's own promise); and the on-request
-  **full copy** (`notice.md:167-170`), which includes hidden rows until they are purged.
-- B1-1 proves the self-serve path: hide every entry in a month → `loggedMonths` drops that month;
-  restore the event → `strengthMonthRows` and `bodyweightMonthRows` return rows **deep-equal** to the
-  pre-hide capture. Restore preserves `public_id`, `created_at` and every value, so the order keys
-  (`export-month.ts:105-112`) and therefore the CSV bytes are unchanged.
+- The routine export keeps filtering hidden rows at `packages/db/src/queries/export-month.ts:88, :94,
+:100, :143, :170`. A deleted set must not keep flowing into the Claude workflow the CSV feeds.
+  Byte-faithfulness risk is zero, because no query changes.
+- Criterion 16 is met two ways. **Restore** is self-serve and lasts until the item is removed. The
+  on-request **full copy** (`notice.md:167-170`) includes hidden rows until the purge removes them.
+- B1-1 proves the self-serve path. Hide a month's entries, and `loggedMonths` drops the month. Restore
+  the event, and the month rows come back **deep-equal** to the pre-hide capture, since `public_id`,
+  `created_at` and every value are preserved (sort keys at `export-month.ts:105-112`).
 
-**Rejected:** a deleted-tolerant export variant. The hidden grain here is the entry, not the profile,
-so this is not even `isLiveProfile`'s variant — it would be a second family of month queries that
-include hidden rows, i.e. the opposite of Delete. A hidden **profile** is A2/A3's problem, not V1-9b's.
+**Rejected:** a second family of month queries that include hidden rows. That is the opposite of
+Delete for the one consumer the export exists for.
 
-### Decision 5 — one hide action for a row and for a folded row
+### Decision 5 — one hide path for a row, a folded row and a cleared day
 
-`hideEntrySchema` and `hideGroupSchema` in the contract become **one** `hideEntriesSchema
-{ profilePublicId, day, entryPublicIds: uuid[] (1..HIDE_BATCH_MAX) }`. A single row sends one id; a
-folded calisthenics row (Q9) sends its bouts; B2's clear sends the day's. One writer, one event per
-call, one set of boundary tests. `day` is required even for one id: the writer refuses ids not on that
-day, so a crafted request cannot make one "event" span two days, and the Hidden bar's day scope holds.
+`hideEntriesSchema` is `{ profilePublicId, day, entryPublicIds: uuid[] }`. It replaces the contract's
+`hideEntrySchema` and `hideGroupSchema`, and `clearDaySchema` extends it with `confirm`. One private
+`runHide(formData, schema)` in `entry-actions.ts` is shared by `hideEntriesAction` and
+`clearDayAction` _(decision B; arch B1, reuse S1/S6)_. It covers auth, the limiter, parsing, the
+profile and the writer. The rules:
 
-All-or-nothing: if **any** id is not an owned entry of that profile on that day (live or already
-hidden), the transaction rolls back and the answer is `AMEND_ERROR_COPY.notFound('entry')` — one
-message for foreign, stale and wrong-day, so a crafted id learns nothing (`actions.ts:525-580`'s
-argument). Ids already hidden are a **replay** and count as done.
+- **Ids are de-duplicated** before the count check (correctness 7).
+- **Size caps are named separately.** `HIDE_ROW_MAX` caps a row (a folded calisthenics row's bouts).
+  `CLEAR_DAY_MAX` caps a clear and is sized from a real day. Both live in `packages/shared/src/hide.ts`.
+  The clear constants move to B2 (scope N).
+- **All or nothing.** If any id is not an owned entry of that profile on that day, live or already
+  hidden, the transaction rolls back with `AMEND_ERROR_COPY.notFound('entry')`. That is one message
+  for foreign, stale and wrong-day, as at `actions.ts:525-580`.
+- **Already-hidden ids are a replay.**
+- **Clear hides the ids the page rendered** (the `n` the dialog states), not a fresh select
+  (Contradiction 5).
 
-### Decision 6 — idempotency is state-keyed, the way the shipped amends are; FE-15 goes to sync
+### Decision 6 — idempotency is state-keyed, like the shipped amends; FE-15 goes to sync
 
-AGENTS.md rule 6 asks that a retried mutation have one effect and the same response. Hide and
-restore get it from state, exactly as `editBodyweightAction`'s branch (b) does (`actions.ts:573-577`):
-a hide of an already-hidden owned entry is `ok`; a restore of an already-live item is `ok`. Neither
-inserts, so there is no row for a `client_id` to dedupe.
+Hide and restore are idempotent through state, as `editBodyweightAction` branch (b) is
+(`actions.ts:573-577`). Hiding an already-hidden owned entry is `ok`, and restoring an already-live
+item is `ok`. **FE-15**'s client event ids belong to the v1.5 sync PR. An id helps only when an outbox
+persists and replays it, and persisting it here would be the `event_id` column ADR 0008 does not
+authorize.
 
-**FE-15** ("hide and restore carry client-generated ids so they replay safely offline") is
-**deferred to the v1.5 sync PR**, with reason: an id only helps if something persists it and replays
-it, and there is no outbox yet; persisting it here would be the `event_id` column ADR 0008 does not
-authorize. ADR 0008 decision 3.1 ("a hide is an event in the outbox, carrying the row's `client_id` and
-the client's timestamp") is the sync PR's to build; B0 is what makes a hidden row's `client_id` still
-addressable when it does.
+### Decision 7 — `hiddenSinceWrite` is cut; today's throw stays for strength and bodyweight
 
-### Decision 7 — `N` lives once, in `packages/shared`, and the restore window is enforced now
+_(Orchestrator accept 2; arch B2, corr 5, scope S3.)_ Round 0 added typed "replay of a hidden create"
+branches to the two create writers without the DAL type, action mapping or copy behind them. The
+reachable case is the life button (accept 1), and B1-2 fixes it structurally with a fresh key per
+mount after a hide, plus a typed result on the check-in/life writer. For the other writers:
 
-`HIDDEN_RESTORE_DAYS` (name final in PRIV-3's plan; this plan uses that name) is an `as const` number in
-`packages/shared/src/retention.ts`, imported by the hidden read, the restore writer, the DTO's
-`restorableUntil`, and — later — PRIV-3's purge job. If PRIV-3's PR has not created it when B1-1
-lands, B1-1 creates it at the value PRIV-3's plan chose, and PRIV-3 imports it.
+- **Bodyweight** remounts its form after a hide, so a fresh id is minted (`bodyweight-form.tsx:34`,
+  `bodyweight-section.tsx:62`).
+- **Strength** remounts after every save (`key={`${day}:${gen}`}`, `strength-form.tsx:155-173, :273`).
 
-The **restore window** is enforced by B1-1 regardless of whether the purge job exists: the hidden read
-returns only `deleted_at > now() - N days`, and the writer refuses older tokens as `not_found`. So a
-`Restore` control can never be shown for a row the purge could delete underneath it — PRIV-3's lower
-bound, by construction. Until the purge job ships, a row past `N` is invisible and unrestorable but
-**still in the database**, and the notice sentence says exactly that (B1-3).
+So a strength or bodyweight replay onto a hidden row needs a tab left open across a hide, followed by a
+resubmit of the **same** render. It keeps today's behaviour, which is a throw with no second row:
+`reselectLiveByClientId` (`strength-session.ts:52`) and branch (c) (`bodyweight.ts:246-249`). The
+case is listed in Risks. If it is ever made typed, the bodyweight branch goes **between (b) and (c)**
+(correctness 4), so `verify.ts:3592-3606` keeps `dayTaken` precedence.
 
-### Decision 8 — "Keep this one instead" is one transaction that hides a **named** holder
+### Decision 8 — "Use this one instead" is one savepoint, and the holder is touched only after the item is proved hidden
 
-`restoreHiddenSchema` gains an optional `keepInsteadOf: entryPublicId`. The writer, in one transaction:
-hides `keepInsteadOf` **only if it is still the live holder of that slot**, then restores the item. If
-the holder changed since the refusal was rendered (a third weigh-in arrived), the answer is
-`'changed'`, never a hide of something the person did not see. Order inside the transaction is
-hide-then-restore, so the non-deferrable unique index never sees two live rows. Replay: target live
-and named holder hidden → `ok`.
+_(Correctness B2.)_ Inside each item's savepoint, in this order:
 
-### Decision 9 — Decision 4 of ADR 0008, revisited at AUTH-1 (recommendation, for the maintainer)
+1. **Lock the item** with `SELECT … FOR UPDATE`, scoped to the owned profile and the day.
+2. **If the item is live and the named holder is hidden:** return `ok` (a replay).
+3. **If the item is not hidden under the token:** classify it (`changed` or `not_found`) and **never
+   touch the holder**.
+4. **Otherwise hide the holder.** The `UPDATE` requires the holder to be owned, in the same
+   bodyweight slot as the item, and live. Zero rows means `changed`.
+5. **Restore the item.**
 
-ADR 0008: _"After `AUTH-1` this is revisited, not inherited."_ After 1c, logging authority is "a
-session whose user is a member of the household", for every athlete in it (AUTH-1 plan § Design 3);
-there are no roles until Beta 1 (`beta-1.md` → Roles). **Recommendation: deletion authority stays
-equal to logging authority** — any member may hide and restore any of the household's entries — for
-the reason the ADR gave (an irrecoverable `editRoutineAction` overwrite is already open to the same
-principal; gating a restorable hide harder is theatre) and because Restore on the **athlete's** page
-is what lets a parent undo a child's hide. Recorded as Open question 2 so the revisit is a decision,
-not an inheritance.
+Any non-`ok` result rolls back to the savepoint, so a half-swap never commits. `db:verify` drives both
+bad orders. UX lens 3 #4: the refusal shows both values with their logged and hidden times, and the
+button reads **"Use {value} instead"**.
 
-## Both orders against V1-24 3b
+### Decision 9 — ADR 0008 decision 4, revisited at AUTH-1 (recommendation)
 
-`page.tsx` today renders bodyweight in `BodyweightSection` (`page.tsx:192-197`), strength receipts in
-`StrengthSection` (`:202-211`), check-ins and life as **forms only** (`:214-252`), and **every** entry
-again in the "Logged entries" list (`:282-348`) — the only place a logged check-in, life activity or
-calisthenics bout appears at all. A strength session renders twice; the list copy is read-only when the
-strength section is on the page (`editable={!strengthOnPage}`, `:335`).
+After 1c, logging authority means any signed-in member of the household, for every athlete in it.
+**Recommendation:** deletion and restore authority stay equal to logging authority, for the ADR's
+reason that the irrecoverable `editRoutineAction` is already open to that same principal. A parent
+can undo a child's hide from the athlete's page. This is open question 1, so the revisit is a decision
+rather than an inheritance.
 
-The control is built so it does not care which order lands:
+## Requirements this plan places on PRIV-3
 
-- **`DeleteEntryControl`** is a client island passed as a **slot** into the row, the idiom
-  `BodyweightReceipt` already uses for Change (`control?: ReactNode`, `bodyweight-receipt.tsx:56`, `:82`).
-  The row owns its position; the control owns nothing but its button.
-- **The surface that owns Change owns Delete** (criterion 13). Single rule, already in the code: the
-  list copy of a session is `editable={false}` while the strength section is on the page, so it gets
-  no Delete either.
-- **Tombs and the Hidden bar are placed by the same row→section mapping** that renders the live row.
+Stated here so the purge PR cannot miss them. ADR 0008 makes PRIV-3 the owner of `N`.
 
-| Surface                                   | **3b has merged** (expected order — B1 is behind AUTH-1 1c and PRIV-3's `N`; 3b is behind neither) | **3b has not merged** (fallback, B1-3 does not wait)                        |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Bodyweight                                | Delete beside Change in `BodyweightReceipt`                                                        | same                                                                        |
-| Strength movement                         | Delete on the movement's name line in the section's `StrengthSessionReceipt`                       | same; the list copy stays read-only and Delete-less (criterion 13)          |
-| Check-in / life entry                     | Delete on its row in its own section (3b's)                                                        | Delete on its row **in the Logged entries list**, the only place it renders |
-| Calisthenics (folded)                     | Delete on the folded row in its section, naming the bout count                                     | Delete on the folded row in the list                                        |
-| "Also logged" (activity left the routine) | Delete on its row there                                                                            | n/a — the list holds it                                                     |
-| Tomb (in-place Undo)                      | in the row's slot in its section                                                                   | in the row's slot wherever it renders                                       |
-
-In the fallback order, **3b's plan inherits one line item**: its row→section move carries
-`DeleteEntryControl` and the tomb slot with each row. Nothing in B1-3 is thrown away — the control and
-the tomb are row-local by construction. B1-3's PR description states which order it landed in.
+1. **One clock** _(decision A)_. The purge PR introduces `N`, the restore window and the dated copy
+   together. The window is **computed once, in SQL**, and shown as the **last full local day** an item
+   can be restored. Both the hidden read and `restoreHidden` take that same predicate. The UX
+   "deadline" findings move there (UX lens 3 #2/#3, reuse S4).
+2. **Orphaned grouping rows** _(decision C, privacy B2)_. When the purge hard-deletes an entry, it
+   **also hard-deletes any `sessions` / `supersets` row left with no entries**. Otherwise a session's
+   free-text `feel` note ("How did it feel?") outlives everything it described. Until the purge ships,
+   B2's dialog, the notice and inventory §8 say plainly that this note stays.
+3. **The notice's "until removed" copy** (B1-3) is replaced by the dated copy in the same PR. A
+   rollback of either PR writes a new notice state; it does not leave stale copy behind (privacy S5).
 
 ## File-by-file changes
 
 ### B0 — `db/v1-9b-0-client-id-arbiters`
 
-| Path                                                                                                                          | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/schema.ts`                                                                                                   | EDIT   | Remove `.where(sql\`${t.deletedAt} is null\`)`from the five`uq_*_client_id` indexes (`:258-260`, `:321-323`, `:390-392`, `:665-667`, `:710-712`). Rewrite the three docblocks that justify the partial (`:187`, `:345-352`, `:386`) to say: a hidden row **keeps** its `client_id`, so a replay conflicts instead of inserting (ADR 0008 decision 3.4).                                              |
-| `packages/db/migrations/00NN_v1_9b_client_id_arbiters.sql`                                                                    | NEW    | `drizzle-kit generate`, then hand-hardened (shape below).                                                                                                                                                                                                                                                                                                                                            |
-| `packages/db/migrations/meta/*`                                                                                               | NEW    | Generated snapshot + journal (append-only, CI-guarded).                                                                                                                                                                                                                                                                                                                                              |
-| `packages/db/scripts/verify.ts`                                                                                               | EDIT   | New section "V1-9b B0" (proofs below). Fix `upsertReturningId`'s fallback re-select (`:1575-1588`), which has no `deleted_at` guard — after B0 it can only find the hidden row on a hidden-replay, so it adds `isNull(table.deletedAt)` and throws on a miss like the shipped helper (`strength-session.ts:39-55`).                                                                                  |
-| `packages/db/scripts/mutations/07-client-id-partial-again.{patch,expect}`                                                     | NEW    | Re-adds `WHERE "entries"."deleted_at" is null` to the new migration's `uq_entries_client_id`. Expect: the criterion-9 assertion reddens. _(Unverified: that `db:mutations` re-runs migrations from the patched SQL file rather than a cached build — check `mutations.mjs` before writing the patch; if it does not, patch `schema.ts` + migration together.)_                                       |
-| `packages/db/scripts/mutations/README.md`                                                                                     | EDIT   | Row for patch 07.                                                                                                                                                                                                                                                                                                                                                                                    |
-| `docs/features/write-path.md`                                                                                                 | EDIT   | Invariant 6 (`:177-180`): "every `client_id` unique is `WHERE deleted_at IS NULL`" becomes false. New text: non-partial since B0; the shipped arbiters still repeat `WHERE deleted_at IS NULL`, which Postgres still infers and which keeps a deploy racing the migration safe; do **not** drop it from a writer in the same PR as an index change. Trap entry: a hidden row's replay now conflicts. |
-| `.claude/skills/add-server-action/SKILL.md`                                                                                   | EDIT   | `:37-39` ("the predicate must be repeated because the unique index is partial") → the reason is now deploy-order safety and the natural-key partials, not the `client_id` one.                                                                                                                                                                                                                       |
-| `.claude/skills/db-migration/SKILL.md`                                                                                        | EDIT   | `:19` ("`client_id` … with a **partial** unique index") → non-partial since V1-9b B0; the `:68-71` rule still holds for the 9 natural-key partials.                                                                                                                                                                                                                                                  |
-| `docs/privacy/data-inventory.md`                                                                                              | EDIT   | §5 (`:251-258`): "a soft delete frees the natural key — `client_id`, …" — `client_id` leaves that list. Of the fourteen partial arbiters, **nine** remain partial on `deleted_at` (the natural keys: superset order, the weigh-in day, set ordinal, quantity slot, readiness day, ramp week, block slug, prescription slot, target pair); recount from `schema.ts` in the PR and state the number.   |
-| `docs/runbooks.md`                                                                                                            | EDIT   | New entry "If B0's migration refuses" (the 0012 precedent): which tables, the aggregate read, how to resolve a pair (a correction that keeps one row), re-run `migrate.yml` by `workflow_dispatch`.                                                                                                                                                                                                  |
-| `docs/changelog/<fragment>.md`, `docs/status.md`, `docs/plan.md` (V1-9b row: "no migration" → B0 owns one), `docs/roadmap.md` | EDIT   | Status rides with the work.                                                                                                                                                                                                                                                                                                                                                                          |
+| Path                                                                                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/schema.ts`                                                                                      | EDIT   | Remove `.where(…deleted_at is null)` from the five indexes. Rewrite **every** comment that B0 makes false: `:187`, `:358`, `:638`, `:698-699`. Each says "a hidden row keeps its `client_id`".                                                                                                                                                                                                                    |
+| `packages/db/migrations/00NN_v1_9b_client_id_arbiters.sql` + `meta/*`                                            | NEW    | `drizzle-kit generate`, then hand-hardened (shape below). If AUTH-1 1b or another migration takes the number first, **regenerate**; never rename a generated file. Assert the new journal entry's `when` is greater than the previous one. db-safety B1 asks for a guard on `when` being monotonic; that is **filed as its own row**, not built here.                                                             |
+| `packages/db/scripts/verify.ts`                                                                                  | EDIT   | New section "V1-9b B0", with the proofs in the Test plan. `upsertReturningId`'s fallback (`:1575-1588`) gains `isNull(table.deletedAt)` and throws on a miss, like `strength-session.ts:39-55`. After B0 the unguarded version can find the hidden row.                                                                                                                                                           |
+| `packages/db/scripts/mutations/07-client-id-partial-again.{patch,expect}` + README row                           | NEW    | The patch re-adds the predicate to `uq_entries_client_id` in **both** `schema.ts` and the new migration, so the mutation does not depend on how `mutations.mjs` sources the DDL (this resolves round 0's hedge). The `.expect` is the **first** failing assertion: the behavioural criterion-9 case is ordered **before** the structural `pg_indexes` check (db-safety 4).                                        |
+| `packages/db/src/writers/strength-session.ts`                                                                    | EDIT   | Docblocks only. `:34-36` ("the partial UNIQUE lets a soft-deleted row share the client_id") becomes false. The guard stays as defence. This file is owned by `strength-logging.md`, so that guide is updated too.                                                                                                                                                                                                 |
+| `docs/features/write-path.md`                                                                                    | EDIT   | Invariant 6 (`:177-180`): `client_id` is non-partial since B0. The `where:` repeat is kept for **deploy-order safety**: never drop it in the PR that changes an index. A trap entry: replaying a hidden row now conflicts.                                                                                                                                                                                        |
+| `docs/features/strength-logging.md`                                                                              | EDIT   | The `strength-session.ts` docblock change.                                                                                                                                                                                                                                                                                                                                                                        |
+| `.claude/skills/add-server-action/SKILL.md`, `.claude/skills/db-migration/SKILL.md`                              | EDIT   | `add-server-action:37-39` and `db-migration:19` state that the `client_id` UNIQUE is partial. Both are corrected. The natural-key rule at `db-migration:68-71` still holds.                                                                                                                                                                                                                                       |
+| `docs/architecture.md`                                                                                           | EDIT   | `:342` says `client_id` is "UNIQUE partial", which becomes plain UNIQUE (arch S3). The `:85` sequence's `ON CONFLICT(client_id) DO UPDATE (LWW)` is already untrue of today's `DO NOTHING`. B0 marks that line as the v1.5 target rather than silently keeping it.                                                                                                                                                |
+| `docs/privacy/data-inventory.md`                                                                                 | EDIT   | §5 (`:251-258`): `client_id` leaves the list of keys a hide frees. **Nine** arbiters stay partial on `deleted_at`, recounted from `schema.ts` in the PR: superset order, weigh-in day, set ordinal, quantity slot, readiness day, ramp week, block slug, prescription slot, target pair.                                                                                                                          |
+| `docs/runbooks.md`                                                                                               | EDIT   | **No new permanent entry** (scope N). The migration's refusal message links the existing "A pending migration wedges prod and the seed with it" section (`runbooks.md:116`). The PR body names its consequence: `migrate.yml` runs the seed in the same job, so a refused B0 **freezes every later migration**, AUTH-1 1b's `0019` included, until the pair is corrected and the run re-dispatched (db-safety 6). |
+| `docs/changelog/<fragment>.md`, `docs/status.md`, `docs/plan.md` (V1-9b: "no migration" → B0), `docs/roadmap.md` | EDIT   | Status rides with the work.                                                                                                                                                                                                                                                                                                                                                                                       |
 
-**The prod read** (committed in B0's PR body and this plan's log; run by the maintainer against
-`DATABASE_URL_UNPOOLED` in a `BEGIN READ ONLY` transaction, **aggregate counts only — never a
-`client_id`, `public_id` or name**, the PRIV-3 rule that no identifier is committed):
+**The prod read.** The maintainer runs it against `DATABASE_URL_UNPOOLED` inside `BEGIN READ ONLY`. It
+returns **aggregate counts only**, never a `client_id`, `public_id` or name. Run it before the PR and
+again immediately before merge, as with 1d (`runbooks.md:56`):
 
 ```sql
 begin read only;
@@ -339,405 +317,457 @@ from (
 rollback;
 ```
 
-Pass condition: `dup_client_ids = 0` in **every** row — a non-partial unique needs hidden/hidden pairs
-gone too, not only hidden/live. `hidden_rows` is expected to be ≥ 2 on `entries` (the 1c losers);
-recorded, not a failure. Re-run immediately before merge (1d's precedent, `runbooks.md:56`).
+**Pass:** `dup_client_ids = 0` in every row. A non-partial index needs hidden/hidden pairs gone too.
+`hidden_rows ≥ 2` on `entries` is expected (the 1c rows).
 
-**Migration shape** (the `0012` precedent, `packages/db/migrations/0012_bodyweight_one_per_day.sql`):
+**If a pair exists:** resolve it with a correction that **selects by predicate**, never by committed
+ids (privacy S6, and PRIV-3's no-identifier rule).
+
+**Migration shape** (the `0012` precedent):
 
 ```sql
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
--- One lock order, the writer's own (sessions → supersets → entries → entry_sets → quantities), taken
--- up front at the strongest level DROP INDEX needs, so no lock upgrade can deadlock mid-file.
+-- The writer's own order, taken up front at the level DROP INDEX needs: no mid-file lock upgrade.
 LOCK TABLE "sessions", "supersets", "entries", "entry_sets", "entry_set_quantities"
   IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
-DO $$ … count duplicate client_id (any deleted_at) per table; RAISE EXCEPTION naming the table and
-        docs/runbooks.md → "If B0's migration refuses" if any > 0 … $$;--> statement-breakpoint
--- <justification: drizzle wraps each file in a transaction, so CONCURRENTLY is impossible; tables are
---  hundreds of rows; the lock above bounds the wait>
+DO $$ … count duplicate client_id (any deleted_at) per table; RAISE naming the table and
+        docs/runbooks.md → "A pending migration wedges prod" … $$;--> statement-breakpoint
+-- <justification: drizzle wraps the file in a transaction, so CONCURRENTLY is impossible>
 -- squawk-ignore require-concurrent-index-deletion
 DROP INDEX "uq_entries_client_id";--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_entries_client_id" ON "entries" USING btree ("client_id");--> statement-breakpoint
 … × 5
 ```
 
-No `IF [NOT] EXISTS`: 0012's reasoning — it would silently skip a same-named index with the wrong
-predicate. ⚠️ _Unverified:_ the exact Squawk rule name for a non-concurrent `DROP INDEX`
-(`require-concurrent-index-deletion` is the expected one; `.squawk.toml` excludes only
-`require-concurrent-index-creation`). Run `squawk` locally on the file before writing the ignores, and
-put each `-- squawk-ignore` on the line **directly** above its statement (`docs/lessons.md`: any
-comment in between voids it).
+**What the lock costs** (db-safety 7). `ACCESS EXCLUSIVE` blocks **reads as well as writes** on all
+five tables, Today's page included, for the duration of the five index builds. At prod's size
+(hundreds of rows) that is well under a second. If the lock cannot be taken it waits at most 5 s
+(`lock_timeout`) and then fails without changing anything. There are no `IF [NOT] EXISTS` guards, for
+0012's reason: such a guard would skip a same-named index that has the wrong predicate.
 
-### B1-1 — `feat/v1-9b-1a-hide-restore-core` (`packages/` only)
+⚠️ **Unverified:** the Squawk rule name for a non-concurrent `DROP INDEX`. Run `squawk` on the file
+first, and put each `-- squawk-ignore` on the line directly above its statement (`docs/lessons.md`).
 
-| Path                                                                                 | Change                          | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/shared/src/retention.ts`                                                   | NEW (or EDIT if PRIV-3 made it) | `HIDDEN_RESTORE_DAYS` (Decision 7).                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `packages/shared/src/hide.ts`                                                        | NEW                             | `HIDE_BATCH_MAX`; `hideEntriesSchema`; `restoreHiddenSchema` (`hiddenAt`: a string matching Postgres' `timestamptz::text` form, never `z.date()`); `RESTORE_REASON` as const (`slot_taken`, `not_found`, `changed`) + zod enum + type; `CLEAR_DAY_CONFIRM_WORD = 'delete'` and `normalizeClearConfirm(s) = s.trim().toLowerCase()` (B2 consumes both — they live here once so UI and server match by construction).                                    |
-| `packages/shared/src/index.ts`                                                       | EDIT                            | Export the above.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `packages/db/src/writers/hide.ts`                                                    | NEW                             | `hideEntries(exec, { profilePublicId, scope, day, entryPublicIds })` → `{ hiddenAt } \| { notFound: true }`; `restoreHidden(exec, { profilePublicId, scope, day, hiddenAt, entryPublicIds, keepInsteadOf?, windowDays })` → per-item results. Shapes below.                                                                                                                                                                                            |
-| `packages/db/src/queries/hidden-entries.ts`                                          | NEW                             | **The repo's first read that returns `deleted_at IS NOT NULL`**, named as such in its docblock (ADR 0008 decision 2): `hiddenEntriesForDay(db, { profilePublicId, scope, day, windowDays })` and `hiddenDaysInWindow(db, { profilePublicId, scope, day, windowDays })` (criterion 15). Both through `isLiveProfile` (`ownership.ts:118-124`); neither reads `scope.householdId` itself (`scope.test.ts` pins the module).                              |
-| `packages/db/src/writers/strength-session.ts`                                        | EDIT                            | `writeSessionStrengthEntry` (`:183-205`): on a conflict with **no live row** but an owned **hidden** row under that `client_id`, return `{ hiddenSinceWrite: true }` instead of `reselectLiveByClientId`'s throw (`:52`), and `writeStrengthSession` skips that movement's sets. A replay must not resolve onto the hidden row (ADR 0008 decision 3.2) **and must not un-hide it** (decision 3.3); the session's replay answer is otherwise unchanged. |
-| `packages/db/src/writers/bodyweight.ts`                                              | EDIT                            | `insertBodyweightEntry` (`:178-250`): a new branch between (a) and (b): this profile's **hidden** weigh-in holds the `client_id` → `{ hiddenSinceWrite: true }`, not (c)'s throw. Branch (b) keeps precedence when the day is held, so `verify.ts:3592-3606` (`{ dayTaken: true }`) stays green unchanged.                                                                                                                                             |
-| `packages/db/src/index.ts`                                                           | EDIT                            | Export the writer and query.                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `packages/db/scripts/verify.ts`                                                      | EDIT                            | Section "V1-9b B1" — the proofs in the Test plan.                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `packages/db/scripts/mutations/08-restore-ignores-token.{patch,expect}` + README row | NEW                             | Drops the `deleted_at = token` conjunct from `restoreHidden`. Expect: "restoring one event leaves the other hidden" reddens.                                                                                                                                                                                                                                                                                                                           |
-| `docs/features/write-path.md`                                                        | EDIT                            | `owns:` gains `packages/db/src/queries/hidden-entries.ts`; new invariant: **hide/restore never touch any column but `deleted_at` and `updated_at`, and no other writer ever writes `deleted_at`** (ADR 0008 decision 3.3); the token-as-text trap; the reader audit table.                                                                                                                                                                             |
-| `docs/features/strength-logging.md`                                                  | EDIT                            | `strength-session.ts` is owned here: the `hiddenSinceWrite` replay branch.                                                                                                                                                                                                                                                                                                                                                                             |
+### B1-1 — `feat/v1-9b-1-1-hide-core` (`packages/` only)
 
-**Writer shapes** (`hide.ts`):
+| Path                                                                                           | Change   | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/date.ts` (or the existing shared day module)                              | EDIT/NEW | `isoDaySchema` is **promoted** from `apps/web/lib/date.ts:16`, which then re-exports it (reuse N1). Ids use the existing shared `uuidSchema`.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `packages/shared/src/hide.ts`                                                                  | NEW      | `HIDE_ROW_MAX`, `hideEntriesSchema` (ids de-duplicated by a transform), `restoreHiddenSchema` (`hiddenAt` matches Decision 2's format, never `z.date()`; plus `entryPublicIds` and an optional `keepInsteadOf`), and `RESTORE_REASON` as const plus its zod enum and type. **No `N`** (decision A).                                                                                                                                                                                                                                            |
+| `packages/db/src/writers/hide.ts`                                                              | NEW      | `hideEntries(exec, { profilePublicId, scope, day, entryPublicIds })` returns `{ hiddenAt } \| { notFound: true }`. `restoreHidden(exec, { …, hiddenAt, entryPublicIds, keepInsteadOf? })` returns per-item results. Ownership is a subselect on `isLiveProfile` (`ownership.ts:118-124`), never a copy. Per item: a savepoint, with Decision 8's order. A `23505` on `BODYWEIGHT_DAY_UNIQUE_INDEX` rolls back to the savepoint and gives `slot_taken`, with the holder found by the slot helper. Any other `23505` is rethrown, as unexpected. |
+| `packages/db/src/writers/bodyweight.ts`                                                        | EDIT     | Extract `bodyweightSlot(profileId, day)`, built from `DEFAULT_BODYWEIGHT_CONTEXT`. It is today's inline predicate at `:231-241`, now used by branch (b) **and** the restore holder lookup (reuse S5). There is no new branch (Decision 7).                                                                                                                                                                                                                                                                                                     |
+| `packages/db/src/writers/checkin.ts`                                                           | NEW      | **The check-in/life insert moves here** from `apps/web/lib/dal/entries.ts:384-455` (correctness 6), so `db:verify` runs the real statement. Each item's result is `created`, `replay` (an own live row), `own_hidden` (this profile's hidden row holds the id, so it is **never `ok`**) or `conflict` (another profile's row). `logCheckinEntries` becomes a thin DAL wrapper.                                                                                                                                                                 |
+| `packages/db/src/queries/hidden-entries.ts`                                                    | NEW      | **The repo's first read that returns `deleted_at IS NOT NULL`**, and its docblock says so (ADR 0008 decision 2). `hiddenEntriesForDay` and `hiddenDayCounts` (other days with hidden items, newest first) both go through `isLiveProfile`. Neither reads `scope.householdId`, so `scope.test.ts` still pins the module.                                                                                                                                                                                                                        |
+| `packages/db/src/index.ts`                                                                     | EDIT     | Exports.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `packages/db/scripts/verify.ts`                                                                | EDIT     | Section "V1-9b B1", with the proofs below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `packages/db/scripts/mutations/08-restore-ignores-token.*`, `09-token-through-date.*` + README | NEW      | Mutation 08 drops the token conjunct. Mutation 09 maps the token through `new Date(…).toISOString()` (db-safety 5).                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `docs/features/delete-and-restore.md`                                                          | NEW      | **A new guide** (arch S6). It **owns** `writers/hide.ts`, `queries/hidden-entries.ts`, `packages/shared/src/hide.ts`, `app/p/[profileId]/entry-actions.ts` (B1-2), and `app/p/[profileId]/hidden/` (B1-3). Invariants: only `hide.ts` writes `deleted_at` (ADR 0008 decision 3.3), the token stays text end to end, and every reader is in the audit table. Its **sequence diagram** of hide → Undo → restore / `slot_taken` is also embedded in `docs/architecture.md` (arch S3).                                                             |
+| `docs/features/write-path.md`                                                                  | EDIT     | `writers/checkin.ts` is added to the writers' story, and the guide points at the new one.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-```ts
-// Owned-profile subselect: the SAME isLiveProfile predicate, never a re-typed copy.
-const ownedProfile = exec.select({ id: profiles.id }).from(profiles)
-  .where(isLiveProfile(profilePublicId, scope));
+**The reader audit** (the spec's Risks row) has one `db:verify` case per reader:
 
-// hideEntries — one UPDATE, one now(), one event.
-UPDATE entries SET deleted_at = now(), updated_at = now()
- WHERE public_id = ANY($ids) AND activity_date = $day
-   AND profile_id IN (ownedProfile) AND deleted_at IS NULL
- RETURNING public_id, deleted_at::text
-// then: owned+on-day rows among $ids (any liveness). If count < $ids.length → rollback, { notFound }.
-// The returned token is the new event's; on a full replay (0 updated, all owned and hidden) the token
-// of the already-hidden rows is returned (the identical-response rule).
+| Reader                                                       | Filter today                                                                                    | Case                                                                                                              |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `listEntriesForDay` (`apps/web/lib/dal/entries.ts:120-294`)  | entries `:197`; sets through live entry ids `:203-218`; quantities through live sets `:224-240` | The app DAL cannot run under `db:verify` (`entries.ts:393-394`), so B1-2 adds an emitted-SQL test and B1-3 an e2e |
+| `strengthMonthRows` / `bodyweightMonthRows` / `loggedMonths` | `export-month.ts:88, :94, :100, :143, :170`                                                     | Hidden rows are absent; restore brings them back deep-equal (Decision 4)                                          |
+| `weeklyAdherence` (`weekly-adherence.ts:63`)                 | entries                                                                                         | A hidden bout leaves the week's sum (**Q7**)                                                                      |
+| `ownedEntryIds` (`ownership.ts:135-141`) → both amends       | entries                                                                                         | Amending a hidden entry's set or weigh-in returns `null`, and `deleted_at` is unchanged                           |
+| `insertBodyweightEntry` lookups (`bodyweight.ts:224, :239`)  | entries                                                                                         | `dayTaken` is unchanged (`verify.ts:3592-3606`)                                                                   |
+| `movement-ownership.ts`                                      | **deliberately none** (`:32-38`)                                                                | Asserted unchanged                                                                                                |
 
-// restoreHidden — per item, each in a SAVEPOINT (drizzle nested tx):
-//   [keepInsteadOf] UPDATE entries SET deleted_at = now(), updated_at = now()
-//                     WHERE public_id = $holder AND deleted_at IS NULL AND <same slot as the item>
-//                   → 0 rows ⇒ { reason: 'changed' }
-//   UPDATE entries SET deleted_at = NULL, updated_at = now()
-//    WHERE public_id = $id AND profile_id IN (ownedProfile) AND activity_date = $day
-//      AND deleted_at = $token::timestamptz
-//      AND deleted_at > now() - make_interval(days => $windowDays)
-//   23505 on BODYWEIGHT_DAY_UNIQUE_INDEX ⇒ roll back the savepoint, look up the live holder of that
-//     (profile, day, coalesce(context,'morning')) slot ⇒ { reason: 'slot_taken', heldBy: { publicId, valueNum, unit } }
-//   any OTHER 23505 ⇒ rethrow (unexpected — error.tsx; `uq_entries_superset_order` is unreachable from
-//     the app, since no writer adds a member to an existing superset)
-//   0 rows ⇒ classify: live ⇒ ok (replay); hidden under another token ⇒ 'changed'; else 'not_found'
-```
+This is the **entry→set live-parent proof** the row owes (`plan.md:115`). Hide an entry whose children
+stay `deleted_at IS NULL`, and every reader above returns none of them. `ON DELETE CASCADE` is
+hard-delete only, which is the same trap as `verify.ts:2655-2682`, one level up.
 
-Why a savepoint-and-catch rather than a `NOT EXISTS` pre-check: the unique index is the only arbiter
-that cannot race; a pre-check still needs the catch for the concurrent case, so it would be two
-mechanisms for one rule. The constraint name comes from the shared `BODYWEIGHT_DAY_UNIQUE_INDEX`
-const the schema already uses (`schema.ts:270`), never a re-typed string.
+### B1-2 — `feat/v1-9b-1-2-entry-actions`
 
-**The reader audit** (the spec's Risks row: "every `WHERE deleted_at IS NULL` filter has only ever
-been tested on PGlite fixtures"). Every reader of the three tables, found by grep on this branch, and
-the B1-1 `db:verify` case that pins it:
+| Path                                                                                                                        | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/p/[profileId]/entry-actions.ts`                                                                               | NEW    | `'use server'`, holding `hideEntriesAction` and `restoreHiddenAction` over a **private** `runHide` (decision B). Each action: `Sentry.withServerActionInstrumentation`, then `sessionUserOrNull()`, `checkMutationLimit(user.userId)`, the zod parse, `getProfileByPublicId`, the DAL, and `revalidatePath`. There is **no `resolveDeclaredDay` bound**: a correction must not dead-end on the history days where mistakes are found (the amends' reasoning, `actions.ts:504-509`). Sentry gets no headers, no formData, and no user or household id (AUTH-1 § Design 3). |
+| `apps/web/app/p/[profileId]/entry-actions.test.ts`                                                                          | NEW    | Colocated, with the boundary, replay and mapping cases (Test plan).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/web/app/p/[profileId]/mutating-actions.ts` + `ACTION_BINDINGS` / `VALID_BODY` / the pinned module list (WP-1's homes) | EDIT   | `{ refusal: NO_PROFILE_LOG, scope: 'profile' }` for each action. The bindings name `hideEntriesForDay` and `restoreHiddenOnDay` as writers. `VALID_BODY` gets one body per action. The module is added to the pinned list and to the guide's `owns:`. **These are append points that A1 and V1-24 2 also edit, so those PRs serialize** (WP-1, "Traps").                                                                                                                                                                                                                  |
+| `apps/web/app/p/[profileId]/action-state.ts`                                                                                | EDIT   | `RestoreActionState = ActionState & { restore?: RestoreResultDTO[] }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `apps/web/lib/dal/entries.ts`                                                                                               | EDIT   | `hideEntriesForDay` and `restoreHiddenOnDay`. `listDayWithHidden(profilePublicId, day)` returns `{ live, hidden, otherDays }` and folds in the hidden-days read (arch S4). Each hidden item carries **only** `afterEntryId` for placement: the preceding live entry in the `(created_at, id)` order at `:251`, computed in the DAL (decision D). `logCheckinEntries` becomes a wrapper over `writers/checkin.ts`. The now-false comment at `:441` is corrected.                                                                                                           |
+| `apps/web/lib/dal/hidden-dto.ts`                                                                                            | NEW    | `HiddenOnDayDTO`: events of `{ hiddenAt, hiddenAtLabel, kind: 'one' \| 'row' \| 'clear', items: { entryPublicId, label, afterEntryId, sectionKey } }`. It has **no `restorableUntil`** (decision A; the field arrives with the purge). Also `RestoreResultDTO`.                                                                                                                                                                                                                                                                                                           |
+| `apps/web/lib/entries/entry-label.ts`                                                                                       | EDIT   | `entryLabel` takes a `Pick<EntryDTO, …>`, so a hidden item is labelled by the same function as a live one. A strength label adds `· {n} sets` (UX lens 1 #6).                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `apps/web/app/p/[profileId]/actions.ts`                                                                                     | EDIT   | `logLifeActivitiesAction` (`:446-455`) today returns `ok` on any conflict. An `own_hidden` result now returns `{ ok:false, error: HIDE_COPY.loggedThenDeleted }`, never `ok`. `logCheckinsAction` (`:229-234`) gives `own_hidden` the same copy.                                                                                                                                                                                                                                                                                                                          |
+| `apps/web/app/p/[profileId]/life-form.tsx`                                                                                  | EDIT   | **Correctness B1 / db-safety B2: the life button's lost write.** Today `LifeButton` is keyed `a.key` (`:91`) and holds `useState(newId)` (`:38`), so the **same** `client_id` survives a hide, and also survives a **day change**, which is a pre-existing bug. After a Delete the button reappears with the dead id, the tap conflicts with the hidden row, and the action reports `ok`. The fix keys it `${day}:${a.key}:${loggedEntryId ?? 'open'}`, with the page passing a key → entry-id map instead of `loggedLifeKeys`.                                           |
+| `apps/web/app/p/[profileId]/page.tsx`                                                                                       | EDIT   | Pass the logged-life map; that is the only B1-2 change to the page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `apps/web/lib/constants.ts`                                                                                                 | EDIT   | `HIDE_COPY` (the strings B1-2 needs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `docs/features/write-path.md`, `docs/features/delete-and-restore.md`                                                        | EDIT   | The actions; the `client_id` lifetime audit (below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `docs/privacy/data-inventory.md`                                                                                            | EDIT   | §1 (`:112-113`) and §5 (`:246-248`): the app now writes `deleted_at`, through `entry-actions.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
-| Reader                                                                      | Filter today                                                                                           | Case                                                                                                                                  |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `listEntriesForDay` (`apps/web/lib/dal/entries.ts:120-294`)                 | entries `:197`; sets **through live entry ids** `:203-218`; quantities through live set ids `:224-240` | app DAL cannot run under `db:verify` (`entries.ts:393-394`'s note) → B1-2's emitted-SQL test + B1-3's e2e                             |
-| `strengthMonthRows` / `bodyweightMonthRows` / `loggedMonths`                | `export-month.ts:88, :94, :100, :143, :170`                                                            | hide → absent; restore → deep-equal (Decision 4)                                                                                      |
-| `weeklyAdherence` (`packages/db/src/queries/weekly-adherence.ts:63`)        | entries                                                                                                | a hidden calisthenics bout leaves the week's sum (**Q7**)                                                                             |
-| `ownedEntryIds` (`ownership.ts:135-141`) → both amends                      | entries                                                                                                | `updateStrengthSetById` on a hidden entry's set → `null`; `updateBodyweightEntryById` → `null`; `deleted_at` unchanged (decision 3.3) |
-| `findAmendableBodyweight` / `amendableBodyweight` (`bodyweight.ts:110-140`) | entries                                                                                                | covered by the amend case                                                                                                             |
-| `insertBodyweightEntry` replay + day lookups (`bodyweight.ts:224, :239`)    | entries                                                                                                | the `hiddenSinceWrite` and `dayTaken` cases                                                                                           |
-| `movement-ownership.ts`                                                     | **deliberately none** (`:32-38`: a hidden entry still holds its FK)                                    | unchanged; asserted unchanged                                                                                                         |
+**Every form's `client_id` lifetime** (accept 1). An id that outlives a hide re-targets a hidden row:
 
-**The entry→set live-parent proof** the row owes (`plan.md:115`: _"`verify.ts:2655-2682` covers only
-set→quantity"_): hide an entry whose sets and quantities stay `deleted_at IS NULL`, then show every
-reader above returns none of them. The trap is exactly the GAP-3 one one level up: `ON DELETE CASCADE`
-is hard-delete only, so a hidden entry's children are "live" rows a careless join would count.
+| Form                                               | Id lifetime                                                                                   | After a hide                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Bodyweight (`bodyweight-form.tsx:34`)              | per mount; keyed `form-${day}` (`bodyweight-section.tsx:62`); unmounted while a receipt shows | ✅ remounts, fresh id                                           |
+| Check-ins (`checkin-form.tsx:57-61`)               | rotated after every successful write (`idSeed`)                                               | ✅ the logged field's id was already rotated                    |
+| Life (`life-form.tsx:38`, `:91`)                   | per instance, keyed by activity only                                                          | 🔴 reuses the dead id, so it is a lost write. **Fixed in B1-2** |
+| Strength (`strength-form.tsx:155-173, :273, :307`) | session id per mount, remounted on `gen` after every save; movement ids `newId()` per card    | ✅                                                              |
+| Amends                                             | no `client_id`                                                                                | n/a: they filter `deleted_at IS NULL` and answer `notFound`     |
 
-### B1-2 — `feat/v1-9b-1b-hide-restore-actions`
+**Is B1-2 reachable before B1-3?** Scope N asked for this to be probed. Next registers a Server Action
+id only for actions that some client module references. With no importer until B1-3, `entry-actions.ts`
+may not be reachable by a crafted POST at all. **Unverified.** B1-2 checks the build's
+`server-reference-manifest.json` and states the answer in the PR. Either way, B1-2's inventory edit
+keeps the docs true.
 
-| Path                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/lib/dal/entries.ts`                    | EDIT   | `hideEntriesForDay(...)`, `restoreHiddenOnDay(...)` (resolve `getHouseholdScope()`, call the writers, build labels); `listDayWithHidden(profilePublicId, day)` → `{ live: EntryDTO[]; hidden: HiddenOnDayDTO }`, computing each hidden item's **placement** (`afterEntryId`: the live entry preceding it in the `(created_at, id)` order `:251` uses) **inside the DAL**, so no timestamp but the token leaves it. `listEntriesForDay` is unchanged. Fix the now-false comment at `:441`. |
-| `apps/web/lib/dal/hidden-dto.ts`                 | NEW    | `HiddenOnDayDTO` (the contract's, plus `afterEntryId`, `section` keys, `sessionId`) and `RestoreResultDTO`; `restorableUntil` computed once here: `localDayIso(tz, hiddenAt + N days)` (`apps/web/lib/date.ts:49`).                                                                                                                                                                                                                                                                       |
-| `apps/web/lib/entries/entry-label.ts`            | EDIT   | `entryLabel` takes `Pick<EntryDTO, …>` of the fields it reads, so a hidden item is labelled by the **same** function as a live one (no second label map).                                                                                                                                                                                                                                                                                                                                 |
-| `apps/web/app/p/[profileId]/actions.ts`          | EDIT   | `hideEntriesAction`, `restoreHiddenAction` — shape below. (WP-1, [`wp-1-shard-actions.md`](./wp-1-shard-actions.md), keeps one `actions.ts` and makes `MUTATING_ACTIONS` + `ACTION_BINDINGS` + `VALID_BODY` the append points; both actions are `scope: 'profile'` if WP-1 has landed. B1-2, A1 and V1-24 2 serialize on these files.)                                                                                                                                                    |
-| `apps/web/app/p/[profileId]/action-state.ts`     | EDIT   | `RestoreActionState = ActionState & { restore?: RestoreResultDTO[] }`.                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `apps/web/app/p/[profileId]/mutating-actions.ts` | EDIT   | Two keys, both `NO_PROFILE_LOG` (`{ refusal: NO_PROFILE_LOG, scope: 'profile' }` after WP-1), plus their `ACTION_BINDINGS` / `VALID_BODY` entries — the unauth / wrong-household suites in `actions.test.ts` (which compares these keys to the exported actions) then cover them with no re-typed list (`:24-32`).                                                                                                                                                                        |
-| `apps/web/lib/constants.ts`                      | EDIT   | `HIDE_COPY` (all strings below — one home); `entryRowId(publicId)` for focus targets.                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/app/p/[profileId]/actions.test.ts`     | EDIT   | Boundary + happy + replay cases (Test plan).                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `apps/web/lib/dal/entries.test.ts`               | EDIT   | Emitted-SQL proof that `listDayWithHidden`'s live half is byte-identical to `listEntriesForDay`'s and its hidden half carries the window conjunct.                                                                                                                                                                                                                                                                                                                                        |
-| `docs/features/write-path.md`                    | EDIT   | The two actions; the "first deleted-row read" note.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `docs/privacy/data-inventory.md`                 | EDIT   | §1 (`:112-113`) and §5 (`:246-248`): `deleted_at` is now **written by the app**, by two actions, and restored by one; "written in exactly one place (a committed data correction)" stops being true.                                                                                                                                                                                                                                                                                      |
+### B1-3 — `feat/v1-9b-1-3-hide-ui` (after V1-24 3b)
 
-**Action shape** (after AUTH-1 1c — `auth-1-clerk-google.md:657-663`):
+| Path                                                                                                       | Change     | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/p/[profileId]/hidden/hidden-visit.tsx`                                                       | NEW        | `'use client'`, keyed `${profileId}\|${day}` (FE-6). **It owns dispatch** (UX lenses 1 and 2, #1). On submit it adds ids to the visit set **optimistically** and marks them pending. On failure it removes them and announces the error. On success it moves focus **in an effect, once the target exists**. One membership rule: a **Delete puts a tomb in place**; a **swap's hidden holder goes to the bar**; a **clear goes to the bar** as one event. It uses the seams table's shared announcer, not a second region (reuse S3). While a restore is pending it suppresses `SavedAnnouncer`'s weigh-in message, so one restore yields one announcement (UX lens 2 #3). |
+| `apps/web/app/p/[profileId]/hidden/delete-entry-control.tsx`                                               | NEW        | A `Button variant="ghost" size="sm"` "Delete", with `aria-label` "Delete {label}" or "Delete {label}, {n} sets". While pending: disabled with "Deleting…" (UX lens 1 #8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/web/app/p/[profileId]/hidden/hidden-slot.tsx`                                                        | NEW        | It renders a hidden item **only if** the item is in the visit set, as the **shared Undo line** (seams table: `components/undo-line.tsx`, owned by PROF-1 PR b). The line reads "{label} deleted · Undo", with `aria-label={HIDE_COPY.restoreLabel(label)}`. Undo is `aria-disabled` until the hide returns (UX lens 2 #5). It renders as `<li>` inside a list and `<div>` otherwise (UX lens 2 #8). **A refusal on an in-place Undo renders in place** (lens 1 #2, lens 2 #2, lens 3 #1): the text is referenced by `aria-describedby`, with "Use {value} instead" and "Leave it", and focus stays on Undo.                                                                 |
+| `apps/web/app/p/[profileId]/hidden/hidden-bar.tsx`                                                         | NEW        | `<section aria-labelledby>` + `<h2>` "Hidden on this day (n)". **The count unit is rows as shown**: a folded row of 3 bouts counts 1 (UX lens 1 #4, correctness NIT). With more than one event, the list sits behind a `button aria-expanded aria-controls` (not `<details>`, UX lens 2 #7). Each item shows its label and "Hidden {time}", or "Hidden {date}, {time}" when the hide was on another day (lens 3 N7), then "Restorable until removed", then Restore or "Restore all". The `slot_taken` refusal sits beside its item, with logged and hidden times on both values, "Use {value} instead", and "Leave it" as the default.                                      |
+| `apps/web/app/p/[profileId]/hidden/other-days.tsx`                                                         | NEW        | _Decision E._ One line: "Hidden on {k} other days", linking the most recent day. The rest sit behind a disclosure with a fixed `max-h` and scroll, so the header never grows with the history.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/app/p/[profileId]/page.tsx`                                                                      | EDIT       | `listDayWithHidden` goes in the existing `Promise.all` (`:85-89`). `<HiddenVisitProvider key=…>` wraps the day. The bar goes under the header and above the sections; `OtherDays` goes under `DayNav`. Each 3b section gets its hidden items by `sectionKey`.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `apps/web/app/p/[profileId]/bodyweight-amend.tsx` / `bodyweight-section.tsx`                               | EDIT       | Delete renders **in the amend's closed branch only** (`bodyweight-amend.tsx:103-123`), so it is hidden while Change is open (UX lens 1 #5). Change and Delete sit in one `flex gap-2` and wrap together. **On a day with duplicates:** after 1d this happens only on legacy pre-1d days. The receipt lists one line per value, each with its own Delete, which replaces `BODYWEIGHT_COPY.duplicates`' "ask a parent / not removed in the app yet" text. That copy is retired or rewritten (reuse N2; lens 2 #6).                                                                                                                                                            |
+| `apps/web/app/p/[profileId]/movement-line.tsx`, `strength-session-receipt.tsx`                             | EDIT       | An optional `control` slot on the name line (`:60-68`): `items-start gap-2`, the label `min-w-0 flex-1 [overflow-wrap:anywhere]`. Delete is passed only where Change is (`editable`). Hidden members render in their placement. The existing receipt ids (`strengthReceiptId`, `BODYWEIGHT_RECEIPT_ID`, `constants.ts:361, :484`) are reused as focus targets; per-entry ids are added only where none exists.                                                                                                                                                                                                                                                              |
+| `apps/web/lib/entries/activity-totals.ts`                                                                  | EDIT       | `MetricTotal` gains `entryIds`, so a folded row can hide its bouts (Q9).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `apps/web/lib/constants.ts`                                                                                | EDIT       | `HIDE_COPY` completed. The `slot_taken` text is **composed from `BODYWEIGHT_COPY.onePerDay`**, not re-typed (reuse).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `docs/privacy/notice.md` + `apps/web/lib/privacy/notice-content.ts` (`pnpm --filter web privacy:generate`) | EDIT       | The sentence below. `:149-152` is rewritten for post-1c sign-in ("anyone in your household who is signed in", not "anyone with your access code"). The export lines (`:163-170`) say a hidden item is not in the zip, and that Restore or the full copy gets it back. The **"Last updated"** line is bumped and the notice is re-signed per its own process (privacy S3–S7).                                                                                                                                                                                                                                                                                                |
+| `docs/privacy/data-inventory.md`                                                                           | EDIT       | The **header date** is bumped. §4 gets two new rows: a hidden item's label (a hidden weigh-in's **value** included) is readable by anyone who can open the athlete until it is removed; and "Hidden {time}" discloses **when** someone deleted it (privacy N8). §6 (`:292-295`): Restore or the full copy recovers a hidden row. §8 (`:365`): restorable until removed, and purged once PRIV-3 ships, with a new row saying a session's "How did it feel?" note stays after its entries are hidden (decision C).                                                                                                                                                            |
+| `docs/runbooks.md`                                                                                         | EDIT       | The full copy (`:806-810`) includes hidden rows until they are purged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `apps/web/e2e/delete-restore.spec.ts`, `apps/web/e2e/a11y.spec.ts`                                         | NEW / EDIT | Test plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/features/delete-and-restore.md`, `docs/features/strength-logging.md`                                 | EDIT       | The islands, the slot, and the single-copy rule.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-```ts
-export async function hideEntriesAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  return await Sentry.withServerActionInstrumentation('hideEntriesAction', async () => {
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);           // 1c's limiter
-    if (!limit.ok) return { ok: false, error: <1c's rate-limit copy> };
-    const parsed = hideEntriesSchema.safeParse({ profileId, day, entryIds: formData.getAll('entryId') });
-    if (!parsed.success) return { ok: false, error: 'Please fix the errors below.', fieldErrors: … };
-    const profile = await getProfileByPublicId(parsed.data.profileId);
-    if (!profile) return { ok: false, error: NO_PROFILE_LOG };
-    const r = await hideEntriesForDay({ profilePublicId: profile.id, day, entryPublicIds });
-    revalidatePath(`/p/${profile.id}`);                             // also on notFound: show what's saved
-    return 'notFound' in r ? { ok: false, error: AMEND_ERROR_COPY.notFound('entry') } : { ok: true, error: null };
-  });
-}
-```
+**The notice sentence** (`notice.md:136-152` and the `:126` table row). It is written for the
+no-purge state:
 
-**No `resolveDeclaredDay` bound.** Hide and restore correct a record; they never create one on a day.
-The amends make the same call for the same reason (`actions.ts:504-509`, plan Decision 5): a ±1 bound
-would render a dead control on exactly the history days a mistake is found on. Restore's only time
-bound is `N`.
+> **Deleting something in the app hides it.** Delete is on each logged item. The item disappears for
+> everyone in your household and shows up under "Hidden on this day", where anyone in your household
+> who is signed in can put it back. **For now it stays hidden until you restore it or your household is
+> deleted** — the job that removes hidden items for good after a set number of days is being built, and
+> this page will give that number when it exists. A session's "How did it feel?" note stays even when
+> every item in it is hidden.
 
-**Sentry:** no `headers`, no `formData`, and — from 1c — no user or household id (AUTH-1 plan § Design
-3, "no Clerk user id and no household id reaches Sentry at all in Beta 0").
-
-### B1-3 — `feat/v1-9b-1c-hide-restore-ui`
-
-| Path                                                                                                           | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/web/app/p/[profileId]/page.tsx`                                                                          | EDIT   | Call `listDayWithHidden` in the existing `Promise.all` (`:85-89`) instead of `listEntriesForDay`, plus `hiddenDaysInWindow`. Wrap the day's content in `<HiddenVisitProvider key={`${profile.id}                                                                                                                                                                                                                                                                               | ${day}`}>` (FE-6). Render `<HiddenBar>` under the header, above the sections (criterion 10), and the "Also hidden" line in the header under `DayNav`. Pass each section its live rows **and** its hidden items. |
-| `apps/web/app/p/[profileId]/hidden-visit.tsx`                                                                  | NEW    | `'use client'`. The day-scoped island: a `Set<entryPublicId>` of **this visit's** hides, `announce(msg)`, a pending focus target. Owns the **one** `role="status"` region, mounted with the provider, before any text (the `saved-announcer.tsx:1-42` idiom). Remounts on a day change (keyed) and empties on a reload, which is what moves this visit's hides into the bar next load.                                                                                         |
-| `apps/web/app/p/[profileId]/delete-entry-control.tsx`                                                          | NEW    | `'use client'`. `<form action={hideEntriesAction}>` with hidden `profileId`, `day`, `entryId`×n; a `Button variant="ghost" size="sm"` "Delete", `aria-label={HIDE_COPY.deleteLabel(label, count)}` ("Delete Push-Ups, 3 sets"). On success: add ids to the visit set, announce, set focus target to the tomb's Undo (criterion 11).                                                                                                                                            |
-| `apps/web/app/p/[profileId]/hidden-slot.tsx`                                                                   | NEW    | `'use client'`. Renders a hidden item **only if** its id is in the visit set: the tomb `<li>`, `"{label} deleted"` + Undo (a restore form for that item's event). Otherwise renders `null` — the item is in the bar instead. This is how a tomb sits in the row's exact position without the server knowing which hides are "this visit".                                                                                                                                      |
-| `apps/web/app/p/[profileId]/hidden-bar.tsx`                                                                    | NEW    | `'use client'` (it filters by the visit set). `<section aria-labelledby>` + `<h2>` "Hidden on this day (n)"; one event shows its item directly, more than one sits in a `<details>`; each item: label, "Hidden {time} · restorable until {date}", Restore / "Restore all". The `slot_taken` refusal renders **beside the item**, `id`-referenced by the Restore button's `aria-describedby` (U20), with "Keep {value} instead" and "Leave it" (the default — nothing happens). |
-| `apps/web/app/p/[profileId]/bodyweight-receipt.tsx` / `bodyweight-section.tsx`                                 | EDIT   | Delete beside Change in the existing `control` slot; Change and Delete grouped in one `flex gap-2` so they wrap **together**. A hidden weigh-in's tomb in the receipt's place.                                                                                                                                                                                                                                                                                                 |
-| `apps/web/app/p/[profileId]/movement-line.tsx`                                                                 | EDIT   | An optional `control` slot on the name line (`:60-68`): `flex items-start gap-2`, the label `min-w-0 flex-1 [overflow-wrap:anywhere]`, the control `shrink-0`. Server component stays server; the slot is the island.                                                                                                                                                                                                                                                          |
-| `apps/web/app/p/[profileId]/strength-session-receipt.tsx`                                                      | EDIT   | Pass `DeleteEntryControl` into each movement's slot **only when `editable`** (criterion 13); render `HiddenSlot`s for that session's hidden members at their placement.                                                                                                                                                                                                                                                                                                        |
-| `apps/web/lib/entries/activity-totals.ts`                                                                      | EDIT   | `MetricTotal` gains `entryIds: string[]` so a folded calisthenics row can hide its bouts (Q9); `values` order unchanged.                                                                                                                                                                                                                                                                                                                                                       |
-| Pre-3b only: the Logged-entries `<li>`s (`page.tsx:303-345`)                                                   | EDIT   | Delete on the `{kind:'entry'}` and `{kind:'calisthenics'}` rows; none on the list's session copy while the section owns Change. See [Both orders](#both-orders-against-v1-24-3b).                                                                                                                                                                                                                                                                                              |
-| `apps/web/lib/constants.ts`                                                                                    | EDIT   | `HIDE_COPY` completed (strings below).                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `docs/privacy/notice.md` + `apps/web/lib/privacy/notice-content.ts` (via `pnpm --filter web privacy:generate`) | EDIT   | The sentence ADR 0008 owes (below); the drift test (`notice-content.test.ts`) keeps the two in step. A new assertion there pins the notice's day count to `HIDDEN_RESTORE_DAYS` (the one literal on the assertion side).                                                                                                                                                                                                                                                       |
-| `docs/privacy/data-inventory.md`                                                                               | EDIT   | §4: a new row — **the Hidden bar shows a hidden item's label, including a hidden weigh-in's value, to anyone who can open the athlete, until `N`**; §6 (`:292-295`): hidden rows are absent from the zip **and recoverable by Restore for `N` days or in the on-request full copy**; §8 (`:365`): "until the whole household is deleted. Nothing purges it" → restorable for `N`, then purged by PRIV-3's job (or, until it ships, invisible and unrestorable but still held). |
-| `apps/web/e2e/delete-restore.spec.ts`                                                                          | NEW    | Test plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `apps/web/e2e/a11y.spec.ts`                                                                                    | EDIT   | Add the day with a populated Hidden bar and with a refusal shown (unowned 8).                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `docs/features/strength-logging.md`                                                                            | EDIT   | `movement-line.tsx`, `strength-session-receipt.tsx`: the slot, the single-copy rule.                                                                                                                                                                                                                                                                                                                                                                                           |
-| `docs/runbooks.md`                                                                                             | EDIT   | The on-request full copy includes hidden rows until purged (`runbooks.md:806-810` names the full copy).                                                                                                                                                                                                                                                                                                                                                                        |
-
-**The notice sentence** (`notice.md:136-152`, rewritten from "is being built" to "was built"; `{N}` is
-`HIDDEN_RESTORE_DAYS`):
-
-> **Deleting something in the app hides it, then removes it.** Delete is on each logged item. The item
-> disappears for everyone in your household and shows up under "Hidden on this day", where anyone who
-> can open that athlete can put it back for **{N} days**. After that it can no longer be restored
-> [and is permanently removed from the database — **or, until the clean-up job ships: and it stays in
-> the database, out of sight, until the clean-up that removes it is finished**].
-
-The bracketed clause is chosen at B1-3's merge by whether PRIV-3's purge job is live, so the notice is
-never ahead of the code. The "How long we keep it" row (`:126`) changes the same way. "**There is
-still no way to permanently remove one single item on demand**" (`:154-155`) stays, true.
-
-**Copy** (`HIDE_COPY`, `apps/web/lib/constants.ts` — the prototype's words, Q10):
-
-| Key                      | Text                                                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| `delete`                 | `Delete`                                                                               |
-| `deleteLabel`            | `Delete {label}` / `Delete {label}, {n} sets` (folded)                                 |
-| `deleted`                | `{label} deleted`                                                                      |
-| `undo` / `undoLabel`     | `Undo` / `Undo delete of {label}` (A11Y-5)                                             |
-| `hiddenHeading`          | `Hidden on this day ({n})`                                                             |
-| `hiddenDetail`           | `Hidden {time} · restorable until {date}`                                              |
-| `restore` / `restoreAll` | `Restore` / `Restore all`                                                              |
-| `slotTaken`              | `{wanted} can't come back while {held} is logged for this day — one weigh-in per day.` |
-| `keepInstead`            | `Keep {wanted} instead`                                                                |
-| `leaveIt`                | `Leave it`                                                                             |
-| `restoredPartly`         | `Restored {k} of {n}.`                                                                 |
-| `alsoHidden`             | `Also hidden, still restorable: `                                                      |
-| `announceHidden`         | `{label} deleted. Undo is in its place.`                                               |
-| `announceRestored`       | `Restored {label}.` / `Restored {n} entries.`                                          |
+The purge PR replaces this with the dated version (requirement 3).
 
 ### B2 — `feat/v1-9b-2-clear-day`
 
-| Path                                                                                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/hide.ts`                                                                                    | EDIT   | `clearDaySchema = hideEntriesSchema.extend({ confirm: z.string().transform(normalizeClearConfirm).pipe(z.literal(CLEAR_DAY_CONFIRM_WORD)) })` — the contract's rule, built from B1-1's one constant and one normalizer.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `apps/web/app/p/[profileId]/actions.ts`                                                                          | EDIT   | `clearDayAction` — the same body as `hideEntriesAction` after its own schema. **No new writer:** it calls `hideEntries` with the day's rendered entry ids, so a clear is one `UPDATE`, one `now()`, one event (Decision 2), and restores through the Hidden bar exactly as a single hide does.                                                                                                                                                                                                                                                                                                                                                           |
-| `apps/web/app/p/[profileId]/mutating-actions.ts`                                                                 | EDIT   | `clearDayAction: NO_PROFILE_LOG`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `apps/web/app/p/[profileId]/clear-day.tsx`                                                                       | NEW    | `'use client'`. "Clear this day…" (a text button, `min-h-11`, below the sections when the day has live entries), opening a small modal: U0's primitive if merged, else a native `<dialog>` with `showModal()` (focus trap and inert background for free). Focus on the title (U21), `aria-describedby` on the consequence; the input `autocapitalize="off" autocorrect="off" spellcheck={false}`; the button disabled until `normalizeClearConfirm(value) === CLEAR_DAY_CONFIRM_WORD`, with the hint "The button turns on when it matches." Its own `role="status"` **inside** the dialog (criterion 46). Escape and Cancel return focus to the trigger. |
-| `apps/web/lib/constants.ts`                                                                                      | EDIT   | `CLEAR_DAY_COPY`: trigger, `Clear {day}?`, `This hides all {n} items logged for {name} on this day, for everyone in your household. You can put them all back from Hidden on this day until {date}.`, `Type delete to confirm`, `Clear day`, `Cancel`.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `apps/web/app/p/[profileId]/hidden-bar.tsx`                                                                      | EDIT   | "Restore all" for a multi-item event; a partial restore lists each item that stayed hidden with its reason (criterion 14), the `slot_taken` one with its swap.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `apps/web/app/p/[profileId]/actions.test.ts`, `apps/web/e2e/delete-restore.spec.ts`, `apps/web/e2e/a11y.spec.ts` | EDIT   | Test plan. The a11y scan opens the dialog.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-
-**"Every live entry" vs "what was shown"** (criterion 14). The action hides the ids the page
-**rendered** (the count `n` the dialog states — IXD-12's "the count matches what you see"), not a
-fresh `SELECT` of the day. In the ordinary case these are identical. When another device logged
-something between render and confirm, the person confirmed `n` items and `n` are hidden; the new one
-stays visible, which is what they saw and agreed to. Flagged as Contradiction 5 because the criterion
-says "every live entry".
+| Path                                                             | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/hide.ts`                                    | EDIT   | `CLEAR_DAY_CONFIRM_WORD = 'delete'`, `normalizeClearConfirm`, `CLEAR_DAY_MAX`, and `clearDaySchema = hideEntriesSchema.extend({ confirm: z.string().transform(normalizeClearConfirm).pipe(z.literal(CLEAR_DAY_CONFIRM_WORD)) })`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `apps/web/app/p/[profileId]/entry-actions.ts`                    | EDIT   | `clearDayAction` = `runHide(formData, clearDaySchema)`. There is no new writer, so a clear is one `UPDATE`, one `now()` and one event.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| WP-1 registry / bindings / `VALID_BODY`, `entry-actions.test.ts` | EDIT   | `clearDayAction: { refusal: NO_PROFILE_LOG, scope: 'profile' }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/app/p/[profileId]/hidden/clear-day.tsx`                | NEW    | The trigger is "Clear this day…" (`min-h-11`). The dialog is U0's primitive if merged, otherwise a native `<dialog>` with `showModal()`. It is **top-anchored** so the keyboard never covers the input (UX lens 2 #4). Focus starts on the title; `aria-describedby` points at the consequence. The input has `autocapitalize="off" autocorrect="off" spellcheck={false} enterKeyHint="done"`. The button stays disabled until `normalizeClearConfirm(v) === CLEAR_DAY_CONFIRM_WORD`, with a hint whose text is built **from the constant**. A `role="status"` sits **inside** the dialog (criterion 46). Clear uses a non-destructive variant, or a token fix for its contrast (UX lens 2). **On success** the dialog closes, the bar shows one event "Cleared this day · {n} items", focus moves to its **Restore all**, and the announcement fires **after** close (lens 1 #3, lens 3 #6). |
+| `apps/web/lib/constants.ts`                                      | EDIT   | `CLEAR_DAY_COPY`. Its body: "This hides all {n} items logged for {name} on this day, for everyone in your household. You can put them all back from Hidden on this day. Their 'How did it feel?' note stays." `{n}` counts rows as shown.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `apps/web/app/p/[profileId]/hidden/hidden-bar.tsx`               | EDIT   | A partial "Restore all" lists each item that stayed hidden, with its reason.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `docs/features/write-path.md`, `delete-and-restore.md`           | EDIT   | The third action (arch S5).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/web/e2e/*`                                                 | EDIT   | Test plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## 360px width math
 
-The main column is `px-4` (`page.tsx:128`): 360 − 32 = **328px**. A bordered `px-4` card subtracts
-32 + 2 = **294px** of content (the spec's measured figure, disagreement 6; `bodyweight-receipt.tsx:84`
-says the same). Buttons: `size="sm"` is `px-2.5` + `text-[0.8rem]` (`components/ui/button.tsx:39`), so
-"Delete" / "Change" ≈ 6 × ~7px + 20 + 2 ≈ **64px**, and the base `min-h-11` gives the 44px height
-(`button.tsx:20`). Width ≥ 44px holds for every label here. These are estimates from the classes;
-**B1-3 measures them on the real page in Playwright at 360px and puts the numbers in the PR**, as
-disagreement 6 requires.
+The main column is `px-4` (`page.tsx:128`), so 360 − 32 = **328px**. A bordered `px-4` card leaves
+**294px** of content (`bodyweight-receipt.tsx:84`; the spec's disagreement 6). A `size="sm"` button is
+`px-2.5` with `text-[0.8rem]` (`components/ui/button.tsx:39`), so "Delete" and "Change" are about
+**64px** wide, and every button is 44px tall from `min-h-11` (`:20`). **B1-3 measures these on the
+real page at 360px** and puts the numbers in the PR.
 
-| Row                             | Arithmetic                                                                                       | Result                                                                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Bodyweight receipt              | "Saved: 1000.5 lb" (16 chars, 16px medium ≈ 136) + 8 + Change 64 + 8 + Delete 64 = **280** ≤ 294 | fits; the action group wraps **as a unit** if a longer locale/value ever exceeds it                                                |
-| Strength movement name line     | 294 − Delete 64 − gap 8 = **222** for the label                                                  | "Overhead Shoulder Press" (~190) fits on one line                                                                                  |
-| …inside a superset bracket      | `border-l-2 pl-3` (`strength-session-receipt.tsx:127`) → 294 − 14 = 280; − 72 = **208**          | fits; with a status badge (~55 + 8) → **145**: the label wraps to two lines (`min-w-0`, `overflow-wrap:anywhere`), never overflows |
-| Tomb `"{label} deleted"` + Undo | 294 − Undo (ghost, `min-w-11`, ~48) − 8 = **238**                                                | "Overhead Shoulder Press deleted" (~31 chars at 14px ≈ 225) fits; longer wraps                                                     |
-| Hidden bar item                 | bar = 328 − 2 border − 20 padding = 306; − "Restore all" (~84) − 8 = **214** for label + detail  | detail wraps to two lines (≈280px at 14px); the button stays right                                                                 |
-| Refusal swap row                | "Keep 112.4 lb instead" (~150) + 8 + "Leave it" (~70) = **228** ≤ 306                            | fits on one line                                                                                                                   |
-| "Also hidden" links             | inline links, each `min-h-11` (U27 / the prototype's `display:inline-flex;min-height:44px`)      | wraps; each link stays a 44px target                                                                                               |
+| Row                                                 | Arithmetic                                                              | Result                                                 |
+| --------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------ |
+| Bodyweight receipt                                  | "Saved: 1000.5 lb" ≈136 + 8 + Change 64 + 8 + Delete 64 = **280** ≤ 294 | Fits. The action group wraps as one unit.              |
+| Strength movement name line                         | 294 − 64 − 8 = **222**                                                  | "Overhead Shoulder Press" (≈190) fits.                 |
+| …in a superset (`strength-session-receipt.tsx:127`) | 280 − 72 = **208**; with a status badge, **145**                        | Fits; with a badge the label wraps to two lines.       |
+| Undo line                                           | 294 − Undo ≈48 − 8 = **238**                                            | "Overhead Shoulder Press deleted · 3 sets" wraps once. |
+| Hidden-bar item                                     | 328 − 22 = 306; − "Restore all" ≈84 − 8 = **214**                       | The detail wraps to two lines.                         |
+| Refusal actions                                     | "Use 112.4 lb instead" ≈140 + 8 + "Leave it" ≈70 = **218** ≤ 306        | One line.                                              |
+| "Hidden on {k} other days"                          | one link line; the disclosure is `max-h-40` with scrolling              | Fixed height (decision E).                             |
 
 ## Test plan
 
-**B0 — `db:verify` (PGlite, local and CI):**
+**B0 — `db:verify`:**
 
-1. For each of the five indexes: `pg_indexes.indexdef` contains no `WHERE` (structural — catches a
-   future re-partial).
-2. Criterion 9 through the **shipped** writers: log a strength session; soft-delete one movement entry
-   by fixture; replay the same graph (`writeStrengthSession`, same `client_id`s) → still **one** row
-   per `client_id` in every table. Same for a check-in (`logCheckinEntries`-equivalent statement →
-   `created: false`) and a weigh-in on a day nobody holds (in B0 this **throws** — branch (c); B1-1
-   turns it into `{ hiddenSinceWrite }` and updates the assertion — the plan says so in both PRs so the
-   change of assertion is deliberate, not drift).
-3. `verify.ts:3592-3606` (`dayTaken` for a hidden submit's replay on a held day) stays green unmodified.
-4. Mutation 07 is red.
-
-Run: `pnpm verify` (includes `db:verify` and `db:mutations`). CI: the `quality` job + forward-only +
-Squawk on the new file.
+1. **Behavioural case, ordered first.** Through the **shipped** writers: soft-delete one movement entry
+   by fixture, then replay the graph with the same `client_id`s. Every table still has **one** row per
+   id. For strength the replay must **throw**, so it is asserted with
+   `assert.rejects(…, /no live row for client_id/)` (db-safety 3). A check-in replay gives
+   `created: false`.
+2. **Structural case.** `pg_indexes.indexdef` for the five indexes has no `WHERE`.
+3. `verify.ts:3592-3606` stays green **unmodified**.
+4. Mutation 07 goes red on case 1.
 
 **B1-1 — `db:verify`:**
 
-1. **Live parent:** the reader-audit table, one case per row.
-2. **Event identity:** three ids hidden in one call → one token; two separate calls → two tokens;
-   restoring one leaves the other hidden; the token is the `::text` form and survives a round trip
-   (assert a non-zero microsecond part, then restore by it).
-3. **`slot_taken`** (criterion 12's fixture): hide weigh-in A; log B on that day via
-   `insertBodyweightEntry`; restore A → `{ reason: 'slot_taken', heldBy: B }`, A still hidden, B
-   untouched, **no `23505` escapes**. Swap with `keepInsteadOf: B` → A live, B hidden with a new token.
-   Swap replay → `ok`, no change. Swap naming a holder that is no longer the holder → `changed`.
-4. **Window:** a row hidden `N + 1` days ago (fixture `deleted_at`) is absent from
-   `hiddenEntriesForDay` and restores as `not_found`; one hidden `N − 1` days ago is present.
-5. **Replay outcomes:** hide replay → same token, no extra write (`updated_at` unchanged on the
-   second call); restore replay → `ok`; restore after re-hide under another token → `changed`.
-6. **Replay of a hidden create:** `insertBodyweightEntry` with a hidden row's `client_id` on a free day
-   → `{ hiddenSinceWrite: true }` and the row stays hidden (decision 3.3); `writeStrengthSession`
-   replay with one hidden movement → the movement stays hidden, the others are untouched.
-7. **TEN-1 matrix, both directions:** household B's scope cannot hide, restore or read A's hidden rows
-   (writers and both queries return zero / `notFound`).
-8. **Export (criterion 16):** capture `strengthMonthRows` + `bodyweightMonthRows` for a month, hide
-   every entry in it, assert `loggedMonths` drops the month, restore the event, assert deep-equal to the
-   capture.
-9. **Q7:** `weeklyAdherence` sum drops by the hidden bout's value and returns after restore.
-10. Mutation 08 is red.
+1. **The reader audit**, one case per row.
+2. **Event identity and microseconds** (correctness B3, db-safety 5).
+   - Fixture rows get `deleted_at` with **six** fractional digits (`'…12:00:00.123456+00'`). Restore by
+     the read's token must succeed.
+   - Two separate hide calls with `pg_sleep(0.001)` between them give two tokens. Restoring one leaves
+     the other hidden.
+   - Three ids hidden inside one transaction with `pg_sleep(0.01)` between statements share **one**
+     token. That pins `now()` over `clock_timestamp()`.
+   - Mutations 08 and 09 go red.
+3. **`slot_taken`** (criterion 12's fixture). Hide weigh-in A, log B, then restore A: the answer is
+   `slot_taken` with `heldBy` B. A stays hidden, B is untouched, and no `23505` escapes.
+4. **Swap** (Decision 8).
+   - Swap A for B: A is live, and B is hidden under a new token.
+   - **Bad order 1:** the item is not hidden under the token. The answer is `changed`, and B is still
+     live.
+   - **Bad order 2:** the named holder is no longer the holder. The answer is `changed`, and nothing
+     is committed.
+   - Replaying the swap gives `ok` with no change.
+5. **Replays.** A hide replay returns the same token and leaves `updated_at` unchanged. A restore
+   replay is `ok`. A restore after a re-hide is `changed`.
+6. **Check-in/life writer.** A replay of a hidden row's `client_id` gives `own_hidden`, and the row
+   stays hidden. A replay of a live row gives `replay`. Another profile's id gives `conflict`.
+7. **TEN-1 matrix, both directions.** B's scope cannot hide, restore or read A's rows.
+8. **Export** (criterion 16). Capture the month, hide it all, and `loggedMonths` drops the month.
+   Restore, and the month is deep-equal to the capture.
+9. **Q7.** A hidden bout leaves `weeklyAdherence`, and a restore brings it back.
 
-**B1-2 — Vitest (`actions.test.ts`, mocked DAL per the repo's pattern):**
+**B1-2 — Vitest (`entry-actions.test.ts`; `actions.test.ts` for the life and check-in mapping):**
 
-- Through `MUTATING_ACTIONS`: **unauth → reject** and **wrong household → `NO_PROFILE_LOG`** for both
-  actions, automatically.
-- **Bad body → zod-reject**, no DAL call: empty `entryId`s, more than `HIDE_BATCH_MAX`, a non-UUID, a
-  malformed day, a `hiddenAt` that is not a timestamp string.
-- **Wrong owner / stale id** → `AMEND_ERROR_COPY.notFound('entry')`, byte-identical for foreign and
-  stale (the ADR 0006 property).
-- **Replay → one effect + identical response** for each action.
-- `restore` result mapping: `slot_taken` → `restore: [{ reason, heldBy: { entryPublicId, label } }]`
-  with the label from `entryLabel`.
-- `entries.test.ts`: the emitted-SQL proof above.
+- Through WP-1's matrix: **unauth → reject** and **wrong household → `NO_PROFILE_LOG`**, byte-identical.
+  The writers are asserted not called.
+- **Bad body → zod-reject:** an empty id list, over `HIDE_ROW_MAX`, a non-UUID, a bad day, and a bad
+  `hiddenAt` format.
+- **Wrong owner or a stale id** → `notFound`, byte-identical. **A replay** → one effect and an identical
+  envelope. `slot_taken` maps to `restore[]` with `heldBy.label`.
+- **Life:** an `own_hidden` result returns `{ ok:false, error: HIDE_COPY.loggedThenDeleted }`, never
+  `ok`. The same holds for check-ins.
+- **`life-form.test.tsx`:** the button remounts, with a new id, when the day changes and when
+  `loggedEntryId` changes.
+- **`entries.test.ts`:** the emitted SQL of `listDayWithHidden`'s live half is byte-identical to
+  `listEntriesForDay`'s.
 
-**B1-3 — Playwright (`pnpm e2e:local`), plus Vitest for the islands:**
+**B1-3 — Playwright (`pnpm e2e:local`), Vitest, a11y:**
 
-- Delete a weigh-in → the tomb is where the receipt was, focus is on its Undo, the status region
-  announced; the weigh-in form is back. Undo → the receipt returns and has focus.
-- Delete, then reload → the tomb is gone and the item is in "Hidden on this day (1)" with "restorable
-  until {date}". Navigate to the previous day and back → still in the bar (criterion 10's reload +
-  day-change).
-- Second Delete on the row **below** a first Delete lands where the finger was: assert the bounding box
-  of every element **above** the tapped row is unchanged after the hide (IXD-2, the test the panel's
-  finding implies).
-- `day-slot`: hide, log a new weight, reload, Restore → the refusal names both values; "Leave it"
-  changes nothing; "Keep {value} instead" swaps, and the newer one is now in the bar.
-- Folded calisthenics row: Delete says "3 sets", hides all three as one bar item; "Restore all".
-- Criterion 13: with the strength section on the page, exactly one `Delete {movement}` button exists.
-- `hidden-visit.test.tsx` (Vitest): a hide adds to the set; a remount with a new key empties it; the
-  status region exists before the first message (the `saved-announcer.test.tsx` idiom).
-- Screenshots via `ui-screenshot` at 390/820/1280: the day with a tomb, with the bar, with a refusal.
-- **Real-phone checks** (spec → "For the implementation plans"; a browser cannot answer): on iOS
-  VoiceOver and Android TalkBack, that the hide announcement and the focus move to Undo both survive
-  when they happen together, and that Undo is reachable by swipe in reading order. Results in the PR.
+- **Delete a weigh-in.** The Undo line appears in its place, focus is on Undo, there is one
+  announcement, and the form returns. Undo puts the receipt back with focus on it, and there is **one**
+  announcement (not `SavedAnnouncer`'s too).
+- **Reload.** The item has moved into the bar with "Restorable until removed". Go to the previous day
+  and come back: it is still in the bar.
+- **IXD-2.** A second Delete lands where the finger was. The bounding box of everything **above** the
+  tapped row is unchanged.
+- **The life lost write** (accept 1). Log Wake, Delete it, tap Wake again. It is listed as logged.
+- **`day-slot`, same visit** (lens 3 #1). Delete a weigh-in, log a new one, then press the **in-place**
+  Undo. The refusal shows in place and focus stays on Undo. "Leave it" changes nothing. "Use {value}
+  instead" swaps, and the newer weigh-in goes to the bar.
+- **`day-slot` after a reload:** the same flow from the bar.
+- **A folded row:** "Delete Push-Ups, 3 sets" gives one bar item that counts as 1.
+- **Criterion 13:** exactly one `Delete {movement}`.
+- **Pending state:** while a Delete is in flight the button reads "Deleting…", and Undo is
+  `aria-disabled`.
+- **Vitest for `hidden-visit`:** optimistic add, rollback on failure, focus only once the target
+  exists, and a remount on a new key empties the set.
+- **a11y scan at the narrow width** (UX lens 2): the Undo line, the expanded bar, the refusal, and the
+  typed-clear dialog.
+- **Real phones** (spec → "For the implementation plans"): on VoiceOver and TalkBack, check that the
+  hide announcement and the focus move to Undo both survive, and that Undo is reachable by swipe.
+  Results go in the PR. Screenshots via `ui-screenshot` at 390/820/1280.
 
-**B2:** zod: `" Delete "` passes, `"delet"` and `"DELETE!"` fail, missing confirm fails; the button
-stays disabled until the match (Vitest on the island); Playwright: clear a six-item day → one bar
-event "Restore all" → all six back; with a re-logged weigh-in, "Restored 5 of 6" + the refusal;
-`db:verify`: one `deleted_at` across all rows of one clear.
+**B2:**
+
+- **zod:** `" Delete "` passes; `"delet"`, `"DELETE!"` and a missing confirm fail.
+- **Playwright:** clear a six-row day. The bar shows "Cleared this day · 6 items", focus is on Restore
+  all, and the announcement comes after close. Restore all brings back 6. With a re-logged weigh-in,
+  restore gives "Restored 5 of 6" plus the refusal.
+- **`db:verify`:** every row a clear hides shares one `deleted_at`.
 
 ## Risks / rollback
 
-| Risk                                                                                              | Mitigation                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **B0 deploy racing the migrator** breaks every insert                                             | B0 changes **no** app code; the writers' `where:` stays, so they infer either index shape (Decision 1). B1-1 merges only after B0's `migrate.yml` run is green **on B0's merge SHA**.                                                                                                |
-| B0's migration finds a duplicate in prod and aborts                                               | The atomic `DO` block raises a named message before any DDL; the app keeps logging (it depends on neither shape). Runbook entry; a correction keeps one row of the pair.                                                                                                             |
-| `ACCESS EXCLUSIVE` on five tables blocks logging during the migration                             | Hundreds of rows; `lock_timeout 5s`, `statement_timeout 60s`; migrate on merge, not at practice time (logging happens after 18:30 local, per the household's schedule).                                                                                                              |
-| **The token loses microseconds** and every restore is `not_found`                                 | Text end to end (Decision 2); `db:verify` case 2 asserts a non-zero microsecond part round-trips.                                                                                                                                                                                    |
-| A reader somewhere counts a hidden entry's live children                                          | The reader audit, one `db:verify` case per reader; the entry→set proof.                                                                                                                                                                                                              |
-| Restore resurrects a row the purge is about to delete, or after it                                | The window is enforced in the read **and** the writer (Decision 7); restore window = purge window by one constant.                                                                                                                                                                   |
-| **A restored single-per-day check-in or life entry duplicates one logged since** (wake, practice) | There is no DB key for those, so there is nothing for `slot_taken` to arbitrate on, and the restore succeeds. Stated, not fixed: the check-ins CSV is header-only (`data-inventory.md` §6), so no export byte changes; a natural key for them is V1-24 2's question, not this row's. |
-| A child hides a sibling's weigh-in                                                                | Accepted by ADR 0008 decision 4; the Hidden bar on the **athlete's** page is the recovery, visible to a parent. The notice says so (`notice.md:149-153`, kept).                                                                                                                      |
-| **A hidden weigh-in's value stays visible in the Hidden bar** to anyone who can open the athlete  | The same audience that saw the live value; needed to choose "Keep {value} instead". Stated in the inventory §4 and for the privacy lens, not hidden.                                                                                                                                 |
-| B1-2's actions are reachable by a crafted POST before B1-3's notice lands                         | Merge B1-2 and B1-3 back to back; B1-2 already updates the inventory so it is never false. The notice's "no Delete button yet" stays literally true until B1-3.                                                                                                                      |
-| LWW later: a hide from another device with a later clock beats a Restore that reported success    | ADR 0008 decision 2/3.5: the sync PR's to reconcile; no LWW exists today (`schema.ts:37` "v1.5"). Today a hide beats an edit unconditionally (the amends filter `deleted_at IS NULL`).                                                                                               |
-| **The LLM never authors loads**                                                                   | Untouched: hide/restore/swap move no value and write no column but `deleted_at`/`updated_at`.                                                                                                                                                                                        |
-| **CSV byte-faithfulness**                                                                         | No export query changes. A hide changes that month's export **by design** (that is what Delete means; ADR 0008); a restore returns it byte-identical (case 8).                                                                                                                       |
+| Risk                                                                                                                                   | Mitigation                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0 racing the deploy breaks every insert                                                                                               | B0 changes no app code, and the writers keep `where:` (Decision 1).                                                                                                                       |
+| B1-1 relies on the new index before prod has it                                                                                        | B1-1's gate checks prod's `pg_indexes`, not only the run's colour (db-safety B1).                                                                                                         |
+| **Between B0 and B1-1 a hidden row's replay throws** instead of inserting. That is a 500 for a stale tab, and only on the two 1c rows. | It is the price of criterion 9, and only a replay of the 2026-09-30 submits can hit it. Accepted; named in the PR body (db-safety 3).                                                     |
+| A stale strength or bodyweight tab resubmits after a hide, which surfaces as a 500, not a second row                                   | Decision 7: needs the same render resubmitted across a hide. The forms remount after a save or a hide.                                                                                    |
+| B0 refuses in prod, and `migrate.yml` freezes every later migration                                                                    | The DO block raises before any DDL. Link the wedge runbook (`runbooks.md:116`). A correction selects by predicate. AUTH-1 1b waits, and the PR says so.                                   |
+| The lock blocks Today's reads during B0                                                                                                | Under a second at prod's size; bounded by `lock_timeout` 5 s.                                                                                                                             |
+| The token loses microseconds                                                                                                           | Decision 2's fixed text format; B1-1 case 2; mutation 09.                                                                                                                                 |
+| **The life button reports `ok` for a lost write**                                                                                      | Fixed in B1-2 (the key and the typed result), and covered by e2e.                                                                                                                         |
+| A restored check-in or life entry duplicates one logged since                                                                          | There is no DB key for those, so there is nothing for `slot_taken` to arbitrate. The check-ins CSV is header-only (`data-inventory.md` §6). A natural key for them is V1-24 2's question. |
+| A hidden weigh-in's value, and **when** it was deleted, stay visible to the household                                                  | The audience is the same one that saw the live value. The value is needed for "Use {value} instead". Stated in inventory §4.                                                              |
+| A child hides a sibling's weigh-in                                                                                                     | ADR 0008 decision 4. The bar on the **athlete's** page is the recovery.                                                                                                                   |
+| Hidden rows accumulate with no end until PRIV-3                                                                                        | That is the honest state, and the notice says it (decision A). The purge brings the end.                                                                                                  |
+| LWW later                                                                                                                              | ADR 0008 decisions 2 and 3.5; the sync PR reconciles it. Today a hide beats an edit, because the amends filter `deleted_at IS NULL`.                                                      |
+| **LLM never authors loads**                                                                                                            | Hide, restore and swap write only `deleted_at` and `updated_at`.                                                                                                                          |
+| **CSV byte-faithfulness**                                                                                                              | No export query changes. A hide changes the month's export by design, and a restore brings it back byte-identical.                                                                        |
 
-**Rollback.** B0: fix-forward with a migration that restores the partial predicate (same shape,
-inverse), safe because no code depends on the non-partial form until B1-1 — after B1-1, a re-partial
-re-arms criterion 9's hazard, so roll back B1 first. B1-1/B1-2: plain reverts; rows already hidden stay
-hidden and are restorable by a correction (`UPDATE … SET deleted_at = NULL` with a `slot_taken` check,
-the runbook's own idiom at `runbooks.md:59-62`). B1-3/B2: plain reverts; the notice reverts with them
-(B1-3) so it is never ahead of the code.
+**Rollback:**
+
+- **B0:** a forward migration restores the partial predicate. It is safe until B1-1; after B1-1, roll B1
+  back first.
+- **B1-1 and B1-2:** plain reverts. Rows already hidden stay restorable by a correction that
+  **selects by predicate**, never by committed ids.
+- **B1-3:** the revert **writes a new notice state** ("Delete was withdrawn; items already hidden stay
+  hidden until restored on request"). It does not restore stale text (privacy S5).
+- **B2:** a plain revert.
 
 ## Out-of-scope / deferred
 
-- **The purge job** — PRIV-3. This plan needs only `N`.
-- **Set grain** — `entry_sets.deleted_at` exists and stays unbuilt (ADR 0008).
-- **Hiding a session or superset row.** Entry grain only; a session whose every movement is hidden
-  simply renders nothing (the day read starts from entries). Its `feel` note is not exported
-  (`data-inventory.md` §6) and stays until the household is erased — said in the inventory.
-- **Clearing `day_readiness`** with a day — a different table and not an entry; "Clear this day"
-  hides entries. The dialog's count says "items logged", which readiness is not.
-- **FE-15's client event ids** and the outbox — the v1.5 sync PR (Decision 6).
-- **Dropping the now-redundant `where:` clauses** from the arbiters — a later cleanup.
-- **A per-day marker on the weekly adherence strip** (Q7's second half): the strip is **per metric**,
-  not per day (`weekly-adherence.tsx`), and renders nothing until the ramp schedule is seeded
-  (`page.tsx:82-84`). The day signal is the "Also hidden" line; a strip marker is the strip's own
-  follow-up once it renders.
-- **Deleting an athlete** (A3), **archive** (A2), **movements** (exempt by ADR 0008).
-- **Removing the Logged-entries list** — V1-24 3b's.
+- **The purge job, `N`, the window and the dated copy.** These belong to PRIV-3, under the requirements
+  above.
+- **Set grain.** `entry_sets.deleted_at` stays unbuilt (ADR 0008).
+- **Hiding a session or superset row.** The grain is the entry. The orphaned note is decision C.
+- **`day_readiness` in a clear.** It is not an entry, and the dialog counts "items logged".
+- **FE-15**, the client event ids, belong to sync (Decision 6).
+- **Dropping the redundant `where:` clauses.** A later cleanup.
+- **Typed replay-of-hidden for strength and bodyweight.** Cut (Decision 7).
+- **A per-day marker on the adherence strip** (Q7's second half). The strip is per metric
+  (`weekly-adherence.tsx`) and renders nothing until ramp targets are seeded (`page.tsx:82-84`).
+- **A guard that the journal's `when` only increases.** Filed as its own row.
+- **The pre-3b order.** Dropped (decision D).
 
-## Open questions
+## Open questions (for the maintainer)
 
-1. **`N`** (PRIV-3). Blocks B1-1. The prototype's 30 days is a labelled placeholder
-   (`index.html:1270`).
-2. **ADR 0008 decision 4 at AUTH-1** — confirm "deletion authority = logging authority = any household
-   member" (Decision 9), or name a narrower rule before B1-2.
-3. **Contract amendments** for the spec's owner to accept or refuse: `restoreHiddenSchema` gains
-   `entryPublicIds` and optional `keepInsteadOf`; `RestoreResult` gains `'changed'`; `hideEntrySchema` +
-   `hideGroupSchema` merge into `hideEntriesSchema` (Decisions 3, 5, 8).
-4. **Criterion 15's span** — "the current week" (criterion text) vs "the whole restore window" (the
-   approved prototype). This plan builds the prototype's; one word in the criterion should change.
-5. **Criterion 14** — hide what was shown (this plan) vs a fresh select of "every live entry".
+1. **ADR 0008 decision 4 at AUTH-1.** The recommendation is that deletion authority equals logging
+   authority, so any signed-in household member can hide and restore (Decision 9). Confirm, or name a
+   narrower rule before B1-2.
+2. **The spec's contract.** The plan amends it in four ways (Decisions 3, 5 and 8, Contradiction 4):
+   - `restoreHiddenSchema` gains `entryPublicIds` and an optional `keepInsteadOf`.
+   - `RestoreResult` gains `'changed'`.
+   - `HiddenOnDayDTO` drops `restorableUntil` until the purge.
+   - The two hide schemas merge into one.
+
+   Accept these, or refuse them.
+
+3. **Criterion 14.** The plan hides what the dialog counted. The alternative is a fresh select of
+   "every live entry" at confirm time. Which should it be?
 
 ## Contradictions with the spec and the rows
 
-1. **The spec treats V1-24 1d and 1e as future work** — chunk table row E, the critical path
-   (_"Beside it: `V1-24 1d → 1e` (1e before B1)"_) and "Can start before AUTH-1 1c" (_"V1-24 1d (a
-   migration…) — serial with B0 and AUTH-1 1b by migration number"_). Both shipped (`9336554` #210 with
-   `0012`; `b625a23` #214), as did 3a (#211, #212). Track E's remainder is **2 and 3b**, and the "1e
-   before B1" gate is met.
-2. **"Nothing in shipped code writes `deleted_at`"** is true of the app; **prod holds hidden rows**
-   from the V1-24 1c correction (`registry.ts:214-217`), so B0's read can fail and is worth running.
-3. **Criterion 15 says "other days of the current week"** (and IXD-13 fixed it to "the last 7 days");
-   the approved prototype covers the **whole restore window** (`index.html:1825`, the `weekHidden` loop
-   to `PURGE_DAYS`, `:2501-2512`). Open question 4.
-4. **The data contract cannot express FE-7** (`restoreHiddenSchema` has no item ids; `RestoreResult`
-   has no "changed"), has **no swap** for criterion 12's "keep this one instead", and its proposed
-   `hiddenAt` identity breaks if the token ever becomes a JS `Date`. Open question 3; Decision 2.
-5. **Criterion 14's "every live entry"** vs IXD-12's "the count matches what you see". Open question 5.
-6. **Q7's marker** asks the strip to "mark the day"; the strip has no days. Out of scope, with reason.
-7. **`data-inventory.md` §5** lists `client_id` among the keys a hide frees; B0 makes that false, so B0
+1. **The spec treats V1-24 1d and 1e as future work.** It does so in chunk row E, on the critical path,
+   and in "Can start before AUTH-1 1c". Both have shipped (`9336554` #210 with `0012`; `b625a23` #214),
+   and so has 3a (#211, #212).
+2. **"Nothing writes `deleted_at`" holds only for app code.** Prod holds hidden rows from the 1c
+   correction (`registry.ts:214-217`).
+3. **Criterion 10 asks for "the date it stops being restorable"**, and ADR 0008 says there is one clock.
+   No date exists until the purge does (decision A).
+4. **The data contract cannot express FE-7 or the swap.** Its `hiddenAt` identity also breaks if the
+   token ever becomes a `Date`. Open question 2.
+5. **Criterion 14 says "every live entry"**, while IXD-12 says "the count matches what you see". Open
+   question 3.
+6. **Q7's marker has no day to mark.** The strip is per metric.
+7. **`data-inventory.md` §5 lists `client_id` among the keys a hide frees.** B0 makes that false, so B0
    edits it.
-8. **The V1-9b row** says "no migration" and "`logCheckIns`"; ADR 0008 and B0 supersede the first, and
-   the function is `logCheckinEntries` (the spec's disagreements 2 and 3, confirmed).
+8. **The V1-9b row says "no migration" and names `logCheckIns`.** B0 supersedes the first, and the
+   function is called `logCheckinEntries`.
+9. **`docs/architecture.md:85` draws `ON CONFLICT … DO UPDATE (LWW)`.** The shipped code is `DO NOTHING`,
+   and LWW does not exist yet (B0, arch S3).
 
-## Review-response log (adversarial panel)
+## Review-response log
 
-_Pending: engineering panel + UX panel (round 1)._
+Round 1, 2026-10-23. The engineering panel had six lenses and the UX panel had three. The orchestrator
+decided **A–E**, recorded in the plan above. Every accepted finding was checked against the cited code
+before it was changed here. There are no pushbacks this round: no finding was contradicted by the code.
+
+### Orchestrator decisions
+
+| #   | Decision                                                                                         | Where it landed                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| A   | One clock: no restore window until the purge is live, and "Restorable until removed" until then. | Goal, gates, Decision 2, requirements 1 and 3, the notice sentence, Contradiction 3. `N` gates no PR. |
+| B   | `entry-actions.ts` in WP-1's matrix, with one private `runHide`.                                 | Decision 5, B1-2, B2                                                                                  |
+| C   | The purge hard-deletes orphaned sessions and supersets; the note's survival is said until then.  | Requirement 2, B2 copy, notice, inventory §8                                                          |
+| D   | B1-3 is gated on 3b; the fallback column is dropped; only `afterEntryId` stays.                  | Gates, staging, B1-2's DTO, Out-of-scope                                                              |
+| E   | "Hidden on {k} other days" is one line plus a fixed-height disclosure.                           | `other-days.tsx`, width math                                                                          |
+
+### Engineering — correctness
+
+| #   | Finding                                                                                                                                                   | Verdict  | Resolution                                                                                                                                                            |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | **BLOCKING.** The life button reuses its `client_id` after a hide (and across days), so the tap conflicts with the hidden row and the action reports `ok` | accepted | Verified at `life-form.tsx:38, :91` and `actions.ts:446-455`. B1-2 adds the key fix, a typed `own_hidden` result and e2e; the lifetime audit table covers every form. |
+| B2  | **BLOCKING.** The swap could hide the holder before proving the item restorable                                                                           | accepted | Decision 8's order inside a savepoint; both bad orders are in `db:verify`.                                                                                            |
+| B3  | **BLOCKING.** The microsecond token is untested                                                                                                           | accepted | Six-digit fixtures, `pg_sleep` between calls, `now()` pinned, mutation 09.                                                                                            |
+| 4   | Any bodyweight typed branch must sit between (b) and (c)                                                                                                  | accepted | Noted in Decision 7; the branch itself is cut.                                                                                                                        |
+| 5   | `hiddenSinceWrite` had no DAL type, mapping or copy                                                                                                       | accepted | Cut (Decision 7).                                                                                                                                                     |
+| 6   | The check-in/life insert is not driven by `db:verify`                                                                                                     | accepted | Moved to `writers/checkin.ts` in B1-1.                                                                                                                                |
+| 7   | Duplicate ids could miscount the all-or-nothing check                                                                                                     | accepted | Ids are de-duplicated by the schema transform; the caps are named separately.                                                                                         |
+| NIT | The count unit was ambiguous; the token format depended on the session                                                                                    | accepted | Rows as shown; `to_char` UTC.                                                                                                                                         |
+
+### Engineering — scope
+
+| #     | Finding                                                                                     | Verdict  | Resolution                                                                                                                                                                |
+| ----- | ------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1    | The restore-window code should not gate on `N`                                              | accepted | Decision A.                                                                                                                                                               |
+| S2    | The pre-3b fallback doubles the UI work                                                     | accepted | Decision D.                                                                                                                                                               |
+| S3    | `hiddenSinceWrite` is speculative                                                           | accepted | Cut.                                                                                                                                                                      |
+| N1–N6 | Clear constants in B1-1; a permanent runbook entry; the 07 hedge; branch ids; the DCE claim | accepted | Constants moved to B2; no new runbook entry (the wedge section is linked instead); 07 patches both files; one branch scheme; DCE is probed in B1-2 and marked unverified. |
+
+### Engineering — architecture
+
+| #   | Finding                                             | Verdict  | Resolution                                                                  |
+| --- | --------------------------------------------------- | -------- | --------------------------------------------------------------------------- |
+| B1  | Actions belong in WP-1's per-feature module         | accepted | `entry-actions.ts` (decision B).                                            |
+| B2  | B0 and B1-1 collide with AUTH-1 on `write-path.md`  | accepted | Stated in the gates and the staging table.                                  |
+| S3  | The architecture ERD and sequence diagram go stale  | accepted | B0 fixes `:342` and flags `:85`; B1-1 adds a hide/restore sequence diagram. |
+| S4  | Two DAL reads for one page                          | accepted | Folded into `listDayWithHidden`.                                            |
+| S5  | B2 must update `write-path.md`                      | accepted | Row added.                                                                  |
+| S6  | The feature earns its own guide                     | accepted | `docs/features/delete-and-restore.md`; islands in `hidden/`.                |
+| S7  | Placement fields in the DTO were over-built         | accepted | Only `afterEntryId` (and the section key).                                  |
+| S8  | The criteria list was mismatched with the milestone | accepted | Criteria 9–13 and 15–16 (the orchestrator fixed the milestone).             |
+
+### Engineering — reuse
+
+| #     | Finding                                                  | Verdict  | Resolution                                                                                         |
+| ----- | -------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| S1/S6 | Hide and clear duplicate a body                          | accepted | `runHide`.                                                                                         |
+| S3    | A second announcer                                       | accepted | The seams table's shared Undo line and announcer; `SavedAnnouncer` is suppressed during a restore. |
+| S4    | The deadline is computed in several places               | deferred | To the purge PR, once, in SQL (requirement 1).                                                     |
+| S5    | The slot predicate is re-typed                           | accepted | `bodyweightSlot()` built from `DEFAULT_BODYWEIGHT_CONTEXT`.                                        |
+| N1    | `isoDaySchema` and `uuidSchema`                          | accepted | Promoted; reused.                                                                                  |
+| N2    | Copy duplicates `BODYWEIGHT_COPY`; `duplicates` is stale | accepted | Composed from `onePerDay` and the confirm const; `duplicates` retired or rewritten.                |
+
+### Engineering — db-safety
+
+| #   | Finding                                                       | Verdict  | Resolution                                                                            |
+| --- | ------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| B1  | Gate on prod's `pg_indexes`; renumbering hazards              | accepted | B1-1's gate; regenerate on renumber; assert `when`; a guard filed as a row.           |
+| B2  | The life lost write (with correctness B1)                     | accepted | As above.                                                                             |
+| 3   | The strength proof must use `assert.rejects`; the B0→B1-1 500 | accepted | Test plan; Risks row.                                                                 |
+| 4   | 07's `.expect` must match the first failure                   | accepted | The behavioural case is ordered first.                                                |
+| 5   | Tokens (with correctness B3)                                  | accepted | As above.                                                                             |
+| 6   | Link the wedge runbook; name the freeze                       | accepted | B0's runbook row; Risks.                                                              |
+| 7   | The lock cost was understated                                 | accepted | "Blocks reads as well as writes", with its bound.                                     |
+| 8   | Docblocks B0 makes false                                      | accepted | `schema.ts:187, :358, :638, :698-699`; `strength-session.ts:34-36`; `entries.ts:441`. |
+
+### Engineering — privacy
+
+| #     | Finding                                                                                                                            | Verdict  | Resolution                                                   |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
+| B1    | A window enforced before any purge contradicts the one-clock rule                                                                  | accepted | Decision A.                                                  |
+| B2    | A session's "How did it feel?" note outlives its hidden entries                                                                    | accepted | Decision C: a PRIV-3 requirement, plus copy in the meantime. |
+| S3–S7 | Export lines; post-1c wording at `:149-152`; rollback leaves a stale notice; re-sign and dates; the correction runbook commits ids | accepted | All in B1-3, Rollback, and B0's read.                        |
+| N8    | "Hidden {time}" discloses when someone deleted something                                                                           | accepted | Inventory §4 row.                                            |
+
+### UX — lens 1 (interaction + first run)
+
+| #   | Finding                                               | Verdict  | Resolution                                                            |
+| --- | ----------------------------------------------------- | -------- | --------------------------------------------------------------------- |
+| 1   | **BLOCKING.** Who owns dispatch, focus and membership | accepted | `HiddenVisitProvider` with an optimistic set and one membership rule. |
+| 2   | A refusal on an in-place Undo                         | accepted | Rendered in place.                                                    |
+| 3   | Clear's landing                                       | accepted | One bar event; focus on Restore all; announce after close.            |
+| 4   | The count unit                                        | accepted | Rows as shown.                                                        |
+| 5   | Delete while Change is open; duplicate days           | accepted | Delete only in the closed branch; one line per value.                 |
+| 6   | Strength label                                        | accepted | "· {n} sets".                                                         |
+| 7   | Other days grow the header                            | accepted | Decision E.                                                           |
+| 8   | No pending state                                      | accepted | "Deleting…"; Undo `aria-disabled`.                                    |
+
+### UX — lens 2 (a11y + 360px)
+
+| #   | Finding                                                    | Verdict  | Resolution                               |
+| --- | ---------------------------------------------------------- | -------- | ---------------------------------------- |
+| 1   | **BLOCKING.** Focus moved before its target exists         | accepted | An effect fires once the target mounts.  |
+| 2   | Refusal not described                                      | accepted | `aria-describedby`; focus stays on Undo. |
+| 3   | Double announcement on a weigh-in restore                  | accepted | `SavedAnnouncer` suppressed.             |
+| 4   | Keyboard covers the dialog input                           | accepted | Top-anchored; `enterKeyHint`.            |
+| 5   | Undo active before the hide returns                        | accepted | `aria-disabled` until it returns.        |
+| 6   | Duplicates day                                             | accepted | As lens 1 #5.                            |
+| 7   | `<details>` for the bar                                    | accepted | `button aria-expanded`.                  |
+| 8   | Undo line inside a non-list                                | accepted | `li` or `div` by context.                |
+| N   | `restoreLabel`; Clear contrast; a11y scans at narrow width | accepted | All in B1-3 and B2.                      |
+
+### UX — lens 3 (trust + data entry)
+
+| #   | Finding                                    | Verdict  | Resolution                                   |
+| --- | ------------------------------------------ | -------- | -------------------------------------------- |
+| 1   | Same-visit `slot_taken` is untested        | accepted | e2e from the in-place Undo.                  |
+| 2/3 | The deadline's wording and timezone        | deferred | To the purge PR (decision A, requirement 1). |
+| 4   | "Keep" is ambiguous; no times shown        | accepted | "Use {value} instead", with both times.      |
+| 6   | Clear has no confirmation that it happened | accepted | As lens 1 #3.                                |
+| N7  | Hidden time without a date across days     | accepted | "Hidden {date}, {time}".                     |
+| N8  | Does re-hiding restart the clock?          | accepted | One sentence in Decision 2.                  |

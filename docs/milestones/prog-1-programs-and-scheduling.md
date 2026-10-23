@@ -38,12 +38,13 @@ program and choose its days"_ (`beta-1.md:438`); the streaks half of that box is
 
 **To decide — before the step that depends on it:**
 
-| Question                                                      | Decide by         | Recommendation                                               |
-| ------------------------------------------------------------- | ----------------- | ------------------------------------------------------------ |
-| Widen to Beta 1 (family #1, two weeks, the maintainer's call) | before step 3     | Beta 1's own gate; nothing here changes it                   |
-| ADR 0007 decision 2's amendment (scheduled-day count)         | step 3's sign-off | Rides SCHED-1 1c, as the spec records                        |
-| How a workout label is stored                                 | step 6's plan     | Per the [V1-22 A4 plan](../plans/v1-22-a4-create-program.md) |
-| What CSV columns say which program version an athlete ran     | step 7's plan     | Per the [CLONE-1 plan](../plans/clone-1-save-as-copy.md)     |
+| Question                                                            | Decide by         | Recommendation                                               |
+| ------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------ |
+| Widen to Beta 1 (family #1, two weeks, the maintainer's call)       | before step 3     | Beta 1's own gate; nothing here changes it                   |
+| ADR 0007 decision 2's amendment (scheduled-day count)               | step 3's sign-off | Rides SCHED-1 1c, as the spec records                        |
+| How a workout label is stored                                       | step 6's plan     | Per the [V1-22 A4 plan](../plans/v1-22-a4-create-program.md) |
+| ADR 0007's amendment for program creation (A4-0, its own signed PR) | before step 6     | Per the [V1-22 A4 plan](../plans/v1-22-a4-create-program.md) |
+| What CSV columns say which program version an athlete ran           | step 7's plan     | Per the [CLONE-1 plan](../plans/clone-1-save-as-copy.md)     |
 
 ## The steps
 
@@ -60,10 +61,11 @@ flowchart LR
   V6 --> CL
   NP --> CL
   CL --> RT[8 · RETIRE-1]
+  RT --> NP
   S --> RT
   CL --> HI[9 · HIST-1]
   V34[V1-34 fixed] --> TG
-  V6 --> TG[10 · TGT-1 typed targets]
+  V2 --> TG[10 · TGT-1 typed targets]
   NP --> X[PROG-1 done]
   RT --> X
   HI --> X
@@ -72,20 +74,20 @@ flowchart LR
 
 **This is the canonical chart**, embedded by every PR in this milestone with its own step marked.
 
-| Step | What                                                                        | Plan                                                                                                          | Gate                                       | Spec criteria                |
-| ---- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------- |
-| 1    | **V1-22 chunks 2 → 3 → 4** — the snapshot writer, the backfill, edit values | [V1-22 spec](../specs/v1-22-authoring-program-editing.md), [chunk 2](../plans/v1-22-2-renderer-and-writer.md) | already unblocked (roadmap)                | V1-22's own                  |
-| 2    | **V1-22 chunks 5 → 6** — the seed guard; add, remove, reorder               | [V1-22 spec](../specs/v1-22-authoring-program-editing.md)                                                     | step 1 + CRUD-1's PICK-1 (the same picker) | 34                           |
-| 3    | **SCHED-1 1a → 1d** — assignments and weekday rows                          | [sched-1-scheduling-model](../plans/sched-1-scheduling-model.md)                                              | **Beta 1's gate** + ADR 0007 signed        | SCHED-1's own                |
-| 4    | **ASSIGN-READ** — Today and the export read the athlete's assignments       | [assign-1-assignments](../plans/assign-1-assignments.md)                                                      | step 3                                     | 30, 43                       |
-| 5    | **ASSIGN-1** — put on, move, change days, take off, with Undo               | [assign-1-assignments](../plans/assign-1-assignments.md)                                                      | step 4 + CRUD-1's U0 sheet                 | 21, 29, 31, 36–38, 40, 44–46 |
-| 6    | **V1-22 A4** — create a program; start from The Daily Five                  | [v1-22-a4-create-program](../plans/v1-22-a4-create-program.md)                                                | steps 2, 4, 5                              | 32–33, 35, 42, 45, 49        |
-| 7    | **CLONE-1** — save as a copy, choose who moves                              | [clone-1-save-as-copy](../plans/clone-1-save-as-copy.md)                                                      | steps 1, 2, 5                              | 22–25                        |
-| 8    | **RETIRE-1** — archive a program                                            | [retire-1-archive-program](../plans/retire-1-archive-program.md)                                              | steps 3, 7                                 | 26–27                        |
-| 9    | **HIST-1** — what an athlete ran on a past date                             | [hist-1-program-history](../plans/hist-1-program-history.md)                                                  | step 7                                     | 28                           |
-| 10   | **TGT-1** — typed per-athlete targets, one weight, a note                   | [tgt-1-typed-targets](../plans/tgt-1-typed-targets.md)                                                        | step 2 + V1-34 fixed                       | 50–51                        |
+| Step | What                                                                                                                                      | Plan                                                                                                          | Gate                                                                     | Spec criteria                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------- |
+| 1    | **V1-22 chunks 2 → 3 → 4** — the snapshot writer, the backfill, edit values                                                               | [V1-22 spec](../specs/v1-22-authoring-program-editing.md), [chunk 2](../plans/v1-22-2-renderer-and-writer.md) | already unblocked (roadmap)                                              | V1-22's own                  |
+| 2    | **V1-22 chunks 5 → 6** — the seed guard; add, remove, reorder                                                                             | [V1-22 spec](../specs/v1-22-authoring-program-editing.md)                                                     | step 1 + CRUD-1's PICK-1 (the same picker)                               | 34                           |
+| 3    | **SCHED-1 1a → 1d** — assignments and weekday rows                                                                                        | [sched-1-scheduling-model](../plans/sched-1-scheduling-model.md)                                              | **Beta 1's gate** + ADR 0007 signed                                      | SCHED-1's own                |
+| 4    | **ASSIGN-READ** — Today and the export read the athlete's assignments                                                                     | [assign-1-assignments](../plans/assign-1-assignments.md)                                                      | step 3                                                                   | 30, 43                       |
+| 5    | **ASSIGN-1** — put on, move, change days, take off, with Undo                                                                             | [assign-1-assignments](../plans/assign-1-assignments.md)                                                      | step 4 + CRUD-1's U0 sheet                                               | 21, 29, 31, 36–38, 40, 44–46 |
+| 6    | **V1-22 A4** — create a program; start from The Daily Five (its last PR, A4-4, waits for step 8, which makes "no live program" reachable) | [v1-22-a4-create-program](../plans/v1-22-a4-create-program.md)                                                | steps 2, 4, 5                                                            | 32–33, 35, 42, 45, 49        |
+| 7    | **CLONE-1** — save as a copy, choose who moves                                                                                            | [clone-1-save-as-copy](../plans/clone-1-save-as-copy.md)                                                      | steps 1, 2, 5                                                            | 22–25                        |
+| 8    | **RETIRE-1** — archive a program                                                                                                          | [retire-1-archive-program](../plans/retire-1-archive-program.md)                                              | steps 3, 7                                                               | 26–27                        |
+| 9    | **HIST-1** — what an athlete ran on a past date                                                                                           | [hist-1-program-history](../plans/hist-1-program-history.md)                                                  | step 7                                                                   | 28                           |
+| 10   | **TGT-1** — typed per-athlete targets, one weight, a note                                                                                 | [tgt-1-typed-targets](../plans/tgt-1-typed-targets.md)                                                        | 1a–1c: V1-34 fixed, before step 1's chunk 4; 1d: chunk 4 + 1c; 1e–1f: 1d | 50–51                        |
 
-**Before Beta 1's gate, only steps 1, 2 and 10 can run**, and step 2 waits on CRUD-1's picker. Step 3
+**Before Beta 1's gate, only steps 1, 2 and 10 can run** (TGT-1 1a–1c before chunk 4), and step 2 waits on CRUD-1's picker. Step 3
 is the gate for everything about days.
 
 ## Parallel lanes
@@ -110,7 +112,7 @@ each pair of lanes, feature guides' `owns:` included, and against CRUD-1's lanes
       program with up to three labelled workouts (step 6).
 - [ ] A copy can be saved and the right athletes moved, a program archived, and any past date answered
       (steps 7–9).
-- [ ] A box jump's height and weight are typed per athlete, and no target is a free-text load (step 10).
+- [ ] A box jump's height and weight are typed per athlete; no target is _written_ as free text, and any legacy text is counted and read-only (step 10).
 - [ ] Every spec criterion tagged PROG-1 has a test in the step that owns it: 21–38, 40, 42–46, 49–51.
 - [ ] The four "calendar-indexed" records in disagreement 8 say "scheduled days".
 

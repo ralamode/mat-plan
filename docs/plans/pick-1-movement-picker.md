@@ -10,88 +10,93 @@
 > `:2828-2850`, `openPicker` / `drawPicker` at `:2855-3120`, the sheet CSS at `:683-760` and
 > `:986-1030`).
 >
+> **Settled seams this plan follows** ([spec → "Seams the plans settled (2026-10-23)"](../specs/crud-1-fix-it-yourself.md),
+> `crud-1-fix-it-yourself.md:525-552`): `foldName` is PROF-1's (`packages/shared/src/text.ts`,
+> `prof-1-athletes.md:329`, `:374`) and PICK-1 imports it; PICK-1 **PR 2** creates `MOVEMENT_NAME_MAX`,
+> `movementNameSchema` (`packages/shared/src/movements.ts`) and `hasALetter` (`text.ts`), which MOV-1 and
+> V1-22 A4 import; the wire key is **`movementPublicId`** everywhere; **one** resolver by public id,
+> taking an `Executor`, which A4 calls; **one** "same movement" key, `movementNameKey`, which MOV-1
+> imports; U0's sheet owns the phone back gesture.
+>
 > Measured against the worktree at `8769c1b` (no `apps/`/`packages/` diff from `origin/main@27847ca`).
-> ⚠️ **V1-22 chunk 2 has not merged** — every `strength-form.tsx` / `strength-session.ts` line cited
-> below is pre-chunk-2 and must be re-read on the SHA each PR starts from (see
+> ⚠️ **V1-22 chunk 2 and PROF-1 have not merged** — every `strength-form.tsx` / `strength-session.ts` /
+> `text.ts` line cited below must be re-read on the SHA each PR starts from (see
 > [Gates](#gates-and-what-to-re-verify)).
 
 ## Goal
 
 Make choosing an **existing** movement the easy path on the strength form, and make the server
-resolve a chosen movement **by its id**, so a near-miss name can no longer mint a duplicate
-`movements` row nobody can remove (`plan.md:163-176`). Today the Movement field is a plain
-`<input type="text">` (`apps/web/app/p/[profileId]/strength-form.tsx:812-823`) and every submitted
-name goes through `findOrCreateMovementId` (`apps/web/lib/dal/entries.ts:497-502` →
-`packages/db/src/writers/movement-catalog.ts:63`), whose slug is only `trim → lowercase → spaces to
-_` (`packages/shared/src/movements.ts:34-36`) — so "Bulgarian Split Squats" against the catalog's
-"Bulgarian Split Squat" is a second row. PICK-1 is also the first consumer of a shared modal sheet
-(U0), which the assignment sheet (ASSIGN-1), the program editor's Add (D2, criterion 34) and every
-later confirm reuse, so the focus trap, scroll lock and in-sheet status region are written once.
+resolve a chosen movement **by its id**. Today the Movement field is a plain `<input type="text">`
+(`apps/web/app/p/[profileId]/strength-form.tsx:812-823`) and every submitted name goes through
+`findOrCreateMovementId` (`apps/web/lib/dal/entries.ts:497-502` →
+`packages/db/src/writers/movement-catalog.ts:63`), whose slug is only `trim → lowercase → spaces to _`
+(`packages/shared/src/movements.ts:34-36`), so "Bulgarian Split Squats" against the catalog's
+"Bulgarian Split Squat" is a second row nobody can remove (`plan.md:163-176`).
 
-Why now: it is Logging's next item (`plan.md:174-176`), AI-1 is parked on its usage data
-(`plan.md:243-245`), and C2 (PICK-2), C4r (MOV-1 rename), C3 (CAT-2) and D2 (V1-22 chunk 6) all
-extend or depend on it (spec chunk table, `crud-1-fix-it-yourself.md:150-157`).
+**What PICK-1 does and does not close** _(narrowed, correctness S2)_: a pick can never mint a row, and
+"Use as typed" is withheld whenever the typed text is the **same movement** as an existing one under
+`movementNameKey` (case, accents, quotes, punctuation, spacing, a plural or possessive `s`) or is a known
+alias. A typed name that is genuinely different ("farmers walk") can still create a household row —
+that is the path, and C2 (PICK-2) narrows it with suggestions.
+
+PICK-1 is also the first consumer of the shared modal sheet (U0), which ASSIGN-1, CLONE-1, V1-22 A4 and
+the program editor's Add (D2, criterion 34) reuse, so the focus trap, scroll lock, back gesture and
+in-sheet status region are written once.
 
 ## Acceptance
 
-From the spec (criteria cited by number, text abbreviated — the spec is the source):
+From the spec (criteria cited by number — the spec is the source):
 
 - **17** _(C1)_ — picking a movement and submitting a set stores an entry that references **that
   movement's id**, with **no** `findOrCreateMovement` call for it, and **no** magnitude arrives
-  prefilled. (Also the PICK-1 row's own acceptance, `plan.md:183-188`.)
-- **18** _(C1)_ — order: the athlete's recent movements, then the catalog grouped by picker group,
-  with today's prescribed movements folded away; no on-screen keyboard on open on a touch device;
-  operable by keyboard alone; every option a ≥44px target at 360px.
-- **19, first sentence only** _(C1 by Q2 — see [Where the spec disagrees](#where-this-plan-disagrees-with-the-spec-or-a-row))_
-  — a known alias (`RDL`) offers the movement it names. Its near-match / spelling sentences stay
-  **C2's**. Its last sentence ("a movement created that way is written when the set is saved, not when
-  it is picked") is **already true** of the typed-name path and PICK-1 keeps it true.
-- **34** _(D2's criterion; PICK-1 owes the component it uses)_ — the editor's "+ Add a movement" opens
-  **the same** picker: PICK-1 ships it as a reusable component with an "already in this workout" mark
-  and caller-supplied save wording, and with no write of its own.
-- **37** _(U0's tests, ASSIGN-1's criterion)_ — below 600px the sheet fills the screen with its title
-  and actions pinned and only the middle scrolling; from 600px a dialog capped at the viewport height
-  with the same pinned actions. (The weekday-toggle and contrast clauses are ASSIGN-1's.)
-- **46** _(U0, C1)_ — a sheet whose text changes as the person edits (here: the match count) announces
-  it through a `role="status"` region **inside** the sheet.
+  prefilled. (Also the PICK-1 row's acceptance, `plan.md:183-188`.) _Lands: PR 2 (server), PR 4 (end to
+  end)._
+- **18** _(C1)_ — recent movements, then the catalog by picker group, today's prescribed movements
+  folded away; no on-screen keyboard on open on touch; keyboard-operable; every option ≥44px at 360px.
+  ⚠️ Wording: see [disagreement 9](#where-this-plan-disagrees-with-the-spec-or-a-row). _Lands: PR 3
+  (component), PR 4 (browser)._
+- **19, alias sentence only** — `RDL` offers Romanian Deadlift. _Lands: PR 3 (`matchMovementOptions`
+  unit test), PR 4 (e2e)._ Its near-match/spelling sentences stay C2's.
+- **34** _(D2's)_ — PICK-1 ships the **same** component D2 mounts, with an "already in" mark and
+  caller-supplied save wording, and no write of its own. _Lands: PR 3._
+- **37** _(U0's tests; ASSIGN-1's criterion)_ — full screen below 600px with title and actions pinned;
+  from 600px a dialog capped at the viewport. _Structure: PR 1 (jsdom). Geometry: PR 4 (the first
+  mounted sheet, e2e)._
+- **46** _(U0, C1)_ — the match count is announced by a `role="status"` **inside** the sheet. _PR 1
+  (structure), PR 4 (browser)._
 
-Concrete "done when", beyond the criteria:
+Concrete "done when":
 
-- The PICK-1 row's two-part test passes **on a day whose program does not prescribe the movement**:
-  the stored `entries.movement_id` is the existing row, and every set's reps/weight are what the
-  athlete typed (`plan.md:183-188`).
-- **Use as typed** is the only path that still reaches `findOrCreateMovementId`; it is refused —
-  disabled in the UI **and** by the shared schema — for a name with no letter (SUX-11) or with a comma
-  or line break (the existing refine, `packages/shared/src/strength-session.ts:58-61`).
-- A movement id from **another household**, or one that does not exist, writes **nothing** — no
-  session, no entry, no find-or-create insert for any sibling movement — and is indistinguishable
-  from an unknown id.
-- A scaffolded card ("Fill in today's movements") also submits its movement **by id**, so the whole
-  form, not only the picker, stops depending on a name round-trip.
-- The CSV export is **byte-identical** for any movement that already resolved to an existing row by
-  name: the export groups by `movements.slug` (`packages/db/src/queries/export-month.ts:65`, `:83`),
-  and an id resolves to the same row a matching name did.
-- `pnpm verify`, `pnpm e2e:local`, `pnpm guides:check` green on every PR; screenshots at three widths
-  on PR 4.
+- The PICK-1 row's two-part test passes on a day whose program does **not** prescribe the movement.
+- "Use as typed" is the only path that still reaches find-or-create, and a typed name is refused —
+  disabled in the UI (with its reason) **and** by `movementNameSchema` — when it has no letter or has a
+  comma or line break. **An id-resolved movement is never refused for its label** (correctness S1).
+- A movement id from **another household**, or an unknown one, writes **nothing** — no session, no
+  entry, no find-or-create insert for a typed sibling — and the two refusals are byte-identical.
+- The phone back gesture closes the open sheet and keeps everything typed on the form.
+- `pnpm verify` (incl. `db:verify`, `db:mutations`), `pnpm e2e:local`, `pnpm guides:check` green on
+  every PR; screenshots at three widths on PR 4.
 
 ## Staging
 
-Four PRs, each one concern and under ~400 lines (tests counted separately in the estimate). No
-migration in any of them — see [Decision 3](#decision-3--groups-and-aliases-live-in-shared-code-not-a-column).
+Four PRs, one concern each, under ~400 source lines. No migration in any.
 
-| PR  | Branch                            | What                                                                                                                                                                  | ~Lines (src / tests) | Gate                                                                                                                                                                                                 |
-| --- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `feat/u0-sheet`                   | **U0.** `components/ui/sheet.tsx` on Radix Dialog + the visual-viewport hook; jsdom tests for 37/46's structure; files the a11y-scan row (unowned 8). Plus this plan. | 140 / 180            | Nothing (spec: "any time"). New file in `components/ui/`, which no guide owns and no AUTH-1 chunk names.                                                                                             |
-| 2   | `feat/pick-1a-movement-id`        | **The server takes a movement id.** Schema field, the resolve core, the DAL id path, the scaffold sends ids, `db:verify` proof. No visible change.                    | 170 / 230            | **V1-22 chunk 2 merged** (same schema field list, same `MovementVals`, same `movementsJson`, both under `strength-logging.md`). Serialized against V1-24 3a/3b on the strength surface (spec E row). |
-| 3   | `feat/pick-1b-picker-component`   | **The picker, unmounted.** `fold`, the picker catalog (groups + aliases), the `MovementPicker` component on U0, its copy, its tests, and the new feature guide.       | 330 / 260            | PR 1. No shared file with PR 2, so it may be **reviewed** in parallel; it merges after PR 2 only to keep one strength-surface PR in flight.                                                          |
-| 4   | `feat/pick-1c-picker-in-the-form` | **Mounted.** The options read (query + DAL + DTO), the form's Movement field becomes the picker button, e2e + the a11y scan's open-sheet state, screenshots.          | 260 / 300            | PRs 2 and 3. ⚠️ Edits `app/p/[profileId]/page.tsx`, which **AUTH-1 1c** also edits (`auth-1-clerk-google.md:1708`): if 1c is open, this PR goes after it.                                            |
+| PR  | Branch                            | What                                                                                                                                                                                                                                                                                                  | ~Lines (src / tests) | Gate                                                                                                                                                                                                                 |
+| --- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `feat/u0-sheet`                   | **U0.** `components/ui/sheet.tsx` on Radix Dialog: layout, history/back gesture, visual-viewport tracking, compact mode, in-sheet status; jsdom tests; files the a11y-scan row (unowned 8). Plus this plan.                                                                                           | 200 / 220            | Nothing (spec: "any time"). No guide owns `components/ui/`; no AUTH-1 chunk names it.                                                                                                                                |
+| 2   | `feat/pick-1a-movement-public-id` | **The server takes `movementPublicId`.** `movementNameSchema` + `hasALetter`; `resolveMovementByPublicId` + `resolveSessionMovements` in `packages/db`; the in-transaction re-check; the DAL becomes a pass-through; `db:verify` + two mutation patches; the architecture diagram. No visible change. | 220 / 300            | **V1-22 chunk 2 merged** (same schema, same `movementsJson`, both under `strength-logging.md`) **and PROF-1 step 1 merged** (`foldName` / `text.ts`). Serialized against V1-24 3a/3b on the strength surface.        |
+| 3   | `feat/pick-1b-picker-component`   | **The picker, unmounted.** `movementNameKey` / `foldMovementQuery` / `matchMovementOptions`, the picker catalog (groups + aliases), the DTO types, the copy module, `MovementPicker` on U0, the new guide.                                                                                            | 340 / 300            | PR 1 and PROF-1 step 1. **Not** gated on PR 2: no shared file, any merge order.                                                                                                                                      |
+| 4   | `feat/pick-1c-picker-in-the-form` | **Mounted.** The two reads (query + DAL), prescribed ids from `program-day.ts`, the form's Movement field becomes the picker button, "Add movement" opens the picker, the Save-line warning, e2e + the a11y scan's open-sheet state, `db:verify` "PICK-1 options" + a mutation patch, screenshots.    | 300 / 360            | PRs 2 and 3. ⚠️ Edits `app/p/[profileId]/page.tsx` (AUTH-1 1c, `auth-1-clerk-google.md:1708`) and `program-day.ts` (programming lane — [overlap](#gates-and-what-to-re-verify)): serialize behind whichever is open. |
 
-If PR 3 and PR 4 together come in under ~400 source lines when written, merge them; the split exists
-only to keep the read path's review separate from the component's.
+**Every PR description** opens with the "Where this sits" block and embeds the CRUD-1 milestone chart
+(`docs/milestones/crud-1-fix-it-yourself.md`) with its own step marked (AGENTS.md → Git; architecture
+8). The PICK-1 sub-chart:
 
 ```mermaid
 flowchart LR
-  V2[V1-22 ch 2 ✅ first] --> P2
+  PF[PROF-1 step 1 · foldName] --> P2
+  PF --> P3
+  V2[V1-22 ch 2] --> P2
   P1[1 · U0 sheet] --> P3[3 · picker component]
   P2[2 · server takes an id] --> P4[4 · picker in the form]
   P3 --> P4
@@ -103,272 +108,294 @@ flowchart LR
 
 ## Design decisions (each with what was rejected)
 
-### Decision 1 — the wire carries an id **and** a label; the id alone decides
+### Decision 1 — the wire carries `movementPublicId` and a label; the id alone decides
 
 `sessionMovementSchema` (`packages/shared/src/strength-session.ts:45-83`) gains
-`movementId: uuidSchema.optional()`. When present, the DAL resolves the movement **by public id** and
-ignores `movementName` for resolution; it writes the **database's** `movements.name` into
-`entries.movement_name`, never the client's text. When absent, today's path runs unchanged
-(`findOrCreateMovementId`, global-first).
+`movementPublicId: uuidSchema.optional()` (the settled wire key). When present, the movement is
+resolved **by public id** and `movementName` is a **label only**: the writer receives the database's
+`movements.name`, never the client's text. When absent, today's typed path runs.
 
-`movementName` stays **required** on the wire, as the card's display label.
+- **The label stays on the wire** because the action names a failing movement by its submitted
+  `movementName` (`apps/web/app/p/[profileId]/actions.ts:316-322`), and V1-30's review rejected
+  "Movement N" (the index points at the submitted list, which drops untouched cards).
+- **The name rules apply only to a typed name** _(correctness S1)_. The field keeps a label shape
+  (`trim`, `1..MOVEMENT_NAME_MAX`). The session `superRefine` (`strength-session.ts:129-…`), for each
+  movement **without** `movementPublicId`, runs `movementNameSchema` (no comma or line break, at least
+  one letter) and re-adds its issues at `['movements', i, 'movementName']` — the path the comma refine
+  uses today, so the action's message mapping is unchanged. An id-resolved row is never refused for its
+  own name. The object stays a plain `ZodObject` (`strength-session.ts:74-79`).
+- **`movementNameSchema` and `MOVEMENT_NAME_MAX` are created here** (`packages/shared/src/movements.ts`;
+  `MOVEMENT_NAME_MAX = 100`, today's inline `.max(100)` at `strength-session.ts:57`), with **named**
+  messages exported as `MOVEMENT_NAME_MESSAGES` (`missing`, `tooLong`, `commaOrLineBreak`, `noLetter`).
+  `hasALetter` (`/\p{L}/u`) joins `hasCommaOrLineBreak` in `text.ts` (`:38`). MOV-1 and A4 import all
+  three (seams).
+- ⚠️ Behaviour change, deliberate: an emoji- or digit-only **typed** name is now refused (SUX-11); and
+  `missing` reads **"Choose a movement."** (was "Enter a movement.", `strength-session.ts:56`), because
+  the form no longer has a text box to enter into. Tests asserting the old string change with it.
+- **Rejected: xor (`movementPublicId` xor `movementName`).** It costs the error label above; "the id
+  decides" gives the same safety, pinned by a test.
+- **Rejected: building `ResolvedSessionMovement` by spread** _(security S1)_. Today's DAL does
+  `{ ...m, movementId }` (`entries.ts:499-502`), which would now carry `movementPublicId` and the
+  client label into the writer's argument. The resolver builds each resolved movement **field by
+  field**: `{ clientId, unit, sets, status, supersetClientId, supersetOrder, prescriptionId, movementId,
+movementName }`, with `movementName` from the database on the id path. `prescriptionId` is V1-22
+  chunk 2's (`v1-22-2-renderer-and-writer.md:189`, `:443`), which relies on today's spread to carry it
+  (`:450`). Because every field of `ResolvedSessionMovement` is optional-tolerant, a dropped key still
+  typechecks and the snapshot goes inert (the GAP-1 P0-1 lesson, `actions.ts:359-364`). So the builder
+  returns `{ [K in keyof ResolvedSessionMovement]-?: ResolvedSessionMovement[K] | undefined }`, writing
+  `undefined` explicitly: a key added to the type later is a compile error here, not a silent drop
+  _(correctness round 2, B1)_.
 
-- **Why keep the label.** The action names a failing movement by its submitted `movementName`
-  (`apps/web/app/p/[profileId]/actions.ts:316-322`), and V1-30's review rejected "Movement N" because
-  `path[1]` indexes the _submitted_ list, which drops untouched scaffolded cards, so the number can
-  point at the wrong card. An id-only wire would bring that defect back for every picked card.
-- **Rejected: an exactly-one-of (`movementId` xor `movementName`).** Cleaner on paper, but it moves a
-  rule into the session `superRefine` (the object must stay a plain `ZodObject`,
-  `strength-session.ts:74-79`), changes the "Enter a movement." path every existing test pins, and
-  costs the error label above. The xor's only benefit — a body cannot send conflicting values — is
-  delivered by "the id decides, the name is ignored", which a test pins.
-- **Rejected: a new `movementPublicId` name.** V1-22 chunk 2 already chose `prescriptionId` with no
-  `PublicId` suffix and argued it (`docs/plans/v1-22-2-renderer-and-writer.md:195-198`); one
-  convention per schema.
-- **New server-side refine on `movementName`: at least one letter** (`/\p{L}/u`), the server half of
-  SUX-11. A field-level `.refine` keeps the object a `ZodObject` (the existing comma refine is the
-  precedent, `strength-session.ts:58-61`). ⚠️ This is a behaviour change: an emoji- or digit-only name
-  that was accepted is now refused. Every catalog name has a letter; the change is deliberate.
+### Decision 2 — resolution, and its ordering, live in `packages/db`, checked twice
 
-### Decision 2 — the id is resolved in `packages/db`, under the same namespace rule as find-or-create
+_(Security B1, correctness B2.)_ Two functions in `packages/db/src/writers/movement-catalog.ts`, beside
+`findOrCreateMovement` (`:63`):
 
-New core `resolveMovementByPublicId(exec, scope, publicId)` beside `findOrCreateMovement` in
-`packages/db/src/writers/movement-catalog.ts`, returning `{ id, name, slug } | null`. A row resolves
-only if it is **global** (`movementIsGlobal()`) **or** in **this** household
-(`movementInHousehold(scope)`), both already exported from `packages/db/src/writers/ownership.ts:166-179`
-and the only sanctioned way to say either (write-path invariant 2: `scope.householdId` is read in one
-place).
+- `resolveMovementByPublicId(exec: Executor, scope, publicId)` → `{ id, name, slug } | null` — the
+  **one** resolver by public id (seams; A4 calls it). Matches only `movementIsGlobal()` **or**
+  `movementInHousehold(scope)` (`packages/db/src/writers/ownership.ts:166-179`, the sanctioned
+  predicates; `scope.householdId` stays read in one place, write-path invariant 2). It deliberately
+  **accepts** a household row whose slug a global row shadows — it is the household's own row, and the
+  list simply never offers it (correctness S3).
+- `resolveSessionMovements(exec, scope, movements)` → the explicit resolved list. **Phase 1:** every
+  `movementPublicId` through the resolver; any `null` throws `MovementNotAvailableError` whose message
+  is the constant `MOVEMENT_NOT_AVAILABLE` (`'Movement not available'`) — **no** id, **no** name
+  (`movement-catalog.ts:55-59`: a thrown value reaches Sentry verbatim) — so an unknown and a foreign
+  id are byte-identical. **Phase 2,** only after phase 1 succeeds: `findOrCreateMovement` for the typed
+  ones. A refused body therefore commits no typed sibling — the TEN-2b-1 residual
+  (`entries.ts:486-491`) gains no new instance.
+- **And inside the transaction** _(security B1 — the TOCTOU)_: `writeStrengthSession`
+  (`packages/db/src/writers/strength-session.ts`) re-checks, after its in-transaction profile resolve,
+  that every `movementId` it is about to write is global-or-own under the **same** scope — one
+  `SELECT count(*)` over the distinct ids with the same two predicates — and throws the same
+  `MovementNotAvailableError` otherwise, rolling the whole graph back. Phase 1 is a fast pre-check; the
+  in-transaction check is the seam, the way the profile resolve already is (strength-logging guide,
+  "`writeStrengthSession`'s in-transaction profile resolve").
+- `apps/web/lib/dal/entries.ts` `logStrengthSession` (`:479-513`) becomes: scope → activity type →
+  `resolveSessionMovements(db, scope, args.movements)` → `writeStrengthSession`. `findOrCreateMovementId`
+  in `lib/dal/catalog.ts:105` loses its last caller and is deleted in the same PR (the `scoped.test.ts`
+  dead-entry rule's spirit; it carries no allowlist entry today).
+- **A refused id throws; it is not a typed envelope.** No screen can produce one (the picker offers only
+  rows the read returned; movements are never deleted; no merge exists). AGENTS.md: "unexpected → throw".
+  **C4m makes a dead id reachable** and owns turning it into a typed refusal — recorded in both guides.
+  This also keeps `actions.ts` untouched (it collides with AUTH-1 1c and WP-1's shard): the new field
+  rides `parsed.data.movements` (`actions.ts:353-375`), and an `actions.test.ts` case asserts the DAL
+  **received** the value — chunk 2's strip-mode trap (`v1-22-2-renderer-and-writer.md:228-234`).
+- **Rejected: resolution in `lib/dal`.** `db:verify` cannot import `server-only` code, and the
+  cross-household refusal must be proved by running the real function (write-path invariant 3).
 
-- **Why `packages/db` and not `lib/dal`.** `db:verify` cannot import `server-only` DAL code
-  (`catalog.ts` docblock; `movement-catalog.ts:47-53`), and the cross-household refusal must be
-  **proved** by running the real function in both directions, the way the catalog verdict does
-  (`packages/db/scripts/verify.ts:5310`, `:5565`). A DAL-only guard is a guard no proof covers
-  (write-path invariant 3).
-- **No `deleted_at` filter is needed, and none is added to the arbiter.** Nothing may set
-  `movements.deleted_at` (`packages/db/src/schema.ts:536-543`); the read adds `isNull(deletedAt)`
-  anyway as a harmless belt, which does **not** trigger the three-part lift that note demands (that is
-  for indexes and the resolver's natural key, and for the PR that first _writes_ the column — C4r/C4m).
-- **Order in `logStrengthSession`** (`entries.ts:479-513`): resolve **every id first** (reads), then
-  find-or-create the typed names. If any id fails to resolve the DAL **throws before any insert**, so a
-  refused body cannot leave a typed sibling's row committed — the residual TEN-2b-1 documents
-  (`entries.ts:486-491`) does not get a new instance.
-- **A failed id throws; it does not return a typed envelope.** No screen can produce one: the picker
-  offers only rows the read returned, movements are never deleted, and there is no merge yet. AGENTS.md
-  → Server conventions: "unexpected → throw → error.tsx". The message is a constant with **no**
-  interpolated id or name (`movement-catalog.ts:55-59`: a thrown value reaches Sentry verbatim).
-  **C4m (merge) changes this** — after a merge a stale page _can_ hold a dead id — and its plan owns
-  turning it into a typed refusal. Recorded in the guide.
-  - **Rejected: a typed `movement_not_found` envelope now.** It needs `actions.ts` edits
-    (`:350-375`), which collide with AUTH-1 1c and every CRUD-1 action-adding chunk on
-    `write-path.md` (spec `:199-206`), for a state no user can reach.
-- **`actions.ts` is not edited.** The new optional field rides `parsed.data.movements` through to the
-  DAL unchanged (`actions.ts:353-375`). The trap chunk 2 names — `z.object` is strip-mode, so a field
-  missing from the schema arrives **removed** while every gate stays green
-  (`v1-22-2-renderer-and-writer.md:228-234`) — is answered the same way: an `actions.test.ts` case
-  asserts the **value** the DAL received.
+### Decision 3 — groups and aliases live in shared code, keyed by slug; the list shows only seeded globals
 
-### Decision 3 — groups and aliases live in shared code, not a column
+`packages/shared/src/movement-picker-catalog.ts`: `MOVEMENT_PICKER_GROUPS` (`as const`, the spec's
+contract name, `crud-1-fix-it-yourself.md:490`) + `movementPickerGroupSchema` +
+`MOVEMENT_PICKER_GROUP_LABELS` + a per-**slug** map `{ group, aliases }` over `MOVEMENT_SEED_ROWS` +
+`RECENT_MOVEMENTS_LIMIT` (5).
 
-`packages/shared/src/movement-picker-catalog.ts` holds `MOVEMENT_PICKER_GROUPS` (the spec's contract
-name, `crud-1-fix-it-yourself.md:490`) and one entry per seeded movement, keyed by **slug**:
-`{ group, aliases }`. The DAL attaches it to global rows; household rows have no entry and render
-under "Added by your household".
+- **Why not a column** (unowned 2's first option): the seed is `ON CONFLICT DO NOTHING`
+  (`packages/db/src/seed.ts:249-252`), so a new column's seed values would never reach the 35 rows
+  already in production without a backfill — for display metadata nothing edits.
+- **Why not group by `pattern`**: `isolation`'s six rows split three ways (unowned 2), so it needs
+  per-row overrides anyway.
+- **A global row is listed only if its slug is in the map** _(correctness S5, security N1)_. Every
+  global row already carries a curated `pattern` by the **validated** CHECK
+  `movements_global_row_has_pattern` (`packages/db/src/schema.ts:571-582`, validated by `TEN-2d`'s
+  0018), and a unit test pins the map's keys to exactly `MOVEMENT_SEED_ROWS`' slugs, so CAT-2 cannot add
+  a row without choosing its group. A global row outside the map is not listed (it still resolves by id
+  and by typed name). There is therefore **no `other` group** — empty by construction rather than by a
+  test.
+- **What ships before chunk 0**: the prototype's grouping, approved with v8/v9 (`index.html:1180-1232`)
+  — Push 7, Pull 7, Legs 14, Core 7 over the 35 rows, `wrestling` declared and empty until C3. Judgement
+  calls chunk 0 confirms: Farmer Carry and Med-Ball Slam → Core; Sled Push, KB Swings, Box Jump, Broad
+  Jump, Calf Raises → Legs; the isolation split as the spec lists it. And the prototype's six aliases
+  (`index.html:1235-1242`): `RDL`, `BSS`, `OHP`, `DB bench`, `KB`, `hip thrust`. Definitions, not
+  loads; the docblock says "provisional until chunk 0" and names the maintainer's pass as the
+  confirmation. Chunk 0 then edits a TypeScript map — no migration.
 
-- **Why not a column** (the spec's first option, unowned 2, `:652-660`): the seed is
-  `ON CONFLICT DO NOTHING` (`packages/db/src/seed.ts:249-252`), so a new `picker_group` column's seed
-  values would **never reach the 35 rows already in production** — it would need a backfill migration
-  as well, for display metadata no screen edits. A code map is total over the global catalog by
-  construction: `db:verify`'s layer 2 already pins the global set to exactly `MOVEMENT_SEED_PUBLIC_IDS`
-  (`packages/db/src/schema.ts:575-579`), and a test pins the map to
-  exactly `MOVEMENT_SEED_ROWS`'s slugs, so CAT-2 cannot add a row without choosing its group.
-- **Why not "group by `pattern` under friendlier names"** (the spec's second option): `isolation`'s six
-  rows split three ways (spec unowned 2), so a pattern map needs per-row overrides anyway, and two
-  sources for one fact drift.
-- **What PICK-1 ships before chunk 0** (the maintainer's human pass): the **prototype's grouping**,
-  which the maintainer approved with v8/v9 (`index.html:1180-1232`) — Push 7, Pull 7, Legs 14, Core 7
-  over the 35 seeded rows (`packages/shared/src/catalog-movements.ts`), `wrestling` declared and empty
-  until C3 seeds the drills. Judgement calls the prototype made and chunk 0 confirms: Farmer Carry and
-  Med-Ball Slam → **Core**; Sled Push, KB Swings, Box Jump, Broad Jump → **Legs**; Calf Raises → Legs;
-  the isolation split as the spec lists it. And the prototype's **six aliases** (`index.html:1235-1242`):
-  `RDL`, `BSS`, `OHP`, `DB bench`, `KB`, `hip thrust`. Both are **definitions a human confirms**, never
-  loads (AGENTS.md's inviolable rule is about loads; still, the map's docblock says "provisional
-  until chunk 0" and names who confirms it).
-- **Chunk 0 then edits a TypeScript map** — one reviewed PR, no migration, no seed change.
-- An unknown group cannot render as a crash: a global row missing from the map (impossible while the
-  two tests above hold) falls into `other`, labelled "More", which the coverage test asserts is empty.
+### Decision 4 — `movementNameKey`: one "same movement" key on top of `foldName`
 
-### Decision 4 — one normaliser, `fold`, shared; matching is substring-per-word, no edit distance
+`packages/shared/src/movement-search.ts` imports `foldName` (PROF-1, `text.ts`; accents, curly quotes,
+spaces, case — `prof-1-athletes.md:329`) and adds only what is movement-specific _(reuse B1,
+architecture 1)_:
 
-`packages/shared/src/movement-search.ts`:
+- `foldMovementQuery(s)` — `foldName(s)`; every non-`\p{L}\p{N}` → space; drop a **lone** `s` word (the
+  possessive, `farmer's` → `farmer s` → `farmer`); strip one trailing `s` from a word of **2+ letters
+  before it** that does not end in `ss` (`ups` → `up`, `squats` → `squat`, `press` stays); collapse.
+- `movementNameKey(s)` — `foldMovementQuery(s)` with the spaces removed (`pull ups`, `pullups`,
+  `Pull-Ups` → `pullup`). **The** "same movement" key (seams): the picker's `exact`, MOV-1's rename
+  collision (`mov-1-rename-movement.md:83-85`, `:139`, `:359` cite the earlier `foldMovementQuery`
+  names; MOV-1 imports `movementNameKey`).
+- `matchMovementOptions(options, query)` (pure) → `{ matches, someWords, aliasHit, exact }`:
+  - an option **matches** when every query word is a substring of its folded name, **or** the query's
+    compact form is a substring of the name's compact form (`trapbar` → Trap-Bar Deadlift, `medball` →
+    Med-Ball Slam) _(UX3 B1, UX1 4, correctness S2)_;
+  - `aliasHit` when the query's key equals an alias's key (exact only — `rd` does not hit);
+  - `exact` when the query's key equals some option's key;
+  - `someWords` — only when `matches` is empty: options matching **any** query word of 3+ letters
+    _(UX3 6)_;
+  - order: alias hit, exact, prefix, the rest by name; ties catalog-first. Deterministic, tested.
+- **"Use as typed" is withheld when `exact` or `aliasHit`** _(UX3 B2, UX1 3)_. `rdl` must not mint a
+  household "rdl".
+- **Test vectors** (the table the test iterates):
 
-- `foldText(s)` — NFD then drop combining marks (diacritics); `‘ ’ ʼ` → `'`; lower-case; collapse
-  whitespace; trim. **Exported separately** because A3's typed-name confirm (SUX-9) needs exactly this
-  and **not** the plural rule below.
-- `foldMovementQuery(s)` — `foldText`, then every non-letter/non-digit (Unicode `\p{L}\p{N}`) → space,
-  collapse, then strip **one trailing `s`** from each word of four or more letters that does not end in
-  `ss` (`squats` → `squat`, `raises` → `raise`, `press` stays). Nothing else: no stemming, no edit
-  distance — that is PICK-2 (`plan.md:224-242`).
-- `matchMovementOptions(options, query)` — pure; returns `{ matches, aliasHit, exact }`:
-  - an option matches when **every** folded query word is a substring of its folded name (so
-    `split squat` and `db row` both work);
-  - `aliasHit` when the folded query **equals** a folded alias (exact only — `rd` must not surface
-    Romanian Deadlift);
-  - `exact` when the folded query equals some option's folded name.
-  - Order: alias hit, exact, prefix-of-name, then the rest by name; ties by owner (`catalog` first) —
-    deterministic, tested.
-- **"Use as typed" is hidden when `exact` is true.** Typing `bulgarian split squats` folds equal to the
-  catalog row, and "use as typed" would mint `bulgarian_split_squats` — the exact duplicate this row
-  exists to stop. Nothing is lost: the two names differ only by case, accents, quotes, punctuation or a
-  plural `s`. The prototype does the same (`index.html:2996-2998`, foot hidden when `exact`).
-- **Rejected: the same fold on the server before find-or-create** (silently resolve
-  `Bulgarian Split Squats` to the catalog row). It is an auto-correct PICK-2's row explicitly forbids
-  ("the athlete can always keep what they typed", `plan.md:226-230`), and it would change
-  `findOrCreateMovement`'s contract, which `db:verify`'s catalog verdict pins.
-- The prototype's `norm`/`lev` are illustrations (FE-12, `crud-1-fix-it-yourself.md:922`); these
-  functions are the spec.
+  | Query                    | Matches                      | `exact` | Use as typed |
+  | ------------------------ | ---------------------------- | ------- | ------------ |
+  | `pull ups`               | Pull-Up                      | yes     | withheld     |
+  | `pullups`                | Pull-Up                      | yes     | withheld     |
+  | `pushups`                | Push-Ups                     | yes     | withheld     |
+  | `push-up`                | Push-Ups                     | yes     | withheld     |
+  | `push up`                | Push-Ups                     | yes     | withheld     |
+  | `Farmer's carry`         | Farmer Carry                 | yes     | withheld     |
+  | `farmers walk`           | — (some words: Farmer Carry) | no      | offered      |
+  | `trapbar`                | Trap-Bar Deadlift            | no      | offered      |
+  | `medball`                | Med-Ball Slam                | no      | offered      |
+  | `rdl`                    | Romanian Deadlift (alias)    | no      | withheld     |
+  | `bulgarian split squats` | Bulgarian Split Squat        | yes     | withheld     |
+  | `press`                  | every "…Press"               | no      | offered      |
 
-### Decision 5 — the read: one query for the catalog the household can see, one for the athlete's recent
+- **Rejected: the same fold on the server before find-or-create** — an auto-correct PICK-2's row forbids
+  (`plan.md:226-230`), and it would change `findOrCreateMovement`'s pinned contract.
 
-`packages/db/src/queries/movement-options.ts` (single-sourced so `db:verify` proves it):
+### Decision 5 — the reads: the household's list, and the athlete's recent, separately
 
-- `householdMovementOptions(db, scope)` — `public_id, name, slug, household_id IS NOT NULL as owned,
-unit_default, is_bodyweight` where `movementIsGlobal() OR movementInHousehold(scope)`, **minus**
-  household rows whose slug equals a global slug. That is the resolver's own **global-first**
-  precedence (`movement-catalog.ts:12-24`): the picker never offers a row `findOrCreateMovement` would
-  never return, so the list and the typed path cannot disagree about which "Back Squat" is real.
+_(Architecture 4.)_ `packages/db/src/queries/movement-options.ts`:
+
+- `householdMovementOptions(db, scope)` — global rows **whose slug is in the picker map**, plus this
+  household's rows that (i) no global slug shadows (the resolver's global-first precedence,
+  `movement-catalog.ts:12-24`) and (ii) are **referenced by a live entry or a live prescription** in
+  this household _(UX3 5, option (a))_: `EXISTS` over `entries` (`deleted_at IS NULL`,
+  `idx_entries_movement`, `schema.ts:250`) or `prescriptions` (`deleted_at IS NULL`,
+  `idx_prescriptions_movement`, `:835`). So a typo'd row nobody uses drops out of the list, and once
+  V1-9b ships, **hiding the only entry that used it is the recovery** — no correction needed. Until
+  V1-9b, a mis-typed row with one entry stays listed; the recovery is MOV-1 rename (C4r) or a
+  correction. **Rejected: option (b), a correction row** — it treats each typo as an operator task
+  forever, where (a) makes the app's own delete the fix.
 - `recentMovementIds(db, { profilePublicId, scope, limit })` — distinct `entries.movement_id` for this
-  profile (`isLiveProfile(publicId, scope)`, `ownership.ts:118`), `entries.deleted_at IS NULL`, the
-  movement itself global-or-own-household, ordered by `max(activity_date) desc, max(entries.id) desc`,
-  `limit RECENT_MOVEMENTS_LIMIT` (5, in `movement-picker-catalog.ts`). Served by
-  `idx_entries_profile_date` (`schema.ts:246`). ⚠️ It is a **new reader of `entries.deleted_at`** — it
-  joins B1's reader audit (spec Risks, `:901`), and filters now so B1 has nothing to add.
-- **Rejected: caching the catalog across requests** (FE-12's "cached catalog"). The household's own
-  rows are in the same list, AGENTS.md forbids caching per-user data across users, and splitting the
-  global half into a cross-request cache saves one indexed query over ≤110 rows (35 now, ~107 after
-  CAT-2). What FE-12 is actually after is kept: the **payload is split** (the household catalog is one
-  prop, the athlete's recent ids and today's prescribed ids are two small arrays), and filtering runs
-  under `useDeferredValue`.
+  profile (`isLiveProfile`, `ownership.ts:118`), `entries.deleted_at IS NULL`, movement global-or-own,
+  newest `activity_date` then `entries.id` first. A **new reader of `entries.deleted_at`** — listed for
+  B1's reader audit (spec Risks, `:901`).
 
-`apps/web/lib/dal/movements.ts` (`server-only`): `listMovementOptions(profilePublicId)` resolves
-`getHouseholdScope()` itself (write-path invariant 2 — nothing above `lib/dal` holds a scope), runs
-both queries in parallel, attaches group/aliases, and returns the DTO. `scoped.test.ts`'s structural
-guard covers it with no allowlist entry (it resolves a scope and builds no ownership predicate).
+`apps/web/lib/dal/movements.ts` (`server-only`), two functions:
+
+- `listMovementOptions()` — `getHouseholdScope()`, the household list + the picker map → options.
+- `listRecentMovementIds(profilePublicId)` — the recent ids, **intersected with** the listed options'
+  ids (correctness S3), so Recent never shows a row the list would not.
+
+`recentIds` is **optional** on the picker: D4c's editor at `/programs/new` has no athlete
+(architecture 4). Both functions resolve their own scope (write-path invariant 2); `scoped.test.ts`
+covers them with no allowlist entry.
+
+- **Rejected: caching the catalog across requests** (FE-12): the household's rows are in the same list
+  and AGENTS.md forbids per-user caching across users; it would save one indexed query over ≤110 rows.
+  FE-12's intent is kept: the list, the recent ids and the prescribed ids are separate props, and
+  filtering runs under `useDeferredValue`.
 
 ```ts
-// apps/web/lib/movements/movement-option.ts — the DTO (the spec's contract, :499-500, extended — see below)
-export type MovementOptionDTO = {
-  publicId: string;
-  name: string;
-  group: MovementPickerGroup | null; // null ⇔ owner === 'household'
-  aliases: readonly string[];
-  owner: 'catalog' | 'household';
-  // The MOVEMENT's declaration — what kind of number it is measured in. Never a magnitude.
-  unitDefault: Unit | null;
-  isBodyweight: boolean;
-};
+// apps/web/lib/movements/movement-option.ts — reuse N1: a discriminated union
+type Declaration = { unitDefault: Unit | null; isBodyweight: boolean }; // the MOVEMENT's, never a magnitude
+export type MovementOptionDTO = { publicId: string; name: string } & Declaration &
+  (
+    | { owner: 'catalog'; group: MovementPickerGroup; aliases: readonly string[] }
+    | { owner: 'household' }
+  );
 export type MovementPickerData = {
   options: readonly MovementOptionDTO[];
-  recentIds: readonly string[]; // ⊆ options' publicIds, newest first
+  recentIds?: readonly string[]; // ⊆ options' publicIds; absent where there is no athlete (D4c)
 };
 ```
 
-`prescribedToday` is **not** a DTO field (the spec has it on `MovementOptionDTO`): it is derived on
-the client from the scaffold rows the form already holds, so the read does not call `programDayRows` a
-second time. The extension to the spec's DTO is `unitDefault` + `isBodyweight`, see Decision 6.
+This is the spec's `MovementOptionDTO` as the seams amended it (`crud-1-fix-it-yourself.md:548-552`):
+no `prescribedToday`, plus `unitDefault` and `isBodyweight`.
 
-### Decision 6 — a pick seeds the movement's **declaration**, never a number
+### Decision 6 — a pick seeds the movement's declaration, never a number
 
-Picking an option on a card sets `movementId`, `movementName` (the option's name), and the same three
-transient hints the scaffold sets (`declaredLoaded`, `declaredDimension` and the unit), computed by
-**one** helper extracted from `strength-form-scaffold.ts` (`declaredUnit` / `declaredMass`, used at
-`:71-100`) so the scaffold and the picker cannot disagree about what a declaration means. The unit is
-applied through the existing `setDimensionUnit` path (`strength-form.tsx:353-386`) so a cross-dimension
-pick clears the load modes in the same update — the guarantee the strength-logging guide's invariant
-4b and its first trap rely on. Reps and weights are **untouched**: a blank card stays blank, and a card
-whose sets were already typed keeps them (they are the athlete's numbers, not prefilled ones).
+Picking sets `movementPublicId`, `movementName` (the option's name) and the scaffold's transient hints
+(`declaredLoaded`, `declaredDimension`, the unit), computed by **one** `declarationOf()` extracted in
+**PR 4** from `strength-form-scaffold.ts` (`declaredUnit` / `declaredMass`, `:71-100`) _(scope N4)_. The
+unit goes through `setDimensionUnit` (`strength-form.tsx:353-386`) so a cross-dimension pick clears the
+load modes in the same update (strength-logging invariant 4b). Reps and weights are untouched.
 
-- `MovementOptionDTO` has **no** `load`, `reps` or `sets` field, asserted by a `@ts-expect-error`
-  test the way `ScaffoldRow`'s containment is (strength-logging invariant 1).
-- **Rejected: the spec's DTO without the declaration.** Then a picked "Back Squat" would open on the
-  household default unit while the same movement scaffolded from the program opens on its declared
-  `lb` — two paths to one movement disagreeing, exactly what V1-26 PR-A fixed for the scaffold.
-- A pick **clears** `scaffolded` and V1-22 chunk 2's `prescriptionId` whenever the picked id differs
-  from the card's current one (chunk 2's "rename clears it" rule,
-  `v1-22-2-renderer-and-writer.md:210-215`, now lives in the pick handler, since there is no rename
-  by typing). Re-picking the same movement is a no-op.
-- "Use as typed" sets `movementName` to the trimmed text, clears `movementId` and every declaration,
-  and sets a transient `created: true` that drives the hint under the button.
+- `MovementOptionDTO` has no `load`/`reps`/`sets`, pinned by `@ts-expect-error` (strength-logging
+  invariant 1).
+- A pick that changes the movement clears `scaffolded` and chunk 2's `prescriptionId` (its "rename
+  clears it" rule, `v1-22-2-renderer-and-writer.md:210-215`, now in the pick handler). Re-picking the
+  same movement is a no-op.
+- "Use as typed" sets `movementName` to the trimmed text, clears `movementPublicId` and every
+  declaration, and sets transient `created: true`.
+- **The scaffold does not send ids** _(scope S1)_. Scaffolded cards keep resolving by name
+  (global-first — correct for every seeded prescription). Handing the scaffold ids is deferred to
+  C4r/MOV-1, the first change that can make a scaffolded name stop slugging to its row.
 
-### Decision 7 — U0 is Radix Dialog from the package already installed, full screen below 600px
+### Decision 7 — U0: Radix Dialog from the installed package; full screen below 600px; owns the back gesture
 
-`apps/web/package.json:38` already depends on `radix-ui` `^1.8.1`; the installed umbrella
-(`apps/web/node_modules/radix-ui/package.json`) pins `@radix-ui/react-dialog` `1.3.1`, which is in
-`pnpm-lock.yaml:1722`. `components/ui/button.tsx:3` already imports `Slot` from it. So
-`import { Dialog } from 'radix-ui'` is **no new dependency**, no lockfile change and no supply-chain
-review item. (Checked, not assumed.)
+`apps/web/package.json:38` already depends on `radix-ui` `^1.8.1`, whose installed umbrella pins
+`@radix-ui/react-dialog` `1.3.1` (in `pnpm-lock.yaml:1722`); `components/ui/button.tsx:3` imports
+`Slot` from it. **No new dependency**, no lockfile change, no supply-chain item.
 
-What Radix gives and the sheet must not undo: focus trap, `aria-modal`, `aria-labelledby` from
-`Dialog.Title`, Escape to close, scroll lock, `aria-hidden` on everything outside (which is _why_
-criterion 46's live region must be inside), and focus return to the element focused before open.
+Radix gives the focus trap, `aria-modal`, `aria-labelledby` from `Dialog.Title`, Escape, scroll lock and
+`aria-hidden` outside (why criterion 46's region must be inside).
 
 ```tsx
-// apps/web/components/ui/sheet.tsx — the shape, not the code
-export const SHEET_FULLSCREEN_BELOW_PX = 600; // criterion 37; the class string below repeats it ONCE
-
+// apps/web/components/ui/sheet.tsx — the shape
 type SheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string; // rendered as Dialog.Title (an h2), tabIndex -1
-  description?: string; // Dialog.Description; omitted → aria-describedby={undefined}
-  status?: string; // criterion 46: a role=status <p>, mounted WITH the sheet, sr-only
-  headerExtra?: ReactNode; // pinned under the title (the picker's search field)
-  footer?: ReactNode; // pinned; wraps; padded by env(safe-area-inset-bottom)
-  initialFocus?: 'title' | RefObject<HTMLElement | null>; // see "no keyboard on open"
+  title: string; // Dialog.Title (h2), tabIndex -1, outline-none, min-w-0 flex-1 break-words
+  description?: string; // omitted → aria-describedby={undefined}
+  status?: string; // criterion 46: role=status <p>, mounted WITH the sheet, sr-only
+  headerExtra?: ReactNode; // pinned under the title (the picker's search)
+  footer?: ReactNode; // pinned; flex-wrap; padded by env(safe-area-inset-bottom)
+  initialFocus?: 'title' | RefObject<HTMLElement | null>;
+  returnFocusTo: RefObject<HTMLElement | null>; // REQUIRED — see below
   children: ReactNode; // the ONLY scrolling region
 };
 ```
 
-- **Layout.** `Dialog.Content` is `fixed inset-0 flex flex-col` with `height: var(--sheet-vvh, 100dvh)`
-  below 600px; `min-[600px]:` a centred dialog, `w-[min(520px,calc(100vw-32px))]`,
-  `max-h-[calc(var(--sheet-vvh,100dvh)-32px)]`, rounded. Header and footer `shrink-0`, the body
-  `min-h-0 flex-1 overflow-y-auto overscroll-contain`. The 600px literal appears in exactly one class
-  string and one exported const; a test pins that they agree (Tailwind needs the literal).
-- **Full screen, not the prototype's bottom sheet, for the picker too.** The prototype draws the
-  picker as a bottom sheet under 600px (`index.html:994-1001`) and reserves full screen for ASSIGN-1
-  (`.full`, `:1003-1012`); the spec's U0 says full screen below 600px (`:150`). One behaviour is
-  chosen: a content-height bottom sheet **changes height on every keystroke** as matches filter, and on
-  iOS a bottom sheet's top edge lands under the keyboard's suggestion bar. **Open question 1** asks the
-  UX panel to confirm.
-- **The keyboard (U13, criterion 19's "visible above the keyboard").** iOS Safari does not shrink
-  `100dvh` when the keyboard opens; only `window.visualViewport.height` does. A ~20-line
-  `useVisualViewportHeight` (in `sheet.tsx`, effect active only while open) writes `--sheet-vvh`, so
-  the pinned footer — where "Use as typed" lives — sits on top of the keyboard. Fallback when the API is
-  missing: `100dvh`. This is a **real-phone check** (spec `:929-932`), not something jsdom or Chromium
-  can prove.
-- **Landscape and 200% zoom (A11Y-8).** At a 360px-tall viewport the pinned header (~128px with a
-  search field) plus footer (~108px) would leave ~124px to scroll. Under `[@media(max-height:480px)]`
-  the header and footer stop being pinned and the **whole** sheet scrolls as one. The footer is
-  `flex-wrap`.
+- **Layout.** `Dialog.Content` below 600px: `fixed inset-x-0 flex flex-col`, `top: var(--sheet-vvt, 0)`,
+  `height: var(--sheet-vvh, 100dvh)` — anchored to the **visual** viewport's top _(UX2 S4)_. From
+  `min-[600px]:` a centred dialog, `w-[min(520px,calc(100vw-32px))]`,
+  `max-h-[calc(var(--sheet-vvh,100dvh)-32px)]`. Header/footer `shrink-0`; body `min-h-0 flex-1
+overflow-y-auto overscroll-contain`. The `600px` literal lives in one class string (no exported
+  constant, _scope N3_); Tailwind needs it literal.
+- **Full screen below 600px, for the picker too — answers Open question 1.** The prototype draws the
+  picker as a bottom sheet (`index.html:994-1001`); the spec's U0 says full screen (`:150`). Full screen
+  stands now that the back gesture is owned (below): a content-height bottom sheet changes height per
+  keystroke, and its top edge lands under the iOS suggestion bar. Recorded as a departure from the
+  prototype (disagreement 5).
+- **The back gesture** _(UX1 B1, UX2 B2; seams)_. On open, `history.pushState({ sheet: id }, '')`; a
+  `popstate` while open closes it **without** a second `back()`; a normal close (Close, Escape, a pick)
+  calls `history.back()` once to drop the entry; where `CloseWatcher` exists it is used instead of the
+  `popstate` listener (Android's back button). A `closingViaHistory` ref guards the double pop. The form
+  under the sheet is never navigated, so typed reps survive (e2e `page.goBack()`). Next's router ignores
+  a same-URL `pushState` with foreign state — **unverified on Next 16.4**; the e2e is the proof, and
+  `node_modules/next/dist/docs/` is read before writing it (`apps/web/AGENTS.md`).
+- **Keyboard-up geometry** _(UX2 B1, UX1 5)_. A ~30-line `useVisualViewport` (active only while open)
+  writes `--sheet-vvh` (height) and `--sheet-vvt` (`offsetTop`), listening to `resize` **and**
+  `scroll`, and sets `data-compact` on the content when the visual viewport is short (keyboard up, or
+  landscape: `visualViewport.height < 480`). Compact: the header drops its padding, the footer's hint
+  clamps to one line. **Not** a `max-height` media query: the layout viewport does not shrink when the
+  iOS keyboard opens, so a media query never fires. Fallback without the API: `100dvh`, not compact.
+  This is a real-phone check (spec `:929-932`).
 - **No keyboard on open on touch (criterion 18).** `initialFocus` defaults to `'title'`; the picker
-  passes its search ref only when `matchMedia('(pointer: coarse)')` is false, via Radix
-  `onOpenAutoFocus` + `preventDefault`. Focus on the title (tabIndex -1) keeps the screen reader
-  oriented without raising the keyboard.
-- **Focus return.** On close the caller may pass `returnFocusTo`; the default is Radix's (the element
-  focused before open). The picker returns focus to **that card's** Movement button, which stays
-  mounted across the pick (same `clientId` key).
-- **Rejected: native `<dialog>` + `showModal()`** (the prototype's choice). It needs its own scroll
-  lock and focus return (the prototype hand-rolls `opener`, `:1757-1776`), and the repo's components
-  are Radix/shadcn by rule (AGENTS.md → Stack). **Rejected: shadcn's generated `sheet`** — it is a
-  side drawer with a fixed width, not this shape; generating it and rewriting it would leave a
-  regeneration hazard like `button.tsx`'s (`:7-17`). **Rejected: a route** (`/p/[id]/pick`, the
-  alternative M12 weighed) — the picker returns a value into unsaved client form state, which a
-  navigation would discard.
+  passes its search ref only when `matchMedia('(pointer: coarse)')` is false (Radix `onOpenAutoFocus` +
+  `preventDefault`).
+- **`returnFocusTo` is required** _(UX2; scope S2 kept because the Safari point holds; architecture 7)_:
+  Safari does not focus a `<button>` on click, so Radix's "the element focused before open" is `<body>`
+  there. The caller names the element; the picker passes that card's Movement button.
+- **Safe area.** The footer pads `env(safe-area-inset-bottom)`; the header pads
+  `env(safe-area-inset-top)` below 600px (full screen covers the notch).
+- **Name.** Kept `components/ui/sheet.tsx`, as the seams table and sibling plans cite it
+  (architecture's `modal-sheet.tsx` suggestion declined on that ground). The hazard is that
+  `shadcn add sheet` would overwrite it with a side drawer: the file's header says so (as
+  `button.tsx:7-17` does), and `sheet.test.tsx`'s status-inside and history cases fail on any
+  regenerated file.
+- **Rejected: native `<dialog>`** (the prototype's) — its own scroll lock and focus return
+  (`index.html:1757-1776`), and AGENTS.md → Stack is Radix/shadcn. **Rejected: shadcn's `sheet`** — a
+  side drawer. **Rejected: a route** — the picker returns a value into unsaved client state.
 
-### Decision 8 — the picker is a reusable component that never writes
+### Decision 8 — the picker: reusable, never writes
 
-`apps/web/components/movements/movement-picker.tsx` (`'use client'`), not under
-`app/p/[profileId]/`, because D2's editor lives at `/p/<id>/program` and must import the **same**
-component (criterion 34). Its props carry everything context-specific:
+`apps/web/components/movements/movement-picker.tsx` (`'use client'`), outside `app/p/[profileId]/` so
+D2's editor imports the same component (criterion 34):
 
 ```ts
 type MovementPickerProps = {
@@ -376,339 +403,442 @@ type MovementPickerProps = {
   onOpenChange: (open: boolean) => void;
   title: string; // "Choose a movement" | D2: "Add a movement to {workout label}"
   data: MovementPickerData;
-  prescribedIds?: readonly string[]; // folded into "Today's program (already on your form)"
-  alreadyIn?: { ids: ReadonlySet<string>; label: string }; // D2: tag "already in {label}"
-  createdWhen: 'set' | 'program'; // the hint's wording: written when the set / program is saved
+  todaysProgram?: { ids: readonly string[]; onForm: ReadonlySet<string> }; // see below
+  alreadyIn?: { ids: ReadonlySet<string>; label: string }; // D2
+  currentId?: string; // marks the card's current movement
+  createdWhen: 'set' | 'program';
+  returnFocusTo: RefObject<HTMLElement | null>;
   onPick: (
-    pick: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
+    p: { kind: 'existing'; option: MovementOptionDTO } | { kind: 'typed'; name: string },
   ) => void;
 };
 ```
 
-It imports no Server Action and no `app/` module (a source-scan test pins it), so it **cannot** write;
-a typed name is returned to the caller, which writes it when **its** save runs — the set's, or later
-the program's (criterion 34's "written when the program is saved").
+It imports no Server Action and no `app/` module (a source-scan test), so it cannot write; a typed name
+is written by the caller's save (the set's, later the program's — criterion 34).
 
-**What it renders** (prototype `drawPicker`, `index.html:2914-3120`, minus PICK-2's "Did you mean"):
+**What it renders** (prototype `drawPicker`, minus PICK-2's "Did you mean"); every string from
+`MOVEMENT_PICKER_COPY` _(reuse S4)_:
 
-- Header (pinned): title + **Close**; a labelled `type="search"` (`maxLength` = the schema's 100,
-  `autoComplete/autoCorrect/autoCapitalize` off, `enterKeyHint="search"`), `aria-describedby` the
-  status.
-- Empty query: **Recent** (from `recentIds`, omitted when empty) → each picker group in
-  `MOVEMENT_PICKER_GROUPS` order (empty groups omitted, so `wrestling` is invisible until C3) →
-  **Added by your household** (omitted when empty) → a `<details>` "Today's program (already on your
-  form)" when `prescribedIds` is non-empty and `alreadyIn` is absent.
-- A query: one **Matches** section; each option tagged `in the app` (catalog) or `added by you`
-  (household); an alias hit carries `also called {ALIAS}`. Status text: `n matches` / `1 match` /
-  `No matches.`, written only when it changes (the prototype's `lastStatus`, `:3115-3118`).
-- Footer (pinned, only when the query is non-empty and not `exact`): **Use "{typed}" as typed** — a
-  full-width outline `Button` with `whitespace-normal h-auto break-words` (the base class is
-  `whitespace-nowrap`, `button.tsx:19`, so a long name would overflow 328px without it), and a hint:
-  usable → `Added to your household's list when you save the set. It can't be removed from the app yet.`;
-  no letter → `A movement name needs at least one letter.`; a comma or line break → the schema's own
-  message (`hasCommaOrLineBreak`, `packages/shared/src/text.ts:38`, reused). Disabled states carry
-  `aria-describedby` to the hint (A11Y-2).
-- ⚠️ **The hint does not say "you can rename it later".** The prototype does (`index.html:3092-3095`),
-  but C4r has not shipped; promising a control that does not exist is the trust failure U14 named. C4r's
-  PR changes the sentence.
-- Semantics (U4, `crud-1-fix-it-yourself.md` review log): groups are `<section aria-labelledby>` with
-  an `<h3>` and a `<ul>` of `<li><button type="button">`; **no** `listbox`/`option` roles, no
-  permanent `aria-expanded`. Every option `min-h-12` (48px).
+- **Header** (pinned): title + Close; a labelled `type="search"` (`maxLength={MOVEMENT_NAME_MAX}`,
+  autocomplete/autocorrect/autocapitalize off, `enterKeyHint="search"`), `aria-describedby` the status.
+  The query **resets on every open** (UX NIT).
+- **Empty query:** **Recent** (omitted without `recentIds` or when empty) → **Today's program** →
+  each group in `MOVEMENT_PICKER_GROUPS` order (empty groups omitted) → **Your household** (omitted when
+  empty).
+  - **Today's program** _(UX1 2)_ is computed from what is **on the form**: `todaysProgram.ids` are the
+    prescribed movements (from `program-day.ts`, PR 4); `onForm` is the set already on a card (by id for
+    a picked card, by `movementNameKey` for a scaffolded or typed one). A `<details>` that is **open**
+    when any prescribed movement is not on a card, closed with "(already on your form)" when all are,
+    absent without `todaysProgram` or with `alreadyIn` (D2).
+- **A query:** **Matches**; if none, **Matches some of your words** (`someWords`); if none, the browse
+  list under a "No matches" status.
+- **One tag per row, by precedence** _(UX2 S2; UX3 4; UX1 8)_: `already in {label}` > `also called
+{ALIAS}` > `current` > the **group label** for a catalog row in search results ("Legs") >
+  `household` for a household row. The tag may wrap under the name. (The brief's "in the app" /
+  "added by you" are replaced on the UX panel's finding — disagreement 10.)
+- **Status:** `n matches` / `1 match` / `No matches.`, plus — when "Use as typed" is unavailable — its
+  reason (`Already in the list as Pull-Up.`), written only when changed _(UX2 S6)_.
+- **Footer** (pinned; only for a non-empty query that is not `exact`/`aliasHit`): **Use "{typed}" as
+  typed**. With matches above it, a quieter control (ghost, still `min-h-11`) and a one-line hint; with
+  none, the outline button and the full hint _(UX2 B1)_. `whitespace-normal h-auto break-words`
+  (`button.tsx:19` is `whitespace-nowrap`). Unusable input (no letter, comma, line break) keeps it
+  **`aria-disabled`** and focusable with the reason in the hint, the message from
+  `MOVEMENT_NAME_MESSAGES` (reuse S4). Hint copy _(UX3 4)_: **"Adds "{name}" to the list for everyone in
+  your household. It can't be deleted, so check the spelling."** — no "rename later" until C4r (MOV-1
+  edits it).
+- **Enter** in the search picks only when unambiguous (exactly one match, or an alias/exact hit) and
+  **never** triggers "Use as typed" (UX3 N8).
+- **Semantics:** `<section aria-labelledby>` + `<h3>` + `<ul>` of `<li><button type="button">`; no
+  `listbox`/`option`; every option `min-h-12`, `focus-visible` ring; the current movement carries
+  `aria-current="true"`.
 
-**Width at 360px** (full-screen sheet): body `px-4` → **328px**; option `px-3` → **304px**; tag
-`text-xs px-2 border` ≈ 12+16+2 = 30px + "added by you" ≈ 66px ⇒ **≈ 96px**, `shrink-0`; `gap-2` 8px ⇒
-**≈ 200px** for the name. The longest seeded name, "Overhead Shoulder Press" (23 characters at
-`text-base`, ≈ 8.5px each ≈ 196px), fits on one line; anything longer **wraps** (`min-w-0
-break-words`, the row grows past 48px) rather than truncating, since a truncated movement name is the
-mis-pick this row exists to stop. Header: title "Choose a movement" (`text-lg`, ≈ 160px) + Close (ghost
-`Button`, ≈ 64px) + `gap-2` = 232px ≤ 328px. Search: `INPUT_CLASS` (`lib/constants.ts:287-288`,
-`h-11 text-base` — `text-base` is load-bearing against iOS zoom-on-focus) at 328px.
+**Width at 360px** (full screen): body `px-4` → 328px; option `px-3` → 304px; a group tag (`text-xs
+px-2` + border, "Legs" ≈ 26px) ≈ 46px; longest tag "already in Strength A" ≈ 130px **wraps under the
+name** rather than squeezing it. Longest seeded name "Overhead Shoulder Press" ≈ 196px at `text-base`,
+one line beside a group tag (304 − 46 − 8 = 250px); longer names wrap (`min-w-0 break-words`), never
+truncate. Header: the title is `min-w-0 flex-1 break-words`, Close `shrink-0` (≈ 64px), so a 40-character
+D2 title wraps instead of pushing Close off (UX2 S3).
 
-**The Movement field on the card** (prototype `vLog`, `index.html:2836-2845`): the `<input>` at
-`strength-form.tsx:808-824` becomes a `button type="button"` with `INPUT_CLASS` sizing,
-`aria-haspopup="dialog"`, `aria-labelledby` = the visible "Movement" label **and** the value span, so
-it reads "Movement, Back Squat" (or "Movement, Choose a movement"). Same flex slot, same 44px height, so
-the row's width budget is unchanged (strength-logging guide, "The row already wraps at 360px", ~294px).
-Below it, when `created`, the hint `New movement — added to your household's list when you save.`
+**The Movement field on the card** _(UX2 S1)_: the `<input>` at `strength-form.tsx:808-824` becomes a
+`button type="button"` on **its own line** above the Measuring/Unit row — `min-h-11 h-auto w-full
+text-left break-words` with `INPUT_CLASS`'s border/focus (`lib/constants.ts:287-288`),
+`aria-haspopup="dialog"`, `aria-labelledby` = the "Movement" label + the value span ("Movement, Back
+Squat" / "Movement, Choose a movement"). A long household name wraps inside it. Under it, while
+`created`, the permanence hint survives until Save: **"New movement — saved for your household when you
+log. It can't be deleted."**
 
-**The one thing a button cannot do that the input did: block the native submit.** `required` on the
-input (`:817`, `nameRequired`) made the browser refuse a sendable card with no name; a button is
-barred from constraint validation. The form gains an `onSubmit` that, when `firstBlocker` is a name
-blocker (the same predicate the summary line already reads, `strength-form-untouched.ts`), calls
-`preventDefault()`, moves focus to **that card's** Movement button, and shows `Choose a movement.`
-beside it with `aria-describedby` (A11Y-2; no `role=alert` racing the focus move).
+**"Add movement"** _(UX1 6)_ opens the picker and **appends** a card on pick (none on cancel); focus moves
+to the new card's first reps input. The initial blank card stays.
 
-- **Rejected: a visually hidden `required` input mirroring the name** — that is the "hidden-but-present
-  `required` input makes the form silently dead" trap the guide records twice (`strength-logging.md`
-  Traps). **Rejected: letting the server refuse** — it works (the action's "Enter a movement." names
-  the card) but costs a round trip and loses the focus move.
-- ⚠️ **Unverified:** that React 19's `<form action={fn}>` skips the action when `onSubmit` calls
-  `preventDefault()`. PR 4's first test proves it in jsdom and `e2e` proves it in a browser; if it does
-  not hold, the fallback is the server refusal above, and the plan returns to the panel.
+**By Save** _(UX3 3, answers Q3)_: when any card is `created`, a line joins the summary — **"Saving adds 1
+new movement: "pullups". Check the spelling."** (plural form for several) — and its id joins Save's
+`aria-describedby` (`strength-form.tsx:641-647`). No confirm dialog.
+
+**The native-submit gap.** `required` on the input (`:817`) blocked a sendable card with no name; a
+button is barred from constraint validation. The form gains `onSubmit`: when `firstBlocker` is a name
+blocker (`strength-form-untouched.ts`), `preventDefault()`, focus that card's Movement button, show
+`MOVEMENT_NAME_MESSAGES.missing` beside it via `aria-describedby` (A11Y-2; no `role=alert` racing focus).
+⚠️ **Unverified:** that React 19's `<form action>` skips the action on `preventDefault()`; PR 4's first
+test proves it. **Fallback, stated** _(scope N6)_: if it does not hold, the server's refusal ("Movement
+1: Choose a movement.") stays the backstop, the plan returns to the panel, and the focus move is lost.
+**Rejected:** a hidden `required` mirror input — the "silently dead form" trap (strength-logging Traps).
 
 ## File-by-file changes
 
 ### PR 1 — U0, `feat/u0-sheet`
 
-| Path                                    | Change | What & why                                                                                                                                                                                                                       |
-| --------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/components/ui/sheet.tsx`      | NEW    | Decision 7. `Sheet` + `useVisualViewportHeight` + `SHEET_FULLSCREEN_BELOW_PX`. Docblock: why Radix, why full screen, why the status region is inside, the landscape rule, and "do not regenerate from shadcn" (as `button.tsx`). |
-| `apps/web/components/ui/sheet.test.tsx` | NEW    | jsdom; see Test plan.                                                                                                                                                                                                            |
-| `docs/plans/pick-1-movement-picker.md`  | NEW    | This plan, with its review-response log (README: the plan rides with the first PR it plans).                                                                                                                                     |
-| `docs/plan.md`                          | EDIT   | PICK-1 row links this plan. **Files unowned 8 as a row** (the a11y scan opens no dialog; `expectTapTargets` measures height only), as the spec assigns to U0's plan (`:690-694`, `:927`).                                        |
-| `docs/roadmap.md`, `docs/status.md`     | EDIT   | U0 → in flight / shipped; the pointer.                                                                                                                                                                                           |
-| `docs/changelog/<fragment>.md`          | NEW    | One fragment.                                                                                                                                                                                                                    |
+| Path                                    | Change | What & why                                                                                                                                                                       |
+| --------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/components/ui/sheet.tsx`      | NEW    | Decision 7: `Sheet`, `useVisualViewport`, the history hook. Header docblock: why Radix, full screen, status inside, back gesture, compact mode, "do not regenerate from shadcn". |
+| `apps/web/components/ui/sheet.test.tsx` | NEW    | jsdom; Test plan.                                                                                                                                                                |
+| `docs/plans/pick-1-movement-picker.md`  | NEW    | This plan and its review-response log.                                                                                                                                           |
+| `docs/plan.md`                          | EDIT   | PICK-1 links this plan; **files unowned 8 as a row** (the a11y scan opens no dialog; tap targets measure height only) — spec `:690-694`, `:927`.                                 |
+| `docs/roadmap.md`, `docs/status.md`     | EDIT   | U0 in flight / shipped.                                                                                                                                                          |
+| `docs/changelog/<fragment>.md`          | NEW    | One fragment.                                                                                                                                                                    |
 
-No feature guide owns `components/ui/` (`docs/features/*.md` `owns:`), so `guides:check` is
-untouched. No privacy change: a primitive with no data.
+No guide owns `components/ui/`. No privacy change.
 
-### PR 2 — the server takes an id, `feat/pick-1a-movement-id`
+### PR 2 — the server takes an id, `feat/pick-1a-movement-public-id`
 
-| Path                                                                                  | Change | What & why                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/strength-session.ts`                                             | EDIT   | `sessionMovementSchema` + `movementId: uuidSchema.optional()` (reuses `uuidSchema`, `:64`); `movementName` + the at-least-one-letter refine (Decision 1). Docblock: the id decides; the name is a label; strip-mode makes the field silently droppable.                                             |
-| `packages/db/src/writers/movement-catalog.ts`                                         | EDIT   | `resolveMovementByPublicId(exec, scope, publicId)` → `{ id, name, slug } \| null`, global-or-own-household via `movementIsGlobal()` / `movementInHousehold(scope)`. Docblock cross-links `findOrCreateMovement`'s precedence. No throw interpolates the id.                                         |
-| `apps/web/lib/dal/catalog.ts`                                                         | EDIT   | `resolveMovementId(scope, publicId)` — the thin `db`-binding wrapper, mirroring `findOrCreateMovementId` (`:105-107`). Takes a scope, so `scoped.test.ts` needs no entry.                                                                                                                           |
-| `apps/web/lib/dal/entries.ts`                                                         | EDIT   | `logStrengthSession` (`:479-513`): resolve all ids first, throw `MOVEMENT_NOT_AVAILABLE` (a module constant) on any miss **before** any find-or-create; then find-or-create the typed ones; `movementName` passed to the writer is the DB's for an id. Docblock updates the TEN-2b-1 residual note. |
-| `packages/db/src/queries/program-day.ts`                                              | EDIT   | Select `movementPublicId: schema.movements.publicId` (no new join; `movements` is already inner-joined).                                                                                                                                                                                            |
-| `apps/web/lib/programming/program-day.ts`                                             | EDIT   | `ProgramDayDTO` + `movementPublicId`; `toProgramDay` maps it (`:18-46`).                                                                                                                                                                                                                            |
-| `apps/web/app/p/[profileId]/strength-form-scaffold.ts`                                | EDIT   | `ScaffoldRow` + `movementId` — the next deliberate widening, an **identity**, with its reason beside chunk 2's; `scaffoldMovements` maps it. Extract `declarationOf(row)` (from `declaredUnit`/`declaredMass`) for PR 4 to reuse (Decision 6).                                                      |
-| `apps/web/app/p/[profileId]/strength-section.tsx`                                     | EDIT   | The narrowing map (`:84-90`) passes `movementPublicId` as `movementId`; `load` still absent.                                                                                                                                                                                                        |
-| `apps/web/app/p/[profileId]/strength-form.tsx`                                        | EDIT   | `MovementVals.movementId?` — **serialized** (`movementsJson`, `:444-474`, spread only when present, "absent stays absent"); `onName` (`:551-558`) clears it. No visible change.                                                                                                                     |
-| `packages/db/scripts/verify.ts`                                                       | EDIT   | New block "PICK-1: a movement id resolves only in its namespace" (Test plan).                                                                                                                                                                                                                       |
-| `apps/web/lib/dal/entries.test.ts`                                                    | EDIT   | Emitted-SQL proofs via `recording-db.ts`: an id path emits **no** movement `INSERT`; a failed id emits no `INSERT` and no `BEGIN`.                                                                                                                                                                  |
-| `apps/web/app/p/[profileId]/actions.test.ts`                                          | EDIT   | The boundary tests (Test plan). **`actions.ts` itself is not edited** (Decision 2).                                                                                                                                                                                                                 |
-| `apps/web/app/p/[profileId]/strength-session-schema.test.ts`                          | EDIT   | Schema cases.                                                                                                                                                                                                                                                                                       |
-| `apps/web/app/p/[profileId]/strength-form-scaffold.test.ts`, `strength-form.test.tsx` | EDIT   | The id rides a scaffolded card; omitted on a hand-added one; cleared on rename; the no-`load` guard unmodified.                                                                                                                                                                                     |
-| `docs/features/strength-logging.md`                                                   | EDIT   | Owns `strength-form.tsx`, `-scaffold.ts`, `strength-session.ts`: invariant 1 gains "a movement **identity** may cross, never a magnitude"; a new invariant "a movement id decides; the name is a label"; the Traps line on `findOrCreateMovementId` says which path still reaches it.               |
-| `docs/features/write-path.md`                                                         | EDIT   | Owns `lib/dal/`, `writers/`: the resolve core, its namespace rule, "ids before inserts", and that a dead id **throws** until C4m.                                                                                                                                                                   |
-| `docs/features/programming.md`                                                        | EDIT   | Owns `program-day.ts` and `lib/programming/`: the extra selected column and why it is not a magnitude.                                                                                                                                                                                              |
-| `docs/roadmap.md`, `docs/status.md`, `docs/changelog/…`                               | EDIT   | Pointer + fragment.                                                                                                                                                                                                                                                                                 |
+| Path                                                                         | Change | What & why                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/text.ts`                                                | EDIT   | `hasALetter` beside `hasCommaOrLineBreak` (`:38`).                                                                                                                                                                   |
+| `packages/shared/src/movements.ts`                                           | EDIT   | `MOVEMENT_NAME_MAX`, `MOVEMENT_NAME_MESSAGES`, `movementNameSchema` (seams).                                                                                                                                         |
+| `packages/shared/src/strength-session.ts`                                    | EDIT   | `movementPublicId: uuidSchema.optional()`; `movementName` → label shape; the typed-name rules in the session `superRefine` (Decision 1).                                                                             |
+| `packages/db/src/writers/movement-catalog.ts`                                | EDIT   | `resolveMovementByPublicId`, `resolveSessionMovements`, `MovementNotAvailableError`, `MOVEMENT_NOT_AVAILABLE` (Decision 2). Already `export *`'d by `packages/db/src/index.ts:29`.                                   |
+| `packages/db/src/writers/strength-session.ts`                                | EDIT   | The in-transaction global-or-own re-check of every `movementId` (Decision 2).                                                                                                                                        |
+| `apps/web/lib/dal/entries.ts`                                                | EDIT   | `logStrengthSession` calls `resolveSessionMovements`; docblock's TEN-2b-1 note updated.                                                                                                                              |
+| `apps/web/lib/dal/catalog.ts`                                                | EDIT   | Delete `findOrCreateMovementId` (`:105-107`), now uncalled; its docblock's history moves to the core's.                                                                                                              |
+| `packages/db/scripts/verify.ts`                                              | EDIT   | "PICK-1: a movement id resolves only in its namespace" (Test plan).                                                                                                                                                  |
+| `packages/db/scripts/mutations/NN-resolver-ignores-household.{patch,expect}` | NEW    | Drops the `movementInHousehold` conjunct from the resolver (widens to any owned row) → the foreign-id case goes red.                                                                                                 |
+| `packages/db/scripts/mutations/NN-typed-before-ids.{patch,expect}`           | NEW    | Swaps the two phases → "a refused id commits no typed sibling" goes red. (`NN` = the next free numbers at merge; `README.md:120-123` procedure.)                                                                     |
+| `packages/db/scripts/mutations/NN-drop-in-tx-recheck.{patch,expect}`         | NEW    | Removes `writeStrengthSession`'s in-transaction global-or-own `count(*)` → case (d) goes red _(correctness round 2, S2)_.                                                                                            |
+| `apps/web/lib/dal/entries.test.ts`                                           | EDIT   | Emitted-SQL order test (Test plan).                                                                                                                                                                                  |
+| `apps/web/app/p/[profileId]/actions.test.ts`                                 | EDIT   | Boundary tests. **`actions.ts` not edited.**                                                                                                                                                                         |
+| `apps/web/app/p/[profileId]/strength-session-schema.test.ts`                 | EDIT   | Schema cases.                                                                                                                                                                                                        |
+| `docs/architecture.md`                                                       | EDIT   | §2 "Write path": the id-path flowchart (resolve ids → typed find-or-create → tx with the re-check) _(architecture 6)_; embedded in PR 2's description.                                                               |
+| `docs/features/strength-logging.md`                                          | EDIT   | Owns `strength-session.ts`, the writer: "the id decides; the name is a label"; the in-tx re-check; which path still reaches find-or-create.                                                                          |
+| `docs/features/write-path.md`                                                | EDIT   | Owns `lib/dal/`, `writers/`: the resolver, ids-before-inserts, the TOCTOU re-check, "a dead id throws until C4m"; the stale `23505` sentence in its Files row (`write-path.md` `movement-catalog.ts` row) corrected. |
+| `docs/roadmap.md`, `docs/status.md`, `docs/changelog/…`                      | EDIT   | Pointer + fragment.                                                                                                                                                                                                  |
 
 ### PR 3 — the picker, unmounted, `feat/pick-1b-picker-component`
 
-| Path                                                                | Change | What & why                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/shared/src/movement-search.ts` (+ `.test.ts`)             | NEW    | Decision 4: `foldText`, `foldMovementQuery`, `matchMovementOptions`, `hasALetter`.                                                                                                                                                                    |
-| `packages/shared/src/movement-picker-catalog.ts` (+ `.test.ts`)     | NEW    | Decision 3: `MOVEMENT_PICKER_GROUPS` (`as const`) + `movementPickerGroupSchema` + `MOVEMENT_PICKER_GROUP_LABELS` + the per-slug `{ group, aliases }` map + `RECENT_MOVEMENTS_LIMIT`. "Provisional until chunk 0" docblock.                            |
-| `packages/shared/src/index.ts`                                      | EDIT   | Export both.                                                                                                                                                                                                                                          |
-| `apps/web/lib/movements/movement-option.ts`                         | NEW    | `MovementOptionDTO`, `MovementPickerData` (Decision 5) — beside the feature, not in `lib/dal`, so a client component can import the **type** without touching `server-only`.                                                                          |
-| `apps/web/lib/movements/picker-copy.ts`                             | NEW    | `MOVEMENT_PICKER_COPY` — every string above. **Not** `lib/constants.ts`: AUTH-1 1c edits that file (`auth-1-clerk-google.md:1602`, `:1736`), and the copy has one feature (AGENTS.md → constants: "the feature's `lib` module").                      |
-| `apps/web/components/movements/movement-picker.tsx` (+ `.test.tsx`) | NEW    | Decision 8, on `Sheet`.                                                                                                                                                                                                                               |
-| `docs/features/movement-picker.md`                                  | NEW    | A new guide — the feature now spans `shared` (2 files), `db` (PR 4's query), `lib/dal`, `lib/movements` and `components/movements`, past the "four files across two packages" bar (AGENTS.md → Feature guides). Owns the new files; invariants below. |
-| `docs/features/README.md`                                           | EDIT   | List the guide.                                                                                                                                                                                                                                       |
-| `docs/roadmap.md`, `docs/status.md`, `docs/changelog/…`             | EDIT   | Pointer + fragment.                                                                                                                                                                                                                                   |
+| Path                                                                | Change | What & why                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared/src/movement-search.ts` (+ `.test.ts`)             | NEW    | Decision 4, importing `foldName`.                                                                                                                                                                                                                          |
+| `packages/shared/src/movement-picker-catalog.ts` (+ `.test.ts`)     | NEW    | Decision 3.                                                                                                                                                                                                                                                |
+| `packages/shared/src/index.ts`                                      | EDIT   | Export both.                                                                                                                                                                                                                                               |
+| `apps/web/lib/movements/movement-option.ts`                         | NEW    | The DTO types (Decision 5) — importable by a client component without `server-only`.                                                                                                                                                                       |
+| `apps/web/lib/movements/movement-picker-copy.ts`                    | NEW    | `MOVEMENT_PICKER_COPY`: **every** picker, card-hint, Save-line and guard string _(reuse S4; architecture)_. Not `lib/constants.ts` (AUTH-1 1c edits it). ⚠️ MOV-1 cites `movement-copy.ts` (`mov-1-rename-movement.md:337`); one of the two plans renames. |
+| `apps/web/components/movements/movement-picker.tsx` (+ `.test.tsx`) | NEW    | Decision 8, on `Sheet`.                                                                                                                                                                                                                                    |
+| `docs/features/movement-picker.md`                                  | NEW    | Owns the five new files above and (PR 4) `packages/db/src/queries/movement-options.ts`. **Links** `lib/dal/movements.ts`, which `write-path.md` owns (`lib/dal/`) _(scope S3)_.                                                                            |
+| `docs/features/README.md`                                           | EDIT   | List the guide.                                                                                                                                                                                                                                            |
+| `docs/roadmap.md`, `docs/status.md`, `docs/changelog/…`             | EDIT   | Pointer + fragment.                                                                                                                                                                                                                                        |
 
-The new guide's invariants (the things that live **between** files):
-
-1. The picker never offers a row `findOrCreateMovement` would not return (global-first, mirrored in
-   the list query).
-2. No magnitude crosses: `MovementOptionDTO` has no load/reps/sets, enforced by the type.
-3. `foldText` is the only text normaliser for typed-name comparison; A3 reuses it, C2 builds on it.
-4. Groups and aliases are code, keyed by slug; adding a seeded movement without a group fails a test.
-5. The component never writes; the caller's save writes a typed name.
-6. Every UI string is in `picker-copy.ts`; the e2e asserts against it.
+The guide's invariants: (1) the list never offers a row `findOrCreateMovement` would not return; (2) no
+magnitude crosses (the type); (3) `movementNameKey` is the one "same movement" rule — MOV-1 imports it;
+(4) groups/aliases are code keyed by slug; a seeded row without a group fails a test; (5) the component
+never writes; (6) a dead id throws until C4m; (7) after C4r renames a row, chunk 2's slug match must
+compare ids (Gates).
 
 ### PR 4 — mounted, `feat/pick-1c-picker-in-the-form`
 
-| Path                                                                    | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/queries/movement-options.ts`                           | NEW    | Decision 5's two queries. Owned by the new guide (and listed there, since `queries/` is owned by name, `write-path.md` Files table).                                                                                                                                                                                                                                                                      |
-| `packages/db/src/index.ts`                                              | EDIT   | `export * from './queries/movement-options'` (the barrel re-exports by module, `index.ts:13-29`; PR 2's core needs no edit, `movement-catalog` is already `export *`'d at `:29`).                                                                                                                                                                                                                         |
-| `apps/web/lib/dal/movements.ts`                                         | NEW    | `listMovementOptions(profilePublicId)` — resolves the scope, both queries in parallel, attaches the picker catalog, returns `MovementPickerData`.                                                                                                                                                                                                                                                         |
-| `apps/web/app/p/[profileId]/page.tsx`                                   | EDIT   | `listMovementOptions(profile.id)` joins the existing `Promise.all` (`:85-89`) — one round trip, not a waterfall.                                                                                                                                                                                                                                                                                          |
-| `apps/web/app/p/[profileId]/strength-section.tsx`                       | EDIT   | Pass `pickerData` through to `StrengthForm`.                                                                                                                                                                                                                                                                                                                                                              |
-| `apps/web/app/p/[profileId]/strength-form.tsx`                          | EDIT   | The Movement button + `MovementPicker` (one instance per form, opened for a card's `clientId`); `onPick` (Decision 6); `created` (transient, never serialized); the `onSubmit` name guard; `prescribedIds` from the scaffold rows.                                                                                                                                                                        |
-| `apps/web/app/p/[profileId]/strength-form-scaffold.ts`                  | EDIT   | Only if PR 2's `declarationOf` needs a second caller shape.                                                                                                                                                                                                                                                                                                                                               |
-| `apps/web/app/p/[profileId]/strength-form.test.tsx`                     | EDIT   | 15 `nameInput()` uses (`:35`) move to a `chooseMovement` test helper; new cases (Test plan).                                                                                                                                                                                                                                                                                                              |
-| `apps/web/e2e/steps.ts`                                                 | EDIT   | `chooseMovement(scope, name, { asTyped? })` — the ONE way specs name a movement.                                                                                                                                                                                                                                                                                                                          |
-| `apps/web/e2e/a11y.spec.ts`                                             | EDIT   | `fill()` on the Movement textbox at `:351`, `:467`, `:523`, `:527`, `:534`, `:547` → `chooseMovement`; **the open picker joins the scan** at 360 and 1280 (unowned 8 / spec `CI` row, `:927`); tap targets inside the sheet.                                                                                                                                                                              |
-| `apps/web/e2e/export-full-day.spec.ts`                                  | EDIT   | `:151` → `chooseMovement(…, { asTyped: true })` (its probe name must stay unique, `:55`).                                                                                                                                                                                                                                                                                                                 |
-| `apps/web/e2e/movement-picker.spec.ts`                                  | NEW    | The picker's own browser test (Test plan).                                                                                                                                                                                                                                                                                                                                                                |
-| `apps/web/scripts/screenshot-ephemeral.ts`                              | EDIT   | `:445` (`Plank`) and `:558` (`Pull-up`) type into the old textbox; switch to the picker (`Pull-up` should now be **picked** — it is a catalog row).                                                                                                                                                                                                                                                       |
-| `docs/features/strength-logging.md`                                     | EDIT   | The Movement field is a button; the `onSubmit` guard and why not a hidden `required` input; the 360px row arithmetic is unchanged.                                                                                                                                                                                                                                                                        |
-| `docs/features/movement-picker.md`                                      | EDIT   | Owns the query and DAL file; adds the `deleted_at` reader note.                                                                                                                                                                                                                                                                                                                                           |
-| `docs/features/write-path.md`                                           | EDIT   | `lib/dal/` is owned there: the new read module.                                                                                                                                                                                                                                                                                                                                                           |
-| `docs/privacy/data-inventory.md`                                        | EDIT   | §1b's "the only catalog table with a user-reachable writer (the free-text movement-name box)" (`:141-143`) → "…("Use as typed" in the movement picker)"; §1a's `movements` row (`:131`) gains: a household's own movement names are now **listed** to everyone viewing any athlete in the household (they were already readable on the day pages that logged them). No new field, processor or retention. |
-| `docs/roadmap.md`, `docs/status.md`, `docs/plan.md`, `docs/changelog/…` | EDIT   | PICK-1 done; PICK-2, C4r and D2 unblocked on it; the pointer; a fragment.                                                                                                                                                                                                                                                                                                                                 |
+| Path                                                                         | Change | What & why                                                                                                                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/queries/movement-options.ts`                                | NEW    | Decision 5's two queries.                                                                                                                                                                                                                                                                                              |
+| `packages/db/src/index.ts`                                                   | EDIT   | `export * from './queries/movement-options'` (the barrel's pattern, `:13-29`).                                                                                                                                                                                                                                         |
+| `apps/web/lib/dal/movements.ts`                                              | NEW    | `listMovementOptions()`, `listRecentMovementIds(profilePublicId)`.                                                                                                                                                                                                                                                     |
+| `packages/db/src/queries/program-day.ts`                                     | EDIT   | Select `movementPublicId` (no new join) — for `todaysProgram.ids` only; **not** carried onto `ScaffoldRow` (Decision 6).                                                                                                                                                                                               |
+| `apps/web/lib/programming/program-day.ts`                                    | EDIT   | `ProgramDayDTO.movementPublicId` (`:18-46`).                                                                                                                                                                                                                                                                           |
+| `apps/web/app/p/[profileId]/page.tsx`                                        | EDIT   | Both reads join the `Promise.all` (`:85-89`).                                                                                                                                                                                                                                                                          |
+| `apps/web/app/p/[profileId]/strength-section.tsx`                            | EDIT   | Pass picker data and the prescribed ids; the scaffold map (`:84-90`) unchanged.                                                                                                                                                                                                                                        |
+| `apps/web/app/p/[profileId]/strength-form-scaffold.ts`                       | EDIT   | Extract `declarationOf()` (Decision 6).                                                                                                                                                                                                                                                                                |
+| `apps/web/app/p/[profileId]/strength-form.tsx`                               | EDIT   | The Movement button; one `MovementPicker` per form; `onPick`; `created`; "Add movement" via the picker; the Save line; the `onSubmit` guard; `movementPublicId` serialized when present (`movementsJson`, `:444-474`), "absent stays absent".                                                                          |
+| `apps/web/app/p/[profileId]/strength-form.test.tsx`                          | EDIT   | 15 `nameInput()` uses (`:35`) → a `chooseMovement` helper; new cases.                                                                                                                                                                                                                                                  |
+| `apps/web/e2e/steps.ts`                                                      | EDIT   | `chooseMovement(scope, name, { asTyped? })` — the one way a spec names a movement.                                                                                                                                                                                                                                     |
+| `apps/web/e2e/a11y.spec.ts`                                                  | EDIT   | `:351`, `:467`, `:523`, `:527`, `:534`, `:547` → `chooseMovement`; the open picker scanned at 360/390/1280; tap targets inside it; a 390px case with long household names on the card.                                                                                                                                 |
+| `apps/web/e2e/export-full-day.spec.ts`                                       | EDIT   | `:151` → `chooseMovement(…, { asTyped: true })`.                                                                                                                                                                                                                                                                       |
+| `apps/web/e2e/movement-picker.spec.ts`                                       | NEW    | Test plan.                                                                                                                                                                                                                                                                                                             |
+| `apps/web/scripts/screenshot-ephemeral.ts`                                   | EDIT   | `:445` (`Plank`, as typed) and `:558` (`Pull-up` — now **picked**).                                                                                                                                                                                                                                                    |
+| `packages/db/scripts/verify.ts`                                              | EDIT   | "PICK-1 options" (Test plan).                                                                                                                                                                                                                                                                                          |
+| `packages/db/scripts/mutations/07-picker-lists-any-household.{patch,expect}` | NEW    | Drops the household conjunct from the list → (a) goes red. (`NN` = the next free number at merge; PR 2 likely takes 07 and 08.)                                                                                                                                                                                        |
+| `docs/features/strength-logging.md`                                          | EDIT   | The Movement field is a button on its own line; the `onSubmit` guard and why not a hidden input; the Save-line warning.                                                                                                                                                                                                |
+| `docs/features/movement-picker.md`                                           | EDIT   | Owns the query; the `deleted_at` reader note; the referenced-rows rule.                                                                                                                                                                                                                                                |
+| `docs/features/write-path.md`                                                | EDIT   | `lib/dal/movements.ts`.                                                                                                                                                                                                                                                                                                |
+| `docs/features/programming.md`                                               | EDIT   | Owns `program-day.ts`, `lib/programming/`: the selected id and why it is not a magnitude.                                                                                                                                                                                                                              |
+| `docs/privacy/data-inventory.md`                                             | EDIT   | §1b `:141-143` "the free-text movement-name box" → "Use as typed in the movement picker"; §1a `movements` row (`:131`): household movement names are now **listed** to everyone viewing any athlete in the household, and only while referenced by a live entry or prescription. No new field, processor or retention. |
+| `docs/roadmap.md`, `docs/status.md`, `docs/plan.md`, `docs/changelog/…`      | EDIT   | PICK-1 done; PICK-2, C4r, D2 unblocked.                                                                                                                                                                                                                                                                                |
 
 ## Test plan
 
 **PR 1 (U0)** — `sheet.test.tsx`, jsdom:
 
-- Opens as `role="dialog"` with `aria-modal="true"`, named by the title. (structure of 37)
-- The `role="status"` element is a **descendant** of the dialog, is mounted on open **before** any
-  status text is set, and its text updates when the `status` prop changes (46).
-- Escape and Close both call `onOpenChange(false)`; focus returns to the opener (and to
-  `returnFocusTo` when passed).
-- `initialFocus: 'title'` focuses the title, not an input; a ref focuses that element.
-- The body is the only element with `overflow-y-auto`; header and footer are `shrink-0`.
-- Contract: the class string contains `min-[600px]:` and `SHEET_FULLSCREEN_BELOW_PX === 600`, so the
-  two cannot drift silently.
-- `useVisualViewportHeight` writes `--sheet-vvh` from a mocked `visualViewport` and removes its
-  listener on close.
-- **What PR 1 cannot prove:** the geometry of 37 needs a real layout engine and a consumer; it is
-  asserted in PR 4's e2e on the first real sheet, and again by ASSIGN-1 on its own.
+- `role="dialog"`, `aria-modal`, named by the title (37's structure).
+- The `role="status"` element is a descendant of the dialog, mounted on open before any text, and
+  updates when `status` changes (46).
+- Close / Escape → `onOpenChange(false)`; focus goes to `returnFocusTo` (mocked as a non-focused
+  button, the Safari case).
+- `initialFocus: 'title'` focuses the title, not an input.
+- **History:** open pushes one entry; a `popstate` closes the sheet and calls no `history.back`; a
+  normal close calls `history.back` exactly once; open → pick → reopen leaves the stack at its original
+  length; with a stubbed `CloseWatcher`, its `onclose` closes and no `popstate` listener is added.
+- `useVisualViewport`: a mocked `visualViewport` (`height`, `offsetTop`, `resize`/`scroll`) writes
+  `--sheet-vvh`/`--sheet-vvt` and toggles `data-compact` below 480; listeners removed on close.
+- Body is the only `overflow-y-auto`; header/footer `shrink-0`; the title has `break-words` and Close
+  `shrink-0` (a 40-character title).
+- **Not provable in PR 1:** the geometry of 37 — PR 4's e2e on the first mounted sheet; ASSIGN-1 again
+  on its own.
 
-**PR 2 (server)** — the AGENTS.md boundary set, tested against the real action as a plain async
-function (DAL mocked where the existing suite mocks it):
+**PR 2 (server)** — the AGENTS.md boundary set:
 
-- **unauth → reject**: no gate access → `NO_PROFILE_LOG`, the DAL not called (the existing suite's
-  shape, now with a `movementId` body).
-- **wrong owner → as unknown**: `db:verify` "PICK-1": two households; household B's own movement id
-  submitted under A's scope → `resolveMovementByPublicId` returns `null`, `logStrengthSession` throws
-  the same constant as for a random UUID, and **no** `sessions`, `entries` or `movements` row exists
-  afterwards — including for a **typed** sibling movement in the same body (ids-before-inserts). And
-  the converse: A's id under A's scope and a global id under either scope resolve.
-- **bad body → zod-reject**: `movementId: 'not-a-uuid'` → a named field error; a name with no letter →
-  refused; a name with a comma → refused as today.
-- **replay → one effect**: the same session `clientId` submitted twice with ids → one session, one
-  entry per movement, the same `sessionId` (per-row `ON CONFLICT`, strength-logging invariant 6).
-- **The id decides**: body `{ movementId: <Back Squat>, movementName: 'Bench' }` → the entry's
-  `movement_id` is Back Squat's and `movement_name` is `Back Squat`.
-- **The strip-mode trap**: `actions.test.ts` asserts the DAL **received** `movementId` with its value.
-- **No find-or-create on the id path** (criterion 17): `entries.test.ts` on the emitted SQL — an
-  id-only session emits no `INSERT INTO movements`.
-- **CSV bytes**: `db:verify` logs the same movement once by name (today's path) and once by id and
-  asserts `exportMonth` rows are identical apart from their dates.
-- Scaffold: `strength-form-scaffold.test.ts` — the id rides; `load` still absent (unmodified test).
+- **`db:verify` "PICK-1"** runs `resolveSessionMovements` **and** `writeStrengthSession` (the real code)
+  over two households: (a) B's own movement id + a typed sibling under A's scope → throws
+  `MOVEMENT_NOT_AVAILABLE`, and **zero** new `sessions`, `entries` or `movements` rows; (b) a random
+  UUID → the **identical** message (security N2); (c) A's own id and a global id → written, the entry's
+  `movement_id` is that row and `movement_name` is the database's; (d) calling `writeStrengthSession`
+  directly with B's internal `movementId` under A's scope (bypassing phase 1) → the in-transaction
+  re-check throws and nothing commits (the TOCTOU seam); (e) **replay**: the same session `clientId`
+  twice with ids → one session, one entry per movement, the same `sessionId`; the export row for the
+  id-logged entry carries the global slug (security S2 — through the real path; the separate
+  name-vs-id CSV block is dropped as tautological, scope N5).
+- **Mutations:** the three PR 2 patches each make their named assertion go red (`db:mutations`). With the in-tx re-check in place, `NN-resolver-ignores-household` still throws the same message, so it goes red only through (a)'s "zero new `movements` rows"; (a)'s typed sibling is therefore a name that slugs to **no** global row, and its `.expect` says so.
+- **`db:verify` (c) also** writes an id-path scaffolded card carrying a `prescriptionId` and asserts its `prescribedSnapshot` is written (correctness round 2, B1).
+- **`entries.test.ts`** (recording DB): the resolver stub returns `null` for the id, and the
+  find-or-create stub **would** insert if reached — so a wrong order emits an `INSERT INTO movements`
+  before the throw; the test asserts no `INSERT` and no `BEGIN` is emitted. And an id-only session emits
+  no `INSERT INTO movements` (17).
+- **`actions.test.ts`:** unauth → `NO_PROFILE_LOG`, DAL not called; `movementPublicId: 'x'` → a named
+  field error; a typed name with no letter / a comma → refused; an id-path card whose label has a comma
+  → **accepted** (correctness S1); the DAL **received** `movementPublicId` with its value (strip-mode
+  trap); `{ movementPublicId: <Back Squat>, movementName: 'Bench' }` → the DAL receives both and the
+  writer gets Back Squat (the id decides).
+- `strength-session-schema.test.ts`: `MOVEMENT_NAME_MESSAGES` strings asserted via the const; the
+  contract test pins `MOVEMENT_NAME_MAX === 100` once.
 
-**PR 3 (component)** — `movement-search.test.ts`, `movement-picker-catalog.test.ts`,
-`movement-picker.test.tsx`:
+**PR 3 (component)**:
 
-- `fold`: `Crème` = `creme`; `Farmer’s` = `farmer's`; `Bulgarian Split Squats` = `bulgarian split
-squat`; `press` unchanged; `Pull-Ups` = `pull up`; an emoji-only string folds to `''`.
-- Matching: word order (`squat split` matches), alias exact-only (`rdl` hits, `rd` does not), the order
-  rule, `exact` true for the plural case.
-- Catalog: the map's slugs equal `MOVEMENT_SEED_ROWS`' exactly; every group is in
-  `MOVEMENT_PICKER_GROUPS`; `other` is empty; aliases are unique and none folds equal to any movement
-  name (an alias that **is** another movement's name would be ambiguous).
-- Component (criteria 18, 46, 34): Recent before the groups; an empty group renders nothing; the
-  prescribed `<details>` is closed by default and absent when `alreadyIn` is given; `alreadyIn` tags
-  `already in {label}`; typing updates the in-sheet status once per change; "Use as typed" absent on an
-  exact fold match, disabled with the hint for no-letter and comma input; `onPick` gets
-  `{kind:'typed', name}` trimmed; a source scan proves the module imports no `'use server'` module.
-- Type: `@ts-expect-error` on `MovementOptionDTO['load']`.
+- `movement-search.test.ts`: the Decision 4 vector table; `foldName` is imported, not re-implemented
+  (a source-scan assertion); `movementNameKey` of every seeded name is unique (two seeded movements
+  being "the same" would make `exact` ambiguous).
+- `movement-picker-catalog.test.ts`: map keys = `MOVEMENT_SEED_ROWS` slugs exactly; groups ∈
+  `MOVEMENT_PICKER_GROUPS`; alias keys unique, and none equals any movement's key.
+- `movement-picker.test.tsx`: Recent → Today's program → groups → household; empty groups absent;
+  `recentIds` absent → no Recent; Today's program open when a prescribed id is not `onForm`, closed when
+  all are, absent with `alreadyIn`; one tag per row by precedence; query reset on reopen; the status
+  updates once per change and carries the "Use as typed" reason; "Use as typed" absent for `rdl`,
+  `pullups`, and present-but-`aria-disabled` for `🙂` and `a,b`; Enter picks the single match and never
+  fires "Use as typed"; `onPick` gets a trimmed typed name; `aria-current` on `currentId`; the module
+  imports no `'use server'` module; `@ts-expect-error` on `MovementOptionDTO['load']`.
 
 **PR 4 (mounted)**:
 
-- `strength-form.test.tsx`: a pick on a blank card leaves every set blank (17); a pick on a
-  scaffolded card clears `scaffolded` / `prescriptionId` (Decision 6); re-picking the same id is a
-  no-op; "use as typed" serializes `movementName` and no `movementId`; the `onSubmit` guard focuses the
-  right card's button and **does not** call the action (the unverified React 19 behaviour — this test
-  goes first); the V1-27 summary line agrees with the payload after a pick (`expectSummaryAgrees`).
-- `e2e/movement-picker.spec.ts` (Chromium + the mobile project the config defines):
-  - **The PICK-1 row's test**, on the seeded athlete, on a day whose program does **not** prescribe
-    it: pick "Romanian Deadlift" by typing `rdl`, log one set, then read the day back and the CSV
-    export: the existing movement, the typed numbers (17, 19).
-  - 360×780: the dialog's box equals the viewport; the header's top is 0 and the footer's bottom is
-    780; scrolling the body moves neither (37). 1280×800: width ≤ 520, height ≤ 768.
-  - Keyboard only: Tab to the Movement button, Enter opens, focus is on the search (fine pointer), type,
-    Tab to an option, Enter picks, focus is back on the button; Escape closes and returns focus (18).
-  - `hasTouch` + coarse pointer: on open, `document.activeElement` is not an input (18).
-  - Every option's box ≥ 44×44 at 360 (18).
-  - The status region inside the dialog reads "2 matches" for `rdl`-style input as the prototype
-    verified (46).
-- `a11y.spec.ts`: the open picker is scanned (axe) at 360 and 1280, and its tap targets measured.
-- `pnpm e2e:local` before opening; `pnpm verify` on every PR.
-- **Real-phone checks** (spec `:929-932`; recorded in the PR body, not CI): VoiceOver and TalkBack
-  hear the match count while the sheet is open; the keyboard does not rise on open; "Use as typed"
-  stays above the iOS keyboard; swipe-back on a full-screen sheet closes it without losing the form;
-  landscape; the largest text size.
+- `strength-form.test.tsx`: the `onSubmit` guard test **first** (focus to the right card's button, the
+  action not called); a pick on a blank card leaves every set blank (17); a pick on a scaffolded card
+  clears `scaffolded`/`prescriptionId`; re-pick of the same id is a no-op; "use as typed" serializes no
+  `movementPublicId`; "Add movement" appends only on pick; the Save line appears for a created card and
+  is in Save's `aria-describedby`; `expectSummaryAgrees` after a pick.
+- **`db:verify` "PICK-1 options"** _(correctness B1)_ over two households: (a) the list holds globals
+  in the map + A's own only, never B's; (b) A's row whose slug a global row holds is excluded; (c) recent
+  excludes a hidden entry, another profile's and another household's; (d) the order is deterministic
+  across two runs; (e) A's unreferenced row is not listed and appears once an entry references it.
+  `NN-picker-lists-any-household.patch` makes (a) go red.
+- `e2e/movement-picker.spec.ts` (Chromium + the config's mobile project):
+  - **The PICK-1 row's test**: on a day whose program does not prescribe it, type `rdl`, pick Romanian
+    Deadlift, log a set; the day and the CSV show the existing movement and the typed numbers (17, 19).
+  - **Geometry (37)** at 360×780, after typing a query and with the Today's-program `<details>` open:
+    the dialog box equals the viewport; header top 0, footer bottom 780; scrolling the body moves
+    neither; no horizontal overflow **inside** the dialog. At 1280×800: width ≤ 520, height ≤ 768.
+  - **Back gesture:** type reps on a card, open the picker, `page.goBack()` → the sheet is closed, the
+    URL unchanged, the reps still there; a second `goBack()` leaves the page as before.
+  - **Keyboard only (18):** Tab → Movement button → Enter → search focused (fine pointer) → type → Tab →
+    Enter picks → focus back on that button; Escape returns focus.
+  - **Touch (18):** `hasTouch` + coarse pointer → on open the active element is not an input.
+  - Every option and the `<summary>` (`min-h-11`) ≥ 44×44 at 360 (18); the status inside the dialog
+    reads the count (46).
+  - **Each geometry/overflow assertion is proven red once** on a seeded regression (e.g. removing
+    `min-h-0` from the body) before the PR opens _(UX2 S5)_; the PR body records it.
+- `a11y.spec.ts`: axe on the open picker at 360, 390 and 1280; tap targets inside it; the 390px card
+  with a long household name.
+- **Real-phone checks** (PR 4 body; spec `:929-932`): VoiceOver/TalkBack hear the count; no keyboard on
+  open; "Use as typed" above the iOS keyboard (compact mode); swipe-back and Android back close the
+  sheet and keep the form; landscape; the largest text size.
 
 ## Gates, and what to re-verify
 
-- **V1-22 chunk 2 merged** before PR 2 (spec `:151`). Re-read on PR 2's base:
-  `sessionMovementSchema`'s field list (chunk 2 adds `prescriptionId`), `MovementVals` and the
-  `movementsJson` spread (chunk 2 adds a serialized field there), `onName`'s clear list, and chunk 2's
-  `matchPrescribedSnapshot`, which compares `movementSlug(movement.movementName)` against the
-  prescription's slug (`v1-22-2-renderer-and-writer.md:279-290`). ⚠️ That match stays correct only
-  because PR 2 hands the writer the **database's** name for an id-resolved movement, and
-  `movementSlug(name) === slug` holds for every global row (the coverage test,
-  `catalog-movements.ts:336-338`) and for every household row (its slug is minted from its name,
-  `movement-catalog.ts:63-104`). **C4r breaks the second half** — a rename changes `name`, not `slug`
-  — so C4r's plan must switch that comparison to the movement id. Recorded in the new guide.
-- **V1-24 3a / 3b** edit the strength surface under the same guide (spec `:155`); serialize with PR 2
-  and PR 4 by merge order.
-- **AUTH-1.** PICK-1 is **not** gated on 1c and edits no file 1c's table names until PR 4's
-  `page.tsx` (`auth-1-clerk-google.md:1708`). If 1c lands first, re-verify: (a) the action's first line
-  is the session check, not `hasGateAccess` (`actions.ts:278`), so PR 2's unauth test asserts the new
-  call; (b) `getHouseholdScope()`'s body changed but its signature and null/throw contract did not
-  (`write-path.md` invariant 2) — `listMovementOptions` relies only on that; (c) the e2e login helper
-  (`e2e/login.ts`) and `screenshot:ephemeral` follow 1c-pre's seam; (d) `pages-are-gated.test.ts` — no
-  new page or action here, so nothing to add.
-- **Chunk 0** does not gate PICK-1: the provisional map ships, and chunk 0 edits it.
+- **V1-22 chunk 2 merged** before PR 2. Re-read: `sessionMovementSchema` (adds `prescriptionId`),
+  `MovementVals` and the `movementsJson` spread, `onName`'s clear list, and `matchPrescribedSnapshot`,
+  which compares `movementSlug(movement.movementName)` to the prescription's slug
+  (`v1-22-2-renderer-and-writer.md:279-290`). That stays correct because the resolver hands the writer
+  the **database's** name, and `movementSlug(name) === slug` holds for every global row
+  (`catalog-movements.ts:336-338`) and every household row (minted from its name). **C4r breaks the
+  second half**; MOV-1's plan already records switching that comparison to the id
+  (`mov-1-rename-movement.md:125-135`).
+- **PROF-1 step 1 merged** before PRs 2 and 3: `foldName` exists in `text.ts` with the shape
+  `prof-1-athletes.md:329` gives. If PROF-1 slips, PICK-1 does **not** write its own fold — it waits
+  (seams).
+- **V1-24 3a / 3b** share the strength surface and its guide; serialize by merge order with PRs 2 and 4.
+- **Programming-lane overlap** _(architecture 5)_: PR 4 edits `packages/db/src/queries/program-day.ts`
+  and `programming.md`, which PROF-1a (the kid-only program predicate, seams), ASSIGN-1/ASSIGN-READ and
+  V1-22 A4 also edit. Gate 1 fails for any of them in flight at once; PR 4's select is one column and
+  goes after whichever is open.
+- **AUTH-1.** PICK-1 is not gated on 1c. If 1c lands first, re-verify: (a) the action's first check is
+  the session check, not `hasGateAccess` (`actions.ts:278`), and PR 2's unauth test asserts the new
+  call; (b) `getHouseholdScope()`'s contract (null/throw) is unchanged — the two DAL reads rely only on
+  it; (c) `e2e/login.ts` and `screenshot:ephemeral` follow 1c-pre's seam; (d) no new page or action, so
+  `pages-are-gated.test.ts` needs nothing.
+- **WP-1** (the `actions.ts` shard) — PICK-1 adds no action and does not edit `actions.ts`.
+- **Chunk 0** does not gate PICK-1.
 
 ## Risks / rollback
 
-| Risk                                                                                             | Mitigation                                                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A crafted id reaches another household's movement** (BOLA on a new resolver).                  | Global-or-own via the two shared predicates; `db:verify` proves both directions with the real function; an unknown and a foreign id throw the same constant.                                                                                                                                             |
-| **A refused body commits a typed sibling's movement row** (a new TEN-2b-1).                      | Ids resolve before any insert; `entries.test.ts` pins the order on the emitted SQL.                                                                                                                                                                                                                      |
-| **`movementId` silently stripped** — feature inert, gates green (chunk 2's named trap).          | `actions.test.ts` asserts the DAL received the value.                                                                                                                                                                                                                                                    |
-| **The picker raises a near-duplicate anyway** via "use as typed" on a fold-equal name.           | Hidden on an exact fold match; the spec's success signal ("near-duplicate household movements", `:220`) measures what is left; C2 narrows it further.                                                                                                                                                    |
-| **A household movement typed by one athlete is listed to the whole household** (privacy).        | Same audience as the day pages that already show it; the inventory says so (PR 4). A name typed into a movement box is the hazard the notice already warns about; the picker does not widen who sees it.                                                                                                 |
-| **The form appears dead** — a nameless sendable card with no native block.                       | The `onSubmit` guard (tested first); the server's "Enter a movement." stays the backstop.                                                                                                                                                                                                                |
-| **The sheet's footer sits under the iOS keyboard**, so "use as typed" is unreachable mid-search. | `--sheet-vvh` from `visualViewport`; a real-phone check before PR 4 merges; the fallback is moving the button under the search field.                                                                                                                                                                    |
-| **LLM authorship**: the group map and aliases were drafted in a model-built prototype.           | They are definitions, not loads; the maintainer approved the prototype; the map is marked provisional and chunk 0 is the human pass that confirms each row.                                                                                                                                              |
-| **Export bytes change**.                                                                         | They do not for any name that already resolved: the export groups by `movements.slug` and the id names the same row; `db:verify` asserts identity. `entries.movement_name` now holds the catalog spelling for a pick, which no export column reads (`export-month.ts:60-78` selects no `movement_name`). |
-| **A dead id after a future merge** throws to `error.tsx` and loses the form.                     | Unreachable until C4m; the write-path guide and the new guide both say C4m owns the typed refusal.                                                                                                                                                                                                       |
+| Risk                                                         | Mitigation                                                                                                                                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A crafted id reaches another household's movement.           | Global-or-own in the resolver **and** re-checked in the transaction; `db:verify` both directions with the real code; a mutation patch proves the proof can fail.                       |
+| A refused body commits a typed sibling's row.                | Ids resolved before any insert, inside `packages/db`; the phase-swap mutation and the emitted-SQL test.                                                                                |
+| `movementPublicId` silently stripped (strip mode).           | `actions.test.ts` asserts the DAL received it.                                                                                                                                         |
+| "Use as typed" mints a same-movement duplicate.              | Withheld on `exact` / alias; the vector table pins the common spellings; the Save line asks for a spelling check; the spec's near-duplicate success signal (`:220`) measures the rest. |
+| A typo'd household movement stays in everyone's list.        | Listed only while referenced (Decision 5); after V1-9b a hide removes it; before, MOV-1 rename or a correction.                                                                        |
+| A household movement name is shown household-wide (privacy). | Same audience as the day pages that show it; inventory updated in PR 4.                                                                                                                |
+| The form appears dead (nameless card, no native block).      | The `onSubmit` guard, tested first; the server's refusal as backstop.                                                                                                                  |
+| The back gesture navigates away and loses the form.          | U0's history entry; the `goBack()` e2e; CloseWatcher on Android.                                                                                                                       |
+| The footer sits under the iOS keyboard.                      | `--sheet-vvh`/`--sheet-vvt` + compact mode; a real-phone check before PR 4 merges.                                                                                                     |
+| Groups and aliases were drafted in a model-built prototype.  | Definitions, not loads; approved with the prototype; marked provisional; chunk 0 is the human pass.                                                                                    |
+| Export bytes change.                                         | The export groups by `movements.slug` (`export-month.ts:65`, `:83`) and selects no `movement_name` (`:60-78`); an id names the same row a matching name did.                           |
+| A dead id after a future merge throws to `error.tsx`.        | Unreachable until C4m, which owns the typed refusal (both guides).                                                                                                                     |
 
-**Rollback.** No migration in any PR, so each reverts cleanly. PR 2 is backward-compatible on the wire
-(a page built before it posts names, and the name path is unchanged). Reverting PR 4 restores the text
-input while PR 2's server keeps accepting both shapes. **Revert in reverse order:** reverting PR 2
-while PR 4 is live makes the server strip `movementId` and resolve every pick by its label — still the
-right row for a catalog pick (the label is the catalog name, and `movementSlug(name) === slug`), but
-it reopens find-or-create for every pick, which is the behaviour PICK-1 exists to remove.
+**Rollback.** No migration, so each PR reverts cleanly. PR 2 is wire-compatible (an older page posts
+names). Reverting PR 4 restores the text box with PR 2's server still accepting both. **Revert in
+reverse order:** reverting PR 2 under PR 4 strips `movementPublicId` and resolves picks by label —
+still the right row for a catalog pick, but it reopens find-or-create for every pick.
 
 ## Out of scope / deferred
 
-- **PICK-2 (C2)**: near matches, spelling suggestions, edit distance, a word list (criterion 19's second
-  and third sentences). PICK-1's `matchMovementOptions` returns a shape C2 extends.
-- **MOV-1 rename (C4r)** and **merge (C4m)** — including the hint's "rename it later" sentence and
-  the typed dead-id refusal.
-- **CAT-2 (C3)** — the drills and the `wrestling` group's rows.
-- **Chunk 0's confirmations** of groups and aliases (a later edit to the map).
-- **The program editor's Add (D2)** — PICK-1 ships the component; D2 mounts it.
-- **Moving find-or-create inside the transaction** (`TEN-2b-1`).
-- **Server-side fold before find-or-create** (Decision 4, rejected).
-- **A new movement's declared unit or bodyweight flag** — "use as typed" still writes
-  `is_bodyweight: false` and no `unit_default`, as `findOrCreateMovement` always has; D8 / unowned 9
-  own movement-declared quantities.
+- **PICK-2 (C2)**: near matches, spelling, edit distance (19's other sentences).
+- **MOV-1 (C4r/C4m)**: rename, merge, the hint's "rename later", the typed dead-id refusal, the
+  scaffold sending ids.
+- **CAT-2 (C3)** and **chunk 0**'s confirmations.
+- **D2** mounts the component; PICK-1 does not.
+- **`TEN-2b-1`** (find-or-create inside the transaction) — phase 2 still runs before it.
+- **Server-side fold before find-or-create** (rejected).
+- **A typed movement's declared unit / bodyweight flag** — D8 / unowned 9.
 - **Cross-request caching** of the catalog.
 
 ## Where this plan disagrees with the spec, or a row
 
-1. **"The picker submits an id, not a name"** (contract rules, `:516-519`). The plan submits an id
-   **and** a display label; resolution uses the id only. Reason: the action's error labels
-   (Decision 1).
-2. **`MovementOptionDTO`** (`:499-500`) gains `unitDefault` + `isBodyweight` and loses
-   `prescribedToday` (Decisions 5, 6). Additive in substance; the spec's shape would make a pick and a
-   scaffold disagree about the unit.
-3. **Unowned 2's options** (`:657-659`): "a per-row value in `MOVEMENT_SEED_ROWS` (a column, a
-   migration)" — a per-row value needs **no** column, and a column would not reach the existing rows
-   through the `ON CONFLICT DO NOTHING` seed (Decision 3).
-4. **Criterion 19 is tagged (C2)** but Q2 and this chunk's brief put aliases in PICK-1. The plan
-   delivers 19's alias sentence and leaves the rest to C2; the spec's criterion-to-chunk table
-   (`:228-229`) should say "19 (C1 alias, C2 rest)".
-5. **The prototype's picker is a bottom sheet under 600px**; U0's spec line says full screen. The plan
-   uses full screen for both (Decision 7, Open question 1).
-6. **The prototype's "use as typed" hint promises a rename** that does not exist until C4r (Decision 8).
-7. **FE-12's "cached catalog"** is declined; the payload split is kept (Decision 5).
-8. **The PICK-1 row says "a plan comes later, in its own PR"** (`plan.md:216-219`); this plan is
-   committed with U0, the first PR it plans, per `docs/plans/README.md`.
+1. **"The picker submits an id, not a name"** (`:516-519`): it submits `movementPublicId` **and** a
+   label; only the id resolves (Decision 1).
+2. **`MovementOptionDTO`**: settled by the seams amendment (`:548-552`); this plan adds the discriminated
+   union (Decision 5).
+3. **Unowned 2's options** (`:657-659`): a per-row value needs no column, and a column would not reach
+   existing rows through the `ON CONFLICT DO NOTHING` seed (Decision 3).
+4. **Criterion 19 is tagged (C2)**; Q2 puts aliases in PICK-1 — the table at `:228-229` should read
+   "19 (C1 alias, C2 rest)".
+5. **The prototype's picker is a bottom sheet under 600px**; full screen is used, with the back gesture
+   owned by U0 (Decision 7).
+6. **The prototype's "use as typed" hint promises a rename** that does not exist until C4r.
+7. **FE-12's "cached catalog"** is declined; the payload split is kept.
+8. **The PICK-1 row says "a plan comes later, in its own PR"** (`plan.md:216-219`); this plan rides U0.
+9. **Criterion 18 says today's prescribed movements are "folded away (the form already fills them)"** —
+   the form fills them only after "Fill in today's movements". The group is computed from what is on the
+   form and is **open** while any prescribed movement is missing (Decision 8). The criterion should say
+   so.
+10. **The tags "in the app" / "added by you"** (SUX-11, the brief) are replaced by the group label and
+    "household" on the UX panel's finding (UX3 4, UX1 8).
+11. **MOV-1 cites `foldText`/`foldMovementQuery` and `movement-copy.ts`** (`mov-1-rename-movement.md:83-85`,
+    `:337`); the seams make the key `movementNameKey` on PROF-1's `foldName`, and this plan names the copy
+    module `movement-picker-copy.ts`. MOV-1 updates its citations.
 
 ## Open questions
 
-1. **Full screen or bottom sheet for the picker below 600px?** The plan says full screen (stable
-   height while filtering, the keyboard). The UX panel decides; the change is one prop on `Sheet`.
-2. **Recent: how many, and does a skipped movement count?** The plan says 5, and any non-hidden entry
-   with a movement (a skip is still "something I do"). The UX panel decides.
-3. **Does "Use as typed" need a second tap to confirm** that the name cannot be removed yet? The plan
-   says no — the hint says it, and the movement is created only on save, which has its own summary
-   line. The trust lens decides.
-4. **One PR or two for PRs 3 and 4** — decided by line count when written (Staging).
+_For the maintainer:_
+
+1. **Recent: 5, and does a skipped movement count?** The plan says 5, and yes. The UX panel left it
+   open.
+2. **Listing a household movement only while referenced** (Decision 5, UX3 5 option (a)) means a row
+   created by "Use as typed" and never saved cannot exist, but one logged once and then hidden vanishes
+   from the list while staying in the database. Confirm that is the wanted recovery.
+
+_Answered by the panels:_ Q1 (full screen — Decision 7), Q3 (no confirm; a Save-line warning — Decision
+8), Q4 (PRs 3 and 4 stay separate; the merge clause is dropped, scope N1).
 
 ## Review-response log
 
-_Pending: engineering panel + UX panel (round 1)._
+### Engineering panel, round 1 (2026-10-23) — correctness, scope, architecture, reuse, security
+
+| Id    | Lens         | Finding (short)                                                                                                    | Response                                                                                                                                                                                                                                                  |
+| ----- | ------------ | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1    | Security     | Ids-before-inserts lived in the DAL; nothing in the transaction re-checked a `movementId` (TOCTOU)                 | **Accepted.** `resolveSessionMovements` in `packages/db`; `writeStrengthSession` re-checks global-or-own in-transaction; `db:verify` (a)–(e) through the real code; two mutation patches (Decision 2, PR 2 table, Test plan).                             |
+| B2    | Correctness  | The ordering claim had no proof that could fail                                                                    | **Accepted** with B1: the phase-swap mutation, and the `entries.test.ts` stub that would insert on a wrong order.                                                                                                                                         |
+| B1    | Correctness  | The list read had no two-household proof                                                                           | **Accepted.** PR 4 "PICK-1 options" (a)–(e) + `NN-picker-lists-any-household.patch`.                                                                                                                                                                      |
+| S1    | Correctness  | The letter/comma rules would refuse an existing row's name on the id path                                          | **Accepted.** Typed-name rules run only without `movementPublicId` (Decision 1); a test with a comma label on the id path.                                                                                                                                |
+| S2    | Correctness  | The fold missed `pullups`/`farmer's`; the Goal overclaimed                                                         | **Accepted.** Compact matching, possessive and 3-letter plural rules, the vector table; the Goal narrowed (Decision 4).                                                                                                                                   |
+| S3    | Correctness  | Recent could show a row the list hides; the resolver accepts shadowed own rows silently                            | **Accepted.** Recent ∩ options; the resolver's acceptance recorded as deliberate (Decisions 2, 5).                                                                                                                                                        |
+| S4    | Correctness  | Wire key name                                                                                                      | **Accepted** — `movementPublicId` (seams).                                                                                                                                                                                                                |
+| S5    | Correctness  | `other` relied on `db:verify`, which never runs on prod                                                            | **Accepted.** A global row is listed only if its slug is in the map; `other` removed; the validated CHECK cited (Decision 3).                                                                                                                             |
+| N2    | Correctness  | Message names                                                                                                      | **Accepted** — `MOVEMENT_NAME_MESSAGES` (Decision 1).                                                                                                                                                                                                     |
+| S1    | Scope        | "The scaffold sends ids" is not PICK-1's concern                                                                   | **Accepted.** Cut from PR 2; deferred to MOV-1 (Decision 6).                                                                                                                                                                                              |
+| S2    | Scope        | `returnFocusTo` is speculative                                                                                     | **Kept**, because UX2's Safari point holds (Safari does not focus a clicked button); now a required prop (Decision 7).                                                                                                                                    |
+| S3    | Scope        | The new guide should not own `lib/dal/movements.ts`                                                                | **Accepted.** `write-path.md` owns it; the new guide links it.                                                                                                                                                                                            |
+| N1–N6 | Scope        | Merge clause; PR 3 gated on PR 2; the 600 constant; `declarationOf` timing; the CSV block; the `onSubmit` fallback | **Accepted** all: no merge clause; PR 3 ungated on PR 2; constant dropped; `declarationOf` in PR 4; the name-vs-id CSV block dropped as tautological, the slug assertion kept inside the real replay proof (reconciles security S2); the fallback stated. |
+| 1     | Architecture | A second fold beside PROF-1's                                                                                      | **Accepted** — imports `foldName` (Decision 4).                                                                                                                                                                                                           |
+| 2     | Architecture | "Same movement" defined twice (picker, MOV-1)                                                                      | **Accepted** — `movementNameKey`, MOV-1 imports (disagreement 11).                                                                                                                                                                                        |
+| 3     | Architecture | Name rules duplicated across MOV-1 / A4                                                                            | **Accepted** — `movementNameSchema` etc. created in PR 2.                                                                                                                                                                                                 |
+| 4     | Architecture | One DAL read mixes household and athlete; D4c has no athlete                                                       | **Accepted** — two functions; `recentIds` optional (Decision 5).                                                                                                                                                                                          |
+| 5     | Architecture | The programming-lane overlap on `program-day.ts` was unrecorded                                                    | **Accepted** — Gates.                                                                                                                                                                                                                                     |
+| 6     | Architecture | No diagram for the id path                                                                                         | **Accepted** — `docs/architecture.md` §2 in PR 2.                                                                                                                                                                                                         |
+| 7     | Architecture | `returnFocusTo` missing from `SheetProps`                                                                          | **Accepted.**                                                                                                                                                                                                                                             |
+| 8     | Architecture | PR descriptions should embed the milestone chart; say where 19/37/46 actually land                                 | **Accepted** — Staging note; Acceptance lists the landing PR per criterion.                                                                                                                                                                               |
+| also  | Architecture | `modal-sheet.tsx`? `movement-picker-copy.ts`                                                                       | **Copy module renamed.** **Sheet name kept** (`sheet.tsx`): the seams table and sibling plans cite it; the shadcn-overwrite hazard is handled by the header and tests (Decision 7). A decision, not a code-proven pushback.                               |
+| B1    | Reuse        | `foldName` re-implemented                                                                                          | **Accepted** (as architecture 1).                                                                                                                                                                                                                         |
+| B2    | Reuse        | Movement-name rules re-implemented                                                                                 | **Accepted** (as architecture 3).                                                                                                                                                                                                                         |
+| B3    | Reuse        | Wire key diverged from siblings                                                                                    | **Accepted** — `movementPublicId`.                                                                                                                                                                                                                        |
+| S1    | Reuse        | Two resolvers by public id                                                                                         | **Accepted** — one, taking an `Executor`; A4 calls it.                                                                                                                                                                                                    |
+| S3    | Reuse        | MOV-1's collision check needs the same key                                                                         | **Accepted** — `movementNameKey`.                                                                                                                                                                                                                         |
+| S4    | Reuse        | Strings split across modules; the client guard re-types the schema's message                                       | **Accepted** — one copy module; the guard uses `MOVEMENT_NAME_MESSAGES.missing`.                                                                                                                                                                          |
+| N1    | Reuse        | DTO should be a discriminated union                                                                                | **Accepted** (Decision 5).                                                                                                                                                                                                                                |
+| S1    | Security     | Spreading the wire movement into the writer's argument                                                             | **Accepted** — built field by field (Decision 1).                                                                                                                                                                                                         |
+| S2    | Security     | Replay and CSV proofs bypassed the resolver                                                                        | **Accepted** — both run through `resolveSessionMovements` + `writeStrengthSession`.                                                                                                                                                                       |
+| N1    | Security     | `other` group as a hiding place                                                                                    | **Accepted** with correctness S5.                                                                                                                                                                                                                         |
+| N2    | Security     | Unknown vs foreign must be indistinguishable                                                                       | **Accepted** — `db:verify` (b) asserts identical messages.                                                                                                                                                                                                |
+
+### UX panel, round 1 (2026-10-23) — interaction (UX1), a11y + 360px (UX2), trust + data entry (UX3)
+
+| Id   | Lens | Finding (short)                                                                                                                                               | Response                                                                                                                |
+| ---- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| B1   | UX1  | Full screen with no back gesture traps a phone user                                                                                                           | **Accepted** — U0's history mechanism + CloseWatcher; e2e `goBack()` keeps typed reps (Decision 7).                     |
+| 2    | UX1  | "Today's program" folded away even when nothing was filled                                                                                                    | **Accepted** — computed from the form, open while any is missing; criterion 18's wording recorded (disagreement 9).     |
+| 3    | UX1  | "Use as typed" offered for an alias                                                                                                                           | **Accepted** — withheld on `aliasHit`.                                                                                  |
+| 4    | UX1  | `pullups`/`pushups` don't match                                                                                                                               | **Accepted** — compact matching (Decision 4).                                                                           |
+| 5    | UX1  | Keyboard-up footer crowding                                                                                                                                   | **Accepted** with UX2 B1.                                                                                               |
+| 6    | UX1  | "Add movement" makes a blank card, then a second tap                                                                                                          | **Accepted** — opens the picker, appends on pick.                                                                       |
+| 8    | UX1  | Catalog matches should show their group                                                                                                                       | **Accepted** — group label as the tag.                                                                                  |
+| B1   | UX2  | Keyboard-up geometry: a max-height query never fires on iOS                                                                                                   | **Accepted** — `visualViewport`-driven `data-compact`; quieter "Use as typed" when matches exist (Decision 7/8).        |
+| B2   | UX2  | Back gesture                                                                                                                                                  | **Accepted** (as UX1 B1).                                                                                               |
+| S1   | UX2  | Movement button sharing a row with two selects at 360                                                                                                         | **Accepted** — own line, `min-h-11 h-auto break-words`; a 390px a11y case.                                              |
+| S2   | UX2  | Two tags per row overflow                                                                                                                                     | **Accepted** — one tag by precedence, may wrap.                                                                         |
+| S3   | UX2  | A long D2 title pushes Close off                                                                                                                              | **Accepted** — `min-w-0 flex-1 break-words`, a 40-char test.                                                            |
+| S4   | UX2  | `offsetTop` ignored; dialog not anchored to the visual viewport                                                                                               | **Accepted** — `--sheet-vvt`, `scroll` listener.                                                                        |
+| S5   | UX2  | Geometry tests could pass vacuously                                                                                                                           | **Accepted** — in-dialog overflow, `<summary>` size, details opened, after typing; each proven red once.                |
+| S6   | UX2  | A `disabled` button hides its reason from keyboard users                                                                                                      | **Accepted** — `aria-disabled`, focusable, reason in the hint and status.                                               |
+| B1   | UX3  | `pullups` mints a duplicate                                                                                                                                   | **Accepted** (as UX1 4).                                                                                                |
+| B2   | UX3  | `rdl` mints a household "rdl"                                                                                                                                 | **Accepted** (as UX1 3); `rdl` in the vector table.                                                                     |
+| 3    | UX3  | Permanence is said once, then forgotten by Save (answers Q3)                                                                                                  | **Accepted** — card hint survives to Save; the Save line; no confirm dialog.                                            |
+| 4    | UX3  | Footer copy not kid-readable; "added by you" is wrong when a sibling added it                                                                                 | **Accepted** — new copy; tag "household" (disagreement 10).                                                             |
+| 5    | UX3  | A typo lives in everyone's list forever                                                                                                                       | **Accepted, option (a)** — listed only while referenced; (b) rejected (Decision 5); open question 2 for the maintainer. |
+| 6    | UX3  | Zero matches is a dead end                                                                                                                                    | **Accepted** — "Matches some of your words", else the browse list.                                                      |
+| NITs | all  | Enter never uses as typed (UX3 N8); reset query on open; mark current; explicit `returnFocusTo` (Safari); safe-area; title `outline-none`; option focus rings | **Accepted** all (Decisions 7, 8).                                                                                      |
+
+No finding was pushed back on code grounds. One naming suggestion (`modal-sheet.tsx`) was declined as
+a decision, recorded above.
+
+### Engineering panel (round 2, correctness re-review)
+
+| #   | Lens        | Critique (short)                                                                   | Verdict      | Resolution                                                                                                             |
+| --- | ----------- | ---------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| B1  | Correctness | The field-by-field build drops chunk 2's `prescriptionId`; the snapshot goes inert | **Accepted** | Added to the list; the builder's return type makes a missing key a compile error; `db:verify` (c) asserts the snapshot |
+| S1  | Correctness | "3+ letters" leaves `ups` unstripped; three vector rows contradict the rule        | **Accepted** | "2+ letters"; added the `push up` row                                                                                  |
+| S2  | Correctness | The in-tx re-check has no mutation patch                                           | **Accepted** | `NN-drop-in-tx-recheck`; the resolver patch's `.expect` names (a)'s zero-new-rows assertion                            |
+| N   | Correctness | PR 4's hard-coded `07` will collide with PR 2's patches                            | **Accepted** | `NN` throughout                                                                                                        |
+
+Every round-1 blocker was confirmed resolved.
