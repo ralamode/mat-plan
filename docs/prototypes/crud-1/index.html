@@ -1366,7 +1366,7 @@
               detail: '10',
             },
             { id: 'e7', order: 7, where: 'list', title: 'Rice bucket', detail: 'Done' },
-            { id: 'e8', order: 8, where: 'list', title: 'Practice', detail: '90 min' },
+            { id: 'e8', order: 8, where: 'list', title: 'Wrestling practice', detail: '90 min' },
           ],
           'a1|2026-10-21': [
             {
@@ -1378,6 +1378,8 @@
               slot: 'bw',
             },
             { id: 'e10', order: 2, where: 'list', title: 'Rice bucket', detail: 'Done' },
+            // Splits left Athlete One's activities after this was logged: it lands in "Also logged".
+            { id: 'e10b', order: 3, where: 'list', title: 'Splits', detail: 'Done' },
           ],
           'a2|2026-10-22': [
             {
@@ -1404,7 +1406,7 @@
                 rx('Pull-Up'),
                 rx('Leg Raises'),
                 rx('V-Sit Crunches'),
-                rx('Box Jump'),
+                rx('Box Jump', 3, '5', { a1: '24', a2: '20' }),
                 rx('Inverted Rows'),
                 rx('Single-Leg Hip Thrusts', 3, '10 per side'),
               ],
@@ -1458,6 +1460,50 @@
         histDate: '2026-07-15',
       };
     }
+    // The per-athlete fields are what the movement measures, and a movement can measure more than one
+    // thing (ADR 0004: the movement declares its dimensions). A box jump is a height and may add a
+    // weight; a sled push is a weight over a distance; a hold is a time. The first field is the
+    // movement's primary quantity; `key` suffixes the rest in `loads`.
+    function targetFields(name) {
+      if (/box jump/i.test(name))
+        return [
+          { key: '', word: 'Box height', unit: 'in', ph: 'e.g. 24' },
+          { key: '|w', word: 'Weight', unit: 'lb', ph: 'none' },
+        ];
+      if (/sled/i.test(name))
+        return [
+          { key: '', word: 'Weight', unit: 'lb', ph: 'e.g. 90' },
+          { key: '|d', word: 'Distance', unit: 'ft', ph: 'e.g. 50' },
+        ];
+      if (/hold|plank/i.test(name)) return [{ key: '', word: 'Time', unit: 's', ph: 'e.g. 30' }];
+      return [{ key: '', word: 'Load', unit: '', ph: 'none' }];
+    }
+    // Athlete One's activities after Strength, in order (the Activities page). `has` says which entries
+    // belong to the section.
+    var DAY_ACTS = [
+      {
+        name: 'Wrestling practice',
+        shape: 'min',
+        has: function (e) {
+          return e.title === 'Wrestling practice';
+        },
+      },
+      {
+        name: 'Rice bucket',
+        shape: 'bool',
+        has: function (e) {
+          return e.title === 'Rice bucket';
+        },
+      },
+      {
+        name: 'Calisthenics',
+        shape: 'reps',
+        unit: 'Push-Ups',
+        has: function (e) {
+          return e.group === 'Push-Ups';
+        },
+      },
+    ];
     function rx(name, sets, reps, loads) {
       return {
         id: 'p' + Math.random().toString(36).slice(2, 8),
@@ -1473,7 +1519,7 @@
     var pageHidden = {}; // event ids hidden during THIS visit → drawn in place (not persisted: a reload folds them into the Hidden bar)
     function load() {
       try {
-        var raw = localStorage.getItem('crud1-proto-v6');
+        var raw = localStorage.getItem('crud1-proto-v7');
         return raw ? JSON.parse(raw) : null;
       } catch (e) {
         return null;
@@ -1481,7 +1527,7 @@
     }
     function save() {
       try {
-        localStorage.setItem('crud1-proto-v6', JSON.stringify(S));
+        localStorage.setItem('crud1-proto-v7', JSON.stringify(S));
       } catch (e) {}
     }
 
@@ -1737,7 +1783,7 @@
       ['picker', 'CRUD-1 · PROF-1 · Picker + Add athlete'],
       ['add', 'CRUD-1 + PROG-1 · Add an athlete (then a program)'],
       ['add-empty', 'PROG-1 · Add an athlete, every program archived'],
-      ['day', 'CRUD-1 · V1-9b · Athlete day: delete + restore'],
+      ['day', 'CRUD-1 · V1-9b + V1-24 · Athlete day: logs in place, delete + restore'],
       ['day-slot', 'CRUD-1 · V1-9b · Restore refused (slot taken)'],
       ['day-clear', 'CRUD-1 · V1-9b · Clear a day'],
       ['edit', 'CRUD-1 · PROF-1 · Edit an athlete'],
@@ -1752,6 +1798,7 @@
     ];
     var NOTES = {
       picker: [
+        'v7 (maintainer round 5): the day page has no second "Logged entries" list; each activity shows its entries in its own section. The new-program editor keeps what you type. A movement shows one target per thing it measures (Box Jump: height + weight; Sled Push: weight + distance).',
         'v6: the work is two milestones. CRUD-1 "Fix it yourself" = athletes (add, rename, archive), delete + restore, the picker, renaming a mis-typed movement, and correcting a logged value (V1-24). PROG-1 "Programs & scheduling" = everything about programs and days. The screen list says which each screen belongs to.',
         'What this prototype does NOT approve (panel PM-5): movement merge, the history page’s layout, and the settings shell. Each gets its own panel when its row is planned.',
         'Dashed tile last in the list (maintainer, 2026-09-28). One link for parents: Household settings.',
@@ -2155,6 +2202,7 @@
         ['Wrestling practice', true],
         ['Wake time', false],
         ['Rice bucket', true],
+        ['Calisthenics', true],
         ['Brain rep', false],
         ['Splits', false],
       ];
@@ -2569,59 +2617,128 @@
 
       // Calisthenics bouts fold into one row per exercise (page.tsx); its Delete hides the group as ONE event (Q9).
       var seen = {};
-      var ls = lsRows
-        .map(function (x) {
-          if (x.t) return tomb(x.t);
-          var e = x.e;
-          if (e.group) {
-            if (seen[e.group]) return '';
-            seen[e.group] = true;
-            var bouts = list.filter(function (y) {
-              return y.group === e.group;
-            });
-            var tot = bouts.reduce(function (c, y) {
-              return c + (+y.detail || 0);
-            }, 0);
-            return (
-              '<li class="entry" id="row-' +
-              e.id +
-              '" tabindex="-1" data-m><div class="body"><div class="title">' +
-              esc(e.group) +
-              ' — ' +
-              bouts
-                .map(function (y) {
-                  return y.detail;
-                })
-                .join(', ') +
-              '</div><div class="detail tabular">' +
-              bouts.length +
-              ' sets · ' +
-              tot +
-              '</div></div>' +
-              '<button type="button" class="btn ghost del" data-act="hide-group" data-k="' +
-              k +
-              '" data-group="' +
-              esc(e.group) +
-              '" aria-label="Delete ' +
-              esc(e.group) +
-              ', all ' +
-              bouts.length +
-              ' sets" data-m>Delete</button></li>'
-            );
-          }
+      // Under its own heading a row is just the value; in "Also logged" it needs its name too.
+      function lsRow(x, inSection) {
+        if (x.t) return tomb(x.t);
+        var e = x.e;
+        if (e.group) {
+          if (seen[e.group]) return '';
+          seen[e.group] = true;
+          var bouts = list.filter(function (y) {
+            return y.group === e.group;
+          });
+          var tot = bouts.reduce(function (c, y) {
+            return c + (+y.detail || 0);
+          }, 0);
           return (
             '<li class="entry" id="row-' +
             e.id +
             '" tabindex="-1" data-m><div class="body"><div class="title">' +
-            esc(e.title) +
-            '</div><div class="detail">' +
-            esc(e.detail) +
+            esc(e.group) +
+            ' — ' +
+            bouts
+              .map(function (y) {
+                return y.detail;
+              })
+              .join(', ') +
+            '</div><div class="detail tabular">' +
+            bouts.length +
+            ' sets · ' +
+            tot +
             '</div></div>' +
-            delBtn(k, e) +
-            '</li>'
+            '<button type="button" class="btn ghost del" data-act="hide-group" data-k="' +
+            k +
+            '" data-group="' +
+            esc(e.group) +
+            '" aria-label="Delete ' +
+            esc(e.group) +
+            ', all ' +
+            bouts.length +
+            ' sets" data-m>Delete</button></li>'
           );
-        })
-        .join('');
+        }
+        return (
+          '<li class="entry" id="row-' +
+          e.id +
+          '" tabindex="-1" data-m><div class="body"><div class="title">' +
+          esc(inSection ? e.detail : e.title) +
+          '</div>' +
+          (inSection ? '' : '<div class="detail">' + esc(e.detail) + '</div>') +
+          '</div>' +
+          delBtn(k, e) +
+          '</li>'
+        );
+      }
+      // The form is the day (V1-24, the maintainer 2026-10-23): each activity shows what was logged IN
+      // its own section. No second list. An entry whose activity has left the athlete's activities has
+      // no section, so it lands in "Also logged" rather than silently vanishing (V1-24 plan, finding 9).
+      function actOf(x) {
+        var e = x.e || x.t.items[0];
+        return DAY_ACTS.find(function (a) {
+          return a.has(e);
+        });
+      }
+      var acts = DAY_ACTS.map(function (act, i) {
+        var rows = lsRows.filter(function (x) {
+          return actOf(x) === act;
+        });
+        var live = rows.some(function (x) {
+          return x.e;
+        });
+        var hid = 'act-h-' + i;
+        var ctl =
+          act.shape === 'bool'
+            ? live
+              ? ''
+              : '<button type="button" class="btn outline" style="width:fit-content" data-act="log-act" data-k="' +
+                k +
+                '" data-n="' +
+                esc(act.name) +
+                '">Mark done</button>'
+            : live && act.shape === 'min'
+              ? ''
+              : '<form class="row act-form" data-k="' +
+                k +
+                '" data-n="' +
+                esc(act.name) +
+                '" data-shape="' +
+                act.shape +
+                '" style="flex-wrap:nowrap"><label class="sr-only" for="act-in-' +
+                i +
+                '">' +
+                (act.shape === 'min' ? 'Minutes of ' : 'Reps, one set of ') +
+                esc(act.unit || act.name) +
+                '</label><input class="input" id="act-in-' +
+                i +
+                '" inputmode="numeric" placeholder="' +
+                (act.shape === 'min' ? 'min' : 'reps') +
+                '" style="max-width:140px" /><button class="btn" type="submit">' +
+                (act.shape === 'min' ? 'Log' : 'Log a set') +
+                '</button></form>';
+        return (
+          '<section class="stack-sm" aria-labelledby="' +
+          hid +
+          '"><h2 id="' +
+          hid +
+          '">' +
+          esc(act.name) +
+          '</h2>' +
+          (rows.length
+            ? '<ul class="plain stack-sm">' +
+              rows
+                .map(function (x) {
+                  return lsRow(x, true);
+                })
+                .join('') +
+              '</ul>'
+            : '') +
+          ctl +
+          '</section>'
+        );
+      }).join('');
+      var other = lsRows.filter(function (x) {
+        return !actOf(x);
+      });
       var anyLive = list.length > 0;
       return (
         '<header class="stack-sm"><button type="button" class="back" data-go="picker">← All athletes</button><h1>' +
@@ -2662,32 +2779,21 @@
         st +
         logBtn +
         '</section>' +
-        '<section class="stack-sm" aria-labelledby="ent-h"><h2 id="ent-h">Logged entries</h2>' +
-        (ls || stRows.length
-          ? '<ul class="plain stack-sm" id="entries">' +
-            ls +
-            (stRows.some(function (x) {
-              return x.e;
-            })
-              ? '<li class="entry" style="color:var(--muted-foreground)"><div class="body small">Strength · ' +
-                stRows.filter(function (x) {
-                  return x.e;
-                }).length +
-                (stRows.filter(function (x) {
-                  return x.e;
-                }).length === 1
-                  ? ' movement'
-                  : ' movements') +
-                ' — change or delete them above</div></li>'
-              : '') +
-            '</ul>'
-          : '<p class="muted small" style="margin:0">Nothing else logged on ' +
-            fmtDay(r.day) +
-            '.</p>') +
+        acts +
+        (other.length
+          ? '<section class="stack-sm" aria-labelledby="oth-h"><h2 id="oth-h">Also logged</h2><p class="hint" style="margin:0">Not in ' +
+            esc(a.name) +
+            '’s activities any more, so it has no section of its own.</p><ul class="plain stack-sm">' +
+            other
+              .map(function (x) {
+                return lsRow(x, false);
+              })
+              .join('') +
+            '</ul></section>'
+          : '') +
         (anyLive
           ? '<button type="button" class="textlink" data-act="clear-open" id="clear-open">Clear this day…</button>'
           : '') +
-        '</section>' +
         '<nav aria-label="' +
         esc(a.name) +
         ' setup"><ul class="plain navlist">' +
@@ -2759,7 +2865,9 @@
       pickCtx = ctx || null;
       openDialog(
         '<div class="sheet-in"><div class="sheet-head"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><h2 id="dlg-title" style="margin:0;font-size:18px">' +
-          (pickCtx ? 'Add a movement to ' + esc(pickCtx.day) : 'Choose a movement') +
+          (pickCtx
+            ? 'Add a movement to ' + esc(pickCtx.label || pickCtx.day)
+            : 'Choose a movement') +
           '</h2><button type="button" class="btn ghost" data-act="dlg-close">Close</button></div>' +
           '<label class="sr-only" for="pk-q">Search movements</label><input class="input" id="pk-q" type="search" placeholder="Search, or type a new name" autocomplete="off" autocorrect="off" aria-describedby="pk-status" />' +
           '<p class="sr-only" id="pk-status" role="status"></p></div>' +
@@ -3037,29 +3145,48 @@
       var hasLoad = Object.keys(p.loads).some(function (k) {
         return p.loads[k];
       });
+      var tf = targetFields(p.name);
       var loads = who
         .map(function (a) {
-          return (
-            '<div class="field"><label for="ld-' +
-            p.id +
-            a.id +
-            '" class="small">' +
-            esc(a.name) +
-            '’s load</label><input class="input" id="ld-' +
-            p.id +
-            a.id +
-            '" value="' +
-            esc(p.loads[a.id] || '') +
-            '" placeholder="none" data-act="load" data-b="' +
-            bid +
-            '" data-day="' +
-            esc(day) +
-            '" data-pid="' +
-            p.id +
-            '" data-aid="' +
-            a.id +
-            '" /></div>'
-          );
+          var fields = tf
+            .map(function (fd) {
+              var fid = 'ld-' + p.id + a.id + fd.key.replace('|', '-');
+              return (
+                '<div class="field"><label for="' +
+                fid +
+                '" class="small">' +
+                (tf.length > 1 ? '' : esc(a.name) + '’s ') +
+                (tf.length > 1 ? fd.word : fd.word.toLowerCase()) +
+                (fd.unit ? ' (' + fd.unit + ')' : '') +
+                (tf.length > 1 ? '<span class="sr-only"> for ' + esc(a.name) + '</span>' : '') +
+                '</label><input class="input" id="' +
+                fid +
+                '" value="' +
+                esc(p.loads[a.id + fd.key] || '') +
+                '" placeholder="' +
+                fd.ph +
+                '"' +
+                (fd.unit ? ' inputmode="decimal"' : '') +
+                ' data-act="load" data-b="' +
+                bid +
+                '" data-day="' +
+                esc(day) +
+                '" data-pid="' +
+                p.id +
+                '" data-aid="' +
+                a.id +
+                fd.key +
+                '" /></div>'
+              );
+            })
+            .join('');
+          return tf.length > 1
+            ? '<fieldset class="stack-xs" style="border:0;padding:0;margin:0"><legend class="small" style="font-weight:500">' +
+                esc(a.name) +
+                '</legend><div class="rx-grid">' +
+                fields +
+                '</div></fieldset>'
+            : fields;
         })
         .join('');
       var base = 'data-b="' + bid + '" data-day="' + esc(day) + '" data-i="' + idx + '"';
@@ -3116,7 +3243,9 @@
         esc(p.name) +
         '</span></label><input class="input" id="s-' +
         p.id +
-        '" inputmode="numeric" value="' +
+        '" inputmode="numeric" data-f="sets" ' +
+        base +
+        ' value="' +
         (p.sets || '') +
         '" placeholder="open" /></div>' +
         '<div class="field"><label for="t-' +
@@ -3125,13 +3254,25 @@
         esc(p.name) +
         '</span></label><input class="input" id="t-' +
         p.id +
-        '" value="' +
+        '" data-f="reps" ' +
+        base +
+        ' value="' +
         esc(p.reps || '') +
         '" placeholder="open" /></div></div>' +
         (loads
           ? '<details class="collapse"' +
             (hasLoad ? ' open' : '') +
-            '><summary>Loads per athlete</summary><div class="stack-sm">' +
+            '><summary>' +
+            (tf.length > 1
+              ? tf
+                  .map(function (fd, i) {
+                    return i ? fd.word.toLowerCase() : fd.word;
+                  })
+                  .join(' and ')
+              : tf[0].word === 'Load'
+                ? 'Loads'
+                : tf[0].word) +
+            ' per athlete</summary><div class="stack-sm">' +
             loads +
             '</div></details>'
           : '') +
@@ -3154,7 +3295,7 @@
           ? '<h2 id="blk-' +
             b.id +
             '" class="sr-only">New program</h2><div class="field"><label for="pn-name" style="font-size:14px;font-weight:500">Program name</label><input class="input" id="pn-name" maxlength="60" value="' +
-            esc(b.name) +
+            esc(S.edit.pname != null ? S.edit.pname : b.name) +
             '" /></div>' +
             // IXD-11: the create path asks for days too, with the same fields and preview as ASSIGN-1.
             (forA
@@ -3169,7 +3310,8 @@
                 ) +
                 '</form>'
               : '<p class="banner" style="margin:0">Nobody is on it until you put someone on it.</p>') +
-            '<p class="hint" style="margin:0">A program has one or more workouts. With more than one, they take turns: one per scheduled day, in order, starting the day you save.</p>'
+            '<p class="hint" style="margin:0">A program has one or more workouts. With more than one, they take turns: one per scheduled day, in order, starting the day you save.</p>' +
+            '<p class="hint" style="margin:0">Loads, heights, distances and times are set per athlete, so their fields appear once someone is on the program.</p>'
           : '<h2 id="blk-' +
             b.id +
             '">' +
@@ -3201,6 +3343,7 @@
             var live = rows.filter(function (p) {
               return !p.removed;
             }).length;
+            var label = (b.fresh && S.edit.labels && S.edit.labels[wi]) || day;
             return (
               '<div class="stack-sm">' +
               (b.fresh
@@ -3213,10 +3356,22 @@
                   '" data-wk="' +
                   esc(day) +
                   '" value="' +
-                  esc(day) +
-                  '" maxlength="30" /><span class="small muted">' +
+                  esc(label) +
+                  '" maxlength="30" /><span class="row" style="justify-content:space-between"><span class="small muted">' +
                   live +
-                  ' of 12 movements</span></div>'
+                  ' of 12 movements</span>' +
+                  (wi > 0
+                    ? '<button type="button" class="btn ghost" data-act="rm-day" data-b="' +
+                      b.id +
+                      '" data-day="' +
+                      esc(day) +
+                      '" data-wi="' +
+                      wi +
+                      '">Remove ' +
+                      esc(label) +
+                      '</button>'
+                    : '') +
+                  '</span></div>'
                 : '<h3>' +
                   esc(day) +
                   ' <span class="muted small" style="font-weight:400">· ' +
@@ -3236,8 +3391,10 @@
               esc(day) +
               '"' +
               (live >= 12 ? ' disabled' : '') +
-              '>+ Add a movement to ' +
-              esc(day) +
+              ' id="add-rx-' +
+              wi +
+              '">+ Add a movement to ' +
+              esc(label) +
               '</button></div>'
             );
           })
@@ -3789,7 +3946,8 @@
     function workoutLabels(bid) {
       return Object.keys(S.edit.blocks[bid]).map(function (k, i) {
         var el = $('#wl-' + i);
-        return (el && el.value.trim()) || k;
+        var kept = S.edit.labels && S.edit.labels[i];
+        return ((el ? el.value : kept) || '').trim() || k;
       });
     }
     // Close-and-open, never edit in place: HIST-1 reads the periods, so a change of days is a new period.
@@ -4087,7 +4245,18 @@
                               p.sets +
                               '×' +
                               esc(p.reps) +
-                              (p.loads[r.id] ? ' @ ' + esc(p.loads[r.id]) : '')
+                              targetFields(p.name)
+                                .filter(function (fd) {
+                                  return p.loads[r.id + fd.key];
+                                })
+                                .map(function (fd) {
+                                  return (
+                                    ' @ ' +
+                                    esc(p.loads[r.id + fd.key]) +
+                                    (fd.unit ? ' ' + fd.unit : '')
+                                  );
+                                })
+                                .join('')
                             : '')
                         );
                       })
@@ -4324,6 +4493,18 @@
           });
           return hideEvent(t.dataset.k, [e]);
         }
+        case 'log-act': {
+          var le = {
+            id: 'e' + Date.now(),
+            order: 50,
+            where: 'list',
+            title: t.dataset.n,
+            detail: 'Done',
+          };
+          (S.entries[t.dataset.k] = S.entries[t.dataset.k] || []).push(le);
+          rerender('#row-' + le.id);
+          return announce(t.dataset.n + ' saved.');
+        }
         case 'hide-group':
           return hideEvent(
             t.dataset.k,
@@ -4463,19 +4644,26 @@
           return announce(p.name + ' moved to position ' + (j + 1) + ' of ' + rows.length + '.');
         }
         case 'add-rx':
-          return openPicker({ b: t.dataset.b, day: t.dataset.day });
+          return openPicker({
+            b: t.dataset.b,
+            day: t.dataset.day,
+            label: t.textContent.replace('+ Add a movement to ', ''),
+          });
+        case 'rm-day': {
+          var rd = S.edit.blocks[t.dataset.b];
+          var gone = workoutLabels(t.dataset.b)[+t.dataset.wi];
+          delete rd[t.dataset.day];
+          if (S.edit.labels) S.edit.labels.splice(+t.dataset.wi, 1);
+          S.edit.dirty = true;
+          rerender('[data-act="add-day"]');
+          return announce(gone + ' removed.');
+        }
         case 'add-day': {
           var ds = S.edit.blocks[t.dataset.b];
           if (Object.keys(ds).length >= MAX_WORKOUTS) return;
-          // Keep what was typed in the label fields across the re-render.
-          workoutLabels(t.dataset.b).forEach(function (l, i) {
-            var k = Object.keys(ds)[i];
-            if (l !== k && !ds[l]) {
-              ds[l] = ds[k];
-              delete ds[k];
-            }
-          });
-          var nd = 'Workout ' + String.fromCharCode(65 + Object.keys(ds).length);
+          // The first unused letter: after a remove, the count can name a key that still exists.
+          for (var li = 0; ds['Workout ' + String.fromCharCode(65 + li)]; li++);
+          var nd = 'Workout ' + String.fromCharCode(65 + li);
           ds[nd] = [];
           S.edit.dirty = true;
           rerender('#wl-' + (Object.keys(ds).length - 1));
@@ -4503,6 +4691,16 @@
             );
           }, 0);
           if (!count) return refuse('Add at least one movement first.', '[data-act="add-rx"]');
+          var emptyAt = keys.findIndex(function (d) {
+            return !staged[d].some(function (p) {
+              return !p.removed;
+            });
+          });
+          if (emptyAt >= 0)
+            return refuse(
+              labels[emptyAt] + ' has no movements. Add one, or remove that workout.',
+              '#add-rx-' + emptyAt,
+            );
           var dup = labels.find(function (l, i) {
             return labels.indexOf(l) !== i;
           });
@@ -4789,6 +4987,20 @@
         $('#del-go').disabled = fold(ev.target.value) !== fold(athlete(S.route.id).name);
       if (S.edit && ev.target.closest && ev.target.closest('#app .rx, #pn-name, [data-wk]'))
         S.edit.dirty = true;
+      // Everything typed in the editor lives in S.edit, so a re-render (adding a movement) keeps it.
+      if (S.edit && id === 'pn-name') S.edit.pname = ev.target.value;
+      if (S.edit && /^wl-/.test(id)) {
+        S.edit.labels = S.edit.labels || [];
+        S.edit.labels[+id.slice(3)] = ev.target.value;
+        var ab = $('#add-rx-' + id.slice(3));
+        if (ab)
+          ab.textContent =
+            '+ Add a movement to ' + (ev.target.value.trim() || ev.target.dataset.wk);
+      }
+      if (S.edit && ev.target.dataset && ev.target.dataset.f) {
+        var rp = S.edit.blocks[ev.target.dataset.b][ev.target.dataset.day][+ev.target.dataset.i];
+        if (rp) rp[ev.target.dataset.f] = ev.target.value;
+      }
       if ((id === 'pn-name' || /^wl-/.test(id)) && $('#new-days'))
         drawAssignPreview($('#new-days'));
       if (ev.target.dataset && ev.target.dataset.act === 'load') {
@@ -4883,6 +5095,25 @@
             rowCount(items) +
             ' items hidden. Restore all is under Hidden on this day.',
         );
+      }
+      if (f.classList.contains('act-form')) {
+        var av = f.querySelector('input').value.trim();
+        if (!/^\d+$/.test(av)) return;
+        var push = f.dataset.shape === 'reps';
+        (S.entries[f.dataset.k] = S.entries[f.dataset.k] || []).push({
+          id: 'e' + Date.now(),
+          order: 50,
+          where: 'list',
+          title: push ? 'Push-Ups' : f.dataset.n,
+          group: push ? 'Push-Ups' : undefined,
+          detail: push ? av : av + ' min',
+        });
+        rerender(
+          push
+            ? '#' + f.querySelector('input').id
+            : '#row-' + S.entries[f.dataset.k].slice(-1)[0].id,
+        );
+        return announce(f.dataset.n + ' saved.');
       }
       if (f.id === 'bw-form') {
         var v = $('#bw-in').value.trim();
