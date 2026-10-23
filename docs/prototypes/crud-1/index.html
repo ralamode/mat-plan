@@ -1468,9 +1468,8 @@
       if (/box jump/i.test(name))
         return [
           { key: '', word: 'Box height', unit: 'in', ph: 'e.g. 24' },
-          // Q18 (M31): a held weight and a worn vest are separate typed quantities, never one sum.
-          { key: '|h', word: 'Held weight', unit: 'lb', ph: 'none' },
-          { key: '|v', word: 'Vest', unit: 'lb', ph: 'none' },
+          // Q18 (M34): one weight, whatever carries it; the movement's note says what it is.
+          { key: '|w', word: 'Weight', unit: 'lb', ph: 'none' },
         ];
       if (/sled/i.test(name))
         return [
@@ -1800,7 +1799,7 @@
     ];
     var NOTES = {
       picker: [
-        'v8 (round 6): the Activities editor is hidden until ACT-1 (Q17). Box Jump takes a held weight and a vest as separate typed targets (Q18).',
+        'v9 (round 7): v8 approved. Targets are the movement’s own quantity plus one weight per athlete, and each movement has an optional note ("dumbbell in each hand") — no separate held and vest fields (Q18, M34). The Activities editor stays hidden until ACT-1 (Q17).',
         'v7 (maintainer round 5): the day page has no second "Logged entries" list; each activity shows its entries in its own section. The new-program editor keeps what you type. A movement shows one target per thing it measures (Box Jump: height + weight; Sled Push: weight + distance).',
         'v6: the work is two milestones. CRUD-1 "Fix it yourself" = athletes (add, rename, archive), delete + restore, the picker, renaming a mis-typed movement, and correcting a logged value (V1-24). PROG-1 "Programs & scheduling" = everything about programs and days. The screen list says which each screen belongs to.',
         'What this prototype does NOT approve (panel PM-5): movement merge, the history page’s layout, and the settings shell. Each gets its own panel when its row is planned.',
@@ -3251,25 +3250,35 @@
         ' value="' +
         esc(p.reps || '') +
         '" placeholder="open" /></div></div>' +
+        // Q18 (M34): one weight per athlete, plus a note per movement that says what it is.
+        '<details class="collapse"' +
+        (hasLoad || p.note ? ' open' : '') +
+        '><summary>' +
         (loads
-          ? '<details class="collapse"' +
-            (hasLoad ? ' open' : '') +
-            '><summary>' +
-            (tf.length > 2
-              ? 'Targets'
-              : tf.length > 1
-                ? tf
-                    .map(function (fd, i) {
-                      return i ? fd.word.toLowerCase() : fd.word;
-                    })
-                    .join(' and ')
-                : tf[0].word === 'Load'
-                  ? 'Loads'
-                  : tf[0].word) +
-            ' per athlete</summary><div class="stack-sm">' +
-            loads +
-            '</div></details>'
-          : '') +
+          ? (tf.length > 1
+              ? tf
+                  .map(function (fd, i) {
+                    return i ? fd.word.toLowerCase() : fd.word;
+                  })
+                  .join(' and ')
+              : tf[0].word === 'Load'
+                ? 'Loads'
+                : tf[0].word) + ' per athlete, and a note'
+          : 'Note') +
+        '</summary><div class="stack-sm">' +
+        '<div class="field"><label for="nt-' +
+        p.id +
+        '" class="small">Note<span class="sr-only"> for ' +
+        esc(p.name) +
+        '</span> (optional)</label><input class="input" id="nt-' +
+        p.id +
+        '" data-f="note" ' +
+        base +
+        ' maxlength="80" placeholder="e.g. dumbbell in each hand" value="' +
+        esc(p.note || '') +
+        '" /></div>' +
+        loads +
+        '</div></details>' +
         '</li>'
       );
     }
