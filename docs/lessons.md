@@ -198,6 +198,17 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
+  OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
+  `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script
+  succeeds, writes three PNGs, and they are **byte-identical to the previous run** — so the edit looks
+  like it did nothing, and the obvious next move is to go and "fix" code that was already correct.
+  Deleting `.screenshots/` does not help; it is `.next` that is stale. **Fix:** pass `--build` on any
+  capture taken after the first one in a session (`pnpm --filter web screenshot:ephemeral <route>
+--build`). Found on a UI change that was later parked (#303): the first capture showed the new
+  control, the second — taken after restyling it — showed the UNSTYLED version, which read as "my
+  change did not apply" and sent me to re-edit code that was already correct. _(2026-10-22.)_
+
 - **A Playwright `addInitScript` silently does nothing from one line onward, and the symptom is a
   later assertion reading `null` ("the theme never applied at all").** → The script runs at
   **document-start**, where `document.documentElement` can still be null, so
@@ -396,6 +407,18 @@ access token`, which reads like a permissions problem with the repo. The cause w
   Also declare the DOM per-file: `// @vitest-environment jsdom` (the suite default is `node`). (V1-3)
 
 ## CI / secrets
+
+- **`pnpm verify` is green, `guides:check` is green, and CI's `quality` still fails — because
+  `status:check` is NOT in `verify`.** → `package.json:27` lists eleven commands and `status:check`
+  is not one of them (`:30` defines it separately). It runs **locally only if you type it** and on
+  every PR. So the first time a branch exercises it can be in CI. **And its rule is not the obvious
+  one:** the changelog fragment's FILENAME must match the **branch slug**, not the change. On
+  `feat/auth-logout-button` a fragment named `2026-10-22-feat-picker-lock-this-device.md` fails with
+  _"Found, but not a valid entry for this branch"_ — a fragment existed, it was just named after what
+  shipped instead of after the branch. Easy to hit when a panel changes the design mid-branch and the
+  commit stops matching the branch name. **Fix:** run `pnpm status:check "$(git merge-base origin/main
+HEAD)"` before opening a PR — the bare form takes a different path and may pass where CI will not,
+  because CI passes `BASE_SHA`. _(2026-10-22.)_
 
 - **A control the code wires can still be OFF in production, and the docs will not notice.** →
   `lib/rate-limit.ts` fails **open** when `UPSTASH_REDIS_REST_URL`/`_TOKEN` are unset (correct for
