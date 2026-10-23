@@ -32,24 +32,24 @@ deleted in the app"_ (`beta-1.md:441`, the whole milestone).
 
 **Made** (each recorded, with its quote, in the spec's review-response log):
 
-| Decision                                                                                                             | Where                |
-| -------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| Two milestones: CRUD-1 is fix-it-yourself; programs and scheduling are [PROG-1](./prog-1-programs-and-scheduling.md) | M21                  |
-| Correcting a logged value is **in** (V1-24's remaining PRs join as track E)                                          | M23                  |
-| Logs live in place; V1-24 3b **removes** the "Logged entries" list instead of folding it into `<details>`            | M26, disagreement 12 |
-| Delete is a hide, restorable until `N` days; "Hidden on this day" names it                                           | ADR 0008, Q10        |
-| Archive and delete an athlete live in Household settings; delete is **later** (Beta 1 step-up)                       | Q1, Q6               |
-| A kid-only guard on the newest block until PROG-1's ASSIGN-READ                                                      | Q15                  |
-| The activities editor has **no link anywhere** until ACT-1; saved activities keep logging                            | M30, criterion 41    |
-| A household renames its own movement; **merge** is later                                                             | PM-4                 |
+| Decision                                                                                                                            | Where                |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Two milestones: CRUD-1 is fix-it-yourself; programs and scheduling are [PROG-1](./prog-1-programs-and-scheduling.md)                | M21                  |
+| Correcting a logged value is **in** (V1-24's remaining PRs join as track E)                                                         | M23                  |
+| Logs live in place; V1-24 3b **removes** the "Logged entries" list instead of folding it into `<details>`                           | M26, disagreement 12 |
+| Delete is a hide, restorable until PRIV-3's purge removes it (no date shown until the purge is live); "Hidden on this day" names it | ADR 0008, Q10        |
+| Archive and delete an athlete live in Household settings; delete is **later** (Beta 1 step-up)                                      | Q1, Q6               |
+| A kid-only guard on the newest block until PROG-1's ASSIGN-READ                                                                     | Q15                  |
+| The activities editor has **no link anywhere** until ACT-1; saved activities keep logging                                           | M30, criterion 41    |
+| A household renames its own movement; **merge** is later                                                                            | PM-4                 |
 
 **To decide — before the step that depends on it:**
 
-| Question                                                              | Decide by     | Recommendation                                                          |
-| --------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| **`N`**, the restore window (PRIV-3's number)                         | before step 4 | Start now; it is a decision with no code, and B1 cannot ship without it |
-| Narrow `write-path.md`'s `owns:` so action lanes can run in parallel? | before step 1 | Per the [WP-1 plan](../plans/wp-1-shard-actions.md)                     |
-| Does a movement rename change past CSV rows?                          | step 7's plan | Per the [MOV-1 plan](../plans/mov-1-rename-movement.md)                 |
+| Question                                                              | Decide by                   | Recommendation                                                                                           |
+| --------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **`N`**, the restore window (PRIV-3's number)                         | before PRIV-3's purge ships | No longer gates step 4 (V1-9b's panel): until the purge is live, the bar says "Restorable until removed" |
+| Narrow `write-path.md`'s `owns:` so action lanes can run in parallel? | before step 1               | Per the [WP-1 plan](../plans/wp-1-shard-actions.md)                                                      |
+| Does a movement rename change past CSV rows?                          | step 7's plan               | Per the [MOV-1 plan](../plans/mov-1-rename-movement.md)                                                  |
 
 ## The steps
 
@@ -61,7 +61,6 @@ flowchart LR
   P1b --> P1c[2b · PROF-1 a-1 add · a-1d duplicate warning]
   B0[3 · V1-9b-0 freed client_id] --> B1
   AU --> B1[4 · V1-9b-1 delete + restore]
-  N[PRIV-3 chooses N] --> B1
   E1e --> B1
   E3b -->|B1-3, the in-place delete| B1
   B1 --> B2[5 · V1-9b-2 clear a day]
@@ -91,7 +90,7 @@ chart is what gets fixed, in that PR.
 | 1    | **PROF-1a** — add an athlete, rename, kind; the kid-only guard                                                                                  | [prof-1-athletes](../plans/prof-1-athletes.md)                                                                                                        | **AUTH-1 1c observed live**                                                                                                | 0    | 1–5, 7, 39, 41        |
 | 2    | **PROF-1b** — archive and restore an athlete                                                                                                    | [prof-1-athletes](../plans/prof-1-athletes.md)                                                                                                        | step 1; the archive marker                                                                                                 | 0    | 5, 47                 |
 | 3    | **V1-9b-0** — the freed `client_id`                                                                                                             | [v1-9b-delete-and-restore](../plans/v1-9b-delete-and-restore.md)                                                                                      | PROG-1's V1-22 chunk 2 merged (both edit `writers/strength-session.ts`; gate run); the next free migration number at merge | 0    | 9                     |
-| 4    | **V1-9b-1** — delete one entry, restore it, refuse a taken slot                                                                                 | [v1-9b-delete-and-restore](../plans/v1-9b-delete-and-restore.md)                                                                                      | step 3 + AUTH-1 1c + **`N` chosen** (V1-24 1e ✅ is met); its UI PR B1-3 also waits on 3b                                  | 0    | 9–13, 15–16           |
+| 4    | **V1-9b-1** — delete one entry, restore it, refuse a taken slot                                                                                 | [v1-9b-delete-and-restore](../plans/v1-9b-delete-and-restore.md)                                                                                      | step 3 + AUTH-1 1c (V1-24 1e ✅ is met); its UI PR B1-3 also waits on 3b                                                   | 0    | 9–13, 15–16           |
 | 5    | **V1-9b-2** — clear a day, restore it as one event                                                                                              | [v1-9b-delete-and-restore](../plans/v1-9b-delete-and-restore.md)                                                                                      | step 4                                                                                                                     | 0    | 14                    |
 | E    | **V1-24 2 → 3b** — correct a logged value (1d #210, 1e #214, 3a #211/#212 ✅ shipped)                                                           | [v1-24-form-is-the-day](../plans/v1-24-form-is-the-day.md), [3a](../plans/v1-24-3a-strength-receipt.md); **3b's plan is not written** and carries M26 | per that plan's Staging; 1e before step 4                                                                                  | 1    | 48 (3b), V1-24's own  |
 | 6a   | **U0** — the shared sheet primitive                                                                                                             | [pick-1-movement-picker](../plans/pick-1-movement-picker.md)                                                                                          | nothing                                                                                                                    | 1    | 37, 46                |
@@ -118,7 +117,7 @@ _(Corrected by the gate run: the earlier text read as three parallel lanes.)_
   also waits on lane A's step 2). E, 6b and step 3 serialize with V1-22 chunk 2 on the strength-form
   files and `strength-logging.md`; 6b, B1-2 and V1-24 2 take turns on `lib/dal/entries.ts`. Step 6a
   (U0) is the one free step.
-- **Start now, before AUTH-1 1c:** `N` (a decision), step 6a, and every plan's panel. Step 0 slots
+- **Start now, before AUTH-1 1c:** step 6a, and every plan's panel. Step 0 slots
   between AUTH-1 1b and 1c, never beside them. Step 3 follows V1-22 chunk 2 and takes the next
   migration number at merge.
 
@@ -148,7 +147,7 @@ guide-free PRs run beside anything; those PRs are U0 (`pick-1:493-498`) and, nea
 - **Gate 3:** AUTH-1 1c has not started. No worktree or PR exists for it, and the roadmap's next items
   are 1c-pre and 1b (`docs/roadmap.md:54` at `origin/main`; 1c-pre landed as #302). 1c gates steps 1,
   4 and 7 (`:91,94,99`).
-- **Gate 5:** the plans await approval (`:3`). `N` is unchosen (`:50`). ADR 0008 is only proposed
+- **Gate 5:** the plans await approval (`:3`). ADR 0008 is only proposed
   (`docs/roadmap.md:55`). MOV-1's open question 1 is unanswered (`mov-1:412`).
 - **Gate 4** passes: `docs/specs/crud-1-fix-it-yourself.md:40`.
 - **Gate 6** fails repo-wide. Every migration PR appends to `packages/db/migrations/meta/_journal.json`
@@ -215,8 +214,8 @@ guide-free PRs run beside anything; those PRs are U0 (`pick-1:493-498`) and, nea
 - **AUTH-1 1c is the gate for steps 1 and 4, and it is a one-way door.** Plans written before it lands
   name what to re-verify after it (each plan → "AUTH-1"). If 1c changes the principal, those steps
   re-plan; they do not proceed on the old shape.
-- **`N` is unstarted and gates step 4.** A decision with no code is the easiest thing to leave until
-  it is the critical path (spec, PM-9).
+- **`N` is unstarted.** It no longer gates step 4, but the notice cannot name a real purge date until
+  PRIV-3 chooses it; the notice exit box above waits on it.
 - **One file, many lanes.** Every mutating step edits the write path under one feature guide, so the
   action-adding steps serialize on `write-path.md` (WP-1's finding).
 - **Removing the list (3b) costs five e2e locators** and needs an "Also logged" bucket so no entry
