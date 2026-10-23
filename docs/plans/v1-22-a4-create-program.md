@@ -524,6 +524,8 @@ carries `userId`/`householdId` and never a program or workout name.
 
 ## Open questions — for the maintainer
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): The Daily Five is copied as **one workout** (M36); default weekdays **none** (M37); "No program yet" offers create (the builder, whose add-a-movement is a searchable, group-filterable library), the curated default, and "Use one of your archived programs" when one exists (M35, criterion 33 amended). Still open: A4-0's signature (asked again with the ADR 0007 amendments).
+
 1. **The Daily Five's shape when it is copied** (decide before A4-4).
    **Recommended: one workout** — an edit can never half-apply to identical A and B copies. The cost: those
    households' CSV `session_type` becomes a constant `strength-a` instead of alternating, which Insight signs

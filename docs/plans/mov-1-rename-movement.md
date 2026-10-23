@@ -645,6 +645,8 @@ any edit. "The LLM never authors loads" is untouched: no load, no model.
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Past rows are relabelled by rename **and** merge (M42); question 1 is closed.
+
 1. **(The maintainer, who owns the Insight pillar. Blocks MOV-1b.) May a household relabel past rows,
    by renaming a movement, or by merging it into a catalog or sibling row?** Both change the
    `movement` column of past months on the next export (D1). Sub-question, which only the maintainer can

@@ -615,6 +615,8 @@ real page at 360px** and puts the numbers in the PR.
 
 ## Open questions (for the maintainer)
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Clear a day hides **every live entry at the moment of confirm** (M43); the four data-contract amendments are accepted (M43). Authority after AUTH-1: the household owner, or the athlete themself when not a child (M45).
+
 1. **ADR 0008 decision 4 at AUTH-1.** The recommendation is that deletion authority equals logging
    authority, so any signed-in household member can hide and restore (Decision 9). Confirm, or name a
    narrower rule before B1-2.

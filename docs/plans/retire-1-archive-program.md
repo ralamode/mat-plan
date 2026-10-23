@@ -713,6 +713,8 @@ have shipped, 1b/1c/1d have not. Before PR c:
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Archive authority after AUTH-1: the household owner, or the athlete themself when not a child (M45). Still open: staged Take off (asked again with the difference spelled out).
+
 1. **(Maintainer)** Staged Take off **deviates from the approved v8/v9 prototype's per-tap Take off**. The
    UX panel's three lenses found per-tap saving makes Cancel cancel nothing and the archive's Undo bring
    back only the last athlete. Confirm the change; the prototype is updated in the PR that builds PR d.

@@ -557,6 +557,8 @@ e2e use the post-1c login helper (`auth-1-clerk-google.md:502-509`).
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): The added weight shows with a cue until GAP-3 4b (M39). Length targets are stored in one base unit (**inches**) and entered/shown in in or ft (M40). **Ranges are allowed** (M41) — this reverses this plan's refusal: the target shape takes a range before 1c, and the correctness lens re-reviews that section before 1c opens.
+
 1. **For the maintainer — the added weight before GAP-3 4b (UX 6).** A target can say "Added weight
    20 lb" for a box jump that the log form cannot record as such. (a) Hide the `added` field until 4b
    ships; (b) show it with a cue on Today's card ("log the jump; the weight can't be recorded yet").

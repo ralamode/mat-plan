@@ -562,6 +562,8 @@ Copies already written are ordinary blocks, and their assignments are ordinary A
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Still open: the pre-tick question (asked again with detail).
+
 1. ~~Where a block's rotation lives~~ **Resolved:** step 6 gates step 7 (scope B1; the milestone was
    updated).
 2. **Pre-tick the route athlete (UX3).** **For the maintainer.** It amends the backlog's "default none"

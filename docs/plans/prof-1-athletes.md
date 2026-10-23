@@ -626,6 +626,8 @@ an archived athlete is restorable by a build with Restore or a guarded correctio
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Archive authority after AUTH-1: the household owner, or the athlete themself when not a child (M45).
+
 1. **An archived athlete's own page** — recommended: notice + forms off, export link kept, no new check
    in the existing actions (archive is not a security boundary). _For the UX panel's re-review._
 2. **Archive authority after AUTH-1** — any member, or owner only? (Re-verify item 6.) _For the

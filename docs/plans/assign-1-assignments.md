@@ -1457,6 +1457,8 @@ Re-verify against the AUTH-1 plan's 1c row (`auth-1-clerk-google.md:549`):
 
 ## Open questions
 
+> **Maintainer answers, 2026-10-23** (spec → review-response log, round 8): Carry on from tomorrow when today was due: **yes**; a one-program household's last step asks by name: **yes** (M38). Still open: the ADR 0007 amendments (asked again).
+
 1. **D-1:** amend ADR 0007 `:491` to allow the editor before MOT-1, with MOT-1 adding settle-before-edit?
    _Recommended: yes._
 2. **Ordering two due programs.** `(active_from, id)` puts a program whose days were just changed **below** one
