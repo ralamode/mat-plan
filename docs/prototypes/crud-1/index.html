@@ -1468,7 +1468,9 @@
       if (/box jump/i.test(name))
         return [
           { key: '', word: 'Box height', unit: 'in', ph: 'e.g. 24' },
-          { key: '|w', word: 'Weight', unit: 'lb', ph: 'none' },
+          // Q18 (M31): a held weight and a worn vest are separate typed quantities, never one sum.
+          { key: '|h', word: 'Held weight', unit: 'lb', ph: 'none' },
+          { key: '|v', word: 'Vest', unit: 'lb', ph: 'none' },
         ];
       if (/sled/i.test(name))
         return [
@@ -1798,6 +1800,7 @@
     ];
     var NOTES = {
       picker: [
+        'v8 (round 6): the Activities editor is hidden until ACT-1 (Q17). Box Jump takes a held weight and a vest as separate typed targets (Q18).',
         'v7 (maintainer round 5): the day page has no second "Logged entries" list; each activity shows its entries in its own section. The new-program editor keeps what you type. A movement shows one target per thing it measures (Box Jump: height + weight; Sled Push: weight + distance).',
         'v6: the work is two milestones. CRUD-1 "Fix it yourself" = athletes (add, rename, archive), delete + restore, the picker, renaming a mis-typed movement, and correcting a logged value (V1-24). PROG-1 "Programs & scheduling" = everything about programs and days. The screen list says which each screen belongs to.',
         'What this prototype does NOT approve (panel PM-5): movement merge, the history page’s layout, and the settings shell. Each gets its own panel when its row is planned.',
@@ -1833,7 +1836,7 @@
         'Restores as one event.',
       ],
       edit: [
-        'One place to set an athlete up: name and kind, their program and days, and "Activities" (the shipped routine editor, retitled, Q14).',
+        'One place to set an athlete up: name and kind, their program and days. v8: no Activities link (Q17, M30) until ACT-1.',
         'v6: a blank name is an error, not "Saved." (IXD-7). Save sits under the fields it saves (CD-6). Navigation is rows ending in › (CD-5, A11Y-11).',
       ],
       settings: [
@@ -2181,15 +2184,8 @@
         ) +
         navRow('All household programs', '', 'data-go="programs"') +
         '</ul></section>' +
-        '<section class="stack-sm" aria-labelledby="ed-act"><h2 id="ed-act">Activities</h2><ul class="plain navlist">' +
-        navRow(
-          'Edit activities',
-          'What ' +
-            esc(a.name) +
-            ' can log besides the program — practice, wake time, habits — and in what order',
-          'data-go="routine" data-id="' + a.id + '"',
-        ) +
-        '</ul></section>' +
+        // Q17 (M30): no link to the activities editor anywhere until ACT-1; saved activities still log.
+        '<p class="proto-flag">Q17: no Activities link here until ACT-1 (households add their own). Saved activities keep logging on the day page.</p>' +
         '<p class="hint" style="margin:0">To archive or delete an athlete, use <button type="button" class="textlink" style="min-height:44px;display:inline-flex" data-go="settings">Household settings</button>.</p>'
       );
     }
@@ -2802,11 +2798,7 @@
           '',
           'data-go="program" data-id="' + a.id + '"',
         ) +
-        navRow(
-          'Edit ' + esc(a.name),
-          'Name, kind, activities',
-          'data-go="edit" data-id="' + a.id + '"',
-        ) +
+        navRow('Edit ' + esc(a.name), 'Name, kind', 'data-go="edit" data-id="' + a.id + '"') +
         '</ul></nav>'
       );
     }
@@ -3263,15 +3255,17 @@
           ? '<details class="collapse"' +
             (hasLoad ? ' open' : '') +
             '><summary>' +
-            (tf.length > 1
-              ? tf
-                  .map(function (fd, i) {
-                    return i ? fd.word.toLowerCase() : fd.word;
-                  })
-                  .join(' and ')
-              : tf[0].word === 'Load'
-                ? 'Loads'
-                : tf[0].word) +
+            (tf.length > 2
+              ? 'Targets'
+              : tf.length > 1
+                ? tf
+                    .map(function (fd, i) {
+                      return i ? fd.word.toLowerCase() : fd.word;
+                    })
+                    .join(' and ')
+                : tf[0].word === 'Load'
+                  ? 'Loads'
+                  : tf[0].word) +
             ' per athlete</summary><div class="stack-sm">' +
             loads +
             '</div></details>'

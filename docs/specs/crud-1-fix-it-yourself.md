@@ -75,11 +75,11 @@ programs track is authoring and scheduling. Each track sits in one roadmap pilla
 **file** claim ([roadmap.md](../roadmap.md) → Pillars), so the tracks are also the first cut of the
 parallelism question, which each milestone settles with the full glob intersection (sequence step 6).
 
-| Milestone                                | Chunks                                                                                                  | ~PRs  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----- |
-| **CRUD-1 — Fix it yourself**             | A1, A2 · B0, B1, B2 · U0, C1, C4r · E (V1-24 1d → 1e → 2 → 3a → 3b)                                     | 13–14 |
-| **PROG-1 — Programs & scheduling**       | D1–D7 (V1-22 ch 2–6, SCHED-1 1a–1d, ASSIGN-READ, ASSIGN-1, create-a-program, CLONE-1, RETIRE-1, HIST-1) | ~15   |
-| Specified here, in **neither** milestone | chunk 0 (starts now), A3 (delete athlete — Beta 1, step-up), C2 (PICK-2), C3 (CAT-2), C4m (MOV-1 merge) | —     |
+| Milestone                                | Chunks                                                                                                         | ~PRs  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----- |
+| **CRUD-1 — Fix it yourself**             | A1, A2 · B0, B1, B2 · U0, C1, C4r · E (V1-24 1d → 1e → 2 → 3a → 3b)                                            | 13–14 |
+| **PROG-1 — Programs & scheduling**       | D1–D8 (V1-22 ch 2–6, SCHED-1 1a–1d, ASSIGN-READ, ASSIGN-1, create-a-program, CLONE-1, RETIRE-1, HIST-1, TGT-1) | ~17   |
+| Specified here, in **neither** milestone | chunk 0 (starts now), A3 (delete athlete — Beta 1, step-up), C2 (PICK-2), C3 (CAT-2), C4m (MOV-1 merge)        | —     |
 
 ```mermaid
 flowchart LR
@@ -112,6 +112,7 @@ flowchart LR
     V6 --> CL
     CL --> RT[D6 · RETIRE-1]
     CL --> HI[D7 · HIST-1]
+    V6 --> TG[D8 · TGT-1 typed targets]
   end
   subgraph Later[Neither milestone]
     H[chunk 0 · CAT-2 human pass] --> C3[C3 · CAT-2 seed]
@@ -161,6 +162,7 @@ Each chunk is tagged **[CRUD-1]**, **[PROG-1]** or **[later]** (neither mileston
 | D5  | **[PROG-1]** **CLONE-1** — "save as a copy" from the editor, choose who moves                                                                                                                                                                                                                                                                  | D1 (chunks 2–3) + D4b + D2 (the editor it saves from)                                                                                                      | Its row's own three gates, in that order.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | D6  | **[PROG-1]** **RETIRE-1** — archive a program                                                                                                                                                                                                                                                                                                  | D5 + D3                                                                                                                                                    | CLONE-1 creates the pile; archive must compose with `active_to`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | D7  | **[PROG-1]** **HIST-1** — what program an athlete ran on a past date                                                                                                                                                                                                                                                                           | D5                                                                                                                                                         | No assignment history exists before CLONE-1 moves someone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| D8  | **[PROG-1]** **TGT-1** _(proposed)_ — typed per-athlete targets: one per quantity the movement declares, plus a `held` weight slot beside the worn `vest`                                                                                                                                                                                      | D2, and V1-34 fixed                                                                                                                                        | **Added by the maintainer (M31):** _"accommodate proper weights if the user is holding dumbbells, or wearing a weighted vest that is a specific weight."_ A `held` mass row in `quantity_slots` (seed only), and a child table of target quantities with the same `(slot, dimension)` and `(unit, dimension)` FK pairs as `entry_set_quantities`, so a target and a logged set say the same thing. Needs the movement's declared slot set stored first (unowned 9). Schema, so it owes the DB-safety lens.                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 **Where V1-22 scope B went.** The row defines B as _"A plus assignment + a third schedule shape +
 GAP-3 measurement shapes"_. Since ADR 0007, **assignment is SCHED-1's `program_assignments`** (D3) and
@@ -400,9 +402,11 @@ the UX panel's first round; **(R2)** by panel round 2. The log at the bottom say
     period opened by a change of days **shall** carry on from the workout that would have come next,
     through the period's stored offset. **(M16, M20, R2 — FE-2, FE-4)**
     _(ASSIGN-1)_
-41. The day page **shall not** link to the routine editor. A parent **shall** reach it from the
-    athlete's edit page, under "Activities on their page", beside the athlete's program and days, and
-    the page **shall** be titled "Activities". **(M17)** _(A1)_
+41. The app **shall not** link to the routine editor from anywhere — not the day page, not the
+    athlete's edit page — until ACT-1 replaces it. A routine already saved **shall** keep rendering and
+    logging on the day page; a profile with none **shall** keep the neutral default (Strength only,
+    `apps/web/lib/routine/catalog.ts`, `NEUTRAL_DEFAULT_KEYS`). The `/p/[profileId]/routine` route stays
+    in code, unlinked, as it was before V1-23 PR 2. **(M17, amended by M30)** _(A1)_
 
 **Panel round 2 and the maintainer's round 4**
 
@@ -442,6 +446,11 @@ the UX panel's first round; **(R2)** by panel round 2. The log at the bottom say
     with what it holds and its unit, and each opening the numeric keypad: Box Jump → box height (in) and
     weight (lb); Sled Push → weight (lb) and distance (ft); a hold → time (s). Only a movement that
     declares a single weight says "load". **(M27, M29)** _(D-track editor; storage per Q18)_
+51. **When** a movement declares a held weight, a worn vest, or both, the program editor **shall** offer
+    a typed per-athlete target for each (a number and a mass unit), the log form **shall** offer the same
+    slots, and a set logged with both **shall** store two quantity rows, `held` and `vest`, never one
+    summed weight. **If** a value has letters or no unit, **then** it **shall** be refused, not stored as
+    text. **(M31)** _(D8)_
 
 ## The data contract
 
@@ -700,6 +709,11 @@ No backlog row owns these. Each needs a row (or a sentence in an existing one) b
    own dimension, `distance` a length, `vest`/`ankle`/`wrist` a worn mass
    (`packages/shared/src/quantity-slots.ts:25`, `:54-60`). **One gap:** a box jump holding dumbbells has
    no slot for the weight, because `primary` is the height and the three mass slots are all **worn**.
+   **Planned (M31):** a `held` mass slot. Slots are a reference table keyed `(code, dimension)`
+   (`packages/db/src/schema.ts:87-103`) with no CHECK on `code`, so the slot is **one seeded row**, from
+   `QUANTITY_SLOT_CODES`, `ON CONFLICT DO NOTHING`, with no DDL. Which slots a movement offers is meant
+   to be **movement-declared** (`schema.ts:84-85`; V1-22's row), but `movements` has **no column for it
+   today** (`schema.ts:544-564`), so D8 depends on whichever chunk stores the declared set.
    Criterion 50 is the label; **how it is stored is Q18**.
 10. **A household cannot add an activity.** _(M28.)_ `activity_types` has **no `household_id`**
     (`schema.ts:408-431`): the activity list is one global catalog seeded from
@@ -711,7 +725,25 @@ No backlog row owns these. Each needs a row (or a sentence in an existing one) b
     activity does not. **"Strength" is not a program**: it is `STRENGTH_KEY`
     (`packages/shared/src/routine.ts:17`), the routine slot where the program's workout and strength
     logging appear. The proposed row is **ACT-1** (household activities: add, describe with a link, archive),
-    in neither milestone — see Q17.
+    in neither milestone — see Q17. **Decided (M30):** the editor is hidden until then (criterion 41),
+    and ACT-1 opens with a written brainstorm of edge cases. A starting list, each from code or a row:
+    - **A default that is one family's number:** `wrestling_practice` writes 90 minutes on one tap
+      (`apps/web/lib/routine/catalog.ts:50`). A household activity needs its own default, or none.
+    - **An activity that twins a movement:** the calisthenics counters double-count push-ups and pull-ups
+      (CAT-1). What stops a household making "Push-ups" an activity when it is a movement?
+    - **A label that misleads:** "Brush teeth" is a wrestling drill block a new coach reads as dental
+      hygiene (`catalog.ts:41`). Who sees the name, and can it be renamed later without breaking history?
+    - **Input shape:** done/not done, a number with a unit, a time of day, a list of sets
+      (`activity_types.input_shape`, `packages/db/src/schema.ts:418`, `:428`). Can a parent choose it, and change it after entries exist?
+    - **The CSV export is byte-faithful** to an existing workflow (AGENTS.md → What this is). Does a
+      household activity get a column, and what does an archived one export?
+    - **Archive and history:** an activity removed from a routine already lands in "Also logged"
+      (criterion 48); an archived **household** activity needs the same answer.
+    - **A video link is a third-party call** (privacy lens): who may add one, and is it shown to a child.
+    - **Adherence:** does a household activity count toward the week strip, and per athlete or per household.
+    - **Kids' activities for adults:** the shared catalog was written for one family's kids.
+    - **The rows that wait on ACT-1:** V1-20 (cross-athlete routine editing) and CAT-1 edit the editor
+      this hides; their rows should say so when the PR opens (disagreement 13).
 
 Also, from the roadmap's own membership rule: **V1-9b and PRIV-3 belong to no pillar** (roadmap.md →
 Pillars). This spec proposes Profiles & Tenancy for neither — V1-9b's files are `app/p/[profileId]/`
@@ -782,6 +814,9 @@ Said rather than silently resolved.
     activity left the routine needs the "Also logged" bucket (`:904-905`); (d) 3a moves `EditableSet`
     into the receipt (`docs/plans/v1-24-3a-strength-receipt.md:237`), which removes the mount-point reason
     once 3a ships. The prototype (v7) shows the result.
+13. **V1-20 and CAT-1 improve a routine editor that M30 hides.** V1-20 makes it discoverable and
+    cross-athlete; CAT-1 narrows what it offers (`docs/plan.md:128`, `:131`). Neither row knows the editor is
+    unlinked until ACT-1. This branch may not edit `plan.md`; the PR proposes parking both behind ACT-1.
 
 ## Open decisions — for the maintainer, at prototype review
 
@@ -806,12 +841,12 @@ panel's answer.
 | Q12  | **New (R1).** Typed `delete` for clear-a-day, when clear-a-day is restorable?                                                                                             | kept                                                                | Keep. The V1-9b row decided it _(maintainer)_; it is bulk, and on a phone a bulk mistake is the expensive one.                                                                                                                                                                                                                        | **declined** (I, NIT)             |
 | Q13  | **New (M2).** Calendar-indexed A/B on a weekday set: on Mon/Wed/Fri the YDP runs B, B, B, then A, A, A. Does the 2026-09-24 decision still hold once days can be skipped? | v3 warns in the sheet and shows the next six sessions               | **Decided (maintainer, 2026-10-22): a skipped day must not shift the program.** Criterion 40.                                                                                                                                                                                                                                         | decided                           |
 | Q13b | **New (M16).** Count **scheduled** days instead of calendar days? Same no-shift property; Mon/Wed/Fri alternates; identical when every day runs                           | v5: a switch in the review bar, "scheduled days" first              | **Approved (maintainer, 2026-10-22).** Lands in ASSIGN-1; amends ADR 0007 decision 2 with the SCHED-1 1c sign-off; a change of days carries on from the next workout ([Recurrence](#recurrence-the-weekday-set-rrule-and-the-rotation), disagreement 8).                                                                              | decided                           |
-| Q14  | **New (M1).** The shipped "→ Edit {name}'s routine" link reads as scheduling                                                                                              | v5: gone from the day page; "Activities" on the athlete's edit page | **Decided (maintainer, 2026-10-22): remove it from the day page**, since another way exists. The editor itself stays — it is the only way to choose what an athlete logs besides the program — reached from "→ Edit {name}" and retitled "Activities" (criterion 41).                                                                 | decided                           |
+| Q14  | **New (M1).** The shipped "→ Edit {name}'s routine" link reads as scheduling                                                                                              | v5: gone from the day page; "Activities" on the athlete's edit page | **Decided (maintainer, 2026-10-22): remove it from the day page**, since another way exists. The editor itself stays — it is the only way to choose what an athlete logs besides the program — reached from "→ Edit {name}" and retitled "Activities" (criterion 41). **Superseded by Q17 (M30):** no link anywhere until ACT-1.      | decided                           |
 | Q15  | **New (M5).** A1 before D4: an adult added in the app is shown the household's newest block, the kids' program. Guard or wait?                                            | v3 assumes assignments exist                                        | **Decided (maintainer, 2026-10-22): the kid-only guard.** No live adult profile reads the YDP card today. The maintainer will add their own adult profile to track their own workout: it logs freely until D4c lets it have a program. **R2 (FE-5):** the guard covers the card, the form's prefill and the export's `prescribedFor`. | decided                           |
 | Q16  | **New (R2, PUX-1).** "Day" meant both a weekday and a workout; "+ Add another day" built a rotation when a parent meant Mon/Wed/Fri                                       | v6: "workout" everywhere; labels "Strength A/B", "Workout A/B"      | **Decided (maintainer, 2026-10-22, M24): workouts with labels, not "Day A/B".** The maintainer is _"not hard set on day a / b"_ and expects labelled workouts on chosen recurring weekdays later (Recurrence). Criterion 42.                                                                                                          | decided                           |
 
-| Q17 | **New (M28).** Households add their own activities (ACT-1, unowned 10): which milestone? | v7: Activities page unchanged (choose + order) | **Neither, filed now, next after PROG-1.** It is a schema change to a global reference table (a nullable `household_id`, the TEN-2 pattern) plus an editor, and nothing in either milestone needs it. A 5-minute rice-bucket video is an **activity** with a link, not a movement: movements are things with sets and reps. | — |
-| Q18 | **New (M27, M29).** Store per-athlete targets typed — one per declared quantity — or keep the one verbatim text column? | v7: Box Jump shows height + weight per athlete, Sled Push weight + distance; storage not shown | **Typed, in its own row after PROG-1's editor**: a child table of target quantities keyed by the same slot vocabulary as `entry_set_quantities`, so a target and a logged set say the same thing. One text column cannot hold two quantities, which is the GAP-3 census finding again. The row also decides the held-weight slot (unowned 9). Until then PROG-1 writes the text column, and fixing V1-34 (`unitDefault`) comes first. | — |
+| Q17 | **New (M28).** Households add their own activities (ACT-1, unowned 10): which milestone? | v8: no Activities link anywhere; saved activities still log on the day page | **Decided (maintainer, 2026-10-23, M30): hide the editor until ACT-1**, since it only fits one household. Saved routines keep working; new households already see Strength only. ACT-1 is in neither milestone, and its **first step is a written edge-case brainstorm** (unowned 10) before any plan or panel. | decided |
+| Q18 | **New (M27, M29).** Store per-athlete targets typed — one per declared quantity — or keep the one verbatim text column? | v8: Box Jump shows box height, held weight and vest per athlete; Sled Push weight and distance | **Decided (maintainer, 2026-10-23, M31): typed, including a held weight and a vest of a specific weight.** Planned as PROG-1 chunk **D8 (TGT-1, proposed)**, criterion 51. V1-34 (`unitDefault`) is fixed first. | decided |
 
 ## Out of scope
 
@@ -1061,3 +1096,10 @@ all held. Prototype v6 carries the accepted UI fixes; engineering-only items wen
 | M27 | _"How does something like box jumps note height etc?"_                                                                                                              | **answered; label in scope, storage is Q18**     | Unowned 9: logging a height works today, prescribing one is free text. v7 labels the per-athlete field "box height (in)" (criterion 50); Q18 recommends typed storage in its own row                                                                                                                                          |
 | M28 | Activities: what is Strength, can a family add one (rice bucket), describe, edit, remove; choose-and-order only _"wont work universally"_                           | **agreed; filed as ACT-1, in neither milestone** | Unowned 10, Q17. Strength is the routine slot for program workouts and strength logging, not a program. A rice-bucket video is an activity with a link, not a movement                                                                                                                                                        |
 | M29 | _"Height, distance, those are sometimes things we measure like sled push for distance and sets, reps + weight. Box jump height and weight, reps, sets"_             | **accepted**                                     | A movement shows one target field per quantity it declares (criterion 50, rewritten). ADR 0004 already models it; the one gap is a held weight on a box jump (unowned 9, Q18)                                                                                                                                                 |
+
+### The maintainer, round 6 (2026-10-23) — Q17 and Q18
+
+| #   | Raised                                                                                                                                                                                                                                               | Verdict     | Resolution                                                                                                                                                                                               |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M30 | Q17: _"hide activities then from the app until Q17, we do not need something that not everyone can use. We may want to do further brainstorming as a first part of Q17 to think of various edge cases."_ Asked how far; answered **hide the editor** | **decided** | Criterion 41 rewritten: no link to the routine editor anywhere until ACT-1; saved routines keep logging; the route stays unlinked. Unowned 10 starts the brainstorm list; disagreement 13 (V1-20, CAT-1) |
+| M31 | Q18: _"we do want to accomodate proper weights if the user is holding dumbells, or wearing a weighted vest that is a specific weight, please take note of that and plan for it."_                                                                    | **decided** | PROG-1 chunk D8 (TGT-1, proposed); criterion 51; the `held` slot is one seeded row (unowned 9)                                                                                                           |
