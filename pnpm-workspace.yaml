@@ -36,3 +36,20 @@ overrides:
   # Still needed after the SDK reached 1.32.1: express-rate-limit@8.7.0 still declares `^10.2.0`,
   # and shadcn > socks@2.8.10 declares `^10.1.1`. Drop it once neither range admits <10.7.1.
   ip-address: '>=10.7.1'
+  # GHSA-mrhx-c7xc-m3w5 / CVE-2023-54404 (HIGH, CVSS 8.2) — memory-exhaustion DoS: `$ZodArray`
+  # accumulates an issue object per failing element with no cap, so an oversized untrusted array
+  # against an unbounded array schema can OOM the process. Patched in 4.6.6.
+  #
+  # ⚠️ SCOPED, not a bare `zod:` entry, and that matters: a blanket override would drag the shadcn
+  # CLI's chain (@modelcontextprotocol/sdk, zod-to-json-schema, both built against zod 3) across a
+  # MAJOR version. Only the Vercel path is vulnerable.
+  #
+  # Reached the production tree through @vercel/functions > @vercel/oidc > @vercel/cli-config, which
+  # pins `zod: 4.1.11` EXACTLY — so bumping @vercel/functions does not help: 3.10.3 (latest) still
+  # resolves cli-config 0.3.3, which still pins 4.1.11. An override is the only lever.
+  #
+  # Our OWN zod is already 4.6.7, so every Server Action and shared schema was always patched; the
+  # vulnerable copy only serves cli-config's local-config reading, which parses no untrusted arrays.
+  # The gate is deliberately blunt about the --prod tree, and that is right: "low exposure" is an
+  # argument for calm, not for an exception. Drop this once cli-config's pin clears 4.6.6.
+  '@vercel/cli-config>zod': '>=4.6.6'
