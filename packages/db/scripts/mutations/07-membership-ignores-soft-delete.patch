@@ -1,0 +1,18 @@
+diff --git a/packages/db/src/queries/household-membership.ts b/packages/db/src/queries/household-membership.ts
+index 6f4903e..18fbdea 100644
+--- a/packages/db/src/queries/household-membership.ts
++++ b/packages/db/src/queries/household-membership.ts
+@@ -29,12 +29,7 @@ export async function membershipHousehold(
+   const rows = await exec
+     .select({ householdId: schema.householdMembers.householdId })
+     .from(schema.householdMembers)
+-    .where(
+-      and(
+-        eq(schema.householdMembers.clerkUserId, clerkUserId),
+-        isNull(schema.householdMembers.deletedAt),
+-      ),
+-    )
++    .where(eq(schema.householdMembers.clerkUserId, clerkUserId))
+     .limit(1);
+ 
+   return rows[0]?.householdId ?? null;

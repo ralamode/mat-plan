@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index ae6422f..f38eecc 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -216,7 +216,7 @@ export async function insertHouseholdMember(
+   scope: HouseholdScope,
+   row: { publicId: string; clerkUserId: string; role: HouseholdRole },
+ ): Promise<void> {
+-  await exec.insert(schema.householdMembers).values({ ...row, householdId: scope.householdId });
++  await exec.insert(schema.householdMembers).values({ ...row, householdId: 1 });
+ }
+ 
+ export async function insertMovementOwnedBy(

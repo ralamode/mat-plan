@@ -6491,16 +6491,26 @@ console.log(
   );
 
   // (2) The happy path, through the scope capability rather than a raw household id.
+  //
+  // ⚠️ Claimed against household **B**, deliberately. The first version of this proof used A — whose
+  // id is 1 — so a writer that ignored its scope and hardcoded `householdId: 1` passed, and
+  // `db:mutations` caught it STAYING GREEN. Household B is the only id that distinguishes "used the
+  // capability" from "guessed the only household there is".
   const PUBLIC_A = newId();
-  await insertHouseholdMember(asPg, A_SCOPE, {
+  await insertHouseholdMember(asPg, B_SCOPE, {
     publicId: PUBLIC_A,
     clerkUserId: CLERK_A,
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
     await membershipHousehold(asPg, CLERK_A),
+    verifyHh.id,
+    'AUTH-1 1b: membershipHousehold resolves the CLAIMED household, not merely the first one',
+  );
+  assert.notEqual(
+    verifyHh.id,
     households[0].id,
-    'AUTH-1 1b: membershipHousehold resolves the claimed household',
+    'AUTH-1 1b: the proof above is only meaningful while B is not A (guards the guard)',
   );
   assert.equal(
     await membershipHousehold(asPg, 'user_nobody'),
@@ -6510,14 +6520,14 @@ console.log(
 
   // (3) The four rejections. Each names the constraint 1c will depend on.
   await expectRejectedBy('household_members_role_check', async () =>
-    insertHouseholdMember(asPg, A_SCOPE, {
+    insertHouseholdMember(asPg, B_SCOPE, {
       publicId: newId(),
       clerkUserId: 'user_bad_role',
       role: 'coach' as never, // COACH-1 is a cross-household grant, not a role string
     }),
   );
   await expectRejectedBy('uq_household_members_clerk_user', async () =>
-    insertHouseholdMember(asPg, A_SCOPE, {
+    insertHouseholdMember(asPg, B_SCOPE, {
       publicId: newId(),
       clerkUserId: CLERK_A, // state D: one live household per Clerk account
       role: HOUSEHOLD_ROLE.owner,
@@ -6526,7 +6536,7 @@ console.log(
   await expectRejectedBy('household_members_public_id_unique', async () =>
     db.insert(schema.householdMembers).values({
       publicId: PUBLIC_A, // already taken by the row above
-      householdId: households[0].id,
+      householdId: verifyHh.id,
       clerkUserId: 'user_dup_public',
       role: HOUSEHOLD_ROLE.owner,
     }),
@@ -6551,14 +6561,14 @@ console.log(
     null,
     'AUTH-1 1b: a soft-deleted membership resolves to null — 1c must land such a user in state C',
   );
-  await insertHouseholdMember(asPg, A_SCOPE, {
+  await insertHouseholdMember(asPg, B_SCOPE, {
     publicId: newId(),
     clerkUserId: CLERK_A,
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
     await membershipHousehold(asPg, CLERK_A),
-    households[0].id,
+    verifyHh.id,
     'AUTH-1 1b: the freed slot can be re-claimed',
   );
 
