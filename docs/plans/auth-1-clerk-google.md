@@ -1694,6 +1694,36 @@ findings the reassigned work must carry, are in
 
 ### 1c — the boundary moves · `feat/auth-1c-session-is-the-boundary`
 
+📌 **1c also ships SIGN-OUT, and a UX panel has already done its homework** _(2026-10-23, from the
+parked [#303](https://github.com/ralamode/mat-plan/pull/303))._ A log-out control was requested for the
+footer of `/p` while the gate was still the boundary. It was built, panelled and then **parked by the
+maintainer** on the correct ground: it cleared `mp_gate`, and `lib/access-gate.ts` says that module is
+deleted at **1d** — so it would have shipped a stopgap-shaped word for a stopgap-shaped act, twice
+replaced within one milestone. The real sign-out belongs **here**, where `requireSession()` makes it
+nearly free. Four findings, so this chunk does not pay for them again:
+
+1. 🔴 **A Server Action CANNOT live in `components/layout/site-footer.tsx`.** `app/layout.tsx` renders
+   the footer on every route, and `pages-are-gated.test.ts` → _"public pages pull no Server Action into
+   their module graph"_ asserts that no `'use server'` module is reachable from `/`, `/privacy`,
+   `/sign-in` or `/gate`. A footer import puts it in all four — _"invokable by an unauthenticated POST
+   to it with only its own gate check in the way."_ The sign-out action goes under a **gated** route.
+2. ✅ **Placement is already decided** — `docs/design.md`: _"The control lives on the profile picker,
+   and only there … a settings-grade preference set once per device."_ The picker's `mt-auto` block
+   (beside `ThemeToggle`) is the proto-settings area, and grouping both there is what makes a later
+   move to a real settings screen a move of two JSX nodes.
+3. ⚠️ **The word matters, and it is only honest AFTER this chunk.** Pre-1c there is one shared access
+   code and tiles are _"a UX switch, not a security boundary"_, so "log out" would have promised a
+   per-person act the system could not deliver — it locked the **device** for the whole household, and
+   the next kid on the gym floor could not log a set. **1c is what makes "Sign out" true**, because the
+   session finally belongs to a person. Ship the word here, not before.
+4. **The action's own trap:** `redirect()` works by throwing, so a guard clause without an explicit
+   `return` leaves the rest of the function running under a stubbed `redirect` — the boundary test
+   caught an ungated caller clearing the cookie anyway. `return redirect(...)`.
+
+⚠️ The enumeration guard (`pages-are-gated.test.ts`, AUTH-1 1b-bis) goes **red by design** on a new
+`'use server'` module, and a sign-out action **must not** be allowlisted: `app/gate/actions.ts` is
+excused only because it cannot require the thing it is about to grant, and a sign-out can.
+
 **Prerequisites: `0015` applied in production (confirmed by the three checks in the new runbook
 section, not by a green `migrate.yml`) AND the claim correction run with `--apply` AND `1b-bis` and
 `1c-pre` merged.** **Gate enforced by the proxy; session re-checked everywhere.** This is the chunk the
