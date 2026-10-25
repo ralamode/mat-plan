@@ -134,6 +134,13 @@
       "when": 1791832170835,
       "tag": "0018_ten2d_validate_global_row_has_pattern",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792788990923,
+      "tag": "0019_auth1b_household_members",
+      "breakpoints": true
     }
   ]
 }

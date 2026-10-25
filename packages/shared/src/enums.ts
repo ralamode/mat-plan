@@ -24,6 +24,28 @@ export type ProfileKind = (typeof PROFILE_KINDS)[number];
 export const profileKindSchema = z.enum(PROFILE_KINDS);
 export const PROFILE_KIND = keyBySelf(PROFILE_KINDS);
 
+/**
+ * Household role — who a Clerk account is to a household (AUTH-1 1b).
+ *
+ * **Two values, not four.** Beta 1's `COACH-1` is a *cross-household grant*, which is a different
+ * shape from a role string on a membership row — reserving `'coach'` here in advance would be a
+ * literal nothing can produce and nothing can consume.
+ *
+ * ⚠️ **`householdRoleSchema` has no input to validate in Beta 0** and that is deliberate, not an
+ * oversight: nothing accepts a user-supplied role — the only writer is a maintainer-run correction
+ * that passes `HOUSEHOLD_ROLE.owner`. It exists so the zod/TS/DB triple stays whole, and gets its
+ * first caller at `COACH-1`. Said here so a reviewer does not hunt for the call site.
+ *
+ * The DB mirrors this list as `household_members_role_check`, whose literals are **inlined** (a CHECK
+ * cannot import a const) and bound back to this array by `assertCheckCoversConst` in `db:verify` —
+ * the `sessions_day_role_check` pattern, not `profiles_kind_check`, which is the one enum CHECK in
+ * the file with no such assertion.
+ */
+export const HOUSEHOLD_ROLES = ['owner', 'member'] as const;
+export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
+export const householdRoleSchema = z.enum(HOUSEHOLD_ROLES);
+export const HOUSEHOLD_ROLE = keyBySelf(HOUSEHOLD_ROLES);
+
 /** v0 entry discriminator — the thin-slice stand-in for the activity_type catalog (V1-1). */
 export const ENTRY_KINDS = ['bodyweight', 'strength'] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];

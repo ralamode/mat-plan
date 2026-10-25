@@ -144,6 +144,61 @@ export const households = pgTable('households', {
   ...timestamps,
 });
 
+/**
+ * AUTH-1 1b — which Clerk account belongs to which household. **Ships DARK: nothing reads it.**
+ * 1c's `getHouseholdScope()` is the first reader; the only writer is a maintainer-run correction.
+ *
+ * **No email column, deliberately.** The person's email and Google identifier live in Clerk — that is
+ * the point of using Clerk — so storing the opaque account id and nothing else is the
+ * data-minimisation answer (`docs/privacy/data-inventory.md` § 7).
+ *
+ * ⚠️ **`clerk_user_id` is a NEW identifier class for this database**: a stable third-party account id
+ * for a named adult. And because § 5 of that document records that a soft-deleted row "stays in the
+ * database indefinitely … Nothing purges them", **a soft-deleted membership retains that identifier
+ * indefinitely** — the household deletion is its only purge. § 8 carries the retention row.
+ *
+ * 🔴 **This is the 19th per-household table, and the deletion runbook's order is hand-maintained.**
+ * The FK is `ON DELETE NO ACTION` (drizzle's default), which is the runbook's stated safety property —
+ * "a table this procedure missed would have aborted the transaction rather than silently orphaning
+ * rows". So with a live membership, `DELETE FROM households` **aborts the whole transaction** until
+ * step 4c names this table. `db:verify` proves the order commits and leaves zero rows.
+ *
+ * **No `client_id`**: the config-table idiom this file already states — a membership is never written
+ * by an offline client.
+ */
+export const householdMembers = pgTable(
+  'household_members',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    householdId: bigint('household_id', { mode: 'number' })
+      .notNull()
+      .references(() => households.id),
+    // Clerk's own user id (`user_…`). TEXT and no FK: there is no users table and will not be one in
+    // Beta 0. ⚠️ Clerk instances are SEPARATE user pools — a development id is not the production id
+    // for the same Google account, so the claim correction must be run with the id from the instance
+    // that will be live when the resolver reads it.
+    clerkUserId: text('clerk_user_id').notNull(),
+    role: text('role').notNull(), // mirrors HOUSEHOLD_ROLES in @mat-plan/shared
+    ...timestamps,
+  },
+  (t) => [
+    index('idx_household_members_household').on(t.householdId), // covers the FK
+    // BOTH the state-D constraint (one live household per Clerk account) AND the resolver's access
+    // path — a partial unique index is a btree index, so a companion `idx_` on the same column with
+    // the same predicate would buy nothing and cost a write on every insert and soft delete. The
+    // `uq_entries_client_id` precedent is the same shape.
+    // ⚠️ Postgres has no partial UNIQUE *constraint*; this can only be an index.
+    uniqueIndex('uq_household_members_clerk_user')
+      .on(t.clerkUserId)
+      .where(sql`${t.deletedAt} is null`),
+    // Inlines the shared HOUSEHOLD_ROLES literals (a CHECK can't import a const); db:verify pins the
+    // accepted set to HOUSEHOLD_ROLES via assertCheckCoversConst — the sessions_day_role_check
+    // pattern, NOT profiles_kind_check, which is the one enum CHECK here with no such assertion.
+    check('household_members_role_check', sql`${t.role} in ('owner','member')`),
+  ],
+);
+
 export const profiles = pgTable(
   'profiles',
   {

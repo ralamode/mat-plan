@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 
 import { schema } from '../client';
+import type { HouseholdRole } from '@mat-plan/shared';
 import type { HouseholdScope } from '../scope';
 import type { Executor } from './executor';
 
@@ -191,6 +192,33 @@ export function movementInHousehold(scope: HouseholdScope) {
  * ([lessons.md](../../../../docs/lessons.md)). ⚠️ It goes in **`where:`**, never `targetWhere:`:
  * `onConflictDoNothing` reads `config.where` and **silently drops** `targetWhere`.
  */
+/**
+ * AUTH-1 1b — bind a Clerk account to a household. **Ships dark: nothing reads the row until 1c.**
+ *
+ * 🔴 **This lives HERE, not in the `writers/household-members.ts` the plan proposed.** A scoped
+ * insert must unwrap `scope.householdId`, and `scope.test.ts:56` pins `UNWRAPS_SCOPE` to **this one
+ * module** — a new writer module would have forced that allowlist to grow, widening the exception the
+ * guard exists to police. `insertMovementOwnedBy` directly below is the same shape for the same
+ * reason, and this module already states it: *"Keeping the number inside this module means the
+ * capability rule still has a gate behind it."*
+ *
+ * The caller passes a `HouseholdScope`, so the correction never holds a raw `household_id` — which is
+ * ADR 0006's capability rule holding in the scripts too.
+ *
+ * ⚠️ **No `onConflictDoNothing`.** `uq_household_members_clerk_user` is a real constraint and a
+ * collision here is an OPERATOR ERROR, not a replay: the same Clerk id already belongs to a
+ * household. The correction reads first and refuses with a message naming the runbook; swallowing the
+ * conflict would turn "already claimed by someone else" into a silent no-op, which is the exact
+ * failure the read-then-branch guard was designed to prevent.
+ */
+export async function insertHouseholdMember(
+  exec: Executor,
+  scope: HouseholdScope,
+  row: { publicId: string; clerkUserId: string; role: HouseholdRole },
+): Promise<void> {
+  await exec.insert(schema.householdMembers).values({ ...row, householdId: scope.householdId });
+}
+
 export async function insertMovementOwnedBy(
   exec: Executor,
   scope: HouseholdScope,

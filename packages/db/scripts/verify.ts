@@ -52,6 +52,8 @@ import {
   UNITS,
   UNIT_DIMENSIONS,
   WEEK_LENGTH_DAYS,
+  HOUSEHOLD_ROLE,
+  HOUSEHOLD_ROLES,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -82,7 +84,8 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
-import { movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import { insertHouseholdMember, movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
 // the correction's own dry run rather than a lookalike of its SQL.
@@ -6462,6 +6465,153 @@ console.log(
       'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
       'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
       'idempotent. No DDL left in this block',
+  );
+}
+
+// ───────────────────────────── AUTH-1 1b — `household_members`, all dark ─────────────────────────
+//
+// Nothing in the app reads this table yet, which is exactly why it needs proofs now: 1c's resolver is
+// a ONE-WAY DOOR, and the constraints it will lean on have to be real before it leans on them.
+{
+  const CLERK_A = 'user_verify_a';
+  const CLERK_B = 'user_verify_b';
+
+  // The CHECK's literals are inlined in the DDL (a CHECK cannot import a const), so this is what
+  // binds them back to @mat-plan/shared in BOTH directions. The sessions_day_role_check pattern.
+  await assertCheckCoversConst('household_members_role_check', HOUSEHOLD_ROLES);
+
+  // (1) The seed writes NO membership — behavioural, not a reading of seed.ts. `migrate.yml` runs
+  // db:seed against prod on every push, so a seeded membership would bind a real family's household
+  // to whatever id the seed names. The claim correction is the only writer.
+  const seededMembers = await db.select().from(schema.householdMembers);
+  assert.equal(
+    seededMembers.length,
+    0,
+    'AUTH-1 1b: the seed writes NO household_members row — the claim correction is the only writer',
+  );
+
+  // (2) The happy path, through the scope capability rather than a raw household id.
+  const PUBLIC_A = newId();
+  await insertHouseholdMember(asPg, A_SCOPE, {
+    publicId: PUBLIC_A,
+    clerkUserId: CLERK_A,
+    role: HOUSEHOLD_ROLE.owner,
+  });
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    households[0].id,
+    'AUTH-1 1b: membershipHousehold resolves the claimed household',
+  );
+  assert.equal(
+    await membershipHousehold(asPg, 'user_nobody'),
+    null,
+    'AUTH-1 1b: an unknown Clerk id resolves to null, never to "the only household"',
+  );
+
+  // (3) The four rejections. Each names the constraint 1c will depend on.
+  await expectRejectedBy('household_members_role_check', async () =>
+    insertHouseholdMember(asPg, A_SCOPE, {
+      publicId: newId(),
+      clerkUserId: 'user_bad_role',
+      role: 'coach' as never, // COACH-1 is a cross-household grant, not a role string
+    }),
+  );
+  await expectRejectedBy('uq_household_members_clerk_user', async () =>
+    insertHouseholdMember(asPg, A_SCOPE, {
+      publicId: newId(),
+      clerkUserId: CLERK_A, // state D: one live household per Clerk account
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+  await expectRejectedBy('household_members_public_id_unique', async () =>
+    db.insert(schema.householdMembers).values({
+      publicId: PUBLIC_A, // already taken by the row above
+      householdId: households[0].id,
+      clerkUserId: 'user_dup_public',
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
+    db.insert(schema.householdMembers).values({
+      publicId: newId(),
+      householdId: 10_000_000, // no such household
+      clerkUserId: 'user_bad_household',
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+
+  // (4) A soft-deleted membership FREES the Clerk id — the partial predicate, proved rather than
+  // assumed. This is what lets a household be re-claimed after a mistake without a hard delete.
+  await db
+    .update(schema.householdMembers)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.householdMembers.clerkUserId, CLERK_A));
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    null,
+    'AUTH-1 1b: a soft-deleted membership resolves to null — 1c must land such a user in state C',
+  );
+  await insertHouseholdMember(asPg, A_SCOPE, {
+    publicId: newId(),
+    clerkUserId: CLERK_A,
+    role: HOUSEHOLD_ROLE.owner,
+  });
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    households[0].id,
+    'AUTH-1 1b: the freed slot can be re-claimed',
+  );
+
+  // (5) 🔴 THE DELETION-ORDER PROOF — the one PRIV-3 predicted in writing.
+  //
+  // Isolated on its OWN household, deliberately: deleting the seeded household aborts on
+  // `profiles_household_id_households_id_fk` FIRST, so it proves the runbook aborts somewhere and
+  // says nothing about THIS table. A household whose only child is a membership names the FK that
+  // runbooks.md step 13 exists for, and nothing else.
+  const [lone] = await asPg
+    .insert(schema.households)
+    .values({ publicId: newId(), name: 'verify 1b deletion-order' })
+    .returning({ id: schema.households.id });
+  // Inserted DIRECTLY, not through `insertHouseholdMember`: the writer takes a `HouseholdScope`, and
+  // minting a third one here is precisely what `scope.test.ts`'s "exactly two named scopes" guard
+  // forbids — it caught this on the first run. The capability path is already proved at (2); what
+  // this proof needs is a row, and the FK does not care how it arrived.
+  await asPg.insert(schema.householdMembers).values({
+    publicId: newId(),
+    householdId: lone!.id,
+    clerkUserId: CLERK_B,
+    role: HOUSEHOLD_ROLE.member,
+  });
+
+  // Out of order: `households` before `household_members` → the NO ACTION FK aborts the transaction.
+  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
+    asPg.delete(schema.households).where(eq(schema.households.id, lone!.id)),
+  );
+  assert.equal(
+    (
+      await asPg
+        .select()
+        .from(schema.householdMembers)
+        .where(eq(schema.householdMembers.householdId, lone!.id))
+    ).length,
+    1,
+    'AUTH-1 1b: the aborted delete rolled back — the membership is still there',
+  );
+
+  // In the runbook's order (step 13 then 14): it commits, and leaves zero rows.
+  await asPg
+    .delete(schema.householdMembers)
+    .where(eq(schema.householdMembers.householdId, lone!.id));
+  await asPg.delete(schema.households).where(eq(schema.households.id, lone!.id));
+  assert.equal(
+    (await asPg.select().from(schema.households).where(eq(schema.households.id, lone!.id))).length,
+    0,
+    'AUTH-1 1b: in runbooks.md order the household deletion COMMITS and leaves nothing',
+  );
+
+  console.log(
+    '✓ AUTH-1 1b: household_members — CHECK bound to HOUSEHOLD_ROLES, four rejections, the freed ' +
+      'slot, the seed writes none, and the runbook order is proved both ways (step 13 before 14)',
   );
 }
 
