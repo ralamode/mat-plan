@@ -69,6 +69,18 @@ before it is run, so a row lands here as `pending` and is dated in a follow-up c
 | `kb-swings-2026-09-28`             | 5 KB-swing sets logged `20 × BW`; they were `10 reps × 20 lb`                          | V1-24          | **2026-09-30** |
 | `bodyweight-duplicates-2026-09-30` | 3 weigh-ins on one day; the 12:17 morning row is the keeper                            | V1-24          | **2026-10-01** |
 | `null-routine-to-full-2026-10-07`  | Live profiles on `routine_config = NULL` rode the whole-catalog default ONB-0 narrowed | ONB-0          | `pending`      |
+| `movements-ownership-2026-10-11`   | Census of the `movements` rows `TEN-2c` does not fix — aggregate counts only           | TEN-2c-1       | `pending`      |
+| `household-claim-2026-10-25`       | No Clerk account was bound to the household, so 1c's resolver had nothing to resolve   | AUTH-1 1b      | `pending`      |
+
+⚠️ **`household-claim-2026-10-25` carries NEITHER target in this table, deliberately.** It takes a
+household `public_id` and a Clerk user id from the **environment**, and both are personal data in a
+public repo — the household id is an anti-IDOR handle, and the Clerk id is a stable third-party
+account id for a named adult (`data-inventory.md` §1a). Rule 6 says what a row records; this is the
+same reasoning rule 8 already applies to the deletion correction, one row earlier than `PRIV-3`.
+🔴 **`PRIV-3` converts this entry to `--household` / `--user` flags** when it lands that runner change
+(rule 8), so the repo does not keep two operator-input channels. Env was chosen here because this
+shipped inside a MIGRATION PR, and because a command line is broadly visible via `ps` while a
+process's environment is readable only by its owner.
 
 <sub>⚠️ **The first two `Name`s changed under `OSS-1` (2026-10-08)** — they used to start with a child's
 first name, which this public repo should not carry (AGENTS.md → "No personal names"). Safe to rename:

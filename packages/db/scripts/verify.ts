@@ -6619,9 +6619,82 @@ console.log(
     'AUTH-1 1b: in runbooks.md order the household deletion COMMITS and leaves nothing',
   );
 
+  // (6) THE CLAIM CORRECTION, exercised rather than read. A correction nobody has run is a
+  // correction nobody has tested, and this one performs the single write that 1c's whole resolver
+  // depends on. Its `run` is called directly — the `nullRoutineToFull` precedent above — because the
+  // runner needs a DATABASE_URL and PGlite has none.
+  const claim = CORRECTIONS.find((c) => c.name === 'household-claim-2026-10-25');
+  assert.ok(claim, 'AUTH-1 1b: the claim correction is in the registry');
+
+  const CLERK_C = 'user_verify_claim';
+  const envBefore = { h: process.env.HOUSEHOLD_PUBLIC_ID, u: process.env.CLERK_USER_ID };
+  try {
+    // (6a) Both targets are required, and neither may be a committed constant.
+    delete process.env.HOUSEHOLD_PUBLIC_ID;
+    delete process.env.CLERK_USER_ID;
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, false),
+      /HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID/,
+      'AUTH-1 1b: the claim correction refuses with no targets',
+    );
+
+    // (6b) A dev-shaped id that is not a Clerk id at all is refused BEFORE any write — the guard
+    // against claiming production with something read off the wrong screen.
+    process.env.HOUSEHOLD_PUBLIC_ID = VERIFY_HH_PUBLIC_ID;
+    process.env.CLERK_USER_ID = 'not-a-clerk-id';
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, false),
+      /should look like/,
+      'AUTH-1 1b: the claim correction refuses an id that is not Clerk-shaped',
+    );
+
+    // (6c) The dry run writes NOTHING (rule 1) and names the full id, so a human can check it against
+    // the dashboard before the irreversible write.
+    process.env.CLERK_USER_ID = CLERK_C;
+    const before = (await asPg.select().from(schema.householdMembers)).length;
+    const dry = await claim.run(asCorrectionDb, false);
+    assert.equal(
+      (await asPg.select().from(schema.householdMembers)).length,
+      before,
+      'AUTH-1 1b: the claim correction writes nothing without --apply',
+    );
+    assert.ok(
+      dry.some((l) => l.includes(CLERK_C)),
+      'AUTH-1 1b: the dry run names the FULL Clerk id — a truncated one cannot be checked',
+    );
+
+    // (6d) --apply writes once, and a SECOND run is an idempotent no-op rather than a 23505.
+    await claim.run(asCorrectionDb, true);
+    assert.equal(
+      await membershipHousehold(asPg, CLERK_C),
+      verifyHh.id,
+      'AUTH-1 1b: --apply binds the account to the NAMED household',
+    );
+    const again = await claim.run(asCorrectionDb, true);
+    assert.ok(
+      again.some((l) => l.includes('already claimed')),
+      'AUTH-1 1b: a re-run is an idempotent no-op, not a duplicate-key crash (rule 2)',
+    );
+
+    // (6e) 🔴 The case `INSERT … WHERE NOT EXISTS` could not have told apart: the SAME Clerk id
+    // pointed at a DIFFERENT household must REFUSE, not silently no-op.
+    process.env.HOUSEHOLD_PUBLIC_ID = households[0]!.publicId;
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, true),
+      /already bound to a DIFFERENT household/,
+      'AUTH-1 1b: claiming a second household with one Clerk id refuses — the operator-error case',
+    );
+  } finally {
+    if (envBefore.h === undefined) delete process.env.HOUSEHOLD_PUBLIC_ID;
+    else process.env.HOUSEHOLD_PUBLIC_ID = envBefore.h;
+    if (envBefore.u === undefined) delete process.env.CLERK_USER_ID;
+    else process.env.CLERK_USER_ID = envBefore.u;
+  }
+
   console.log(
     '✓ AUTH-1 1b: household_members — CHECK bound to HOUSEHOLD_ROLES, four rejections, the freed ' +
-      'slot, the seed writes none, and the runbook order is proved both ways (step 13 before 14)',
+      'slot, the seed writes none, the runbook order both ways (step 13 before 14), and the five ' +
+      'branches of the claim correction',
   );
 }
 

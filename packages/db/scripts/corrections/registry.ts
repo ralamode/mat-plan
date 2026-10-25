@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 
 import {
   ENTRY_STATUS,
+  HOUSEHOLD_ROLE,
   MOVEMENT_SEED_PUBLIC_IDS,
+  newId,
   SEED_METRIC_KEYS,
   type Unit,
 } from '@mat-plan/shared';
@@ -20,7 +22,7 @@ import {
 import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
-import { inHousehold, isLiveProfile } from '../../src/writers/ownership';
+import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
 
 /**
  * One guarded, idempotent correction to live data.
@@ -673,9 +675,120 @@ const movementsOwnershipReport: Correction = {
   },
 };
 
+/**
+ * AUTH-1 1b — bind the maintainer's Clerk account to their household, so 1c's resolver has something
+ * to resolve. **This is the only writer of `household_members`.**
+ *
+ * ```
+ * HOUSEHOLD_PUBLIC_ID=<uuid> CLERK_USER_ID=user_… \
+ *   pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25          # dry run
+ * … --apply
+ * ```
+ *
+ * **Both targets come from the ENVIRONMENT, not from a committed constant** (rule 3 forbids an
+ * internal id; a committed Clerk id would also publish a named adult's account id in a public repo).
+ *
+ * ⚠️ **Why env and not `--household` / `--user` flags** _(maintainer, 2026-10-25)_. README **rule 8**
+ * already assigns the flag to `PRIV-3` — _"a runner change, with its own plan"_ — and this is a
+ * MIGRATION PR: a reviewer checking `0019`'s DDL should not also be reviewing argv parsing. There is
+ * a second reason that runs the other way from the obvious one: a process's **command line is broadly
+ * visible via `ps`, while its environment is readable only by its owner**, and the value here is a
+ * stable third-party account id for a named adult (`data-inventory.md` §1a). So env is the quieter
+ * channel, not merely the cheaper one.
+ * 🔴 **`PRIV-3` converts this entry when it lands the flag**, so the repo does not keep two input
+ * channels. Named here because that obligation is invisible from `PRIV-3`'s own row.
+ *
+ * **The guard is a READ-THEN-BRANCH, not `INSERT … WHERE NOT EXISTS`.** The single statement cannot
+ * tell the two cases apart: "already claimed by me" (the idempotent re-run rule 2 wants) and "already
+ * claimed by SOMEONE ELSE" (an operator error) would both be a silent 0-row no-op. And the uniqueness
+ * is on `clerk_user_id`, not `household_id`, so the realistic second-run typo — same Clerk id, a
+ * different household `public_id` — would sail past a `household_id` guard and die on a bare `23505`
+ * mid-transaction instead of refusing cleanly.
+ */
+const householdClaim: Correction = {
+  name: 'household-claim-2026-10-25',
+  what: "no Clerk account was bound to the household, so 1c's resolver had nothing to resolve",
+  issue: 'AUTH-1 1b',
+  async run(db, apply) {
+    const householdPublicId = process.env.HOUSEHOLD_PUBLIC_ID;
+    const clerkUserId = process.env.CLERK_USER_ID;
+
+    if (!householdPublicId || !clerkUserId) {
+      throw new Error(
+        'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and ' +
+          'neither may be a committed constant (README rule 3; a Clerk id is personal data and this ' +
+          'repo is public).',
+      );
+    }
+    // ⚠️ Clerk instances are SEPARATE user pools: a development `user_…` is NOT the production id for
+    // the same Google account. Claiming production with a dev id lands the maintainer in state C at
+    // 1c — locked out of their own household by the chunk meant to bind them to it.
+    assert.ok(
+      clerkUserId.startsWith('user_'),
+      `CLERK_USER_ID should look like 'user_…'; got '${clerkUserId}'. Read it from the dashboard of ` +
+        'the instance that will be LIVE when the resolver reads it.',
+    );
+
+    const scope = await requireLiveHouseholdScope(db, householdPublicId);
+
+    // ── the read, before any branch ──────────────────────────────────────────────────────────────
+    const [existing] = await db
+      .select({
+        householdId: schema.householdMembers.householdId,
+        publicId: schema.householdMembers.publicId,
+      })
+      .from(schema.householdMembers)
+      .where(
+        and(
+          eq(schema.householdMembers.clerkUserId, clerkUserId),
+          isNull(schema.householdMembers.deletedAt),
+        ),
+      );
+
+    if (existing) {
+      // Already bound HERE → idempotent no-op (rule 2). Already bound ELSEWHERE → refuse; this is an
+      // operator error and the two must not read alike.
+      const sameHousehold = await db
+        .select({ id: schema.households.id })
+        .from(schema.households)
+        .where(
+          and(
+            eq(schema.households.publicId, householdPublicId),
+            eq(schema.households.id, existing.householdId),
+          ),
+        );
+
+      if (sameHousehold.length > 0) {
+        return [
+          `already claimed by this Clerk account (membership ${existing.publicId}) — no change`,
+        ];
+      }
+      throw new Error(
+        `that Clerk account is already bound to a DIFFERENT household (membership ` +
+          `${existing.publicId}). Refusing rather than moving it: see docs/runbooks.md → the AUTH-1 ` +
+          'checklist. Soft-delete the existing membership first if the move is intended.',
+      );
+    }
+
+    // The FULL id is printed, and only locally: the dry run is the one gate a human reads before an
+    // irreversible write, and a truncated id cannot be checked against the Clerk dashboard. It must
+    // NOT reach the Applied table (rule 6 / rule 8's reasoning) — that is a public file.
+    const line = `claim household ${householdPublicId} for ${clerkUserId} as ${HOUSEHOLD_ROLE.owner}`;
+    if (!apply) return [line];
+
+    await insertHouseholdMember(db, scope, {
+      publicId: newId(),
+      clerkUserId,
+      role: HOUSEHOLD_ROLE.owner,
+    });
+    return [line];
+  },
+};
+
 export const CORRECTIONS: readonly Correction[] = [
   kbSwingsLoadRepsSwap,
   bodyweightDuplicates,
   nullRoutineToFull,
   movementsOwnershipReport,
+  householdClaim,
 ];
