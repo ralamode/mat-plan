@@ -849,7 +849,12 @@ UNION ALL SELECT 'prescription_targets', count(*) FROM prescription_targets
 -- household typed; a row with `household_id IS NULL` is seeded reference data owned by nobody and
 -- must SURVIVE. Counted here because the counts are the proof, and step 5 has nothing to compare
 -- against without it.
-UNION ALL SELECT 'movements', count(*) FROM movements WHERE household_id = (SELECT id FROM h);
+UNION ALL SELECT 'movements', count(*) FROM movements WHERE household_id = (SELECT id FROM h)
+-- AUTH-1 1b: the 19th per-household table. Its FK to `households` is NO ACTION, so a live row here
+-- aborts step 14 and rolls the whole transaction back. Counted for the same reason as `movements` —
+-- the counts are the proof, and 4d has nothing to compare against without it.
+UNION ALL SELECT 'household_members', count(*) FROM household_members
+  WHERE household_id = (SELECT id FROM h);
 ```
 
 **Pre-flight integrity — every one of these must return 0, or STOP.** `entries.session_id`,
@@ -957,7 +962,7 @@ SET LOCAL statement_timeout = '60s';
 --     Any non-zero → ROLLBACK: a cross-household row may have landed since step 3.
 -- 4b. Re-run step 3's COUNT block. Numbers may be HIGHER than step 3 — the household kept
 --     logging, which is expected. Anything that looks wrong → ROLLBACK.
--- 4c. The 13 DELETEs, in the order below, against the same CTE shape.
+-- 4c. The 14 DELETEs, in the order below, against the same CTE shape.
 -- 4d. Re-run the COUNT block once more. Every row must read 0.
 
 COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
@@ -967,25 +972,39 @@ COMMIT;   -- or ROLLBACK, if 4a was non-zero or any number surprised you
 `sessions` and `supersets`, so it must precede both — the non-obvious one, confirmed against
 `packages/db/src/schema.ts` by two independent reviews:
 
-| #   | Table                  | Scoped by                                                      |
-| --- | ---------------------- | -------------------------------------------------------------- |
-| 1   | `entry_set_quantities` | `entry_set_id` ∈ entry_sets of entries of H                    |
-| 2   | `entry_sets`           | `entry_id` ∈ entries of H                                      |
-| 3   | **`entries`**          | `profile_id` ∈ H — **before 4 and 5**                          |
-| 4   | `supersets`            | `session_id` ∈ sessions of H                                   |
-| 5   | `sessions`             | `profile_id` ∈ H                                               |
-| 6   | `day_readiness`        | `profile_id` ∈ H                                               |
-| 7   | `ramp_targets`         | `profile_id` ∈ H                                               |
-| 8   | `prescription_targets` | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
-| 9   | `prescriptions`        | `block_id` ∈ program_blocks of H                               |
-| 10  | `program_blocks`       | `household_id` = H                                             |
-| 11  | **`movements`**        | `household_id` = H — **TEN-2a; see below**                     |
-| 12  | `profiles`             | `household_id` = H                                             |
-| 13  | `households`           | `id` = H                                                       |
+| #   | Table                   | Scoped by                                                      |
+| --- | ----------------------- | -------------------------------------------------------------- |
+| 1   | `entry_set_quantities`  | `entry_set_id` ∈ entry_sets of entries of H                    |
+| 2   | `entry_sets`            | `entry_id` ∈ entries of H                                      |
+| 3   | **`entries`**           | `profile_id` ∈ H — **before 4 and 5**                          |
+| 4   | `supersets`             | `session_id` ∈ sessions of H                                   |
+| 5   | `sessions`              | `profile_id` ∈ H                                               |
+| 6   | `day_readiness`         | `profile_id` ∈ H                                               |
+| 7   | `ramp_targets`          | `profile_id` ∈ H                                               |
+| 8   | `prescription_targets`  | `profile_id` ∈ H **OR** `prescription_id` ∈ prescriptions of H |
+| 9   | `prescriptions`         | `block_id` ∈ program_blocks of H                               |
+| 10  | `program_blocks`        | `household_id` = H                                             |
+| 11  | **`movements`**         | `household_id` = H — **TEN-2a; see below**                     |
+| 12  | `profiles`              | `household_id` = H                                             |
+| 13  | **`household_members`** | `household_id` = H — **AUTH-1 1b; see below**                  |
+| 14  | `households`            | `id` = H                                                       |
 
 Steps 1 and 2 are redundant with the `ON DELETE CASCADE` on `entry_sets.entry_id` and
 `entry_set_quantities.entry_set_id` — written out anyway, because **the counts are the proof** and a
 cascade reports nothing.
+
+🔴 **Step 13 (`household_members`) is new at `AUTH-1 1b`, and without it this whole procedure aborts
+the same way.** The FK `household_members.household_id → households.id` is `ON DELETE NO ACTION`
+(drizzle's default), so a live membership makes step 14's `DELETE FROM households` raise `23503` and
+**the whole transaction rolls back** — the household cannot be deleted at all, against
+[notice.md](./privacy/notice.md)'s promise that the data is permanently removed. `docs/plan.md` →
+`PRIV-3` predicted this class in writing: the `db:verify` proof is _"the only thing that catches a
+**19th per-household table** escaping the runbook's hand-maintained delete order"_ — and
+`household_members` **is** that 19th table.
+
+⚠️ **`NO ACTION` rather than `ON DELETE CASCADE` is deliberate**, for the reason steps 1-2 already
+give: a cascade reports nothing, and **the counts are the proof**. `db:verify` asserts that after this
+order the transaction **commits** and zero rows remain for H.
 
 🔴 **Step 11 (`movements`) is new at `TEN-2a`, and without it this whole procedure aborts.** Migration
 `0015` added `movements.household_id` with `ON DELETE NO ACTION`, so from the first non-NULL value the

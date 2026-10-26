@@ -112,10 +112,17 @@ flowchart LR
      signatures carry no scope — invariant 8 already makes `lib/dal` the one layer allowed ambient
      server state, and a threading mistake one layer up is a leak the compiler cannot see (the
      parameter is present, just wrong).
-   - **`scope.householdId` is read in exactly ONE place** (`writers/ownership.ts` → `inHousehold`).
-     The scope is a **capability**, not a tenant id: a call site that unwraps it to build its own
-     `eq()` has turned it back into a number, and COACH-1's _"not mine, but shared with me"_ would
-     then have to widen every such site instead of one function (ADR 0006, fwd-1).
+   - **`scope.householdId` is read in exactly ONE MODULE** (`writers/ownership.ts`), which
+     `packages/db/src/scope.test.ts` pins by name as `UNWRAPS_SCOPE`. The scope is a **capability**,
+     not a tenant id: a call site that unwraps it to build its own `eq()` has turned it back into a
+     number, and COACH-1's _"not mine, but shared with me"_ would then have to widen every such site
+     instead of one function (ADR 0006, fwd-1).
+     ⚠️ **"One MODULE", never "one function"** — TEN-2b made that distinction matter, and `AUTH-1` 1b
+     tested it again: `insertHouseholdMember` landed **in this module** rather than the separate
+     `writers/household-members.ts` its plan proposed, precisely because a scoped insert must unwrap
+     the scope and a new module would have forced that allowlist to grow. `insertMovementOwnedBy` is
+     the same shape for the same reason. **If you are writing a scoped insert, it belongs here** — and
+     if you think it does not, the guard will tell you before review does.
    - **A wrong-household id is a 404, never a 403**, and never a new error shape: it takes the exact
      path an unknown id already takes (`notFound()` / `NO_PROFILE_LOG`, now in `lib/constants.ts` so
      the byte-identity is structural). The threat is not enumeration but a _leak_ — an id an attacker

@@ -52,6 +52,8 @@ import {
   UNITS,
   UNIT_DIMENSIONS,
   WEEK_LENGTH_DAYS,
+  HOUSEHOLD_ROLE,
+  HOUSEHOLD_ROLES,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -82,7 +84,8 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
-import { movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import { insertHouseholdMember, movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
 // the correction's own dry run rather than a lookalike of its SQL.
@@ -6462,6 +6465,236 @@ console.log(
       'the curated row and WARNS instead of throwing (naming the seed slug, never the household’s free ' +
       'text, because that log is world-readable), and with no shadow it warns about nothing and stays ' +
       'idempotent. No DDL left in this block',
+  );
+}
+
+// ───────────────────────────── AUTH-1 1b — `household_members`, all dark ─────────────────────────
+//
+// Nothing in the app reads this table yet, which is exactly why it needs proofs now: 1c's resolver is
+// a ONE-WAY DOOR, and the constraints it will lean on have to be real before it leans on them.
+{
+  const CLERK_A = 'user_verify_a';
+  const CLERK_B = 'user_verify_b';
+
+  // The CHECK's literals are inlined in the DDL (a CHECK cannot import a const), so this is what
+  // binds them back to @mat-plan/shared in BOTH directions. The sessions_day_role_check pattern.
+  await assertCheckCoversConst('household_members_role_check', HOUSEHOLD_ROLES);
+
+  // (1) The seed writes NO membership — behavioural, not a reading of seed.ts. `migrate.yml` runs
+  // db:seed against prod on every push, so a seeded membership would bind a real family's household
+  // to whatever id the seed names. The claim correction is the only writer.
+  const seededMembers = await db.select().from(schema.householdMembers);
+  assert.equal(
+    seededMembers.length,
+    0,
+    'AUTH-1 1b: the seed writes NO household_members row — the claim correction is the only writer',
+  );
+
+  // (2) The happy path, through the scope capability rather than a raw household id.
+  //
+  // ⚠️ Claimed against household **B**, deliberately. The first version of this proof used A — whose
+  // id is 1 — so a writer that ignored its scope and hardcoded `householdId: 1` passed, and
+  // `db:mutations` caught it STAYING GREEN. Household B is the only id that distinguishes "used the
+  // capability" from "guessed the only household there is".
+  const PUBLIC_A = newId();
+  await insertHouseholdMember(asPg, B_SCOPE, {
+    publicId: PUBLIC_A,
+    clerkUserId: CLERK_A,
+    role: HOUSEHOLD_ROLE.owner,
+  });
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    verifyHh.id,
+    'AUTH-1 1b: membershipHousehold resolves the CLAIMED household, not merely the first one',
+  );
+  assert.notEqual(
+    verifyHh.id,
+    households[0].id,
+    'AUTH-1 1b: the proof above is only meaningful while B is not A (guards the guard)',
+  );
+  assert.equal(
+    await membershipHousehold(asPg, 'user_nobody'),
+    null,
+    'AUTH-1 1b: an unknown Clerk id resolves to null, never to "the only household"',
+  );
+
+  // (3) The four rejections. Each names the constraint 1c will depend on.
+  await expectRejectedBy('household_members_role_check', async () =>
+    insertHouseholdMember(asPg, B_SCOPE, {
+      publicId: newId(),
+      clerkUserId: 'user_bad_role',
+      role: 'coach' as never, // COACH-1 is a cross-household grant, not a role string
+    }),
+  );
+  await expectRejectedBy('uq_household_members_clerk_user', async () =>
+    insertHouseholdMember(asPg, B_SCOPE, {
+      publicId: newId(),
+      clerkUserId: CLERK_A, // state D: one live household per Clerk account
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+  await expectRejectedBy('household_members_public_id_unique', async () =>
+    db.insert(schema.householdMembers).values({
+      publicId: PUBLIC_A, // already taken by the row above
+      householdId: verifyHh.id,
+      clerkUserId: 'user_dup_public',
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
+    db.insert(schema.householdMembers).values({
+      publicId: newId(),
+      householdId: 10_000_000, // no such household
+      clerkUserId: 'user_bad_household',
+      role: HOUSEHOLD_ROLE.owner,
+    }),
+  );
+
+  // (4) A soft-deleted membership FREES the Clerk id — the partial predicate, proved rather than
+  // assumed. This is what lets a household be re-claimed after a mistake without a hard delete.
+  await db
+    .update(schema.householdMembers)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.householdMembers.clerkUserId, CLERK_A));
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    null,
+    'AUTH-1 1b: a soft-deleted membership resolves to null — 1c must land such a user in state C',
+  );
+  await insertHouseholdMember(asPg, B_SCOPE, {
+    publicId: newId(),
+    clerkUserId: CLERK_A,
+    role: HOUSEHOLD_ROLE.owner,
+  });
+  assert.equal(
+    await membershipHousehold(asPg, CLERK_A),
+    verifyHh.id,
+    'AUTH-1 1b: the freed slot can be re-claimed',
+  );
+
+  // (5) 🔴 THE DELETION-ORDER PROOF — the one PRIV-3 predicted in writing.
+  //
+  // Isolated on its OWN household, deliberately: deleting the seeded household aborts on
+  // `profiles_household_id_households_id_fk` FIRST, so it proves the runbook aborts somewhere and
+  // says nothing about THIS table. A household whose only child is a membership names the FK that
+  // runbooks.md step 13 exists for, and nothing else.
+  const [lone] = await asPg
+    .insert(schema.households)
+    .values({ publicId: newId(), name: 'verify 1b deletion-order' })
+    .returning({ id: schema.households.id });
+  // Inserted DIRECTLY, not through `insertHouseholdMember`: the writer takes a `HouseholdScope`, and
+  // minting a third one here is precisely what `scope.test.ts`'s "exactly two named scopes" guard
+  // forbids — it caught this on the first run. The capability path is already proved at (2); what
+  // this proof needs is a row, and the FK does not care how it arrived.
+  await asPg.insert(schema.householdMembers).values({
+    publicId: newId(),
+    householdId: lone!.id,
+    clerkUserId: CLERK_B,
+    role: HOUSEHOLD_ROLE.member,
+  });
+
+  // Out of order: `households` before `household_members` → the NO ACTION FK aborts the transaction.
+  await expectRejectedBy('household_members_household_id_households_id_fk', async () =>
+    asPg.delete(schema.households).where(eq(schema.households.id, lone!.id)),
+  );
+  assert.equal(
+    (
+      await asPg
+        .select()
+        .from(schema.householdMembers)
+        .where(eq(schema.householdMembers.householdId, lone!.id))
+    ).length,
+    1,
+    'AUTH-1 1b: the aborted delete rolled back — the membership is still there',
+  );
+
+  // In the runbook's order (step 13 then 14): it commits, and leaves zero rows.
+  await asPg
+    .delete(schema.householdMembers)
+    .where(eq(schema.householdMembers.householdId, lone!.id));
+  await asPg.delete(schema.households).where(eq(schema.households.id, lone!.id));
+  assert.equal(
+    (await asPg.select().from(schema.households).where(eq(schema.households.id, lone!.id))).length,
+    0,
+    'AUTH-1 1b: in runbooks.md order the household deletion COMMITS and leaves nothing',
+  );
+
+  // (6) THE CLAIM CORRECTION, exercised rather than read. A correction nobody has run is a
+  // correction nobody has tested, and this one performs the single write that 1c's whole resolver
+  // depends on. Its `run` is called directly — the `nullRoutineToFull` precedent above — because the
+  // runner needs a DATABASE_URL and PGlite has none.
+  const claim = CORRECTIONS.find((c) => c.name === 'household-claim-2026-10-25');
+  assert.ok(claim, 'AUTH-1 1b: the claim correction is in the registry');
+
+  const CLERK_C = 'user_verify_claim';
+  const envBefore = { h: process.env.HOUSEHOLD_PUBLIC_ID, u: process.env.CLERK_USER_ID };
+  try {
+    // (6a) Both targets are required, and neither may be a committed constant.
+    delete process.env.HOUSEHOLD_PUBLIC_ID;
+    delete process.env.CLERK_USER_ID;
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, false),
+      /HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID/,
+      'AUTH-1 1b: the claim correction refuses with no targets',
+    );
+
+    // (6b) A dev-shaped id that is not a Clerk id at all is refused BEFORE any write — the guard
+    // against claiming production with something read off the wrong screen.
+    process.env.HOUSEHOLD_PUBLIC_ID = VERIFY_HH_PUBLIC_ID;
+    process.env.CLERK_USER_ID = 'not-a-clerk-id';
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, false),
+      /should look like/,
+      'AUTH-1 1b: the claim correction refuses an id that is not Clerk-shaped',
+    );
+
+    // (6c) The dry run writes NOTHING (rule 1) and names the full id, so a human can check it against
+    // the dashboard before the irreversible write.
+    process.env.CLERK_USER_ID = CLERK_C;
+    const before = (await asPg.select().from(schema.householdMembers)).length;
+    const dry = await claim.run(asCorrectionDb, false);
+    assert.equal(
+      (await asPg.select().from(schema.householdMembers)).length,
+      before,
+      'AUTH-1 1b: the claim correction writes nothing without --apply',
+    );
+    assert.ok(
+      dry.some((l) => l.includes(CLERK_C)),
+      'AUTH-1 1b: the dry run names the FULL Clerk id — a truncated one cannot be checked',
+    );
+
+    // (6d) --apply writes once, and a SECOND run is an idempotent no-op rather than a 23505.
+    await claim.run(asCorrectionDb, true);
+    assert.equal(
+      await membershipHousehold(asPg, CLERK_C),
+      verifyHh.id,
+      'AUTH-1 1b: --apply binds the account to the NAMED household',
+    );
+    const again = await claim.run(asCorrectionDb, true);
+    assert.ok(
+      again.some((l) => l.includes('already claimed')),
+      'AUTH-1 1b: a re-run is an idempotent no-op, not a duplicate-key crash (rule 2)',
+    );
+
+    // (6e) 🔴 The case `INSERT … WHERE NOT EXISTS` could not have told apart: the SAME Clerk id
+    // pointed at a DIFFERENT household must REFUSE, not silently no-op.
+    process.env.HOUSEHOLD_PUBLIC_ID = households[0]!.publicId;
+    await assert.rejects(
+      () => claim.run(asCorrectionDb, true),
+      /already bound to a DIFFERENT household/,
+      'AUTH-1 1b: claiming a second household with one Clerk id refuses — the operator-error case',
+    );
+  } finally {
+    if (envBefore.h === undefined) delete process.env.HOUSEHOLD_PUBLIC_ID;
+    else process.env.HOUSEHOLD_PUBLIC_ID = envBefore.h;
+    if (envBefore.u === undefined) delete process.env.CLERK_USER_ID;
+    else process.env.CLERK_USER_ID = envBefore.u;
+  }
+
+  console.log(
+    '✓ AUTH-1 1b: household_members — CHECK bound to HOUSEHOLD_ROLES, four rejections, the freed ' +
+      'slot, the seed writes none, the runbook order both ways (step 13 before 14), and the five ' +
+      'branches of the claim correction',
   );
 }
 
