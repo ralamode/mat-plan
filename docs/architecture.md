@@ -267,6 +267,15 @@ The concrete tables the v0 thin slice (`units · profiles · entries · entry_se
 keyed by natural keys and seeded from `@mat-plan/shared` in V1-2) classify each `entry`; `sessions`
 group a training day's entries. Full column detail in [spec.md](./spec.md) §4a.
 
+📌 **`household_members` (AUTH-1 1b) is how a person reaches a household at all**, and it ships
+**dark**: nothing reads it until 1c replaces `getHouseholdScope()`'s body with
+session → `household_members` → household. It holds Clerk's own `user_…` and **no email** — the
+address lives in Clerk, which is the point of using Clerk. One partial unique index on
+`clerk_user_id WHERE deleted_at IS NULL` is **both** the one-live-household-per-account rule and the
+resolver's access path. ⚠️ Its FK to `households` is `ON DELETE NO ACTION`, which makes it the **19th**
+table in the deletion runbook's hand-maintained order — step 13, before `households`, or the whole
+delete transaction aborts.
+
 ⚠️ **`households` is the authz root for everything that hangs off `profiles` — and two of the three
 catalogs hang off nothing.** Global is right for `activity_types` and `metric_definitions` (seeded,
 never written by the app) and **was wrong for `movements`**, which the strength form writes from free
@@ -316,6 +325,7 @@ exactly those columns as _"the movement's declaration"_.
 ```mermaid
 erDiagram
   households ||--o{ profiles : "scopes"
+  households ||--o{ household_members : "claimed by (AUTH-1 1b; one live row per Clerk account)"
   households ||--o{ movements : "owns custom (TEN-2a; NULL = seeded, owned by nobody)"
   profiles ||--o{ sessions : "logs"
   profiles ||--o{ entries : "logs"

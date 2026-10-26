@@ -75,6 +75,82 @@ returns the predicate in `packages/db/migrations/0013_prescribed_snapshot.sql`, 
 `prescribed_snapshot` appears in `information_schema.columns`. Until all three hold, chunk 2's code
 names a column that may not exist, on the strength write.
 
+## Before chunk 1c of AUTH-1
+
+🔴 **1c is the one-way door**: the session becomes the boundary, and a maintainer who cannot resolve a
+household is locked out of their own data. Two things must be true first, and **neither is proved by a
+green CI run**.
+
+### 1. `0019` is live in prod — three checks, not one
+
+Same shape and the same "check all three" as `0013` above. ⚠️ `gh run list` being green is **not**
+sufficient on its own: the migrate step `exit 0`s with a warning when `DATABASE_URL_UNPOOLED` is
+absent, so a green run can mean **nothing was applied**.
+
+1. `gh run list --workflow migrate.yml --branch main -L 3` shows **success on 1b's merge SHA**.
+2. In prod, the table exists:
+   ```sql
+   SELECT table_name FROM information_schema.tables WHERE table_name = 'household_members';
+   ```
+3. In prod, **both** constraints match `packages/db/migrations/0019_auth1b_household_members.sql`
+   byte for byte — the CHECK and the partial unique, because 1c's resolver leans on the second one and
+   a table without it would accept two live memberships for one account:
+   ```sql
+   SELECT pg_get_constraintdef(oid) FROM pg_constraint
+    WHERE conname = 'household_members_role_check';
+   SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_household_members_clerk_user';
+   ```
+
+### 2. The claim correction has been run with `--apply`
+
+🔴 **Read the Clerk user id from the PRODUCTION instance's dashboard, never the development one.**
+Clerk instances are **separate user pools** — a `user_…` minted in development is **not** the id
+production issues for the same Google account. Writing a development id into production's
+`household_members` binds the household to an id that will never sign in, and 1c then lands the
+maintainer in **state C**: signed in, no membership, locked out of their own household by the chunk
+whose job was to bind them to it. The correction asserts the id is _Clerk-shaped_; **it cannot tell
+development from production.** This check is yours.
+
+So, in order:
+
+1. **Create the production instance** and finish the dashboard half of the AUTH-1 checklist below.
+2. **Sign in once against production**, so an account exists there.
+3. **Read that instance's `user_…`** from the Clerk dashboard → Users.
+4. **Dry run first.** Targets come from the environment, never a flag and never a committed constant —
+   a command line is broadly visible via `ps`, and this id is personal data in a public repo:
+   ```bash
+   HOUSEHOLD_PUBLIC_ID=<the household's public_id> CLERK_USER_ID=user_… \
+     DATABASE_URL_UNPOOLED=<prod, unpooled> \
+     pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25
+   ```
+   It writes nothing and prints the **full** id, so check it against the dashboard before continuing.
+5. **Re-run with `--apply`.** A second `--apply` is an idempotent no-op; pointing the same Clerk id at a
+   _different_ household **refuses** rather than moving it.
+6. **Confirm**, in prod:
+   ```sql
+   SELECT role, created_at FROM household_members WHERE deleted_at IS NULL;
+   ```
+   Exactly one live row, `role = 'owner'`.
+
+⚠️ **Do not paste the Clerk user id into a PR, an issue, or a commit.** It is a stable third-party
+account identifier for a named adult (`docs/privacy/data-inventory.md` § 1a), and this repo is public.
+The `Applied` table in `packages/db/scripts/corrections/README.md` records **neither** target, for the
+same reason.
+
+### If something is wrong afterwards
+
+A membership is soft-deletable and the partial unique is on `clerk_user_id WHERE deleted_at IS NULL`,
+so clearing a mistake **frees the slot** and the correction can be re-run with the right id:
+
+```sql
+UPDATE household_members SET deleted_at = now(), updated_at = now()
+ WHERE clerk_user_id = 'user_…' AND deleted_at IS NULL;
+```
+
+`db:verify` proves that freed-slot behaviour, so this is a tested path rather than a hopeful one.
+⚠️ The soft-deleted row **keeps the identifier indefinitely** (§ 5 of the data inventory) — the
+household deletion is its only purge.
+
 **The wedge below applies to ANY pending migration, `0013` included** — a failed run re-fails on every
 later push and takes `db:seed` with it, and the `lock_timeout` carve-out is the same.
 
