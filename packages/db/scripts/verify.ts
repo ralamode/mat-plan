@@ -6503,7 +6503,7 @@ console.log(
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
-    await membershipHousehold(asPg, CLERK_A),
+    (await membershipHousehold(asPg, CLERK_A))[0],
     verifyHh.id,
     'AUTH-1 1b: membershipHousehold resolves the CLAIMED household, not merely the first one',
   );
@@ -6513,8 +6513,8 @@ console.log(
     'AUTH-1 1b: the proof above is only meaningful while B is not A (guards the guard)',
   );
   assert.equal(
-    await membershipHousehold(asPg, 'user_nobody'),
-    null,
+    (await membershipHousehold(asPg, 'user_nobody')).length,
+    0,
     'AUTH-1 1b: an unknown Clerk id resolves to null, never to "the only household"',
   );
 
@@ -6557,8 +6557,8 @@ console.log(
     .set({ deletedAt: new Date() })
     .where(eq(schema.householdMembers.clerkUserId, CLERK_A));
   assert.equal(
-    await membershipHousehold(asPg, CLERK_A),
-    null,
+    (await membershipHousehold(asPg, CLERK_A)).length,
+    0,
     'AUTH-1 1b: a soft-deleted membership resolves to null — 1c must land such a user in state C',
   );
   await insertHouseholdMember(asPg, B_SCOPE, {
@@ -6567,10 +6567,74 @@ console.log(
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
-    await membershipHousehold(asPg, CLERK_A),
+    (await membershipHousehold(asPg, CLERK_A))[0],
     verifyHh.id,
     'AUTH-1 1b: the freed slot can be re-claimed',
   );
+
+  // (4b) 🔴 A SOFT-DELETED HOUSEHOLD STOPS RESOLVING — the conjunct the first implementation of
+  // `membershipHousehold` lost, and the one TEN-1 extracted `liveHouseholdIds` to protect. Without
+  // `h.deleted_at IS NULL` a member of a deleted household keeps a working scope and can read its
+  // profiles. ⚠️ This proof did not exist when the bug shipped (#308): the soft-deleted MEMBERSHIP
+  // was covered, the soft-deleted HOUSEHOLD was not, so the suite passed on a wrong query.
+  {
+    const [tmpHh] = await asPg
+      .insert(schema.households)
+      .values({ publicId: newId(), name: 'verify 1b soft-deleted household' })
+      .returning({ id: schema.households.id });
+    const CLERK_D = 'user_verify_deleted_hh';
+    await asPg.insert(schema.householdMembers).values({
+      publicId: newId(),
+      householdId: tmpHh!.id,
+      clerkUserId: CLERK_D,
+      role: HOUSEHOLD_ROLE.owner,
+    });
+    assert.equal(
+      (await membershipHousehold(asPg, CLERK_D))[0],
+      tmpHh!.id,
+      'AUTH-1 1b: a live membership on a live household resolves (the baseline for the next line)',
+    );
+
+    await asPg
+      .update(schema.households)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.households.id, tmpHh!.id));
+    assert.equal(
+      (await membershipHousehold(asPg, CLERK_D)).length,
+      0,
+      'AUTH-1 1b: a LIVE membership on a SOFT-DELETED household resolves to nothing — 1c must land ' +
+        'that user in state C, never in a deleted household',
+    );
+
+    // (4c) The LIMIT 2 ambiguity probe. Two live memberships for one account is a state the resolver
+    // cannot represent, so the query must REPORT it rather than pick. `LIMIT 1` + no ORDER BY would
+    // have returned whichever row the planner reached first — a cross-wire with nothing in the logs.
+    const [tmpHh2] = await asPg
+      .insert(schema.households)
+      .values({ publicId: newId(), name: 'verify 1b ambiguity probe' })
+      .returning({ id: schema.households.id });
+    // The partial unique is on `clerk_user_id` alone, so a SECOND live membership for one account is
+    // rejected by the DATABASE — which is the real guarantee. The probe exists for the shapes the
+    // index cannot cover (a future COACH-1 widening), so assert the constraint, then the cap.
+    await expectRejectedBy('uq_household_members_clerk_user', async () =>
+      asPg.insert(schema.householdMembers).values({
+        publicId: newId(),
+        householdId: tmpHh2!.id,
+        clerkUserId: CLERK_D,
+        role: HOUSEHOLD_ROLE.member,
+      }),
+    );
+    assert.ok(
+      (await membershipHousehold(asPg, CLERK_D)).length <= 2,
+      'AUTH-1 1b: the probe is capped at two — it reports ambiguity, it never pages',
+    );
+
+    await asPg
+      .delete(schema.householdMembers)
+      .where(eq(schema.householdMembers.clerkUserId, CLERK_D));
+    await asPg.delete(schema.households).where(eq(schema.households.id, tmpHh!.id));
+    await asPg.delete(schema.households).where(eq(schema.households.id, tmpHh2!.id));
+  }
 
   // (5) 🔴 THE DELETION-ORDER PROOF — the one PRIV-3 predicted in writing.
   //
@@ -6666,7 +6730,7 @@ console.log(
     // (6d) --apply writes once, and a SECOND run is an idempotent no-op rather than a 23505.
     await claim.run(asCorrectionDb, true);
     assert.equal(
-      await membershipHousehold(asPg, CLERK_C),
+      (await membershipHousehold(asPg, CLERK_C))[0],
       verifyHh.id,
       'AUTH-1 1b: --apply binds the account to the NAMED household',
     );
