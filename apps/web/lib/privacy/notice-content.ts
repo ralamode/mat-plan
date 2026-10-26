@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-10-21. This is a beta."
+            "text": "Last updated: 2026-10-26. This is a beta."
           }
         ]
       }
@@ -297,8 +297,22 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": no email address, no phone number, no address, no payment details, no\nphotos, no location, and no date of birth. "
+        "text": ": no phone number, no address, no payment details, no location, and no date\nof birth. "
       },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "This app never asks you to type an email address, and no athlete's record contains one."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
       {
         "k": "em",
         "children": [
@@ -311,28 +325,119 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             "children": [
               {
                 "k": "text",
-                "text": "not\nswitched on yet"
+                "text": "not switched on yet"
               }
             ]
           },
           {
             "k": "text",
-            "text": " — when it is, Google will give Clerk the email address on your Google account. This\napp's own database will still never store it, no athlete's record will contain it, and "
-          },
-          {
-            "k": "strong",
-            "children": [
-              {
-                "k": "text",
-                "text": "a child is\nnever asked for one."
-              }
-            ]
-          },
-          {
-            "k": "text",
-            "text": " See \"What is changing\"."
+            "text": "."
           }
         ]
+      },
+      {
+        "k": "text",
+        "text": " When it is, here is what\nis honest about it, because the shorter version would not be:"
+      }
+    ]
+  },
+  {
+    "k": "ul",
+    "items": [
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Google tells Clerk your email address, your name and your profile picture"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — that set comes with\nGoogle's basic sign-in and "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "cannot be narrowed"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": "; it is the minimum Google issues to sign someone\nin, not a choice this app made."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "This app reads none of it except to know which account signed in."
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " Your name and picture are\n"
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "never read and never stored"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " by this app, no athlete's record contains them, and nothing here can\ndisplay a photo. What the database keeps is an opaque account identifier and nothing else."
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "k": "p",
+          "children": [
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "A child is never asked to sign in"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": ", and never asked for an email address. Sign-in is for the\nadult who runs the household."
+            }
+          ]
+        }
+      ]
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "text",
+        "text": "See \"What is changing\"."
       }
     ]
   },
@@ -1901,7 +2006,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-21."
+            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-26."
           }
         ]
       }

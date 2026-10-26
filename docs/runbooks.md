@@ -1228,6 +1228,27 @@ invite-only setting).
       uses preconfigured shared OAuth credentials and redirect URIs — no other configuration is
       needed."_ So there is no Google console to read until the production instance is configured, and
       the original assumption (safe if wrong) still stands for that day.
+      🔴 **That day arrived (2026-10-26), and Google has MOVED this console.** The single "OAuth
+      consent screen" page this checklist described no longer exists; it is now **Google Auth
+      Platform**, split four ways — and the paths matter because the boxes below point at them:
+
+      | What you need | Where it is now |
+      | --- | --- |
+      | App name, support email, **authorized domains**, **privacy-policy URL** | **Branding** |
+      | User type (External), **publishing status**, test users | **Audience** |
+      | The scope list | **Data Access** |
+      | The OAuth 2.0 client ids | **Clients** |
+
+      ⚠️ **Publishing status is a real decision, not a formality** (**Audience**): *Testing* caps the
+      app at **100 users**, each added by hand, and external users cannot sign in; *In production* is
+      what Clerk's own docs require of a production instance. `userinfo.email` / `userinfo.profile`
+      are **non-sensitive** scopes, so publishing does not trigger the long verification that
+      sensitive scopes do.
+      📌 **The Authorized JavaScript origin is the origin the BROWSER loads the app from**, which is
+      not the redirect URI: the redirect goes to Clerk's own subdomain (`clerk.<domain>`), copied from
+      Clerk so it cannot drift, while the origin is the app's. If both the apex and `www` resolve, add
+      both — a mismatch fails silently.
+
 - [ ] **A consent step at sign-up, before the first write. Two thirds answered 2026-10-21; the third
       is the one that matters and is deliberately still open.**
       ✅ **It exists and it is named** _"Require express consent to legal documents"_, on the Clerk
@@ -1306,7 +1327,9 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       Clerk's, so it **cannot** use this app's credentials and no Google Cloud Console work exists for
       dev at all. This box is entirely a production-instance box; the custom-credentials toggle
       (**Use custom credentials**, with **Enable for sign-up and sign-in**) is where it is done.
-- [ ] 🔴 **The exact OAuth SCOPE list — answered 2026-10-21, and the answer is NOT the one this box
+- [x] 🔴 **The exact OAuth SCOPE list — CLOSED 2026-10-26 on the production instance.** The custom-credentials screen shows `openid` · `userinfo.email` · `userinfo.profile`, and **`userinfo.profile` could not be removed** — confirmed by the maintainer in the console, not inferred from docs. So `name` and `picture` arrive whatever this app wants, and the documents were edited in the chunk that configured the instance, exactly as the conditional below required. [notice.md](./privacy/notice.md) now says plainly what Google sends and that this app **reads and stores none of it**; [data-inventory.md](./privacy/data-inventory.md) §7 records the scope list and that it cannot be narrowed. The standing prohibition is unchanged and is now the load-bearing control: **nothing may ever write `profiles.avatar`.** ⚠️ Do not reintroduce a flat "Google sends us nothing but an email address" — it is false at the token and falsifiable by anyone who looks.
+
+- [x] 🔴 **(superseded, kept for the reasoning) The exact OAuth SCOPE list — answered 2026-10-21, and the answer is NOT the one this box
       was hoping for. It is now a named obligation on the chunk that configures the instance, not an
       open question.**
       **What was read:** Clerk's default Google scopes are exactly the conventional
