@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/queries/household-membership.ts b/packages/db/src/queries/household-membership.ts
+index c2211f2..69989a2 100644
+--- a/packages/db/src/queries/household-membership.ts
++++ b/packages/db/src/queries/household-membership.ts
+@@ -35,7 +35,6 @@ export async function membershipHousehold(exec: Executor, clerkUserId: string):
+         // resolves a working scope and can read its profiles — the exact thing TEN-1 extracted
+         // `liveHouseholdIds` to prevent, whose docblock calls `deleted_at IS NULL` "the load-bearing
+         // conjunct". The first version of this function lost it; `db:verify` now proves both halves.
+-        isNull(schema.households.deletedAt),
+       ),
+     )
+     // An AMBIGUITY PROBE, not a pick, and deliberately no ORDER BY. `LIMIT 1` would silently choose
