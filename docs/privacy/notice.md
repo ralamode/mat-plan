@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-10-21. This is a beta.**
+**Last updated: 2026-10-26. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -42,11 +42,22 @@ is usually typing.
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item so the same entry is not saved twice.
 
-**What we never ask for**: no email address, no phone number, no address, no payment details, no
-photos, no location, and no date of birth. _Signing in with Google is being rolled out and is **not
-switched on yet** — when it is, Google will give Clerk the email address on your Google account. This
-app's own database will still never store it, no athlete's record will contain it, and **a child is
-never asked for one.** See "What is changing"._
+**What we never ask for**: no phone number, no address, no payment details, no location, and no date
+of birth. **This app never asks you to type an email address, and no athlete's record contains one.**
+
+_Signing in with Google is being rolled out and is **not switched on yet**._ When it is, here is what
+is honest about it, because the shorter version would not be:
+
+- **Google tells Clerk your email address, your name and your profile picture** — that set comes with
+  Google's basic sign-in and **cannot be narrowed**; it is the minimum Google issues to sign someone
+  in, not a choice this app made.
+- **This app reads none of it except to know which account signed in.** Your name and picture are
+  **never read and never stored** by this app, no athlete's record contains them, and nothing here can
+  display a photo. What the database keeps is an opaque account identifier and nothing else.
+- **A child is never asked to sign in**, and never asked for an email address. Sign-in is for the
+  adult who runs the household.
+
+See "What is changing".
 
 ## Children
 
@@ -239,7 +250,7 @@ Bodily measurements of a child may count as health data under some laws, with ob
 does not attempt to describe. **If you need that answered, it needs a lawyer, and this document is not
 one.**
 
-**Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-21.**
+**Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-26.**
 
 **This notice must be reviewed again when** a new company starts receiving data, a retention period
 changes, a new kind of information starts being stored, sign-in goes live, or anything is made
