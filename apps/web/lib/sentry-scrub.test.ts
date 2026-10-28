@@ -321,18 +321,26 @@ describe('the identified user never reaches Sentry (AUTH-1 1c-1)', () => {
       user: { email: 'parent@example.com' },
     } as never as Parameters<typeof scrubSentryEvent>[0]);
     expect(JSON.stringify(event)).not.toContain('parent@example.com');
-    expect(JSON.stringify(event)).not.toContain('[Filtered]');
+    // Deleted, not emptied: `'user' in event` is the form of this claim that can actually fail. (An
+    // earlier version asserted the absence of '[Filtered]', a string this codebase never writes.)
+    expect('user' in event).toBe(false);
   });
 
   it('leaves the observability this app DOES want — neither tag names a person', () => {
     const event = scrubSentryEvent({
       user: { id: 'user_abc' },
       tags: { scope_outcome: 'no_household' },
-      contexts: { household: { householdId: 7 } },
+      contexts: { scope_miss: { reason: 'cross_household', profilePublicId: 'p_1' } },
     } as never as Parameters<typeof scrubSentryEvent>[0]);
 
     expect(event.user).toBeUndefined();
     expect(event.tags?.scope_outcome).toBe('no_household');
-    expect(event.contexts?.household).toEqual({ householdId: 7 });
+    // `contexts.scope_miss` is the shape the app ACTUALLY emits (`lib/dal/household.ts`), so an
+    // over-broad future scrub that deleted it would turn this red. The previous version asserted an
+    // invented `contexts.household` and so guarded nothing.
+    expect(event.contexts?.scope_miss).toEqual({
+      reason: 'cross_household',
+      profilePublicId: 'p_1',
+    });
   });
 });

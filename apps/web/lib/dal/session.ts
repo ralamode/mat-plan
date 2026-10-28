@@ -3,7 +3,9 @@ import 'server-only';
 import { cache } from 'react';
 
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
+
+import * as Sentry from '@sentry/nextjs';
 
 import { clerkIsConfigured } from '@/lib/clerk';
 import { SIGN_IN_PATH } from '@/lib/constants';
@@ -45,14 +47,56 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * single `auth()`. It is **not** a cross-request cache: AGENTS.md forbids caching per-user data
  * across users, and `app/tenancy-is-not-cached.test.ts` is the standing guard on that.
  */
+/** Module-level: the capture below fires once per process, not once per probe. */
+let authUnavailableReported = false;
+
 export const getCurrentUser = cache(async (): Promise<{ userId: string } | null> => {
   if (!clerkIsConfigured()) return null;
 
   try {
     const { userId } = await auth();
     return userId ? { userId } : null;
-  } catch {
-    // `auth()` threw — `clerkMiddleware()` did not run on this request. Refuse; never resolve.
+  } catch (error) {
+    // 🔴 NOT every throw means "no session", and swallowing the two that don't is a correctness bug
+    // with a long fuse. `@clerk/nextjs@7.9.15`'s `buildRequestLike` deliberately RETHROWS two kinds:
+    //
+    //  - Next's prerender-bailout signal (`DynamicServerError`, digest `DYNAMIC_SERVER_USAGE`), which
+    //    Next itself catches to mark a route dynamic. Swallowed, "this route must render dynamically"
+    //    silently becomes "there is no session" — baked into a cached output.
+    //  - `ClerkUseCacheError`, which exists precisely so calling `auth()` inside `'use cache'` is a
+    //    loud, actionable error rather than a silently cached `null`.
+    //
+    // `unstable_rethrow` is Next's own list of control-flow errors, so this does not hand-maintain a
+    // set that the framework owns. ⚠️ A Route Handler does NOT inherit a layout's `force-dynamic`
+    // (`app/tenancy-is-not-cached.test.ts` says so), and 1c-3 switches the export handler — which is
+    // exactly where this would otherwise answer "unauthenticated" instead of bailing out.
+    unstable_rethrow(error);
+    // ⚠️ `ClerkUseCacheError` is NOT exported from any public entry at 7.9.15, so this checks the
+    // global-registry symbol — which is what Clerk's own `isClerkUseCacheError` checks.
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      Symbol.for('clerk_use_cache_error') in error
+    ) {
+      throw error;
+    }
+
+    // § Design 1's third property, panel-added: a wholly misconfigured Clerk refuses EVERYONE while
+    // emitting nothing distinguishable from ordinary anonymous probing. Tagged, carrying no headers,
+    // no cookie and no params — the `scope_outcome` precedent.
+    //
+    // ⚠️ BOUNDED. This path is reachable by an unauthenticated request to any route the matcher
+    // misses, so an uncapped capture is a Sentry-quota drain anyone can pull. Once per process is
+    // enough to tell "misconfigured" from "anonymous", which is the whole question it answers.
+    if (!authUnavailableReported) {
+      authUnavailableReported = true;
+      Sentry.captureMessage('auth() unavailable', {
+        level: 'warning',
+        tags: { auth_outcome: 'auth_unavailable' },
+      });
+    }
+
+    // `clerkMiddleware()` did not run on this request. Refuse; never resolve.
     return null;
   }
 });

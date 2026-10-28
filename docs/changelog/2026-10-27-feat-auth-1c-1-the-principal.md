@@ -32,3 +32,26 @@
   the point of using Clerk). `event.user` and `contexts.user` are **deleted, not masked** — a masked
   field is still a field somebody can decide to unmask. It lands here, **before any session exists**,
   so there is no window in which an identified event could be sent.
+  **Two fresh review lenses found two P1s and the fixes are in this PR**, both of which would have
+  been expensive to reopen inside the one-way-door diff. 🔴 **The headline limiter test could not
+  fail.** Its mock discarded the policy (`static slidingWindow = () => ({})`) and was a pure function
+  of the identifier, so a regression that built _both_ limiters from one shared policy passed it — a
+  probe confirmed the shipped and bugged implementations produced identical results. The mock is now
+  stateful and policy-aware, the proof is "exhaust one limiter and the other still allows", and a
+  second assertion pins the consts to the constructed instances, which is the only thing that can
+  detect the wrong policy at all. Both go **red** under the regression.
+  🔴 **And the bare `catch` swallowed two errors Clerk deliberately rethrows**: Next's
+  prerender-bailout signal (`DYNAMIC_SERVER_USAGE`), which would have turned _"this route must render
+  dynamically"_ into _"there is no session"_ baked into a cached output; and `ClerkUseCacheError`,
+  which exists to be loud and would have become a silently cached `null`. Now `unstable_rethrow` —
+  Next's own list, so the set is not hand-maintained — plus the global-registry symbol, which is the
+  only honest detector since `ClerkUseCacheError` is not exported from any public entry at 7.9.15.
+  Also fixed from the same reviews: the Redis key was **double-prefixed**
+  (`mat-plan:mutate:mutate:<userId>`) and the test pinned the wrong shape; the docblock's claim that
+  separate prefixes mean the windows _"cannot collide"_ was **false** (`mat-plan:*` is a parent
+  namespace of `mat-plan:mutate:*`); a type assertion hid a **module-load crash the live gate would
+  have inherited** from dark code, now a compile error; § Design 1's third mandated property — the
+  tagged Sentry capture in the `catch`, bounded to once per process so an unauthenticated prober
+  cannot drain the quota — had been dropped silently and is restored; and the claim that _"Clerk's SDK
+  populates `event.user`"_ was **false at the pinned version** (zero `sentry` hits across
+  `@clerk/nextjs/dist`), so the comment now says what it is: closing a path before anything takes it.

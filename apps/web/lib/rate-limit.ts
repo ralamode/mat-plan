@@ -71,11 +71,24 @@ const UPSTASH_TIMEOUT_MS = 800;
  * 10-per-10-minutes while a sizing test asserted the new number and passed — "a boundary test that
  * cannot fail is worse than none", applied to a constant nothing reads.
  *
- * Each policy gets its own instance **and its own `prefix`**, so their windows cannot collide in
- * Redis, and its own `ephemeralCache` (module-level, so a warm lambda actually reuses it).
+ * Each policy gets its own instance, its own `prefix` and its own `ephemeralCache` (module-level, so
+ * a warm lambda actually reuses it).
+ *
+ * ⚠️ **The prefixes do NOT make collision impossible, and an earlier draft of this comment claimed
+ * they did.** `mat-plan:*` is a *parent* namespace of `mat-plan:mutate:*`, so a future
+ * `checkRateLimit('mutate:…')` would land in the mutation limiter's keyspace, where two different
+ * window sizes produce indices that can coincide and one policy's counter is spent against the
+ * other's budget. What actually keeps them apart is that **each limiter owns its identifier shape**
+ * and no caller builds one by hand. Keep it that way.
+ *
+ * ⚠️ `window` is typed as Upstash's `Duration` template literal, NOT `string`, and the cast that was
+ * here is gone. `Ratelimit.slidingWindow` calls `ms(window)` EAGERLY and throws on anything it cannot
+ * parse — and this runs at MODULE SCOPE, so a typo in the dark mutation policy would have taken down
+ * every importer of this file, including the live gate action. Typed properly, `'5 mins'` is a
+ * compile error instead.
  */
 function buildLimiter(
-  policy: { attempts: number; window: string },
+  policy: { attempts: number; window: Parameters<typeof Ratelimit.slidingWindow>[1] },
   prefix: string,
 ): Ratelimit | null {
   if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) return null;
@@ -84,10 +97,7 @@ function buildLimiter(
       url: env.UPSTASH_REDIS_REST_URL,
       token: env.UPSTASH_REDIS_REST_TOKEN,
     }),
-    limiter: Ratelimit.slidingWindow(
-      policy.attempts,
-      policy.window as Parameters<typeof Ratelimit.slidingWindow>[1],
-    ),
+    limiter: Ratelimit.slidingWindow(policy.attempts, policy.window),
     timeout: UPSTASH_TIMEOUT_MS,
     analytics: false, // an extra Redis write per check, for a dashboard nobody reads at this scale
     ephemeralCache: new Map(),
@@ -131,7 +141,7 @@ export async function checkMutationLimit(
 ): Promise<{ allowed: boolean; reason: 'ok' | 'unconfigured' | 'limiter-error' | 'limited' }> {
   if (!mutationLimiter) return { allowed: true, reason: 'unconfigured' };
   try {
-    const { success } = await mutationLimiter.limit(`mutate:${userId}`);
+    const { success } = await mutationLimiter.limit(userId);
     return success ? { allowed: true, reason: 'ok' } : { allowed: false, reason: 'limited' };
   } catch {
     return { allowed: true, reason: 'limiter-error' };

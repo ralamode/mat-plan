@@ -11,6 +11,10 @@ const UPSTASH_ENV = {
 };
 
 /** Load `rate-limit.ts` fresh with a given env and a given `Ratelimit.limit` behaviour. */
+/** What each `new Ratelimit(...)` was constructed with — the only thing that pins the consts to the
+ *  instances. Reset by `loadWith`. */
+const built: { attempts: number; window: string; prefix: string }[] = [];
+
 async function loadWith(opts: {
   env: Record<string, string | undefined>;
   // AUTH-1 1c-1 widened this: the mutation tests assert the IDENTIFIER each limiter is called with,
@@ -20,10 +24,22 @@ async function loadWith(opts: {
   vi.resetModules();
   vi.doMock('./env', () => ({ env: opts.env }));
   vi.doMock('@upstash/redis', () => ({ Redis: class {} }));
+  // 🔴 STATEFUL and POLICY-AWARE, and it has to be. The first version of this mock discarded the
+  // policy (`static slidingWindow = () => ({})`) and was a pure function of the identifier — so a
+  // regression that built BOTH limiters from one shared policy passed every test in this file. A
+  // probe confirmed it: shipped and bugged implementations produced identical results.
+  built.length = 0;
   vi.doMock('@upstash/ratelimit', () => ({
     Ratelimit: class {
-      static slidingWindow = () => ({});
-      limit = opts.limit ?? (async () => ({ success: true }));
+      static slidingWindow = (attempts: number, window: string) => ({ attempts, window });
+      cfg: { limiter: { attempts: number; window: string }; prefix: string };
+      used = 0;
+      constructor(cfg: { limiter: { attempts: number; window: string }; prefix: string }) {
+        this.cfg = cfg;
+        built.push({ ...cfg.limiter, prefix: cfg.prefix });
+      }
+      limit = async (identifier: string) =>
+        opts.limit ? opts.limit(identifier) : { success: ++this.used <= this.cfg.limiter.attempts };
     },
   }));
   return import('./rate-limit');
@@ -130,27 +146,42 @@ describe('MUTATION_RATE_LIMIT — sized for a kid logging, not for a brute-force
     expect(MUTATION_RATE_LIMIT.window).toMatch(/^\d+\s*[smhd]$/);
   });
 
-  it('🔴 is ENFORCED, not merely declared — the two policies get separate limiters', async () => {
-    // The defect this guards: `Ratelimit.slidingWindow(...)` bakes the window in at construction and
-    // `checkRateLimit` takes no policy argument. With one module-level limiter, adding the const
-    // above would have left the actions limited at the GATE's rate while this file asserted the new
-    // number and passed. The proof is behavioural: exhaust one limiter, the other still allows.
-    const seen: string[] = [];
-    const { checkRateLimit, checkMutationLimit } = await loadWith({
+  it('🔴 is ENFORCED, not merely declared — proved by EXHAUSTING one and not the other', async () => {
+    // The defect this guards: `slidingWindow()` bakes the window in at construction and
+    // `checkRateLimit` takes no policy argument, so one shared limiter would silently apply the
+    // GATE's 10-per-10-minutes to every mutation while the sizing test above asserted 120 and passed.
+    //
+    // The mock now counts calls against the policy it was BUILT with, so this goes red under a shared
+    // instance AND under the wrong policy — neither of which the previous version could detect.
+    const { checkRateLimit, checkMutationLimit, GATE_RATE_LIMIT } = await loadWith({
       env: { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' },
-      limit: async (id: string) => {
-        seen.push(id);
-        // Only the GATE's identifier is over its limit.
-        return { success: !id.startsWith('ip:') };
-      },
     });
 
+    // Exhaust the gate: its 11th call is refused.
+    for (let n = 0; n < GATE_RATE_LIMIT.attempts; n += 1) {
+      expect((await checkRateLimit('ip:1.2.3.4')).allowed).toBe(true);
+    }
     expect((await checkRateLimit('ip:1.2.3.4')).allowed).toBe(false);
-    expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
-    expect(seen).toEqual(['ip:1.2.3.4', 'mutate:user_abc']);
+
+    // The mutation limiter is untouched by that — it has its own instance and its own budget.
+    for (let n = 0; n < GATE_RATE_LIMIT.attempts + 1; n += 1) {
+      expect((await checkMutationLimit('user_abc')).allowed).toBe(true);
+    }
   });
 
-  it('owns the `mutate:` key shape, so no call site builds an identifier by hand', async () => {
+  it('🔴 pins the CONSTS to the INSTANCES — the only thing that does', async () => {
+    // Without this, `buildLimiter(GATE_RATE_LIMIT, ...)` twice is undetectable: no test observes the
+    // constructor config, and `isRateLimitConfigured` is true in both worlds.
+    const { GATE_RATE_LIMIT, MUTATION_RATE_LIMIT } = await loadWith({
+      env: { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' },
+    });
+    expect(built).toEqual([
+      { ...GATE_RATE_LIMIT, prefix: 'mat-plan' },
+      { ...MUTATION_RATE_LIMIT, prefix: 'mat-plan:mutate' },
+    ]);
+  });
+
+  it('owns its key shape, so no call site builds an identifier by hand', async () => {
     const seen: string[] = [];
     const { checkMutationLimit } = await loadWith({
       env: { UPSTASH_REDIS_REST_URL: 'https://x', UPSTASH_REDIS_REST_TOKEN: 't' },
@@ -160,7 +191,9 @@ describe('MUTATION_RATE_LIMIT — sized for a kid logging, not for a brute-force
       },
     });
     await checkMutationLimit('user_abc');
-    expect(seen).toEqual(['mutate:user_abc']);
+    // The `mutate:` lives in the PREFIX (`mat-plan:mutate`), so the identifier must NOT repeat it —
+    // Upstash joins `[prefix, identifier]`, and the first draft produced `mat-plan:mutate:mutate:…`.
+    expect(seen).toEqual(['user_abc']);
   });
 
   it('fails OPEN when the limiter is unconfigured or throws — a kid must not be blocked', async () => {

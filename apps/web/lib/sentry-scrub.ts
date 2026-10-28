@@ -153,8 +153,15 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
 
   // 🔴 AUTH-1 1c-1 — the identified user never reaches Sentry.
   //
-  // Clerk's SDK and Sentry's Next integration both populate `event.user` once a session exists, and
-  // the default payload is an id, an email and an IP. Email is the one piece of adult personal data
+  // ⚠️ **Nothing populates `event.user` today, and an earlier version of this comment said Clerk did.**
+  // Verified at the pinned version rather than assumed, which is this file's own standard: a recursive
+  // grep for `sentry` across `@clerk/nextjs@7.9.15/dist` returns ZERO hits — there is no Clerk→Sentry
+  // integration. What WOULD populate it is a `Sentry.setUser` call, which nothing in this repo makes
+  // yet. So this closes the path BEFORE anything can take it, rather than cleaning up after something
+  // that already does — and that distinction matters, because a future reader who believes the scrub
+  // is already load-bearing might relax `SENTRY_DATA_COLLECTION.userInfo` on the strength of it.
+  //
+  // When it is populated, the default payload is an id, an email and an IP. Email is the one piece of adult personal data
   // this app deliberately does NOT hold (`data-inventory.md` §7: it lives in Clerk, which is the
   // point of using Clerk) — so letting Sentry collect it would reintroduce, in the error pipeline,
   // exactly what the schema was designed to avoid.

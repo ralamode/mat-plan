@@ -22,7 +22,15 @@ const redirect = vi.hoisted(() =>
 const clerkIsConfigured = vi.hoisted(() => vi.fn());
 
 vi.mock('@clerk/nextjs/server', () => ({ auth }));
-vi.mock('next/navigation', () => ({ redirect }));
+// ⚠️ `unstable_rethrow` must be mocked with REAL behaviour, not stubbed away: the module calls it on
+// every caught error, and a stub that did nothing would make the "rethrown" cases silently pass. This
+// mirrors Next's own rule — rethrow its control-flow errors, return for anything else.
+const unstable_rethrow = vi.hoisted(() => (error: unknown): void => {
+  const digest = (error as { digest?: unknown })?.digest;
+  if (typeof digest === 'string' && digest.startsWith('DYNAMIC_SERVER_USAGE')) throw error;
+  if (typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT')) throw error;
+});
+vi.mock('next/navigation', () => ({ redirect, unstable_rethrow }));
 vi.mock('@/lib/clerk', () => ({ clerkIsConfigured }));
 // `cache()` is React's per-request memo; in a unit test it must be the identity wrapper, or every
 // case after the first would read the first one's answer and the suite would pass vacuously.
@@ -63,6 +71,30 @@ describe('getCurrentUser — fails closed, three ways (AUTH-1 1c-1)', () => {
     expect(await getCurrentUser()).toBeNull();
   });
 
+  it("🔴 Next's prerender-bailout is RETHROWN — it is not 'no session'", async () => {
+    clerkIsConfigured.mockReturnValue(true);
+    // Swallowed, "this route must render dynamically" would silently become "nobody is signed in",
+    // baked into a cached output. `unstable_rethrow` is Next's own list, so this does not
+    // hand-maintain a set the framework owns.
+    const bailout = Object.assign(new Error('Dynamic server usage'), {
+      digest: 'DYNAMIC_SERVER_USAGE',
+    });
+    auth.mockRejectedValue(bailout);
+    await expect(getCurrentUser()).rejects.toThrow();
+  });
+
+  it("🔴 Clerk's use-cache error is RETHROWN — it exists to be loud", async () => {
+    clerkIsConfigured.mockReturnValue(true);
+    // Not exported from any public entry at 7.9.15, so the global-registry symbol is the only honest
+    // detector — the same one Clerk's own `isClerkUseCacheError` checks.
+    auth.mockRejectedValue(
+      Object.assign(new Error('auth() inside "use cache"'), {
+        [Symbol.for('clerk_use_cache_error')]: true,
+      }),
+    );
+    await expect(getCurrentUser()).rejects.toThrow();
+  });
+
   it('a real session → the principal', async () => {
     clerkIsConfigured.mockReturnValue(true);
     auth.mockResolvedValue({ userId: 'user_abc' });
@@ -98,6 +130,15 @@ describe('the two refusals (AUTH-1 1c-1)', () => {
     auth.mockResolvedValue({ userId: null });
     await expect(requireSession()).rejects.toThrow(`REDIRECT:${SIGN_IN_PATH}`);
     expect(redirect).toHaveBeenCalledWith(SIGN_IN_PATH);
+  });
+
+  it('🔴 NO KEYS → requireSession redirects too — the likeliest state right after a deploy', async () => {
+    // Production ships with both keys unset until 1c, so this is not a corner: every gated page
+    // redirects to a `/sign-in` that itself renders nothing. Fail-closed, which is correct — but it
+    // must be proved, not assumed, because it is the state a misconfigured deploy lands in.
+    clerkIsConfigured.mockReturnValue(false);
+    await expect(requireSession()).rejects.toThrow(`REDIRECT:${SIGN_IN_PATH}`);
+    expect(auth).not.toHaveBeenCalled();
   });
 
   it('requireSession returns the principal when there is one', async () => {
