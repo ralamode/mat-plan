@@ -83,7 +83,7 @@ flowchart LR
   P1 --> P2[PRIV-2 PR 2 · serve /privacy ✅]
   P2 --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
-  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅<br/>1c-2 · 1c-3 · 1c-4 · 1d]
+  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅ 1c-2 ✅<br/>1c-3 · 1c-4 · 1d]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]

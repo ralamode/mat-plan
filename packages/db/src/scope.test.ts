@@ -11,7 +11,7 @@ import { householdScopeForScript } from './writers/household-scope-script';
  * TEN-1's structural claims about the household scope, as tests rather than sentences.
  *
  * The plan's **primary** safety mechanism is the compiler: `isLiveProfile`'s required positional
- * `HouseholdScope` makes an unconverted call site a build failure. This file guards the four things
+ * `HouseholdScope` makes an unconverted call site a build failure. This file guards the five things
  * the compiler **cannot** see, each of which silently removes that mechanism or the containment
  * around it:
  *
@@ -181,7 +181,7 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     // request (already a named constant here).
     const offenders = WEB_SOURCES.filter(
       (f) =>
-        !f.startsWith('apps/web/lib/dal/') &&
+        !relative('', f).startsWith('apps/web/lib/dal/') &&
         relative('', f) !== FIXTURE_DERIVES_SCOPE &&
         /\bgetHouseholdScope\b/.test(code(join(REPO, f))),
     );

@@ -326,7 +326,7 @@ to that host for the whole sign-in exchange. So the honest statement is now in *
    `frame-src https://challenges.cloudflare.com` (Clerk's bot-protection widget). `proxy.test.ts` pins
    each one and asserts the policy contains no `*` and no scheme-wide `https:`/`http:` source. What
    leaves the browser is a sign-in exchange: Clerk sees the visitor's IP and browser on that screen,
-   and the email address and Google account identifier of whoever signs in. **No training, bodyweight
+   and the email address, name, profile picture and Google account identifier of whoever signs in (see the Google row below — the profile claims cannot be narrowed). **No training, bodyweight
    or athlete data is involved** — `/sign-in` reads none of it, by the same rule `/` and `/privacy`
    follow.
 
