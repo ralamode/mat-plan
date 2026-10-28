@@ -975,7 +975,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": ", and not yet. Google is told that you signed in to this app, and gives Clerk the email address and account identifier on your Google account. Nothing about your athletes is ever sent to Google."
+            "text": ", and not yet. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google."
           }
         ]
       },

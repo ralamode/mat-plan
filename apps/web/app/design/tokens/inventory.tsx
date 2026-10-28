@@ -200,6 +200,10 @@ export function SurfacesCell() {
       </Card>
       <EmptyState>Nothing logged yet.</EmptyState>
       <PickerEmptyState />
+      {/* Harness-only separator. Both blocks are heading-light prose, so without a label they render
+          as one continuous run and a reviewer cannot tell where `PickerEmptyState` ends. Never add
+          this to the shipped screen — `p/page.tsx`'s `<h1>` is that block's label there. */}
+      <p className="text-muted-foreground text-xs uppercase">No household</p>
       <NoHouseholdState />
       <div className="flex flex-col gap-2" aria-hidden>
         <Skeleton className="h-4 w-2/3" />

@@ -144,10 +144,11 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
 /**
  * AUTH-1 1c-2 — soft-delete the HOUSEHOLD, so the picker renders `NoHouseholdState`.
  *
- * ⚠️ **Ordering trap:** this harness derives its fixture scope through `liveHouseholdIds` (the one
- * allowlisted deriver, `packages/db/src/scope.test.ts:FIXTURE_DERIVES_SCOPE`), which by definition
- * finds nothing once the household is hidden. The state seeders run AFTER that derivation — keep it
- * that way, or the run fails before it screenshots anything.
+ * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** — the way `seedClosedDays`
+ * composes `seedWeighIns`. `fixtureScope` asserts *"expected exactly one live household in the
+ * throwaway DB"* and throws on 0, which is precisely the state this function creates. (There is no
+ * scope-derivation PASS to order against: `runEphemeral` runs `migrateAndSeed` and then exactly one
+ * `STATES[state]` seeder, and `fixtureScope()` is only ever called from inside a sibling seeder.)
  *
  * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
  * `fullyParallel` against one shared seeded database, and a hidden household breaks `selectProfile`
@@ -317,6 +318,8 @@ const STATES = {
   empty: null,
   // ONB-0 — the explained first-run empty state. The ONLY way to render it (see `seedNoProfiles`).
   'no-profiles': seedNoProfiles,
+  // AUTH-1 1c-2 — the "this account resolves no household" screen. The ONLY way to render it (see
+  // `seedNoHousehold`): it needs zero live households, which breaks `selectProfile` in every spec.
   'no-household': seedNoHousehold,
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.

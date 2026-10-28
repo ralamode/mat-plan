@@ -37,11 +37,20 @@ export async function gateLogin(page: Page): Promise<void> {
   // With no `from`, the Server Action redirects straight to the app home — the picker, in one hop
   // (OSS-2: `/` is the public landing now).
   await page.waitForURL(APP_HOME_PATH);
-  // AUTH-1 1c-2: ANY `<h1>`, not the picker's specific one. The picker is no longer the only screen
-  // a successful login can land on — a signed-in account with no household gets its own `<h1>`, and
-  // after 1c-4 that is a real state rather than a fresh-deploy curiosity. Asserting the *specific*
-  // heading here would also make this helper a weak health check: a 1c deploy where membership
-  // resolution silently broke would sail past `gateLogin` and then fail confusingly in every spec on
-  // missing tiles. The specs that genuinely need the picker keep asserting `pickerHeading`.
+  // AUTH-1 1c-2: ANY `<h1>`, not the picker's specific one — this asserts "a page rendered", which is
+  // what this helper can honestly promise now that the picker is not the only screen a successful
+  // login lands on. It still catches the hard failure: `app/error.tsx` renders an `<h2>`.
+  //
+  // 🔴 **The reason is the SCREENSHOT HARNESS, not the health check.** `scripts/capture.ts` calls
+  // `gateLogin` once per viewport BEFORE `page.goto(route)`, so while this demanded the picker's
+  // heading, `screenshot:ephemeral --state no-household` could not get past login at all — the one
+  // state that has no picker. Saying so matters, because "we loosened an assertion" invites a revert.
+  //
+  // ⚠️ **The picker assertion did NOT disappear — it moved to `e2e/global.setup.ts`**, the one
+  // consumer that actually needs the picker (it goes on to `selectProfile`). Leaving it only here
+  // would have been strictly worse: a deploy where household resolution silently broke would render
+  // the no-household `<h1>`, satisfy this line, and first fail as a `selectProfile` timeout on a
+  // missing tile — a confusing failure a long way from its cause. The specs that need the picker
+  // keep asserting `pickerHeading` too.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }

@@ -32,14 +32,32 @@ describe('NoHouseholdState', () => {
 
   it('states what a household is, the wrong-account fix, and that the screen is a dead end', () => {
     const { container } = render(<NoHouseholdState />);
-    expect(container.querySelectorAll('p')).toHaveLength(3);
+    expect(container.querySelectorAll('p')).toHaveLength(4);
     for (const copy of [
       NO_HOUSEHOLD_COPY.what,
       NO_HOUSEHOLD_COPY.wrongAccount,
+      NO_HOUSEHOLD_COPY.notYet,
       NO_HOUSEHOLD_COPY.next,
     ]) {
       expect(container.textContent).toContain(copy);
     }
+  });
+
+  it('says on screen that sign-out is not here yet, beside the line that prescribes it', () => {
+    // Without this line `wrongAccount` tells the reader to sign out with no affordance anywhere on
+    // the page, and `next`'s "Otherwise" makes that read as a live branch. 1c-3 deletes `notYet` and
+    // ships the button; this test is what notices if the copy is removed before the control exists.
+    const { container } = render(<NoHouseholdState />);
+    const paragraphs = [...container.querySelectorAll('p')];
+    const notYet = paragraphs.find((el) => el.textContent === NO_HOUSEHOLD_COPY.notYet);
+    expect(notYet, 'the not-yet line must render').toBeTruthy();
+    // Muted follow-up, exactly as `PickerEmptyState` renders its own `notYet`.
+    expect(notYet?.className).toContain('text-muted-foreground');
+    // …and it must sit AFTER the line it qualifies, or it reads as a caption for the wrong sentence.
+    const wrongAccountIndex = paragraphs.findIndex(
+      (el) => el.textContent === NO_HOUSEHOLD_COPY.wrongAccount,
+    );
+    expect(paragraphs.indexOf(notYet!)).toBeGreaterThan(wrongAccountIndex);
   });
 
   it('offers NO control at all — not a link, not a button', () => {
@@ -60,7 +78,9 @@ describe('NoHouseholdState', () => {
     // moment someone "helpfully" adds "the database may not be seeded yet".
     const { container } = render(<NoHouseholdState />);
     expect(container.textContent?.toLowerCase()).not.toMatch(
-      /seed|database|deploy|migration|admin|localhost|env/,
+      // Word-bounded on the short ones: a bare `env` fires on "seven"/"eleven", a bare `admin` on
+      // "administer", and a guard that cries wolf gets deleted by the next author.
+      /seed|database|deploy|migration|localhost|\badmin\b|\benv\b|environment/,
     );
   });
 });

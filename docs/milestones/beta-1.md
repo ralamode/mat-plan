@@ -83,7 +83,7 @@ flowchart LR
   P1 --> P2[PRIV-2 PR 2 · serve /privacy ✅]
   P2 --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
-  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a wired dark · 1b-1f next]
+  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅<br/>1c-2 · 1c-3 · 1c-4 · 1d]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
@@ -93,6 +93,30 @@ flowchart LR
 **This is the canonical chart.** Every PR in this milestone embeds it with its own step marked
 (`AGENTS.md` → "Milestone PRs also embed a progress chart"), so a reviewer sees what is still between
 that PR and the finish. If a PR's position disagrees with this chart, the chart is what gets fixed.
+
+### Why `AUTH-1` chunk 1c is four PRs, in that order
+
+1c as planned was **19 files** and it is the **one-way door**, so it is split by _what each piece
+makes reachable_: **1c-1** the principal (dark) · **1c-2** the "no household" screen · **1c-3** the
+call sites and sign-out · **1c-4** the resolver.
+
+🔴 **The order is the REVERSE of what the plan implies, and that is deliberate.** The plan lists the
+resolver first; doing that breaks the app — if `getHouseholdScope()` goes membership-based while the
+call sites still check only the gate, every gate-authenticated visitor **without a Clerk session**
+resolves `null` and gets an empty picker. Call sites first is safe: a visitor must have a session
+while the household still resolves the old way, which is correct for Beta 0's one household.
+
+**1c-2 comes before both doors** because until it lands, a `null` scope renders `PickerEmptyState` —
+_"adding an athlete takes a change to this deployment's seed data"_, plus a link into a public repo.
+That must never be what an invited parent reads.
+
+**Ordering obligations, so they are gates and not preferences:**
+
+| Step     | Must not land before | Why                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1c-4** | **1c-3 merged**      | 1c-4 is what makes the no-household screen reachable by a parent. `NO_HOUSEHOLD_COPY.wrongAccount` prescribes signing out, and **1c-3 is what makes that performable** — before it, signing out of Clerk leaves the gate cookie in place.                                                                                                                                                                                           |
+| **1c-3** | —                    | Deletes `NO_HOUSEHOLD_COPY.notYet` (the "signing out isn't in the app yet" line) in the same PR as the control, and owes `data-inventory.md` §7/§8 the Upstash rows. Any NEW `householdState()` call site must establish a principal first.                                                                                                                                                                                         |
+| **1c-4** | —                    | Flips `notice.md`'s _"it is not switched on … nobody has an account"_ paragraph and §7's Clerk/Google cells to present tense **in the same PR**: `wrongAccount` becomes true at that commit, not before. Also re-reads `PICKER_EMPTY_COPY`, whose committed audience argument (_"the reader either deployed this or was handed the code by whoever did"_) becomes false once an invited parent can reach an athlete-less household. |
 
 ⚠️ **`TEN-2` entered this chart on 2026-10-08, and it entered as a FINDING rather than a plan
 change.** Step 2's own criterion said _"either TEN-1 proves the picker and the metadata stay per
