@@ -80,6 +80,14 @@ flowchart LR
    returning the action's not-found copy. Until SEC-1 no action did, and requests carrying a prefetch
    header skipped the proxy, so every action was reachable without the gate cookie.
 
+   🔴 **`AUTH-1` 1c-1 lands the replacement, dark: `lib/dal/session.ts`.** `hasGateAccess()` becomes
+   **`sessionUserOrNull()`** for the seven actions and `requireGatedPage()` becomes
+   **`requireSession()`** for the four pages — same shapes, so `1c-3` is a symbol swap at the call
+   sites and `1d` is a deletion rather than a rewrite. ⚠️ The action refusal returns the **principal,
+   not a boolean**: a boolean cannot supply the `userId` that `checkMutationLimit()` keys on, and two
+   shapes asking one question at one call site is how the source guard ends up matching the weaker
+   call. Until `1c-3`, `lib/dal/gate.ts` is still the boundary and nothing imports `session.ts`.
+
    ✅ **This is now enforced, not requested** (`AUTH-1` 1b-bis). The old wording here —
    _"a new action without it fails the unauth suite only if you add it to that suite: do"_ — was an
    invariant that depended on remembering, which is not an invariant. Two guards close it from both

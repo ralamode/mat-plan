@@ -36,6 +36,19 @@ import { env } from './env';
 export const GATE_RATE_LIMIT = { attempts: 10, window: '10 m' } as const;
 
 /**
+ * The per-user mutation limit (AUTH-1 1c-1). **Sized for a human on a gym floor, not for a gate.**
+ * A kid logging a strength session writes one action per movement and can amend a set twice while
+ * the keyboard is up, so a working session is plausibly 20-40 mutations in a few minutes — which is
+ * why this is NOT the gate's 10-per-10-minutes. The gate limits *guesses at a secret*; this limits
+ * *a signed-in person doing their actual work*, and the failure mode of being too tight is an
+ * athlete who cannot log.
+ *
+ * ⚠️ Keyed by Clerk user id, so it survives a household sharing one NAT — which the gate's IP key
+ * does not, and which `runbooks.md` already records as the tail of the gate's recovery story.
+ */
+export const MUTATION_RATE_LIMIT = { attempts: 120, window: '5 m' } as const;
+
+/**
  * Upstash's own network-failure escape hatch. Its DEFAULT is 5000ms — which on a phone is a five-second
  * hang before a tap registers, blowing the INP budget in ADR-0001. 800ms keeps the fail-open property
  * while staying inside a plausible interaction budget.
@@ -50,20 +63,55 @@ const UPSTASH_TIMEOUT_MS = 800;
  * Postgres), CI (no external network call may gate a build), and previews before the Vercel env is
  * wired all legitimately run without credentials.
  */
-const limiter =
-  env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-        redis: new Redis({
-          url: env.UPSTASH_REDIS_REST_URL,
-          token: env.UPSTASH_REDIS_REST_TOKEN,
-        }),
-        limiter: Ratelimit.slidingWindow(GATE_RATE_LIMIT.attempts, GATE_RATE_LIMIT.window),
-        timeout: UPSTASH_TIMEOUT_MS,
-        analytics: false, // an extra Redis write per check, for a dashboard nobody reads at this scale
-        ephemeralCache: new Map(),
-        prefix: 'mat-plan',
-      })
-    : null;
+/**
+ * 🔴 **A FACTORY, not one limiter — because the window is baked in at construction.**
+ * `Ratelimit.slidingWindow(...)` is fixed when the instance is built, and `checkRateLimit` takes no
+ * policy argument. So before AUTH-1 there was exactly one policy, and adding a `MUTATION_RATE_LIMIT`
+ * const without this change would have left the seven actions limited at **the gate's**
+ * 10-per-10-minutes while a sizing test asserted the new number and passed — "a boundary test that
+ * cannot fail is worse than none", applied to a constant nothing reads.
+ *
+ * Each policy gets its own instance, its own `prefix` and its own `ephemeralCache` (module-level, so
+ * a warm lambda actually reuses it).
+ *
+ * ⚠️ **The prefixes do NOT make collision impossible, and an earlier draft of this comment claimed
+ * they did.** `mat-plan:*` is a *parent* namespace of `mat-plan:mutate:*`, so a future
+ * `checkRateLimit('mutate:…')` would land in the mutation limiter's keyspace, where two different
+ * window sizes produce indices that can coincide and one policy's counter is spent against the
+ * other's budget. What actually keeps them apart is that **each limiter owns its identifier shape**
+ * and no caller builds one by hand. Keep it that way.
+ *
+ * ⚠️ `window` is typed as Upstash's `Duration` template literal, NOT `string`, and the cast that was
+ * here is gone. `Ratelimit.slidingWindow` calls `ms(window)` EAGERLY and throws on anything it cannot
+ * parse — and this runs at MODULE SCOPE, so a typo in the dark mutation policy would have taken down
+ * every importer of this file, including the live gate action. Typed properly, `'5 mins'` is a
+ * compile error instead.
+ */
+function buildLimiter(
+  policy: { attempts: number; window: Parameters<typeof Ratelimit.slidingWindow>[1] },
+  prefix: string,
+): Ratelimit | null {
+  if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) return null;
+  return new Ratelimit({
+    redis: new Redis({
+      url: env.UPSTASH_REDIS_REST_URL,
+      token: env.UPSTASH_REDIS_REST_TOKEN,
+    }),
+    limiter: Ratelimit.slidingWindow(policy.attempts, policy.window),
+    timeout: UPSTASH_TIMEOUT_MS,
+    analytics: false, // an extra Redis write per check, for a dashboard nobody reads at this scale
+    ephemeralCache: new Map(),
+    prefix,
+  });
+}
+
+const limiter = buildLimiter(GATE_RATE_LIMIT, 'mat-plan');
+
+/**
+ * The mutation limiter. **Ships DARK in 1c-1** — `1c-3` is what calls `checkMutationLimit` from the
+ * seven actions, once they have a `userId` to key on.
+ */
+const mutationLimiter = buildLimiter(MUTATION_RATE_LIMIT, 'mat-plan:mutate');
 
 /** Whether the limiter is wired — exported so a runbook/health check can tell "off" from "broken". */
 export const isRateLimitConfigured = limiter !== null;
@@ -78,6 +126,28 @@ export const isRateLimitConfigured = limiter !== null;
  * because under the limit" from "allowed because the limiter is off/broken" — the latter is worth a
  * breadcrumb so a permanently-dead limiter is visible instead of silent.
  */
+/**
+ * The per-user mutation check (AUTH-1 1c-1). Owns its `mutate:` key shape so no call site builds the
+ * identifier by hand — the seven actions pass a `userId` and nothing else, which is also what keeps
+ * the source guard in `pages-are-gated.test.ts` matching one spelling.
+ *
+ * Same fail-OPEN contract as {@link checkRateLimit}, for the same reason: a Redis outage that stops a
+ * kid logging a set is worse than an outage that briefly widens a window on a three-person app.
+ *
+ * ⚠️ **Ships DARK.** `1c-3` adds the call sites, once the actions have a principal.
+ */
+export async function checkMutationLimit(
+  userId: string,
+): Promise<{ allowed: boolean; reason: 'ok' | 'unconfigured' | 'limiter-error' | 'limited' }> {
+  if (!mutationLimiter) return { allowed: true, reason: 'unconfigured' };
+  try {
+    const { success } = await mutationLimiter.limit(userId);
+    return success ? { allowed: true, reason: 'ok' } : { allowed: false, reason: 'limited' };
+  } catch {
+    return { allowed: true, reason: 'limiter-error' };
+  }
+}
+
 export async function checkRateLimit(
   identifier: string,
 ): Promise<{ allowed: boolean; reason: 'ok' | 'unconfigured' | 'limiter-error' | 'limited' }> {

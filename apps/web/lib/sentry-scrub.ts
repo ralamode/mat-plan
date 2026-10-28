@@ -151,6 +151,31 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
   // A transaction's spans: Next records the error message as a span's status/description.
   scrubTree(event.spans);
 
+  // 🔴 AUTH-1 1c-1 — the identified user never reaches Sentry.
+  //
+  // ⚠️ **Nothing populates `event.user` today, and an earlier version of this comment said Clerk did.**
+  // Verified at the pinned version rather than assumed, which is this file's own standard: a recursive
+  // grep for `sentry` across `@clerk/nextjs@7.9.15/dist` returns ZERO hits — there is no Clerk→Sentry
+  // integration. What WOULD populate it is a `Sentry.setUser` call, which nothing in this repo makes
+  // yet. So this closes the path BEFORE anything can take it, rather than cleaning up after something
+  // that already does — and that distinction matters, because a future reader who believes the scrub
+  // is already load-bearing might relax `SENTRY_DATA_COLLECTION.userInfo` on the strength of it.
+  //
+  // When it is populated, the default payload is an id, an email and an IP. Email is the one piece of adult personal data
+  // this app deliberately does NOT hold (`data-inventory.md` §7: it lives in Clerk, which is the
+  // point of using Clerk) — so letting Sentry collect it would reintroduce, in the error pipeline,
+  // exactly what the schema was designed to avoid.
+  //
+  // ⚠️ Deleted rather than masked: a masked field is still a field somebody can decide to unmask.
+  // `contexts.user` is deleted too, because the SDK writes the same object in both places on some
+  // paths and scrubbing one would leave the other.
+  //
+  // This lands in 1c-1, BEFORE any session exists, so there is no window in which an identified
+  // event could be sent. `tags.scope_outcome` and `householdId` are unaffected — those are the
+  // observability this app does want, and neither names a person.
+  delete event.user;
+  if (event.contexts) delete event.contexts.user;
+
   // Contexts can carry a duplicate of the request under `contexts.request` on some paths.
   const requestContext = event.contexts?.request;
   if (requestContext) {
