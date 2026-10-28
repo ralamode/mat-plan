@@ -141,6 +141,33 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
   return householdScopeForRequest(live[0].id);
 }
 
+/**
+ * AUTH-1 1c-2 — soft-delete the HOUSEHOLD, so the picker renders `NoHouseholdState`.
+ *
+ * ⚠️ **Ordering trap:** this harness derives its fixture scope through `liveHouseholdIds` (the one
+ * allowlisted deriver, `packages/db/src/scope.test.ts:FIXTURE_DERIVES_SCOPE`), which by definition
+ * finds nothing once the household is hidden. The state seeders run AFTER that derivation — keep it
+ * that way, or the run fails before it screenshots anything.
+ *
+ * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
+ * `fullyParallel` against one shared seeded database, and a hidden household breaks `selectProfile`
+ * in every other spec.
+ */
+async function seedNoHousehold(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const hidden = await db
+      .update(schema.households)
+      .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+      .where(isNull(schema.households.deletedAt))
+      .returning({ publicId: schema.households.publicId });
+    console.log(`✓ hid ${hidden.length} household(s) → the picker renders its no-household state`);
+  } finally {
+    await pool.end();
+  }
+}
+
 async function seedNoProfiles(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);
@@ -290,6 +317,7 @@ const STATES = {
   empty: null,
   // ONB-0 — the explained first-run empty state. The ONLY way to render it (see `seedNoProfiles`).
   'no-profiles': seedNoProfiles,
+  'no-household': seedNoHousehold,
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
   calisthenics: seedCalisthenics,

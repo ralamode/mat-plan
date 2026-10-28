@@ -6,8 +6,6 @@ import { expect, type Page } from '@playwright/test';
 import { GATE_PATH } from '../lib/access-gate';
 import { APP_HOME_PATH } from '../lib/constants';
 
-import { pickerHeading } from './contexts';
-
 /**
  * Drive the real access-gate form to authenticate a page. Used by the Playwright
  * `setup` project (to mint a reusable `storageState`) and by the screenshot
@@ -39,5 +37,11 @@ export async function gateLogin(page: Page): Promise<void> {
   // With no `from`, the Server Action redirects straight to the app home — the picker, in one hop
   // (OSS-2: `/` is the public landing now).
   await page.waitForURL(APP_HOME_PATH);
-  await expect(pickerHeading(page)).toBeVisible();
+  // AUTH-1 1c-2: ANY `<h1>`, not the picker's specific one. The picker is no longer the only screen
+  // a successful login can land on — a signed-in account with no household gets its own `<h1>`, and
+  // after 1c-4 that is a real state rather than a fresh-deploy curiosity. Asserting the *specific*
+  // heading here would also make this helper a weak health check: a 1c deploy where membership
+  // resolution silently broke would sail past `gateLogin` and then fail confusingly in every spec on
+  // missing tiles. The specs that genuinely need the picker keep asserting `pickerHeading`.
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }

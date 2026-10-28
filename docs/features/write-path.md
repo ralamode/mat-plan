@@ -120,6 +120,15 @@ flowchart LR
      signatures carry no scope — invariant 8 already makes `lib/dal` the one layer allowed ambient
      server state, and a threading mistake one layer up is a leak the compiler cannot see (the
      parameter is present, just wrong).
+   - 🔴 **A page NEVER calls `getHouseholdScope()`** (`AUTH-1` 1c-2). The picker needs to tell "no
+     household" from "a household with no athletes yet" — `listProfiles` returns `[]` for both — and
+     the obvious patch is to have `p/page.tsx` resolve the scope and branch on it. That puts a
+     `HouseholdScope` in `app/`, breaking invariant 2. **`householdState(): 'none' | 'resolved'`** is
+     the discriminator instead: it rides the same `cache()`d resolver and returns **no scope**, so the
+     capability never leaves the DAL. ⚠️ It is deliberately coarser than the resolver's five outcomes
+     — five causes share one honest screen, and the ones that differ for an operator are carried by
+     `scope_outcome` in Sentry. Widening that union to put a cause on screen is how a family gets told
+     something only an operator can act on.
    - **`scope.householdId` is read in exactly ONE MODULE** (`writers/ownership.ts`), which
      `packages/db/src/scope.test.ts` pins by name as `UNWRAPS_SCOPE`. The scope is a **capability**,
      not a tenant id: a call site that unwraps it to build its own `eq()` has turned it back into a

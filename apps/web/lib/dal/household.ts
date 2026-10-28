@@ -65,6 +65,28 @@ import { db } from './db';
  * **Only this function's body** — session → `household_members` → household. No page, action or
  * Route Handler signature holds a scope, so nothing else moves.
  */
+/**
+ * AUTH-1 1c-2 — **does this request resolve a household, without handing out the scope?**
+ *
+ * The picker needs to tell "no household" from "a household with no athletes yet", and today it
+ * cannot: `listProfiles` returns `[]` for both (`if (!scope) return []`), so both land on
+ * `PICKER_EMPTY_COPY` — which tells a signed-in parent to change this deployment's seed data.
+ *
+ * 🔴 **A boolean in the DAL, not a branch in the page.** The obvious patch is to have `p/page.tsx`
+ * call `getHouseholdScope()` — but that puts a `HouseholdScope` in `app/`, breaking
+ * `write-path.md` invariant 2 and promise 2. This returns **no scope**, so the capability never
+ * leaves the DAL, and it rides the same `cache()`d resolver, so it costs no extra query.
+ *
+ * ⚠️ **Deliberately COARSER than the five states it collapses**, and that is not laziness: the
+ * five causes have one honest copy between them (see `NO_HOUSEHOLD_COPY`), and the ones that differ
+ * for the maintainer are carried by `scope_outcome` in Sentry and by the runbook. Widening this union
+ * to put a cause on screen is how a family gets told something only an operator can act on. If you
+ * need the cause, read the telemetry — `getHouseholdScope()` already tags it.
+ */
+export async function householdState(): Promise<'none' | 'resolved'> {
+  return (await getHouseholdScope()) ? 'resolved' : 'none';
+}
+
 export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> => {
   // Single-sourced in `packages/db/src/queries/household-scope.ts` so `db:verify` proves THIS
   // query — including that a soft-deleted household stops resolving — against a real database.

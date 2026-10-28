@@ -1,3 +1,4 @@
+import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -199,6 +200,7 @@ export function SurfacesCell() {
       </Card>
       <EmptyState>Nothing logged yet.</EmptyState>
       <PickerEmptyState />
+      <NoHouseholdState />
       <div className="flex flex-col gap-2" aria-hidden>
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/3" />

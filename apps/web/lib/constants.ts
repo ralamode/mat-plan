@@ -194,6 +194,51 @@ export const QUIET_LINK_CLASS =
  * parent what a wrestler's day consists of. One noun throughout: **athlete** (the human word), not
  * "profile" (the schema's).
  */
+/**
+ * AUTH-1 1c-2 — the screen for "this request resolves no household".
+ *
+ * 🔴 **Every line is true for ALL FIVE causes, and that is the design constraint, not a compromise.**
+ * `householdState()` returns `'none'` for: an unseeded deploy (today); the table not existing yet;
+ * a signed-in parent with no membership (after 1c-4); **the maintainer before the claim correction
+ * has run**; and — the likeliest cause on a phone — **the wrong Google account**, where a parent with
+ * a personal and a work account signs in with whichever one the browser was already in.
+ *
+ * A copy that named one of those would be false for the other four. The maintainer's cases (an
+ * unseeded deploy, a missing table, the pre-correction window) are served by `scope_outcome` in
+ * Sentry and by the runbook — **not by a line on a family's screen**. So: one cause-free string,
+ * telemetry carries the cause, and `householdState()` stays deliberately coarser than the five
+ * states it collapses.
+ *
+ * Statements of fact, never imperatives — the `PICKER_EMPTY_COPY` / `SIGN_IN_COPY` family.
+ */
+export const NO_HOUSEHOLD_COPY = {
+  /** Replaces `PICKER_COPY.subhead`: "Pick a profile to start logging." has no object here. */
+  subhead: 'Nothing is linked to this account yet.',
+  heading: 'No household for this account',
+  what: `A household is the group ${APP_NAME} keeps one family's athletes and their logs in. This account isn't in one, so there is nothing to show here.`,
+  /**
+   * The likeliest cause on a phone, and the only one the reader can fix alone.
+   * ⚠️ Names the control by its exact visible label (WCAG 2.5.3 Label in Name), never "below" —
+   * reflow and a screen reader both break that.
+   * 🔴 **The control itself arrives at 1c-3, not here**: until the session is the boundary, signing
+   * out of Clerk would not sign you out of this app — the gate cookie still governs. Shipping a
+   * control that does not do what it says is what parked the lock-device PR (#303), and the same
+   * argument applies to its mirror image.
+   */
+  wrongAccount:
+    'If you have more than one Google account, this may be the wrong one. Signing out and signing back in with the address the invitation was sent to is the fix.',
+  /**
+   * Says plainly that the screen is a dead end, which is what stops a parent hunting for a button
+   * that does not exist.
+   * ⚠️ **It can never carry an address, and that is deliberate** — the only ones that would make it
+   * tappable are the maintainer's name or email, and committing either puts personal data in a
+   * PUBLIC repo (AGENTS.md → "No personal names"). The invited parent already holds the artifact
+   * that resolves "the person who set this up": the invitation itself, in their inbox. Recorded here
+   * so the missing link is not read as an oversight and "fixed".
+   */
+  next: 'Otherwise, ask the person who set this up to add this account. It is done by hand, and nothing on this screen can do it.',
+} as const;
+
 export const PICKER_EMPTY_COPY = {
   /** Replaces `PICKER_COPY.subhead` when there are no athletes: "Pick a profile to start logging." is an
    *  imperative with no object here, and a screen reader hears it with nothing to supersede it. */
