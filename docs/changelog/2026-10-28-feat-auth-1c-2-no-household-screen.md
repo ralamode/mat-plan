@@ -49,4 +49,8 @@
   `PRIV-2`'s scope correction fixed the notice's prose (#311) but missed the processor table, which
   still said Google gives Clerk _"the email address and account identifier"_. The `userinfo.profile`
   scope cannot be removed, so **the name and profile picture arrive too** — as
-  `data-inventory.md` already recorded. The table row and the served `/privacy` page now say so.
+  `data-inventory.md` already recorded. **Four** published statements carried the narrow claim, not
+  one — the Google row, the Clerk row beside it, the sentence telling a person what they will receive
+  if they ask for everything, and the consent paragraph. All four, and the served `/privacy` page,
+  now say so. ⚠️ Nothing pins `notice.md` against `data-inventory.md`, which is how one correction
+  left three behind; `notice-content.test.ts` checks structure, links and the placeholder gate only.

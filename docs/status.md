@@ -10,7 +10,7 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-✅ **AUTH-1 is five chunks in, and every one of them is still DARK (through 1c-1, 2026-10-28).**
+✅ **AUTH-1 is six chunks in, and every one of them is still DARK (through 1c-2, 2026-10-28).**
 `@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional** (`1a`), the CSP is widened
 for Clerk **by exact origin derived from the publishable key, never a wildcard**, `/sign-in` is public
 and `noindex`, the **`/api` matcher hole** is closed, and `lib/access-gate.ts` is split so chunk `1d`
@@ -19,7 +19,11 @@ enumeration rather than by remembering; **`1c-pre`** (#302) renamed the login se
 do not have to; **`1b`** (#308) added `household_members` + migration `0019` + the claim correction,
 with #310 restoring the household conjunct the first draft of `membershipHousehold` lost; and
 **`1c-1`** (#312) landed the principal — `lib/dal/session.ts`, imported by nothing, failing closed
-three ways.
+three ways; and **`1c-2`** (#313) gave _"no household for this account"_ its own screen **before**
+`1c-4` can make that state reachable by a parent, since until then it renders `PICKER_EMPTY_COPY` —
+_"adding an athlete takes a change to this deployment's seed data"_, plus a link into a public repo.
+`1c-2` is dark in the same sense the rest are: with one live household the state cannot be reached in
+production at all.
 
 **`1c` is split four ways and the resolver goes LAST** — `1c-1` principal → `1c-2` the "no household"
 screen → `1c-3` call sites + sign-out → `1c-4` the resolver. The chart, the reason the order is the

@@ -947,7 +947,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": " — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
+            "text": " — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
           }
         ]
       },
@@ -1470,7 +1470,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " and you will be sent a full copy — including, once sign-in is switched\non, what Clerk holds about your login: your email address, your Google account identifier, and when\nyou signed in. And "
+        "text": " and you will be sent a full copy — including, once sign-in is switched\non, what Clerk holds about your login: your email address, your name, your profile picture, your Google account identifier, and when\nyou signed in. And "
       },
       {
         "k": "strong",
@@ -1873,7 +1873,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": everyone still\ngets in with the shared household access code, nobody has an account, and nothing has been sent to\nClerk or to Google. When it is switched on you will have a personal login instead of the shared code,\nClerk and Google will handle your email address and your Google account identifier, and this notice\nwill say so in the present tense on that day."
+        "text": ": everyone still\ngets in with the shared household access code, nobody has an account, and nothing has been sent to\nClerk or to Google. When it is switched on you will have a personal login instead of the shared code,\nClerk and Google will handle your email address, your name, your profile picture and your Google account identifier, and this notice\nwill say so in the present tense on that day."
       }
     ]
   },

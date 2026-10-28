@@ -31,7 +31,9 @@ import { NO_HOUSEHOLD_COPY } from '@/lib/constants';
  *    one shared seeded database. ⚠️ That cell does NOT cover the `<h1>`, the subhead or the theme
  *    block, which are the parts most likely to overflow at 200% text.
  *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (4.74:1 — AA by
- *    0.24). Prose read once, cold, on a phone should not sit on the AA floor.
+ *    0.24). Prose read once, cold, on a phone should not sit on the AA floor. **The `notYet` status
+ *    line is the deliberate exception** — muted and `text-sm`, exactly as `PickerEmptyState` renders
+ *    its own: it qualifies the paragraph above it rather than being read for content.
  *
  * ⚠️ **Props-free and no Server Action**, deliberately: the inventory cell renders it directly, and a
  * `'use server'` import reachable from `/design/tokens` would put an action in a page's module graph

@@ -57,6 +57,9 @@ describe('NoHouseholdState', () => {
     const wrongAccountIndex = paragraphs.findIndex(
       (el) => el.textContent === NO_HOUSEHOLD_COPY.wrongAccount,
     );
+    // Without this, removing `wrongAccount` makes `findIndex` return -1 and the ordering assertion
+    // below passes for the wrong reason.
+    expect(wrongAccountIndex).toBeGreaterThanOrEqual(0);
     expect(paragraphs.indexOf(notYet!)).toBeGreaterThan(wrongAccountIndex);
   });
 
@@ -78,9 +81,10 @@ describe('NoHouseholdState', () => {
     // moment someone "helpfully" adds "the database may not be seeded yet".
     const { container } = render(<NoHouseholdState />);
     expect(container.textContent?.toLowerCase()).not.toMatch(
-      // Word-bounded on the short ones: a bare `env` fires on "seven"/"eleven", a bare `admin` on
-      // "administer", and a guard that cries wolf gets deleted by the next author.
-      /seed|database|deploy|migration|localhost|\badmin\b|\benv\b|environment/,
+      // `\benv\b` because a bare `env` fires on "seven"/"eleven". `admin` is PREFIX-bounded only:
+      // "ask your administrator" is the plausible future edit to family-facing copy, and `\badmin\b`
+      // would stop matching it. "administer" is a false positive worth paying for.
+      /seed|database|deploy|migration|localhost|\badmin|\benv\b|environment/,
     );
   });
 });
