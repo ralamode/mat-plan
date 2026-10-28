@@ -301,3 +301,38 @@ describe('scrubSentryEvent — Sentry 11 collection paths, stripped as a second 
     expect(frame).toMatchObject({ function: 'write' });
   });
 });
+
+describe('the identified user never reaches Sentry (AUTH-1 1c-1)', () => {
+  it('deletes event.user and contexts.user', () => {
+    // Clerk's SDK and Sentry's Next integration both populate this once a session exists, and the
+    // default payload carries an EMAIL — the one piece of adult personal data this app deliberately
+    // does not hold (data-inventory §7: it lives in Clerk, which is the point of using Clerk).
+    const event = scrubSentryEvent({
+      user: { id: 'user_abc', email: 'parent@example.com', ip_address: '1.2.3.4' },
+      contexts: { user: { id: 'user_abc', email: 'parent@example.com' } },
+    } as never as Parameters<typeof scrubSentryEvent>[0]);
+
+    expect(event.user).toBeUndefined();
+    expect(event.contexts?.user).toBeUndefined();
+  });
+
+  it('deleted, not masked — nothing is left for somebody to decide to unmask', () => {
+    const event = scrubSentryEvent({
+      user: { email: 'parent@example.com' },
+    } as never as Parameters<typeof scrubSentryEvent>[0]);
+    expect(JSON.stringify(event)).not.toContain('parent@example.com');
+    expect(JSON.stringify(event)).not.toContain('[Filtered]');
+  });
+
+  it('leaves the observability this app DOES want — neither tag names a person', () => {
+    const event = scrubSentryEvent({
+      user: { id: 'user_abc' },
+      tags: { scope_outcome: 'no_household' },
+      contexts: { household: { householdId: 7 } },
+    } as never as Parameters<typeof scrubSentryEvent>[0]);
+
+    expect(event.user).toBeUndefined();
+    expect(event.tags?.scope_outcome).toBe('no_household');
+    expect(event.contexts?.household).toEqual({ householdId: 7 });
+  });
+});
