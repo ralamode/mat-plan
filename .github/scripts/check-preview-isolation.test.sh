@@ -89,6 +89,17 @@ expect "SKIP_ENV_VALIDATION anywhere FAILS" 1 "turns off env validation" <<EOF
 ]}}
 EOF
 
+# --- 8b. The session BYPASS in any Vercel scope fails, with ITS OWN remediation rather than
+#         SKIP_ENV_VALIDATION's. A shared message told whoever set an authentication bypass to go and
+#         fix a DATABASE_URL, which is the wrong direction (AUTH-1 1c-3a review).
+expect "E2E_SESSION_BYPASS_USER_ID anywhere FAILS, with bypass-specific advice" 1 "test session BYPASS" <<EOF
+{$(project true true),"env":{"envs":[
+  $(env_var DATABASE_URL '["production"]'),
+  $(env_var DATABASE_URL '["preview"]'),
+  $(env_var E2E_SESSION_BYPASS_USER_ID '["production"]')
+]}}
+EOF
+
 # --- 9. "not shared" is not the same as "present". A Preview scope with no DATABASE_URL at all
 #        shares nothing and is still broken.
 expect "DATABASE_URL missing from preview FAILS" 1 "missing from: preview" <<EOF

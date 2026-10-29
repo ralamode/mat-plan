@@ -94,7 +94,19 @@ export function databaseNameOf(connectionString: string): string | null {
  * from "which database" to "is authentication on".**
  */
 function hasHostOverride(connectionString: string): boolean {
-  return /[?&](host|hostaddr)=/i.test(connectionString);
+  // 🔴 **DECODE first.** The first version of this matched raw text — `/[?&](host|hostaddr)=/i` —
+  // and `pg-connection-string` **decodes** the parameter key, so `?%68ost=ep-prod.aws.neon.tech`
+  // read as local while `pg` connected to Neon. Verified against the pinned parser, which returns
+  // `host: 'ep-prod.aws.neon.tech'` for exactly that string. A guard that inspects a different
+  // representation than the consumer is not a guard.
+  try {
+    const params = new URL(connectionString).searchParams;
+    return params.has('host') || params.has('hostaddr');
+  } catch {
+    // Unparseable: fall back to the raw scan rather than answering "no override". `isLocalDbHost`
+    // returns false for an unparseable string anyway, so this only has to avoid answering *yes*.
+    return /[?&](host|hostaddr)=/i.test(connectionString);
+  }
 }
 
 export function isLocalDbHost(connectionString: string): boolean {

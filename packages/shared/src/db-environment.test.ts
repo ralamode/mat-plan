@@ -70,6 +70,41 @@ describe('isLocalDbHost', () => {
     expect(isLocalDbHost(NEON_PROD)).toBe(false);
     expect(isLocalDbHost('not a url')).toBe(false);
   });
+
+  /**
+   * 🔴 **A libpq `host=` parameter OVERRIDES the hostname in the URL**, so a string that *displays*
+   * as localhost can connect to Neon. Verified against the pinned `pg-connection-string@2.14.1`,
+   * which returns `host: 'ep-prod.aws.neon.tech'` for every case below — while
+   * `packages/db/src/client.ts` hands the raw string straight to `new Pool({ connectionString })`.
+   *
+   * AUTH-1 1c-3a promoted this predicate from *which database* to **is authentication on**, so a
+   * false "local" here arms a session bypass. The percent-encoded case is not hypothetical: the
+   * first version of the guard matched raw text, and the parser decodes the key — so `?%68ost=`
+   * passed it. A guard that inspects a different representation than the consumer is not a guard.
+   */
+  it.each([
+    ['plain', 'postgres://u:pw@localhost:5432/db?host=ep-prod.aws.neon.tech'],
+    ['hostaddr', 'postgres://u:pw@localhost:5432/db?sslmode=require&hostaddr=10.0.0.9'],
+    ['percent-encoded key', 'postgres://u:pw@localhost:5432/db?%68ost=ep-prod.aws.neon.tech'],
+  ])('refuses a host override that makes a remote database look local: %s', (_label, url) => {
+    expect(isLocalDbHost(url)).toBe(false);
+  });
+
+  it.each([
+    ['sslmode', 'postgres://u:pw@localhost:5432/db?sslmode=require'],
+    [
+      'a param whose VALUE contains host=',
+      'postgres://u:pw@localhost:5432/db?application_name=myhost=1',
+    ],
+    [
+      'a different param that merely starts with host',
+      'postgres://u:pw@localhost:5432/db?hostname=x',
+    ],
+  ])('does not false-positive on a legitimate local string: %s', (_label, url) => {
+    // The override check must not make ordinary local connection strings unusable — a guard that
+    // cries wolf gets deleted by the next author, which is how the real one goes with it.
+    expect(isLocalDbHost(url)).toBe(true);
+  });
 });
 
 describe('assertDatabaseEnvironment — off Vercel (local dev, CI, e2e, screenshots)', () => {

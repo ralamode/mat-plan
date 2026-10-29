@@ -5,6 +5,8 @@ import { join } from 'node:path';
 
 import EmbeddedPostgres from 'embedded-postgres';
 
+import { isLocalDbHost } from '@mat-plan/shared';
+
 /**
  * Shared `embedded-postgres` plumbing — the genuinely reusable core extracted from
  * the ephemeral-screenshot flow (PR #43) so BOTH callers ride the same helper
@@ -34,15 +36,17 @@ import EmbeddedPostgres from 'embedded-postgres';
 export const EMBEDDED_DB_NAME = 'mat_plan';
 export const EMBEDDED_DB_USER = 'postgres';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
-
-export function isLocalDbUrl(url: string): boolean {
-  try {
-    return LOCAL_HOSTS.has(new URL(url).hostname);
-  } catch {
-    return false;
-  }
-}
+/**
+ * 🔴 **The shared predicate, not a second copy.** This file carried its own `LOCAL_HOSTS` set, which
+ * had neither the `?host=` override check nor `[::1]` (the WHATWG parser brackets IPv6 hostnames, as
+ * `db-environment.ts` documents). Both injectors cite *this* function as the proof that the bypass
+ * may arm — so "two independent proofs of locality" was really one hardened proof plus a copy that
+ * had drifted. AGENTS.md → Constants: a derivation used in two places becomes one exported helper.
+ *
+ * The duplication was cosmetic while this only chose a database. AUTH-1 1c-3a made it decide whether
+ * **authentication is on**, which is when it stopped being cosmetic.
+ */
+export const isLocalDbUrl = isLocalDbHost;
 
 function hostOf(url: string): string {
   try {
