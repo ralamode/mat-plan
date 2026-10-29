@@ -11,7 +11,7 @@ import { householdScopeForScript } from './writers/household-scope-script';
  * TEN-1's structural claims about the household scope, as tests rather than sentences.
  *
  * The plan's **primary** safety mechanism is the compiler: `isLiveProfile`'s required positional
- * `HouseholdScope` makes an unconverted call site a build failure. This file guards the four things
+ * `HouseholdScope` makes an unconverted call site a build failure. This file guards the five things
  * the compiler **cannot** see, each of which silently removes that mechanism or the containment
  * around it:
  *
@@ -21,7 +21,10 @@ import { householdScopeForScript } from './writers/household-scope-script';
  *    specifier `apps/web` already imports;
  * 3. **`apps/web` naming `householdScopeForScript`** at all;
  * 4. a call site **reading `scope.householdId`** — turning the capability back into a tenant id,
- *    which is exactly what ADR 0006's forward-compatibility requirement 1 forbids.
+ *    which is exactly what ADR 0006's forward-compatibility requirement 1 forbids;
+ * 5. **anything above `lib/dal` CALLING `getHouseholdScope()`** (AUTH-1 1c-2) — nothing is minted
+ *    and nothing is unwrapped, so guards 1-4 all stay green while a `HouseholdScope` lands in a
+ *    page, a component or a `'use server'` module under `lib/`.
  *
  * Source is matched with comments STRIPPED (the `pages-are-gated.test.ts` idiom), so a docblock that
  * *describes* the hazard — this one included — cannot trip the guard, and a `// TODO: scope` cannot
@@ -160,6 +163,31 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     expect(
       offenders.map((f) => relative('', f)).sort(),
       'a scope constructor on a request path bypasses getHouseholdScope() — the one place allowed to decide whose request this is',
+    ).toEqual([]);
+  });
+
+  it('nothing above lib/dal CALLS getHouseholdScope() (write-path invariant 2)', () => {
+    // AUTH-1 1c-2. The guards above contain who may MINT or UNWRAP a scope; this one contains who
+    // may ASK FOR one. Without it the guide's newest red-flagged invariant is prose: a page could
+    // `const scope = await getHouseholdScope(); if (!scope) …` and every existing gate stays green,
+    // because nothing is minted and `scope.householdId` is never read — yet a `HouseholdScope` is
+    // now sitting in `app/`, which is exactly what invariant 2 forbids. The supported way to ask
+    // "does this request resolve a household" without receiving the capability is `householdState()`.
+    //
+    // Swept by EXCLUSION rather than by naming `app|components`: invariant 2 is "nothing ABOVE
+    // `lib/dal` holds a scope", and a `'use server'` module under `lib/` (not `lib/dal/`) is above it
+    // too — 1b-bis exists precisely because such modules are easy to forget. Two homes may name the
+    // resolver: the DAL that owns it, and the screenshot fixture script, which has a database and no
+    // request (already a named constant here).
+    const offenders = WEB_SOURCES.filter(
+      (f) =>
+        !relative('', f).startsWith('apps/web/lib/dal/') &&
+        relative('', f) !== FIXTURE_DERIVES_SCOPE &&
+        /\bgetHouseholdScope\b/.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders.map((f) => relative('', f)).sort(),
+      'write-path.md inv. 2: a caller above lib/dal branches on householdState(), never on the scope itself',
     ).toEqual([]);
   });
 

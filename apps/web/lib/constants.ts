@@ -213,6 +213,71 @@ export const PICKER_EMPTY_COPY = {
   setupAnchor: '#adding-an-athlete',
 } as const;
 
+/**
+ * AUTH-1 1c-2 — the screen for "this request resolves no household".
+ *
+ * 🔴 **Every line is true for ALL FIVE causes, and that is the design constraint, not a compromise.**
+ * `householdState()` returns `'none'` for: an unseeded deploy (today); the table not existing yet;
+ * a signed-in parent with no membership (after 1c-4); **the maintainer before the claim correction
+ * has run**; and — the likeliest cause on a phone — **the wrong Google account**, where a parent with
+ * a personal and a work account signs in with whichever one the browser was already in.
+ *
+ * A copy that named one of those would be false for the other four. The maintainer's cases (an
+ * unseeded deploy, a missing table, the pre-correction window) are served by `scope_outcome` in
+ * Sentry and by the runbook — **not by a line on a family's screen**. So: one cause-free string,
+ * telemetry carries the cause, and `householdState()` stays deliberately coarser than the five
+ * states it collapses.
+ *
+ * 🔴 **The reader's question is "where is my kid's data?", not "what is a household?"** This screen
+ * opens with three statements of absence in a row (heading, subhead, `what`), so `what` has to close
+ * by scoping them to the ACCOUNT. *"There is nothing to show"* is a claim about the world; the true
+ * claim is about this account, and the reader is one clause away from understanding they are at the
+ * wrong door rather than at an empty cupboard. _(UX panel F6, 2026-10-28.)_
+ *
+ * Statements of fact, never imperatives — the `PICKER_EMPTY_COPY` / `SIGN_IN_COPY` family, including
+ * its `notYet` idiom for a control that is not here yet.
+ */
+export const NO_HOUSEHOLD_COPY = {
+  /**
+   * Replaces `PICKER_COPY.subhead`: "Pick a profile to start logging." has no object here.
+   * ⚠️ **No "yet."** It promises the state resolves on its own, which is false in the wrong-account
+   * case — that account is never linked, however long the reader waits.
+   */
+  subhead: 'Nothing is linked to this account.',
+  heading: 'No household for this account',
+  what: `A household is the group ${APP_NAME} keeps one family’s athletes and their logs in. This account isn’t in one, so this screen has nothing to show. That is about the account, not about anyone’s training history.`,
+  /**
+   * The only cause the reader can fix alone.
+   * ⚠️ **Predicated on the ACT, not on owning accounts.** "If you have more than one Google account"
+   * is true of most adults, so it never goes quiet — and today's only reader came through the access
+   * gate and never touched Google. "If you signed in with Google" self-disables for them.
+   * 🔴 **The control arrives at 1c-3, not here**: until the session is the boundary, signing out of
+   * Clerk would not sign you out of this app — the gate cookie still governs. Shipping a control that
+   * does not do what it says is what parked the lock-device PR (#303), and the same argument applies
+   * to its mirror image. `notYet` below is what says so on screen.
+   */
+  wrongAccount:
+    'If you signed in with Google and have more than one account, this may be the wrong one. Signing out and signing back in with the address the invitation was sent to is the fix.',
+  /**
+   * 🔴 **Deleted at 1c-3, which ships the control.** Without it `wrongAccount` prescribes an action
+   * with no affordance anywhere on the page, and `next`’s *"Otherwise"* makes it read as a live
+   * branch. `PICKER_EMPTY_COPY.notYet` / `SIGN_IN_COPY.notYet` are the same idiom: lead with the
+   * state, so nobody hunts for a button that is not there.
+   */
+  notYet: 'Signing out isn’t in the app yet.',
+  /**
+   * Says plainly that the screen cannot add the account, which is what stops a parent hunting for a
+   * control that does not exist. Names the invitation because *"the person who set this up"* is
+   * otherwise an unresolvable handle on a phone — a reply in their mail client reaches that person,
+   * and the clause is conditional, so it stays true in all five causes.
+   * ⚠️ **It must never name the maintainer** (AGENTS.md → "No personal names"; the repo is public).
+   * It does not need to: `SiteFooter` renders on this page and links `PRIVACY_PATH`, and the notice
+   * carries the project address. Recorded so a future author neither commits a personal address nor
+   * reads the absence of one as an oversight.
+   */
+  next: 'Otherwise, ask the person who set this up to add this account — if you have the invitation, replying to it reaches them. Adding an account is done by hand, and nothing on this screen can do it.',
+} as const;
+
 /** The routine editor's copy — the e2e replays its Save, so the label has one home. */
 export const ROUTINE_COPY = {
   orderHeading: 'Routine order',

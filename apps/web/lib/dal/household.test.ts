@@ -30,7 +30,7 @@ const { state, recording, captureMessage } = await vi.hoisted(async () => {
 vi.mock('./db', () => ({ db: recording.db }));
 vi.mock('@sentry/nextjs', () => ({ captureMessage }));
 
-import { getHouseholdScope } from './household';
+import { getHouseholdScope, HOUSEHOLD_STATE, householdState } from './household';
 
 beforeEach(() => {
   state.households = [];
@@ -149,5 +149,34 @@ describe('reportScopeMiss — the miss-path event', () => {
     ).resolves.toBeUndefined();
     vi.doUnmock('./db');
     vi.resetModules();
+  });
+});
+
+/**
+ * AUTH-1 1c-2 — the picker's discriminator. Three things, each of which a later author could break:
+ *
+ * - it **returns no scope**, which is the entire reason it exists rather than `p/page.tsx` calling
+ *   `getHouseholdScope()` itself (`write-path.md` invariant 2 — a `HouseholdScope` must not reach
+ *   `app/`). ⚠️ That half is **structural, not behavioural**, so it is not pinned here: asserting
+ *   `typeof value === 'string'` only restates the return type. `packages/db/src/scope.test.ts`
+ *   enforces it, by failing the build if any file under `app/` or `components/` names the resolver;
+ * - it is **coarser than the resolver on purpose**, collapsing five causes into one honest screen;
+ * - it does **NOT** collapse the ambiguous case. `≥2 live households` still throws. Reporting
+ *   "no household for this account" when the server cannot tell *whose* data it holds would tell a
+ *   family their data is gone and send the operator looking in the wrong place.
+ */
+describe('householdState — "does this request resolve a household", without handing out the scope', () => {
+  it('exactly one live household → resolved', async () => {
+    state.households = [[11]];
+    await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.resolved);
+  });
+
+  it('zero live households → none', async () => {
+    await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.none);
+  });
+
+  it('two live households → THROWS; it must not degrade to "none"', async () => {
+    state.households = [[11], [22]];
+    await expect(householdState()).rejects.toThrow(/ambiguous/);
   });
 });
