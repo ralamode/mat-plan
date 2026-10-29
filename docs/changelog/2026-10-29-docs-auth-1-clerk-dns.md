@@ -23,3 +23,14 @@
   measurement away from being made on an assumption.
   ⚠️ Scope: this covers the sign-IN card only. The sign-UP consent step renders unstyled for an
   unrelated reason, which the bot-protection box already records.
+- **2026-10-29** — **Correction to the entry above: the precise claim is "no `style-src` violation",
+  not "a clean console".** The same page load reports **one `script-src` issue — `eval` blocked** —
+  and it appears in DevTools' **Issues** panel rather than Console, which is exactly why a glance at
+  Console read as clean. The `style-src` conclusion is unaffected (different directive, and the card
+  is demonstrably styled), but the stronger wording was wrong and is fixed.
+  `'unsafe-eval'` is **dev-only** in `proxy.ts`, so production blocks `eval` by design. The card
+  still renders, Clerk still sets `__client`, and a full Google sign-in completes — so it is **not
+  fatal to sign-in**; what is unknown is whether a narrower Clerk path depends on it. Recorded as its
+  own open box, with the warning not to reach for `'unsafe-eval'`: it is the most load-bearing thing
+  a `script-src` can give away, and `'strict-dynamic'` plus a nonce is what the rest of the app is
+  built on.

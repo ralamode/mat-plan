@@ -1439,8 +1439,12 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `pnpm e2e:local` procedure this box planned, because it is the real build, the real nonce and
       the real `pk_live_` instance rather than a local approximation. `/sign-in` renders Clerk's card
       **fully styled** — the Google button, its border and type, and the "Secured by Clerk" footer —
-      with **zero console violations of any kind**. So `clerk-js` stamps the nonce from
+      with **no `style-src` violation**. So `clerk-js` stamps the nonce from
       `<ClerkProvider nonce dynamic>` onto the `<style>` elements it injects.
+      ⚠️ **"No `style-src` violation" is the precise claim, and it is narrower than "a clean
+      console."** The same page load reports **one `script-src` issue — `eval` blocked** — in
+      DevTools' **Issues** panel rather than Console, which is why a glance at Console reads as clean.
+      It is a different directive and a separate box (below); it does not weaken this one.
       🔴 **The prepared remedy is therefore NOT applied, and must not be.** It would have widened
       `'unsafe-inline'` for the `SIGN_IN_PATH` subtree — and because a nonce makes `'unsafe-inline'`
       inert under CSP3, that meant **deleting the nonce for the whole app on every route**. The
@@ -1448,6 +1452,18 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       ⚠️ **What this does NOT cover:** the sign-UP consent step, which the bot-protection box below
       records as rendering unstyled for an unrelated reason. Re-read that box rather than treating
       this one as covering every Clerk surface.
+- [ ] **`script-src` — `eval` is blocked in production, and the sign-in card renders anyway.**
+      Production is `script-src 'self' 'nonce-…' 'strict-dynamic'`; `'unsafe-eval'` is **dev-only**
+      (`proxy.ts`, for React's richer stack traces). On the live instance `/sign-in` reports exactly
+      one issue — _"Content Security Policy of your site blocks the use of `eval` in JavaScript"_ —
+      while the card renders, Clerk sets `__client`, and a full Google sign-in completes. So it is
+      **not fatal to sign-in**; what is unknown is whether some narrower Clerk path depends on it.
+      ⚠️ **It surfaces in DevTools' Issues panel, NOT Console**, which is why the first look at this
+      page read as clean. Check Issues before recording any CSP box as closed.
+      🔴 **Do not reach for `'unsafe-eval'` as the fix.** It is the single most load-bearing thing a
+      `script-src` can give away, and `'strict-dynamic'` plus a nonce is the policy the rest of the
+      app is built on. The question to answer first is **which** code evals — Clerk's own bundle, or
+      a dependency it loads — and whether the affected feature is one this app uses at all. Open.
 - [ ] 🔴 **Clerk's BOT PROTECTION breaks sign-up under our CSP — measured 2026-10-22, and this is the
       box that actually bit.** `1a` allowed `https://challenges.cloudflare.com` in `frame-src`, read
       off the pinned version's `DEFAULT_DIRECTIVES`. ⚠️ **At `clerk-js` 6.40.0 that is the wrong
