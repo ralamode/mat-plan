@@ -1417,7 +1417,7 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the vendor's own type says the nonce "requires the `dynamic` prop to also be set"). Clerk's own
       recommended policy is **not** adopted: it carries `'unsafe-inline' https: http:` in `script-src`
       and two `*.protect.clerk.com` wildcards.
-- [ ] 🔴 **`style-src` — still open, and ⚠️ `pnpm dev` CANNOT close it.** Production is
+- [x] ✅ **`style-src` — CLOSED 2026-10-29: `clerk-js` DOES propagate our nonce, and production needs no change.** Production is
       `style-src 'self' 'nonce-…'`; Clerk's recommended policy is `'self' 'unsafe-inline'`, and under
       CSP3 a nonce makes `'unsafe-inline'` inert — so there is no "add it as well": relaxing
       `style-src` for Clerk means **deleting the nonce for the whole app, on every route**.
@@ -1435,11 +1435,19 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `<style>` elements it creates?** If it does, production needs no change at all. If it does not,
       they are blocked under `'nonce-…'` and the card goes unstyled — losing contrast, focus-visible
       and every tap target at once.
-      **Procedure — a PRODUCTION build, not `pnpm dev`:** `pnpm e2e:local` (which builds the prod app,
-      so `isDev` is false and the nonce branch is live) with the development Clerk keys injected, then
-      load `/sign-in` and look for `style-src` violations and an unstyled card. The prepared remedy is
-      unchanged: widen `'unsafe-inline'` **scoped to the `SIGN_IN_PATH` subtree only**, pinned in
-      `proxy.test.ts`, with the cost to the app-wide nonce argument written down.
+      ✅ **Answered 2026-10-29 on the live production deployment** — a stronger reading than the
+      `pnpm e2e:local` procedure this box planned, because it is the real build, the real nonce and
+      the real `pk_live_` instance rather than a local approximation. `/sign-in` renders Clerk's card
+      **fully styled** — the Google button, its border and type, and the "Secured by Clerk" footer —
+      with **zero console violations of any kind**. So `clerk-js` stamps the nonce from
+      `<ClerkProvider nonce dynamic>` onto the `<style>` elements it injects.
+      🔴 **The prepared remedy is therefore NOT applied, and must not be.** It would have widened
+      `'unsafe-inline'` for the `SIGN_IN_PATH` subtree — and because a nonce makes `'unsafe-inline'`
+      inert under CSP3, that meant **deleting the nonce for the whole app on every route**. The
+      measurement saved an app-wide CSP weakening that was about to be made on an assumption.
+      ⚠️ **What this does NOT cover:** the sign-UP consent step, which the bot-protection box below
+      records as rendering unstyled for an unrelated reason. Re-read that box rather than treating
+      this one as covering every Clerk surface.
 - [ ] 🔴 **Clerk's BOT PROTECTION breaks sign-up under our CSP — measured 2026-10-22, and this is the
       box that actually bit.** `1a` allowed `https://challenges.cloudflare.com` in `frame-src`, read
       off the pinned version's `DEFAULT_DIRECTIVES`. ⚠️ **At `clerk-js` 6.40.0 that is the wrong

@@ -11,3 +11,15 @@
   certificate-transparency result means issuance never started, so waiting will not help.
   ⚠️ **The `style-src` question remains open**, and this is what unblocks reaching it: nothing had
   rendered yet to violate a style policy. A resolved 404 is not a cleared CSP.
+- **2026-10-29** — **`style-src` is closed, and the answer is that production needs no change at
+  all.** The open question was narrow: does `clerk-js` stamp the nonce from
+  `<ClerkProvider nonce dynamic>` onto the `<style>` elements it injects? Measured on the **live
+  production deployment** — a stronger reading than the `pnpm e2e:local` procedure the box planned,
+  because it is the real build, the real nonce and the real `pk_live_` instance: `/sign-in` renders
+  Clerk's card fully styled with **zero console violations**.
+  🔴 **The prepared remedy is therefore not applied.** It would have widened `'unsafe-inline'` for
+  the `SIGN_IN_PATH` subtree — and since a nonce makes `'unsafe-inline'` inert under CSP3, that meant
+  **deleting the nonce for the whole app, on every route**. An app-wide CSP weakening was one
+  measurement away from being made on an assumption.
+  ⚠️ Scope: this covers the sign-IN card only. The sign-UP consent step renders unstyled for an
+  unrelated reason, which the bot-protection box already records.
