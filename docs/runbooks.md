@@ -1289,18 +1289,52 @@ is a later, explicit act from the instance dropdown, and the first box below is 
 yet. Navigation paths in this list are the dashboard's **current** ones (verified 2026-10-21); Clerk
 moves them, so treat a path that does not resolve as a renamed page, not a missing feature.
 
-- [ ] 🔴 **Production keys stay UNSET until chunk 1c.** This is the one box that is about _not_ doing
+- [x] ✅ **Production keys stay UNSET until chunk 1c — DISCHARGED 2026-10-29**, when `1c-3` made the
+      session the boundary and the keys went into Vercel (Production scope; the publishable half as
+      **Config**, not Secret — it is public by design and Vercel refuses the contradiction). Kept for
+      the reasoning, which is still the reason not to light an instance early. This was about _not_ doing
       something, and it is the UX panel's finding, not a precaution: between 1a and 1c a completed
       Google sign-in grants nothing, lands on `APP_HOME_PATH`, and is bounced to `/gate` for the shared
       password — so the reward for signing in is a password prompt, with no explanation on screen. Use
       the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
-- [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
+- [x] ✅ **The production instance's custom domain — DONE 2026-10-29.** A production instance serves its Frontend API from
+      `clerk.<domain>` and its Account Portal from `accounts.<domain>`; neither resolves until CNAMEs
+      exist. The dashboard's **Configure → Domains** lists the full set — the mail/DKIM entries carry
+      an instance id, so copy them rather than reconstruct them. The two that gate sign-in:
+
+      | Host | Type | Target |
+      | --- | --- | --- |
+      | `clerk.<domain>` | CNAME | `frontend-api.clerk.services` |
+      | `accounts.<domain>` | CNAME | `accounts.clerk.services` |
+
+      ⚠️ **Set this up in the PRODUCTION instance.** The dashboard opens on **development**, where
+      every page in this list renders plausibly — a Domains tab showing a `*.clerk.accounts.dev`
+      primary badged _Development domain_ is the tell. The environment selector sits beside the
+      application name.
+
+      **Three diagnostics, because the failure modes are indistinguishable from the app side.** Each
+      answers a different question and none requires the dashboard:
+
+      | Symptom | Command | Reading |
+      | --- | --- | --- |
+      | clerk-js 404s, browser reports a CORS error | `dig +short zzz-nope.<domain> A` | A deliberately non-existent subdomain resolving means a **wildcard** is answering for `clerk.*` too, sending it to the app host — which 404s on an unknown hostname. A specific CNAME beats a wildcard, so add the records; the wildcard can stay. |
+      | TLS `handshake failure`, no HTTP status | `curl -o /dev/null -w '%{http_code}' https://<frontend-api>/v1/client` on **both** instances | Development answering **200** while `clerk.<domain>` answers **000** is conclusive: Clerk is healthy, the custom hostname has no certificate. Not CSP, not CORS, not the key. |
+      | Certificate seems stuck | `curl -s 'https://crt.sh/?q=clerk.<domain>&output=json'` | Empty means issuance has **never started** — the domain is unverified on Clerk's side, so waiting will not help. A result means it is in flight. |
+
+      📌 The publishable key encodes the host Clerk expects: `base64 -d` the part after `pk_live_`.
+      **A healthy result is `200` or `401`** — `401` means Clerk answered.
+
+- [x] ✅ **Google only — verified on the PRODUCTION instance, 2026-10-29.** Every other sign-in strategy disabled, or invitation-only has a second door.
       **Path (verified 2026-10-21):** **SSO connections → Add connection → For all users → Google.**
       Disable email/password and every other strategy in the same pass; the point of the box is that
       invite-only governs one door only if there is one door.
-- [x] **Sign-up restricted to invited emails — verified 2026-10-21.** ✅ **It exists, it is called
+- [x] **Sign-up restricted to invited emails.** 🔴 **The 2026-10-21 verification was on the
+      DEVELOPMENT instance, and production stayed `Open` until 2026-10-29** — proven, not suspected:
+      two accounts self-created from two Google addresses with no invitation, 20 minutes apart, while
+      the checklist read as satisfied. **Access mode is per-instance, like everything else on this
+      page.** Set to `Invite-only` on production 2026-10-29. ✅ **It exists, it is called
       `Invite-only`** (API value `restricted`), on the **Access mode** page
       (`dashboard.clerk.com/~/user-authentication/access-mode`), one of three modes with `Open`
       (`public`) and `Waitlist` (`waitlist`). ✅ **It blocks**, per Clerk's
@@ -1390,7 +1424,7 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the vendor's own type says the nonce "requires the `dynamic` prop to also be set"). Clerk's own
       recommended policy is **not** adopted: it carries `'unsafe-inline' https: http:` in `script-src`
       and two `*.protect.clerk.com` wildcards.
-- [ ] 🔴 **`style-src` — still open, and ⚠️ `pnpm dev` CANNOT close it.** Production is
+- [x] ✅ **`style-src` — CLOSED 2026-10-29: `clerk-js` DOES propagate our nonce, and production needs no change.** Production is
       `style-src 'self' 'nonce-…'`; Clerk's recommended policy is `'self' 'unsafe-inline'`, and under
       CSP3 a nonce makes `'unsafe-inline'` inert — so there is no "add it as well": relaxing
       `style-src` for Clerk means **deleting the nonce for the whole app, on every route**.
@@ -1408,12 +1442,37 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `<style>` elements it creates?** If it does, production needs no change at all. If it does not,
       they are blocked under `'nonce-…'` and the card goes unstyled — losing contrast, focus-visible
       and every tap target at once.
-      **Procedure — a PRODUCTION build, not `pnpm dev`:** `pnpm e2e:local` (which builds the prod app,
-      so `isDev` is false and the nonce branch is live) with the development Clerk keys injected, then
-      load `/sign-in` and look for `style-src` violations and an unstyled card. The prepared remedy is
-      unchanged: widen `'unsafe-inline'` **scoped to the `SIGN_IN_PATH` subtree only**, pinned in
-      `proxy.test.ts`, with the cost to the app-wide nonce argument written down.
-- [ ] 🔴 **Clerk's BOT PROTECTION breaks sign-up under our CSP — measured 2026-10-22, and this is the
+      ✅ **Answered 2026-10-29 on the live production deployment** — a stronger reading than the
+      `pnpm e2e:local` procedure this box planned, because it is the real build, the real nonce and
+      the real `pk_live_` instance rather than a local approximation. `/sign-in` renders Clerk's card
+      **fully styled** — the Google button, its border and type, and the "Secured by Clerk" footer —
+      with **no `style-src` violation**. So `clerk-js` stamps the nonce from
+      `<ClerkProvider nonce dynamic>` onto the `<style>` elements it injects.
+      ⚠️ **"No `style-src` violation" is the precise claim, and it is narrower than "a clean
+      console."** The same page load reports **one `script-src` issue — `eval` blocked** — in
+      DevTools' **Issues** panel rather than Console, which is why a glance at Console reads as clean.
+      It is a different directive and a separate box (below); it does not weaken this one.
+      🔴 **The prepared remedy is therefore NOT applied, and must not be.** It would have widened
+      `'unsafe-inline'` for the `SIGN_IN_PATH` subtree — and because a nonce makes `'unsafe-inline'`
+      inert under CSP3, that meant **deleting the nonce for the whole app on every route**. The
+      measurement saved an app-wide CSP weakening that was about to be made on an assumption.
+      ⚠️ **What this does NOT cover:** the sign-UP consent step, which the bot-protection box below
+      records as rendering unstyled for an unrelated reason. Re-read that box rather than treating
+      this one as covering every Clerk surface.
+- [ ] **`script-src` — `eval` is blocked in production, and the sign-in card renders anyway.**
+      Production is `script-src 'self' 'nonce-…' 'strict-dynamic'`; `'unsafe-eval'` is **dev-only**
+      (`proxy.ts`, for React's richer stack traces). On the live instance `/sign-in` reports exactly
+      one issue — _"Content Security Policy of your site blocks the use of `eval` in JavaScript"_ —
+      while the card renders, Clerk sets `__client`, and a full Google sign-in completes. So it is
+      **not fatal to sign-in**; what is unknown is whether some narrower Clerk path depends on it.
+      ⚠️ **It surfaces in DevTools' Issues panel, NOT Console**, which is why the first look at this
+      page read as clean. Check Issues before recording any CSP box as closed.
+      🔴 **Do not reach for `'unsafe-eval'` as the fix.** It is the single most load-bearing thing a
+      `script-src` can give away, and `'strict-dynamic'` plus a nonce is the policy the rest of the
+      app is built on. The question to answer first is **which** code evals — Clerk's own bundle, or
+      a dependency it loads — and whether the affected feature is one this app uses at all. Open.
+- [x] ✅ **Clerk's BOT PROTECTION — turned OFF on the PRODUCTION instance, 2026-10-29**, which is
+      option 1 below. Measured 2026-10-22, and this is the
       box that actually bit.** `1a` allowed `https://challenges.cloudflare.com` in `frame-src`, read
       off the pinned version's `DEFAULT_DIRECTIVES`. ⚠️ **At `clerk-js` 6.40.0 that is the wrong
       mechanism and the allowance is dead weight:** bot protection now loads
