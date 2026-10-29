@@ -3,9 +3,9 @@
 One file-by-file plan per **significant** PR, written and reviewed **before** any implementation code
 is committed. The plan is the reviewable contract for the change; the PR then executes it.
 
-- **When a plan is required** (see AGENTS.md → "Implementation plans for significant PRs"): the change
-  touches CI, a DB migration, auth, a new subsystem/runner, or non-trivial multi-file logic.
-- **Exempt:** docs, copy, config one-liners, and single-file mechanical changes.
+- **When a plan is required, and what is exempt:** AGENTS.md → "Implementation plans for significant
+  PRs" is the source (in short: CI, a migration, auth, a new subsystem/runner, non-trivial multi-file
+  logic; docs, copy, config one-liners and single-file mechanical changes are exempt).
 - **Naming:** `<id>-<slug>.md`, matching the backlog id — e.g. `v0-11-ci-postgres-playwright.md`.
 - **Lifecycle:** drafted (usually by the Plan agent) → **adversarial review** (below) → reviewed by a
   human → committed on the feature branch in the **same PR** as the code it plans. The row in

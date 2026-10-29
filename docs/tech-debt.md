@@ -462,7 +462,7 @@ success.` Harmless there — nothing referenced the files yet.
   is built it must branch the **`mat-plan-preview`** project or use an anonymized snapshot. The
   rehearsal value (real row counts) is partly lost that way, which is a trade to make deliberately.
 - **Proposed fix:** a PR job that cuts a Neon branch from `main` and applies the migration against it
-  (AGENTS.md's "(b) a Neon branch cut from main"). Needs a Neon API token in repo secrets and a
+  (the one gate AGENTS.md → "Local hooks vs CI merge-gates" still lists as NOT wired). Needs a Neon API token in repo secrets and a
   create/delete branch step — the reason it has been deferred is credentials plus per-PR cost, not
   difficulty. Trigger: the first migration whose risk is **data-shaped** (a backfill over real row counts)
   rather than shape-shaped — GAP-3's backfill step is the candidate.
