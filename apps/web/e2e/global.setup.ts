@@ -1,8 +1,9 @@
 import { SEED_PROFILE_2_NAME, SEED_PROFILE_NAME } from '@mat-plan/shared';
-import { test as setup } from '@playwright/test';
+import { expect, test as setup } from '@playwright/test';
 
 import { STORAGE_STATE } from '../playwright.config';
 import { APP_HOME_PATH } from '../lib/constants';
+import { pickerHeading } from './contexts';
 import { gateLogin } from './login';
 import { logBodyweight, selectProfile, submitCheckins, WARMUP_BODYWEIGHT } from './steps';
 
@@ -23,6 +24,13 @@ setup.setTimeout(180_000);
 
 setup('authenticate + warm the write path', async ({ page }) => {
   await gateLogin(page);
+  // 🔴 **The suite's household health check (AUTH-1 1c-2).** `gateLogin` now asserts only that SOME
+  // `<h1>` rendered, because the screenshot harness drives it for the no-household state too. This
+  // is the consumer that genuinely requires the picker — every line below it selects a profile — so
+  // the specific assertion belongs here. Without it, a deploy where household resolution silently
+  // broke would render "No household for this account", sail through login, and first fail as a
+  // `selectProfile` timeout on a missing tile: a confusing failure a long way from its cause.
+  await expect(pickerHeading(page)).toBeVisible();
   await page.context().storageState({ path: STORAGE_STATE });
 
   await page.goto(APP_HOME_PATH);

@@ -28,7 +28,9 @@ import { db } from './db';
  * - **exactly one row** → that household.
  * - **ZERO rows** → `null`. A genuinely empty database; the picker's empty state is the honest
  *   answer, and a Sentry **message** (not an exception — an empty database is not a server fault)
- *   records the count. A household *count* is not personal data, so SECURITY.md → Logging is fine.
+ *   records that it happened. The payload is the fixed message plus `scope_outcome`, and
+ *   deliberately carries **no count, no id and no name**, so SECURITY.md → Logging is satisfied by
+ *   construction rather than by judgement.
  * - **TWO rows** → **THROW**. The server cannot tell whose data it holds. That is an unexpected
  *   server state, not a user error, so `write-path.md` invariant 4 routes it to a throw →
  *   `error.tsx` + a Sentry exception with a stack.
@@ -73,8 +75,8 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
   if (rows.length === 1) return householdScopeForRequest(rows[0].id);
 
   if (rows.length === 0) {
-    // Not an exception: an empty database is a deployment state, not a fault. The count is the whole
-    // payload — no ids, no names.
+    // Not an exception: an empty database is a deployment state, not a fault. The fixed message and
+    // the `scope_outcome` tag are the WHOLE payload — no count, no ids, no names.
     Sentry.captureMessage('household scope unresolved: no live household', {
       level: 'warning',
       tags: { scope_outcome: 'no_household' },
@@ -89,6 +91,51 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
       'server cannot tell whose data it holds',
   );
 });
+
+/**
+ * The two answers `householdState()` can give. Hoisted rather than inlined so the page and the tests
+ * compare against the same symbol — the `SCOPE_MISS_OUTCOME` idiom forty lines below, and
+ * AGENTS.md → "Constants, enums & shared values" ("tests use the same constant as the app").
+ */
+export const HOUSEHOLD_STATE = { none: 'none', resolved: 'resolved' } as const;
+export type HouseholdState = (typeof HOUSEHOLD_STATE)[keyof typeof HOUSEHOLD_STATE];
+
+/**
+ * AUTH-1 1c-2 — **does this request resolve a household, without handing out the scope?**
+ *
+ * The picker needs to tell "no household" from "a household with no athletes yet", and today it
+ * cannot: `listProfiles` returns `[]` for both (`if (!scope) return []`), so both land on
+ * `PICKER_EMPTY_COPY` — which tells a signed-in parent to change this deployment's seed data.
+ *
+ * 🔴 **A boolean in the DAL, not a branch in the page.** The obvious patch is to have `p/page.tsx`
+ * call `getHouseholdScope()` — but that puts a `HouseholdScope` in `app/`, breaking
+ * `write-path.md` invariant 2 and promise 2. This returns **no scope**, so the capability never
+ * leaves the DAL, and it rides the same `cache()`d resolver above, so it costs no extra query.
+ * `packages/db/src/scope.test.ts` fails the build if a page or component names the resolver.
+ *
+ * ⚠️ **Deliberately COARSER than the causes it collapses**, and that is not laziness: five causes
+ * have one honest screen between them (see `NO_HOUSEHOLD_COPY`), and the ones that differ for the
+ * maintainer are carried by `scope_outcome` in Sentry and by the runbook. Widening this union to put
+ * a cause on screen is how a family gets told something only an operator can act on. If you need the
+ * cause, read the telemetry — `getHouseholdScope()` already tags it. (The resolver has **three**
+ * outcomes — scope, `null`, throw; the five are the causes that collapse into `null`.)
+ *
+ * 🔴 **Callers must establish a PRINCIPAL first** (`requireSession()` / `sessionUserOrNull()`).
+ * Today `'none'` is a property of the deployment; after 1c-4 it is a property of the requester, and
+ * it absorbs *no session* and a missing `household_members` table too (the plan's § Design 3.2, B
+ * and B′). A sessionless caller would therefore be shown a wrong-Google-account explanation — the
+ * exact class of wrong-audience copy this screen exists to delete. `p/page.tsx` is safe because
+ * 1c-3 puts `requireSession()` ahead of this call; any NEW call site owes the same ordering.
+ *
+ * ⚠️ **The plan placed this in `lib/dal/session.ts`** (`auth-1-clerk-google.md` § file table). It
+ * lands here instead because at 1c-4 `household.ts` imports `getCurrentUser` from `session.ts`
+ * (§ Design 3.1), so the reverse import would make the two modules a cycle — a cost the plan did not
+ * price. It is also a pure projection of the resolver directly above it, which is the
+ * `catalog.ts` / `household.ts` "resolver and its satellites together" shape § Design 2 argues for.
+ */
+export async function householdState(): Promise<HouseholdState> {
+  return (await getHouseholdScope()) ? HOUSEHOLD_STATE.resolved : HOUSEHOLD_STATE.none;
+}
 
 /**
  * What a scope miss was, as the event records it. **Three values, because two would lie.**

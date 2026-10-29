@@ -10,24 +10,32 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-✅ **AUTH-1 chunk 1a has landed: Clerk is wired, and dark (2026-10-16).**
-`@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional**, no instance configured, and
-every caller sees exactly what they saw yesterday — and that is a branch in our own code
-(`apps/web/lib/clerk.ts`), not a vendor behaviour we hoped for, because at this version Clerk's
-provider **throws** on a missing publishable key when its keyless path is live. `next.config.ts` pins
-Clerk's telemetry **and** its keyless auto-provisioning off in code; the latter would have provisioned
-a live Clerk application from a `pnpm dev`. `/sign-in` is the third public route (`noindex`), ran a
-three-lens UX panel before it was written, and while dark it names the access code as the way in. The
-CSP is widened for Clerk **by exact origin derived from the publishable key, never a wildcard**, and
-**`style-src` is deliberately untouched** — the one CSP question that needs a real instance, now a
-runbook box rather than a guess. 1a also closed the **`/api` matcher hole** `SECURITY.md` and
-`tech-debt.md` carried, and split `lib/access-gate.ts` into `lib/safe-redirect.ts` +
-`lib/public-paths.ts` so chunk 1d is a pure delete. **What remains on the `AUTH-1` path:** chunk
-**1b-bis** (the action-enumeration guard, test-only) next, and the **console configuration** itself
-— whose first box is now _production keys stay unset until 1c_, because between 1a and 1c a completed
-Google sign-in would land on a shared-password prompt. ⚠️ Nothing in this repo can measure the LIT
-sign-in screen (no keys in CI, Clerk's DOM ships from a CDN at a floating major) —
-[tech-debt.md](./tech-debt.md) carries the row and the runbook carries the owed panel.
+✅ **AUTH-1 is six chunks in, and every one of them is still DARK (through 1c-2, 2026-10-28).**
+`@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional** (`1a`), the CSP is widened
+for Clerk **by exact origin derived from the publishable key, never a wildcard**, `/sign-in` is public
+and `noindex`, the **`/api` matcher hole** is closed, and `lib/access-gate.ts` is split so chunk `1d`
+is a pure delete. Since then: **`1b-bis`** (#300) made every Server Action's boundary call enforced by
+enumeration rather than by remembering; **`1c-pre`** (#302) renamed the login seam so `1c` and `1d`
+do not have to; **`1b`** (#308) added `household_members` + migration `0019` + the claim correction,
+with #310 restoring the household conjunct the first draft of `membershipHousehold` lost; and
+**`1c-1`** (#312) landed the principal — `lib/dal/session.ts`, imported by nothing, failing closed
+three ways; and **`1c-2`** (#313) gave _"no household for this account"_ its own screen **before**
+`1c-4` can make that state reachable by a parent, since until then it renders `PICKER_EMPTY_COPY` —
+_"adding an athlete takes a change to this deployment's seed data"_, plus a link into a public repo.
+`1c-2` is dark in the same sense the rest are: with one live household the state cannot be reached in
+production at all.
+
+**`1c` is split four ways and the resolver goes LAST** — `1c-1` principal → `1c-2` the "no household"
+screen → `1c-3` call sites + sign-out → `1c-4` the resolver. The chart, the reason the order is the
+reverse of the plan's, and the ordering obligations are in
+[beta-1](./milestones/beta-1.md). **Nothing a visitor sees has changed yet:** the shared access gate
+is still the boundary, and **production Clerk keys stay unset until `1c` is done** — between `1a` and
+`1c` a completed Google sign-in would land on a shared-password prompt. Two Clerk-dashboard boxes the
+maintainer owns still stand between here and a lit instance ([runbooks.md](./runbooks.md)).
+
+⚠️ Nothing in this repo can measure the LIT sign-in screen (no keys in CI, Clerk's DOM ships from a
+CDN at a floating major) — [tech-debt.md](./tech-debt.md) carries the row and the runbook carries the
+owed panel.
 
 ✅ **PRIV-2 has landed: the privacy notice is served at `/privacy`, and `AUTH-1`'s consent-screen URL
 now exists (2026-10-15).** The notice is rendered from
