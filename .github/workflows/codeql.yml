@@ -70,7 +70,7 @@ jobs:
       # Single language => no matrix. Add one when AGENTS.md's v3 Python/FastAPI
       # service lands; `build-mode` is per-job, so a second language needs the matrix.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           languages: javascript-typescript
           build-mode: none
@@ -79,6 +79,6 @@ jobs:
           # triage them, and an ignored scan is a disabled scan.
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: '/language:javascript-typescript'
