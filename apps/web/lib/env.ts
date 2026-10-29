@@ -15,6 +15,18 @@ import { z } from 'zod';
  * database-environment guard at the bottom of this file deliberately runs
  * OUTSIDE that gate** — see the comment there.
  */
+/**
+ * The shape a bypass principal must have. **Used in three places on purpose** — the zod schema, the
+ * boot refusal and the reader — because it is a CONTROL, not hygiene, and only one of those three is
+ * inside `createEnv`.
+ *
+ * 🔴 **`SKIP_ENV_VALIDATION` disables zod, so the schema alone does not enforce it.** With that flag
+ * set, a value like `'  not-a-clerk-id  '` would otherwise reach `checkMutationLimit(userId)` as a
+ * Redis key and, at 1c-4, a `membershipHousehold()` lookup. The refusal and the reader apply it
+ * themselves, which is the same doctrine the OPS-1 guard below follows for the same reason.
+ */
+const BYPASS_ID_RE = /^user_[A-Za-z0-9]+$/;
+
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -71,10 +83,7 @@ export const env = createEnv({
     // flag would make the harness exercise a code path production never takes.
     // ⚠️ The regex is a CONTROL, not hygiene. `emptyStringAsUndefined` plus a shape turns `' '` into
     // a boot refusal; without it a whitespace principal becomes a Redis key and a membership lookup.
-    E2E_SESSION_BYPASS_USER_ID: z
-      .string()
-      .regex(/^user_[A-Za-z0-9]+$/)
-      .optional(),
+    E2E_SESSION_BYPASS_USER_ID: z.string().regex(BYPASS_ID_RE).optional(),
   },
   // ⚠️ `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is the ONE legitimate `NEXT_PUBLIC_` in this repo.
   // AGENTS.md forbids the prefix on SECRETS; Clerk's publishable key is public by design — it is
@@ -168,19 +177,41 @@ function sessionBypassAllowed(): boolean {
  * Unconditional and outside `SKIP_ENV_VALIDATION`, again matching OPS-1: leaving an auth bypass
  * behind one environment variable would make that variable a silent kill switch for this guard.
  */
-if (process.env.E2E_SESSION_BYPASS_USER_ID && !sessionBypassAllowed()) {
-  throw new Error(
-    'E2E_SESSION_BYPASS_USER_ID is set, but this process is not a local throwaway harness ' +
-      '(VERCEL/VERCEL_ENV present, or DATABASE_URL is not a local host). It is an authentication ' +
-      'bypass and must never arm against a real database. Unset it. See apps/web/lib/env.ts.',
-  );
-}
-
 /**
- * The synthetic principal, or `null`. **`lib/dal/session.ts` is the only reader** — pinned by
- * `apps/web/test/bypass-is-contained.test.ts`.
+ * The bypass principal, decided **once at module scope** and frozen.
+ *
+ * ⚠️ **One decision, not two.** An earlier shape re-read `process.env` on every call, so the thing
+ * that refused at boot and the thing that answered later could disagree if anything mutated the
+ * environment mid-process. Taking the snapshot here means the refusal above and the value below are
+ * the same evaluation by construction.
+ *
+ * `lib/dal/session.ts` is the only reader of the accessor, and the only file besides this one
+ * allowed to name it — pinned by `apps/web/test/bypass-is-contained.test.ts`.
  */
+const BYPASS_PRINCIPAL: string | null = (() => {
+  const raw = process.env.E2E_SESSION_BYPASS_USER_ID;
+  if (!raw) return null;
+
+  if (!BYPASS_ID_RE.test(raw)) {
+    throw new Error(
+      'E2E_SESSION_BYPASS_USER_ID is set but is not a Clerk-shaped id. It becomes a rate-limit key ' +
+        'and, from 1c-4, a membership lookup — so a malformed one is refused rather than carried. ' +
+        'See apps/web/lib/env.ts.',
+    );
+  }
+
+  if (!sessionBypassAllowed()) {
+    throw new Error(
+      'E2E_SESSION_BYPASS_USER_ID is set, but this process is not a local throwaway harness ' +
+        '(VERCEL/VERCEL_ENV present, or DATABASE_URL is not a local host). It is an authentication ' +
+        'bypass and must never arm against a real database. Unset it. See apps/web/lib/env.ts.',
+    );
+  }
+
+  return raw;
+})();
+
+/** The bypass principal, or `null`. See {@link BYPASS_PRINCIPAL}. */
 export function sessionBypassUserId(): string | null {
-  const id = process.env.E2E_SESSION_BYPASS_USER_ID;
-  return id && sessionBypassAllowed() ? id : null;
+  return BYPASS_PRINCIPAL;
 }

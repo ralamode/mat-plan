@@ -76,6 +76,35 @@ describe('the test session bypass arms only in a local throwaway harness (AUTH-1
     await expect(importEnv()).rejects.toThrow(/authentication bypass/i);
   });
 
+  it('🔴 SKIP_ENV_VALIDATION does NOT disarm the shape check', async () => {
+    // The regex is documented as a control, not hygiene — but it lived only in the zod schema, and
+    // `skipValidation: !!process.env.SKIP_ENV_VALIDATION` removes zod entirely. A security probe got
+    // `'  not-a-clerk-id;DROP  '` all the way out of the reader that way; it would then have become
+    // a Redis key and, at 1c-4, a membership lookup. The refusal now applies the same regex itself,
+    // which is the doctrine `lib/env.ts`'s OPS-1 guard already follows: a guard behind one
+    // environment variable is a guard with a kill switch.
+    vi.stubEnv('SKIP_ENV_VALIDATION', '1');
+    vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', '  not-a-clerk-id;DROP  ');
+    await expect(importEnv()).rejects.toThrow(/Clerk-shaped/i);
+  });
+
+  it('an absent DATABASE_URL fails CLOSED, not open', async () => {
+    // The one place a `?? ''` default decides an authentication question. `isLocalDbHost('')` is
+    // false because the `URL` constructor throws — but nothing pinned that, and "empty looks local"
+    // is exactly the shape of mistake this whole guard exists to prevent.
+    //
+    // ⚠️ Three guards would refuse this, and **zod answers first**: `emptyStringAsUndefined` turns
+    // `''` into `undefined`, which fails `DATABASE_URL`'s schema. The assertion accepts either door
+    // rather than pinning the one that happens to be nearest — what matters is that no door is open,
+    // and asserting the wrong message is how this test would quietly stop testing anything.
+    vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', FIXTURE);
+    vi.stubEnv('DATABASE_URL', '');
+    vi.stubEnv('ALLOW_LIVE_DB', '1'); // so OPS-1's locality guard does not answer first either
+    await expect(importEnv()).rejects.toThrow(
+      /Invalid environment variables|authentication bypass/i,
+    );
+  });
+
   it('unset → the module imports cleanly and the predicate answers null', async () => {
     // Production's permanent state. The guard must be invisible when the variable is absent, or it
     // would be a boot risk of its own.

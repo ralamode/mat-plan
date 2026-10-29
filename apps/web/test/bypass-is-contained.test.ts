@@ -1,6 +1,12 @@
+import { globSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
-import { appSources, code } from './source-scan';
+import { appSources, code, WEB_DIR } from './source-scan';
+
+const REPO = resolve(WEB_DIR, '../..');
 
 /**
  * AUTH-1 1c-3a — **the test session bypass has exactly one armer and exactly one reader.**
@@ -67,15 +73,40 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
     ).toEqual([ARMS]);
   });
 
-  it('calls the predicate only from the principal module', () => {
-    const callers = appSources()
-      .filter((f) => relative(f) !== ARMS && /\bsessionBypassUserId\s*\(/.test(code(f)))
+  it('names the predicate only in the principal module', () => {
+    // 🔴 **The SYMBOL, not a call.** A first version matched `/\bsessionBypassUserId\s*\(/`, which a
+    // security probe walked straight through: `import { sessionBypassUserId as uid }` then `uid()`
+    // passed, and so would `const f = sessionBypassUserId; f()` or a plain re-export. Matching the
+    // bare identifier catches the import, the alias, the re-export and the indirect call at once —
+    // and is cheaper than the regex it replaces.
+    const namers = appSources()
+      .filter((f) => relative(f) !== ARMS && /\bsessionBypassUserId\b/.test(code(f)))
       .map(relative);
 
     expect(
-      callers.sort(),
+      namers.sort(),
       'the stand-in principal enters the app in one place, beside the real one',
     ).toEqual([READS_PREDICATE]);
+  });
+
+  it('CI names the fixture id exactly once, with the committed value', () => {
+    // `appSources()` is rooted at `apps/web`, so the workflow is outside every sweep above — which
+    // left the id duplicated between `seed-ids.ts` and `ci.yml` with nothing noticing drift, or a
+    // SECOND workflow step quietly acquiring the variable. Read as text; no YAML parser needed.
+    const workflows = globSync('.github/workflows/*.yml', { cwd: REPO })
+      .map((f) => join(REPO, f))
+      .filter((f) => /E2E_SESSION_BYPASS_USER_ID/.test(readFileSync(f, 'utf8')));
+
+    expect(
+      workflows.map((f) => f.replace(`${REPO}/`, '')),
+      'only the smoke step may arm it',
+    ).toEqual(['.github/workflows/ci.yml']);
+
+    const ci = readFileSync(join(REPO, '.github/workflows/ci.yml'), 'utf8');
+    const values = [...ci.matchAll(/E2E_SESSION_BYPASS_USER_ID:\s*(\S+)/g)].map((m) => m[1]);
+    expect(values, 'CI must inject the committed constant, not a re-typed literal').toEqual([
+      E2E_SESSION_BYPASS_USER,
+    ]);
   });
 
   it('every allowlisted file still exists — an allowlist must not outlive its subject', () => {

@@ -25,9 +25,15 @@
   touches `process.env` for this, so it cannot skip the locality check. Two limits are named rather
   than papered over: the sweep is rooted at `apps/web` so `ci.yml` is outside it, and no source scan
   sees `process.env[dynamicKey]` — the boot refusal is what contains that.
-  **The harnesses now BLANK the Clerk, Upstash and Sentry variables** instead of inheriting them.
-  Both spread `...process.env` and `next start` reads `.env.local`, which `lib/env.ts` says will hold
-  dev Clerk keys from 1c — so "no keys, no egress" was a property of the developer's machine, not of
+  **The harnesses now BLANK the Clerk, Upstash and Sentry variables** — with `''`, **never
+  `undefined`**, and that distinction is the whole mechanism. `spawn` DROPS a key whose value is
+  `undefined`, and an absent key is exactly the condition under which `@next/env` applies the
+  `.env.local` value — so the first version of this blanking handed the win to the very file it was
+  defending against, and the claim below was false on any machine with Clerk keys in `.env.local`.
+  Caught by a security review that spawned a child and read `'X' in process.env` rather than
+  reasoning about it. An empty string keeps the key present, so dotenv leaves it alone.
+  Why it matters: both scripts spread `...process.env` and inherit it,
+  and `next start` reads `.env.local`, which `lib/env.ts` says will hold dev Clerk keys from 1c — so "no keys, no egress" was a property of the developer's machine, not of
   the harness, and `e2e/theme.spec.ts`'s zero-egress assertion would have gone red locally. That
   assertion is **one-way**: once a Clerk host is legitimately contacted it can never catch a
   regression again.
@@ -35,3 +41,13 @@
   authenticates every request in a run, so a per-page helper would do nothing — and a helper that
   does nothing is worse than none. The other half of that panel finding stands: no combined
   `login()`, and `@clerk/testing` stays out of `capture.ts`'s module graph.
+  **Three controls were hardened by the security review, two of them proven broken by probe.** The
+  containment guard matched `sessionBypassUserId\s*\(` — a literal call — so
+  `import { sessionBypassUserId as uid }` walked straight through it; it now matches the **symbol**,
+  which catches the alias, the re-export and the indirect call in one regex. The shape regex lived
+  only in the zod schema, and `SKIP_ENV_VALIDATION` disables zod — a junk principal reached the
+  reader intact; the regex is now one const applied by the schema, the refusal **and** the reader.
+  And `isLocalDbHost` proved the URL's _display_ host: a libpq `?host=` parameter overrides it, so
+  `postgres://u:pw@localhost/db?host=ep-x.aws.neon.tech` read as local and connected to Neon. That
+  function is pre-existing (OPS-1) but this is the change that promotes it from _which database_ to
+  _is authentication on_, so the two-line hardening lands here.

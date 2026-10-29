@@ -981,11 +981,18 @@ async function runEphemeral(
       // again. "No keys, no egress" must be a property of this harness, not of the machine running
       // it. Upstash and Sentry for the same reason — a smoke run should spend no real rate-limit
       // quota and file no real error events.
-      CLERK_SECRET_KEY: undefined,
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
-      UPSTASH_REDIS_REST_URL: undefined,
-      UPSTASH_REDIS_REST_TOKEN: undefined,
-      SENTRY_DSN: undefined,
+      // 🔴 **`''`, never `undefined`, and that is the whole mechanism.** `spawn` DROPS a key whose
+      // value is `undefined`, and an absent key is exactly the condition under which
+      // `@next/env`'s `processEnv` applies the `.env.local` value instead — so blanking with
+      // `undefined` hands the win to the very file this is defending against. An empty string keeps
+      // the key PRESENT, so dotenv leaves it alone; `''` is falsy for `clerkIsConfigured()` and
+      // `emptyStringAsUndefined: true` makes zod see `undefined` anyway. Verified by spawning a
+      // child and reading `'X' in process.env`.
+      CLERK_SECRET_KEY: '',
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '',
+      UPSTASH_REDIS_REST_URL: '',
+      UPSTASH_REDIS_REST_TOKEN: '',
+      SENTRY_DSN: '',
     };
     const forceBuild = process.argv.includes('--build');
     if (forceBuild || !existsSync(join(process.cwd(), '.next', 'BUILD_ID'))) {

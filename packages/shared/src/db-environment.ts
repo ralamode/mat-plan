@@ -85,7 +85,20 @@ export function databaseNameOf(connectionString: string): string | null {
 }
 
 /** Whether the connection string points at this machine. Unparseable => not local (fail closed). */
+/**
+ * ⚠️ **A libpq `host=` / `hostaddr=` parameter OVERRIDES the host in the URL**, so
+ * `postgres://u:pw@localhost/db?host=ep-x.aws.neon.tech` displays as local and connects to Neon.
+ * `pg-connection-string` honours it and `packages/db/src/client.ts` hands the raw string to `Pool`,
+ * so without this the predicate proves the wrong thing. It is a documented form (unix-socket
+ * directories, Cloud SQL), not an exotic one. 🔴 **Hardened when AUTH-1 1c-3a promoted this function
+ * from "which database" to "is authentication on".**
+ */
+function hasHostOverride(connectionString: string): boolean {
+  return /[?&](host|hostaddr)=/i.test(connectionString);
+}
+
 export function isLocalDbHost(connectionString: string): boolean {
+  if (hasHostOverride(connectionString)) return false;
   try {
     return LOCAL_DB_HOSTS.has(new URL(connectionString).hostname);
   } catch {
