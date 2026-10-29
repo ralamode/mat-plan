@@ -123,6 +123,43 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
 - zod at every trust boundary; whitelist mutable fields (`zod .pick` — no mass assignment).
 - Drizzle parameterized queries only (no `sql.raw` / string interpolation). No `dangerouslySetInnerHTML`.
 
+## Injection (XSS) and CSRF
+
+**The sinks, and what makes each safe — weakening any of these is a review finding.** The rule is
+not "don't use `dangerouslySetInnerHTML`": there is one legitimate use (`theme-provider.tsx`'s inline
+no-flash script, React's only supported way to emit inline script text), so the question is always
+what _reaches_ a sink, never whether the string appears.
+
+- **The one `dangerouslySetInnerHTML` is a build-time constant.** No interpolation, no prop, no DB
+  value, no translated string may reach it.
+- **The CSP is nonce-based and per request** (`buildCsp()` in `proxy.ts`):
+  `script-src 'self' 'nonce-X' 'strict-dynamic'` (plus `'unsafe-eval'` **dev-only**, for React's
+  stack traces), and `style-src 'self'` with `'unsafe-inline'` **dev-only** and the nonce in prod.
+  **`'unsafe-inline'` never appears in `script-src` at all.** Two traps worth knowing before reading
+  a header dump: under CSP3 a nonce makes a sibling `'unsafe-inline'` **inert**, and
+  `'strict-dynamic'` makes **host allowlists in `script-src` inert** — so a host added there is
+  ignored rather than trusted, and _removing_ `'strict-dynamic'` silently activates every host
+  beside it.
+- **No URL is user- or DB-controlled.** The first one that is needs a scheme allowlist
+  (`javascript:`, `data:`, `vbscript:`).
+- **Generated source guards its own interpolation**: `scripts/generate-privacy-notice.ts` emits TSX
+  from Markdown and rejects backticks and `${`.
+- **Absent by design, each a finding the first time it appears:** Markdown→HTML rendering, rich text,
+  SVG or any file upload, a templating engine, `eval` / `new Function`.
+
+**CSRF — no tokens, deliberately. Three layers cover the current surface:**
+
+| Shape                                     | Protected by                                                                                                                       |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding. |
+| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. The only one today is `GET` (`app/p/[profileId]/export/route.ts`).          |
+| **Cookies**                               | `SameSite=Lax` + `httpOnly` + `secure` in prod (`app/gate/actions.ts`). Lax is what stops a cross-site POST carrying the session.  |
+
+🔴 **`/api/sync` is planned as a `POST` Route Handler and will land outside all of this.** It needs
+its own origin or token check, and `/api/*` is outside the gate matcher too
+([tech-debt.md](../docs/tech-debt.md)). A state-changing Route Handler with no explicit check is a
+**P0**. The same applies to any mutation moved to `GET`, which `SameSite=Lax` does not protect.
+
 ## Tokens / secrets
 
 - The MCP/REST token is a **separate, org-scoped, least-privilege (reads + one narrow write),
