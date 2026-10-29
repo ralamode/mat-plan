@@ -57,3 +57,11 @@ pnpm-debug.log*
 
 # Agent worktrees (transient, created by Claude Code)
 .claude/worktrees/
+
+# Per-machine Claude Code settings. 🔴 It holds credentials — `env.GH_TOKEN` among them — so this
+# line is a SECRET control, not tidiness. It was previously ignored only by a machine-local
+# `~/.config/git/ignore`, which does not travel: a fresh clone, a second machine, or one edit to that
+# file, and `git add -A` stages a GitHub token into a PUBLIC repo. AGENTS.md → privacy: "a real value
+# committed anywhere in the tree is a P0, and deleting it from HEAD is not removing it."
+# `.claude/settings.json` (shared, no secrets) stays tracked.
+.claude/settings.local.json
