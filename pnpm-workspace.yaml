@@ -30,6 +30,24 @@ overrides:
   # Reached production through next > postcss > source-map-js and @sentry/nextjs > next > ... .
   # postcss's range still admits <1.2.2; drop this once it doesn't.
   source-map-js: '>=1.2.2'
+  # GHSA-587h-7wmj-h5pm (high) — `launch-editor`'s `fs.existsSync()` existence check is bypassable
+  # on Windows. It is reached through vite's dev-server "open in editor" overlay, so the real-world
+  # exposure here is nil: we build on Linux, deploy to Vercel's Node runtime, and never start a vite
+  # dev server in CI or production.
+  #
+  # It is pinned anyway because it reached the PRODUCTION tree for the first time in this bump:
+  # @sentry/nextjs 11.8.0 adds @sentry/cloudflare, which depends on vite. We never import the
+  # Cloudflare path, but `pnpm audit --prod` cannot see that and should not be asked to.
+  #
+  # BARE, not scoped, and unlike the zod entry below that is the right call: vite resolves to ONE
+  # version across this tree (the prod path and the vitest dev chain alike), so there is no second
+  # major to drag — and the dev chain gets patched too.
+  #
+  # ⚠️ `>=8.1.6` is a FLOOR, not a pin: pnpm takes the newest satisfying release, which is how this
+  # resolved to 8.3.5 rather than the 8.1.6 the advisory names. That is the same shape as the two
+  # entries above it, and `pnpm verify` is what certifies the jump (1340 tests green on it). Drop the
+  # entry once @sentry/cloudflare's own range excludes <8.1.6.
+  vite: '>=8.1.6'
   # GHSA-2w6q-fjjm-54f4 + GHSA-9jm3-4fm8-q4qc (moderate) — isInSubnet() and a parse diagnostic.
   # Dev-only, via the `shadcn` CLI > @modelcontextprotocol/sdk > express-rate-limit, which declares
   # `^10.2.0`. The real fix is the SDK bump upstream; this is in-range until then.
