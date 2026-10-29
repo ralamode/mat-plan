@@ -1296,6 +1296,36 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
+- [ ] 🔴 **The production instance's DNS records — and a WILDCARD will hide the fact that they are
+      missing.** A production instance serves its Frontend API from `clerk.<domain>` and its Account
+      Portal from `accounts.<domain>`, and **neither works until CNAMEs exist.** Clerk's dashboard
+      lists the exact set under **Configure → Domains → DNS records**; the mail/DKIM ones carry an
+      instance id, so copy them rather than guessing. The two that block sign-in:
+
+      | Host | Type | Target |
+      | --- | --- | --- |
+      | `clerk.<domain>` | CNAME | `frontend-api.clerk.services` |
+      | `accounts.<domain>` | CNAME | `accounts.clerk.services` |
+
+      ⚠️ **The failure mode is a 404, not a DNS error, and that is what makes it expensive.** If the
+      domain has a **wildcard** `*.<domain>` record pointing at the host (Vercel's range is
+      `216.150.x.x`), then `clerk.<domain>` resolves perfectly, answers, and returns **404** — because
+      the host does not recognise that name. The browser then reports
+      _"blocked by CORS policy: No 'Access-Control-Allow-Origin' header"_ on
+      `clerk.<domain>/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, which reads like a CORS or CSP
+      problem and is neither. **Diagnose by comparing a deliberately non-existent subdomain**: if
+      `zzz-nonexistent.<domain>` resolves to the same range, a wildcard is answering and the Clerk
+      records were never added. _(Hit 2026-10-29, first production sign-in attempt.)_
+
+      A specific CNAME wins over a wildcard, so the wildcard does **not** have to be removed — the
+      records just have to exist. Verify from a shell, not the dashboard's checkmark:
+      `dig +short clerk.<domain> CNAME` should name Clerk, and
+      `curl -o /dev/null -w '%{http_code}' https://clerk.<domain>/v1/client` should be **anything but
+      404** (401 is healthy — it means Clerk answered).
+
+      📌 **This is also the box that unblocks the `style-src` question below.** That question cannot be
+      answered while clerk-js 404s, because nothing has rendered yet to violate a style policy.
+
 - [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
       **Path (verified 2026-10-21):** **SSO connections → Add connection → For all users → Google.**
       Disable email/password and every other strategy in the same pass; the point of the box is that
