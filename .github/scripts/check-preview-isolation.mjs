@@ -68,8 +68,27 @@ const SHAREABLE = new Set([]);
 /** Variables that must exist, separately, in BOTH the production and preview scopes. */
 const REQUIRED_PER_SCOPE = ['DATABASE_URL'];
 
-/** Never legitimate in any Vercel scope: it disables env validation, OPS-1's guard included. */
-const FORBIDDEN_ANYWHERE = ['SKIP_ENV_VALIDATION', 'E2E_SESSION_BYPASS_USER_ID'];
+/**
+ * Never legitimate in any Vercel scope. **Each entry carries its own remediation**, because they are
+ * forbidden for different reasons and a shared message is actively misleading: telling someone who
+ * set an authentication bypass to "correct that scope's DATABASE_URL" sends them the wrong way.
+ */
+const FORBIDDEN_ANYWHERE = [
+  {
+    key: 'SKIP_ENV_VALIDATION',
+    why:
+      `it turns off env validation INCLUDING OPS-1's database guard. The fix for a failing build ` +
+      `is to correct that scope's DATABASE_URL, never to skip validation.`,
+  },
+  {
+    key: 'E2E_SESSION_BYPASS_USER_ID',
+    why:
+      `it is the test session BYPASS (AUTH-1 1c-3a) — it makes getCurrentUser() return a fixture ` +
+      `principal without Clerk. apps/web/lib/env.ts refuses to boot when it is set outside a local ` +
+      `throwaway harness, so a deployment carrying it fails its build. Remove it from the scope; it ` +
+      `belongs only in e2e-local.ts, screenshot-ephemeral.ts and ci.yml's smoke step.`,
+  },
+];
 
 const API_BASE = 'https://api.vercel.com';
 
@@ -225,16 +244,14 @@ function checkEnv(envResponse) {
   }
 
   // 2. SKIP_ENV_VALIDATION would disable the in-app guard, silently, from the dashboard.
-  for (const key of FORBIDDEN_ANYWHERE) {
+  for (const { key, why } of FORBIDDEN_ANYWHERE) {
     const hits = records.filter((r) => r.key === key);
     if (hits.length === 0) {
       pass(`${key} is not set`, 'absent from every scope');
     } else {
       fail(
         `${key} is not set`,
-        `present in ${hits.flatMap((r) => r.target ?? []).join(', ') || 'an unknown scope'} — it ` +
-          `turns off env validation INCLUDING OPS-1's database guard. The fix for a failing build ` +
-          `is to correct that scope's DATABASE_URL, never to skip validation.`,
+        `present in ${hits.flatMap((r) => r.target ?? []).join(', ') || 'an unknown scope'} — ${why}`,
       );
     }
   }

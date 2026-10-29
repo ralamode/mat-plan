@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { assertDatabaseEnvironment, isLocalDbHost } from '@mat-plan/shared';
+import {
+  assertDatabaseEnvironment,
+  E2E_SESSION_BYPASS_USER,
+  isLocalDbHost,
+} from '@mat-plan/shared';
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
@@ -16,14 +20,17 @@ import { z } from 'zod';
  * OUTSIDE that gate** — see the comment there.
  */
 /**
- * The shape a bypass principal must have. **Used in three places on purpose** — the zod schema, the
- * boot refusal and the reader — because it is a CONTROL, not hygiene, and only one of those three is
- * inside `createEnv`.
+ * The shape a bypass principal must have. **Documentation of the shape; it is NOT the control** —
+ * see `BYPASS_PRINCIPAL`, which requires the committed constant itself.
  *
- * 🔴 **`SKIP_ENV_VALIDATION` disables zod, so the schema alone does not enforce it.** With that flag
- * set, a value like `'  not-a-clerk-id  '` would otherwise reach `checkMutationLimit(userId)` as a
- * Redis key and, at 1c-4, a `membershipHousehold()` lookup. The refusal and the reader apply it
- * themselves, which is the same doctrine the OPS-1 guard below follows for the same reason.
+ * ⚠️ A previous comment here claimed this was "used in three places — the schema, the refusal and
+ * the reader". It was used in two, and the reader applied nothing. Corrected rather than quietly
+ * amended, because a comment that asserts a control count the code does not have is the exact defect
+ * this file's review round existed to kill: a reader who greps and finds two assumes one was
+ * deleted.
+ *
+ * 🔴 **`SKIP_ENV_VALIDATION` disables zod**, so the schema alone enforces nothing — which is why the
+ * real check lives in the refusal below and does not depend on this at all.
  */
 const BYPASS_ID_RE = /^user_[A-Za-z0-9]+$/;
 
@@ -192,11 +199,22 @@ const BYPASS_PRINCIPAL: string | null = (() => {
   const raw = process.env.E2E_SESSION_BYPASS_USER_ID;
   if (!raw) return null;
 
-  if (!BYPASS_ID_RE.test(raw)) {
+  // 🔴 **EQUALITY with the committed fixture, not a shape test.** All three injectors
+  // (`e2e-local.ts`, `screenshot-ephemeral.ts`, `ci.yml`) pass `E2E_SESSION_BYPASS_USER`, so the
+  // only legitimate value is that one — and equality buys three things a regex cannot:
+  //
+  //  - it **bounds the length**. `^user_[A-Za-z0-9]+$` accepted `'user_' + 'a'.repeat(100_000)`,
+  //    which would become a 100KB Redis key and, from 1c-4, a membership lookup argument.
+  //  - it makes **"a real Clerk id passed" impossible**. `seed-ids.ts` argues at length that the
+  //    principal must never be a real id — personal data in a public repo, a collision with that
+  //    person's own rate bucket, a real household resolved if it ever armed against a live database.
+  //    The regex permitted exactly that; only the locality gate stood in the way.
+  //  - it needs no `SKIP_ENV_VALIDATION` carve-out, because it never relied on zod.
+  if (raw !== E2E_SESSION_BYPASS_USER) {
     throw new Error(
-      'E2E_SESSION_BYPASS_USER_ID is set but is not a Clerk-shaped id. It becomes a rate-limit key ' +
-        'and, from 1c-4, a membership lookup — so a malformed one is refused rather than carried. ' +
-        'See apps/web/lib/env.ts.',
+      'E2E_SESSION_BYPASS_USER_ID is set to something other than the committed fixture principal ' +
+        '(E2E_SESSION_BYPASS_USER in @mat-plan/shared). It is an authentication bypass; the only ' +
+        'value it may carry is the one the harnesses inject. See apps/web/lib/env.ts.',
     );
   }
 

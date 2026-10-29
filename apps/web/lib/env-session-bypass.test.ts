@@ -76,7 +76,7 @@ describe('the test session bypass arms only in a local throwaway harness (AUTH-1
     await expect(importEnv()).rejects.toThrow(/authentication bypass/i);
   });
 
-  it('🔴 SKIP_ENV_VALIDATION does NOT disarm the shape check', async () => {
+  it('🔴 SKIP_ENV_VALIDATION does NOT disarm the value check', async () => {
     // The regex is documented as a control, not hygiene — but it lived only in the zod schema, and
     // `skipValidation: !!process.env.SKIP_ENV_VALIDATION` removes zod entirely. A security probe got
     // `'  not-a-clerk-id;DROP  '` all the way out of the reader that way; it would then have become
@@ -85,7 +85,24 @@ describe('the test session bypass arms only in a local throwaway harness (AUTH-1
     // environment variable is a guard with a kill switch.
     vi.stubEnv('SKIP_ENV_VALIDATION', '1');
     vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', '  not-a-clerk-id;DROP  ');
-    await expect(importEnv()).rejects.toThrow(/Clerk-shaped/i);
+    await expect(importEnv()).rejects.toThrow(/committed fixture principal/i);
+  });
+
+  it('🔴 a WELL-SHAPED id that is not the fixture is refused', async () => {
+    // The case a shape test could never catch, and the reason the control is equality. The old
+    // regex accepted every real Clerk id — and `seed-ids.ts` argues at length that the principal
+    // must never be one: personal data in a public repo, a collision with that person's own
+    // `mat-plan:mutate:<id>` bucket, and a REAL household resolved if the bypass ever armed against
+    // a live database. ⚠️ This literal is deliberately fake; never paste a real id into this tree.
+    vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', 'user_wellShapedButNotTheFixture00');
+    await expect(importEnv()).rejects.toThrow(/committed fixture principal/i);
+  });
+
+  it('🔴 an unbounded id is refused', async () => {
+    // `'user_' + 'a'.repeat(100_000)` satisfied the old regex and would have become a 100KB Redis
+    // key, and from 1c-4 a membership lookup argument. Equality bounds the length for free.
+    vi.stubEnv('E2E_SESSION_BYPASS_USER_ID', `user_${'a'.repeat(100_000)}`);
+    await expect(importEnv()).rejects.toThrow(/committed fixture principal/i);
   });
 
   it('an absent DATABASE_URL fails CLOSED, not open', async () => {

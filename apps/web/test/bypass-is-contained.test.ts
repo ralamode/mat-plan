@@ -89,24 +89,76 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
     ).toEqual([READS_PREDICATE]);
   });
 
-  it('CI names the fixture id exactly once, with the committed value', () => {
-    // `appSources()` is rooted at `apps/web`, so the workflow is outside every sweep above — which
-    // left the id duplicated between `seed-ids.ts` and `ci.yml` with nothing noticing drift, or a
-    // SECOND workflow step quietly acquiring the variable. Read as text; no YAML parser needed.
-    const workflows = globSync('.github/workflows/*.yml', { cwd: REPO })
+  it('CI names the fixture id exactly once, step-scoped, with the committed value', () => {
+    // `appSources()` is rooted at `apps/web`, so workflows are outside every sweep above — which
+    // left the id duplicated between `seed-ids.ts` and `ci.yml` with nothing noticing drift.
+    //
+    // 🔴 **A first version of this missed all three realistic ways a second step acquires it**, each
+    // proven green by a security probe: a `run:` step appending to `$GITHUB_ENV` (the value regex
+    // only matched the `key: value` form); a `.yaml` file (the glob was `*.yml`); and moving the
+    // block from the step to the JOB, which produces the same single correct match while putting the
+    // variable in reach of every step — `actions/upload-artifact` included. `ci.yml` asserts that
+    // step-vs-job rule for itself in prose; this is the gate behind the sentence.
+    const workflows = globSync('.github/workflows/*.{yml,yaml}', { cwd: REPO })
       .map((f) => join(REPO, f))
       .filter((f) => /E2E_SESSION_BYPASS_USER_ID/.test(readFileSync(f, 'utf8')));
 
     expect(
       workflows.map((f) => f.replace(`${REPO}/`, '')),
-      'only the smoke step may arm it',
+      'only the Playwright smoke step may arm the bypass',
     ).toEqual(['.github/workflows/ci.yml']);
 
     const ci = readFileSync(join(REPO, '.github/workflows/ci.yml'), 'utf8');
-    const values = [...ci.matchAll(/E2E_SESSION_BYPASS_USER_ID:\s*(\S+)/g)].map((m) => m[1]);
-    expect(values, 'CI must inject the committed constant, not a re-typed literal').toEqual([
+
+    // 🔴 **Count EVERY mention anywhere on any line, then pin the shape of the single survivor.**
+    // A line-anchored pattern was not enough: `run: echo "KEY=value" >> "$GITHUB_ENV"` puts the name
+    // mid-line, so it stayed invisible — found by probing this very fix, which passed with such a
+    // step present. Counting first means a second mention fails regardless of what introduced it:
+    // a `run:`, a matrix, a comment, or another step's `env:`.
+    const mentions = ci.match(/E2E_SESSION_BYPASS_USER_ID/g) ?? [];
+    expect(
+      mentions,
+      'exactly one mention: the Playwright smoke step and nothing else',
+    ).toHaveLength(1);
+
+    const declaration = /^(\s*)E2E_SESSION_BYPASS_USER_ID: (\S+)$/m.exec(ci);
+    expect(declaration, 'the one mention must be a plain `key: value` env entry').not.toBeNull();
+    expect(declaration?.[2], 'CI injects the committed constant, never a re-typed literal').toBe(
       E2E_SESSION_BYPASS_USER,
-    ]);
+    );
+    // Step-scoped, not job-scoped: a step's `env:` nests deeper than the job's own keys. This job's
+    // job-level `env:` sits at 6 spaces, so 10+ is inside a step.
+    expect(
+      declaration?.[1].length,
+      'STEP-level only — a job-level env reaches every step, upload-artifact included',
+    ).toBeGreaterThan(8);
+  });
+
+  it("both harnesses blank the third-party credentials with `''`, never `undefined`", () => {
+    // 🔴 **The exact defect the previous review round fixed, now pinned.** `spawn` DROPS a key whose
+    // value is `undefined` — and an absent key is precisely when `@next/env` applies the `.env.local`
+    // value instead. So blanking with `undefined` handed the win to the file it was defending
+    // against, and `e2e:local` ran with Clerk CONFIGURED on any machine holding dev keys. The only
+    // thing that would have caught it is `e2e/theme.spec.ts`'s zero-egress assertion, which is
+    // ONE-WAY: once a Clerk host is legitimately contacted it can never catch a regression again.
+    // So the mechanism gets a cheap source-text assertion of its own rather than relying on that.
+    const BLANKED = [
+      'CLERK_SECRET_KEY',
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'UPSTASH_REDIS_REST_URL',
+      'UPSTASH_REDIS_REST_TOKEN',
+      'SENTRY_DSN',
+    ];
+
+    for (const script of ['scripts/e2e-local.ts', 'scripts/screenshot-ephemeral.ts']) {
+      const src = code(join(WEB_DIR, script));
+      for (const key of BLANKED) {
+        expect(src, `${script} must blank ${key}`).toMatch(new RegExp(`${key}:\\s*''`));
+        expect(src, `${script}: ${key} must not be blanked with undefined`).not.toMatch(
+          new RegExp(`${key}:\\s*undefined`),
+        );
+      }
+    }
   });
 
   it('every allowlisted file still exists — an allowlist must not outlive its subject', () => {

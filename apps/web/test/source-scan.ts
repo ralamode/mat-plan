@@ -57,9 +57,16 @@ export const USE_SERVER_MENTION_RE = /['"]use server['"]/;
  * domain costs nothing.
  */
 export function appSources(): string[] {
-  return globSync('**/*.{ts,tsx}', { cwd: WEB_DIR })
+  // ⚠️ **Not just `{ts,tsx}`.** Next's default `pageExtensions` is `['tsx','ts','jsx','js']` (read
+  // from the pinned `next/dist/server/config-shared.js`), so `app/x/page.js` is a real route and
+  // `lib/foo.js` really bundles — and every guard built on this helper was blind to both. That was
+  // cosmetic while these guards policed conventions; AUTH-1 1c-3a made one of them contain an
+  // **authentication bypass**, where a `.js` file reading `process.env` directly would skip the
+  // containment AND the boot refusal, because it need not import `lib/env.ts` at all.
+  // Widening is free today: the only non-TS sources under `apps/web` are two config `.mjs` files.
+  return globSync('**/*.{ts,tsx,js,jsx,mjs,cjs}', { cwd: WEB_DIR })
     .filter((f) => !/(^|\/)(node_modules|\.next)\//.test(f))
-    .filter((f) => !/\.test\.tsx?$/.test(f))
+    .filter((f) => !/\.test\.[jt]sx?$/.test(f))
     .map((f) => join(WEB_DIR, f))
     .sort();
 }
