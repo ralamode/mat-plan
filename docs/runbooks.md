@@ -1296,49 +1296,32 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
-- [ ] 🔴 **The production instance's DNS records — and a WILDCARD will hide the fact that they are
-      missing.** A production instance serves its Frontend API from `clerk.<domain>` and its Account
-      Portal from `accounts.<domain>`, and **neither works until CNAMEs exist.** Clerk's dashboard
-      lists the exact set under **Configure → Domains → DNS records**; the mail/DKIM ones carry an
-      instance id, so copy them rather than guessing. The two that block sign-in:
+- [ ] **The production instance's custom domain.** A production instance serves its Frontend API from
+      `clerk.<domain>` and its Account Portal from `accounts.<domain>`; neither resolves until CNAMEs
+      exist. The dashboard's **Configure → Domains** lists the full set — the mail/DKIM entries carry
+      an instance id, so copy them rather than reconstruct them. The two that gate sign-in:
 
       | Host | Type | Target |
       | --- | --- | --- |
       | `clerk.<domain>` | CNAME | `frontend-api.clerk.services` |
       | `accounts.<domain>` | CNAME | `accounts.clerk.services` |
 
-      ⚠️ **The failure mode is a 404, not a DNS error, and that is what makes it expensive.** If the
-      domain has a **wildcard** `*.<domain>` record pointing at the host (Vercel's range is
-      `216.150.x.x`), then `clerk.<domain>` resolves perfectly, answers, and returns **404** — because
-      the host does not recognise that name. The browser then reports
-      _"blocked by CORS policy: No 'Access-Control-Allow-Origin' header"_ on
-      `clerk.<domain>/npm/@clerk/clerk-js@6/dist/clerk.browser.js`, which reads like a CORS or CSP
-      problem and is neither. **Diagnose by comparing a deliberately non-existent subdomain**: if
-      `zzz-nonexistent.<domain>` resolves to the same range, a wildcard is answering and the Clerk
-      records were never added. _(Hit 2026-10-29, first production sign-in attempt.)_
+      ⚠️ **Set this up in the PRODUCTION instance.** The dashboard opens on **development**, where
+      every page in this list renders plausibly — a Domains tab showing a `*.clerk.accounts.dev`
+      primary badged _Development domain_ is the tell. The environment selector sits beside the
+      application name.
 
-      A specific CNAME wins over a wildcard, so the wildcard does **not** have to be removed — the
-      records just have to exist. Verify from a shell, not the dashboard's checkmark:
-      `dig +short clerk.<domain> CNAME` should name Clerk, and
-      `curl -o /dev/null -w '%{http_code}' https://clerk.<domain>/v1/client` should be **anything but
-      404** (401 is healthy — it means Clerk answered).
+      **Three diagnostics, because the failure modes are indistinguishable from the app side.** Each
+      answers a different question and none requires the dashboard:
 
-      📌 **The dashboard opens on the DEVELOPMENT instance, and every page in this list looks
-      plausible there.** The environment selector sits beside the application name; a Domains page
-      showing a `*.clerk.accounts.dev` primary domain badged _Development domain_, or the line
-      _"not available on development instances"_, means the custom-domain work is being done in the
-      wrong context. Production is where `clerk.<domain>` is verified and its certificate issued.
+      | Symptom | Command | Reading |
+      | --- | --- | --- |
+      | clerk-js 404s, browser reports a CORS error | `dig +short zzz-nope.<domain> A` | A deliberately non-existent subdomain resolving means a **wildcard** is answering for `clerk.*` too, sending it to the app host — which 404s on an unknown hostname. A specific CNAME beats a wildcard, so add the records; the wildcard can stay. |
+      | TLS `handshake failure`, no HTTP status | `curl -o /dev/null -w '%{http_code}' https://<frontend-api>/v1/client` on **both** instances | Development answering **200** while `clerk.<domain>` answers **000** is conclusive: Clerk is healthy, the custom hostname has no certificate. Not CSP, not CORS, not the key. |
+      | Certificate seems stuck | `curl -s 'https://crt.sh/?q=clerk.<domain>&output=json'` | Empty means issuance has **never started** — the domain is unverified on Clerk's side, so waiting will not help. A result means it is in flight. |
 
-      📌 **One command separates "Clerk is broken" from "my domain is not provisioned":** curl
-      `/v1/client` on BOTH Frontend APIs. The development one (`<slug>.clerk.accounts.dev`, in the
-      dev instance's publishable key) answering **200** while `clerk.<domain>` answers **000** is
-      conclusive — Clerk is healthy and the custom hostname has no certificate. A TLS
-      `handshake failure` with no HTTP status at all is that same state; it is **not** a CSP, CORS
-      or key problem, and the publishable key can be decoded to prove which host it expects
-      (`base64 -d` the part after `pk_live_`).
-
-      📌 **This is also the box that unblocks the `style-src` question below.** That question cannot be
-      answered while clerk-js 404s, because nothing has rendered yet to violate a style policy.
+      📌 The publishable key encodes the host Clerk expects: `base64 -d` the part after `pk_live_`.
+      **A healthy result is `200` or `401`** — `401` means Clerk answered.
 
 - [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
       **Path (verified 2026-10-21):** **SSO connections → Add connection → For all users → Google.**
