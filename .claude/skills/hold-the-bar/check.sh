@@ -61,6 +61,10 @@ bar_files="$(git diff --name-only "$base" -- AGENTS.md docs/definition-of-done.m
   'commitlint.config.*' | sed 's/^/    /')"
 if [ -n "$bar_files" ]; then
   printf '\n! The bar itself changed — confirm each is a TIGHTENING, or say why it loosens:\n%s\n' "$bar_files"
+  # AGENTS.md is loaded by every session and every subagent; DX-10 set a word budget. Advisory only.
+  if printf '%s' "$bar_files" | grep -q 'AGENTS\.md' && [ -f AGENTS.md ]; then
+    printf '  AGENTS.md is %s words (budget: 4,000 or fewer — docs/plans/dx-10-agents-md-diet.md)\n' "$(wc -w <AGENTS.md | tr -d ' ')"
+  fi
 fi
 
 if [ "$findings" -eq 0 ]; then

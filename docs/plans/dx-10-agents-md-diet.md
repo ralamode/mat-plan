@@ -214,3 +214,18 @@ and lost two new files; the net PR is smaller than the draft's.
 | C2  | Correctness | **Resolved.** M9 range and destination confirmed                                                                                                                                                                                                   |
 | S1  | Scope       | **Resolved.** The arithmetic now closes on its own terms; the seven sibling-file edits keep this one concern (three forced by the diet, two the retired claim, two opportunistic — `plans/README.md:6-8` is the one to drop if scope is contested) |
 | —   | Both        | Two notes folded in: "Schema & migration conventions" and "Server conventions" added to the keep list; the DoD edit also trips `hold-the-bar` and the PR body answers it                                                                           |
+
+### Implementation notes (author, 2026-10-29)
+
+- **The ≤ 4,000 ceiling was not met: 4,639 words after three passes (6,565 → 4,639, −29%).** The
+  per-section arithmetic behind the ceiling under-counted what the plan itself keeps: the Stack, the
+  Schema, Server, Backend and DB fences, the "don't" list and the Constants rules total ~1,700 words
+  before any section this PR trims. Reaching 4,000 means cutting rules, which the plan forbids. The
+  count is reported in the fragment; the `hold-the-bar` notice prints it against the 4,000 budget on
+  every future edit, so the gap stays visible until the maintainer resets the number or cuts further.
+- **Deviation from the file table:** `docs/lessons.md:548` is repointed at `AGENTS.md → "Start here"`,
+  not "Local hooks vs CI merge-gates" — the "add an entry in the same PR as the fix" sentence lives in
+  the new Start here section (M1), so that is the honest target.
+- **M19 verification:** `ci.yml` runs `db:seed` once (`:484`); the "seeds run twice → idempotent" check
+  is not wired and is no longer claimed anywhere. `tech-debt.md` §420 has no separate (a) row — its
+  first row already marks the e2e migrate/seed as present — so only line 465 changed there.

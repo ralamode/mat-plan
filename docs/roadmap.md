@@ -147,6 +147,7 @@ The full list is [status.md](./status.md)'s changelog. The last few, for orienta
 
 | PR              | Pillar              | What                                                               |
 | --------------- | ------------------- | ------------------------------------------------------------------ |
+| this PR         | Product & Spec      | DX-10: AGENTS.md cut 29%, every rule kept, every cite resolving    |
 | #289 + this PR  | Onboarding & Access | PRIV-2: the privacy notice filled, then served at `/privacy`       |
 | #283            | Platform            | DX-5(b): the three local-only gates run in CI, each seen red first |
 | #261 + closeout | Platform            | OPS-1: previews isolated from production, 440 old previews purged  |

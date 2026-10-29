@@ -99,7 +99,7 @@ with no rule citation is taste. Mark it P2, or drop it.
    `apps/web/lib/constants.ts`, `apps/web/components/ui/*`, `lib/dal/*` and the writers in
    `packages/db/src/writers/`. The second occurrence of a meaningful literal is a finding (AGENTS.md →
    "Constants, enums & shared values"). Tests must use the same const as the app.
-3. **Architecture rules** (AGENTS.md → "Architecture rules", "The don't list", "Server
+3. **Architecture rules** (AGENTS.md → "Architecture rules", The "don't" list, "Server
    conventions"). Watch for: `'use client'` where RSC works, a `db` import or `process.env` read
    outside `lib/dal`, `sql.raw`/interpolated SQL, `dangerouslySetInnerHTML`, a raw row returned
    instead of a DTO, a non-async export from a `'use server'` file, a Server Action missing

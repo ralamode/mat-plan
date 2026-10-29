@@ -38,7 +38,8 @@ Every PR must satisfy:
 
 - [ ] Generated SQL committed and reviewed (never `drizzle-kit push` to prod)
 - [ ] Forward-only (no edits to applied migrations); one migration per PR
-- [ ] Squawk lint passes; migration applies on empty Docker PG + a Neon branch; drift check clean
+- [ ] Squawk lint passes; migration applies on an empty Postgres in CI (the prod-shaped Neon-branch
+      rehearsal is **not** wired — [tech-debt.md](./tech-debt.md)); drift check clean
 - [ ] Expand → contract for breaking changes; `lock_timeout` set; concurrent index isolated
 - [ ] Backfill plan + rollback plan documented in the PR
 

@@ -96,8 +96,8 @@ screenshot <route>` script still exists for this same already-running-server cas
 **Publish:** `pnpm --filter web screenshots:publish --pr <n> --comment` (add
 `--note "<what changed>"` from the second round; the script refuses without it, and `--only <substr>`
 filters files). It uploads to the orphan `screenshots` branch and posts `github.com/.../raw/...` links,
-the form that renders; `raw.githubusercontent.com` and base64 `data:` URIs don't (AGENTS.md → "Why the
-tooling exists"). Confirm `git status` is clean (`.screenshots/` is gitignored). If you started a `--use-live-db`
+the form that renders; `raw.githubusercontent.com` and base64 `data:` URIs don't
+([lessons.md](../../../docs/lessons.md) → GitHub / PRs). Confirm `git status` is clean (`.screenshots/` is gitignored). If you started a `--use-live-db`
 server, kill it (`pkill -f "next start -p 3996"`) — the default ephemeral flow cleans up after itself.
 
 ## Fallback — the Playwright MCP (when the script can't run)

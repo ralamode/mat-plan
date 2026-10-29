@@ -26,7 +26,7 @@
 
 ## Test Configuration
 
-<!-- Node version, DB (Docker Postgres / Neon branch), relevant env. -->
+<!-- Node version, DB (embedded Postgres via `e2e:local` / the seed-only preview project), relevant env. -->
 
 ## Screenshots (optional)
 

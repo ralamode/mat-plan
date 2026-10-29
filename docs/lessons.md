@@ -545,4 +545,4 @@ main` in the main checkout (it stays on `main`; see `ship-pr` step 8), then spot
 ---
 
 **Appending:** when a failure takes more than one attempt to diagnose, add an entry here in the same PR
-as the fix (see AGENTS.md → "turn failures into prevention"). Keep it terse; the value is fast recall.
+as the fix (see AGENTS.md → "Start here"). Keep it terse; the value is fast recall.
