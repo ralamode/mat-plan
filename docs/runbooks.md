@@ -1323,6 +1323,20 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `curl -o /dev/null -w '%{http_code}' https://clerk.<domain>/v1/client` should be **anything but
       404** (401 is healthy — it means Clerk answered).
 
+      📌 **The dashboard opens on the DEVELOPMENT instance, and every page in this list looks
+      plausible there.** The environment selector sits beside the application name; a Domains page
+      showing a `*.clerk.accounts.dev` primary domain badged _Development domain_, or the line
+      _"not available on development instances"_, means the custom-domain work is being done in the
+      wrong context. Production is where `clerk.<domain>` is verified and its certificate issued.
+
+      📌 **One command separates "Clerk is broken" from "my domain is not provisioned":** curl
+      `/v1/client` on BOTH Frontend APIs. The development one (`<slug>.clerk.accounts.dev`, in the
+      dev instance's publishable key) answering **200** while `clerk.<domain>` answers **000** is
+      conclusive — Clerk is healthy and the custom hostname has no certificate. A TLS
+      `handshake failure` with no HTTP status at all is that same state; it is **not** a CSP, CORS
+      or key problem, and the publishable key can be decoded to prove which host it expects
+      (`base64 -d` the part after `pk_live_`).
+
       📌 **This is also the box that unblocks the `style-src` question below.** That question cannot be
       answered while clerk-js 404s, because nothing has rendered yet to violate a style policy.
 
