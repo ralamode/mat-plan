@@ -83,11 +83,11 @@ So the first draft was **default-OPEN**: toggle off → no throw → `getCurrent
 synthetic principal ahead of `clerkIsConfigured()` for every unauthenticated request. Between 1c-3b
 and 1c-4 that reaches the one live household — two minors' logged bodyweight.
 
-🔴 **The maintainer's "a short outage is cheap" does NOT reach this one, and the distinction is the
-whole reason §2 and §3 are separate sections.** §3 trades on _availability_, which is now priced near
-zero. **This is `confidentiality`:** a default-open bypass does not take the app down, it hands a
-stranger a household's data while everything looks healthy. No tolerance for downtime buys any of it,
-and the gate stays a positive proof.
+🔴 **§2 and §3 are separate sections because they trade on different properties, and only one of them
+is negotiable.** §3 is about _availability_ — how loudly a mis-wired deployment fails. **This is
+`confidentiality`:** a default-open bypass does not take the app down, it hands a stranger a
+household's data while everything looks healthy. Downtime can be priced; this cannot, so the gate
+stays a positive proof regardless of how much outage the project is willing to absorb.
 
 OPS-1 solved this by keying off **database locality**, and the helper is already exported:
 
@@ -109,11 +109,10 @@ A request-time throw lets the mis-wired deployment **build green and promote**. 
 DNS, bypass armed — and the failure is only discovered by whoever happens to hit a gated route,
 rather than by the deploy that caused it.
 
-⚠️ **This is not an availability argument.** _(Maintainer, 2026-10-29: nobody uses the app yet, not
-even the household's own athletes, so a short outage is cheap and should not buy complexity.)_ The
-reason boot beats request here is **attribution, not blast radius**: a build-log failure names the
-deployment that introduced it, at the moment it was introduced. It also costs nothing — the same
-check, in a module that already runs one.
+⚠️ **This is not an availability argument**, and should not be read as one. The reason boot beats
+request here is **attribution**: a build-log failure names the deployment that introduced it, at the
+moment it was introduced, instead of waiting for whoever happens to hit a gated route. It also costs
+nothing — the same check, in a module that already runs one.
 
 `apps/web/lib/env.ts:117` already runs `assertDatabaseEnvironment(...)` unconditionally at module
 scope, deliberately outside `SKIP_ENV_VALIDATION`, and `db-environment.ts:108-112` says why: a
@@ -123,11 +122,11 @@ So the refusal joins it there: _the var is set and `bypassAllowed` is false → 
 per-request code in `session.ts` is then a pure `if (bypassAllowed && id) return { userId: id }` with
 no production-only branch at all.
 
-**On the DoS objection — moot twice over.** Anyone who can set a Vercel env var already holds deploy
-access and, per `.github/scripts/check-preview-isolation.mjs:17-21`, a Vercel token has **no
+**On the DoS objection — not an escalation.** Anyone who can set a Vercel env var already holds
+deploy access and, per `.github/scripts/check-preview-isolation.mjs:17-21`, a Vercel token has **no
 read-only scope**: it _"can decrypt every production environment variable in the project and create
-deployments"_. And the maintainer has priced downtime at roughly zero for now. Keep the throw; do not
-soften it to `return null`.
+deployments"_. A denial they could equally achieve by deploying `throw` in `layout.tsx` buys them
+nothing. Keep the throw; do not soften it to `return null`.
 
 ### 4. Containment: one equality assertion, on the helper 1b-bis already extracted
 
