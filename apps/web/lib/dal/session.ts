@@ -8,6 +8,7 @@ import { redirect, unstable_rethrow } from 'next/navigation';
 import * as Sentry from '@sentry/nextjs';
 
 import { clerkIsConfigured } from '@/lib/clerk';
+import { sessionBypassUserId } from '@/lib/env';
 import { SIGN_IN_PATH } from '@/lib/constants';
 
 /**
@@ -51,6 +52,18 @@ import { SIGN_IN_PATH } from '@/lib/constants';
 let authUnavailableReported = false;
 
 export const getCurrentUser = cache(async (): Promise<{ userId: string } | null> => {
+  // AUTH-1 1c-3a — the test session seam, and the ONLY read of it in the repo
+  // (`apps/web/test/bypass-is-contained.test.ts` fails the build on a second one).
+  //
+  // Ahead of `clerkIsConfigured()` deliberately: the harness runs with no Clerk keys, which is the
+  // property `e2e/theme.spec.ts` asserts one-way, so there is nothing to fall through to.
+  // `lib/env.ts` owns the arming decision and REFUSES AT BOOT if the variable is set anywhere that
+  // is not a local throwaway database — so by the time this runs, a non-null answer has already been
+  // proved safe. Nothing is re-checked here, because a second predicate is a second thing to get
+  // wrong.
+  const bypassUserId = sessionBypassUserId();
+  if (bypassUserId) return { userId: bypassUserId };
+
   if (!clerkIsConfigured()) return null;
 
   try {

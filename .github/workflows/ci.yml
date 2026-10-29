@@ -485,6 +485,15 @@ jobs:
 
       - name: Playwright smoke
         if: steps.guard.outputs.skip != 'true'
+        # AUTH-1 1c-3a — the test session seam. CI does NOT go through `scripts/e2e-local.ts`, so it
+        # needs its own injection; without it every spec reaching a `requireSession()` page lands on
+        # `/sign-in` from 1c-3b onward. The value is the committed fixture id, not a secret.
+        # ⚠️ STEP-level, never job-level — the rule this file states for itself above. A job-level
+        # env is in reach of every step, `actions/upload-artifact` included.
+        # `apps/web/lib/env.ts` refuses to arm unless `DATABASE_URL` is local; the job's is the
+        # localhost service container, which is what makes this safe rather than the label on it.
+        env:
+          E2E_SESSION_BYPASS_USER_ID: user_000000000000000000000000e2e
         run: pnpm --filter web e2e
 
       - name: Upload report + traces on failure

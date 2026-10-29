@@ -69,7 +69,7 @@ const SHAREABLE = new Set([]);
 const REQUIRED_PER_SCOPE = ['DATABASE_URL'];
 
 /** Never legitimate in any Vercel scope: it disables env validation, OPS-1's guard included. */
-const FORBIDDEN_ANYWHERE = ['SKIP_ENV_VALIDATION'];
+const FORBIDDEN_ANYWHERE = ['SKIP_ENV_VALIDATION', 'E2E_SESSION_BYPASS_USER_ID'];
 
 const API_BASE = 'https://api.vercel.com';
 

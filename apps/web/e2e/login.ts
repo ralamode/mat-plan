@@ -14,15 +14,21 @@ import { APP_HOME_PATH } from '../lib/constants';
  *
  * ⚠️ **The file is `login.ts`, not `gate-login.ts`, on purpose (AUTH-1 1c-pre).** The export keeps
  * the `gate` in its name because that is what it drives; the MODULE does not, because at 1c it also
- * holds `sessionLogin` and at 1d the gate half is deleted. A name that is true in all three worlds
+ * held a session helper and at 1d the gate half is deleted. A name that is true in all three worlds
  * costs one rename now instead of one inside 1c's one-way-door PR and another inside 1d's.
  *
- * 🔴 **1c adds `sessionLogin` HERE and each consumer calls the two halves explicitly — it does NOT
- * add a combined `login()`.** A single wrapper would have to branch on ambient env, which is the same
- * branch moved out of sight, and it would drag `@clerk/testing` into `capture.ts`'s module graph —
- * breaking the offline, no-credential property that is the whole reason `screenshot:ephemeral`
- * exists. Two explicit calls also put the 1c switch in the consumer's diff, where it is reviewable.
- * _(Settled by the 1c-pre panel, 2026-10-22; see docs/plans/auth-1c-pre-login-seam.md.)_
+ * ⚠️ **1c-pre promised a `sessionLogin` here. 1c-3a RETRACTS that promise rather than keeping it**,
+ * and the reason is that the seam turned out to live a layer lower. The session bypass is an
+ * **environment variable** (`apps/web/lib/env.ts`), so every request in a harness run is already
+ * authenticated — a per-page login helper would have nothing to do, and a helper that does nothing
+ * is worse than no helper, because the next reader assumes it is load-bearing.
+ *
+ * 🔴 **The other half of that panel finding still stands, and is why `@clerk/testing` is NOT here.**
+ * A combined `login()` would have to branch on ambient env — the same branch moved out of sight —
+ * and it would drag `@clerk/testing` into `capture.ts`'s module graph, breaking the offline,
+ * no-credential property that is the whole reason `screenshot:ephemeral` exists. The bypass keeps
+ * that property by never introducing the dependency at all.
+ * _(1c-pre panel, 2026-10-22, docs/plans/auth-1c-pre-login-seam.md; retraction 1c-3a, 2026-10-29.)_
  */
 export async function gateLogin(page: Page): Promise<void> {
   const password = process.env.ACCESS_GATE_PASSWORD;

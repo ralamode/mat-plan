@@ -20,6 +20,7 @@ import {
   ACTIVITY_TYPE_KEYS,
   DEFAULT_BODYWEIGHT_UNIT,
   DEFAULT_SESSION_TYPE,
+  E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
   METRIC_KEYS,
   newId,
@@ -968,6 +969,30 @@ async function runEphemeral(
       DATABASE_URL: dbUrl,
       DATABASE_URL_UNPOOLED: dbUrl,
       ACCESS_GATE_PASSWORD: SCREENSHOT_GATE_PASSWORD,
+      // AUTH-1 1c-3a — the session seam, so `/p` and the other gated routes stay capturable once
+      // 1c-3b converts them. `assertDbTargetAllowed` above has already proved `dbUrl` is the
+      // throwaway cluster, which is the same property `lib/env.ts` re-checks before arming.
+      E2E_SESSION_BYPASS_USER_ID: E2E_SESSION_BYPASS_USER,
+      // 🔴 **Blank the third-party credentials rather than inheriting them.** `...process.env` and
+      // `next start`'s own `.env.local` load would otherwise carry whatever the developer has — and
+      // `lib/env.ts` says plainly that from 1c `pnpm dev` starts needing dev Clerk keys there. That
+      // would turn `e2e/theme.spec.ts`'s zero-Clerk-egress assertion red locally, and that assertion
+      // is **one-way**: once a Clerk host is legitimately contacted it can never catch a regression
+      // again. "No keys, no egress" must be a property of this harness, not of the machine running
+      // it. Upstash and Sentry for the same reason — a smoke run should spend no real rate-limit
+      // quota and file no real error events.
+      // 🔴 **`''`, never `undefined`, and that is the whole mechanism.** `spawn` DROPS a key whose
+      // value is `undefined`, and an absent key is exactly the condition under which
+      // `@next/env`'s `processEnv` applies the `.env.local` value instead — so blanking with
+      // `undefined` hands the win to the very file this is defending against. An empty string keeps
+      // the key PRESENT, so dotenv leaves it alone; `''` is falsy for `clerkIsConfigured()` and
+      // `emptyStringAsUndefined: true` makes zod see `undefined` anyway. Verified by spawning a
+      // child and reading `'X' in process.env`.
+      CLERK_SECRET_KEY: '',
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: '',
+      UPSTASH_REDIS_REST_URL: '',
+      UPSTASH_REDIS_REST_TOKEN: '',
+      SENTRY_DSN: '',
     };
     const forceBuild = process.argv.includes('--build');
     if (forceBuild || !existsSync(join(process.cwd(), '.next', 'BUILD_ID'))) {

@@ -25,3 +25,20 @@ export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
  */
 export const SEED_PROFILE_NAME = 'Athlete One';
 export const SEED_PROFILE_2_NAME = 'Athlete Two';
+
+/**
+ * AUTH-1 1c-3a — the synthetic principal the **test session bypass** returns, injected by
+ * `e2e-local.ts`, `screenshot-ephemeral.ts` and CI's smoke step as `E2E_SESSION_BYPASS_USER_ID`.
+ *
+ * 🔴 **It must never be a real Clerk id.** A real one would be personal data committed to a public
+ * repo (AGENTS.md → privacy: *"a real value committed anywhere in the tree is a P0, and deleting it
+ * from HEAD is not removing it"*), would collide with that person's own `mat-plan:mutate:<id>` rate
+ * bucket, and — were the bypass ever to arm against a live database — would resolve a **real
+ * household** rather than failing to resolve anything.
+ *
+ * Obviously fake on purpose, the `E2E_LOCAL_GATE_PASSWORD` idiom: a random-looking placeholder trips
+ * gitleaks, and a reader should be able to tell at a glance that this identifies nobody. The shape
+ * still satisfies `lib/env.ts`'s `/^user_[A-Za-z0-9]+$/`, because the principal has to flow through
+ * the same code paths a real one does.
+ */
+export const E2E_SESSION_BYPASS_USER = 'user_000000000000000000000000e2e';
