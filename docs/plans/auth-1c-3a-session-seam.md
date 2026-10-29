@@ -35,12 +35,19 @@ boundary_.
 This chunk follows 1c-1's shape exactly — **ship the mechanism dark and unit-proved, convert the
 consumers in the next PR.**
 
-🔴 **And it carries 1c-1's weakness too, stated rather than footnoted.** The seam's real proof only
-exists once a page calls `requireSession()`, which is 1c-3b. This chunk's acceptance is therefore
-unit-level, and _"acceptance could not fail"_ is exactly the defect that withdrew 1c-pre's first
-draft (`auth-1c-pre-login-seam.md:104`, B4). The mitigation is that the three refusal cases in the
-Test plan **can** fail and are proved by mutation; what cannot be proved here is the integration,
-and the plan says so instead of implying otherwise.
+✅ **The weakness this plan expected to carry has been RETIRED.** The draft said the seam could only
+be proved once a page calls `requireSession()` — i.e. in 1c-3b — leaving this chunk with unit-level
+acceptance, which is the _"acceptance could not fail"_ defect that withdrew 1c-pre's first draft
+(`auth-1c-pre-login-seam.md:104`, B4). It turned out to be provable here, with a throwaway probe
+rather than a shipped change:
+
+| Probe — applied, measured, reverted                                      | Result                                                        |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `requireSession()` temporarily added to `app/p/page.tsx`, **seam armed** | **74 passed**                                                 |
+| the same probe, **seam disarmed** (injection commented out)              | **1 failed** — `global.setup.ts` dies at the picker assertion |
+
+Both halves matter: the first shows the seam works end to end, the second shows it is **load-bearing
+rather than incidental**. Neither probe is committed.
 
 ## 🔴 The decision this plan exists to make: NOT `@clerk/testing`
 

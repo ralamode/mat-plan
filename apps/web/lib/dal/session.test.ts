@@ -20,6 +20,10 @@ const redirect = vi.hoisted(() =>
   }),
 );
 const clerkIsConfigured = vi.hoisted(() => vi.fn());
+// AUTH-1 1c-3a. Mocked rather than exercised here for the same reason `@/lib/clerk` is: importing
+// the real `lib/env.ts` runs its two module-scope guards (OPS-1's database assertion and the bypass
+// refusal), which is a different contract with its own file — `lib/env-session-bypass.test.ts`.
+const sessionBypassUserId = vi.hoisted(() => vi.fn(() => null as string | null));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth }));
 // ⚠️ `unstable_rethrow` must be mocked with REAL behaviour, not stubbed away: the module calls it on
@@ -32,6 +36,7 @@ const unstable_rethrow = vi.hoisted(() => (error: unknown): void => {
 });
 vi.mock('next/navigation', () => ({ redirect, unstable_rethrow }));
 vi.mock('@/lib/clerk', () => ({ clerkIsConfigured }));
+vi.mock('@/lib/env', () => ({ sessionBypassUserId }));
 // `cache()` is React's per-request memo; in a unit test it must be the identity wrapper, or every
 // case after the first would read the first one's answer and the suite would pass vacuously.
 vi.mock('react', async (orig) => ({
@@ -46,6 +51,8 @@ describe('getCurrentUser — fails closed, three ways (AUTH-1 1c-1)', () => {
     auth.mockReset();
     redirect.mockClear();
     clerkIsConfigured.mockReset();
+    sessionBypassUserId.mockReset();
+    sessionBypassUserId.mockReturnValue(null);
   });
 
   it('no Clerk keys → null, and `auth()` is never called', async () => {
@@ -146,5 +153,49 @@ describe('the two refusals (AUTH-1 1c-1)', () => {
     auth.mockResolvedValue({ userId: 'user_abc' });
     expect(await requireSession()).toEqual({ userId: 'user_abc' });
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTH-1 1c-3a — the test session seam, from the principal's side.
+ *
+ * Whether the bypass may ARM at all is `lib/env.ts`'s contract and is proved in
+ * `lib/env-session-bypass.test.ts`. What matters here is narrower and still worth pinning: when the
+ * armer hands back an id, this module returns it **and never reaches Clerk** — because the harness
+ * runs with no keys and `e2e/theme.spec.ts` asserts, one-way, that no Clerk host is contacted.
+ */
+describe('getCurrentUser — the test session bypass (AUTH-1 1c-3a)', () => {
+  beforeEach(() => {
+    auth.mockReset();
+    clerkIsConfigured.mockReset();
+    sessionBypassUserId.mockReset();
+  });
+
+  it('an armed bypass is the principal, and `auth()` is never called', async () => {
+    sessionBypassUserId.mockReturnValue('user_000000000000000000000000e2e');
+    // Configured deliberately: the bypass must win even where Clerk COULD have answered, or the
+    // harness would silently depend on keys being absent rather than on the seam.
+    clerkIsConfigured.mockReturnValue(true);
+
+    expect(await getCurrentUser()).toEqual({ userId: 'user_000000000000000000000000e2e' });
+    expect(auth).not.toHaveBeenCalled();
+  });
+
+  it('a disarmed bypass changes nothing — the real path still runs', async () => {
+    // The case that matters in production, where `sessionBypassUserId()` always answers null.
+    sessionBypassUserId.mockReturnValue(null);
+    clerkIsConfigured.mockReturnValue(true);
+    auth.mockResolvedValue({ userId: 'user_real' });
+
+    expect(await getCurrentUser()).toEqual({ userId: 'user_real' });
+    expect(auth).toHaveBeenCalled();
+  });
+
+  it('a disarmed bypass does not rescue a missing session', async () => {
+    sessionBypassUserId.mockReturnValue(null);
+    clerkIsConfigured.mockReturnValue(true);
+    auth.mockResolvedValue({ userId: null });
+
+    expect(await getCurrentUser()).toBeNull();
   });
 });

@@ -120,6 +120,20 @@ flowchart LR
      signatures carry no scope — invariant 8 already makes `lib/dal` the one layer allowed ambient
      server state, and a threading mistake one layer up is a leak the compiler cannot see (the
      parameter is present, just wrong).
+   - 🔴 **`getCurrentUser()` can return a principal Clerk never issued** (`AUTH-1` 1c-3a), and
+     anything reasoning about the principal has to know it. `lib/dal/session.ts` reads
+     `sessionBypassUserId()` **before** `clerkIsConfigured()`, so in a local harness every request
+     carries a committed fixture id (`E2E_SESSION_BYPASS_USER`) with no Clerk involvement at all.
+     That is what lets `e2e:local`, `screenshot:ephemeral` and CI's smoke reach a `requireSession()`
+     page with no keys and no egress — and it is why the smoke proves _the call sites_, never _Clerk_.
+     **The arming decision is `lib/env.ts`'s alone** and is keyed on **database locality**, not on
+     `VERCEL`: those are system variables gated on a dashboard toggle, so a rule keyed on them
+     silently no-ops when it is off — which for an auth bypass means default-OPEN on a real
+     deployment. It **refuses at module import**, so a mis-wired deployment fails its build rather
+     than promoting and serving. `apps/web/test/bypass-is-contained.test.ts` pins one armer, one
+     reader and two injectors; `lib/env-session-bypass.test.ts` pins the refusals — including the one
+     OPS-1 deliberately allows and this does not (`ALLOW_LIVE_DB` + a remote database, i.e.
+     `pnpm dev:prod`).
    - 🔴 **A page NEVER calls `getHouseholdScope()`** (`AUTH-1` 1c-2). The picker needs to tell "no
      household" from "a household with no athletes yet" — `listProfiles` returns `[]` for both — and
      the obvious patch is to have `p/page.tsx` resolve the scope and branch on it. That puts a

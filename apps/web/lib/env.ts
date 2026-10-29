@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { assertDatabaseEnvironment } from '@mat-plan/shared';
+import { assertDatabaseEnvironment, isLocalDbHost } from '@mat-plan/shared';
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
@@ -64,6 +64,17 @@ export const env = createEnv({
     // instance" is the deliberate state of chunks 1a-1b; 1c is the PR that makes a session the
     // boundary, and 1c is where `pnpm dev` starts needing dev keys in `.env.local`.
     CLERK_SECRET_KEY: z.string().min(1).optional(),
+
+    // --- AUTH-1 1c-3a: the TEST SESSION BYPASS. Read `sessionBypassUserId()` below before touching.
+    // Shaped like a real Clerk id on purpose: the principal it produces flows into
+    // `checkMutationLimit(userId)` and, at 1c-4, `membershipHousehold(clerkUserId)`, so a boolean
+    // flag would make the harness exercise a code path production never takes.
+    // ⚠️ The regex is a CONTROL, not hygiene. `emptyStringAsUndefined` plus a shape turns `' '` into
+    // a boot refusal; without it a whitespace principal becomes a Redis key and a membership lookup.
+    E2E_SESSION_BYPASS_USER_ID: z
+      .string()
+      .regex(/^user_[A-Za-z0-9]+$/)
+      .optional(),
   },
   // ⚠️ `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is the ONE legitimate `NEXT_PUBLIC_` in this repo.
   // AGENTS.md forbids the prefix on SECRETS; Clerk's publishable key is public by design — it is
@@ -90,6 +101,7 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     SENTRY_DSN: process.env.SENTRY_DSN,
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    E2E_SESSION_BYPASS_USER_ID: process.env.E2E_SESSION_BYPASS_USER_ID,
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
   },
   emptyStringAsUndefined: true,
@@ -120,3 +132,55 @@ assertDatabaseEnvironment({
   allowLiveDb: !!process.env.ALLOW_LIVE_DB,
   context: 'apps/web/lib/env.ts',
 });
+
+/**
+ * AUTH-1 1c-3a — **is the test session bypass allowed to arm in this process?**
+ *
+ * The bypass lets `pnpm e2e:local`, `screenshot:ephemeral` and CI's smoke reach a page that calls
+ * `requireSession()` with no Clerk keys and no egress to Clerk. It is an **authentication bypass in
+ * production code**, so the gate is a POSITIVE proof that this is a throwaway harness.
+ *
+ * 🔴 **Keyed on database LOCALITY, not on `process.env.VERCEL`, and that is not a style choice.**
+ * `VERCEL`/`VERCEL_ENV` are Vercel *system* variables, gated on the project's "Enable access to
+ * System Environment Variables" toggle — `db-environment.ts` says so, and OPS-1 deliberately re-keyed
+ * its own guard off locality for exactly this reason. A rule keyed on them silently no-ops when that
+ * toggle is off, which for THIS control means a default-OPEN bypass on a real Production deployment:
+ * a synthetic principal returned to every unauthenticated request. The `VERCEL*` checks stay as a
+ * second belt precisely because they can vanish without warning.
+ *
+ * Both harnesses already prove locality to themselves (`scripts/e2e-local.ts` → `assertLocalDbUrl`,
+ * `scripts/screenshot-ephemeral.ts` → `assertDbTargetAllowed`), and OPS-1 makes "production with a
+ * local `DATABASE_URL`" impossible — so this reuses an invariant the repo already enforces rather
+ * than inventing one.
+ */
+function sessionBypassAllowed(): boolean {
+  return (
+    !process.env.VERCEL_ENV && !process.env.VERCEL && isLocalDbHost(process.env.DATABASE_URL ?? '')
+  );
+}
+
+/**
+ * 🔴 **Refuse at BOOT, not per request.** A request-time throw lets the mis-wired deployment build
+ * green and PROMOTE: it is then live, in DNS, bypass armed, and the failure is found by whoever
+ * happens to hit a gated route rather than by the deploy that caused it. A module-import throw is a
+ * build-log failure — the `assertDatabaseEnvironment` pattern directly above, for the same reason.
+ *
+ * Unconditional and outside `SKIP_ENV_VALIDATION`, again matching OPS-1: leaving an auth bypass
+ * behind one environment variable would make that variable a silent kill switch for this guard.
+ */
+if (process.env.E2E_SESSION_BYPASS_USER_ID && !sessionBypassAllowed()) {
+  throw new Error(
+    'E2E_SESSION_BYPASS_USER_ID is set, but this process is not a local throwaway harness ' +
+      '(VERCEL/VERCEL_ENV present, or DATABASE_URL is not a local host). It is an authentication ' +
+      'bypass and must never arm against a real database. Unset it. See apps/web/lib/env.ts.',
+  );
+}
+
+/**
+ * The synthetic principal, or `null`. **`lib/dal/session.ts` is the only reader** — pinned by
+ * `apps/web/test/bypass-is-contained.test.ts`.
+ */
+export function sessionBypassUserId(): string | null {
+  const id = process.env.E2E_SESSION_BYPASS_USER_ID;
+  return id && sessionBypassAllowed() ? id : null;
+}

@@ -11,6 +11,8 @@ import {
   stopChildProcess,
 } from './embedded-pg';
 
+import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
+
 /**
  * Run the Playwright smoke LOCALLY against a throwaway database (`pnpm e2e:local`).
  *
@@ -99,6 +101,26 @@ async function main(): Promise<void> {
       DATABASE_URL_UNPOOLED: dbUrl,
       ACCESS_GATE_PASSWORD: E2E_LOCAL_GATE_PASSWORD,
       E2E_PORT: String(appPort),
+      // AUTH-1 1c-3a — the session seam. Without it, every spec reaching a `requireSession()` page
+      // lands on `/sign-in` from 1c-3b onward. `lib/env.ts` refuses to arm unless `DATABASE_URL` is
+      // a local host, which `assertLocalDbUrl` has already proved for `dbUrl` above.
+      // 📌 Injected into the whole Playwright run, build included, and that is safe here because
+      // `app/layout.tsx` is `force-dynamic` (pinned by `app/tenancy-is-not-cached.test.ts`) — so no
+      // page prerenders, and no principal can be baked into a static output.
+      E2E_SESSION_BYPASS_USER_ID: E2E_SESSION_BYPASS_USER,
+      // 🔴 **Blank the third-party credentials rather than inheriting them.** `...process.env` and
+      // `next start`'s own `.env.local` load would otherwise carry whatever the developer has — and
+      // `lib/env.ts` says plainly that from 1c `pnpm dev` starts needing dev Clerk keys there. That
+      // would turn `e2e/theme.spec.ts`'s zero-Clerk-egress assertion red locally, and that assertion
+      // is **one-way**: once a Clerk host is legitimately contacted it can never catch a regression
+      // again. "No keys, no egress" must be a property of this harness, not of the machine running
+      // it. Upstash and Sentry for the same reason — a smoke run should spend no real rate-limit
+      // quota and file no real error events.
+      CLERK_SECRET_KEY: undefined,
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: undefined,
+      UPSTASH_REDIS_REST_URL: undefined,
+      UPSTASH_REDIS_REST_TOKEN: undefined,
+      SENTRY_DSN: undefined,
     };
 
     console.log(`▸ running playwright (app on http://localhost:${appPort}; first run builds)…`);
