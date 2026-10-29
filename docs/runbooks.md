@@ -1289,14 +1289,17 @@ is a later, explicit act from the instance dropdown, and the first box below is 
 yet. Navigation paths in this list are the dashboard's **current** ones (verified 2026-10-21); Clerk
 moves them, so treat a path that does not resolve as a renamed page, not a missing feature.
 
-- [ ] 🔴 **Production keys stay UNSET until chunk 1c.** This is the one box that is about _not_ doing
+- [x] ✅ **Production keys stay UNSET until chunk 1c — DISCHARGED 2026-10-29**, when `1c-3` made the
+      session the boundary and the keys went into Vercel (Production scope; the publishable half as
+      **Config**, not Secret — it is public by design and Vercel refuses the contradiction). Kept for
+      the reasoning, which is still the reason not to light an instance early. This was about _not_ doing
       something, and it is the UX panel's finding, not a precaution: between 1a and 1c a completed
       Google sign-in grants nothing, lands on `APP_HOME_PATH`, and is bounced to `/gate` for the shared
       password — so the reward for signing in is a password prompt, with no explanation on screen. Use
       the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
-- [ ] **The production instance's custom domain.** A production instance serves its Frontend API from
+- [x] ✅ **The production instance's custom domain — DONE 2026-10-29.** A production instance serves its Frontend API from
       `clerk.<domain>` and its Account Portal from `accounts.<domain>`; neither resolves until CNAMEs
       exist. The dashboard's **Configure → Domains** lists the full set — the mail/DKIM entries carry
       an instance id, so copy them rather than reconstruct them. The two that gate sign-in:
@@ -1323,11 +1326,15 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       📌 The publishable key encodes the host Clerk expects: `base64 -d` the part after `pk_live_`.
       **A healthy result is `200` or `401`** — `401` means Clerk answered.
 
-- [ ] **Google only** — every other sign-in strategy disabled, or invitation-only has a second door.
+- [x] ✅ **Google only — verified on the PRODUCTION instance, 2026-10-29.** Every other sign-in strategy disabled, or invitation-only has a second door.
       **Path (verified 2026-10-21):** **SSO connections → Add connection → For all users → Google.**
       Disable email/password and every other strategy in the same pass; the point of the box is that
       invite-only governs one door only if there is one door.
-- [x] **Sign-up restricted to invited emails — verified 2026-10-21.** ✅ **It exists, it is called
+- [x] **Sign-up restricted to invited emails.** 🔴 **The 2026-10-21 verification was on the
+      DEVELOPMENT instance, and production stayed `Open` until 2026-10-29** — proven, not suspected:
+      two accounts self-created from two Google addresses with no invitation, 20 minutes apart, while
+      the checklist read as satisfied. **Access mode is per-instance, like everything else on this
+      page.** Set to `Invite-only` on production 2026-10-29. ✅ **It exists, it is called
       `Invite-only`** (API value `restricted`), on the **Access mode** page
       (`dashboard.clerk.com/~/user-authentication/access-mode`), one of three modes with `Open`
       (`public`) and `Waitlist` (`waitlist`). ✅ **It blocks**, per Clerk's
@@ -1464,7 +1471,8 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `script-src` can give away, and `'strict-dynamic'` plus a nonce is the policy the rest of the
       app is built on. The question to answer first is **which** code evals — Clerk's own bundle, or
       a dependency it loads — and whether the affected feature is one this app uses at all. Open.
-- [ ] 🔴 **Clerk's BOT PROTECTION breaks sign-up under our CSP — measured 2026-10-22, and this is the
+- [x] ✅ **Clerk's BOT PROTECTION — turned OFF on the PRODUCTION instance, 2026-10-29**, which is
+      option 1 below. Measured 2026-10-22, and this is the
       box that actually bit.** `1a` allowed `https://challenges.cloudflare.com` in `frame-src`, read
       off the pinned version's `DEFAULT_DIRECTIVES`. ⚠️ **At `clerk-js` 6.40.0 that is the wrong
       mechanism and the allowance is dead weight:** bot protection now loads
