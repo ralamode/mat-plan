@@ -120,7 +120,12 @@ export const LANDING_COPY = {
 /** The gate page's copy. "Private preview." was dropped at OSS-2: the gate is now screen two of a
  *  public flow, and "preview" promised a timeline the landing deliberately doesn't. */
 export const GATE_COPY = {
-  subhead: 'Enter the household access code to continue.',
+  /**
+   * ⚠️ AUTH-1 1c-3b: *"to continue"* is true for a visitor who already has a session and false for
+   * everyone else, because the code is now one of two requirements. Says so rather than implying the
+   * code is sufficient — the reader who is about to discover otherwise is the one this helps.
+   */
+  subhead: 'Enter the household access code. You’ll also sign in with Google.',
   /** The way back out — the one room a stranger can walk into needs an exit. The page draws a
    *  decorative `←` before it, hidden from screen readers so the link isn't "leftwards arrow, About…". */
   back: `About ${APP_NAME}`,
@@ -156,7 +161,14 @@ export const GATE_COPY = {
 export const SIGN_IN_COPY = {
   heading: 'Sign in with Google',
   notYet: 'Signing in with Google isn’t switched on yet.',
-  codeStillWorks: 'The household access code is still the way in.',
+  /**
+   * 🔴 **Kept and reworded, not deleted — AUTH-1 1c-3b.** A draft of that chunk deleted this line
+   * and the `/gate` button below it, which would have left **nothing in the app linking to a door
+   * that is still mandatory**: until 1d the boundary is the access code AND a session. The sentence
+   * is also simply TRUE under that AND, so deleting it was the dishonest direction. What changed is
+   * that it now says the code is one of two things rather than the only one.
+   */
+  codeStillWorks: 'You also need this household’s access code until the next release.',
   gateCta: 'Enter the access code',
   processor:
     'This screen is run by Clerk. Signing in tells us the email address on your Google account — nothing else from it, and nothing about your athletes is sent to Google.',
@@ -258,13 +270,6 @@ export const NO_HOUSEHOLD_COPY = {
    */
   wrongAccount:
     'If you signed in with Google and have more than one account, this may be the wrong one. Signing out and signing back in with the address the invitation was sent to is the fix.',
-  /**
-   * 🔴 **Deleted at 1c-3, which ships the control.** Without it `wrongAccount` prescribes an action
-   * with no affordance anywhere on the page, and `next`’s *"Otherwise"* makes it read as a live
-   * branch. `PICKER_EMPTY_COPY.notYet` / `SIGN_IN_COPY.notYet` are the same idiom: lead with the
-   * state, so nobody hunts for a button that is not there.
-   */
-  notYet: 'Signing out isn’t in the app yet.',
   /**
    * Says plainly that the screen cannot add the account, which is what stops a parent hunting for a
    * control that does not exist. Names the invitation because *"the person who set this up"* is
@@ -579,6 +584,39 @@ export const SAVING_LABEL = 'Saving…';
  * read correctly to a parent. They are `/^No profile found to (log|save) against\.$/` — deliberately
  * close, so neither can hint at which check refused.
  */
+/**
+ * AUTH-1 1c-3b — the mutation limiter's refusal. **Distinct from `NO_PROFILE_*` on purpose.**
+ *
+ * Reusing a not-found string would tell a kid mid-session *"No profile found to log against"* when
+ * the truth is "too many writes, briefly" — unactionable, and it would muddy the argument
+ * `actions.test.ts` pins: that an un-gated caller, a caller with no session and a caller reaching
+ * another household all get the SAME bytes, so none of them learns which it was. A rate limit is not
+ * that class of refusal and must not borrow its copy.
+ *
+ * Says what to do, because unlike the others there is something to do.
+ */
+/**
+ * AUTH-1 1c-3b — the sign-out control's copy.
+ *
+ * The consequence line is **disclosure at the decision point, not a confirmation dialog**. A confirm
+ * would ask the user to approve something they cannot evaluate — whether Google will re-present an
+ * account chooser is a property of their browser's session state, which no screen here can see — and
+ * the real risk is a mis-tap, whose fix is placement and visual recession, not a dialog dismissed by
+ * reflex. The `SIGN_IN_COPY.processor` idiom: put the fact next to the control.
+ *
+ * `text-foreground`, not muted, at the use site: read once, cold, immediately before an act with no
+ * undo.
+ */
+export const SIGN_OUT_COPY = {
+  action: 'Sign out',
+  /** Shown while `clerk-js` is still arriving — on gym LTE that is not instant. */
+  loading: 'Sign out',
+  consequence:
+    'Signing out ends this session on this device. Getting back in needs the Google account linked to this household.',
+} as const;
+
+export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try again.';
+
 export const NO_PROFILE_LOG = 'No profile found to log against.';
 /** @see NO_PROFILE_LOG — the routine editor's wording of the same refusal. */
 export const NO_PROFILE_SAVE = 'No profile found to save against.';

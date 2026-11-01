@@ -86,7 +86,25 @@ flowchart LR
    sites and `1d` is a deletion rather than a rewrite. ⚠️ The action refusal returns the **principal,
    not a boolean**: a boolean cannot supply the `userId` that `checkMutationLimit()` keys on, and two
    shapes asking one question at one call site is how the source guard ends up matching the weaker
-   call. Until `1c-3`, `lib/dal/gate.ts` is still the boundary and nothing imports `session.ts`.
+   call. 🔴 **`1c-3b` made it an ADDITION, not a swap, and that is the invariant to keep.** Every
+   entry point now checks **the gate AND a session, both in-process**:
+
+   ```
+   if (!(await hasGateAccess())) return refusal;   // SEC-1 — deleted at 1d, after 1c-4
+   const user = await sessionUserOrNull();          // AUTH-1 1c-3b
+   if (!user) return refusal;                       // the SAME bytes: 404-never-403, ADR 0006
+   const limit = await checkMutationLimit(user.userId);
+   ```
+
+   The reason is the window: `getHouseholdScope()` does not consult the principal until **1c-4**, so
+   a session alone would mean _"anyone this Clerk instance admits"_ — and dropping the in-process
+   gate check would leave `mp_gate` enforced by the proxy alone, which `SECURITY.md` refuses to call
+   a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
+   **Therefore `1c-4` must land before `1d`** — a security obligation, recorded in `beta-1.md`.
+
+   `pages-are-gated.test.ts` requires all three per action, reported separately so a failure names
+   which conjunct went missing. ⚠️ The limiter needs that **source** guard because it fails open and
+   is `unconfigured` under vitest — a call placed after the write would pass every behavioural test.
 
    ✅ **This is now enforced, not requested** (`AUTH-1` 1b-bis). The old wording here —
    _"a new action without it fails the unauth suite only if you add it to that suite: do"_ — was an
@@ -120,6 +138,9 @@ flowchart LR
      signatures carry no scope — invariant 8 already makes `lib/dal` the one layer allowed ambient
      server state, and a threading mistake one layer up is a leak the compiler cannot see (the
      parameter is present, just wrong).
+   - **`ScopeMissEvent.actor` is `'clerk_session'` from 1c-3b** — a constant, never the id. The
+     requester's Clerk id in a third-party store is the same cross-tenant linkage the owning
+     household id is forbidden for, and a new personal-data flow besides.
    - 🔴 **`getCurrentUser()` can return a principal Clerk never issued** (`AUTH-1` 1c-3a), and
      anything reasoning about the principal has to know it. `lib/dal/session.ts` reads
      `sessionBypassUserId()` **before** `clerkIsConfigured()`, so in a local harness every request

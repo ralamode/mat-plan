@@ -55,10 +55,29 @@ test.describe('un-gated', () => {
 });
 
 test.describe('gated', () => {
-  test('/ goes straight to the picker', async ({ page }) => {
+  /**
+   * 🔴 **Inverted by AUTH-1 1c-3b, and the inversion is the regression guard.** The proxy used to
+   * forward a cookie-holder from `/` to the picker. Once the pages also require a session that
+   * became a loop — `/p` → `requireSession()` → `/sign-in`, whose forward controls lead back here —
+   * and it meant a visitor holding only the gate cookie could never see the landing at all.
+   *
+   * ⚠️ Asserted as "the landing renders", not "a sessionless visitor sees the landing": the harness
+   * arms a principal process-wide (1c-3a), so no spec here can establish "no session". The proxy
+   * reads no session either way, so this still catches the regression it is named for.
+   */
+  test('/ renders the landing — no forward to the picker', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(APP_HOME_PATH);
-    await expect(pickerHeading(page)).toBeVisible();
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('link', { name: LANDING_COPY.gateCta, exact: true })).toBeVisible();
+  });
+
+  test('the gate stays reachable — the access code is still one of two requirements', async ({
+    page,
+  }) => {
+    // Until 1d a visitor needs the code AND a session, so the form must not become unreachable for
+    // someone who has one and not the other.
+    await page.goto(GATE_PATH);
+    await expect(page).toHaveURL(GATE_PATH);
   });
 });
 

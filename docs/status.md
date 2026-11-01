@@ -10,7 +10,7 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-✅ **AUTH-1 is six chunks in, and every one of them is still DARK (through 1c-2, 2026-10-28).**
+🔴 **AUTH-1 is no longer dark: signing in is REQUIRED (through 1c-3b, 2026-11-01).**
 `@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional** (`1a`), the CSP is widened
 for Clerk **by exact origin derived from the publishable key, never a wildcard**, `/sign-in` is public
 and `noindex`, the **`/api` matcher hole** is closed, and `lib/access-gate.ts` is split so chunk `1d`
@@ -22,8 +22,17 @@ with #310 restoring the household conjunct the first draft of `membershipHouseho
 three ways; and **`1c-2`** (#313) gave _"no household for this account"_ its own screen **before**
 `1c-4` can make that state reachable by a parent, since until then it renders `PICKER_EMPTY_COPY` —
 _"adding an athlete takes a change to this deployment's seed data"_, plus a link into a public repo.
-`1c-2` is dark in the same sense the rest are: with one live household the state cannot be reached in
-production at all.
+`1c-2` was dark in the same sense the rest were: with one live household the state could not be
+reached at all.
+
+🔴 **`1c-3b` ended that.** All twelve entry points — 4 pages, 7 Server Actions, 1 Route Handler — now
+require **the household access code AND a Clerk session**, both checked in-process, and **sign out
+exists**. (`1c-3a`, #319 and its hardening #320, shipped the test seam that lets the harnesses reach
+a page requiring a session at all.) It is an **AND rather than a swap** because `getHouseholdScope()`
+does not consult the principal until `1c-4`: a session alone would mean _"anyone this Clerk instance
+admits"_, and dropping the in-process gate check would leave `mp_gate` enforced by middleware alone,
+which `SECURITY.md` refuses to call a boundary. **So `1c-4` must land before `1d`**, which is what
+deletes the gate half — a security obligation, recorded in [beta-1](./milestones/beta-1.md).
 
 **`1c` is split four ways and the resolver goes LAST** — `1c-1` principal → `1c-2` the "no household"
 screen → `1c-3` call sites + sign-out → `1c-4` the resolver. The chart, the reason the order is the

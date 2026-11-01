@@ -48,10 +48,17 @@ describe('every page is gated or deliberately un-gated', () => {
   });
 
   it.each(pages.map((f) => [routeOf(f), f]))('%s', (route, file) => {
-    const gated = /\bawait\s+requireGatedPage\(\)/.test(code(file));
+    const src = code(file);
+    const gated = /\bawait\s+requireGatedPage\(\)/.test(src);
+    // 🔴 **ADDED, not widened — AUTH-1 1c-3b.** The file's own note bans widening a regex to accept
+    // EITHER helper, because a guard matching either proves neither. Two separate conjuncts, both
+    // required, is the opposite of that: each still proves its own call. The gate conjunct is
+    // deleted at 1d, after 1c-4 makes the scope membership-derived.
+    const sessioned = /\bawait\s+requireSession\(\)/.test(src);
     expect(
-      gated || isUngatedPath(route),
-      `${route} neither awaits requireGatedPage() nor is an ungated path (PUBLIC_PATHS or the gate)`,
+      (gated && sessioned) || isUngatedPath(route),
+      `${route} must await BOTH requireGatedPage() and requireSession(), or be an ungated path ` +
+        `(PUBLIC_PATHS or the gate). Found gate=${gated} session=${sessioned}.`,
     ).toBe(true);
   });
 });
@@ -69,9 +76,15 @@ describe('every Route Handler checks the gate itself', () => {
   });
 
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
+    const src = code(file);
+    // The existing alternation is two spellings of ONE check (a handler may call either helper), not
+    // the forbidden "either guard will do". 1c-3b adds a second, independent conjunct.
+    const gated = /\b(?:isValidGateCookie|hasGateAccess)\(/.test(src);
+    const sessioned = /\bsessionUserOrNull\s*\(/.test(src);
     expect(
-      /\b(?:isValidGateCookie|hasGateAccess)\(/.test(code(file)),
-      `${route}/route.ts never checks the gate cookie`,
+      gated && sessioned,
+      `${route}/route.ts must check BOTH the gate cookie and a session. ` +
+        `Found gate=${gated} session=${sessioned}.`,
     ).toBe(true);
   });
 });
@@ -215,6 +228,17 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * ships today, which is what makes this chunk inert and revert-safe.
    */
   const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
+  /** AUTH-1 1c-3b: the session, required alongside the gate in every exported action. */
+  const SESSION_CALL = /\bsessionUserOrNull\s*\(/;
+  /**
+   * 🔴 **The limiter needs a SOURCE guard, because no behavioural test can catch its absence.**
+   * `checkMutationLimit` fails open, and under vitest `mutationLimiter` is always `null` — so every
+   * call answers `allowed: true`. A call placed after the write, or whose result is ignored, is
+   * invisible to the entire suite. `rate-limit.ts`'s own docblock warns about exactly this shape one
+   * level up ("a sizing test asserted the new number and passed"). An eighth action that forgets it
+   * fails here instead.
+   */
+  const LIMITER_CALL = /\bcheckMutationLimit\s*\(/;
 
   /** Every `'use server'` module under `apps/web`, by path relative to it. */
   const modules = serverActionModules().map((f) => relative(WEB_DIR, f));
@@ -260,13 +284,15 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
       name: n,
       at: src.search(new RegExp(`^export\\s+async\\s+function\\s+${n}\\b`, 'm')),
     }));
-    const missing = starts
-      .filter(({ at }, i) => {
-        const next = starts[i + 1]?.at ?? src.length;
-        return !BOUNDARY_CALL.test(src.slice(at, next));
-      })
-      .map(({ name }) => name);
+    // Each of the three must appear INSIDE the action's own slice. Reported separately so a failure
+    // names which conjunct went missing rather than just "the boundary".
+    const report = (re: RegExp) =>
+      starts
+        .filter(({ at }, i) => !re.test(src.slice(at, starts[i + 1]?.at ?? src.length)))
+        .map(({ name }) => name);
 
-    expect(missing).toEqual([]);
+    expect(report(BOUNDARY_CALL), 'actions missing the gate check').toEqual([]);
+    expect(report(SESSION_CALL), 'actions missing the session check').toEqual([]);
+    expect(report(LIMITER_CALL), 'actions missing checkMutationLimit').toEqual([]);
   });
 });

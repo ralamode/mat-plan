@@ -176,8 +176,14 @@ export type ScopeMissAction = (typeof SCOPE_MISS_ACTION)[keyof typeof SCOPE_MISS
  *   outcome already says whether one existed.
  */
 type ScopeMissEvent = Required<{
-  /** Pre-AUTH-1 there is no principal: the gate is a shared code. AUTH-1 replaces this with a user. */
-  actor: 'gate_session';
+  /**
+   * AUTH-1 1c-3b: there IS a principal now, so the label says so. 🔴 **A constant, never the id.**
+   * The obvious "improvement" — putting the requester's Clerk id here — is the same cross-tenant
+   * linkage the owning-household id is forbidden for two lines above, and it would be a new flow of
+   * personal data to a third party. The outcome already says whether a scope existed; who asked is
+   * not what this event is for.
+   */
+  actor: 'clerk_session';
   action: ScopeMissAction;
   /** The PUBLIC id the request asked for — already in the URL the caller sent. Never an internal id. */
   resource: string;
@@ -243,7 +249,7 @@ export async function reportScopeMiss(args: {
         : SCOPE_MISS_OUTCOME.unknownResource;
 
     const event: ScopeMissEvent = {
-      actor: 'gate_session',
+      actor: 'clerk_session',
       action: args.action,
       resource: args.profilePublicId,
       outcome,

@@ -1,9 +1,16 @@
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { ProfileTile } from '@/components/profiles/profile-tile';
+import {
+  SIGN_OUT_CONSEQUENCE_ID,
+  SignOutButton,
+  SignOutPlaceholder,
+} from '@/components/profiles/sign-out';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireGatedPage } from '@/lib/dal/gate';
-import { NO_HOUSEHOLD_COPY, PICKER_COPY, PICKER_EMPTY_COPY } from '@/lib/constants';
+import { requireSession } from '@/lib/dal/session';
+import { clerkIsConfigured } from '@/lib/clerk';
+import { NO_HOUSEHOLD_COPY, PICKER_COPY, PICKER_EMPTY_COPY, SIGN_OUT_COPY } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
 import { listProfiles } from '@/lib/dal/profiles';
 
@@ -25,7 +32,15 @@ export const runtime = 'nodejs';
  * root layout, so the choice applies everywhere and the gate and the landing still follow the device.
  */
 export default async function ProfilePickerPage() {
+  // 🔴 **BOTH, in-process — AUTH-1 1c-3b adds the session, it does not replace the gate.**
+  // `getHouseholdScope()` does not consult the principal until 1c-4, so until then a session alone
+  // would mean "anyone this Clerk instance admits". And a swap would leave `mp_gate` enforced by the
+  // proxy alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
+  // prefetch header skipping the matcher). The gate check is deleted at 1d, AFTER 1c-4 has made the
+  // scope membership-derived — which is why "1c-4 before 1d" is a security obligation, not an order
+  // of convenience.
   await requireGatedPage(); // SEC-1: the proxy is not the boundary
+  await requireSession();
   const profiles = await listProfiles();
   // AUTH-1 1c-2: THREE states, not two. `listProfiles` returns `[]` for "no household" AND for "a
   // household with no athletes yet", so without this the first lands on `PICKER_EMPTY_COPY` — which
@@ -76,9 +91,27 @@ export default async function ProfilePickerPage() {
         </ul>
       )}
 
-      {/* `mt-auto`: the switch sits at the BOTTOM of the page, below the thing the screen is for. */}
-      <div className="mt-auto">
+      {/* `mt-auto`: the block sits at the BOTTOM of the page, below the thing the screen is for.
+          🔴 **`gap-6` and a `border-t`, not a bare stack — AUTH-1 1c-3b.** `ThemeToggle`'s committed
+          argument for living here is that "a mis-tap costs nothing". That stops being true for the
+          BLOCK the moment sign-out joins it: on a two-profile household the page is short, so
+          `mt-auto` puts this in the fat part of the thumb zone. The rule separates them and the
+          order puts the consequential control last, in reading order.
+          **Stacked, never a row:** at 200% text the theme group alone is ~356px against a 328px
+          budget at 360px, and survives only by `flex-wrap` INSIDE a child — the "width math, not
+          wrap luck" trap. Stacking makes no arithmetic load-bearing. */}
+      <div className="mt-auto flex flex-col gap-6">
         <ThemeToggle />
+        <div className="flex flex-col items-start gap-2 border-t pt-6">
+          {/* `clerkIsConfigured()` gates the live control because `app/layout.tsx` renders no
+              `<ClerkProvider>` without keys, and `useClerk()` would throw. Both harnesses blank the
+              keys on purpose, so the placeholder is what they capture and axe measures — see
+              `components/profiles/sign-out.tsx`. */}
+          {clerkIsConfigured() ? <SignOutButton /> : <SignOutPlaceholder />}
+          <p id={SIGN_OUT_CONSEQUENCE_ID} className="text-foreground max-w-prose text-sm">
+            {SIGN_OUT_COPY.consequence}
+          </p>
+        </div>
       </div>
     </main>
   );

@@ -9,7 +9,6 @@ import {
   clerkIsConfigured,
   clerkPublishableKey,
 } from '@/lib/clerk';
-import { APP_HOME_PATH } from '@/lib/constants';
 import { env } from '@/lib/env';
 
 /**
@@ -176,18 +175,23 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
     return withSecurityHeaders(NextResponse.redirect(url), csp);
   }
 
-  // Already gated, on the gate or the public landing → straight to the app. `'/'` and not
-  // `isPublicPath`: a public path with a purpose of its own (`/privacy`, `/sign-in`) must NOT bounce
-  // to the app. Convenience routing between two pages the caller may already see, NOT authorization:
-  // it lives here rather than in `app/page.tsx` so the public page stays branchless, and because a
-  // page-level `redirect()` under the root layout's `force-dynamic` streams a 200 (landing HTML)
-  // before the redirect lands.
-  if (authed && (pathname === GATE_PATH || pathname === '/')) {
-    const url = request.nextUrl.clone();
-    url.pathname = APP_HOME_PATH;
-    url.search = '';
-    return withSecurityHeaders(NextResponse.redirect(url), csp);
-  }
+  // 🔴 **AUTH-1 1c-3b deleted the `authed && (GATE_PATH | '/')` → `APP_HOME_PATH` forward.** It was
+  // convenience routing, and its own comment said so — but once the pages also require a session it
+  // became a LOOP for every cookie-holder without one, which is everyone at deploy:
+  //
+  //   /sign-in → tap the access-code button → /gate → (forward) → /p → requireSession() → /sign-in
+  //   /sign-in → tap the footer's "mat-plan" → /    → (forward) → /p → requireSession() → /sign-in
+  //
+  // The second arm also meant such a visitor could never see the landing page at all. Nothing
+  // security-relevant went with it: an unauthenticated caller never reached this point (the un-gated
+  // bounce above returns first, and the `authed &&` conjunct was false for them), so behaviour for a
+  // cookie-less caller is bit-identical. A signed-in visitor now sees the landing at `/` instead of
+  // being forwarded, which after 1c-3b is the more honest answer anyway.
+  //
+  // ⚠️ Four committed rationales elsewhere referred to this forward and were corrected with it:
+  // `app/page.tsx`, `app/gate/actions.ts`'s `from === '/'` substitution, `APP_HOME_PATH`'s HH-1 note
+  // and `SIGN_IN_COPY`'s docblock. `e2e/landing.spec.ts` lost its "/ goes straight to the picker"
+  // case for the same reason.
 
   return withSecurityHeaders(await withClerk(request, event, forward(request, nonce, csp)), csp);
 }

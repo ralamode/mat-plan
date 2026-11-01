@@ -353,8 +353,14 @@ success.` Harmless there — nothing referenced the files yet.
   worse, real ids are non-enumerable UUIDv7 (SECURITY.md's anti-IDOR design), so an attacker cannot land
   in a real bucket even by accident. Such a limit would constrain **only the household**, while adding a
   Redis round-trip to every tap on the gym floor (an INP cost against the ADR-0001 budget).
-- **Impact:** low today. Reaching these actions at all requires the gate cookie (re-checked inside
-  each action since SEC-1; before that only the proxy checked it, and prefetch-flagged requests
+- 🔴 **Half paid at `AUTH-1` 1c-3b (2026-11-01).** The seven mutating Server Actions are now limited
+  on the Clerk principal (`checkMutationLimit`, 120 / 5 min), placed after the session check and
+  **before** the zod parse, so an unauthenticated flood costs zero Redis and zero DB work.
+  ⏳ **The zip export route is NOT** — the eighth surface this entry counts, and the most expensive
+  single request in the app. Deferred to `1c-4`, where the principal becomes the thing being
+  _scoped_ rather than merely identified.
+- **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
+  both re-checked inside each action (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`.
   skipped the proxy), and the gate is rate limited (in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash database, so the limiter failed open there); the app is a single household on an unlisted URL. The residual exposure is a gate-holder
   writing unbounded rows — annoying, not dangerous, and visible in the log.
 - **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,

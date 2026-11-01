@@ -6,6 +6,7 @@ import { ProgramReference } from '@/app/p/[profileId]/program-reference';
 import type { ProgramDayDTO } from '@/lib/programming/program-day';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireGatedPage } from '@/lib/dal/gate';
+import { requireSession } from '@/lib/dal/session';
 
 import { AA_LARGE, AA_NORMAL, formatRatio, ratioOf, toHex } from './contrast';
 import { ButtonsCell, FieldsCell, SetCell, SurfacesCell } from './inventory';
@@ -111,7 +112,15 @@ const NON_TEXT_PAIRS = [
 ] as const;
 
 export default async function TokenSetsPage() {
+  // 🔴 **BOTH, in-process — AUTH-1 1c-3b adds the session, it does not replace the gate.**
+  // `getHouseholdScope()` does not consult the principal until 1c-4, so until then a session alone
+  // would mean "anyone this Clerk instance admits". And a swap would leave `mp_gate` enforced by the
+  // proxy alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
+  // prefetch header skipping the matcher). The gate check is deleted at 1d, AFTER 1c-4 has made the
+  // scope membership-derived — which is why "1c-4 before 1d" is a security obligation, not an order
+  // of convenience.
   await requireGatedPage(); // SEC-1: the proxy is not the boundary
+  await requireSession();
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-4 py-8">

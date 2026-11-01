@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requireGatedPage } from '@/lib/dal/gate';
+import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
 
@@ -26,7 +27,15 @@ export default async function RoutineEditorPage({
 }: {
   params: Promise<{ profileId: string }>;
 }) {
+  // 🔴 **BOTH, in-process — AUTH-1 1c-3b adds the session, it does not replace the gate.**
+  // `getHouseholdScope()` does not consult the principal until 1c-4, so until then a session alone
+  // would mean "anyone this Clerk instance admits". And a swap would leave `mp_gate` enforced by the
+  // proxy alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
+  // prefetch header skipping the matcher). The gate check is deleted at 1d, AFTER 1c-4 has made the
+  // scope membership-derived — which is why "1c-4 before 1d" is a security obligation, not an order
+  // of convenience.
   await requireGatedPage(); // SEC-1: the proxy is not the boundary
+  await requireSession();
   const { profileId } = await params;
   const profile = await getProfileByPublicId(profileId);
   if (!profile) notFound();

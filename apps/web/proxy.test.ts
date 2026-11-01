@@ -101,14 +101,27 @@ describe('proxy routing', () => {
     expect(location).toBeNull();
   });
 
-  it('sends a gated caller on / straight to the app home', async () => {
+  /**
+   * 🔴 **The inverse of what these two asserted before AUTH-1 1c-3b**, and the inversion is the
+   * point. The proxy used to forward a cookie-holder from `/` and `/gate` to the app home. Once the
+   * pages also require a session that became a LOOP — `/p` → `requireSession()` → `/sign-in`, whose
+   * only forward controls lead back to `/` and `/gate` — and the `/` arm meant such a visitor could
+   * never see the landing page at all.
+   *
+   * ⚠️ Written as "no redirect", not "no session", deliberately: the proxy reads no session either
+   * before or after, so a case claiming to exercise a sessionless visitor would be asserting a
+   * precondition this file cannot establish and does not need.
+   */
+  it('leaves a gated caller on / — the landing is reachable', async () => {
     const { location } = await run('/', { gated: true });
-    expect(location?.pathname).toBe(APP_HOME_PATH);
+    expect(location).toBeNull();
   });
 
-  it('sends a gated caller on the gate to the app home', async () => {
+  it('leaves a gated caller on the gate — no forward to the app home', async () => {
+    // Still reachable on purpose: until 1d the access code is one of two things a visitor needs, so
+    // the gate form must stay available to someone who has a session but no cookie.
     const { location } = await run(GATE_PATH, { gated: true });
-    expect(location?.pathname).toBe(APP_HOME_PATH);
+    expect(location).toBeNull();
   });
 
   // The pass-through branches: a regression here is a redirect LOOP (`/gate` → `/gate`, `/p` → `/p`).
