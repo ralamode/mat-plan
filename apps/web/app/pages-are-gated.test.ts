@@ -77,9 +77,22 @@ describe('every Route Handler checks the gate itself', () => {
 
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
     const src = code(file);
-    // The existing alternation is two spellings of ONE check (a handler may call either helper), not
-    // the forbidden "either guard will do". 1c-3b adds a second, independent conjunct.
-    const gated = /\b(?:isValidGateCookie|hasGateAccess)\(/.test(src);
+    // ⚠️ **No longer an alternation.** It accepted `isValidGateCookie` as well, because the export
+    // handler hand-rolled `hasGateAccess`'s exact body. That copy is gone, so the guard now names the
+    // one helper — and a handler that reintroduces the raw cookie read fails here rather than
+    // quietly passing. Still two INDEPENDENT conjuncts (gate AND session), never "either will do".
+    //
+    // 🔴 **A KNOWN SHAPE PROBLEM, recorded so the next author widens it the RIGHT way.** This asks
+    // for both calls TEXTUALLY in the handler file, while the action half of this suite was reshaped
+    // the opposite way: an action delegates to `enterMutation` and the conjuncts are asserted once
+    // in the helper, precisely because seven copies of a predicate is seven places to drop one. The
+    // `/api/sync` handler is next — it would be `app/api/sync/route.ts`, and today's only handler is
+    // `app/p/[profileId]/export/route.ts` — and if it routes through a shared entry helper
+    // — the correct shape by that argument — it contains NEITHER spelling and goes red here. It fails
+    // CLOSED, so nothing is silently unprotected. **Then: mirror the action half** (accept delegation
+    // plus the returned-refusal backreference), do NOT inline the predicate again and do NOT loosen
+    // this to an alternation. With one handler in the tree there is nothing yet to generalise from.
+    const gated = /\bhasGateAccess\s*\(/.test(src);
     const sessioned = /\bsessionUserOrNull\s*\(/.test(src);
     expect(
       gated && sessioned,

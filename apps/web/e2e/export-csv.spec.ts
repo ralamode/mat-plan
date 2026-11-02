@@ -35,9 +35,10 @@ test('the export refuses an unknown profile, and says nothing about it', async (
 test('the export is gated — a request without the access cookie gets nothing', async ({
   browser,
 }) => {
-  // ⚠️ THE reason this route lives under /p/ and not /api/: the gate matcher excludes `/api`, so a
-  // handler there would be completely ungated. This asserts the gate actually covers it — with a
-  // fresh context, so none of the project's storageState leaks in.
+  // ⚠️ This route lives under /p/ and not /api/ because the gate matcher EXCLUDED `/api` when
+  // V1-13b sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection —
+  // what protects the handler is its own in-process gate + session check. This asserts the refusal
+  // from outside, with a fresh context so none of the project's storageState leaks in.
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const res = await context.request.get(`${SEED_PROFILE_ROUTE}/export`, {
     maxRedirects: 0,

@@ -14,7 +14,9 @@ write any comment, call any endpoint, and put hostile text in anything the syste
 `AGENTS.md` is already in your context via `CLAUDE.md` (open it only if it isn't): apply
 its Server
 conventions and "don't" list. Read first: `.github/SECURITY.md` and
-`docs/tech-debt.md` (e.g. `/api/*` is outside the gate matcher).
+`docs/tech-debt.md`. ⚠️ Read what they say **now**, not what you remember: this line used to brief
+you that `/api/*` sits outside the gate matcher, which has been false since `AUTH-1` 1a and is the
+kind of premise a reviewer builds a whole finding on.
 
 Look for:
 
@@ -62,8 +64,10 @@ each is a finding the first time it appears, not a later cleanup.
 - 🔴 **Route Handlers are NOT covered by that check.** The only one today is `GET`
   (`app/p/[profileId]/export/route.ts`), so nothing is exposed — but **`/api/sync` is planned as a
   `POST` Route Handler**, and it will sit outside the protection everything else relies on. A
-  state-changing Route Handler with no explicit origin/token check is a **P0**, and `/api/*` is
-  outside the gate matcher as well (`docs/tech-debt.md`).
+  state-changing Route Handler with no explicit origin/token check is a **P0**. ✅ `/api/*` IS inside
+  the gate matcher since `AUTH-1` 1a (`apps/web/proxy.ts` → `config.matcher`), so the bounce and the
+  security headers reach it — but the matcher is **not** the boundary, so a handler there still owes
+  its own in-process gate + session check.
 - **Cookies** carry `SameSite=Lax` + `httpOnly` + `secure` in prod (`app/gate/actions.ts`). Lax is
   what stops a cross-site POST carrying the session at all; a change to `SameSite=None`, or a
   mutation moved to `GET` (which Lax does _not_ protect), is a finding.

@@ -14,17 +14,22 @@ import { SIGN_IN_PATH } from '@/lib/constants';
 /**
  * THE principal for this request, and the two refusals built on it (AUTH-1 1c-1).
  *
- * **Ships DARK.** Nothing imports this module yet: `1c-3` switches the eleven call sites and `1c-4`
- * switches the resolver. It lands first and alone so the fail-closed contract below can be reviewed
- * and tested on its own, rather than inside the diff that moves the boundary.
+ * Landed dark and alone in `1c-1`, so the fail-closed contract below could be reviewed and tested on
+ * its own rather than inside the diff that moved the boundary. **Live since `1c-3b`**, which switched
+ * the call sites: `requireSession()` in the four gated pages, `sessionUserOrNull()` in
+ * `app/p/[profileId]/mutation-entry.ts` (on behalf of all seven mutating actions) and in
+ * `app/p/[profileId]/export/route.ts`. ⏳ `1c-4` is still owed — it switches the **resolver**, so
+ * until then a session says *that* you are someone, not *whose* data you get.
  *
  * **ONE module, not two.** The plan's first draft split `user.ts` (the principal) from `session.ts`
  * (the refusals) and the panel rejected it: the second file's functions would be thin wrappers over
  * the first's one, which is a split personality rather than a seam. `lib/dal/gate.ts` — the module
  * this replaces — holds its predicate and its redirect together in 28 lines.
  *
- * ⚠️ **`lib/dal/gate.ts` is NOT deleted here.** Through `1c` both exist: the gate stays the boundary
- * until `1c-3`, and `1d` removes it.
+ * ⚠️ **`lib/dal/gate.ts` is NOT deleted here, and not at `1c-3b` either.** From `1c-3b` the boundary
+ * is the gate **AND** a session, both re-checked in-process; `1d` is what removes the gate half, and
+ * `1c-4` gates `1d` — until the household scope is membership-derived, a session alone would mean
+ * "anyone this Clerk instance admits".
  */
 
 /**
@@ -121,7 +126,7 @@ export const getCurrentUser = cache(async (): Promise<{ userId: string } | null>
  * 🔴 **Returns the principal, not a boolean.** A boolean cannot supply the `userId` the per-user
  * mutation limit needs, so every action would call `getCurrentUser()` a second time to fetch the key
  * it had just proved exists — two shapes asking one question at one call site, and the source guard
- * in `pages-are-gated.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s own
+ * in `pages-are-gated.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s pre-1c-3b
  * docblock predicted this shape: _"Mutation limits land with Clerk at v1.5, when `getCurrentUser()`
  * provides a real identifier."_
  */

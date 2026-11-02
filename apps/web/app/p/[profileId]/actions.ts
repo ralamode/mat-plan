@@ -271,7 +271,9 @@ function deriveSupersets(movements: unknown): { clientId: string }[] {
  *
  * `sessionType` is deliberately NOT read from the body — it's omitted so the schema default fires
  * (FormData.get returns null, which .default() doesn't catch and z.enum rejects; V1-8-2 has no
- * type control anyway). Same authZ gap as the other writers (existence-only until Clerk v1.5).
+ * type control anyway). Same authZ gap as the other writers: existence-only until **`AUTH-1` 1c-4**, which is what makes
+ * the household scope membership-derived. (Not "until Clerk" — Clerk landed at Beta 0, and since
+ * `1c-3b` a session is required here; it just does not yet decide WHOSE data this is.)
  */
 export async function logStrengthSessionAction(
   _prev: ActionState,
@@ -393,7 +395,7 @@ export async function logStrengthSessionAction(
  *     uses the declared day (bounded ±1) like the other day-grain writers.
  * The submitted `activityKey` is validated against the TRUSTED `LIFE_ACTIVITY_KEYS` set — never trusted
  * from the body; unit/metric are resolved server-side. Same authZ gap as the other writers (existence-only
- * until Clerk v1.5).
+ * until `AUTH-1` 1c-4 — Clerk itself landed at Beta 0).
  */
 export async function logLifeActivitiesAction(
   _prev: ActionState,
@@ -598,7 +600,7 @@ export async function editBodyweightAction(
  * `resolveRoutine` — so the coach can't save a routine that would render as something else. The profile
  * is re-resolved via `getProfileByPublicId` (the ownership seam + the non-UUID guard); the DAL's
  * `.returning` maps a soft-deleted/unknown profile to a typed error. Same authZ gap as the other writers
- * (existence-only until Clerk v1.5 — see docs/tech-debt.md).
+ * (existence-only until `AUTH-1` 1c-4, not "until Clerk" — see docs/tech-debt.md).
  */
 export async function editRoutineAction(
   _prev: ActionState,

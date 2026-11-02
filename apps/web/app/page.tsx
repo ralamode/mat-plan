@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * The PUBLIC landing (OSS-2 §A) — the one page served without the access gate (`PUBLIC_PATHS`).
+ * The PUBLIC landing (OSS-2 §A) — one of the routes served without the access gate. ⚠️ Not "the one
+ * page": `isUngatedPath` is `/gate` ∪ `PUBLIC_PATHS` (`/`, `/privacy`) ∪ `PUBLIC_PATH_TREES` (the
+ * whole `/sign-in` subtree). Reading `PUBLIC_PATHS` as the full set is exactly how a correction
+ * during `1c-3b` came to assert that `/sign-in` was gated.
  *
  * ⚠️ Keep it branchless and private-free: no cookie read, no DAL import, no `requireGatedPage`, no
  * Server Action. It renders identically for every caller, so there is no condition that could serve

@@ -285,8 +285,12 @@ above). So:
   gives Preview **its own free Upstash database** — which the backlog row asks for anyway — and
   requires the preview gate code to be long and random.
 - **`/api` is not gated at all** (`apps/web/proxy.ts`'s matcher excludes it; accepted debt in
-  [tech-debt.md](../tech-debt.md)), so once a Route Handler exists the preview database must be
-  assumed writable by anyone who finds a preview URL.
+  `tech-debt.md`), so once a Route Handler exists the preview database must be assumed writable by
+  anyone who finds a preview URL.
+  ⚠️ **Falsified after this plan shipped:** `AUTH-1` 1a dropped `api` from the matcher exclusion and
+  the tech-debt entry is gone. Left as written because a merged plan is a record of what was decided
+  with what was known; the correction lives in [runbooks.md](../runbooks.md) → "What is still true",
+  which is the document an operator actually reads.
 - **Fork-PR protection is the control that matters most, and the threat is not "a fork reads data".**
   It is that a fork PR's **build executes attacker-controlled code with the Preview scope's
   environment** — a hostile `postinstall`, `next.config.ts` or build script exfiltrates

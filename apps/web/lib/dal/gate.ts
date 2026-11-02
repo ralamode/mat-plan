@@ -11,9 +11,15 @@ import { env } from '@/lib/env';
  *
  * The proxy redirects un-gated requests, but it is a matcher-driven layer and NOT the auth boundary
  * (.github/SECURITY.md; CVE-2025-29927). Until SEC-1 its matcher excluded prefetch-flagged requests,
- * so any request carrying a prefetch header skipped the gate entirely. Every Server Action and every
- * gated page calls one of these first, so a future matcher edit, rewrite or route move can't open
- * the app again. Same check as the export Route Handler. Still a stopgap: Clerk replaces it at v1.5.
+ * so any request carrying a prefetch header skipped the gate entirely. Every gated ENTRY POINT
+ * reaches one of these first — the seven mutating actions through `enterMutation`
+ * (`app/p/[profileId]/mutation-entry.ts`), the four pages through `requireGatedPage()`, the export
+ * handler directly. ⚠️ Not *every* Server Action: `app/gate/actions.ts` issues the gate and cannot
+ * require what it is about to grant, which is why it is allowlisted BY NAME in
+ * `app/pages-are-gated.test.ts`. So a future matcher edit, rewrite or route move can't open the app.
+ * Still a stopgap, and the date moved: Clerk does not replace it at v1.5 but at **`AUTH-1` 1d**,
+ * which `1c-4` gates — until the household scope is membership-derived, a session alone means
+ * "anyone this Clerk instance admits", so deleting the gate first would WIDEN access.
  */
 export async function hasGateAccess(): Promise<boolean> {
   return isValidGateCookie(

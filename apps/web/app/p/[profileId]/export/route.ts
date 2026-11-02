@@ -1,9 +1,7 @@
-import { GATE_COOKIE_NAME, isValidGateCookie } from '@/lib/access-gate';
-import { sessionUserOrNull } from '@/lib/dal/session';
 import { buildExportZip } from '@/lib/dal/export';
+import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { env } from '@/lib/env';
-import { cookies } from 'next/headers';
+import { sessionUserOrNull } from '@/lib/dal/session';
 import { NextResponse } from 'next/server';
 
 /**
@@ -33,12 +31,19 @@ import { NextResponse } from 'next/server';
  * was a prefetch header skipping the matcher. The checks are cheap and they are what actually holds.
  */
 /**
- * 🔴 **SECURITY, not a test artifact.** A Route Handler inherits no segment config, and after 1c-3b
- * this handler can have NO dynamic signal of its own: `getCurrentUser()` returns before touching any
- * dynamic API on two live paths — the 1c-3a bypass (an env read) and `!clerkIsConfigured()`. Under
- * ADR 0006 the URL carries no tenant, so a cached response is **one household's CSV served to
- * another**. `tenancy-is-not-cached.test.ts` also accepts this directive in place of the `cookies()`
- * call, but that is the second reason; do not delete this the day that test changes.
+ * 🔴 **SECURITY, not a test artifact.** A Route Handler inherits no segment config, and under ADR
+ * 0006 the URL carries no tenant — so a cached response is **one household's CSV served to another**.
+ *
+ * ⚠️ **Precisely what this protects against, because the earlier wording over-claimed.** Today the
+ * gate's `cookies()` read inside `hasGateAccess()` runs first and unconditionally, so the request IS
+ * dynamic anyway — the directive changes **nothing about runtime dynamism today, for either half**.
+ * It is here for the *session* half, which can return before touching any dynamic API on two live
+ * paths (the 1c-3a bypass, an env read, and `!clerkIsConfigured()`), and it becomes the **only**
+ * runtime signal at **1d**, when the gate conjunct and its cookie read are deleted. Do not remove it
+ * then — which is a date, not a condition somebody can re-derive from a green suite.
+ *
+ * 📌 It is also the only thing satisfying `tenancy-is-not-cached.test.ts` for this file since the
+ * cookie read moved into the DAL — not a second reason any more, the live one.
  */
 export const dynamic = 'force-dynamic';
 
@@ -51,12 +56,18 @@ export async function GET(
   // 1c-4 `getHouseholdScope()` ignores the principal, so a session alone would mean "anyone this
   // Clerk instance admits", and dropping the in-process gate check would leave `mp_gate` enforced by
   // the proxy alone. The gate half is deleted at 1d, after 1c-4.
-  const authed = await isValidGateCookie(
-    (await cookies()).get(GATE_COOKIE_NAME)?.value,
-    env.ACCESS_GATE_PASSWORD,
-  );
+  //
+  // ⚠️ **`hasGateAccess()`, not a hand-rolled cookie read.** This handler carried its own copy of
+  // that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — since
+  // V1-13b, and `gate.ts`'s own docblock acknowledged it as "same check as the export Route
+  // Handler". 1c-3b added a second conjunct beside that copy without removing it, which is the
+  // thing that chunk's own argument is against: a security predicate written twice is two places for
+  // the next author to land one conjunct short. It was also the only reason this handler imported
+  // `@/lib/env` — the secret now sits behind one DAL predicate. (Not a `process.env` read: this file
+  // never had one, and `lib/env.ts` is the sanctioned validated facade, which `proxy.ts` and
+  // `app/gate/actions.ts` legitimately import too.)
   // 404, not 401: an un-authed caller learns nothing about whether this profile exists.
-  if (!authed) return new NextResponse('Not found', { status: 404 });
+  if (!(await hasGateAccess())) return new NextResponse('Not found', { status: 404 });
 
   // Same 404 for the same reason — unauth, no session, unknown id and another household's profile
   // are byte-identical to a caller (ADR 0006).

@@ -367,12 +367,19 @@ already slugs and dedupes, so it reads like the problem is solved. It costs the 
 a slug upsert makes silently and irreversibly.
 
 **S8 — the extraction endpoint is a Route Handler under `/p/[profileId]/`, never under `/api/`.**
-AGENTS.md routes external calls to Route Handlers, not Server Actions — and the gate matcher
-**excludes `/api`** (`apps/web/proxy.ts:113`). A handler at `/api/extract` would be completely
-ungated: an open, metered Anthropic proxy on a public repo. The precedent and the full reasoning are
-already written on the export handler (`apps/web/app/p/[profileId]/export/route.ts:16`–`:23`), which
-sites itself under `/p/` for this exact reason and **re-checks the gate inside the handler anyway**,
-because middleware is not an authorization boundary.
+AGENTS.md routes external calls to Route Handlers, not Server Actions.
+
+⚠️ **Corrected 2026-11-02 — the original premise here is false, and the conclusion survives without
+it.** This section said the gate matcher "excludes `/api`", so a handler at `/api/extract` would be
+"completely ungated". `AUTH-1` 1a dropped `api` from the exclusion, so the bounce and the security
+headers do reach it. **What has not changed is the thing that actually protects an endpoint:** the
+matcher is not an authorization boundary (SEC-1's scar was a prefetch header skipping it;
+CVE-2025-29927 is the general case), so an extraction handler owes its own in-process gate + session
+check and its own fail-closed limiter **wherever it is sited**. An open, metered Anthropic proxy on a
+public repo is still the risk; the matcher was never what prevented it. Siting under `/p/` remains
+reasonable — it is where the reader already is — but it is a routing choice, not a control. The
+precedent is the export handler (`apps/web/app/p/[profileId]/export/route.ts`), which checks for
+itself for exactly this reason.
 
 **S9 — the extraction's limiter fails CLOSED.** This is a deliberate departure from
 `checkRateLimit`'s contract, which fails **open** on purpose (`apps/web/lib/rate-limit.ts:72`–`:91`):

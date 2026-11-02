@@ -342,7 +342,7 @@ success.` Harmless there — nothing referenced the files yet.
   mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
 - **Severity:** informational.
 
-### Mutating Server Actions are not rate-limited (V1-14a)
+### The zip export is not rate-limited (V1-14a; the mutating actions were, at `AUTH-1` 1c-3b)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
   Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
@@ -364,13 +364,15 @@ success.` Harmless there — nothing referenced the files yet.
   gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
   limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
   database, so the limiter failed open there. The app is a single household on an unlisted URL. The
-  residual exposure is a gate-holder writing unbounded rows — annoying, not dangerous, and visible in
-  the log.
-- **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
-  and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
-  in that PR, keyed by user id, reusing the existing `checkRateLimit` seam (already fail-open + tested).
-  `/api/sync` should land limited from day one — the batch flush is the genuine amplification endpoint.
-- **Severity:** low (accepted until Clerk; the seam and its contract already exist).
+  residual exposure is the **unthrottled zip export** named above — not a gate-holder writing
+  unbounded rows, which `1c-3b` capped at 120 / 5 min. Annoying, not dangerous, and visible in the log.
+- **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
+  **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
+  `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +
+  `/api/sync`") presumes. ⏳ **What is left:** the zip export at `1c-4`, and `/api/sync`, which should
+  land limited from day one — the batch flush is the genuine amplification endpoint.
+- **Severity:** low (accepted until **`1c-4`**, not "until Clerk" — Clerk landed at Beta 0 and the
+  mutations half shipped at `1c-3b`; the seam and its contract already exist).
 
 ### Sentry ships without source maps, so stack frames are minified (V1-14a)
 
@@ -530,7 +532,8 @@ success.` Harmless there — nothing referenced the files yet.
   `→ Edit {name}'s routine` link below the logged-entries list, so anyone past the access gate reaches the
   editor in one tap. The obscurity was never a security control, so nothing regressed; but the sentence this
   entry used to carry ("reachable by URL only … limits discoverability") is now false, and the mitigation it
-  implied is gone. **The gap was knowingly accepted when the link shipped**: there is no Clerk until v1.5,
+  implied is gone. **The gap was knowingly accepted when the link shipped**: there was no Clerk then (it
+  landed at Beta 0; ownership becomes membership-derived at `AUTH-1` 1c-4),
   the household is three people behind one shared access gate, and the alternative — leaving the coach
   affordance undiscoverable to make a BOLA hole feel smaller — is security theatre that costs the feature.
   Two write semantics are also accepted, not bugs:
@@ -557,7 +560,9 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low today (single trusted household, pre-Clerk, occasional edits). The BOLA gap is the real
   item; the two semantics are edge cases a single coach won't hit. The two sharp edges above are newly
   **reachable** as of V1-23 — still low (one coach, three kids), but no longer hidden behind a URL.
-- **Proposed fix:** **Clerk v1.5** closes the authz gap — scope the DAL read + write by `household_id` (the
+- **Proposed fix:** **`AUTH-1` 1c-4** closes the authz gap — not "Clerk v1.5": Clerk landed at Beta 0
+  and `1c-3b` already requires a session here; 1c-4 is what derives the scope from the principal. Scope
+  the DAL read + write by `household_id` (the
   ownership seam every writer already re-resolves through). The LWW clobber is paid down with the offline/sync
   LWW work (same `incoming >= stored` guard as the set-edit debt above). Default-freeze resolves naturally if
   the editor gains a "reset to default" affordance or the write skips a no-op-vs-default save.
