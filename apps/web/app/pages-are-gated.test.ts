@@ -224,11 +224,23 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
   /**
    * 🔴 **1c SWITCHES this, it does not WIDEN it.** A regex matching `hasGateAccess|requireSession`
    * passes on either and therefore proves neither — and that is precisely the edit an author reaches
-   * for when the suite goes red under time pressure. 1b-bis asserts the gate call because that is what
-   * ships today, which is what makes this chunk inert and revert-safe.
+   * for when the suite goes red under time pressure. 1b-bis asserted the gate call directly because
+   * that is what shipped then.
+   *
+   * 🔴 **1c-3b made it three conjuncts, and review on #323 collapsed the seven copies into
+   * `enterMutation` _(maintainer, 2026-11-01)_ — so the guard splits in two rather than loosening:**
+   *
+   *  - **per action**, below: the action must call `enterMutation`, and `actions.ts` must import it
+   *    from `./mutation-entry` — so "calls something named like the helper" is not enough.
+   *  - **once, in the helper**: the three conjuncts appear there IN ORDER. The old per-action scan
+   *    could not assert order at all (seven slices, three independent presence checks); one
+   *    definition can. That is the half that is strictly stronger than what 1c-3b shipped.
    */
+  const ENTRY_CALL = /\bawait\s+enterMutation\s*\(/;
+  const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'\.\/mutation-entry'/;
+
   const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
-  /** AUTH-1 1c-3b: the session, required alongside the gate in every exported action. */
+  /** AUTH-1 1c-3b: the session, required alongside the gate before every mutation. */
   const SESSION_CALL = /\bsessionUserOrNull\s*\(/;
   /**
    * 🔴 **The limiter needs a SOURCE guard, because no behavioural test can catch its absence.**
@@ -291,8 +303,31 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
         .filter(({ at }, i) => !re.test(src.slice(at, starts[i + 1]?.at ?? src.length)))
         .map(({ name }) => name);
 
-    expect(report(BOUNDARY_CALL), 'actions missing the gate check').toEqual([]);
-    expect(report(SESSION_CALL), 'actions missing the session check').toEqual([]);
-    expect(report(LIMITER_CALL), 'actions missing checkMutationLimit').toEqual([]);
+    expect(report(ENTRY_CALL), 'actions missing the awaited enterMutation() call').toEqual([]);
+    // A local function of the same name would satisfy the slice scan above and check nothing.
+    expect(ENTRY_IMPORT.test(src), `${rel} must import enterMutation from ./mutation-entry`).toBe(
+      true,
+    );
+  });
+
+  /**
+   * 🔴 **The conjuncts themselves, and their ORDER, asserted once where they now live.**
+   *
+   * `enterMutation` is the whole boundary for seven actions, so a conjunct dropped here is dropped
+   * everywhere at once — and the order is load-bearing, not stylistic: the limiter is keyed on the
+   * principal, so it MUST come after the session, and both must come before the caller's zod parse
+   * and DB read or an unauthenticated flood buys Redis and Postgres work. Nothing behavioural can
+   * see any of this: the limiter fails open and is `null` under vitest.
+   */
+  it('enterMutation holds the gate, the session and the limiter — in that order', () => {
+    const src = code(join(APP_DIR, 'p', '[profileId]', 'mutation-entry.ts'));
+    const gate = src.search(BOUNDARY_CALL);
+    const session = src.search(SESSION_CALL);
+    const limiter = src.search(LIMITER_CALL);
+    expect(gate, 'the gate check').toBeGreaterThan(-1);
+    expect(session, 'the session check').toBeGreaterThan(-1);
+    expect(limiter, 'checkMutationLimit').toBeGreaterThan(-1);
+    expect(gate, 'the gate must be checked before the session').toBeLessThan(session);
+    expect(session, 'the principal must exist before it can key the limiter').toBeLessThan(limiter);
   });
 });

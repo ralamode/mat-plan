@@ -21,7 +21,6 @@ import {
   AMEND_ERROR_COPY,
   BODYWEIGHT_COPY,
   NO_PROFILE_LOG,
-  RATE_LIMITED,
   NO_PROFILE_SAVE,
 } from '@/lib/constants';
 import {
@@ -41,14 +40,12 @@ import {
   editBodyweight,
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
-import { hasGateAccess } from '@/lib/dal/gate';
-import { sessionUserOrNull } from '@/lib/dal/session';
-import { checkMutationLimit } from '@/lib/rate-limit';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
+import { enterMutation } from './mutation-entry';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
@@ -85,33 +82,10 @@ export async function logBodyweightAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
-    // 🔴 **Three checks, in this order, and the order is the design — AUTH-1 1c-3b.**
-    //
-    //  1. the GATE, unchanged. 1c-3b ADDS a session rather than swapping the gate out:
-    //     `getHouseholdScope()` does not consult the principal until 1c-4, so a session alone would
-    //     mean "anyone this Clerk instance admits", and a swap would leave `mp_gate` enforced by the
-    //     proxy alone — which SECURITY.md refuses to call a boundary. Deleted at 1d, after 1c-4.
-    //  2. the SESSION. Same refusal copy as the gate on purpose: a caller must not be able to tell
-    //     "no code" from "no session" from "wrong household" — `actions.test.ts` pins that the three
-    //     refusals are byte-identical, which is ADR 0006's 404-never-403 argument.
-    //  3. the LIMITER, keyed on the principal — so it comes after the session, and BEFORE the zod
-    //     parse and `getProfileByPublicId`. An unauthenticated flood then does zero Redis and zero DB
-    //     work, and the key is never caller-supplied. ⚠️ It fails OPEN, and under vitest it is always
-    //     `unconfigured` — so a call placed somewhere useless is invisible to the suite. The guard is
-    //     `pages-are-gated.test.ts`'s per-action source scan, not a behavioural test.
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    // The gate AND the session AND the limiter, in that order — `./mutation-entry` holds the one
+    // copy and the reasoning, and `pages-are-gated.test.ts` is what pins both.
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = logBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       value: formData.get('value'),
@@ -201,19 +175,8 @@ export async function logCheckinsAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
     //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
     const items = [];
@@ -316,19 +279,8 @@ export async function logStrengthSessionAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const raw = formData.get('movements');
     let movements: unknown;
     try {
@@ -449,19 +401,8 @@ export async function logLifeActivitiesAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const profileId = uuidSchema.safeParse(formData.get('profileId'));
     const clientId = uuidSchema.safeParse(formData.get('clientId'));
     const activityKey = formData.get('activityKey');
@@ -534,19 +475,8 @@ export async function editStrengthSetAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = editStrengthSetSchema.safeParse({
       profileId: formData.get('profileId'),
       setId: formData.get('setId'),
@@ -605,19 +535,8 @@ export async function editBodyweightAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editBodyweightAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_LOG };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = editBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       entryId: formData.get('entryId'),
@@ -687,19 +606,8 @@ export async function editRoutineAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_SAVE };
-    const user = await sessionUserOrNull();
-    if (!user) return { ok: false, error: NO_PROFILE_SAVE };
-    const limit = await checkMutationLimit(user.userId);
-    if (!limit.allowed) return { ok: false, error: RATE_LIMITED };
-    if (limit.reason === 'limiter-error') {
-      // The gate action's idiom: a permanently-dead fail-open limiter is otherwise silent.
-      Sentry.addBreadcrumb({
-        category: 'rate-limit',
-        level: 'warning',
-        message: 'mutation limiter unavailable',
-      });
-    }
+    const entry = await enterMutation(NO_PROFILE_SAVE);
+    if (!entry.ok) return entry;
     const raw = formData.get('routine');
     let submitted: unknown;
     try {
