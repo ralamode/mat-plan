@@ -269,13 +269,16 @@ and complete; this is the one thing it cannot reach.
   the render where the action turns `ok` (`useOnActionSuccess`, shared with the log forms since V1-24
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
   read as persisted. Don't replace it with an effect or a boolean.
-  Every gated page calls **`requireGatedPage()` and then `requireSession()`** — both, in-process
-  (`AUTH-1` 1c-3b). The routine editor is one of the four. The gate half is deleted at `1d`, after
-  `1c-4` makes the household scope membership-derived; until then a session alone would not be a
-  boundary, because the resolver still answers the same household for any principal.
-  proxy is not the auth boundary, and before SEC-1 a prefetch-flagged request skipped it. A new page
-  under `/p/` needs the same line — `app/pages-are-gated.test.ts` fails CI without it. The only
-  exemptions are `isUngatedPath`'s: the public landing (`PUBLIC_PATHS`) and `/gate`.
+
+- **Every gated page calls `requireGatedPage()` AND THEN `requireSession()`** — both, in-process
+  (`AUTH-1` 1c-3b), and the routine editor is one of the four. The proxy is not the auth boundary:
+  before SEC-1 a prefetch-flagged request skipped it, and CVE-2025-29927 is the general case. A new
+  page under `/p/` needs both lines — `app/pages-are-gated.test.ts` reports by name any page missing
+  either conjunct. The only exemptions are `isUngatedPath`'s: `/gate`, the public landing and
+  `/privacy` (`PUBLIC_PATHS`), and the whole `/sign-in` subtree (`PUBLIC_PATH_TREES`). The gate half
+  is deleted at `1d`, after `1c-4` makes the household scope membership-derived — until then a session
+  alone would not be a boundary, because the resolver still answers the same household for any
+  principal.
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never

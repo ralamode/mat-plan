@@ -42,10 +42,16 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  * #323 _(maintainer, 2026-11-01)_.
  *
  * ⚠️ **The limiter fails OPEN, and under vitest `mutationLimiter` is always `null`** — so every call
- * answers `allowed: true` and no behavioural test can see this function misplaced or missing. The
- * guard is `app/pages-are-gated.test.ts`: it requires every exported action to call `enterMutation`,
- * pins the import to this module, and asserts the three conjuncts appear HERE in the order above.
- * Collapsing to one function is what made that order assertable at all.
+ * answers `allowed: true`, and a `checkMutationLimit` placed after the write, or whose result is
+ * ignored, is invisible to any behavioural test. Hence the **source** guard in
+ * `app/pages-are-gated.test.ts`: per action, the awaited `enterMutation` call, that its refusal is
+ * RETURNED, and that the import comes from this module; and once, here, that the three conjuncts
+ * appear in the order above. Collapsing to one function is what made that order assertable at all.
+ *
+ * 📌 The behavioural half is real and is not redundant: `actions.test.ts` runs the real
+ * `enterMutation` against mocked dependencies, so a missing or result-discarded call fails all three
+ * refusal suites for every enumerated action. The source guard covers what those cannot — placement
+ * and order — not the whole claim.
  *
  * @param refusal the copy for both "no gate" and "no session" — never distinguishable to a caller.
  */

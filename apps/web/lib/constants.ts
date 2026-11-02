@@ -36,8 +36,10 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
  *
  * ⚠️ Branch-specific under HH-1. If household addressing lands in the path, home becomes
  * `/<household-id>`, which the proxy cannot compute (it has env and a cookie, no DB and no session).
- * The next author must then DELETE the proxy's `/` → home rule and resolve home in a page that can check
- * membership — not teach the proxy, which is the proxy-as-authorization mistake (CVE-2025-29927).
+ * Home must then be resolved in a page that can check membership — never taught to the proxy, which
+ * is the proxy-as-authorization mistake (CVE-2025-29927). ✅ Half of that is already paid: the
+ * proxy's `/` → home forward was deleted at AUTH-1 1c-3b (it looped once the pages required a
+ * session), so there is no longer a rule to remove first.
  */
 export const APP_HOME_PATH = '/p';
 
@@ -147,8 +149,12 @@ export const GATE_COPY = {
  * production at 1a. It leads with the state rather than an imperative (the `PICKER_EMPTY_COPY.notYet`
  * family), says "isn't switched on yet" — a configuration fact, so the maintainer verifying the
  * deploy can tell dark from broken — and asks the reader for nothing. The exit points at `GATE_PATH`,
- * not `/`: ONE control then serves both readers, because `proxy.ts` sends a caller who already holds
- * the cookie straight on to `APP_HOME_PATH`. The footer already carries `/` and `PRIVACY_PATH` on
+ * not `/`: the code is one of the two things a caller needs (AUTH-1 1c-3b), so the gate is the only
+ * forward step a reader without it can take. ⚠️ The original argument was "ONE control serves both
+ * readers, because `proxy.ts` sends a cookie-holder straight on to `APP_HOME_PATH`" — that forward is
+ * gone, so a reader who ALREADY holds the cookie now makes a round trip through `/gate` to arrive
+ * back here. Tracked as the escape-hatch question on the sign-in page. The footer already carries
+ * `/` and `PRIVACY_PATH` on
  * every route, so the page adds neither — two same-href links in one document read as a duplicate
  * destination in a screen-reader link list, and axe does not flag it.
  *
@@ -569,6 +575,44 @@ export const CLOSED_DAY_NOTICE =
 export const SAVING_LABEL = 'Saving…';
 
 /**
+ * AUTH-1 1c-3b — the sign-out control's copy.
+ *
+ * The consequence line is **disclosure at the decision point, not a confirmation dialog**. A confirm
+ * would ask the user to approve something they cannot evaluate — whether Google will re-present an
+ * account chooser is a property of their browser's session state, which no screen here can see — and
+ * the real risk is a mis-tap, whose fix is placement and visual recession, not a dialog dismissed by
+ * reflex. The `SIGN_IN_COPY.processor` idiom: put the fact next to the control.
+ *
+ * `text-foreground`, not muted, at the use site: read once, cold, immediately before an act with no
+ * undo.
+ */
+export const SIGN_OUT_COPY = {
+  action: 'Sign out',
+  /**
+   * Shown while `clerk-js` is still arriving — on gym LTE that is not instant. Deliberately the SAME
+   * string as `action`: the button is `disabled` until `loaded`, so the state is already signalled by
+   * the control, and changing the label as well would move the layout under a thumb already on its
+   * way down. It stays a separate constant so the two can diverge without hunting call sites.
+   */
+  loading: 'Sign out',
+  consequence:
+    'Signing out ends this session on this device. Getting back in needs the Google account linked to this household.',
+} as const;
+
+/**
+ * AUTH-1 1c-3b — the mutation limiter's refusal. **Distinct from `NO_PROFILE_*` on purpose.**
+ *
+ * Reusing a not-found string would tell a kid mid-session *"No profile found to log against"* when
+ * the truth is "too many writes, briefly" — unactionable, and it would muddy the argument
+ * `actions.test.ts` pins: that an un-gated caller, a caller with no session and a caller reaching
+ * another household all get the SAME bytes, so none of them learns which it was. A rate limit is not
+ * that class of refusal and must not borrow its copy.
+ *
+ * Says what to do, because unlike the others there is something to do.
+ */
+export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try again.';
+
+/**
  * The refusal every profile-addressed Server Action returns when it has no profile to act on —
  * promoted out of `actions.ts`'s module scope by TEN-1 1b (ADR 0006's consequence 4).
  *
@@ -584,39 +628,6 @@ export const SAVING_LABEL = 'Saving…';
  * read correctly to a parent. They are `/^No profile found to (log|save) against\.$/` — deliberately
  * close, so neither can hint at which check refused.
  */
-/**
- * AUTH-1 1c-3b — the mutation limiter's refusal. **Distinct from `NO_PROFILE_*` on purpose.**
- *
- * Reusing a not-found string would tell a kid mid-session *"No profile found to log against"* when
- * the truth is "too many writes, briefly" — unactionable, and it would muddy the argument
- * `actions.test.ts` pins: that an un-gated caller, a caller with no session and a caller reaching
- * another household all get the SAME bytes, so none of them learns which it was. A rate limit is not
- * that class of refusal and must not borrow its copy.
- *
- * Says what to do, because unlike the others there is something to do.
- */
-/**
- * AUTH-1 1c-3b — the sign-out control's copy.
- *
- * The consequence line is **disclosure at the decision point, not a confirmation dialog**. A confirm
- * would ask the user to approve something they cannot evaluate — whether Google will re-present an
- * account chooser is a property of their browser's session state, which no screen here can see — and
- * the real risk is a mis-tap, whose fix is placement and visual recession, not a dialog dismissed by
- * reflex. The `SIGN_IN_COPY.processor` idiom: put the fact next to the control.
- *
- * `text-foreground`, not muted, at the use site: read once, cold, immediately before an act with no
- * undo.
- */
-export const SIGN_OUT_COPY = {
-  action: 'Sign out',
-  /** Shown while `clerk-js` is still arriving — on gym LTE that is not instant. */
-  loading: 'Sign out',
-  consequence:
-    'Signing out ends this session on this device. Getting back in needs the Google account linked to this household.',
-} as const;
-
-export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try again.';
-
 export const NO_PROFILE_LOG = 'No profile found to log against.';
 /** @see NO_PROFILE_LOG — the routine editor's wording of the same refusal. */
 export const NO_PROFILE_SAVE = 'No profile found to save against.';

@@ -126,9 +126,10 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
  * **Order: the gate runs FIRST, Clerk second, on the pass-through path only.** A bounced request
  * renders nothing, so nothing can call `auth()` and Clerk has no question to answer; running vendor
  * middleware on every request from an un-gated stranger would widen the unauthenticated surface for
- * no benefit while the gate is still the only boundary. Every request that DOES render — the un-gated
- * `/` and `/privacy`, and `/sign-in`, which is gated like any other page — passes through here, which
- * is what `auth()` needs. ⚠️ This
+ * no benefit while the gate is still the only boundary. Every request that DOES render — including
+ * the un-gated `/`, `/privacy` and the whole `/sign-in` SUBTREE (`PUBLIC_PATH_TREES`, not
+ * `PUBLIC_PATHS` — Clerk's prebuilt page is a catch-all and the handshake arrives on its children) —
+ * passes through here, which is what `auth()` needs. ⚠️ This
  * is NOT "the matcher/proxy is the boundary": SEC-1's lesson stands, pages and actions re-check
  * independently, and the `/api` matcher change below is about `auth()` being ABLE to answer.
  */
@@ -189,10 +190,12 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
   // cookie-less caller is bit-identical. A signed-in visitor now sees the landing at `/` instead of
   // being forwarded, which after 1c-3b is the more honest answer anyway.
   //
-  // ⚠️ Four committed rationales elsewhere referred to this forward and were corrected with it:
-  // `app/page.tsx`, `app/gate/actions.ts`'s `from === '/'` substitution, `APP_HOME_PATH`'s HH-1 note
-  // and `SIGN_IN_COPY`'s docblock. `e2e/landing.spec.ts` lost its "/ goes straight to the picker"
-  // case for the same reason.
+  // ⚠️ FIVE committed rationales elsewhere referred to this forward, and all five are corrected with
+  // it: `app/page.tsx`'s branchless-landing note, `app/gate/actions.ts`'s `from === '/'` ONE-hop
+  // substitution, `APP_HOME_PATH`'s HH-1 note, `GATE_COPY`'s one-exit-serves-both argument and the
+  // sign-in page's copy of that same argument. `e2e/landing.spec.ts` lost its "/ goes straight to the
+  // picker" case for the same reason. (The count said four and zero were done; a reviewer found both
+  // halves — the fifth lived at the control itself.)
 
   return withSecurityHeaders(await withClerk(request, event, forward(request, nonce, csp)), csp);
 }

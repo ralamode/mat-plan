@@ -4,6 +4,11 @@ owns:
   - apps/web/lib/dal/
   - apps/web/app/p/[profileId]/actions.ts
   - apps/web/app/p/[profileId]/action-state.ts
+  # AUTH-1 1c-3b: the gate + session + limiter for all seven mutations live in ONE function now, so
+  # the blast radius of an edit here is every write in the app. The enumeration it is checked against
+  # lives next to it.
+  - apps/web/app/p/[profileId]/mutation-entry.ts
+  - apps/web/app/p/[profileId]/mutating-actions.ts
   - packages/db/src/writers/
   - packages/db/src/client.ts
   - packages/db/src/scope.ts
@@ -89,11 +94,21 @@ flowchart LR
    call. 🔴 **`1c-3b` made it an ADDITION, not a swap, and that is the invariant to keep.** Every
    entry point now checks **the gate AND a session, both in-process**:
 
+   🔴 **It is ONE function, `enterMutation`, not seven copies** (`app/p/[profileId]/mutation-entry.ts`
+   — collapsed on review of #323). Seven pasted copies of a security predicate is seven places to land
+   one conjunct short, and six of those are only caught by a reviewer noticing an absence.
+
    ```
-   if (!(await hasGateAccess())) return refusal;   // SEC-1 — deleted at 1d, after 1c-4
-   const user = await sessionUserOrNull();          // AUTH-1 1c-3b
-   if (!user) return refusal;                       // the SAME bytes: 404-never-403, ADR 0006
-   const limit = await checkMutationLimit(user.userId);
+   // mutation-entry.ts — the three checks, in this order, once:
+   if (!(await hasGateAccess())) return { ok: false, error: refusal };  // SEC-1 — deleted at 1d
+   const user = await sessionUserOrNull();                              // AUTH-1 1c-3b
+   if (!user) return { ok: false, error: refusal };     // the SAME bytes: 404-never-403, ADR 0006
+   const limit = await checkMutationLimit(user.userId); // keyed on the principal, so it comes third
+
+   // every action — and `refusal` is a PARAMETER because six answer NO_PROFILE_LOG and the
+   // routine editor answers NO_PROFILE_SAVE, and both of a caller's branches use the same string:
+   const entry = await enterMutation(NO_PROFILE_LOG);
+   if (!entry.ok) return entry;
    ```
 
    The reason is the window: `getHouseholdScope()` does not consult the principal until **1c-4**, so
@@ -102,9 +117,15 @@ flowchart LR
    a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
    **Therefore `1c-4` must land before `1d`** — a security obligation, recorded in `beta-1.md`.
 
-   `pages-are-gated.test.ts` requires all three per action, reported separately so a failure names
-   which conjunct went missing. ⚠️ The limiter needs that **source** guard because it fails open and
-   is `unconfigured` under vitest — a call placed after the write would pass every behavioural test.
+   **The source guard is SPLIT, and both halves are the claim.** `pages-are-gated.test.ts` requires,
+   **per action**, the awaited `enterMutation()` call, that its refusal is returned, and that
+   `actions.ts` imports the helper from `./mutation-entry` (so a local function of the same name
+   satisfies nothing); and **once, in the helper**, that the three conjuncts appear there **in
+   order**. That order assertion only became expressible when the copies collapsed — seven slices with
+   three independent presence checks could not say it — and it is load-bearing rather than stylistic:
+   the limiter is keyed on the principal, so it must follow the session, and both must precede the
+   caller's zod parse and DB read. ⚠️ It must be a **source** guard because the limiter fails open and
+   is `unconfigured` under vitest, so a call placed after the write passes every behavioural test.
 
    ✅ **This is now enforced, not requested** (`AUTH-1` 1b-bis). The old wording here —
    _"a new action without it fails the unauth suite only if you add it to that suite: do"_ — was an

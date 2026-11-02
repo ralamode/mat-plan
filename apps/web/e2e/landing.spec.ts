@@ -12,7 +12,7 @@ import {
   ROUTINE_COPY,
 } from '../lib/constants';
 
-import { MOBILE_VIEWPORT, NO_GATE_STATE, pickerHeading } from './contexts';
+import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
 import { SEED_PROFILE_ROUTE } from './steps';
 
 /**

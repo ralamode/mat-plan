@@ -360,9 +360,12 @@ success.` Harmless there — nothing referenced the files yet.
   single request in the app. Deferred to `1c-4`, where the principal becomes the thing being
   _scoped_ rather than merely identified.
 - **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
-  both re-checked inside each action (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`.
-  skipped the proxy), and the gate is rate limited (in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash database, so the limiter failed open there); the app is a single household on an unlisted URL. The residual exposure is a gate-holder
-  writing unbounded rows — annoying, not dangerous, and visible in the log.
+  both re-checked inside each action, so neither a proxy-skipping request nor a session-only caller
+  gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
+  limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
+  database, so the limiter failed open there. The app is a single household on an unlisted URL. The
+  residual exposure is a gate-holder writing unbounded rows — annoying, not dangerous, and visible in
+  the log.
 - **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
   and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
   in that PR, keyed by user id, reusing the existing `checkRateLimit` seam (already fail-open + tested).

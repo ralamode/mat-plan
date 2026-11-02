@@ -126,6 +126,12 @@ describe('reportScopeMiss — the miss-path event', () => {
     const ctx = (call?.[1] as { contexts: { scope_miss: Record<string, unknown> } }).contexts
       .scope_miss;
     expect(Object.keys(ctx).sort()).toEqual(['action', 'actor', 'outcome', 'resource']);
+    // 🔴 The VALUE, not just the key. `actor` is a CONSTANT describing the KIND of principal, never
+    // the user id — a requester→owner mapping in a third-party store is the same cross-tenant
+    // linkage the owning household id is forbidden for below. It changed `gate_session` →
+    // `clerk_session` at 1c-3b with nothing pinning either, and `runbooks.md`'s triage procedure
+    // filters on it. The literal belongs here, once, on the assertion side.
+    expect(ctx.actor).toBe('clerk_session');
     // SEC-3's scar: a `DrizzleQueryError` message embeds query params, and that has already shipped
     // a kid's bodyweight to Sentry once.
     expect(JSON.stringify(call?.[1])).not.toMatch(/params/);

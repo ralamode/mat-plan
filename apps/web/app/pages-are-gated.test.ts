@@ -238,6 +238,15 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    */
   const ENTRY_CALL = /\bawait\s+enterMutation\s*\(/;
   const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'\.\/mutation-entry'/;
+  /**
+   * 🔴 **The one source-half conjunct the collapse WEAKENED, restored.** Before it, the gate was one
+   * inseparable expression — `if (!(await hasGateAccess())) return {…}` — so matching the call and
+   * dropping the result was not really expressible. Two statements can come apart: a bare
+   * `await enterMutation(NO_PROFILE_LOG);` with no return satisfies `ENTRY_CALL` and checks nothing.
+   * Backreferenced, so the binding returned is the one that was tested. Found by the security lens
+   * on #323.
+   */
+  const ENTRY_REFUSAL = /if\s*\(\s*!\s*(\w+)\.ok\s*\)\s*return\s+\1\s*;/;
 
   const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
   /** AUTH-1 1c-3b: the session, required alongside the gate before every mutation. */
@@ -304,6 +313,9 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
         .map(({ name }) => name);
 
     expect(report(ENTRY_CALL), 'actions missing the awaited enterMutation() call').toEqual([]);
+    expect(report(ENTRY_REFUSAL), 'actions that call enterMutation but drop its refusal').toEqual(
+      [],
+    );
     // A local function of the same name would satisfy the slice scan above and check nothing.
     expect(ENTRY_IMPORT.test(src), `${rel} must import enterMutation from ./mutation-entry`).toBe(
       true,

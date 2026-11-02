@@ -73,7 +73,10 @@ describe('SignOutPlaceholder — what the keyless harness captures', () => {
     expect(button.getAttribute('aria-describedby')).toBe(SIGN_OUT_CONSEQUENCE_ID);
   });
 
-  it('imports nothing from Clerk — it must render where there is no provider', () => {
+  it('its BODY never calls useClerk — it must render where there is no provider', () => {
+    // ⚠️ Named for what it proves. "Imports nothing from Clerk" is false of the FILE (line 3 is
+    // `import { useClerk }`) and the slice below starts at the placeholder, so a test with that
+    // title could never fail on it. What matters is that the placeholder's own body is provider-free.
     const src = code(join(WEB_DIR, 'components/profiles/sign-out.tsx'));
     const placeholder = src.slice(src.indexOf('export function SignOutPlaceholder'));
     expect(placeholder).not.toMatch(/useClerk|@clerk/);

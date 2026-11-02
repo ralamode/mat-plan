@@ -100,11 +100,19 @@ export default function SignInPage() {
       )}
 
       {/* ONE forward control, styled like the landing's own second CTA so the single real action
-          looks the same on both screens. It points at `GATE_PATH` rather than `/`: that serves both
-          readers in one link, because `proxy.ts` sends a caller who already holds the cookie straight
-          on to `APP_HOME_PATH`. `/` and `PRIVACY_PATH` are deliberately absent — `SiteFooter` renders
-          both on every route, and two same-href links in one document read as a duplicate destination
-          in a screen-reader link list. */}
+          looks the same on both screens. It points at `GATE_PATH` rather than `/` because the access
+          code is one of the two things a caller needs until 1d (AUTH-1 1c-3b).
+
+          ⚠️ Its original justification — "that serves both readers in one link, because `proxy.ts`
+          sends a caller who already holds the cookie straight on to `APP_HOME_PATH`" — died with that
+          forward. For a reader who already holds the cookie, which is everyone at deploy, this is now
+          a round trip: /gate → code → /p → requireSession() → back here. It is still the right
+          control for a reader WITHOUT the code, and the page cannot yet tell the two apart.
+          Suppressing it for a valid-cookie caller is a Server-Component cookie read away and keeps
+          the page household-data-free; deliberately not done in this chunk, which is already the
+          one-way door. `/` and `PRIVACY_PATH` are absent — `SiteFooter` renders both on every route,
+          and two same-href links in one document read as a duplicate destination in a screen-reader
+          link list. */}
       <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
         <Link href={GATE_PATH}>{SIGN_IN_COPY.gateCta}</Link>
       </Button>

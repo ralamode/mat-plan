@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { NO_HOUSEHOLD_COPY } from '@/lib/constants';
+import { code, WEB_DIR } from '@/test/source-scan';
 
 import { NoHouseholdState } from './no-household-state';
 
@@ -40,6 +42,20 @@ describe('NoHouseholdState', () => {
     ]) {
       expect(container.textContent).toContain(copy);
     }
+  });
+
+  it('🔴 stays PROVIDER-FREE — it renders where there is no ClerkProvider', () => {
+    // ⚠️ The surviving half of a guard 1c-3b deleted. That test ("offers NO control at all") had two
+    // reasons: one expired when sign-out shipped, and one did NOT — `design/tokens/inventory.tsx`
+    // renders this component directly, and both harnesses blank the Clerk keys on purpose, so a
+    // `useClerk()` component reachable from `/design/tokens` would THROW there. The obvious next
+    // edit is to move the sign-out button INTO this component, which `NO_HOUSEHOLD_COPY.wrongAccount`
+    // all but prescribes. This is what makes that edit fail here instead of on the tokens page.
+    //
+    // A SOURCE scan, because the failure is a throw at render time under a condition this suite does
+    // not reproduce — rendering it successfully here proves nothing about the keyless harness.
+    const src = code(join(WEB_DIR, 'components/onboarding/no-household-state.tsx'));
+    expect(src).not.toMatch(/useClerk|@clerk/);
   });
 
   it('says nothing only an OPERATOR could act on — the copy is cause-free', () => {

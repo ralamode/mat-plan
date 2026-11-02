@@ -16,9 +16,10 @@ only way a notice about minors' health data is worth anything.
 > `pnpm dev` (`createAccountlessApplication`) — **both are pinned off in `apps/web/next.config.ts`**, in
 > code rather than by env, which is why neither appears in §7's table. ⚠️ **Still owed, and deliberately
 > not written as confirmed:** Clerk's **data region**, its **retention** for user records and sign-in
-> logs (a §8 row), and the exact **OAuth scope list** — all three are console reads on an instance that
-> **no longer** does not exist — the production instance was configured 2026-10-29 — and they remain
-> boxes on [runbooks.md](../runbooks.md)'s AUTH-1 checklist.
+> logs (a §8 row), and the exact **OAuth scope list** — all three are console reads, and the console
+> is now there to read: the production instance was configured 2026-10-29. ⚠️ So the reason these are
+> unanswered is no longer "there is nothing to look at"; they are simply unread, and they remain boxes
+> on [runbooks.md](../runbooks.md)'s AUTH-1 checklist.
 >
 > 🔴 **That changed at `AUTH-1` 1c-3b (2026-11-01), and this is the line that was false before it was
 > rewritten.** Through 1a-1c-3a this file said _"1a holds **no** Clerk-held personal data: sign-in is
