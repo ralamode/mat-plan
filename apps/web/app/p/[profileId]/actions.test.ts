@@ -43,6 +43,17 @@ vi.mock('@/lib/dal/entries', () => ({
 }));
 // The access gate (SEC-1). Passes by default; the unauth suite flips it per action.
 vi.mock('@/lib/dal/gate', () => ({ hasGateAccess: vi.fn(async () => true) }));
+// AUTH-1 1c-3b: the session, alongside the gate rather than instead of it. Passes by default; the
+// no-session suite flips it per action, exactly as the un-gated one does.
+vi.mock('@/lib/dal/session', () => ({
+  sessionUserOrNull: vi.fn(async () => ({ userId: 'user_000000000000000000000000e2e' })),
+}));
+// 🔴 The limiter is mocked so a REFUSAL is reachable. In the real module it fails open, and with no
+// Upstash configured under vitest it answers `unconfigured` to everything — so without this mock the
+// refusal branch in all seven actions would be dead code that no test could enter.
+vi.mock('@/lib/rate-limit', () => ({
+  checkMutationLimit: vi.fn(async () => ({ allowed: true, reason: 'ok' })),
+}));
 vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
     id: PROFILE_ID,
@@ -65,9 +76,11 @@ import {
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
 import { hasGateAccess } from '@/lib/dal/gate';
+import { sessionUserOrNull } from '@/lib/dal/session';
+import { checkMutationLimit } from '@/lib/rate-limit';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
-import { DEFAULT_TIME_ZONE } from '@/lib/constants';
+import { DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
@@ -171,6 +184,54 @@ describe('every Server Action — unauth → reject before any DAL call (SEC-1)'
     for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
     expect(updateProfileRoutine).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTH-1 1c-3b — the session is a SECOND required check, not a replacement.
+ *
+ * The suite above still passes with a valid session, and this one still refuses with a valid gate
+ * cookie. Both together are what "AND" means, and either suite going green alone would mean the
+ * conjunction had quietly become a disjunction.
+ */
+describe('every Server Action — no session → reject before any DAL call (AUTH-1 1c-3b)', () => {
+  it.each(ALL_ACTIONS)('%s refuses a caller with no session', async (_name, action, notFound) => {
+    vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+    const res = await action(initial, form({ profileId: PROFILE_ID }));
+    // 🔴 The SAME bytes as the un-gated refusal, deliberately: a caller must not be able to tell
+    // "no code" from "no session" from "another household". ADR 0006's 404-never-403 argument.
+    expect(res).toEqual({ ok: false, error: notFound });
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * AUTH-1 1c-3b — the mutation limiter, which is otherwise untestable.
+ *
+ * It fails OPEN and is `unconfigured` under vitest, so a call placed after the write, or one whose
+ * result is ignored, would be invisible to every other test in this file. These are the only cases
+ * that can distinguish "the limiter is wired" from "the limiter is imported".
+ */
+describe('every Server Action — rate limited → reject before any DAL call (AUTH-1 1c-3b)', () => {
+  it.each(ALL_ACTIONS)('%s refuses when the limiter says so', async (_name, action) => {
+    vi.mocked(checkMutationLimit).mockResolvedValueOnce({ allowed: false, reason: 'limited' });
+    const res = await action(initial, form({ profileId: PROFILE_ID }));
+    // ⚠️ NOT the not-found copy. A rate limit is the one refusal with something to do about it, and
+    // borrowing `NO_PROFILE_*` would both lie to the user and blur the 404-never-403 argument above.
+    expect(res).toEqual({ ok: false, error: RATE_LIMITED });
+    expect(getProfileByPublicId).not.toHaveBeenCalled();
+    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
+    expect(updateProfileRoutine).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each(ALL_ACTIONS)('%s keys the limiter on the principal', async (_name, action) => {
+    await action(initial, form({ profileId: PROFILE_ID }));
+    // The id comes from `auth()`, never from the request — so it cannot be forged or enumerated.
+    expect(checkMutationLimit).toHaveBeenCalledWith('user_000000000000000000000000e2e');
   });
 });
 

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { NO_HOUSEHOLD_COPY } from '@/lib/constants';
+import { code, WEB_DIR } from '@/test/source-scan';
 
 import { NoHouseholdState } from './no-household-state';
 
@@ -32,45 +34,28 @@ describe('NoHouseholdState', () => {
 
   it('states what a household is, the wrong-account fix, and that the screen is a dead end', () => {
     const { container } = render(<NoHouseholdState />);
-    expect(container.querySelectorAll('p')).toHaveLength(4);
+    expect(container.querySelectorAll('p')).toHaveLength(3);
     for (const copy of [
       NO_HOUSEHOLD_COPY.what,
       NO_HOUSEHOLD_COPY.wrongAccount,
-      NO_HOUSEHOLD_COPY.notYet,
       NO_HOUSEHOLD_COPY.next,
     ]) {
       expect(container.textContent).toContain(copy);
     }
   });
 
-  it('says on screen that sign-out is not here yet, beside the line that prescribes it', () => {
-    // Without this line `wrongAccount` tells the reader to sign out with no affordance anywhere on
-    // the page, and `next`'s "Otherwise" makes that read as a live branch. 1c-3 deletes `notYet` and
-    // ships the button; this test is what notices if the copy is removed before the control exists.
-    const { container } = render(<NoHouseholdState />);
-    const paragraphs = [...container.querySelectorAll('p')];
-    const notYet = paragraphs.find((el) => el.textContent === NO_HOUSEHOLD_COPY.notYet);
-    expect(notYet, 'the not-yet line must render').toBeTruthy();
-    // Muted follow-up, exactly as `PickerEmptyState` renders its own `notYet`.
-    expect(notYet?.className).toContain('text-muted-foreground');
-    // …and it must sit AFTER the line it qualifies, or it reads as a caption for the wrong sentence.
-    const wrongAccountIndex = paragraphs.findIndex(
-      (el) => el.textContent === NO_HOUSEHOLD_COPY.wrongAccount,
-    );
-    // Without this, removing `wrongAccount` makes `findIndex` return -1 and the ordering assertion
-    // below passes for the wrong reason.
-    expect(wrongAccountIndex).toBeGreaterThanOrEqual(0);
-    expect(paragraphs.indexOf(notYet!)).toBeGreaterThan(wrongAccountIndex);
-  });
-
-  it('offers NO control at all — not a link, not a button', () => {
-    // Deliberate, and the reason is in the component's comment: the one control this screen wants is
-    // **Sign out**, and until the session is the boundary (1c-3) signing out of Clerk would leave the
-    // gate cookie in place and the person still logged in. The copy names the fix rather than
-    // offering a button that would lie about performing it — the argument that parked #303.
-    render(<NoHouseholdState />);
-    expect(screen.queryAllByRole('link')).toHaveLength(0);
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  it('🔴 stays PROVIDER-FREE — it renders where there is no ClerkProvider', () => {
+    // ⚠️ The surviving half of a guard 1c-3b deleted. That test ("offers NO control at all") had two
+    // reasons: one expired when sign-out shipped, and one did NOT — `design/tokens/inventory.tsx`
+    // renders this component directly, and both harnesses blank the Clerk keys on purpose, so a
+    // `useClerk()` component reachable from `/design/tokens` would THROW there. The obvious next
+    // edit is to move the sign-out button INTO this component, which `NO_HOUSEHOLD_COPY.wrongAccount`
+    // all but prescribes. This is what makes that edit fail here instead of on the tokens page.
+    //
+    // A SOURCE scan, because the failure is a throw at render time under a condition this suite does
+    // not reproduce — rendering it successfully here proves nothing about the keyless harness.
+    const src = code(join(WEB_DIR, 'components/onboarding/no-household-state.tsx'));
+    expect(src).not.toMatch(/useClerk|@clerk/);
   });
 
   it('says nothing only an OPERATOR could act on — the copy is cause-free', () => {

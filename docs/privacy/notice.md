@@ -45,7 +45,7 @@ browser, and an identifier each device generates per logged item so the same ent
 **What we never ask for**: no phone number, no address, no payment details, no location, and no date
 of birth. **This app never asks you to type an email address, and no athlete's record contains one.**
 
-_Signing in with Google is being rolled out and is **not switched on yet**._ When it is, here is what
+_Signing in with Google is **how you get in** from 1 November 2026._ Here is what
 is honest about it, because the shorter version would not be:
 
 - **Google tells Clerk your email address, your name and your profile picture** — that set comes with
@@ -105,16 +105,16 @@ still works.
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                                          |
-| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                                                |
-| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                                             |
-| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                                                  |
-| **Upstash**    | **Your IP address only**, briefly, to stop someone guessing the access code.                                                                                                                                                                                                                                                                                                                   |
-| **Clerk**      | Runs the sign-in screen. **Its code ships with the app now, and sign-in is not switched on yet** — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data. |
-| **Google**     | _Only if you sign in with Google_, and not yet. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                                                                                                            |
-| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                                         |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                        |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                              |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                           |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                |
+| **Upstash**    | **Your IP address only**, briefly, to stop someone guessing the access code.                                                                                                                                                                                                                 |
+| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data. |
+| **Google**     | _Only if you sign in with Google_, and not yet. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                          |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                       |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
@@ -220,12 +220,11 @@ Because this cannot be undone and there is currently no per-person login to prov
 
 ## What is changing
 
-**Sign-in with Google is being rolled out.** The code for it ships with the app today, which is why
-**Clerk is listed above as a processor from now on** — and it is **not switched on**: everyone still
-gets in with the shared household access code, nobody has an account, and nothing has been sent to
-Clerk or to Google. When it is switched on you will have a personal login instead of the shared code,
-Clerk and Google will handle your email address, your name, your profile picture and your Google account identifier, and this notice
-will say so in the present tense on that day.
+**Sign-in with Google is switched on.** You sign in with your Google account, and you **also** need
+this household's access code — both are required until the code is retired in a later release. Clerk
+holds your account and your sign-in sessions; Google tells Clerk your email address, your name, your
+profile picture and your Google account identifier. What each of them holds is listed in the table
+above. Nothing about your athletes is sent to either of them.
 
 **How your agreement is recorded.** Signing up is by invitation only, so the record of who was asked,
 and when, is the invitation itself — this app does not store a separate consent timestamp. If you would

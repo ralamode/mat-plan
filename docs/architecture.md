@@ -121,10 +121,35 @@ sequenceDiagram
 
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
-`/` is the **public landing** (OSS-2): no cookie read, no DB query. A caller who already holds the
-gate cookie never sees it — the proxy sends `/` (and `/gate`) to the picker at **`/p`**
-(`APP_HOME_PATH`). That redirect is convenience routing, not authorization: every gated page still
-calls `requireGatedPage()`, and `app/pages-are-gated.test.ts` fails CI if one doesn't.
+`/` is the **public landing** (OSS-2): no cookie read, no DB query — and since `AUTH-1` 1c-3b
+**every caller sees it**, gated or not.
+
+🔴 **Every gated surface requires the access code AND a Clerk session, both re-checked in-process
+(1c-3b).** Not one or the other, and never the proxy alone: `app/pages-are-gated.test.ts` reports by
+name any page, action or Route Handler that drops either conjunct, and a third guard pins the
+mutation limiter.
+
+**Why both.** `getHouseholdScope()` does not consult the principal until **`1c-4`**, so until then a
+session alone means _"anyone this Clerk instance admits"_ — deleting the gate first would **widen**
+access, not narrow it. And a request that skips the proxy (SEC-1's scar was a prefetch header missing
+the matcher; CVE-2025-29927 is the general case) meets nothing at all if the in-process gate check is
+removed; [SECURITY.md](../.github/SECURITY.md) refuses to call middleware a boundary. **So `1c-4`
+lands before `1d`**, which is what deletes the gate half —
+[beta-1](./milestones/beta-1.md) records that as a security obligation rather than a preference.
+
+⚠️ **The proxy no longer forwards a cookie-holder from `/` or `/gate` to `/p`.** That arm was
+convenience routing (never authorization), but once the pages also required a session it **looped**
+for every cookie-holder without one, which is everyone at deploy — both exits from `/sign-in` led
+straight back to it:
+
+```text
+/sign-in → "use the access code" → /gate → (forward) → /p → requireSession() → /sign-in
+/sign-in → footer "mat-plan"     → /     → (forward) → /p → requireSession() → /sign-in
+```
+
+The second arm also meant such a visitor could never reach the landing page at all. Nothing
+security-relevant went with it: an unauthenticated caller never reached that branch, so behaviour for
+a cookie-less caller is bit-identical.
 
 **`PUBLIC_PATHS` holds TWO routes since PRIV-2**: `/` and `/privacy`. The notice at `/privacy` is a
 compiled copy of [`docs/privacy/notice.md`](./privacy/notice.md) — rendered from a committed data
@@ -132,10 +157,10 @@ module, so it reads **no cookie, no database and no request input** (no `params`
 no `fs`), and a byte-exact drift test fails when the page and the reviewed source disagree. It
 exists because the Clerk and Google consent screens need a privacy-policy **URL**.
 
-⚠️ **The two public routes are deliberately asymmetric when the caller is gated.** The proxy's
-redirect arm is `pathname === '/'`, not `isPublicPath(pathname)`, so a gated family lands on the
-picker from `/` but **reads the notice in place** at `/privacy`. A public path that bounced into the
-app would be unreadable to the person who most needs it. `/privacy` also owns **no subtree**:
+⚠️ **Both public routes now render in place for every caller** — the asymmetry that once sent `/`
+to the picker went with the forward above. Keep its reasoning in mind before re-adding any bounce: a
+public path that jumped into the app would be unreadable to the person who most needs it, and the
+notice is the URL the Clerk and Google consent screens point at. `/privacy` owns **no subtree**:
 `/privacy/x` is gated (`PUBLIC_PATH_TREES` is the separate opt-in a route with children joins), and
 `/privacy/` 308s to `/privacy` before the proxy runs.
 
@@ -161,9 +186,13 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 - **Zero live households → `null` (the app goes dark); ≥ 2 → THROW.** Different states, different
   paths: `null` for both would tell a parent their data does not exist and suggest a production write.
 - **AUTH-1 replaces only `getHouseholdScope()`'s body** (session → `household_members` → household).
-  Nothing else moves, which is the whole reason the seam landed before its consumers.
-- ⚠️ **Scoping is not authorization.** Before AUTH-1 the principal is a shared access code, so what
-  is proved is _consistent scoping_, not that the requester is who they claim.
+  Nothing else moves, which is the whole reason the seam landed before its consumers. ⏳ **Still
+  pending at 1c-3b:** the entry points now _require_ a session, but the scope is not yet derived from
+  it. That is **`1c-4`**, and it is what makes `1d` safe.
+- ⚠️ **Scoping is not authorization.** Until **`1c-4`** the scope is still resolved from the single
+  live household rather than from the principal, so what is proved is _consistent scoping_. From
+  1c-3b a requester must hold a real Clerk session as well as the code, but the session does not yet
+  decide _whose_ data they get.
 - ✅ **`movements` came inside the seam at `TEN-2b`.** `findOrCreateMovementId` takes a
   `HouseholdScope` and resolves **global-first** — the curated namespace (`household_id IS NULL`),
   then this household's own, then an insert into this household's own — so a name a household types
@@ -183,7 +212,8 @@ flowchart LR
   LANDING["/ — public landing<br/>(no cookie, no DB)"]
   PRIVACY["/privacy — the notice<br/>compiled from docs/privacy/notice.md<br/>(no cookie, no DB, no request input)"]
   GATE["/gate — access code"]
-  PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles"]
+  SIGNIN["/sign-in — Clerk<br/>(invite-only)"]
+  PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles<br/>+ Sign out (session only)"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
   ACT["Server Action<br/>log bodyweight / strength"]
   SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>0 → null (dark) · ≥2 → throw"]
@@ -191,13 +221,16 @@ flowchart LR
 
   LANDING -->|"Household sign-in"| GATE
   GATE -->|"code OK → APP_HOME_PATH"| PICKER
-  LANDING -.->|"proxy: already has the cookie"| PICKER
   LANDING -->|"site footer"| PRIVACY
   GATE -->|"site footer"| PRIVACY
   PICKER -->|"site footer"| PRIVACY
   PRIVACY -->|"footer: mat-plan"| LANDING
-  PRIVACY -.->|"gated caller STAYS here<br/>(the arm is pathname === '/')"| PRIVACY
-  SCOPE -->|"the one live household<br/>(AUTH-1: the session's)"| PICKER
+  SIGNIN -->|"SIGN_IN_COPY.gateCta<br/>(the code is ONE of two things)"| GATE
+  SIGNIN -->|"session OK"| PICKER
+  PICKER -.->|"no session → redirect (1c-3b)"| SIGNIN
+  TODAY -.->|"no session → redirect (1c-3b)"| SIGNIN
+  PICKER -.->|"Sign out: clears the Clerk session<br/>ONLY — clearing mp_gate too is a lockout"| SIGNIN
+  SCOPE -->|"the one live household<br/>(1c-4: the session's)"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
   TODAY -->|"hidden field profileId"| ACT

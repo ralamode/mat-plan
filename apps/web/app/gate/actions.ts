@@ -77,9 +77,12 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
     maxAge: COOKIE_MAX_AGE,
   });
 
-  // No usable `from`, or one that is the landing → the app home (OSS-2), in ONE hop: the landing would
-  // only bounce a cookie-holder to the picker. Compared on the PATHNAME so `/?x=1` counts too. Resolved
-  // here rather than inside `safeInternalPath`, the hostile-input sink SEC-4 hardened.
+  // No usable `from`, or one that is the landing → the app home (OSS-2). ⚠️ The reason used to be
+  // "in ONE hop: the landing would only bounce a cookie-holder to the picker" — AUTH-1 1c-3b deleted
+  // that forward, so the landing now renders for everyone and this substitution is what sends a
+  // caller who just entered the code onward instead of back to a page with nothing for them.
+  // Compared on the PATHNAME so `/?x=1` counts too. Resolved here rather than inside
+  // `safeInternalPath`, the hostile-input sink SEC-4 hardened.
   const to = safeInternalPath(parsed.data.from);
   redirect(internalPathname(to) === '/' ? APP_HOME_PATH : to);
 }

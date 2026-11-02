@@ -137,6 +137,29 @@ account identifier for a named adult (`docs/privacy/data-inventory.md` § 1a), a
 The `Applied` table in `packages/db/scripts/corrections/README.md` records **neither** target, for the
 same reason.
 
+### 3. Sign out works against a real instance — the one control no harness can see
+
+🔴 **Nothing automated covers this, by construction, and the code says so in two places.** Both
+harnesses blank the Clerk keys on purpose (`e2e-local.ts`, `screenshot-ephemeral.ts`), so
+`clerkIsConfigured()` is false, no `<ClerkProvider>` renders, and Playwright and axe only ever see
+`SignOutPlaceholder`. What actually clears the session cookies is `@clerk/clerk-js`, fetched from a
+CDN at a **floating major** and absent from `pnpm-lock.yaml` — so `sign-out.test.tsx` can only assert
+what **our** file does **not** do (it names no cookie). This box is the positive half.
+
+Against the **development** instance, signed in:
+
+1. Press **Sign out** on `/p`.
+2. Devtools → Application → Cookies: `__session` and `__client_uat` are **gone**.
+3. 🔴 **`mp_gate` is STILL THERE.** This is the invariant, not a detail: sign-out clears the Clerk
+   session **only**. Clearing the gate cookie too would bounce the user to `/gate` needing the shared
+   household code to re-enter **their own household** — and after `1c-4` that reader is an invited
+   parent who does not have it. A button labelled "Sign out" that does that is a permanent lockout.
+4. Navigate to `/p`: it redirects to `/sign-in`.
+5. Sign in again: you land back on the picker without re-entering the access code.
+
+If step 3 fails, **stop** — the control is a lockout and must not reach anyone outside the
+maintainer's own browser.
+
 ### If something is wrong afterwards
 
 A membership is soft-deletable and the partial unique is on `clerk_user_id WHERE deleted_at IS NULL`,
@@ -724,9 +747,12 @@ household conjunct and emits one structured event.
 | Threshold | **more than 3 events in 1 hour** — one is a stale bookmark, a burst is a probe |
 | Action    | email the maintainer                                                           |
 
-**What the event carries, and what it deliberately does not.** `actor` (`gate_session` until AUTH-1 —
-the gate is a shared code, not an identity), `action`, `resource` (the `public_id` the caller already
-sent) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
+**What the event carries, and what it deliberately does not.** `actor` — **`clerk_session` since
+`AUTH-1` 1c-3b**; it was `gate_session` while the gate was the only door, and it is a **constant
+either way, never the user id**, because a requester id in a third-party store is the same
+cross-tenant linkage the owning household id is forbidden for. Filter on the current value: an alert
+triaged against the old one returns nothing. Plus `action`, `resource` (the `public_id` the caller
+already sent) and `outcome`. **No name, no logged value, no `params:` tail** (SEC-3: drizzle's
 `DrizzleQueryError` message embeds query parameters and has shipped a kid's bodyweight to Sentry
 once) and **not the owning household's id** — a requester→owner mapping in a third-party store would
 be a cross-tenant linkage over minors' health data.

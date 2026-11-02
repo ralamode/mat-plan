@@ -318,26 +318,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Signing in with Google is being rolled out and is "
+            "text": "Signing in with Google is "
           },
           {
             "k": "strong",
             "children": [
               {
                 "k": "text",
-                "text": "not switched on yet"
+                "text": "how you get in"
               }
             ]
           },
           {
             "k": "text",
-            "text": "."
+            "text": " from 1 November 2026."
           }
         ]
       },
       {
         "k": "text",
-        "text": " When it is, here is what\nis honest about it, because the shorter version would not be:"
+        "text": " Here is what\nis honest about it, because the shorter version would not be:"
       }
     ]
   },
@@ -934,20 +934,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "desc": [
           {
             "k": "text",
-            "text": "Runs the sign-in screen. "
+            "text": "Runs the sign-in screen, and "
           },
           {
             "k": "strong",
             "children": [
               {
                 "k": "text",
-                "text": "Its code ships with the app now, and sign-in is not switched on yet"
+                "text": "sign-in is switched on"
               }
             ]
           },
           {
             "k": "text",
-            "text": " — nothing has been sent to Clerk. When it is switched on, Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
+            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
           }
         ]
       },
@@ -1841,39 +1841,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Sign-in with Google is being rolled out."
+            "text": "Sign-in with Google is switched on."
           }
         ]
       },
       {
         "k": "text",
-        "text": " The code for it ships with the app today, which is why\n"
+        "text": " You sign in with your Google account, and you "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Clerk is listed above as a processor from now on"
+            "text": "also"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — and it is "
-      },
-      {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
-            "text": "not switched on"
-          }
-        ]
-      },
-      {
-        "k": "text",
-        "text": ": everyone still\ngets in with the shared household access code, nobody has an account, and nothing has been sent to\nClerk or to Google. When it is switched on you will have a personal login instead of the shared code,\nClerk and Google will handle your email address, your name, your profile picture and your Google account identifier, and this notice\nwill say so in the present tense on that day."
+        "text": " need\nthis household's access code — both are required until the code is retired in a later release. Clerk\nholds your account and your sign-in sessions; Google tells Clerk your email address, your name, your\nprofile picture and your Google account identifier. What each of them holds is listed in the table\nabove. Nothing about your athletes is sent to either of them."
       }
     ]
   },

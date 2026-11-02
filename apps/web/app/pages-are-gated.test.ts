@@ -48,10 +48,17 @@ describe('every page is gated or deliberately un-gated', () => {
   });
 
   it.each(pages.map((f) => [routeOf(f), f]))('%s', (route, file) => {
-    const gated = /\bawait\s+requireGatedPage\(\)/.test(code(file));
+    const src = code(file);
+    const gated = /\bawait\s+requireGatedPage\(\)/.test(src);
+    // 🔴 **ADDED, not widened — AUTH-1 1c-3b.** The file's own note bans widening a regex to accept
+    // EITHER helper, because a guard matching either proves neither. Two separate conjuncts, both
+    // required, is the opposite of that: each still proves its own call. The gate conjunct is
+    // deleted at 1d, after 1c-4 makes the scope membership-derived.
+    const sessioned = /\bawait\s+requireSession\(\)/.test(src);
     expect(
-      gated || isUngatedPath(route),
-      `${route} neither awaits requireGatedPage() nor is an ungated path (PUBLIC_PATHS or the gate)`,
+      (gated && sessioned) || isUngatedPath(route),
+      `${route} must await BOTH requireGatedPage() and requireSession(), or be an ungated path ` +
+        `(PUBLIC_PATHS or the gate). Found gate=${gated} session=${sessioned}.`,
     ).toBe(true);
   });
 });
@@ -69,9 +76,15 @@ describe('every Route Handler checks the gate itself', () => {
   });
 
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
+    const src = code(file);
+    // The existing alternation is two spellings of ONE check (a handler may call either helper), not
+    // the forbidden "either guard will do". 1c-3b adds a second, independent conjunct.
+    const gated = /\b(?:isValidGateCookie|hasGateAccess)\(/.test(src);
+    const sessioned = /\bsessionUserOrNull\s*\(/.test(src);
     expect(
-      /\b(?:isValidGateCookie|hasGateAccess)\(/.test(code(file)),
-      `${route}/route.ts never checks the gate cookie`,
+      gated && sessioned,
+      `${route}/route.ts must check BOTH the gate cookie and a session. ` +
+        `Found gate=${gated} session=${sessioned}.`,
     ).toBe(true);
   });
 });
@@ -211,10 +224,42 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
   /**
    * 🔴 **1c SWITCHES this, it does not WIDEN it.** A regex matching `hasGateAccess|requireSession`
    * passes on either and therefore proves neither — and that is precisely the edit an author reaches
-   * for when the suite goes red under time pressure. 1b-bis asserts the gate call because that is what
-   * ships today, which is what makes this chunk inert and revert-safe.
+   * for when the suite goes red under time pressure. 1b-bis asserted the gate call directly because
+   * that is what shipped then.
+   *
+   * 🔴 **1c-3b made it three conjuncts, and review on #323 collapsed the seven copies into
+   * `enterMutation` _(maintainer, 2026-11-01)_ — so the guard splits in two rather than loosening:**
+   *
+   *  - **per action**, below: the action must call `enterMutation`, and `actions.ts` must import it
+   *    from `./mutation-entry` — so "calls something named like the helper" is not enough.
+   *  - **once, in the helper**: the three conjuncts appear there IN ORDER. The old per-action scan
+   *    could not assert order at all (seven slices, three independent presence checks); one
+   *    definition can. That is the half that is strictly stronger than what 1c-3b shipped.
    */
+  const ENTRY_CALL = /\bawait\s+enterMutation\s*\(/;
+  const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'\.\/mutation-entry'/;
+  /**
+   * 🔴 **The one source-half conjunct the collapse WEAKENED, restored.** Before it, the gate was one
+   * inseparable expression — `if (!(await hasGateAccess())) return {…}` — so matching the call and
+   * dropping the result was not really expressible. Two statements can come apart: a bare
+   * `await enterMutation(NO_PROFILE_LOG);` with no return satisfies `ENTRY_CALL` and checks nothing.
+   * Backreferenced, so the binding returned is the one that was tested. Found by the security lens
+   * on #323.
+   */
+  const ENTRY_REFUSAL = /if\s*\(\s*!\s*(\w+)\.ok\s*\)\s*return\s+\1\s*;/;
+
   const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
+  /** AUTH-1 1c-3b: the session, required alongside the gate before every mutation. */
+  const SESSION_CALL = /\bsessionUserOrNull\s*\(/;
+  /**
+   * 🔴 **The limiter needs a SOURCE guard, because no behavioural test can catch its absence.**
+   * `checkMutationLimit` fails open, and under vitest `mutationLimiter` is always `null` — so every
+   * call answers `allowed: true`. A call placed after the write, or whose result is ignored, is
+   * invisible to the entire suite. `rate-limit.ts`'s own docblock warns about exactly this shape one
+   * level up ("a sizing test asserted the new number and passed"). An eighth action that forgets it
+   * fails here instead.
+   */
+  const LIMITER_CALL = /\bcheckMutationLimit\s*\(/;
 
   /** Every `'use server'` module under `apps/web`, by path relative to it. */
   const modules = serverActionModules().map((f) => relative(WEB_DIR, f));
@@ -260,13 +305,41 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
       name: n,
       at: src.search(new RegExp(`^export\\s+async\\s+function\\s+${n}\\b`, 'm')),
     }));
-    const missing = starts
-      .filter(({ at }, i) => {
-        const next = starts[i + 1]?.at ?? src.length;
-        return !BOUNDARY_CALL.test(src.slice(at, next));
-      })
-      .map(({ name }) => name);
+    // Each of the three must appear INSIDE the action's own slice. Reported separately so a failure
+    // names which conjunct went missing rather than just "the boundary".
+    const report = (re: RegExp) =>
+      starts
+        .filter(({ at }, i) => !re.test(src.slice(at, starts[i + 1]?.at ?? src.length)))
+        .map(({ name }) => name);
 
-    expect(missing).toEqual([]);
+    expect(report(ENTRY_CALL), 'actions missing the awaited enterMutation() call').toEqual([]);
+    expect(report(ENTRY_REFUSAL), 'actions that call enterMutation but drop its refusal').toEqual(
+      [],
+    );
+    // A local function of the same name would satisfy the slice scan above and check nothing.
+    expect(ENTRY_IMPORT.test(src), `${rel} must import enterMutation from ./mutation-entry`).toBe(
+      true,
+    );
+  });
+
+  /**
+   * 🔴 **The conjuncts themselves, and their ORDER, asserted once where they now live.**
+   *
+   * `enterMutation` is the whole boundary for seven actions, so a conjunct dropped here is dropped
+   * everywhere at once — and the order is load-bearing, not stylistic: the limiter is keyed on the
+   * principal, so it MUST come after the session, and both must come before the caller's zod parse
+   * and DB read or an unauthenticated flood buys Redis and Postgres work. Nothing behavioural can
+   * see any of this: the limiter fails open and is `null` under vitest.
+   */
+  it('enterMutation holds the gate, the session and the limiter — in that order', () => {
+    const src = code(join(APP_DIR, 'p', '[profileId]', 'mutation-entry.ts'));
+    const gate = src.search(BOUNDARY_CALL);
+    const session = src.search(SESSION_CALL);
+    const limiter = src.search(LIMITER_CALL);
+    expect(gate, 'the gate check').toBeGreaterThan(-1);
+    expect(session, 'the session check').toBeGreaterThan(-1);
+    expect(limiter, 'checkMutationLimit').toBeGreaterThan(-1);
+    expect(gate, 'the gate must be checked before the session').toBeLessThan(session);
+    expect(session, 'the principal must exist before it can key the limiter').toBeLessThan(limiter);
   });
 });

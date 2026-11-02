@@ -31,22 +31,17 @@ import { NO_HOUSEHOLD_COPY } from '@/lib/constants';
  *    one shared seeded database. ⚠️ That cell does NOT cover the `<h1>`, the subhead or the theme
  *    block, which are the parts most likely to overflow at 200% text.
  *  - **`text-foreground` on the explanatory paragraphs**, not `text-muted-foreground` (4.74:1 — AA by
- *    0.24). Prose read once, cold, on a phone should not sit on the AA floor. **The `notYet` status
- *    line is the deliberate exception** — muted and `text-sm`, exactly as `PickerEmptyState` renders
- *    its own: it qualifies the paragraph above it rather than being read for content.
+ *    0.24). Prose read once, cold, on a phone should not sit on the AA floor. (1c-2 carried a muted
+ *    `notYet` exception; 1c-3b shipped the control it apologised for and deleted it.)
  *
- * ⚠️ **Props-free and no Server Action**, deliberately: the inventory cell renders it directly, and a
- * `'use server'` import reachable from `/design/tokens` would put an action in a page's module graph
- * for no reason. The one control this state will eventually have — **Sign out** — therefore lives in
- * `p/page.tsx`'s `mt-auto` block, not in here.
+ * ⚠️ **Props-free and no Clerk import**, deliberately: the inventory cell renders it directly, and a
+ * `useClerk()` component reachable from `/design/tokens` would throw there — that route is captured
+ * by the keyless harness, so no `<ClerkProvider>` exists. **Sign out therefore lives in
+ * `p/page.tsx`'s `mt-auto` block**, where the page can branch on `clerkIsConfigured()`.
  *
- * 🔴 **That control arrives at 1c-3, not here.** Until the session is the boundary, signing out of
- * Clerk would leave the gate cookie in place and the person still logged in — a control that does not
- * do what it says, which is exactly what parked #303. So the copy names the fix AND says the control
- * is not here yet (`NO_HOUSEHOLD_COPY.notYet`, the `PICKER_EMPTY_COPY.notYet` idiom): without that
- * line `wrongAccount` prescribes an action with no affordance anywhere on the page, and `next`'s
- * *"Otherwise"* reads as though the first branch were live. **1c-3 deletes `notYet` and ships the
- * button.**
+ * ✅ **Sign out shipped in 1c-3b**, in that block. The wrong-Google-account line below prescribes
+ * it, and until 1c-3b there was no control to prescribe — which is why 1c-2 carried a `notYet`
+ * line rather than a button that would have lied about what it did (the argument that parked #303).
  *
  * Pure sync Server Component — no state, no `'use client'`.
  */
@@ -55,7 +50,6 @@ export function NoHouseholdState() {
     <div className="flex max-w-prose flex-col gap-3">
       <p>{NO_HOUSEHOLD_COPY.what}</p>
       <p>{NO_HOUSEHOLD_COPY.wrongAccount}</p>
-      <p className="text-muted-foreground text-sm">{NO_HOUSEHOLD_COPY.notYet}</p>
       <p>{NO_HOUSEHOLD_COPY.next}</p>
     </div>
   );

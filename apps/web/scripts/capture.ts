@@ -102,8 +102,11 @@ export async function captureScreenshot(opts: {
         ]);
       }
       const page = await context.newPage();
-      // A public route — and the gate itself — is captured as a stranger sees it: logged in, the proxy
-      // sends both `/` and `/gate` to the picker.
+      // An un-gated route is captured as a stranger sees it, which is the state that needs reviewing.
+      // ⚠️ Until AUTH-1 1c-3b this was also a HARD limit: the proxy forwarded a cookie-holder from `/`
+      // and `/gate` to the picker, so a logged-in capture of either was impossible. 1c-3b deleted that
+      // forward (it looped once the pages required a session), so both now render for a gated caller
+      // too — the `gateLogin` skip here is a choice about which state to shoot, no longer a workaround.
       const pathname = new URL(opts.route, opts.baseUrl).pathname;
       if (!isUngatedPath(pathname)) await gateLogin(page);
       await page.goto(opts.route, { waitUntil: 'networkidle' });

@@ -16,8 +16,10 @@ export const metadata: Metadata = {
  *
  * ⚠️ Keep it branchless and private-free: no cookie read, no DAL import, no `requireGatedPage`, no
  * Server Action. It renders identically for every caller, so there is no condition that could serve
- * household content to the internet. A caller who already has the gate cookie never sees it — the
- * proxy sends them to the picker (`APP_HOME_PATH`).
+ * household content to the internet. ⚠️ **Every caller sees it, gated or not** (AUTH-1 1c-3b): the
+ * proxy used to forward a cookie-holder to the picker, which looped once the pages also required a
+ * session. Branchless is what makes that safe — there is no state to leak by rendering it to
+ * everyone.
  */
 export default function LandingPage() {
   return (

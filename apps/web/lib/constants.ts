@@ -36,8 +36,10 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
  *
  * ⚠️ Branch-specific under HH-1. If household addressing lands in the path, home becomes
  * `/<household-id>`, which the proxy cannot compute (it has env and a cookie, no DB and no session).
- * The next author must then DELETE the proxy's `/` → home rule and resolve home in a page that can check
- * membership — not teach the proxy, which is the proxy-as-authorization mistake (CVE-2025-29927).
+ * Home must then be resolved in a page that can check membership — never taught to the proxy, which
+ * is the proxy-as-authorization mistake (CVE-2025-29927). ✅ Half of that is already paid: the
+ * proxy's `/` → home forward was deleted at AUTH-1 1c-3b (it looped once the pages required a
+ * session), so there is no longer a rule to remove first.
  */
 export const APP_HOME_PATH = '/p';
 
@@ -120,7 +122,12 @@ export const LANDING_COPY = {
 /** The gate page's copy. "Private preview." was dropped at OSS-2: the gate is now screen two of a
  *  public flow, and "preview" promised a timeline the landing deliberately doesn't. */
 export const GATE_COPY = {
-  subhead: 'Enter the household access code to continue.',
+  /**
+   * ⚠️ AUTH-1 1c-3b: *"to continue"* is true for a visitor who already has a session and false for
+   * everyone else, because the code is now one of two requirements. Says so rather than implying the
+   * code is sufficient — the reader who is about to discover otherwise is the one this helps.
+   */
+  subhead: 'Enter the household access code. You’ll also sign in with Google.',
   /** The way back out — the one room a stranger can walk into needs an exit. The page draws a
    *  decorative `←` before it, hidden from screen readers so the link isn't "leftwards arrow, About…". */
   back: `About ${APP_NAME}`,
@@ -142,8 +149,12 @@ export const GATE_COPY = {
  * production at 1a. It leads with the state rather than an imperative (the `PICKER_EMPTY_COPY.notYet`
  * family), says "isn't switched on yet" — a configuration fact, so the maintainer verifying the
  * deploy can tell dark from broken — and asks the reader for nothing. The exit points at `GATE_PATH`,
- * not `/`: ONE control then serves both readers, because `proxy.ts` sends a caller who already holds
- * the cookie straight on to `APP_HOME_PATH`. The footer already carries `/` and `PRIVACY_PATH` on
+ * not `/`: the code is one of the two things a caller needs (AUTH-1 1c-3b), so the gate is the only
+ * forward step a reader without it can take. ⚠️ The original argument was "ONE control serves both
+ * readers, because `proxy.ts` sends a cookie-holder straight on to `APP_HOME_PATH`" — that forward is
+ * gone, so a reader who ALREADY holds the cookie now makes a round trip through `/gate` to arrive
+ * back here. Tracked as the escape-hatch question on the sign-in page. The footer already carries
+ * `/` and `PRIVACY_PATH` on
  * every route, so the page adds neither — two same-href links in one document read as a duplicate
  * destination in a screen-reader link list, and axe does not flag it.
  *
@@ -156,7 +167,14 @@ export const GATE_COPY = {
 export const SIGN_IN_COPY = {
   heading: 'Sign in with Google',
   notYet: 'Signing in with Google isn’t switched on yet.',
-  codeStillWorks: 'The household access code is still the way in.',
+  /**
+   * 🔴 **Kept and reworded, not deleted — AUTH-1 1c-3b.** A draft of that chunk deleted this line
+   * and the `/gate` button below it, which would have left **nothing in the app linking to a door
+   * that is still mandatory**: until 1d the boundary is the access code AND a session. The sentence
+   * is also simply TRUE under that AND, so deleting it was the dishonest direction. What changed is
+   * that it now says the code is one of two things rather than the only one.
+   */
+  codeStillWorks: 'You also need this household’s access code until the next release.',
   gateCta: 'Enter the access code',
   processor:
     'This screen is run by Clerk. Signing in tells us the email address on your Google account — nothing else from it, and nothing about your athletes is sent to Google.',
@@ -258,13 +276,6 @@ export const NO_HOUSEHOLD_COPY = {
    */
   wrongAccount:
     'If you signed in with Google and have more than one account, this may be the wrong one. Signing out and signing back in with the address the invitation was sent to is the fix.',
-  /**
-   * 🔴 **Deleted at 1c-3, which ships the control.** Without it `wrongAccount` prescribes an action
-   * with no affordance anywhere on the page, and `next`’s *"Otherwise"* makes it read as a live
-   * branch. `PICKER_EMPTY_COPY.notYet` / `SIGN_IN_COPY.notYet` are the same idiom: lead with the
-   * state, so nobody hunts for a button that is not there.
-   */
-  notYet: 'Signing out isn’t in the app yet.',
   /**
    * Says plainly that the screen cannot add the account, which is what stops a parent hunting for a
    * control that does not exist. Names the invitation because *"the person who set this up"* is
@@ -562,6 +573,44 @@ export const CLOSED_DAY_NOTICE =
 
 /** The pending label on every Save button (amend islands and the routine editor). */
 export const SAVING_LABEL = 'Saving…';
+
+/**
+ * AUTH-1 1c-3b — the sign-out control's copy.
+ *
+ * The consequence line is **disclosure at the decision point, not a confirmation dialog**. A confirm
+ * would ask the user to approve something they cannot evaluate — whether Google will re-present an
+ * account chooser is a property of their browser's session state, which no screen here can see — and
+ * the real risk is a mis-tap, whose fix is placement and visual recession, not a dialog dismissed by
+ * reflex. The `SIGN_IN_COPY.processor` idiom: put the fact next to the control.
+ *
+ * `text-foreground`, not muted, at the use site: read once, cold, immediately before an act with no
+ * undo.
+ */
+export const SIGN_OUT_COPY = {
+  action: 'Sign out',
+  /**
+   * Shown while `clerk-js` is still arriving — on gym LTE that is not instant. Deliberately the SAME
+   * string as `action`: the button is `disabled` until `loaded`, so the state is already signalled by
+   * the control, and changing the label as well would move the layout under a thumb already on its
+   * way down. It stays a separate constant so the two can diverge without hunting call sites.
+   */
+  loading: 'Sign out',
+  consequence:
+    'Signing out ends this session on this device. Getting back in needs the Google account linked to this household.',
+} as const;
+
+/**
+ * AUTH-1 1c-3b — the mutation limiter's refusal. **Distinct from `NO_PROFILE_*` on purpose.**
+ *
+ * Reusing a not-found string would tell a kid mid-session *"No profile found to log against"* when
+ * the truth is "too many writes, briefly" — unactionable, and it would muddy the argument
+ * `actions.test.ts` pins: that an un-gated caller, a caller with no session and a caller reaching
+ * another household all get the SAME bytes, so none of them learns which it was. A rate limit is not
+ * that class of refusal and must not borrow its copy.
+ *
+ * Says what to do, because unlike the others there is something to do.
+ */
+export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try again.';
 
 /**
  * The refusal every profile-addressed Server Action returns when it has no profile to act on —

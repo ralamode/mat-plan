@@ -40,12 +40,12 @@ import {
   editBodyweight,
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
-import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
 import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
+import { enterMutation } from './mutation-entry';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
@@ -82,7 +82,10 @@ export async function logBodyweightAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    // The gate AND the session AND the limiter, in that order — `./mutation-entry` holds the one
+    // copy and the reasoning, and `pages-are-gated.test.ts` is what pins both.
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = logBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       value: formData.get('value'),
@@ -172,7 +175,8 @@ export async function logCheckinsAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logCheckinsAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     // 1. Walk the TRUSTED registry. Accumulate every field error rather than returning on
     //    the first — with 10 controls, one-error-at-a-time is a miserable phone form.
     const items = [];
@@ -275,7 +279,8 @@ export async function logStrengthSessionAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logStrengthSessionAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const raw = formData.get('movements');
     let movements: unknown;
     try {
@@ -396,7 +401,8 @@ export async function logLifeActivitiesAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logLifeActivitiesAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const profileId = uuidSchema.safeParse(formData.get('profileId'));
     const clientId = uuidSchema.safeParse(formData.get('clientId'));
     const activityKey = formData.get('activityKey');
@@ -469,7 +475,8 @@ export async function editStrengthSetAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editStrengthSetAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = editStrengthSetSchema.safeParse({
       profileId: formData.get('profileId'),
       setId: formData.get('setId'),
@@ -528,7 +535,8 @@ export async function editBodyweightAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editBodyweightAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_LOG };
+    const entry = await enterMutation(NO_PROFILE_LOG);
+    if (!entry.ok) return entry;
     const parsed = editBodyweightSchema.safeParse({
       profileId: formData.get('profileId'),
       entryId: formData.get('entryId'),
@@ -598,7 +606,8 @@ export async function editRoutineAction(
 ): Promise<ActionState> {
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('editRoutineAction', async () => {
-    if (!(await hasGateAccess())) return { ok: false, error: NO_PROFILE_SAVE };
+    const entry = await enterMutation(NO_PROFILE_SAVE);
+    if (!entry.ok) return entry;
     const raw = formData.get('routine');
     let submitted: unknown;
     try {
