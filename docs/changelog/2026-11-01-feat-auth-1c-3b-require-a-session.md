@@ -50,3 +50,17 @@
   same cross-tenant linkage the owning household id is forbidden for. `force-dynamic` on the export
   handler is now justified by the **security** reason (a cached CSV under ADR 0006 is one household's
   data served to another) rather than by the source-text test that also happens to accept it.
+  **[architecture.md](../architecture.md) §2b is brought current in the same PR** — it still described
+  the deleted forward as live, and derived the two public routes' asymmetry from the `pathname === '/'`
+  arm that no longer exists. Its routing diagram now carries `/sign-in`, both redirect edges and sign
+  out, so the PR's diagram and the committed one agree (`AGENTS.md` → "Diagrams in the PR description").
+  🔴 **Raised in review and fixed here: the entry check is ONE function, not seven copies.** The
+  gate-session-limiter block was pasted into all seven actions, byte-identical but for the refusal
+  string — the same shape V1-24 had already collapsed once in this folder for the Sentry wrapper.
+  Seven copies of a security predicate is seven places to land one conjunct short, six of them
+  catchable only by a reviewer noticing an absence. It is now `enterMutation(refusal)` in
+  `app/p/[profileId]/mutation-entry.ts`, and the guard **split rather than loosened**: per action,
+  the awaited call plus a pin on the import source (so a local look-alike cannot satisfy it); once,
+  in the helper, the three conjuncts **in order**. That order assertion is new — seven slices with
+  three independent presence checks could not express it, and the limiter is keyed on the principal,
+  so "session before limiter" is load-bearing. All three probes proved RED. _(maintainer, 2026-11-01)_

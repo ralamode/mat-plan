@@ -126,8 +126,9 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
  * **Order: the gate runs FIRST, Clerk second, on the pass-through path only.** A bounced request
  * renders nothing, so nothing can call `auth()` and Clerk has no question to answer; running vendor
  * middleware on every request from an un-gated stranger would widen the unauthenticated surface for
- * no benefit while the gate is still the only boundary. Every request that DOES render — including the
- * ungated `/`, `/privacy` and `/sign-in` — passes through here, which is what `auth()` needs. ⚠️ This
+ * no benefit while the gate is still the only boundary. Every request that DOES render — the un-gated
+ * `/` and `/privacy`, and `/sign-in`, which is gated like any other page — passes through here, which
+ * is what `auth()` needs. ⚠️ This
  * is NOT "the matcher/proxy is the boundary": SEC-1's lesson stands, pages and actions re-check
  * independently, and the `/api` matcher change below is about `auth()` being ABLE to answer.
  */
