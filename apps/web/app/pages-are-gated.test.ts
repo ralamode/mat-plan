@@ -86,7 +86,8 @@ describe('every Route Handler checks the gate itself', () => {
     // for both calls TEXTUALLY in the handler file, while the action half of this suite was reshaped
     // the opposite way: an action delegates to `enterMutation` and the conjuncts are asserted once
     // in the helper, precisely because seven copies of a predicate is seven places to drop one. The
-    // `/api/sync` handler is next (`export/route.ts`), and if it routes through a shared entry helper
+    // `/api/sync` handler is next — it would be `app/api/sync/route.ts`, and today's only handler is
+    // `app/p/[profileId]/export/route.ts` — and if it routes through a shared entry helper
     // — the correct shape by that argument — it contains NEITHER spelling and goes red here. It fails
     // CLOSED, so nothing is silently unprotected. **Then: mirror the action half** (accept delegation
     // plus the returned-refusal backreference), do NOT inline the predicate again and do NOT loosen

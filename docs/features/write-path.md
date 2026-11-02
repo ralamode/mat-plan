@@ -481,15 +481,34 @@ flowchart LR
 - **✅ The access-gate matcher INCLUDES `/api` — since `AUTH-1` 1a, and this bullet said the opposite
   until 2026-11-01.** It did exclude `/api` and `/api/*`, which is why V1-13b's export lives at
   `/p/[profileId]/export`. 1a dropped the exclusion (`auth()` throws when `clerkMiddleware()` did not
-  run, so an excluded handler could not authenticate at all), and the same stale claim was carried, in the present
-  tense, by `export/route.ts`'s docblock, `.github/SECURITY.md`'s `/api/sync` paragraph,
-  `e2e/export-csv.spec.ts`'s gating-test comment, `docs/runbooks.md`'s preview section,
-  `docs/status.md`, and — worst — the `review-pr` skill and the `security-reviewer` agent, which hand
-  it to the next reviewer as fact. Listed, not counted: the first attempt at this sweep said "three",
-  which is the arithmetic trap `proxy.ts` names four bullets up. ⚠️ **What has NOT changed is the rule:** the matcher is not an
-  authorization boundary, so a handler under `/api` still owes its own in-process gate + session
-  check, and `/api/sync` additionally owes an origin or token check. `app/pages-are-gated.test.ts`
-  requires **both conjuncts** of every Route Handler it discovers.
+  run, so an excluded handler could not authenticate at all), and ⚠️ **what has NOT changed is the rule:** the matcher is
+  not an authorization boundary, so a handler under `/api` still owes its own in-process gate +
+  session check, and `/api/sync` additionally owes an origin or token check.
+  `app/pages-are-gated.test.ts` requires **both conjuncts** of every Route Handler it discovers.
+
+  🔴 **This is the ONE list of where the stale claim lived** — everything else cites it rather than
+  keeping a copy, and nothing here is counted, because two attempts at a count were both wrong
+  ("three", then "seven"):
+
+  - `apps/web/app/p/[profileId]/export/route.ts` — the handler's own docblock, quoting a matcher that
+    was no longer in the file
+  - `.github/SECURITY.md` — the `/api/sync` paragraph, contradicting the top of the same file
+  - `apps/web/e2e/export-csv.spec.ts` — the justification comment on the gating test for that handler
+  - `docs/runbooks.md` — the preview section, as an operational fact
+  - `docs/status.md` — the MVP record
+  - `docs/plans/ops-1-preview-isolation.md` — a merged plan: annotated, original text kept
+  - `docs/plans/ai-1-nl-logging.md` — ⚠️ **not history**: the design doc whose S8 security argument
+    rested on the premise, for an endpoint nobody has built yet
+  - `.claude/agents/security-reviewer.md` (twice) and `.claude/skills/review-pr/SKILL.md` — handed to
+    a reviewer **as fact**, citing a `tech-debt.md` entry that no longer exists
+  - `.claude/skills/add-server-action/SKILL.md` — the same class aimed at the **author**: "no auth
+    until Clerk (v1.5)", "actions are deliberately unlimited", "nothing to test yet"
+  - `.claude/skills/review-pr/reporting-contract.md` — a second copy of the auth state, reaching a
+    reviewer **before** the corrected one
+
+  📌 **The corrected claim now appears in roughly a dozen files.** Deliberate for now — each serves a
+  different reader — but at `1d`, when the gate conjunct goes, every copy is a separate place to get
+  it wrong. Reconcile them against this bullet.
 
 - **⚠️ The bodyweight export carries each row's UNIT; `kg` is converted, everything but `lb`/`kg`
   throws (CSV-1).** The legacy column is `weight_lb`, so a kg weigh-in written bare reads as pounds

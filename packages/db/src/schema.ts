@@ -115,7 +115,8 @@ export const activityTypeCategories = pgTable('activity_type_categories', {
 /**
  * Households — the authz root (spec.md §4): a Clerk operator owns one household and
  * every profile/log row is household-scoped for DAL ownership checks. Written now so
- * `profiles.household_id` has a target; membership UI lands with Clerk at v1.5.
+ * `profiles.household_id` has a target; Clerk landed at Beta 0 (`AUTH-1`) and the
+ * membership UI is `PROF-1`.
  */
 export const households = pgTable('households', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),

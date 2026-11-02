@@ -21,8 +21,9 @@ import { env } from './env';
  * constrained **only the household**. 1c-3b is what supplies a principal the caller cannot choose,
  * which is the whole reason the limiter call sits AFTER the session check and BEFORE the zod parse.
  *
- * ⏳ **The zip export route is still unlimited** — the one surface `docs/tech-debt.md` still counts
- * as owed, and the most expensive single request in the app. Deferred to `1c-4`.
+ * ⏳ **The zip export route is still unlimited** — the one EXISTING surface `docs/tech-debt.md`
+ * counts as owed, and the most expensive single request in the app. Deferred to `1c-4`. (`/api/sync`
+ * is the other thing that entry owes, and it is not a surface yet.)
  *
  * IDENTIFIER: the client IP as computed by **Vercel Proxy** (`x-real-ip`, read via `@vercel/functions`
  * at the call site). Not the `mp_gate` cookie: that is a deterministic hash of the shared code, so every

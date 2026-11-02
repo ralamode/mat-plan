@@ -36,10 +36,11 @@ import { NextResponse } from 'next/server';
  *
  * ⚠️ **Precisely what this protects against, because the earlier wording over-claimed.** Today the
  * gate's `cookies()` read inside `hasGateAccess()` runs first and unconditionally, so the request IS
- * dynamic anyway. The directive matters for the *session* half, which can return before touching any
- * dynamic API on two live paths — the 1c-3a bypass (an env read) and `!clerkIsConfigured()` — and it
- * becomes the ONLY signal at **1d**, when the gate conjunct and its cookie read are deleted. Do not
- * remove it then.
+ * dynamic anyway — the directive changes **nothing about runtime dynamism today, for either half**.
+ * It is here for the *session* half, which can return before touching any dynamic API on two live
+ * paths (the 1c-3a bypass, an env read, and `!clerkIsConfigured()`), and it becomes the **only**
+ * runtime signal at **1d**, when the gate conjunct and its cookie read are deleted. Do not remove it
+ * then — which is a date, not a condition somebody can re-derive from a green suite.
  *
  * 📌 It is also the only thing satisfying `tenancy-is-not-cached.test.ts` for this file since the
  * cookie read moved into the DAL — not a second reason any more, the live one.

@@ -35,9 +35,9 @@ export const metadata: Metadata = {
  *
  * ⚠️ **Keep it household-data-free.** Like `/` and `/privacy`, this page reads no cookie, calls no
  * DAL, queries nothing and owns no Server Action. It is ungated, so that is the property that makes
- * widening `isPublicPath` to a subtree safe. It authorizes nothing either: in 1a the access gate is
- * was still the only boundary in 1a, which is why the way in is also on the page. ⚠️ Since `1c-3b` it is
- * the gate AND a session; the page keeps the gate link because the code is one of the two things a
+ * widening `isPublicPath` to a subtree safe. It authorizes nothing either: in 1a the access gate was
+ * still the only boundary, which is why the way in is also on the page. ⚠️ Since `1c-3b` the boundary
+ * is the gate AND a session; the page keeps the gate link because the code is one of the two things a
  * caller needs until `1d`.
  *
  * **Two states, and only the dark one reaches production at 1a.** `clerkIsConfigured()` is the same

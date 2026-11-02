@@ -11,15 +11,21 @@ and its invariants are binding, and the `guides:check` gate will make you update
 
 **What is and isn't wired today**, so the code and the PR don't claim more than exists:
 
-| AGENTS.md asks for                          | Reality today                                                                                    |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `getCurrentUser()` + `household_id` scoping | **No auth until Clerk (v1.5).** Ownership is existence-only: the profile resolves by `public_id` |
-| Rate limit on mutations                     | **Gate only** (`lib/rate-limit.ts`). Actions are deliberately unlimited (tech-debt.md)           |
-| Idempotency-Key header                      | A `clientId` form field (UUIDv7) + UNIQUE + ON CONFLICT                                          |
-| unauth → reject test                        | Nothing to test yet. Write the other boundary tests                                              |
-| Structured logs + correlation id            | Sentry only                                                                                      |
+| AGENTS.md asks for                          | Reality today                                                                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| authN inside the action                     | ✅ **The gate AND a Clerk session**, via `await enterMutation(refusal)` — never hand-rolled. See [write-path](../../../docs/features/write-path.md), which owns this.      |
+| `getCurrentUser()` + `household_id` scoping | ⏳ Ownership is **existence-only until `AUTH-1` 1c-4**: the profile resolves by `public_id` within the one live household. A session proves _who_, not yet _whose data_.   |
+| Rate limit on mutations                     | ✅ **Limited**, inside `enterMutation` — `checkMutationLimit`, keyed on the Clerk principal. Do not add a second call. ⏳ The zip export is still owed (`1c-4`).           |
+| Idempotency-Key header                      | A `clientId` form field (UUIDv7) + UNIQUE + ON CONFLICT                                                                                                                    |
+| unauth → reject test                        | ✅ Required and real: un-gated, no-session and wrong-household must be **byte-identical** refusals (`actions.test.ts`), and the source guards in `pages-are-gated.test.ts` |
+| Structured logs + correlation id            | Sentry only                                                                                                                                                                |
 
-When Clerk lands, update this table in the same PR.
+🔴 **A new action that does not `await enterMutation(…)` and return its refusal fails CI** —
+`app/pages-are-gated.test.ts` reports it by name, pins the import source, and asserts the three
+conjuncts in order inside the helper. ⚠️ This table said "no auth until Clerk (v1.5)", "actions are
+deliberately unlimited" and "nothing to test yet" for two chunks after each stopped being true, which
+would have walked an author straight into that failure. It is a **pointer** now, not a second copy of
+`write-path.md`; when `1c-4` or `1d` moves something, that guide is what changes.
 
 ## 1. Contract first: the shared schema
 

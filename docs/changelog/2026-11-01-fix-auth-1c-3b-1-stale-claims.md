@@ -35,19 +35,21 @@
   replacement to v1.5 rather than `1d`; `tech-debt.md` contradicting itself eleven lines apart; and two
   vacuity gaps in `mutation-entry.test.ts` — a "no breadcrumb" assertion that any early refusal
   satisfied, and an unpinned severity. _(architecture lens on #323, 2026-11-01.)_
-  🔴 **Reviewed, and the sweep was itself short by four — including the two files that brief the next
-  reviewer.** The stale `/api`-matcher claim was in **seven** committed places, not the three this
-  fragment first said: `.claude/agents/security-reviewer.md` (twice) and `.claude/skills/review-pr/SKILL.md`
-  hand it to a security reviewer **as fact**, with a citation to a `tech-debt.md` entry that no longer
-  exists — one of the review agents on this PR reported being briefed with it. Also `e2e/export-csv.spec.ts`
-  (the gating test for the very route this PR edits), `docs/runbooks.md`'s preview section, `docs/status.md`,
-  and the OPS-1 plan. All corrected except the merged plan and a dated changelog fragment, which are
-  history and get a dated note instead. The same skill also still told a reviewer that ownership is
-  _"existence-only today (no Clerk until v1.5)"_ — stale since `1c-3b`, and it would mis-grade the next PR.
-  ⚠️ **The count in this fragment and in `write-path.md` is now a LIST**, for the reason `proxy.ts`
-  already gives: a list can be checked against the tree, a count only by redoing the arithmetic. The
-  review also caught that `proxy.ts`'s own _"wrong three times running"_ was a count that cannot be
-  checked, two lines above the rule banning them.
+  🔴 **Three review rounds on this PR, and the sweep was short every time — worst in the files that
+  brief the next session.** `.claude/agents/security-reviewer.md` and `.claude/skills/review-pr/SKILL.md`
+  handed the stale claim to a reviewer **as fact**, citing a `tech-debt.md` entry that no longer
+  exists; one of the review agents on this PR reported being briefed with it.
+  `.claude/skills/review-pr/reporting-contract.md`, which every reviewer agent reads **first**, carried
+  a second copy of the auth state that reached them before the corrected one. And
+  `.claude/skills/add-server-action/SKILL.md` — aimed at the **author**, not the reviewer — still said
+  _"no auth until Clerk (v1.5)"_, _"actions are deliberately unlimited"_ and _"nothing to test yet"_,
+  which would walk someone straight into the CI failure the new guard produces.
+  `docs/plans/ai-1-nl-logging.md`'s S8 is the one that was not history: an unbuilt endpoint whose
+  security argument rested on the false premise.
+  ⚠️ **No counts anywhere now.** [write-path.md](../features/write-path.md) carries **the one list**
+  and everything else cites it. Two attempts at a count were both wrong, and `proxy.ts`'s own
+  _"wrong three times running"_ was itself a count nobody can check against the tree — two lines above
+  the rule banning them. A list can be checked; a count can only be re-derived.
   Also from the two lenses: `session.ts` quoted, as current, a sentence this very commit deleted from
   `rate-limit.ts`; the export handler's comment claimed it had read `process.env` when it imported the
   validated `@/lib/env` facade, a rule that would have sent a future author "fixing" six compliant

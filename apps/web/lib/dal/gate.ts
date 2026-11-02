@@ -11,8 +11,8 @@ import { env } from '@/lib/env';
  *
  * The proxy redirects un-gated requests, but it is a matcher-driven layer and NOT the auth boundary
  * (.github/SECURITY.md; CVE-2025-29927). Until SEC-1 its matcher excluded prefetch-flagged requests,
- * so any request carrying a prefetch header skipped the gate entirely. Every Server Action and every
- * gated ENTRY POINT reaches one of these first — the seven mutating actions through `enterMutation`
+ * so any request carrying a prefetch header skipped the gate entirely. Every gated ENTRY POINT
+ * reaches one of these first — the seven mutating actions through `enterMutation`
  * (`app/p/[profileId]/mutation-entry.ts`), the four pages through `requireGatedPage()`, the export
  * handler directly. ⚠️ Not *every* Server Action: `app/gate/actions.ts` issues the gate and cannot
  * require what it is about to grant, which is why it is allowlisted BY NAME in
