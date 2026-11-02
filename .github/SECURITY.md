@@ -156,9 +156,12 @@ what _reaches_ a sink, never whether the string appears.
 | **Cookies**                               | `SameSite=Lax` + `httpOnly` + `secure` in prod (`app/gate/actions.ts`). Lax is what stops a cross-site POST carrying the session.  |
 
 🔴 **`/api/sync` is planned as a `POST` Route Handler and will land outside all of this.** It needs
-its own origin or token check, and `/api/*` is outside the gate matcher too
-([tech-debt.md](../docs/tech-debt.md)). A state-changing Route Handler with no explicit check is a
-**P0**. The same applies to any mutation moved to `GET`, which `SameSite=Lax` does not protect.
+its own origin or token check. ⚠️ **Corrected 2026-11-01:** this line read _"and `/api/*` is outside
+the gate matcher too"_, contradicting the statement at the top of this file. `api` was dropped from
+the matcher exclusion at **`AUTH-1` 1a**, so the gate bounce and the security headers DO reach
+`/api/*`; what a handler there still owes is its own in-process gate + session check and an
+origin/token check, because the matcher is not the boundary. A state-changing Route Handler with no
+explicit check is a **P0**. The same applies to any mutation moved to `GET`, which `SameSite=Lax` does not protect.
 
 ## Tokens / secrets
 

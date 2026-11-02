@@ -1,9 +1,7 @@
-import { GATE_COOKIE_NAME, isValidGateCookie } from '@/lib/access-gate';
-import { sessionUserOrNull } from '@/lib/dal/session';
 import { buildExportZip } from '@/lib/dal/export';
+import { hasGateAccess } from '@/lib/dal/gate';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { env } from '@/lib/env';
-import { cookies } from 'next/headers';
+import { sessionUserOrNull } from '@/lib/dal/session';
 import { NextResponse } from 'next/server';
 
 /**
@@ -51,12 +49,16 @@ export async function GET(
   // 1c-4 `getHouseholdScope()` ignores the principal, so a session alone would mean "anyone this
   // Clerk instance admits", and dropping the in-process gate check would leave `mp_gate` enforced by
   // the proxy alone. The gate half is deleted at 1d, after 1c-4.
-  const authed = await isValidGateCookie(
-    (await cookies()).get(GATE_COOKIE_NAME)?.value,
-    env.ACCESS_GATE_PASSWORD,
-  );
+  //
+  // ⚠️ **`hasGateAccess()`, not a hand-rolled cookie read.** This handler carried its own copy of
+  // that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — since
+  // V1-13b, and `gate.ts`'s own docblock acknowledged it as "same check as the export Route
+  // Handler". 1c-3b added a second conjunct beside that copy without removing it, which is the
+  // thing that chunk's own argument is against: a security predicate written twice is two places for
+  // the next author to land one conjunct short. It is also the only reason this file read
+  // `process.env` at all (AGENTS.md → the DAL owns every env read).
   // 404, not 401: an un-authed caller learns nothing about whether this profile exists.
-  if (!authed) return new NextResponse('Not found', { status: 404 });
+  if (!(await hasGateAccess())) return new NextResponse('Not found', { status: 404 });
 
   // Same 404 for the same reason — unauth, no session, unknown id and another household's profile
   // are byte-identical to a caller (ADR 0006).

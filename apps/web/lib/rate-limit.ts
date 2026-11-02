@@ -6,16 +6,23 @@ import { Redis } from '@upstash/redis';
 import { env } from './env';
 
 /**
- * Rate limiting (V1-14a) — one seam, deliberately applied to **one** endpoint.
+ * Rate limiting (V1-14a) — one seam, **two** endpoints since `AUTH-1` 1c-3b.
  *
- * WHAT IS LIMITED, AND WHY ONLY THAT: the access gate (`app/gate/actions.ts`) is an unauthenticated
- * password oracle for `ACCESS_GATE_PASSWORD`, the app's only shared secret — SECURITY.md lists "auth"
- * first in its rate-limit line. The six mutating Server Actions are deliberately NOT limited yet: the
- * only identifier they carry is `profileId`, which is `formData.get('profileId')` — caller-supplied
- * and unauthenticated, so an attacker rotates a fresh UUID per request for a fresh bucket, while real
- * ids are non-enumerable UUIDv7 (SECURITY.md's anti-IDOR design) and therefore unreachable by guess.
- * Such a limit would constrain only the household. Mutation limits land with Clerk at v1.5, when
- * `getCurrentUser()` provides a real identifier — see docs/tech-debt.md.
+ * 1. **The access gate** (`app/gate/actions.ts`) — an unauthenticated password oracle for
+ *    `ACCESS_GATE_PASSWORD`, the app's only shared secret; SECURITY.md lists "auth" first in its
+ *    rate-limit line. Keyed on the client IP (below).
+ * 2. **Every mutating Server Action**, through `enterMutation` (`app/p/[profileId]/mutation-entry.ts`),
+ *    keyed on the **Clerk principal**.
+ *
+ * ⚠️ **WHY (2) WAITED, which is the part worth keeping.** Through 1c-2 the only identifier an action
+ * carried was `formData.get('profileId')` — caller-supplied and unauthenticated, so an attacker
+ * rotates a fresh UUID per request for a fresh bucket, while real ids are non-enumerable UUIDv7
+ * (SECURITY.md's anti-IDOR design) and therefore unreachable by guess. Such a limit would have
+ * constrained **only the household**. 1c-3b is what supplies a principal the caller cannot choose,
+ * which is the whole reason the limiter call sits AFTER the session check and BEFORE the zod parse.
+ *
+ * ⏳ **The zip export route is still unlimited** — the eighth surface, and the most expensive single
+ * request in the app. Deferred to `1c-4`; see docs/tech-debt.md.
  *
  * IDENTIFIER: the client IP as computed by **Vercel Proxy** (`x-real-ip`, read via `@vercel/functions`
  * at the call site). Not the `mp_gate` cookie: that is a deterministic hash of the shared code, so every
@@ -108,8 +115,8 @@ function buildLimiter(
 const limiter = buildLimiter(GATE_RATE_LIMIT, 'mat-plan');
 
 /**
- * The mutation limiter. **Ships DARK in 1c-1** — `1c-3` is what calls `checkMutationLimit` from the
- * seven actions, once they have a `userId` to key on.
+ * The mutation limiter. Landed dark in `1c-1`; **live since `1c-3b`**, called once from
+ * `enterMutation` on behalf of all seven actions.
  */
 const mutationLimiter = buildLimiter(MUTATION_RATE_LIMIT, 'mat-plan:mutate');
 
@@ -128,13 +135,15 @@ export const isRateLimitConfigured = limiter !== null;
  */
 /**
  * The per-user mutation check (AUTH-1 1c-1). Owns its `mutate:` key shape so no call site builds the
- * identifier by hand — the seven actions pass a `userId` and nothing else, which is also what keeps
- * the source guard in `pages-are-gated.test.ts` matching one spelling.
+ * identifier by hand.
  *
  * Same fail-OPEN contract as {@link checkRateLimit}, for the same reason: a Redis outage that stops a
  * kid logging a set is worse than an outage that briefly widens a window on a three-person app.
  *
- * ⚠️ **Ships DARK.** `1c-3` adds the call sites, once the actions have a principal.
+ * 🔴 **ONE caller since `1c-3b`: `enterMutation`.** It is not called from an action directly, and the
+ * guard in `pages-are-gated.test.ts` asserts it appears there in order, after the session check —
+ * because the key is the principal, and fail-open plus an unconfigured limiter under vitest means no
+ * behavioural test can see this call misplaced or missing.
  */
 export async function checkMutationLimit(
   userId: string,

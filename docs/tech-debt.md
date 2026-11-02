@@ -364,12 +364,12 @@ success.` Harmless there — nothing referenced the files yet.
   gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
   limited — ⚠️ in production only since 2026-10-09: until OPS-1's runbook, production had no Upstash
   database, so the limiter failed open there. The app is a single household on an unlisted URL. The
-  residual exposure is a gate-holder writing unbounded rows — annoying, not dangerous, and visible in
-  the log.
-- **Proposed fix:** **Clerk / v1.5.** `getCurrentUser()` + `household_id` is the first real identifier,
-  and it is exactly what AGENTS.md's rate-limit line ("auth + mutations + `/api/sync`") presumes. Add it
-  in that PR, keyed by user id, reusing the existing `checkRateLimit` seam (already fail-open + tested).
-  `/api/sync` should land limited from day one — the batch flush is the genuine amplification endpoint.
+  residual exposure is the **unthrottled zip export** named above — not a gate-holder writing
+  unbounded rows, which `1c-3b` capped at 120 / 5 min. Annoying, not dangerous, and visible in the log.
+- **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
+  the existing `checkRateLimit` seam, exactly as AGENTS.md's rate-limit line ("auth + mutations +
+  `/api/sync`") presumes. ⏳ **What is left:** the zip export at `1c-4`, and `/api/sync`, which should
+  land limited from day one — the batch flush is the genuine amplification endpoint.
 - **Severity:** low (accepted until Clerk; the seam and its contract already exist).
 
 ### Sentry ships without source maps, so stack frames are minified (V1-14a)

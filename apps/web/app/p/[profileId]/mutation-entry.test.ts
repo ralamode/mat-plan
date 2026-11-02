@@ -45,12 +45,18 @@ describe('enterMutation — the branches the action suites cannot reach', () => 
     expect(entry).toEqual({ ok: true, userId: USER_ID });
     expect(addBreadcrumb).toHaveBeenCalledTimes(1);
     expect(addBreadcrumb).toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'rate-limit', message: 'mutation limiter unavailable' }),
+      expect.objectContaining({
+        category: 'rate-limit',
+        level: 'warning',
+        message: 'mutation limiter unavailable',
+      }),
     );
   });
 
   it('a HEALTHY limiter leaves no breadcrumb — otherwise the signal is every request', async () => {
-    await enterMutation(NO_PROFILE_LOG);
+    // ⚠️ The return value as well: "no breadcrumb" alone is satisfied by ANY early refusal, so a
+    // regression that never reached the limiter would pass this test silently.
+    expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: true, userId: USER_ID });
     expect(addBreadcrumb).not.toHaveBeenCalled();
   });
 

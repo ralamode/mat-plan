@@ -22,7 +22,7 @@ import { NoticeArticle } from './notice-article';
  *
  * ⚠️ **It comes off at AUTH-1 chunk 1d**, the chunk that retires the gate and makes the session the
  * boundary — named precisely, because "at AUTH-1" was ambiguous the moment AUTH-1 became six chunks.
- * 1a (Clerk wired and dark) is NOT it: the gate is still the only boundary and `lib/rate-limit.ts`
+ * 1a (Clerk wired and dark) was NOT it: the gate was still the only boundary then and `lib/rate-limit.ts`
  * still fails open with Upstash unconfigured, so every reason above still holds.
  */
 export const metadata: Metadata = {

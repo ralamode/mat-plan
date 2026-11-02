@@ -80,7 +80,10 @@ export async function submitGate(_prev: GateState, formData: FormData): Promise<
   // No usable `from`, or one that is the landing → the app home (OSS-2). ⚠️ The reason used to be
   // "in ONE hop: the landing would only bounce a cookie-holder to the picker" — AUTH-1 1c-3b deleted
   // that forward, so the landing now renders for everyone and this substitution is what sends a
-  // caller who just entered the code onward instead of back to a page with nothing for them.
+  // caller who just entered the code to the picker rather than back to a page with nothing for them.
+  // 🔴 **It is not the last hop until `1d`:** without a session `/p` forwards once more to
+  // `/sign-in`, which is arm 1 of the loop `proxy.ts` describes — this line is what reproduces it,
+  // and it is correct behaviour, not a bug, because the code is only half of what a caller needs.
   // Compared on the PATHNAME so `/?x=1` counts too. Resolved here rather than inside
   // `safeInternalPath`, the hostile-input sink SEC-4 hardened.
   const to = safeInternalPath(parsed.data.from);

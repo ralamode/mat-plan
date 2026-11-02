@@ -36,7 +36,9 @@ export const metadata: Metadata = {
  * ⚠️ **Keep it household-data-free.** Like `/` and `/privacy`, this page reads no cookie, calls no
  * DAL, queries nothing and owns no Server Action. It is ungated, so that is the property that makes
  * widening `isPublicPath` to a subtree safe. It authorizes nothing either: in 1a the access gate is
- * still the only boundary, which is why the way in is also on the page.
+ * still the only boundary then, which is why the way in is also on the page. ⚠️ Since `1c-3b` it is
+ * the gate AND a session; the page keeps the gate link because the code is one of the two things a
+ * caller needs until `1d`.
  *
  * **Two states, and only the dark one reaches production at 1a.** `clerkIsConfigured()` is the same
  * predicate `app/layout.tsx` uses to decide whether to render `<ClerkProvider>` — they MUST agree,
@@ -108,9 +110,11 @@ export default function SignInPage() {
           forward. For a reader who already holds the cookie, which is everyone at deploy, this is now
           a round trip: /gate → code → /p → requireSession() → back here. It is still the right
           control for a reader WITHOUT the code, and the page cannot yet tell the two apart.
-          Suppressing it for a valid-cookie caller is a Server-Component cookie read away and keeps
-          the page household-data-free; deliberately not done in this chunk, which is already the
-          one-way door. `/` and `PRIVACY_PATH` are absent — `SiteFooter` renders both on every route,
+          ⚠️ Suppressing it for a valid-cookie caller is NOT free: this page's own docblock makes
+          "reads no cookie" the property that justifies widening `isPublicPath` to a whole subtree.
+          Reading the caller's own gate cookie keeps the page household-data-free, but it retires
+          that argument, so the subtree widening would need a new one. Deliberately not done in the
+          one-way-door chunk; whoever does it reconciles both places. `/` and `PRIVACY_PATH` are absent — `SiteFooter` renders both on every route,
           and two same-href links in one document read as a duplicate destination in a screen-reader
           link list. */}
       <Button asChild size="lg" variant="outline" className={CTA_CLASS}>

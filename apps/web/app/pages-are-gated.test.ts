@@ -77,9 +77,11 @@ describe('every Route Handler checks the gate itself', () => {
 
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
     const src = code(file);
-    // The existing alternation is two spellings of ONE check (a handler may call either helper), not
-    // the forbidden "either guard will do". 1c-3b adds a second, independent conjunct.
-    const gated = /\b(?:isValidGateCookie|hasGateAccess)\(/.test(src);
+    // ⚠️ **No longer an alternation.** It accepted `isValidGateCookie` as well, because the export
+    // handler hand-rolled `hasGateAccess`'s exact body. That copy is gone, so the guard now names the
+    // one helper — and a handler that reintroduces the raw cookie read fails here rather than
+    // quietly passing. Still two INDEPENDENT conjuncts (gate AND session), never "either will do".
+    const gated = /\bhasGateAccess\s*\(/.test(src);
     const sessioned = /\bsessionUserOrNull\s*\(/.test(src);
     expect(
       gated && sessioned,

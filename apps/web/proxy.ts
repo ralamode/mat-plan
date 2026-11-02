@@ -126,7 +126,9 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
  * **Order: the gate runs FIRST, Clerk second, on the pass-through path only.** A bounced request
  * renders nothing, so nothing can call `auth()` and Clerk has no question to answer; running vendor
  * middleware on every request from an un-gated stranger would widen the unauthenticated surface for
- * no benefit while the gate is still the only boundary. Every request that DOES render — including
+ * no benefit while the gate is the only thing THE PROXY ITSELF enforces. ⚠️ That clause is about
+ * this layer, not about the app: since 1c-3b the boundary is the gate AND a Clerk session, both
+ * re-checked in-process. Every request that DOES render — including
  * the un-gated `/`, `/privacy` and the whole `/sign-in` SUBTREE (`PUBLIC_PATH_TREES`, not
  * `PUBLIC_PATHS` — Clerk's prebuilt page is a catch-all and the handshake arrives on its children) —
  * passes through here, which is what `auth()` needs. ⚠️ This
@@ -184,18 +186,34 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
   //   /sign-in → tap the access-code button → /gate → (forward) → /p → requireSession() → /sign-in
   //   /sign-in → tap the footer's "mat-plan" → /    → (forward) → /p → requireSession() → /sign-in
   //
+  // 🔴 **ARM 2 IS GONE. ARM 1 SURVIVES, one form submit later** — do not read this deletion as having
+  // closed both. A cookie-holder now SEES the gate form instead of being forwarded past it, enters
+  // the code, and `submitGate`'s own `internalPathname(to) === '/' ? APP_HOME_PATH : to` sends them
+  // to `/p`, where `requireSession()` bounces them back to `/sign-in`. Closing that is the sign-in
+  // escape-hatch question recorded at `app/sign-in/[[...rest]]/page.tsx` — a Server-Component read of
+  // the caller's own gate cookie, deliberately not done in the one-way-door chunk.
+  //
   // The second arm also meant such a visitor could never see the landing page at all. Nothing
   // security-relevant went with it: an unauthenticated caller never reached this point (the un-gated
   // bounce above returns first, and the `authed &&` conjunct was false for them), so behaviour for a
   // cookie-less caller is bit-identical. A signed-in visitor now sees the landing at `/` instead of
   // being forwarded, which after 1c-3b is the more honest answer anyway.
   //
-  // ⚠️ FIVE committed rationales elsewhere referred to this forward, and all five are corrected with
-  // it: `app/page.tsx`'s branchless-landing note, `app/gate/actions.ts`'s `from === '/'` ONE-hop
-  // substitution, `APP_HOME_PATH`'s HH-1 note, `GATE_COPY`'s one-exit-serves-both argument and the
-  // sign-in page's copy of that same argument. `e2e/landing.spec.ts` lost its "/ goes straight to the
-  // picker" case for the same reason. (The count said four and zero were done; a reviewer found both
-  // halves — the fifth lived at the control itself.)
+  // ⚠️ **NO COUNT.** Committed rationales elsewhere referred to this forward and are corrected with
+  // it — listed, not numbered, because the number has been wrong three times running: four claimed
+  // when zero were done, then five when it was seven, and that correction also swapped a true file
+  // name (`SIGN_IN_COPY`) for a false one (`GATE_COPY`). A list can be checked against the tree; a
+  // count invites being kept up to date by arithmetic.
+  //
+  //   `app/page.tsx`                    the branchless-landing note
+  //   `app/gate/actions.ts`             the `from === '/'` substitution's ONE-hop reason
+  //   `APP_HOME_PATH`                   an HH-1 instruction to delete a rule already gone
+  //   `SIGN_IN_COPY`                    the one-exit-serves-both argument
+  //   `app/sign-in/[[...rest]]/page.tsx` the control's own copy of that argument
+  //   `scripts/capture.ts`              why a logged-in `/` or `/gate` could not be screenshotted
+  //   `docs/architecture.md` §2b        the routing diagram and the public-route asymmetry
+  //
+  // `e2e/landing.spec.ts` lost its "/ goes straight to the picker" case for the same reason.
 
   return withSecurityHeaders(await withClerk(request, event, forward(request, nonce, csp)), csp);
 }

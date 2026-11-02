@@ -125,9 +125,10 @@ sequenceDiagram
 **every caller sees it**, gated or not.
 
 🔴 **Every gated surface requires the access code AND a Clerk session, both re-checked in-process
-(1c-3b).** Not one or the other, and never the proxy alone: `app/pages-are-gated.test.ts` reports by
-name any page, action or Route Handler that drops either conjunct, and a third guard pins the
-mutation limiter.
+(1c-3b).** Not one or the other, and never the proxy alone. `app/pages-are-gated.test.ts` reports the
+offender by name, asking the question differently per kind: a **page** or **Route Handler** names both
+checks itself, while an **action** must call `enterMutation` and **return its refusal** — the two
+conjuncts, their order, and the mutation limiter are asserted once inside that helper.
 
 **Why both.** `getHouseholdScope()` does not consult the principal until **`1c-4`**, so until then a
 session alone means _"anyone this Clerk instance admits"_ — deleting the gate first would **widen**

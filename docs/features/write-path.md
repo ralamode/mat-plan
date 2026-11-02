@@ -117,6 +117,22 @@ flowchart LR
    a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
    **Therefore `1c-4` must land before `1d`** — a security obligation, recorded in `beta-1.md`.
 
+   🔴 **The export handler calls `hasGateAccess()` like everything else (2026-11-01).** It hand-rolled
+   that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — from
+   V1-13b until the follow-up to 1c-3b, and `gate.ts`'s own docblock acknowledged the duplicate.
+   1c-3b added the session conjunct **beside** that copy without removing it, which is the thing this
+   chunk's argument is against. It was also the only reason the file read `process.env`, which
+   AGENTS.md reserves to the DAL. The Route-Handler guard in `pages-are-gated.test.ts` narrowed with
+   it: the `isValidGateCookie|hasGateAccess` alternation existed only for that copy, so it now names
+   the one helper and a reintroduced raw cookie read fails CI.
+
+   📌 **`lib/rate-limit.ts` and `lib/dal/session.ts` landed DARK in `1c-1` and are LIVE from `1c-3b`.**
+   Both carried "ships dark" / "nothing imports this module yet" contracts for two chunks after that
+   stopped being true. Their docblocks are the ones a future author reads before touching either, so
+   when a chunk switches a module on, its contract docblock moves in the same PR — a module that
+   documents itself as unused while it holds the mutation boundary makes an unprotected surface and a
+   protected one look identical in the docs.
+
    **The source guard is SPLIT, and both halves are the claim.** `pages-are-gated.test.ts` requires,
    **per action**, the awaited `enterMutation()` call, that its refusal is returned, and that
    `actions.ts` imports the helper from `./mutation-entry` (so a local function of the same name
@@ -461,12 +477,15 @@ flowchart LR
   was correct while movements were lb/kg-only and became an FK violation — surfacing as a 500 — the
   moment a movement could be logged in `sec`. Derive it (`UNIT_DIMENSION_BY_CODE[unit]`).
 
-- **⚠️ The access-gate matcher EXCLUDES `/api`.** `config.matcher` in `proxy.ts` skips `/api` and
-  `/api/*` (segment-anchored since OSS-2, so `/apiary` is gated), so **any Route Handler under `/api`
-  is completely ungated.** V1-13b's export therefore lives at `/p/[profileId]/export`, inside the
-  matcher — and still re-checks the gate itself, because middleware is not an authorization boundary
-  (a matcher edit or a rewrite silently exposes it). **This is a live hazard for the `/api/sync`
-  AGENTS.md plans.**
+- **✅ The access-gate matcher INCLUDES `/api` — since `AUTH-1` 1a, and this bullet said the opposite
+  until 2026-11-01.** It did exclude `/api` and `/api/*`, which is why V1-13b's export lives at
+  `/p/[profileId]/export`. 1a dropped the exclusion (`auth()` throws when `clerkMiddleware()` did not
+  run, so an excluded handler could not authenticate at all), and the same stale claim was carried by
+  `export/route.ts`'s docblock and by `.github/SECURITY.md`'s `/api/sync` paragraph — three committed
+  files, two of them citing each other. ⚠️ **What has NOT changed is the rule:** the matcher is not an
+  authorization boundary, so a handler under `/api` still owes its own in-process gate + session
+  check, and `/api/sync` additionally owes an origin or token check. `app/pages-are-gated.test.ts`
+  requires **both conjuncts** of every Route Handler it discovers.
 
 - **⚠️ The bodyweight export carries each row's UNIT; `kg` is converted, everything but `lb`/`kg`
   throws (CSV-1).** The legacy column is `weight_lb`, so a kg weigh-in written bare reads as pounds

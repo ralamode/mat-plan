@@ -14,9 +14,12 @@ import { SIGN_IN_PATH } from '@/lib/constants';
 /**
  * THE principal for this request, and the two refusals built on it (AUTH-1 1c-1).
  *
- * **Ships DARK.** Nothing imports this module yet: `1c-3` switches the eleven call sites and `1c-4`
- * switches the resolver. It lands first and alone so the fail-closed contract below can be reviewed
- * and tested on its own, rather than inside the diff that moves the boundary.
+ * Landed dark and alone in `1c-1`, so the fail-closed contract below could be reviewed and tested on
+ * its own rather than inside the diff that moved the boundary. **Live since `1c-3b`**, which switched
+ * the call sites: `requireSession()` in the four gated pages, `sessionUserOrNull()` in
+ * `app/p/[profileId]/mutation-entry.ts` (on behalf of all seven mutating actions) and in
+ * `app/p/[profileId]/export/route.ts`. ⏳ `1c-4` is still owed — it switches the **resolver**, so
+ * until then a session says *that* you are someone, not *whose* data you get.
  *
  * **ONE module, not two.** The plan's first draft split `user.ts` (the principal) from `session.ts`
  * (the refusals) and the panel rejected it: the second file's functions would be thin wrappers over
