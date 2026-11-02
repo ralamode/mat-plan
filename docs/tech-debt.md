@@ -342,7 +342,7 @@ success.` Harmless there — nothing referenced the files yet.
   mutual-exclusion CHECK** — it would be a breaking migration and would foreclose the above.
 - **Severity:** informational.
 
-### Mutating Server Actions are not rate-limited (V1-14a)
+### The zip export is not rate-limited (V1-14a; the mutating actions were, at `AUTH-1` 1c-3b)
 
 - **What & why (V1-14a):** V1-14a rate-limits only the **access gate**. The **seven** mutating Server
   Actions in `app/p/[profileId]/actions.ts` — **and the zip export route, so a full training-history
@@ -367,7 +367,8 @@ success.` Harmless there — nothing referenced the files yet.
   residual exposure is the **unthrottled zip export** named above — not a gate-holder writing
   unbounded rows, which `1c-3b` capped at 120 / 5 min. Annoying, not dangerous, and visible in the log.
 - **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
-  the existing `checkRateLimit` seam, exactly as AGENTS.md's rate-limit line ("auth + mutations +
+  **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
+  `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +
   `/api/sync`") presumes. ⏳ **What is left:** the zip export at `1c-4`, and `/api/sync`, which should
   land limited from day one — the batch flush is the genuine amplification endpoint.
 - **Severity:** low (accepted until Clerk; the seam and its contract already exist).

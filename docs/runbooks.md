@@ -657,9 +657,12 @@ deployment** (rotation is not retroactive).
 
 - A preview is a **publicly-listed, internet-reachable** deployment. Unless step 0's Deployment
   Protection is on, its only control is a shared code.
-- `/api` is **not gated at all** — `apps/web/proxy.ts`'s matcher excludes it
-  ([tech-debt.md](./tech-debt.md)). Once a Route Handler exists, assume the preview database is
-  writable by anyone who finds a preview URL.
+- ⚠️ **`/api` IS inside the gate matcher since `AUTH-1` 1a** — this bullet said "not gated at all"
+  and cited a `tech-debt.md` entry that no longer exists. The bounce and the security headers reach
+  `/api/*`. **The operational conclusion is unchanged**, for a different reason: the matcher is not
+  the boundary, the preview gate code is shared, and a handler's own check is what holds — so once a
+  **mutating** Route Handler exists, still assume the preview database is writable by anyone who
+  finds a preview URL and the code.
 - The preview Neon project has **no IP allowlist** on the free tier: the connection string is full
   DDL access, and it now lives in two places (the Vercel Preview scope and an Actions secret).
 - **Therefore the preview estate must hold nothing you would mind being public.** That is the whole

@@ -126,9 +126,12 @@ with no rule citation is taste. Mark it P2, or drop it.
    get a UX panel log and three-width screenshots? Is the title a lowercase Conventional Commit? Does
    the description claim a gate that isn't in `.github/workflows/`?
 9. **Security** (the repo is **public**). No secret or real personal data in code, fixtures or
-   screenshots. Ownership is **existence-only** today (no Clerk until v1.5), so anything that widens
-   what an unauthenticated caller can reach is at least P1. `/api/*` sits outside the gate matcher
-   (tech-debt.md). New workflow steps must not expose secrets to fork PRs.
+   screenshots. ⚠️ Ownership is **existence-only until `AUTH-1` 1c-4** — Clerk landed at Beta 0, not
+   v1.5, and from `1c-3b` every entry point requires a session as well as the access code; what `1c-4`
+   adds is the scope being derived from the principal. Anything that widens
+   what an unauthenticated caller can reach is at least P1. `/api/*` is **inside** the gate matcher
+   since `AUTH-1` 1a — and the matcher is still not the boundary, so a handler there owes its own
+   in-process gate + session check. New workflow steps must not expose secrets to fork PRs.
 10. **Privacy / data protection.** A different question from 9: not "can an attacker reach it" but
     "should we hold it, and can the person get it back or get rid of it". Check what personal data the
     diff starts holding, whether an existing value becomes readable somewhere new, whether anything

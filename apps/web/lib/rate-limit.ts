@@ -6,7 +6,7 @@ import { Redis } from '@upstash/redis';
 import { env } from './env';
 
 /**
- * Rate limiting (V1-14a) — one seam, **two** endpoints since `AUTH-1` 1c-3b.
+ * Rate limiting (V1-14a) — one seam, two limiter instances, applied at both of these:
  *
  * 1. **The access gate** (`app/gate/actions.ts`) — an unauthenticated password oracle for
  *    `ACCESS_GATE_PASSWORD`, the app's only shared secret; SECURITY.md lists "auth" first in its
@@ -21,8 +21,8 @@ import { env } from './env';
  * constrained **only the household**. 1c-3b is what supplies a principal the caller cannot choose,
  * which is the whole reason the limiter call sits AFTER the session check and BEFORE the zod parse.
  *
- * ⏳ **The zip export route is still unlimited** — the eighth surface, and the most expensive single
- * request in the app. Deferred to `1c-4`; see docs/tech-debt.md.
+ * ⏳ **The zip export route is still unlimited** — the one surface `docs/tech-debt.md` still counts
+ * as owed, and the most expensive single request in the app. Deferred to `1c-4`.
  *
  * IDENTIFIER: the client IP as computed by **Vercel Proxy** (`x-real-ip`, read via `@vercel/functions`
  * at the call site). Not the `mp_gate` cookie: that is a deterministic hash of the shared code, so every

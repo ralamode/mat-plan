@@ -200,10 +200,10 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
   // being forwarded, which after 1c-3b is the more honest answer anyway.
   //
   // ⚠️ **NO COUNT.** Committed rationales elsewhere referred to this forward and are corrected with
-  // it — listed, not numbered, because the number has been wrong three times running: four claimed
-  // when zero were done, then five when it was seven, and that correction also swapped a true file
-  // name (`SIGN_IN_COPY`) for a false one (`GATE_COPY`). A list can be checked against the tree; a
-  // count invites being kept up to date by arithmetic.
+  // it — listed, not numbered. The number was wrong every time it was written: "four" when none had
+  // been made, then "five" when it was seven, and that correction also swapped a true file name
+  // (`SIGN_IN_COPY`) for a false one (`GATE_COPY`). A list can be checked against the tree; a count
+  // can only be checked by redoing the arithmetic, which is why it is the thing that goes stale.
   //
   //   `app/page.tsx`                    the branchless-landing note
   //   `app/gate/actions.ts`             the `from === '/'` substitution's ONE-hop reason

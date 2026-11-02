@@ -26,8 +26,10 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * the first's one, which is a split personality rather than a seam. `lib/dal/gate.ts` — the module
  * this replaces — holds its predicate and its redirect together in 28 lines.
  *
- * ⚠️ **`lib/dal/gate.ts` is NOT deleted here.** Through `1c` both exist: the gate stays the boundary
- * until `1c-3`, and `1d` removes it.
+ * ⚠️ **`lib/dal/gate.ts` is NOT deleted here, and not at `1c-3b` either.** From `1c-3b` the boundary
+ * is the gate **AND** a session, both re-checked in-process; `1d` is what removes the gate half, and
+ * `1c-4` gates `1d` — until the household scope is membership-derived, a session alone would mean
+ * "anyone this Clerk instance admits".
  */
 
 /**
@@ -124,7 +126,7 @@ export const getCurrentUser = cache(async (): Promise<{ userId: string } | null>
  * 🔴 **Returns the principal, not a boolean.** A boolean cannot supply the `userId` the per-user
  * mutation limit needs, so every action would call `getCurrentUser()` a second time to fetch the key
  * it had just proved exists — two shapes asking one question at one call site, and the source guard
- * in `pages-are-gated.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s own
+ * in `pages-are-gated.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s pre-1c-3b
  * docblock predicted this shape: _"Mutation limits land with Clerk at v1.5, when `getCurrentUser()`
  * provides a real identifier."_
  */

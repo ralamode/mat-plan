@@ -31,12 +31,18 @@ import { NextResponse } from 'next/server';
  * was a prefetch header skipping the matcher. The checks are cheap and they are what actually holds.
  */
 /**
- * 🔴 **SECURITY, not a test artifact.** A Route Handler inherits no segment config, and after 1c-3b
- * this handler can have NO dynamic signal of its own: `getCurrentUser()` returns before touching any
- * dynamic API on two live paths — the 1c-3a bypass (an env read) and `!clerkIsConfigured()`. Under
- * ADR 0006 the URL carries no tenant, so a cached response is **one household's CSV served to
- * another**. `tenancy-is-not-cached.test.ts` also accepts this directive in place of the `cookies()`
- * call, but that is the second reason; do not delete this the day that test changes.
+ * 🔴 **SECURITY, not a test artifact.** A Route Handler inherits no segment config, and under ADR
+ * 0006 the URL carries no tenant — so a cached response is **one household's CSV served to another**.
+ *
+ * ⚠️ **Precisely what this protects against, because the earlier wording over-claimed.** Today the
+ * gate's `cookies()` read inside `hasGateAccess()` runs first and unconditionally, so the request IS
+ * dynamic anyway. The directive matters for the *session* half, which can return before touching any
+ * dynamic API on two live paths — the 1c-3a bypass (an env read) and `!clerkIsConfigured()` — and it
+ * becomes the ONLY signal at **1d**, when the gate conjunct and its cookie read are deleted. Do not
+ * remove it then.
+ *
+ * 📌 It is also the only thing satisfying `tenancy-is-not-cached.test.ts` for this file since the
+ * cookie read moved into the DAL — not a second reason any more, the live one.
  */
 export const dynamic = 'force-dynamic';
 
@@ -55,8 +61,10 @@ export async function GET(
   // V1-13b, and `gate.ts`'s own docblock acknowledged it as "same check as the export Route
   // Handler". 1c-3b added a second conjunct beside that copy without removing it, which is the
   // thing that chunk's own argument is against: a security predicate written twice is two places for
-  // the next author to land one conjunct short. It is also the only reason this file read
-  // `process.env` at all (AGENTS.md → the DAL owns every env read).
+  // the next author to land one conjunct short. It was also the only reason this handler imported
+  // `@/lib/env` — the secret now sits behind one DAL predicate. (Not a `process.env` read: this file
+  // never had one, and `lib/env.ts` is the sanctioned validated facade, which `proxy.ts` and
+  // `app/gate/actions.ts` legitimately import too.)
   // 404, not 401: an un-authed caller learns nothing about whether this profile exists.
   if (!(await hasGateAccess())) return new NextResponse('Not found', { status: 404 });
 

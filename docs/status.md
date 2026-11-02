@@ -397,9 +397,10 @@ day sheet is the artifact parents actually forward.
 strength-log formatter, proven against golden vectors transcribed from the contract's own real bytes)
 and **#150** (delivery: reads, a hand-rolled STORED zip, and a download an e2e actually performs). The
 export route is **`/p/[profileId]/export`, deliberately NOT under `/api`** — the access-gate matcher
-excludes `/api`, so a handler there would have left every athlete's whole training history
-downloadable by anyone with the URL. That exclusion is now recorded in
-[tech-debt](./tech-debt.md) as a live hazard for the `/api/sync` design.
+**excluded** `/api` at the time, so a handler there would have left every athlete's whole training
+history downloadable by anyone with the URL. ⚠️ **That exclusion was removed at `AUTH-1` 1a**, so the
+siting is history rather than protection; what protects the handler is its own in-process gate and
+session check.
 
 📍 **v1 — the MVP's backlog is merged; V1-14b, the last row, landed in #169.** Logging surfaces: per-kid routines, weigh-ins,
 check-ins, calisthenics + weekly adherence, life activities, strength sessions with supersets,

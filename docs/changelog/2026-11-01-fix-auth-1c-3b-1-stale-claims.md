@@ -35,3 +35,27 @@
   replacement to v1.5 rather than `1d`; `tech-debt.md` contradicting itself eleven lines apart; and two
   vacuity gaps in `mutation-entry.test.ts` — a "no breadcrumb" assertion that any early refusal
   satisfied, and an unpinned severity. _(architecture lens on #323, 2026-11-01.)_
+  🔴 **Reviewed, and the sweep was itself short by four — including the two files that brief the next
+  reviewer.** The stale `/api`-matcher claim was in **seven** committed places, not the three this
+  fragment first said: `.claude/agents/security-reviewer.md` (twice) and `.claude/skills/review-pr/SKILL.md`
+  hand it to a security reviewer **as fact**, with a citation to a `tech-debt.md` entry that no longer
+  exists — one of the review agents on this PR reported being briefed with it. Also `e2e/export-csv.spec.ts`
+  (the gating test for the very route this PR edits), `docs/runbooks.md`'s preview section, `docs/status.md`,
+  and the OPS-1 plan. All corrected except the merged plan and a dated changelog fragment, which are
+  history and get a dated note instead. The same skill also still told a reviewer that ownership is
+  _"existence-only today (no Clerk until v1.5)"_ — stale since `1c-3b`, and it would mis-grade the next PR.
+  ⚠️ **The count in this fragment and in `write-path.md` is now a LIST**, for the reason `proxy.ts`
+  already gives: a list can be checked against the tree, a count only by redoing the arithmetic. The
+  review also caught that `proxy.ts`'s own _"wrong three times running"_ was a count that cannot be
+  checked, two lines above the rule banning them.
+  Also from the two lenses: `session.ts` quoted, as current, a sentence this very commit deleted from
+  `rate-limit.ts`; the export handler's comment claimed it had read `process.env` when it imported the
+  validated `@/lib/env` facade, a rule that would have sent a future author "fixing" six compliant
+  files; `tenancy-is-not-cached.test.ts` said the export handler _"is dynamic only because it calls
+  `cookies()`"_, which this commit made false by moving that read into `hasGateAccess()` — so
+  `force-dynamic` is now the **only** in-file signal, and the route's docblock says so instead of
+  calling it "the second reason"; `tech-debt.md`'s heading still read _"Mutating Server Actions are not
+  rate-limited"_ above a body saying they are; `gate.ts`'s _"every Server Action"_ is refuted by its own
+  new enumeration (the gate action is allowlisted by name); and the narrowed Route-Handler guard will
+  trap `/api/sync` into re-duplicating the predicate, which is now **recorded in the guard itself** with
+  the right way to widen it. _(security + correctness lenses, 2026-11-01.)_
