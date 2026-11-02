@@ -486,9 +486,10 @@ flowchart LR
   session check, and `/api/sync` additionally owes an origin or token check.
   `app/pages-are-gated.test.ts` requires **both conjuncts** of every Route Handler it discovers.
 
-  🔴 **This is the ONE list of where the stale claim lived** — everything else cites it rather than
-  keeping a copy, and nothing here is counted, because two attempts at a count were both wrong
-  ("three", then "seven"):
+  🔴 **This is the ONE list of where the stale claims lived** — both classes, since the sweeps kept
+  finding them together: the `/api`-matcher claim, and the auth-state claim ("no auth until Clerk
+  v1.5", "actions are deliberately unlimited"). Everything else cites this list rather than keeping a
+  copy, and nothing here is counted, because two attempts at a count were both wrong:
 
   - `apps/web/app/p/[profileId]/export/route.ts` — the handler's own docblock, quoting a matcher that
     was no longer in the file
