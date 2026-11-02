@@ -64,3 +64,17 @@
   in the helper, the three conjuncts **in order**. That order assertion is new — seven slices with
   three independent presence checks could not express it, and the limiter is keyed on the principal,
   so "session before limiter" is load-bearing. All three probes proved RED. _(maintainer, 2026-11-01)_
+  🔴 **Fifteen claims about controls were made true on review** — in the chunk whose own argument is
+  that an inaccurate claim about a control is the defect. The sharpest: an earlier commit in this PR
+  "corrected" `proxy.ts` to say `/sign-in` is gated. It is **not** — `isPublicPath` unions
+  `PUBLIC_PATHS` with `PUBLIC_PATH_TREES`, which holds `SIGN_IN_PATH`, pinned by three committed
+  tests — and acting on that line means gating the sign-in page, whose gate bounce does
+  `url.search = ''` and destroys Clerk's OAuth handshake parameters. A correct statement had been
+  replaced with a false one by reading one of two lists. Also: the deletion note claimed **four**
+  stale rationales were corrected when there were **five** and **zero** had been; the collapse to
+  `enterMutation` left one source conjunct (that the refusal is _returned_) unpinned; the
+  `limiter-error` fail-open branch had no test; the manual sign-out verification two files hand off
+  to did not exist in the runbook; `write-path.md` documented the deleted inline block and did not
+  **own** the file that now holds the boundary for every write in the app; and `runbooks.md` still
+  told an operator to filter the cross-household alert on `actor: gate_session`. All fixed in the
+  same PR, with the round-3 log in the plan. _(maintainer + security and correctness lenses, 2026-11-01)_
