@@ -252,7 +252,9 @@ none` is not an answer. The PR template carries the lines and the reasoning.
   ([docs/milestones/](./docs/milestones/)) copies the milestone's canonical Mermaid step chart, done
   steps ✅ and this PR's step given a `style` line. The milestone doc owns the chart; if the order
   changed, fix it in the same PR. Live example: [beta-1.md](./docs/milestones/beta-1.md). Not for a
-  standalone PR.
+  standalone PR. ⚠️ **The template prompts for it**, inside "Where this sits" — a PR that fills that
+  section is by definition one that owes a chart. It was prose here and nowhere else until
+  2026-11-03, and four consecutive milestone PRs shipped without one.
 - Every PR gets a Vercel preview; CI must be green; reference the backlog id. A preview points at a
   **separate, seed-only Neon project**, never a branch of production — there is no Neon branch per PR
   ([OPS-1](./docs/plans/ops-1-preview-isolation.md)).
