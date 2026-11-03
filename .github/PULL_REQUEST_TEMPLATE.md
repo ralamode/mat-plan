@@ -16,6 +16,16 @@
 - **This PR:** <!-- e.g. chunk 1 of 6, the snapshot column -->
 - **Next:** <!-- what this unblocks, and what that is gated on -->
 
+<!-- 🔴 AND THE MILESTONE'S PROGRESS CHART, if you kept this section. Copy the canonical Mermaid step
+     chart from the milestone doc (docs/milestones/<id>.md), mark done steps ✅ and give THIS PR's
+     step a `style` line, so a reviewer sees what is still between here and the finish without
+     opening the milestone. The milestone doc owns the chart — copy it, do not reword it; if the
+     ordering has changed, fix the milestone in this PR too.
+
+     This is a SEPARATE obligation from the Diagram section below, which is about a pivotal flow or
+     model. Keeping the chart only in AGENTS.md prose is why four consecutive milestone PRs shipped
+     without one. Delete this block along with the section for a standalone PR. -->
+
 ## Type of Change
 
 <!-- bug fix | new feature | breaking change | perf | refactor | docs -->
