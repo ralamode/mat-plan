@@ -93,6 +93,9 @@ Anything to decide before implementation (empty once resolved).
 
 ## Review-response log (adversarial panel)
 
+> Panel cost: <lens>: <tokens> · <duration>, … (from the task notifications; records cost only —
+> it can never show what a cheaper lens missed)
+
 Per critique: reviewer/lens → **accepted** (what changed in the plan) or **rejected** (why). Blocking
 concerns must be resolved before implementation.
 ```

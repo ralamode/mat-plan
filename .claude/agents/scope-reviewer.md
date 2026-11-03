@@ -2,6 +2,8 @@
 name: scope-reviewer
 description: Adversarial simplicity & scope reviewer for a mat-plan plan or PR — over-engineering, YAGNI, a smaller path, one concern and <400 lines, fit with ~4h/week. One of the four standing panel lenses (docs/plans/README.md).
 tools: Read, Grep, Glob, Bash
+model: fable
+effort: high
 ---
 
 # Simplicity & scope reviewer

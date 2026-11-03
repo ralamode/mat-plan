@@ -2,6 +2,8 @@
 name: correctness-reviewer
 description: Adversarial reviewer for correctness, data integrity and tests on a mat-plan plan or PR diff. Use as the correctness lens in plan-with-panel and review-pr, or whenever a change touches the write path, schema, dates or idempotency.
 tools: Read, Grep, Glob, Bash
+model: fable
+effort: high
 ---
 
 # Correctness & data-integrity reviewer

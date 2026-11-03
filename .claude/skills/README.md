@@ -47,6 +47,16 @@ CI merge-gates".
 | [`review-prefetch.sh`](../../.github/scripts/review-prefetch.sh) (`@claude review` + local `review-pr`; DX-1)                                   | A PR head is reviewed as inert data, and the review job refuses a base whose agent config could widen it (`.claude/settings.json` hash-pinned)                                                                                          | `bash .github/scripts/review-prefetch.test.sh`         |
 | [`review-post.sh`](../../.github/scripts/review-post.sh) (`@claude review` post job; DX-1)                                                      | One comment per request, never silence; secrets withheld; `@mentions` broken; partial runs bannered                                                                                                                                     | `bash .github/scripts/review-post.test.sh`             |
 
+## Model & effort policy (DX-11)
+
+**The policy is the frontmatter**: every agent in [`../agents/`](../agents/) pins its own `model` and
+`effort`, read by Claude Code on every spawn, by any session. Print it with
+`grep -H '^model:\|^effort:' .claude/agents/*.md`; the rationale and starting values are in
+[the DX-11 plan](../../docs/plans/dx-11-agent-model-effort.md) (frozen — the frontmatter is the living
+source). Two settings override the pins **silently** and must stay unset: the `CLAUDE_CODE_EFFORT_LEVEL`
+env var and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. The main session is never governed by this policy —
+it stays whatever `/model` picks.
+
 ## Backlog, in priority order
 
 Candidates came from the repo's recurring operations and from
