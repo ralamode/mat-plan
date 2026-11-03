@@ -2,6 +2,8 @@
 name: fact-sheet
 description: Read-only researcher that turns "how does X actually work in mat-plan" into a concise fact sheet with path:line cites, and states plainly where AGENTS.md or the docs claim something the code doesn't do. Use before writing a skill, a plan, or a review that depends on how the code really behaves.
 tools: Read, Grep, Glob, Bash
+model: haiku
+effort: medium
 ---
 
 # Fact sheet

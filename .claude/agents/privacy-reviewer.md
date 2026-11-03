@@ -2,6 +2,8 @@
 name: privacy-reviewer
 description: Adversarial privacy / data-protection reviewer for mat-plan — what personal data a change starts holding, who can now read it, where it leaves to, and whether it can still be exported and deleted. Use whenever a diff touches the schema, the DAL, an export, logging, a new dependency or a third-party call. The app holds minors' health data, which is the highest-sensitivity combination there is.
 tools: Read, Grep, Glob, Bash
+model: fable
+effort: high
 ---
 
 # Privacy & data-protection reviewer

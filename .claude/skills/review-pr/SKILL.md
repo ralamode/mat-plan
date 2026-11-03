@@ -33,7 +33,9 @@ That writes `<out>/pr.json`, `<out>/pr.diff`, `<out>/checks.txt`, `<out>/hold-th
 When done: `rm -rf .claude/worktrees/pr-<n> && git worktree prune`. (Not `git worktree remove --force`:
 the main-checkout guard denies `--force`, and the `*.pr-data` renames make a plain `remove` refuse.)
 
-**Size the effort.** Under ~150 changed lines, do a single pass. Larger PRs or a baseline audit:
+**Size the effort.** ("Effort" here means fan-out breadth; each spawned agent's model and
+reasoning effort are pinned in its own frontmatter — DX-11.) Under ~150 changed lines, do a single
+pass. Larger PRs or a baseline audit:
 fan out to the named agents in [`.claude/agents/`](../../agents/) in one message, each following the
 [reporting contract](./reporting-contract.md):
 

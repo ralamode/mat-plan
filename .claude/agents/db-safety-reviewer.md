@@ -2,6 +2,8 @@
 name: db-safety-reviewer
 description: Adversarial database-safety reviewer for any mat-plan migration, schema, seed, correction or write-path change that alters what the DB enforces — locks, forward-only, expand→contract, deploy/migrate ordering, constraint and index semantics, idempotent seeds, and db:verify proofs. Required on every plan that includes a migration (docs/plans/README.md).
 tools: Read, Grep, Glob, Bash
+model: fable
+effort: high
 ---
 
 # DB-safety reviewer

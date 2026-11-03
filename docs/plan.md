@@ -1250,6 +1250,11 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
   deliberately left alone to keep to one concern.
   (SEC-2's `check-action-pins.mjs` already runs in `quality`; its self-test, in `guards:test`, does not.)
   Then update AGENTS.md's gate list, which #181 corrected to say "by convention", in the same PR.
+- **DX-11 — model & effort policy per agent, committed in frontmatter** ([plan](./plans/dx-11-agent-model-effort.md),
+  panel round 1: 4 lenses, 2 blocking → accepted; round 2 clean). All eight reviewers pin
+  `fable`/`high`, `fact-sheet` pins `haiku`/`medium`; the frontmatter is the policy and Claude Code
+  reads it on every spawn. **Acceptance:** every `.claude/agents/*.md` declares explicit `model` +
+  `effort`; downscales are annotations on `plan-with-panel`'s tables; panel logs record per-lens cost.
 - **DX-10 — `AGENTS.md` on a diet: rules stay, stories move** ([plan](./plans/dx-10-agents-md-diet.md),
   panel round 1: 4 lenses, 3 blocking → all accepted). The contract every session and subagent loads
   is 6,565 words, a third of it incident narrative that already lives in lessons, tech-debt, the plans

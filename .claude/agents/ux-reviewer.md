@@ -2,6 +2,8 @@
 name: ux-reviewer
 description: Adversarial UX / interaction-design reviewer for any mat-plan UI plan or diff: interaction and first-run, a11y and 360px responsive layout, and trust / data-entry burden. Required before implementation on every UI change (AGENTS.md → UI PR rules).
 tools: Read, Grep, Glob, Bash
+model: fable
+effort: high
 ---
 
 # UX / interaction-design reviewer

@@ -41,7 +41,7 @@ draft from its answers, including its "claimed but not wired" section.
 
 ## 2. Run the panel: lenses in parallel, one named agent each
 
-The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each, so the
+The lenses are **named agents in [`.claude/agents/`](../../agents/)**, one lens each (each pins its own `model`/`effort` in frontmatter — DX-11), so the
 ≥3 independent reviewers AGENTS.md and `docs/plans/README.md` require stay independent. Each carries
 its own checklist and follows the shared
 [reporting contract](../review-pr/reporting-contract.md). Send them **in one message** so they run
@@ -54,7 +54,7 @@ concurrently. The prompt only has to name the target: _"Review the plan at `docs
 | A migration, schema, seed or correction                         | + `db-safety-reviewer` (the dedicated DB-safety reviewer)                                                          |
 | Auth, secrets, CI/workflows, anything reachable unauthenticated | + `security-reviewer`                                                                                              |
 | New screen or flow                                              | + `ux-reviewer` **three times**, one per sub-lens (`Lens: 1` interaction · `Lens: 2` a11y/360px · `Lens: 3` trust) |
-| Small visual change (plan-exempt)                               | + `ux-reviewer` once, all three sub-lenses (**required**)                                                          |
+| Small visual change (plan-exempt)                               | + `ux-reviewer` once, all three sub-lenses (**required**; spawn `effort: medium` — the sanctioned downscale)       |
 
 Add a one-off lens (perf/CWV for a heavy page) with an inline prompt when no agent fits.
 
@@ -69,6 +69,8 @@ reason**. Record the result in the plan's `## Review-response log`:
 ```markdown
 ### Engineering panel (round 1)
 
+> Panel cost: correctness 81k · 4m30s, scope 73k · 4m29s, …
+
 | #   | Lens        | Critique (short)                              | Verdict      | Resolution                                                               |
 | --- | ----------- | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
 | C1  | Correctness | Retry double-writes when the action times out | **accepted** | Added client_id + ON CONFLICT; see §File-by-file                         |
@@ -80,7 +82,7 @@ Pushbacks stay in the log; that record is the point. NITs may be batched in one 
 ## 4. Re-review and hand off
 
 - If any BLOCKING critique was accepted in a way that reshaped the plan, send the **revised** plan
-  back to the lens that raised it (one light pass). Iterate until no blocking concern survives.
+  back to the lens that raised it (one light pass, spawned with `effort: medium`). Iterate until no blocking concern survives.
 - Link the plan from its row in `docs/plan.md`.
 - **Stop and hand the plan to the user for human review.** Summarise what the panels changed, the
   pushbacks, and any open questions. No implementation code gets committed until they approve.
