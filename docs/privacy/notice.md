@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-10-26. This is a beta.**
+**Last updated: 2026-11-03. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -113,7 +113,7 @@ Running the app means other companies handle some of your data. Each one, and wh
 | **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                |
 | **Upstash**    | **Your IP address only**, briefly, to stop someone guessing the access code.                                                                                                                                                                                                                 |
 | **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data. |
-| **Google**     | _Only if you sign in with Google_, and not yet. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                          |
+| **Google**     | **Signing in uses Google, and it is the only way in.** Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                   |
 | **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                       |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers

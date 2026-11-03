@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-10-26. This is a beta."
+            "text": "Last updated: 2026-11-03. This is a beta."
           }
         ]
       }
@@ -965,17 +965,17 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         ],
         "desc": [
           {
-            "k": "em",
+            "k": "strong",
             "children": [
               {
                 "k": "text",
-                "text": "Only if you sign in with Google"
+                "text": "Signing in uses Google, and it is the only way in."
               }
             ]
           },
           {
             "k": "text",
-            "text": ", and not yet. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google."
+            "text": " Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google."
           }
         ]
       },
