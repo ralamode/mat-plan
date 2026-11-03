@@ -301,11 +301,25 @@ limiter and constant (a zip must not consume the `mat-plan:mutate` budget).
 
 ---
 
-## Before PR 2 merges — a named runbook box, with a **recorded** outcome
+## Before PR 2 merges — a runbook box, downgraded
 
-The deploy **is** the merge (Vercel builds on push to `main`), so "before deploy" is the wrong
-boundary. And the precedent is a runbook section with the answer written down, not a risk-table
-sentence — because what went wrong in this series is precisely an unrecorded verification
+🔴 **The draft called this a deploy blocker. It is not one, and the reason has an expiry date worth
+writing down.** _(Maintainer, 2026-11-03: no account or row in production is anything but expendable;
+starting fresh is acceptable.)_ So the failure the draft feared — every principal, the maintainer
+included, locked out in state C — costs a correction re-run, or nothing. It does not gate the merge.
+
+⚠️ **This latitude ends at the first invited family**, the next milestone step after `1d`. From that
+commit the same missing row locks out a person who cannot fix it and whose data cannot be recreated,
+and this box is a gate again. Any later chunk leaning on this paragraph should check that date first.
+
+**What does NOT relax.** Expendable data is a statement about _recovery_, not about _correctness_:
+the fixture-member locality guard, the `migrate.yml` containment and the 404-never-403 refusals all
+stand unchanged. A guard that is wrong is wrong whether or not the rows behind it matter today, and
+it will still be there when they do.
+
+The deploy **is** the merge (Vercel builds on push to `main`), so "before deploy" was the wrong
+boundary too. The box stays — the precedent is a runbook section with the answer written down, not a
+risk-table sentence, because what went wrong in this series is precisely an unrecorded verification
 (`runbooks.md:1362`: the sign-up restriction was verified on _development_ while production stayed
 `Open`).
 
@@ -313,9 +327,9 @@ sentence — because what went wrong in this series is precisely an unrecorded v
 SELECT clerk_user_id, role, created_at FROM household_members WHERE deleted_at IS NULL;
 ```
 
-Exactly one live row, `role = 'owner'`. **If it is missing, every principal — the maintainer
-included — lands in state C with no in-app recovery.** It fails in the safe direction (locked out, not
-exposed), and the only exit is running the claim correction against production.
+Exactly one live row, `role = 'owner'`. If it is missing, every principal lands in state C — no
+in-app recovery, exit via the claim correction. It fails in the **safe** direction: locked out, not
+exposed. Today that is an inconvenience; after the first invite it is an outage.
 
 ⚠️ **Name the guard that must NOT be written:** a state-C fallback to "the one live household" would
 reinstate exactly the widening this chunk exists to remove.
@@ -364,7 +378,9 @@ Four lenses, in parallel. **Every blocking finding was accepted**; the three rej
 
 ## Open questions
 
-1. **Does production hold the maintainer's membership row, and which account?** One query, above.
-   Gates PR 2's merge.
+1. ✅ **Resolved 2026-11-03.** Production data is expendable, so a missing membership row no longer
+   gates PR 2's merge — it costs a correction re-run. The query is still worth running (it also says
+   which of the two Clerk accounts from the `Open` window to keep), and the latitude expires at the
+   first invited family.
 2. `recording-db.ts` — the panel's answer is "rewrite in place, ~15 lines, not a harness rewrite".
    Confirm at implementation.
