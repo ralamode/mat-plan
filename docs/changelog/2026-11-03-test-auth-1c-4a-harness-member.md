@@ -37,3 +37,32 @@
   Also: the correction's own error message cited **README rule 3** for a claim rule 3 does not make
   (it is about `public_id` vs internal ids). Corrected to the rule that applies — a real Clerk id may
   never be committed to a public repo — and to note that the harness passes committed _fixtures_.
+  🔴 **Reviewed, and the guard that is the whole point of this PR had no test that failed if it was
+  deleted.** `target-url.test.ts` drove `fixtureBindIsAllowed` in isolation; nothing proved it was
+  **wired into** the correction. Removing the `throw` from `registry.ts` left `pnpm verify` green.
+  `db:verify` now carries branch **(6f)** asserting the composition, and the correction's branch count
+  goes five → six. Proved RED: _"Missing expected rejection: AUTH-1 1c-4a: the fixture principal is
+  refused against a non-local target."_
+  ⚠️ **And the stated reason for excluding `pnpm dev` was false — in six places.** It said the second
+  `pnpm dev` _"would die before `next dev` ever started"_. It would not: a second identical bind
+  returns `already claimed by this Clerk account — no change` and exits 0, which `verify.ts` asserts
+  by name (_"a re-run is an idempotent no-op, not a duplicate-key crash"_). The same docblock argued
+  four lines earlier that the correction was **chosen because** it is idempotent. The decision stands
+  on two true reasons instead: binding a committed fixture principal into a developer's long-lived
+  sandbox is wrong on its own, and `dev-local.ts` injects no bypass principal, so the row is dead
+  weight a real dev id can never use.
+  📌 **Two more guards that could not fail.** The caller allowlist matched a **call**
+  (`/linkFixtureMember\s*\(/`), which an aliased import walks straight through — the sibling guard
+  records that exact evasion as probe-proven, and this file used the hardened bare-symbol form four
+  lines below. And the prose assertion matched `/dev-local/`, which the module docblock has satisfied
+  since long before this chunk, so deleting the entire rationale kept it green. Both anchored, both
+  probed.
+  Also: `ci.yml` cited a guard file that does not exist; the CI-literal assertion proved a correct
+  copy **exists** rather than that a divergent second one does not (now counts, then matches, which
+  is what the sibling was hardened to); `screenshot-ephemeral.ts`'s _"no scope-derivation pass to
+  order against"_ was falsified by this diff and the ordering is now load-bearing (`--state
+no-household` soft-deletes the household the link step needs); _"the full id is printed, and only
+  locally"_ stopped being true when CI started running it into a public log; and the README rule
+  citation was wrong **twice** — it is rule 9 (this repo is public), not 3 and not 6.
+  The runbook's `pnpm dev` step now leads with the **dry run**, because `fixtureBindIsAllowed` does
+  **not** cover a real dev id — the printed `target:` host is the only control there.

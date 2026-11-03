@@ -171,20 +171,26 @@ This is not an oversight — see `embedded-pg.ts` → `linkFixtureMember`. Bindi
 into a long-lived sandbox is wrong on its own, and the correction refuses a second identical bind, so
 the **second** `pnpm dev` would die before `next dev` started.
 
-Link your own dev id once, against the sandbox:
+🔴 **The fixture guard does NOT cover this.** `fixtureBindIsAllowed` refuses only the committed e2e
+principal; your real dev id passes it, so **the `target:` line the runner prints is the only control**
+— which is why the dry run below is step 1 and not a footnote. A stale production
+`DATABASE_URL_UNPOOLED` in the shell is the realistic way this goes wrong, and
+`corrections/registry.ts` records the consequence from the other side: claiming production with a dev
+id is what locks the maintainer out of their own household.
+
+**1. Dry run, and read the `target:` host.** The household id is the value of
+`SEED_HOUSEHOLD_PUBLIC_ID` (`packages/shared/src/seed-ids.ts`); the Clerk id comes from the
+**development** instance's dashboard, never production's.
 
 ```bash
-# the Clerk id from the DEVELOPMENT instance's dashboard — not the production one
-HOUSEHOLD_PUBLIC_ID=019826b4-0000-7000-8000-000000000010 \
+HOUSEHOLD_PUBLIC_ID=<SEED_HOUSEHOLD_PUBLIC_ID> \
   CLERK_USER_ID=user_<your dev instance id> \
   DATABASE_URL_UNPOOLED=postgres://…localhost… \
-  pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25 --apply
+  pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25
 ```
 
-⚠️ **Dry-run it first** (drop `--apply`) and read the `target:` line — the runner prints the host for
-exactly this reason. ⚠️ **A development `user_…` is not the production id for the same Google
-account**; `corrections/registry.ts` records that trap from the other side, where claiming production
-with a dev id is what locks the maintainer out.
+**2. If `target:` is your local sandbox, re-run with `--apply`.** A second run is an idempotent
+no-op (`already claimed … — no change`), so this is safe to repeat.
 
 ### If something is wrong afterwards
 

@@ -687,8 +687,12 @@ const movementsOwnershipReport: Correction = {
  * … --apply
  * ```
  *
- * **Both targets come from the ENVIRONMENT, not from a committed constant** (rule 3 forbids an
- * internal id; a committed Clerk id would also publish a named adult's account id in a public repo).
+ * **Both targets come from the ENVIRONMENT** — a committed REAL Clerk id would publish a named
+ * adult's account id in a public repo (README rule 9), and rule 3 separately forbids targeting by an
+ * internal id. ⚠️ **"not from a committed constant" was too broad and is false since `1c-4a`:** the
+ * e2e and screenshot harnesses pass committed FIXTURE values (`embedded-pg.ts` →
+ * `linkFixtureMember`), which the guard in `run()` is what makes safe. The rule is about REAL
+ * values, not about literals.
  *
  * ⚠️ **Why env and not `--household` / `--user` flags** _(maintainer, 2026-10-25)_. README **rule 8**
  * already assigns the flag to `PRIV-3` — _"a runner change, with its own plan"_ — and this is a
@@ -718,9 +722,8 @@ const householdClaim: Correction = {
     if (!householdPublicId || !clerkUserId) {
       throw new Error(
         'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and a ' +
-          'REAL Clerk id may never be committed to this repo, which is public (rule 6 of the ' +
-          'README\'s "what a row records" note, not rule 3, which is about public_id vs internal ' +
-          'ids). The e2e harness passes committed FIXTURE values and is guarded separately below.',
+          'REAL Clerk id may never be committed to this repo, which is public (README rule 9). ' +
+          'The e2e harness passes committed FIXTURE values and is guarded separately below.',
       );
     }
     // 🔴 **THE FIXTURE PRINCIPAL MAY ONLY EVER BE BOUND TO A LOCAL DATABASE (AUTH-1 1c-4a).**
@@ -794,9 +797,12 @@ const householdClaim: Correction = {
       );
     }
 
-    // The FULL id is printed, and only locally: the dry run is the one gate a human reads before an
-    // irreversible write, and a truncated id cannot be checked against the Clerk dashboard. It must
-    // NOT reach the Applied table (rule 6 / rule 8's reasoning) — that is a public file.
+    // The FULL id is printed: the dry run is the one gate a human reads before an irreversible
+    // write, and a truncated id cannot be checked against the Clerk dashboard. ⚠️ **"and only
+    // locally" was true until `1c-4a`** — CI's smoke step now runs this, so the line reaches a
+    // PUBLIC Actions log. Harmless because the only non-local caller passes the committed fixture
+    // id, and the guard above is what keeps that true. It must still NOT reach the Applied table
+    // (rule 6 / rule 8's reasoning) — that is a public file a real id would persist in.
     const line = `claim household ${householdPublicId} for ${clerkUserId} as ${HOUSEHOLD_ROLE.owner}`;
     if (!apply) return [line];
 

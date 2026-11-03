@@ -170,9 +170,17 @@ export async function migrateAndSeed(
  *  - The correction is dry-run by default and prints the target host, so a mis-run is visible.
  *
  * 🔴 **NOT folded into `migrateAndSeed`, and this is load-bearing.** That function has THREE callers
- * and the third is `dev-local.ts` — `pnpm dev`, against the **persistent** cluster. Binding a fixture
- * principal into a developer's long-lived sandbox is wrong on its own, and the correction refuses a
- * second identical bind, so the second `pnpm dev` would die before `next dev` ever started.
+ * and the third is `dev-local.ts` — `pnpm dev`, against the **persistent** cluster. Two reasons, both
+ * about the sandbox rather than about failure: binding a committed fixture principal into a
+ * developer's long-lived database is wrong on its own, and `dev-local.ts` injects **no** bypass
+ * principal, so the row would be dead weight that a real dev-instance Clerk id can never use. The
+ * developer needs `runbooks.md`'s step instead — the same correction with **their** id.
+ *
+ * ⚠️ **It would NOT crash, and an earlier version of this docblock said it would** — "the second
+ * `pnpm dev` would die before `next dev` ever started". False, and self-contradicting four lines
+ * above, where the same block argues the correction was chosen *because* it is idempotent. A second
+ * identical bind returns `already claimed by this Clerk account — no change` and exits 0, which
+ * `verify.ts` asserts by name: _"a re-run is an idempotent no-op, not a duplicate-key crash"_.
  *
  * 📌 **`pnpm dev` is not covered and needs its own answer** (`runbooks.md`): a developer signing in
  * with a real dev-instance account has no membership there either, and the fix is the same
@@ -184,8 +192,13 @@ export async function linkFixtureMember(
 ): Promise<void> {
   // Belt: the url we were handed must be local. Braces: the correction itself refuses to bind this
   // principal to a non-local target, resolving it through the same expression the runner connects
-  // with (`corrections/target-url.ts`). Either guard alone would be enough for the honest mistake;
-  // the pair is what covers the dishonest environment.
+  // with (`corrections/target-url.ts`), which covers the path where this function is bypassed.
+  //
+  // ⚠️ **They are not independent.** Both call `isLocalDbHost`, so an SSH tunnel or an `/etc/hosts`
+  // entry pointing `localhost` at a remote address defeats both — it is one proof read twice, not
+  // two proofs. Accepted: it needs a deliberate act by the most privileged actor in SECURITY.md's
+  // threat model, and there is no cheap second discriminator (production's database is also named
+  // `mat_plan`, and its household is also the zero-entropy seed id).
   assertLocalDbUrl(dbUrl, 'linkFixtureMember');
   log('\u25b8 linking the fixture membership\u2026');
   await runScript(

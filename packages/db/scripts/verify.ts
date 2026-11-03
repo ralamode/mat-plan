@@ -54,6 +54,7 @@ import {
   WEEK_LENGTH_DAYS,
   HOUSEHOLD_ROLE,
   HOUSEHOLD_ROLES,
+  E2E_SESSION_BYPASS_USER,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -6712,6 +6713,38 @@ console.log(
       'AUTH-1 1b: the claim correction refuses an id that is not Clerk-shaped',
     );
 
+    // (6f) 🔴 **The fixture principal is refused against a non-local target — AUTH-1 1c-4a.**
+    //
+    // `corrections/target-url.test.ts` drives `fixtureBindIsAllowed` in isolation; nothing there
+    // proves it is WIRED INTO this correction. Delete the `if (!fixtureBindIsAllowed(...)) throw`
+    // from `registry.ts` and that unit suite stays green — which would leave the one control
+    // standing between the committed fixture id and a production database unproven, in the chunk
+    // that introduced it. This asserts the composition.
+    //
+    // The target is forced non-local by removing BOTH variables: `correctionTargetUrl()` then
+    // resolves `undefined`, and the guard treats unknown as not-local. That is also the honest
+    // shape of the case it exists for — a correction run with no target set is not a local one.
+    const dbUrlBefore = {
+      pooled: process.env.DATABASE_URL,
+      unpooled: process.env.DATABASE_URL_UNPOOLED,
+    };
+    delete process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL_UNPOOLED;
+    try {
+      process.env.HOUSEHOLD_PUBLIC_ID = VERIFY_HH_PUBLIC_ID;
+      process.env.CLERK_USER_ID = E2E_SESSION_BYPASS_USER;
+      await assert.rejects(
+        () => claim.run(asCorrectionDb, true),
+        /refusing to bind the committed e2e fixture principal/,
+        'AUTH-1 1c-4a: the fixture principal is refused against a non-local target',
+      );
+    } finally {
+      if (dbUrlBefore.pooled === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = dbUrlBefore.pooled;
+      if (dbUrlBefore.unpooled === undefined) delete process.env.DATABASE_URL_UNPOOLED;
+      else process.env.DATABASE_URL_UNPOOLED = dbUrlBefore.unpooled;
+    }
+
     // (6c) The dry run writes NOTHING (rule 1) and names the full id, so a human can check it against
     // the dashboard before the irreversible write.
     process.env.CLERK_USER_ID = CLERK_C;
@@ -6757,8 +6790,9 @@ console.log(
 
   console.log(
     '✓ AUTH-1 1b: household_members — CHECK bound to HOUSEHOLD_ROLES, four rejections, the freed ' +
-      'slot, the seed writes none, the runbook order both ways (step 13 before 14), and the five ' +
-      'branches of the claim correction',
+      'slot, the seed writes none, the runbook order both ways (step 13 before 14), and the six ' +
+      'branches of the claim correction (the sixth is 1c-4a: the fixture principal is refused ' +
+      'against a non-local target, proving the guard is WIRED and not merely unit-tested)',
   );
 }
 

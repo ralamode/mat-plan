@@ -477,7 +477,7 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: pnpm --filter web exec playwright install --with-deps chromium
 
-      - name: Migrate + seed ephemeral Postgres (reuse packages/db scripts)
+      - name: Migrate + seed + link the fixture member (reuse packages/db scripts)
         if: steps.guard.outputs.skip != 'true'
         run: |
           pnpm --filter @mat-plan/db db:migrate
@@ -488,7 +488,7 @@ jobs:
           #
           # 🔴 This MUST NOT be copied into `migrate.yml`, which seeds production — the correction
           # refuses to bind this principal to a non-local database (`corrections/registry.ts`), and
-          # `test/workflows-link-no-production.test.ts` fails if the command appears in any other
+          # `apps/web/test/fixture-member-is-contained.test.ts` fails if the command appears in any other
           # workflow. The values come from committed constants, so no secret and no personal data.
           HOUSEHOLD_PUBLIC_ID=019826b4-0000-7000-8000-000000000010 \
             CLERK_USER_ID=user_000000000000000000000000e2e \

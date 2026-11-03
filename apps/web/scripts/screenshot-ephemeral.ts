@@ -149,7 +149,9 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
  * ⚠️ **Never COMPOSE this with a seeder that calls `fixtureScope()`** — the way `seedClosedDays`
  * composes `seedWeighIns`. `fixtureScope` asserts *"expected exactly one live household in the
  * throwaway DB"* and throws on 0, which is precisely the state this function creates. (There is no
- * scope-derivation PASS to order against: `runEphemeral` runs `migrateAndSeed` and then exactly one
+ * scope-derivation pass to order against — ⚠️ **there is one since `1c-4a`**: `runEphemeral` runs
+ * `migrateAndSeed`, then `linkFixtureMember` (which resolves the live household through the
+ * correction's `requireLiveHouseholdScope`), then exactly one
  * `STATES[state]` seeder, and `fixtureScope()` is only ever called from inside a sibling seeder.)
  *
  * This is the only way to see this screen outside the design-token harness: the Playwright suite runs
@@ -962,6 +964,11 @@ async function runEphemeral(
     await migrateAndSeed(dbUrl);
     // AUTH-1 1c-4a: the bypass principal needs a MEMBERSHIP, not just an id — from 1c-4 the scope is
     // derived from it. Separate from `migrateAndSeed` on purpose; see its docblock.
+    //
+    // 🔴 **BEFORE the state seeder, and that order is load-bearing.** The correction resolves the
+    // live household (`requireLiveHouseholdScope`), and `--state no-household` soft-deletes it —
+    // so below the seeder this throws and the capture dies. The module docblock's "no
+    // scope-derivation pass to order against" was true until this line existed.
     await linkFixtureMember(dbUrl);
 
     const seedFixture = STATES[state];
