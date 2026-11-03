@@ -176,8 +176,21 @@ export const SIGN_IN_COPY = {
    */
   codeStillWorks: 'You also need this household’s access code until the next release.',
   gateCta: 'Enter the access code',
+  /**
+   * 🔴 **Corrected 2026-11-03 — it said the prohibited thing, on the consent screen.** It read
+   * _"tells us the email address on your Google account — **nothing else from it**"_, which is false
+   * at the token: the production instance's scopes are `openid` · `userinfo.email` ·
+   * `userinfo.profile`, and **`userinfo.profile` cannot be removed**, so `name` and `picture` arrive
+   * whatever this app wants. `runbooks.md`'s closed scope box carries the standing prohibition
+   * verbatim — _"Do not reintroduce a flat 'Google sends us nothing but an email address' — it is
+   * false at the token and falsifiable by anyone who looks"_ — and `notice.md` was corrected for it
+   * on 2026-10-26 while this string, the one a person actually reads before deciding, was missed.
+   *
+   * ⚠️ The distinction the copy must keep is **what Google sends** vs **what this app stores**. They
+   * are different, and collapsing them is how the old sentence became false.
+   */
   processor:
-    'This screen is run by Clerk. Signing in tells us the email address on your Google account — nothing else from it, and nothing about your athletes is sent to Google.',
+    'This screen is run by Clerk. Signing in tells Clerk your email address, your name and your profile picture — that is Google’s minimum and cannot be narrowed. This app stores only which account signed in, and nothing about your athletes is ever sent to Google.',
   privacyLink: 'What this app stores, and how to get it back or delete it',
 } as const;
 
