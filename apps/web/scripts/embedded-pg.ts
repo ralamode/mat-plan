@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import EmbeddedPostgres from 'embedded-postgres';
 
-import { isLocalDbHost } from '@mat-plan/shared';
+import { E2E_SESSION_BYPASS_USER, isLocalDbHost, SEED_HOUSEHOLD_PUBLIC_ID } from '@mat-plan/shared';
 
 /**
  * Shared `embedded-postgres` plumbing — the genuinely reusable core extracted from
@@ -146,6 +146,73 @@ export async function migrateAndSeed(
   await runScript('pnpm', ['--filter', '@mat-plan/db', 'db:migrate'], env);
   log('▸ seeding catalogs…');
   await runScript('pnpm', ['--filter', '@mat-plan/db', 'db:seed'], env);
+}
+
+/**
+ * 🔴 **Give the harness's bypass principal a MEMBERSHIP row — `AUTH-1` 1c-4a.**
+ *
+ * From `1c-4` the household scope is derived from the principal, not from "the one live household".
+ * The harnesses already inject `E2E_SESSION_BYPASS_USER` as the principal (`e2e-local.ts`,
+ * `screenshot-ephemeral.ts`, CI's smoke step), but **the seed writes no `household_members` row and
+ * `db:verify` asserts that it writes none** — `migrate.yml` seeds PRODUCTION, and this is the one
+ * row that must never exist there. Without this step every gated spec would land on an empty picker
+ * the moment the resolver changes.
+ *
+ * ⚠️ **It reuses the committed `household-claim-2026-10-25` correction rather than a new writer**,
+ * and the reasons are not stylistic:
+ *
+ *  - `insertHouseholdMember` is deliberately **not** idempotent (`writers/ownership.ts` says so in
+ *    capitals: a collision there is an operator error, not a replay). The correction is, by
+ *    read-then-branch — already bound here is a no-op, bound elsewhere is a refusal.
+ *  - `verify.ts`'s assertion reads _"the seed writes NO household_members row — **the claim
+ *    correction is the only writer**"_. A second writer would make its second clause false while
+ *    keeping its first one true, which is the kind of half-true a gate should never be reduced to.
+ *  - The correction is dry-run by default and prints the target host, so a mis-run is visible.
+ *
+ * 🔴 **NOT folded into `migrateAndSeed`, and this is load-bearing.** That function has THREE callers
+ * and the third is `dev-local.ts` — `pnpm dev`, against the **persistent** cluster. Two reasons, both
+ * about the sandbox rather than about failure: binding a committed fixture principal into a
+ * developer's long-lived database is wrong on its own, and `dev-local.ts` injects **no** bypass
+ * principal, so the row would be dead weight that a real dev-instance Clerk id can never use. The
+ * developer needs `runbooks.md`'s step instead — the same correction with **their** id.
+ *
+ * ⚠️ **It would NOT crash, and an earlier version of this docblock said it would** — "the second
+ * `pnpm dev` would die before `next dev` ever started". False, and self-contradicting four lines
+ * above, where the same block argues the correction was chosen *because* it is idempotent. A second
+ * identical bind returns `already claimed by this Clerk account — no change` and exits 0, which
+ * `verify.ts` asserts by name: _"a re-run is an idempotent no-op, not a duplicate-key crash"_.
+ *
+ * 📌 **`pnpm dev` is not covered and needs its own answer** (`runbooks.md`): a developer signing in
+ * with a real dev-instance account has no membership there either, and the fix is the same
+ * correction with THEIR Clerk id — not this one.
+ */
+export async function linkFixtureMember(
+  dbUrl: string,
+  log: (msg: string) => void = console.log,
+): Promise<void> {
+  // Belt: the url we were handed must be local. Braces: the correction itself refuses to bind this
+  // principal to a non-local target, resolving it through the same expression the runner connects
+  // with (`corrections/target-url.ts`), which covers the path where this function is bypassed.
+  //
+  // ⚠️ **They are not independent.** Both call `isLocalDbHost`, so an SSH tunnel or an `/etc/hosts`
+  // entry pointing `localhost` at a remote address defeats both — it is one proof read twice, not
+  // two proofs. Accepted: it needs a deliberate act by the most privileged actor in SECURITY.md's
+  // threat model, and there is no cheap second discriminator (production's database is also named
+  // `mat_plan`, and its household is also the zero-entropy seed id).
+  assertLocalDbUrl(dbUrl, 'linkFixtureMember');
+  log('\u25b8 linking the fixture membership\u2026');
+  await runScript(
+    'pnpm',
+    ['--filter', '@mat-plan/db', 'db:correct', 'household-claim-2026-10-25', '--apply'],
+    {
+      ...process.env,
+      // Both, explicitly, so an ambient `DATABASE_URL_UNPOOLED` cannot win the `?? ` in the runner.
+      DATABASE_URL: dbUrl,
+      DATABASE_URL_UNPOOLED: dbUrl,
+      HOUSEHOLD_PUBLIC_ID: SEED_HOUSEHOLD_PUBLIC_ID,
+      CLERK_USER_ID: E2E_SESSION_BYPASS_USER,
+    },
+  );
 }
 
 export interface StartEmbeddedOptions {

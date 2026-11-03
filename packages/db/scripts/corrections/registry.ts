@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
   HOUSEHOLD_ROLE,
   MOVEMENT_SEED_PUBLIC_IDS,
@@ -22,6 +23,7 @@ import {
 import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { fixtureBindIsAllowed } from './target-url';
 import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -685,8 +687,12 @@ const movementsOwnershipReport: Correction = {
  * … --apply
  * ```
  *
- * **Both targets come from the ENVIRONMENT, not from a committed constant** (rule 3 forbids an
- * internal id; a committed Clerk id would also publish a named adult's account id in a public repo).
+ * **Both targets come from the ENVIRONMENT** — a committed REAL Clerk id would publish a named
+ * adult's account id in a public repo (README rule 9), and rule 3 separately forbids targeting by an
+ * internal id. ⚠️ **"not from a committed constant" was too broad and is false since `1c-4a`:** the
+ * e2e and screenshot harnesses pass committed FIXTURE values (`embedded-pg.ts` →
+ * `linkFixtureMember`), which the guard in `run()` is what makes safe. The rule is about REAL
+ * values, not about literals.
  *
  * ⚠️ **Why env and not `--household` / `--user` flags** _(maintainer, 2026-10-25)_. README **rule 8**
  * already assigns the flag to `PRIV-3` — _"a runner change, with its own plan"_ — and this is a
@@ -715,11 +721,32 @@ const householdClaim: Correction = {
 
     if (!householdPublicId || !clerkUserId) {
       throw new Error(
-        'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and ' +
-          'neither may be a committed constant (README rule 3; a Clerk id is personal data and this ' +
-          'repo is public).',
+        'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and a ' +
+          'REAL Clerk id may never be committed to this repo, which is public (README rule 9). ' +
+          'The e2e harness passes committed FIXTURE values and is guarded separately below.',
       );
     }
+    // 🔴 **THE FIXTURE PRINCIPAL MAY ONLY EVER BE BOUND TO A LOCAL DATABASE (AUTH-1 1c-4a).**
+    //
+    // From 1c-4a the e2e and screenshot harnesses call this correction to give their bypass
+    // principal a membership row, because the seed deliberately writes none and `db:verify` asserts
+    // that it writes none — `migrate.yml` seeds PRODUCTION, and this is the one row that must never
+    // exist there. The harnesses pass committed FIXTURE values, which is the narrow case this guard
+    // covers; the maintainer's real claim passes a real id and is unaffected.
+    //
+    // ⚠️ It resolves the target through `correctionTargetUrl()` — the same expression the runner
+    // connects with — because `DATABASE_URL=localhost` beside a production `DATABASE_URL_UNPOOLED`
+    // is a real environment, not a hypothetical one: the runbook's own procedure creates it.
+    // A guard reading the other variable would pass and then watch the write land on Neon.
+    if (!fixtureBindIsAllowed(clerkUserId)) {
+      throw new Error(
+        `refusing to bind the committed e2e fixture principal to a non-local database. ` +
+          `CLERK_USER_ID is '${E2E_SESSION_BYPASS_USER}', which exists only to let a throwaway ` +
+          `harness database resolve a scope. If you meant to claim a real household, use the Clerk ` +
+          `id from the dashboard of the instance that will be live (runbooks.md -> AUTH-1).`,
+      );
+    }
+
     // ⚠️ Clerk instances are SEPARATE user pools: a development `user_…` is NOT the production id for
     // the same Google account. Claiming production with a dev id lands the maintainer in state C at
     // 1c — locked out of their own household by the chunk meant to bind them to it.
@@ -770,9 +797,12 @@ const householdClaim: Correction = {
       );
     }
 
-    // The FULL id is printed, and only locally: the dry run is the one gate a human reads before an
-    // irreversible write, and a truncated id cannot be checked against the Clerk dashboard. It must
-    // NOT reach the Applied table (rule 6 / rule 8's reasoning) — that is a public file.
+    // The FULL id is printed: the dry run is the one gate a human reads before an irreversible
+    // write, and a truncated id cannot be checked against the Clerk dashboard. ⚠️ **"and only
+    // locally" was true until `1c-4a`** — CI's smoke step now runs this, so the line reaches a
+    // PUBLIC Actions log. Harmless because the only non-local caller passes the committed fixture
+    // id, and the guard above is what keeps that true. It must still NOT reach the Applied table
+    // (rule 6 / rule 8's reasoning) — that is a public file a real id would persist in.
     const line = `claim household ${householdPublicId} for ${clerkUserId} as ${HOUSEHOLD_ROLE.owner}`;
     if (!apply) return [line];
 

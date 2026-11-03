@@ -1,4 +1,5 @@
 import { createDb, createDbPool } from '../src/client';
+import { correctionTargetUrl } from './corrections/target-url';
 import { CORRECTIONS } from './corrections/registry';
 
 /**
@@ -33,7 +34,9 @@ if (!correction) {
   process.exit(1);
 }
 
-const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+// Single-sourced in `corrections/target-url.ts` so a correction's own guard resolves the SAME
+// string this connects with (AUTH-1 1c-4a). See that file for why the ordering is the hazard.
+const url = correctionTargetUrl();
 if (!url) {
   console.error('Set DATABASE_URL_UNPOOLED (or DATABASE_URL) to the database to correct.');
   process.exit(1);

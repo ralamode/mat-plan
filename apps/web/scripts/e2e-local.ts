@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   assertLocalDbUrl,
   freePort,
+  linkFixtureMember,
   migrateAndSeed,
   startEmbeddedPostgres,
   stopChildProcess,
@@ -93,6 +94,9 @@ async function main(): Promise<void> {
     // does before `pnpm --filter web e2e` (ci.yml), so local and CI start from the same
     // database state.
     await migrateAndSeed(dbUrl);
+    // AUTH-1 1c-4a: the bypass principal needs a MEMBERSHIP, not just an id — from 1c-4 the scope is
+    // derived from it. Separate from `migrateAndSeed` on purpose; see its docblock.
+    await linkFixtureMember(dbUrl);
 
     const appPort = await freePort();
     const env: NodeJS.ProcessEnv = {

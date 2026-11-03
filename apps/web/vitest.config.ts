@@ -22,6 +22,12 @@ export default defineConfig({
       // in docs/tech-debt.md ("gates quietly go vacuous"); closed here because it is two lines and
       // there were zero such tests to break.
       '../../packages/*/src/**/*.test.ts',
+      // 🔴 **`scripts/` was still uncovered, for the same reason and with the same consequence.**
+      // The line above closed `packages/*/src`; `packages/db/scripts/` holds `verify.ts`,
+      // `correct.ts` and the corrections registry — real logic, and the place a guard for a
+      // correction belongs. A test written there ran NOWHERE until AUTH-1 1c-4a, so it would have
+      // shipped green without executing. Proven by watching `corrections/target-url.test.ts` go red.
+      '../../packages/*/scripts/**/*.test.ts',
     ],
     // Playwright owns e2e/ (its specs are *.spec.ts, already outside `include`);
     // exclude the dir too so a stray *.test.ts there never leaks into Vitest.
