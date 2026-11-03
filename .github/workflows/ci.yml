@@ -482,6 +482,17 @@ jobs:
         run: |
           pnpm --filter @mat-plan/db db:migrate
           pnpm --filter @mat-plan/db db:seed
+          # AUTH-1 1c-4a — the bypass principal needs a MEMBERSHIP row, not just an id: from 1c-4 the
+          # household scope is derived from it. CI does not go through `scripts/embedded-pg.ts`, so it
+          # needs its own call, exactly as it needs its own bypass injection below.
+          #
+          # 🔴 This MUST NOT be copied into `migrate.yml`, which seeds production — the correction
+          # refuses to bind this principal to a non-local database (`corrections/registry.ts`), and
+          # `test/workflows-link-no-production.test.ts` fails if the command appears in any other
+          # workflow. The values come from committed constants, so no secret and no personal data.
+          HOUSEHOLD_PUBLIC_ID=019826b4-0000-7000-8000-000000000010 \
+            CLERK_USER_ID=user_000000000000000000000000e2e \
+            pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25 --apply
 
       - name: Playwright smoke
         if: steps.guard.outputs.skip != 'true'

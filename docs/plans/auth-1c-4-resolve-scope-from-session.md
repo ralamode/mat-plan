@@ -2,7 +2,8 @@
 
 > Backlog: [plan.md](../plan.md) → `AUTH-1`. Parent: [auth-1-clerk-google.md](./auth-1-clerk-google.md)
 > § Design 3. Milestone: [beta-1](../milestones/beta-1.md).
-> **Status:** REWRITTEN after a four-lens panel. No implementation code committed.
+> **Status:** PR 1 shipped 2026-11-03 (option **D**, the existing correction — the draft's new
+> script was withdrawn when review found it was not idempotent). PR 2 next.
 > Branch for PR 2: `feat/auth-1c-4-resolve-scope-from-session`.
 
 ## Goal
@@ -29,12 +30,12 @@ no-op for production behaviour, the resolver is the security boundary moving. Bu
 reviewer who must concentrate on the resolver is also reviewing a new DB command and three workflow
 call sites — which is how #320's _"four controls that did not control what they claimed"_ happened.
 
-| #   | PR                                                | Why separate                                                                                                                                                             | Size    |
-| --- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
-| 1   | `test(auth-1c-4a)`: the harness supplies a member | **Must land first** — the e2e story breaks the moment the resolver changes. Green before _and_ after, so it is reviewable on its own (1c-1 and 1c-3a won this argument). | ~40 ln  |
-| 2   | `feat(auth-1c-4)`: the resolver                   | One concern: a security boundary moving, with its proofs and the claims it falsifies.                                                                                    | ~700 ln |
-| 3   | `docs(privacy)`: the notice contradicts itself    | **Independent of both.** False since #323 merged. Can ship today.                                                                                                        | ~20 ln  |
-| 4   | `fix(auth)`: the zip export has no rate limit     | Parallel-safe. Deferring to `1d` costs a `tech-debt.md` edit anyway, and `1d` is the PR least able to absorb it.                                                         | ~40 ln  |
+| #    | PR                                                | Why separate                                                                                                                                                             | Size    |
+| ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+| 1 ✅ | `test(auth-1c-4a)`: the harness supplies a member | **Must land first** — the e2e story breaks the moment the resolver changes. Green before _and_ after, so it is reviewable on its own (1c-1 and 1c-3a won this argument). | ~40 ln  |
+| 2    | `feat(auth-1c-4)`: the resolver                   | One concern: a security boundary moving, with its proofs and the claims it falsifies.                                                                                    | ~700 ln |
+| 3    | `docs(privacy)`: the notice contradicts itself    | **Independent of both.** False since #323 merged. Can ship today.                                                                                                        | ~20 ln  |
+| 4    | `fix(auth)`: the zip export has no rate limit     | Parallel-safe. Deferring to `1d` costs a `tech-debt.md` edit anyway, and `1d` is the PR least able to absorb it.                                                         | ~40 ln  |
 
 ---
 

@@ -37,6 +37,7 @@ import { captureScreenshot, routeSlug } from './capture';
 import {
   freePort,
   isLocalDbUrl,
+  linkFixtureMember,
   migrateAndSeed,
   runScript,
   startEmbeddedPostgres,
@@ -959,6 +960,9 @@ async function runEphemeral(
     // Migrate + seed via the EXISTING packages/db scripts (shared helper; do NOT
     // hand-roll). Against embedded PG (no PgBouncer) pooled == unpooled == same string.
     await migrateAndSeed(dbUrl);
+    // AUTH-1 1c-4a: the bypass principal needs a MEMBERSHIP, not just an id — from 1c-4 the scope is
+    // derived from it. Separate from `migrateAndSeed` on purpose; see its docblock.
+    await linkFixtureMember(dbUrl);
 
     const seedFixture = STATES[state];
     if (seedFixture) await seedFixture(dbUrl);

@@ -160,6 +160,32 @@ Against the **development** instance, signed in:
 If step 3 fails, **stop** — the control is a lockout and must not reach anyone outside the
 maintainer's own browser.
 
+### 4. `pnpm dev` needs its own membership row, and nothing gives it one
+
+🔴 **From `AUTH-1` 1c-4 a local dev session lands in state C**, and the fixture row the test
+harnesses write does **not** help: `dev-local.ts` deliberately injects no bypass principal, so you
+sign in with a **real** dev-instance Google account, and that Clerk id has no `household_members`
+row in your persistent sandbox.
+
+This is not an oversight — see `embedded-pg.ts` → `linkFixtureMember`. Binding the fixture principal
+into a long-lived sandbox is wrong on its own, and the correction refuses a second identical bind, so
+the **second** `pnpm dev` would die before `next dev` started.
+
+Link your own dev id once, against the sandbox:
+
+```bash
+# the Clerk id from the DEVELOPMENT instance's dashboard — not the production one
+HOUSEHOLD_PUBLIC_ID=019826b4-0000-7000-8000-000000000010 \
+  CLERK_USER_ID=user_<your dev instance id> \
+  DATABASE_URL_UNPOOLED=postgres://…localhost… \
+  pnpm --filter @mat-plan/db db:correct household-claim-2026-10-25 --apply
+```
+
+⚠️ **Dry-run it first** (drop `--apply`) and read the `target:` line — the runner prints the host for
+exactly this reason. ⚠️ **A development `user_…` is not the production id for the same Google
+account**; `corrections/registry.ts` records that trap from the other side, where claiming production
+with a dev id is what locks the maintainer out.
+
 ### If something is wrong afterwards
 
 A membership is soft-deletable and the partial unique is on `clerk_user_id WHERE deleted_at IS NULL`,

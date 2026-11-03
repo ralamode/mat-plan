@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
   HOUSEHOLD_ROLE,
   MOVEMENT_SEED_PUBLIC_IDS,
@@ -22,6 +23,7 @@ import {
 import type { HouseholdScope } from '../../src/scope';
 import * as schema from '../../src/schema';
 import { householdScopeForScript } from '../../src/writers/household-scope-script';
+import { fixtureBindIsAllowed } from './target-url';
 import { inHousehold, insertHouseholdMember, isLiveProfile } from '../../src/writers/ownership';
 
 /**
@@ -715,11 +717,33 @@ const householdClaim: Correction = {
 
     if (!householdPublicId || !clerkUserId) {
       throw new Error(
-        'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and ' +
-          'neither may be a committed constant (README rule 3; a Clerk id is personal data and this ' +
-          'repo is public).',
+        'set HOUSEHOLD_PUBLIC_ID and CLERK_USER_ID in the environment — both are targets, and a ' +
+          'REAL Clerk id may never be committed to this repo, which is public (rule 6 of the ' +
+          'README\'s "what a row records" note, not rule 3, which is about public_id vs internal ' +
+          'ids). The e2e harness passes committed FIXTURE values and is guarded separately below.',
       );
     }
+    // 🔴 **THE FIXTURE PRINCIPAL MAY ONLY EVER BE BOUND TO A LOCAL DATABASE (AUTH-1 1c-4a).**
+    //
+    // From 1c-4a the e2e and screenshot harnesses call this correction to give their bypass
+    // principal a membership row, because the seed deliberately writes none and `db:verify` asserts
+    // that it writes none — `migrate.yml` seeds PRODUCTION, and this is the one row that must never
+    // exist there. The harnesses pass committed FIXTURE values, which is the narrow case this guard
+    // covers; the maintainer's real claim passes a real id and is unaffected.
+    //
+    // ⚠️ It resolves the target through `correctionTargetUrl()` — the same expression the runner
+    // connects with — because `DATABASE_URL=localhost` beside a production `DATABASE_URL_UNPOOLED`
+    // is a real environment, not a hypothetical one: the runbook's own procedure creates it.
+    // A guard reading the other variable would pass and then watch the write land on Neon.
+    if (!fixtureBindIsAllowed(clerkUserId)) {
+      throw new Error(
+        `refusing to bind the committed e2e fixture principal to a non-local database. ` +
+          `CLERK_USER_ID is '${E2E_SESSION_BYPASS_USER}', which exists only to let a throwaway ` +
+          `harness database resolve a scope. If you meant to claim a real household, use the Clerk ` +
+          `id from the dashboard of the instance that will be live (runbooks.md -> AUTH-1).`,
+      );
+    }
+
     // ⚠️ Clerk instances are SEPARATE user pools: a development `user_…` is NOT the production id for
     // the same Google account. Claiming production with a dev id lands the maintainer in state C at
     // 1c — locked out of their own household by the chunk meant to bind them to it.
