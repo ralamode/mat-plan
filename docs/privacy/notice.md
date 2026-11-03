@@ -90,10 +90,12 @@ still works.
 
 **Three honest limitations during the beta:**
 
-1. **The access code is shared**, even though sign-in is not. Everyone in the household types the
-   same code, and there is **no control in the app** to remove one person's access — ask, and it is
-   done directly in the database. (Each adult now signs in as themselves, so the record of _who_ did
-   something is per-person; the _code_ is the part that is still shared, until it is retired.)
+1. **The access code is shared**, even though signing in is not. Everyone in the household types the
+   same code, and there is **no control in the app** to remove one person's access. Ask, and their
+   sign-in account is deleted at Clerk — that is the lever that works today. ⚠️ **Removing someone
+   from the household in the database does not currently stop them**, because the app does not yet
+   work out whose data you get from who you are; that is the next piece of work. And signing in does
+   not mean the app records **who** did what — it still does not. See the limitation below.
 2. **Households are not yet separated by the code itself.** The work to guarantee that one family's
    data is unreachable from another's is underway and not finished. **That is exactly why the beta
    starts with a single invited family.** Until it is done, please treat the app as if anyone who was
@@ -107,16 +109,16 @@ still works.
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                        |
-| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                              |
-| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                           |
-| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                |
-| **Upstash**    | **Your IP address**, briefly, to stop someone guessing the access code — and, since sign-in went live, **the identifier of whoever is signed in**, briefly, to stop the app being hammered. Both are counters that expire in minutes. No name, no email, and never any training or weigh-in data.                            |
-| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data.                                 |
-| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who uses this app goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google. |
-| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                       |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                   |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                         |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                      |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                           |
+| **Upstash**    | **Your IP address**, briefly, to stop someone guessing the access code — and, since sign-in went live, **the identifier of whoever is signed in**, briefly, to stop the app being hammered. Both are counters that expire in minutes. No name, no email, and never any training or weigh-in data.                       |
+| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data.                            |
+| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google. |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                  |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
@@ -124,10 +126,19 @@ recording anywhere. The honest version is **"designed and tested to carry none o
 "cannot" — an unexpected fragment in an error message is always possible.
 
 **No tracking.** No advertising network, no analytics product, no social buttons, no third-party
-fonts. Once you are signed in, **your browser talks to this app and nothing else**. **One** thing is
-different, and it is not tracking: the sign-in screen — which everyone now passes through, because it
-is the only way in — loads Clerk's code and talks to Clerk's and Google's servers, so both see your IP
-address and your browser **on that screen**. Nothing about your athletes, their training or their weight is ever involved, and
+fonts. **One** thing is not this app, and it is not tracking: **Clerk's code loads on every page,
+including this one**, from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's
+domain — and opens a connection to them. So **Clerk sees your IP address and your browser on every
+page you open here**, whether or not you sign in, and so does Cloudflare, which Clerk puts in front of
+that address.
+
+⚠️ **This paragraph used to say your browser talked to this app and nothing else, and that the
+sign-in screen was the exception. That was wrong, and it was wrong on this very page** — checked
+against the live site on 2026-11-03, not assumed. Scoping Clerk's code to the screens that need it is
+worth doing and is not done yet; until it is, the honest version is the one above.
+
+Tapping **Continue with Google** then sends you to Google, which sees your IP address and browser
+too. Nothing about your athletes, their training or their weight is ever involved in any of it, and
 Clerk's own usage reporting is switched off in this app's code rather than left on by default.
 
 ## How long we keep it
@@ -188,7 +199,8 @@ Ask, and your household is deleted: every profile, every logged session, every s
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
 sign-in accounts are deleted too.
 
-Because this cannot be undone and there is currently no per-person login to prove who is asking:
+Because this cannot be undone, and signing in does not yet prove which household is asking — the
+access code is still the shared part:
 
 - **We will confirm the request through the channel your invitation came through** — not simply by
   replying to whatever message arrives. This is to stop someone else having your family's data deleted.
@@ -231,8 +243,9 @@ above. Nothing about your athletes is sent to either of them.
 **How your agreement is recorded.** Signing up is by invitation only, so the record of who was asked,
 and when, is the invitation itself — this app does not store a separate consent timestamp.
 ⚠️ **This paragraph used to end _"if you would rather not have an account, say so and the shared code
-keeps working for you"_, and that stopped being true on 1 November 2026.** A Google account is now
-required to use the app at all; there is no longer a way in with the access code alone. If you would
+keeps working for you"_, and that stopped being true on 1 November 2026.** An adult now needs a Google
+account to get in; there is no longer a way in with the access code alone. (A child still never signs
+in — they use a device an adult has already unlocked.) If you would
 rather not have one, the honest answer is that the app cannot be used without it — which is a
 limitation you should hear before you start, not at the door.
 

@@ -15,6 +15,29 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Clerk's script loads on the PUBLIC pages, including the privacy notice (found 2026-11-03, #326 review)
+
+- **What:** `app/layout.tsx` renders `<ClerkProvider dynamic>` conditioned on `clerkIsConfigured()` —
+  the **keys**, not the **path** — so `clerk.browser.js` is emitted on every rendered route and
+  clerk-js opens a connection to Clerk's Frontend API. Measured against production:
+  `curl -sL https://mat-plan.dev/privacy` carries the script tag, and so does the landing page.
+- 🔴 **Why it matters more than it looks.** `/` and `/privacy` are the two routes a **stranger** can
+  open — someone sent here by a consent screen to decide whether to trust this app with a child's
+  health data. Today that person's IP is seen by Clerk, and by Cloudflare which fronts
+  `clerk.mat-plan.dev`, **because they read the privacy notice**. OSS-2 made `/` deliberately
+  branchless and PRIV-2 made `/privacy` read no cookie and query no database; both of those
+  properties are about this app's own server, and a third-party script on the same page is the part
+  neither of them covers.
+- **Impact:** no data about anyone's training leaves — this is an IP address and a user agent on two
+  public pages. But it is exactly the shape a privacy notice is read to find out about, and until
+  2026-11-03 the notice said the opposite ("your browser talks to this app and nothing else").
+- **Proposed fix:** scope the provider to the routes that need it. `/sign-in` needs it, and so does
+  `/p` (the sign-out control calls `useClerk()`); `/` and `/privacy` need nothing from Clerk.
+  ⚠️ Not a one-liner: `app/layout.tsx` is the root layout, the provider feeds the `x-nonce` wiring,
+  and `lib/clerk.ts`'s keys-absent branch exists because the provider **throws** without a key — so
+  the split has to keep all three true. Check whether a route-group layout is the cleanest seam.
+- **Severity:** medium. It is disclosed now, which is the floor, not the fix.
+
 ### Clerk's browser runtime is fetched from a CDN at a floating major, so nothing in CI sees it (found 2026-10-16, AUTH-1 1a)
 
 - **What & why:** `@clerk/nextjs@7.9.15` is pinned in `pnpm-lock.yaml`, but the code that actually

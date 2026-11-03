@@ -55,3 +55,23 @@
   three since `1a` (`/sign-in` owns its subtree via `PUBLIC_PATH_TREES`), and `/sign-in` is the **only**
   un-gated route that reaches a third party. The notice already said three, so the published document
   was ahead of its own evidence. _(privacy + trust lenses, 2026-11-03.)_
+  🔴 **A third review round found a production fact nobody had written down: Clerk's script loads on
+  the PUBLIC pages, including the privacy notice itself.** `app/layout.tsx` renders `<ClerkProvider>`
+  conditioned on the **keys**, not the **path**, so `clerk.browser.js` ships on every route. Measured,
+  not inferred — `curl -sL https://mat-plan.dev/privacy` carries the script tag, and so does the
+  landing page. **So a stranger who opens the privacy notice and nothing else has their IP seen by
+  Clerk, and by Cloudflare which fronts that hostname, because they read the privacy notice.** Both
+  versions of the "No tracking" paragraph were wrong about this — the old one and the one this PR
+  wrote. It now says so plainly, and `tech-debt.md` carries the fix (scope the provider to the routes
+  that need it; `/` and `/privacy` need nothing from Clerk). Disclosure is the floor, not the fix.
+  ⚠️ **Three more of this PR's own new sentences were false, all verified against the code:**
+  _"ask, and it is done directly in the database"_ — soft-deleting a `household_members` row removes
+  no access at all, because the resolver is not membership-derived until `1c-4`; _"the record of who
+  did something is per-person"_ — there is **no actor column** anywhere (`created_by|author_id|
+member_id|logged_by` → 0 matches) and `userId` appears **0 times** in any Server Action; and
+  _"everyone who uses this app goes through Google"_ — contradicted three times by the Children
+  section, since a child never signs in. The subject is now scoped to **signing in**.
+  📌 **Two more gates earned their keep.** The notice's renderer rejects inline code spans, so
+  `clerk.mat-plan.dev` ships as plain text — a document for parents carries no backticks by design.
+  And a malformed three-column table row passed `format:check` silently; prettier does not pad a
+  missing cell. _(correctness lens, 2026-11-03.)_

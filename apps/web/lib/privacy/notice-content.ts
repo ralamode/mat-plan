@@ -668,7 +668,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": ", even though sign-in is not. Everyone in the household types the\nsame code, and there is "
+              "text": ", even though signing in is not. Everyone in the household types the\nsame code, and there is "
             },
             {
               "k": "strong",
@@ -681,10 +681,23 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " to remove one person's access — ask, and it is\ndone directly in the database. (Each adult now signs in as themselves, so the record of "
+              "text": " to remove one person's access. Ask, and their\nsign-in account is deleted at Clerk — that is the lever that works today. ⚠️ "
             },
             {
-              "k": "em",
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Removing someone\nfrom the household in the database does not currently stop them"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": ", because the app does not yet\nwork out whose data you get from who you are; that is the next piece of work. And signing in does\nnot mean the app records "
+            },
+            {
+              "k": "strong",
               "children": [
                 {
                   "k": "text",
@@ -694,20 +707,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " did\nsomething is per-person; the "
-            },
-            {
-              "k": "em",
-              "children": [
-                {
-                  "k": "text",
-                  "text": "code"
-                }
-              ]
-            },
-            {
-              "k": "text",
-              "text": " is the part that is still shared, until it is retired.)"
+              "text": " did what — it still does not. See the limitation below."
             }
           ]
         }
@@ -1025,7 +1025,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             "children": [
               {
                 "k": "text",
-                "text": "it is the only sign-in method offered — so everyone who uses this app goes through Google"
+                "text": "it is the only sign-in method offered — so everyone who signs in goes through Google"
               }
             ]
           },
@@ -1101,20 +1101,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. Once you are signed in, "
-      },
-      {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
-            "text": "your browser talks to this app and nothing else"
-          }
-        ]
-      },
-      {
-        "k": "text",
-        "text": ". "
+        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. "
       },
       {
         "k": "strong",
@@ -1127,20 +1114,77 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " thing is\ndifferent, and it is not tracking: the sign-in screen — which everyone now passes through, because it\nis the only way in — loads Clerk's code and talks to Clerk's and Google's servers, so both see your IP\naddress and your browser "
+        "text": " thing is not this app, and it is not tracking: "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "on that screen"
+            "text": "Clerk's code loads on every page,\nincluding this one"
           }
         ]
       },
       {
         "k": "text",
-        "text": ". Nothing about your athletes, their training or their weight is ever involved, and\nClerk's own usage reporting is switched off in this app's code rather than left on by default."
+        "text": ", from clerk.mat-plan.dev — Clerk's own servers, under a name on this app's\ndomain — and opens a connection to them. So "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Clerk sees your IP address and your browser on every\npage you open here"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", whether or not you sign in, and so does Cloudflare, which Clerk puts in front of\nthat address."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "text",
+        "text": "⚠️ "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "This paragraph used to say your browser talked to this app and nothing else, and that the\nsign-in screen was the exception. That was wrong, and it was wrong on this very page"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " — checked\nagainst the live site on 2026-11-03, not assumed. Scoping Clerk's code to the screens that need it is\nworth doing and is not done yet; until it is, the honest version is the one above."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "text",
+        "text": "Tapping "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Continue with Google"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " then sends you to Google, which sees your IP address and browser\ntoo. Nothing about your athletes, their training or their weight is ever involved in any of it, and\nClerk's own usage reporting is switched off in this app's code rather than left on by default."
       }
     ]
   },
@@ -1602,7 +1646,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Because this cannot be undone and there is currently no per-person login to prove who is asking:"
+        "text": "Because this cannot be undone, and signing in does not yet prove which household is asking — the\naccess code is still the shared part:"
       }
     ]
   },
@@ -1983,7 +2027,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " A Google account is now\nrequired to use the app at all; there is no longer a way in with the access code alone. If you would\nrather not have one, the honest answer is that the app cannot be used without it — which is a\nlimitation you should hear before you start, not at the door."
+        "text": " An adult now needs a Google\naccount to get in; there is no longer a way in with the access code alone. (A child still never signs\nin — they use a device an adult has already unlocked.) If you would\nrather not have one, the honest answer is that the app cannot be used without it — which is a\nlimitation you should hear before you start, not at the door."
       }
     ]
   },
