@@ -331,7 +331,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": " from 1 November 2026."
+            "text": ", since 1 November 2026."
           }
         ]
       },
@@ -437,7 +437,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "See \"What is changing\"."
+        "text": "See \"What changed on 1 November 2026\"."
       }
     ]
   },
@@ -662,13 +662,52 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "One shared access code."
+                  "text": "The access code is shared"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " Everyone in the household uses the same code. There is no per-person\nlogin yet, and no way to revoke access for one person without changing the code for everyone."
+              "text": ", even though sign-in is not. Everyone in the household types the\nsame code, and there is "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "no control in the app"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " to remove one person's access — ask, and it is\ndone directly in the database. (Each adult now signs in as themselves, so the record of "
+            },
+            {
+              "k": "em",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "who"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " did\nsomething is per-person; the "
+            },
+            {
+              "k": "em",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "code"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " is the part that is still shared, until it is retired.)"
             }
           ]
         }
@@ -909,13 +948,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             "children": [
               {
                 "k": "text",
-                "text": "Your IP address only"
+                "text": "Your IP address"
               }
             ]
           },
           {
             "k": "text",
-            "text": ", briefly, to stop someone guessing the access code."
+            "text": ", briefly, to stop someone guessing the access code — and, since sign-in went live, "
+          },
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "the identifier of whoever is signed in"
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": ", briefly, to stop the app being hammered. Both are counters that expire in minutes. No name, no email, and never any training or weigh-in data."
           }
         ]
       },
@@ -965,17 +1017,21 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         ],
         "desc": [
           {
+            "k": "text",
+            "text": "Provides the sign-in, and "
+          },
+          {
             "k": "strong",
             "children": [
               {
                 "k": "text",
-                "text": "Signing in uses Google, and it is the only way in."
+                "text": "it is the only sign-in method offered — so everyone who uses this app goes through Google"
               }
             ]
           },
           {
             "k": "text",
-            "text": " Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google."
+            "text": ". Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google."
           }
         ]
       },
@@ -1045,40 +1101,40 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. "
+        "text": " No advertising network, no analytics product, no social buttons, no third-party\nfonts. Once you are signed in, "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "Today your browser talks to this app and nothing else"
+            "text": "your browser talks to this app and nothing else"
           }
         ]
       },
       {
         "k": "text",
-        "text": " — the code for the sign-in screen\nships with the app, but with sign-in switched off nothing of it runs and no request leaves for anyone\nelse. When sign-in is switched on, "
+        "text": ". "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "one"
+            "text": "One"
           }
         ]
       },
       {
         "k": "text",
-        "text": " thing changes and it is not tracking: opening the sign-in\nscreen loads Clerk's code and talks to Clerk's servers, so Clerk sees your IP address and your browser\non "
+        "text": " thing is\ndifferent, and it is not tracking: the sign-in screen — which everyone now passes through, because it\nis the only way in — loads Clerk's code and talks to Clerk's and Google's servers, so both see your IP\naddress and your browser "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "that screen"
+            "text": "on that screen"
           }
         ]
       },
@@ -1177,6 +1233,29 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "term": [
           {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "Your sign-in session"
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": " (a cookie, and the record at Clerk)"
+          }
+        ],
+        "desc": [
+          {
+            "k": "text",
+            "text": "Held by Clerk, not by this app. Its exact length is Clerk's setting and this notice does not yet state it — ask and you will be told. Signing out ends it immediately."
+          }
+        ]
+      },
+      {
+        "term": [
+          {
             "k": "text",
             "text": "Your theme choice"
           }
@@ -1192,7 +1271,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "term": [
           {
             "k": "text",
-            "text": "The IP address used for rate limiting"
+            "text": "The IP address, and the signed-in account identifier, used for rate limiting"
           }
         ],
         "desc": [
@@ -1378,7 +1457,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " The app does\nnot record who deleted what, and anyone with your access code can open any athlete. So a child can\ndelete a weigh-in and a parent will not see it either, until they use Restore. That is the honest\nshape of it today, and it is one of the things sign-in is meant to improve."
+              "text": " The app does\nnot record who deleted what, and anyone with your access code can open any athlete. So a child can\ndelete a weigh-in and a parent will not see it either, until they use Restore. That is the honest\nshape of it today, and it is one of the things per-person sign-in is meant to improve."
             }
           ]
         }
@@ -1470,7 +1549,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " and you will be sent a full copy — including, once sign-in is switched\non, what Clerk holds about your login: your email address, your name, your profile picture, your Google account identifier, and when\nyou signed in. And "
+        "text": " and you will be sent a full copy — including what Clerk holds about\nyour login: your email address, your name, your profile picture, your Google account identifier, and when\nyou signed in. And "
       },
       {
         "k": "strong",
@@ -1514,7 +1593,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ", not hidden. Your\nsign-in accounts are deleted too, once sign-in exists."
+        "text": ", not hidden. Your\nsign-in accounts are deleted too."
       }
     ]
   },
@@ -1829,7 +1908,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "What is changing"
+        "text": "What changed on 1 November 2026"
       }
     ]
   },
@@ -1878,7 +1957,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Signing up is by invitation only, so the record of who was asked,\nand when, is the invitation itself — this app does not store a separate consent timestamp. If you would\nrather not have an account, say so and the shared code keeps working for you."
+        "text": " Signing up is by invitation only, so the record of who was asked,\nand when, is the invitation itself — this app does not store a separate consent timestamp.\n⚠️ "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "This paragraph used to end "
+          },
+          {
+            "k": "em",
+            "children": [
+              {
+                "k": "text",
+                "text": "\"if you would rather not have an account, say so and the shared code\nkeeps working for you\""
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": ", and that stopped being true on 1 November 2026."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " A Google account is now\nrequired to use the app at all; there is no longer a way in with the access code alone. If you would\nrather not have one, the honest answer is that the app cannot be used without it — which is a\nlimitation you should hear before you start, not at the door."
       }
     ]
   },
@@ -1993,9 +2098,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Reviewed against the code and signed off by the maintainer (the household operator), 2026-10-26."
+            "text": "Reviewed in full against the code and signed off by the maintainer (the household operator),\n2026-10-26. Re-reviewed 2026-11-03"
           }
         ]
+      },
+      {
+        "k": "text",
+        "text": " against the sign-in claims, after sign-in went live on\n1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been\nanswered."
       }
     ]
   },

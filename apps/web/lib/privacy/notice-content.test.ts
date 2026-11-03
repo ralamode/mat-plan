@@ -181,7 +181,7 @@ describe('the flattener reaches every nesting depth', () => {
     ['an `ol` item', 'Guard the code the way you would guard a password.'],
     ['a `dl` head', 'How long'],
     ['a `dl` term', 'Upstash'],
-    ['a `dl` desc', 'Your IP address only'],
+    ['a `dl` desc', 'to stop someone guessing the access code'],
     ['the signed-off line', 'signed off by the maintainer'],
   ])('surfaces text from %s', (_depth, probe) => {
     expect(flattened).toContain(probe);
