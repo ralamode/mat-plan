@@ -1510,7 +1510,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every write from code deployed before 2b; moving the writer into 2c just moves the boundary) — so the
   control was the sequencing rule plus 2b's `23505` fallback, which degraded the denial into the
   pre-existing read leak. `0017` removed it structurally, and it was never reachable in production (the
-  scope resolver throws on a second live household). ✅ **`TEN-2d`'s `VALIDATE` — the arc's only
+  scope resolver threw on a second live household — removed at 1c-4). ✅ **`TEN-2d`'s `VALIDATE` — the arc's only
   mechanical production-side gate, and the last invite precondition this arc owned — is DISCHARGED**
   (`0018`, 2026-10-13; its blocker count was measured zero first, so it could not wedge). What the
   invite now waits on is **`AUTH-1`** and the self-serve step

@@ -232,7 +232,8 @@ they are how to schedule any milestone, not facts about this one.
   2c just moves the boundary) — so the control was the **schedule**, with 2b's `23505` fallback
   degrading the denial into the pre-existing read leak. **Migration `0017` removed it structurally**:
   the two partial indexes are the only arbiters now, so B's own row simply inserts, and the window was
-  never reachable in production (the scope resolver throws on a second live household).
+  never reachable in production (the scope resolver threw on a second live household — removed at
+  1c-4).
   Reasoning: [TEN-2a's plan](../plans/ten-2a-household-movements.md) → _"The 2b→2c window"_.
   ✅ **And this settles the PR count: TEN-2 is FIVE rows, not three or four** — `2a`, `2b`, `2c`,
   `2c-1` (the split backfill) and `2d` (the `VALIDATE` plus the fallback's deletion), all filed in

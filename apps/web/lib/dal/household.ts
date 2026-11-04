@@ -114,7 +114,8 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
     // ⚠️ **FIXED MESSAGE AND TAG ONLY — never the error, never `extra`.** The caught error is a
     // `DrizzleQueryError` whose message embeds `params:`, and the param here IS the Clerk user id.
     // `scrubSentryEvent` has no allowlist for hand-built contexts; the DAL does not rely on it.
-    if (shouldReportUnresolved(user.userId, SCOPE_OUTCOME.schemaMissing)) {
+    if (!schemaMissingReported) {
+      schemaMissingReported = true;
       Sentry.captureMessage('household scope unresolved: membership schema missing', {
         level: 'error',
         tags: { scope_outcome: SCOPE_OUTCOME.schemaMissing },
@@ -208,24 +209,63 @@ export type ScopeOutcome = (typeof SCOPE_OUTCOME)[keyof typeof SCOPE_OUTCOME];
  * this one unblocks, "admitted by the instance" is the only requirement left.
  *
  * ⚠️ **Per principal rather than once per process**, which is the whole argument for giving C its own
- * outcome: once-per-process would hide the second affected family behind the first. One event per
- * distinct principal answers the runbook's question ("which account is unresolved"); the 10,000th
- * from the same account answers nothing. `REPORT_CAP` bounds the set itself, so a loop over many
- * accounts cannot grow it without limit — and an attacker holding one account burns one slot, not
- * every slot.
+ * outcome: once-per-process would hide the second affected family behind the first. ⚠️ **What that
+ * buys is a COUNT, not an identity** — the payload is a fixed message and one tag, so two
+ * principals' events are byte-identical and group into one Sentry issue. Keying per principal means
+ * the event count tracks how many accounts are unresolved; it cannot tell the operator *which*, and
+ * nothing here may (ADR 0006 obligation 3). `REPORT_CAP` bounds the set itself, so a loop over many
+ * accounts cannot grow it without limit, and an attacker holding one account burns one slot rather
+ * than every slot. Reaching the cap **emits once**, so the blackout that follows is visible rather
+ * than inferred from silence.
+ *
+ * 🔴 **`schema_missing` is NOT in that budget, and sharing one was a starvation path.** B′ means
+ * `household_members` is absent — a deploy ahead of migration `0019`: **production is dark for
+ * everyone**, not one person. Keyed per principal it was wrong in both directions — up to 100
+ * identical events for one outage, then none — and, sharing a never-evicted cap with the
+ * attacker-fillable C, 100 distinct no-membership principals could **silence that alarm for the life
+ * of the process**. The cheap hostile signal must not starve the expensive operator-critical one, so
+ * B′ gets `session.ts`'s shape instead: one boolean, once per process, which is the right shape for
+ * a deployment-wide condition anyway.
+ *
+ * 🔴 **`reportScopeMiss`'s `no_scope` rides the SAME bound, and leaving it out made this docblock
+ * claim more than the code did.** The loop above emits `no_membership` once — and then, on a
+ * profile-addressed request, `profiles.ts`'s null-scope branch emitted one **uncapped**
+ * `profile scope miss: no_scope` per request, so the stream this bound exists to stop survived under
+ * a different value. `cross_household` and `unknown_resource` stay **uncapped on purpose**: those
+ * two ARE the signal ADR 0006 obligation 3 exists to raise, and `runbooks.md`'s *"more than 3 events
+ * in 1 hour"* rule is written against them.
  *
  * The ids stay in **process memory only**: never logged, never emitted (the tag is still the whole
- * payload), and gone on the next deploy. The DAL already holds the id for the duration of the
- * request; this keeps it no longer than the process.
+ * payload), and gone on the next deploy. Deliberately the plaintext id rather than a digest — the
+ * request already holds it, `reportedUnresolved` is module-private and unexported, and a hash would
+ * add a second representation of the same identifier to reason about for no change in what is
+ * retained.
  */
 const REPORT_CAP = 100;
 const reportedUnresolved = new Set<string>();
 
-function shouldReportUnresolved(userId: string, outcome: ScopeOutcome): boolean {
-  const key = `${outcome}:${userId}`;
+/** B′ is deployment-wide, so it is once per PROCESS — `session.ts`'s shape, not a per-principal key. */
+let schemaMissingReported = false;
+
+function shouldReportUnresolved(
+  userId: string | null,
+  outcome: ScopeOutcome | ScopeMissOutcome,
+): boolean {
+  // No principal collapses to once per process, which is correct rather than a compromise: there is
+  // nothing to tell two anonymous callers apart by, and 1c-3b refuses them upstream anyway.
+  const key = `${outcome}:${userId ?? 'anonymous'}`;
   if (reportedUnresolved.has(key)) return false;
-  if (reportedUnresolved.size >= REPORT_CAP) return false;
+  if (reportedUnresolved.size > REPORT_CAP) return false;
   reportedUnresolved.add(key);
+  // The cap's own event, so an operator sees the blackout start instead of inferring it from
+  // silence. It takes the last slot, which is why the comparison above is `>` and not `>=`.
+  if (reportedUnresolved.size > REPORT_CAP) {
+    Sentry.captureMessage('household scope unresolved: per-principal report cap reached', {
+      level: 'warning',
+      tags: { scope_outcome: 'report_cap_reached' },
+    });
+    return false;
+  }
   return true;
 }
 
@@ -422,11 +462,20 @@ export async function reportScopeMiss(args: {
       outcome,
     };
 
-    Sentry.captureMessage(`profile scope miss: ${outcome}`, {
-      level: outcome === SCOPE_MISS_OUTCOME.crossHousehold ? 'warning' : 'info',
-      tags: { scope_outcome: outcome, scope_action: event.action },
-      contexts: { scope_miss: { ...event } },
-    });
+    // 🔴 **`no_scope` is BOUNDED per principal; the other two are not.** A signed-in account with no
+    // membership reaches this on every profile-addressed request, so an uncapped `no_scope` is the
+    // same quota drain the resolver's own captures are bounded against — and the thing it buries is
+    // `cross_household`, which is why that one and `unknown_resource` are never capped.
+    if (
+      outcome !== SCOPE_MISS_OUTCOME.noScope ||
+      shouldReportUnresolved((await getCurrentUser())?.userId ?? null, outcome)
+    ) {
+      Sentry.captureMessage(`profile scope miss: ${outcome}`, {
+        level: outcome === SCOPE_MISS_OUTCOME.crossHousehold ? 'warning' : 'info',
+        tags: { scope_outcome: outcome, scope_action: event.action },
+        contexts: { scope_miss: { ...event } },
+      });
+    }
   } catch {
     // Constraint 4. A `DrizzleQueryError` here embeds query params (SEC-3), and a telemetry probe
     // must never turn a 404 into a 500. Deliberately silent: the next miss emits again.

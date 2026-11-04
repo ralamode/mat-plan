@@ -315,7 +315,9 @@ describe('the renderer undoes the preflight rules the notice depends on', () => 
   it('numbers the ordered list — `notice.md` cross-references "(1) and (2)"', () => {
     // Preflight sets `list-style: none` on `ol`. Without `list-decimal` the paragraph that tells a
     // parent the worst-case exposure points at numbers that are not on the page.
-    expect(flattened).toContain('That follows from (1) and');
+    // The WHOLE sentence: it was truncated at "(1) and" only because the old wrap split it, and
+    // `flattened` normalises whitespace now, so the probe can be what the page actually says.
+    expect(flattened).toContain('That follows from (1) and (2)');
     expect(BLOCK_CLASS.ol).toContain('list-decimal');
     expect(BLOCK_CLASS.ul).toContain('list-disc');
   });

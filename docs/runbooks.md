@@ -716,7 +716,12 @@ database from a branch, run `db:migrate` locally against the preview string (OPS
 dispatch **"Migrate + seed (preview database)"**, which holds no production credential. Check the "Apply migrations + idempotent seed" step didn't print the `DATABASE_URL_UNPOOLED …
 skipping` warning.
 
-**Safety:** `db:migrate` is a no-op when nothing is pending; `db:seed` is idempotent.
+**Safety:** `db:migrate` is a no-op when nothing is pending. ⚠️ **`db:seed` is idempotent against an
+empty or seed-owned database — not against an arbitrary one, since `AUTH-1` 1c-4.** If a live
+household exists and none carries the seed's `public_id`, it **refuses** with
+_"refusing to seed into a household this seed does not own"_ and the job goes **red** rather than
+creating a second household (`packages/db/src/seed.ts`). That is the intended outcome; the recovery is
+Precondition 2 below.
 
 ---
 
@@ -804,12 +809,12 @@ be a cross-tenant linkage over minors' health data.
    the old "re-seed prod" answer is wrong for all of them.** `apps/web/lib/dal/household.ts` →
    `SCOPE_OUTCOME` is the source of the values:
 
-   | `scope_outcome`  | What it means                                                                         | What to do                                                                                                                                                                                                                                                                       |
-   | ---------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `no_membership`  | This signed-in account holds **no live `household_members` row**                      | **The common one.** An invited account that was never linked, the wrong Google account, or the maintainer before the claim correction. Confirm with § "The claim correction has been run with `--apply`" step 6, then run the claim correction for that account. Do NOT re-seed. |
-   | `schema_missing` | `household_members` is not there (`42P01`/`42703`)                                    | A deploy ahead of migration `0019`, or an un-migrated preview. Fix the migration state; the app is dark for **everyone**, not one person.                                                                                                                                        |
-   | `no_scope`       | A miss-path event: the request reached a scoped read with no scope at all             | The same two causes as above, seen one layer up. Triage by the resolver's own event, not this one.                                                                                                                                                                               |
-   | `no_household`   | ⚠️ **Retired at 1c-4 — nothing can emit it.** An event carrying it is OLDER than 1c-4 | Read it as history. Do not reason about current behaviour from it.                                                                                                                                                                                                               |
+   | `scope_outcome`  | What it means                                                                         | What to do                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+   | ---------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | `no_membership`  | This signed-in account holds **no live `household_members` row**                      | **The common one.** An invited account that was never linked, the wrong Google account, or the maintainer before the claim correction. ⚠️ **The event cannot tell you WHICH account** — its payload is a fixed message and one tag, deliberately (ADR 0006 obligation 3), so events from different principals are byte-identical and group into one Sentry issue. The count tracks how many accounts are unresolved, not who. To find them, compare the live memberships against the Clerk dashboard: `SELECT household_id, role, created_at FROM household_members WHERE deleted_at IS NULL;` — one row per person who can get in, so an account the dashboard lists with no row here is in this state. Then run the claim correction for that account. Do NOT re-seed. |
+   | `schema_missing` | `household_members` is not there (`42P01`/`42703`)                                    | A deploy ahead of migration `0019`, or an un-migrated preview. Fix the migration state; the app is dark for **everyone**, not one person.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+   | `no_scope`       | A miss-path event: the request reached a scoped read with no scope at all             | The same two causes as above, seen one layer up. Triage by the resolver's own event, not this one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+   | `no_household`   | ⚠️ **Retired at 1c-4 — nothing can emit it.** An event carrying it is OLDER than 1c-4 | Read it as history. Do not reason about current behaviour from it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 4. **The app is down for ONE account with `household scope is ambiguous`** → 🔴 **this changed
    meaning at `AUTH-1` 1c-4, and the old remedy here destroyed data.** It used to mean "two or more
@@ -820,13 +825,19 @@ be a cross-tenant linkage over minors' health data.
    deleting a real family. Find the duplicate MEMBERSHIP and soft-delete the one created in error:
 
    ```sql
-   SELECT id, household_id, clerk_user_id, role, created_at
+   SELECT id, household_id, role, created_at
      FROM household_members
     WHERE deleted_at IS NULL
       AND clerk_user_id IN (
           SELECT clerk_user_id FROM household_members
            WHERE deleted_at IS NULL GROUP BY clerk_user_id HAVING count(*) > 1);
    ```
+
+   ⚠️ **The projection deliberately omits `clerk_user_id`.** The remedy soft-deletes by `id`, and
+   `household_id` + `created_at` are what you choose between, so triage never needs to print the id —
+   and this section's output is the kind an operator pastes into a note. Same rule as § "The claim
+   correction has been run with `--apply`": a Clerk user id is a stable third-party account
+   identifier for a named adult (`docs/privacy/data-inventory.md` § 1a) and this repo is public.
 
    ⚠️ It should be unreachable: `uq_household_members_clerk_user` is partial-unique on
    `clerk_user_id` alone, so the second row cannot be inserted. If this alert fires, that constraint
@@ -947,9 +958,19 @@ Then:
 ### ⛔ Precondition 2 — a household in the seed cannot be deleted yet
 
 `migrate.yml` runs `db:seed` against production **on every push to `main`**, and the seed upserts the
-household and its profiles by fixed `public_id` with `ON CONFLICT DO NOTHING`. That is idempotent only
-against a row that **exists** — after a hard delete there is no conflict, **so it inserts**, and the
-next merged PR re-creates the household and its named child profiles.
+household and its profiles by fixed `public_id` with `ON CONFLICT DO NOTHING`. 🔴 **Since `AUTH-1`
+1c-4 the consequence of deleting a seeded household depends on whether another live household
+exists**, and the two branches fail in opposite directions:
+
+- **No other live household** (today's single-household deployment) — unchanged: after a hard delete
+  there is no conflict and no live household, **so the seed inserts**, and the next merged PR
+  re-creates the household and its named child profiles.
+- **Another live household exists** (the intended end state once a family is invited) — the seed's
+  insert is now conditional on no live household existing, so it **skips**, finds nothing under the
+  seed's `public_id`, and **throws**. `migrate.yml` is then **red on every merge to `main`** until a
+  row under `SEED_HOUSEHOLD_PUBLIC_ID` exists again — and a dead step in that job means no new
+  reference data reaches production either. Recovery: re-insert a household row under that
+  `public_id`, or land `OPS-2`'s seed split first.
 
 So: **do not delete a seeded household until `OPS-2` splits the seed** (reference data for prod,
 fixtures for dev/CI). This applies to the maintainer's own household specifically — the one most

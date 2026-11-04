@@ -168,16 +168,26 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     //
     // `export * from './queries/household-membership'` in `src/index.ts` is the ONE intended route
     // and is exempt by name; a star-export of that module from anywhere else is not.
+    //
+    // 🔴 **The declaring module is NOT exempt, and exempting it was the bug.** The sibling guard
+    // exempts its own home safely, because `writers/household-scope-script.ts` is unreachable from
+    // `apps/web` by `packages/db`'s `exports` map at all. This module is the opposite: the barrel
+    // star-exports it, so **anything it exports is published on the `"."` specifier the app
+    // imports** — one `export { membershipHousehold as lookupHousehold };` added INSIDE it reaches
+    // the app under a name no guard knows. Copying the sibling's exemption without that adjustment
+    // left the guard green against exactly the evasion it was written for, and the first probe of it
+    // planted the alias in the barrel, where the filter did reach.
     const BARREL = 'packages/db/src/index.ts';
-    const HOME = 'packages/db/src/queries/household-membership.ts';
     const offenders = DB_SOURCES.filter((f) => {
       const rel = relative('', f);
-      if (rel === HOME) return false;
       const src = code(join(REPO, f));
-      if (/export\s*\{[^}]*\bas\s+membershipHousehold/.test(src)) return true;
-      if (/export\s*\{[^}]*\bmembershipHousehold\b[^}]*\bas\b/.test(src)) return true;
+      // One pattern, not three: `{ x as membershipHousehold }` and `{ membershipHousehold as x }`
+      // both contain the bare symbol inside the braces, so the two narrower forms were subsumed.
       if (/export\s*\{[^}]*\bmembershipHousehold\b/.test(src)) return true;
-      if (/export\s+\*\s+from\s+['"][^'"]*household-membership/.test(src)) return rel !== BARREL;
+      // A star-export naming the module, OR a directory barrel that would re-publish it indirectly.
+      if (/export\s+\*\s+from\s+['"][^'"]*(household-membership|\/queries)['"]/.test(src)) {
+        return rel !== BARREL;
+      }
       return false;
     });
     expect(

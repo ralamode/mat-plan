@@ -176,6 +176,37 @@ describe('getHouseholdScope — the one place a household is derived from a requ
     await getHouseholdScope();
     expect(captureMessage).toHaveBeenCalledTimes(2);
   });
+
+  it("🔴 (B′) is ONCE PER PROCESS, so a flood of (C) cannot starve 'production is dark'", async () => {
+    // B′ means `household_members` is absent — a deploy ahead of `0019`, dark for EVERYONE. It used
+    // to share one never-evicted 100-slot budget with C, which is attacker-fillable on an
+    // unlimited page read: 100 distinct no-membership principals silenced this alarm for the life of
+    // the process. Two assertions, because both halves have to hold.
+    const { createRecordingDb } = await import('./recording-db');
+    const missing = Object.assign(new Error('relation does not exist'), { code: '42P01' });
+    const rec = createRecordingDb(() => {
+      throw missing;
+    });
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const mod = await import('./household');
+    captureMessage.mockClear();
+
+    // (1) Deployment-wide, so one event however many principals meet it.
+    state.principal = nextPrincipal();
+    await mod.getHouseholdScope();
+    state.principal = nextPrincipal();
+    await mod.getHouseholdScope();
+    const schemaEvents = () =>
+      captureMessage.mock.calls.filter(
+        (c) =>
+          (c[1] as { tags?: { scope_outcome?: string } })?.tags?.scope_outcome === 'schema_missing',
+      );
+    expect(schemaEvents()).toHaveLength(1);
+
+    vi.doUnmock('./db');
+    vi.resetModules();
+  });
 });
 
 /**
@@ -231,6 +262,50 @@ describe('reportScopeMiss — the miss-path event', () => {
     // the row.
     const call = await miss([], true);
     expect(call?.[1]).toMatchObject({ contexts: { scope_miss: { outcome: 'no_scope' } } });
+  });
+
+  /** The captures carrying one `scope_outcome` tag. The tag is what the runbook triages on. */
+  const tagged = (calls: unknown[][], outcome: string) =>
+    calls.filter(
+      (c) => (c[1] as { tags?: { scope_outcome?: string } })?.tags?.scope_outcome === outcome,
+    );
+
+  /** Two calls in ONE module graph, so the module-level bound is shared between them. */
+  async function missTwice(memberships: unknown[][], profileExists: boolean) {
+    const { createRecordingDb } = await import('./recording-db');
+    const rec = createRecordingDb((sql) =>
+      /from "household_members"/.test(sql) ? memberships : profileExists ? [[FOREIGN]] : [],
+    );
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const mod = await import('./household');
+    const args = { action: mod.SCOPE_MISS_ACTION.resolveProfile, profilePublicId: FOREIGN };
+    captureMessage.mockClear();
+    await mod.reportScopeMiss(args);
+    await mod.reportScopeMiss(args);
+    vi.doUnmock('./db');
+    vi.resetModules();
+    return captureMessage.mock.calls;
+  }
+
+  it('🔴 no_scope is BOUNDED per principal — it is the one a no-membership account can loop', async () => {
+    // Without this the bound on the resolver's own captures is half a bound: the same account
+    // looping `GET /p/<id>` emits one `no_membership` and then one `no_scope` PER REQUEST, so the
+    // stream survives under a different value — and what it buries is `cross_household`.
+    // Count by TAG, and count each outcome separately: state C also emits the resolver's own
+    // `no_membership` on the way past, which the same helper bounds — so a bare length assertion
+    // would pass for the wrong reason. The tag rather than the message, because the resolver's
+    // message reads "has no live membership" and only the tag carries the value an operator filters.
+    const calls = await missTwice([], true);
+    expect(tagged(calls, 'no_scope')).toHaveLength(1);
+    expect(tagged(calls, 'no_membership')).toHaveLength(1);
+  });
+
+  it('🔴 cross_household is NOT bounded — capping the signal would defeat the event', async () => {
+    // ADR 0006 obligation 3 exists to make this one noticeable, and `runbooks.md`'s alert rule is
+    // "more than 3 events in 1 hour" — a bound here would make that rule unreachable.
+    const calls = await missTwice([[11]], true);
+    expect(tagged(calls, 'cross_household')).toHaveLength(2);
   });
 
   it('carries the id and NOTHING else — no name, no value, no owning household', async () => {

@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-03. This is a beta."
+            "text": "Last updated: 2026-11-04. This is a beta."
           }
         ]
       }
@@ -681,7 +681,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " to remove one person's access to the code\nitself — rotating it signs everybody out. ✅ "
+              "text": " to remove one person's access to the code\nitself — rotating it means everyone has to enter the new code. ✅ "
             },
             {
               "k": "strong",
@@ -694,7 +694,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " (changed 2026-11-03): the app works out whose data you get from who you are, so once their\nmembership is removed they see nothing, even with the code. Deleting their sign-in account at\nClerk also still works. Ask for either. And signing in does not mean the app records "
+              "text": " (new in this version): the app works out whose data you get from who you are, so once their\nmembership is removed they see nothing, even with the code. Deleting their sign-in account at\nClerk also still works. Ask for either. ⚠️ "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Removing someone from the household hides their\nmembership record rather than erasing it, so it keeps their account identifier until the whole\nhousehold is deleted"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — deleting their Clerk account is the lever that leaves nothing behind. And signing in does not mean the app records "
             },
             {
               "k": "strong",
@@ -727,7 +740,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " (changed\n2026-11-03): who you are signed in as decides which household's data the app will show you, and\nthat is checked on every read and every write. "
+              "text": " (new in\nthis version): who you are signed in as decides which household's data the app will show you, and\nthat is checked on every read and every write. "
             },
             {
               "k": "strong",
@@ -773,7 +786,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What changed on\n2026-11-03 is that the access code alone is no longer enough: it takes the code "
+              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this\nversion is that the access code alone is no longer enough: it takes the code "
             },
             {
               "k": "strong",
@@ -2174,7 +2187,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " against the sign-in claims, after sign-in went live on\n1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been\nanswered."
+        "text": " against the sign-in claims, after sign-in went live on\n1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been\nanswered. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Re-reviewed again 2026-11-04"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " against the household-scope change: the app now works out\nwhose data you get from who you are, which made three of the limitations below out of date in the\ndirection of understating what the app protects."
       }
     ]
   },

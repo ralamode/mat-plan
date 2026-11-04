@@ -70,7 +70,8 @@ join "households"`. ⚠️ `household.test.ts`'s `no_scope` case was the one to 
   1c-3b → #323 and #324, 1c-4 → #330), with the two-pass sweep written down — grep the chunk id,
   then grep the **behaviour** — and the rule that the PR states the list, never a count.
   🔴 **The published privacy notice was telling parents a protection did NOT work that this chunk
-  makes work.** `notice.md`'s limitation 1 read _"removing someone from the household in the database
+  makes work**, and `session.ts` — the module the resolver reads its principal from — still said
+  `1c-4` was _"still owed"_ in the present tense, a sixth site. `notice.md`'s limitation 1 read _"removing someone from the household in the database
   does not currently stop them, because the app does not yet work out whose data you get from who you
   are; that is the next piece of work"_ — this **is** that work, and `membershipHousehold` filters
   both `deleted_at` conjuncts (proved by `07-membership-ignores-soft-delete`), so removing a
@@ -81,7 +82,13 @@ join "households"`. ⚠️ `household.test.ts`'s `no_scope` case was the one to 
   source of truth for what is enforced. All corrected, `notice-content.ts` regenerated. ⚠️ **What did
   NOT change:** inside one household any member still reads and exports any athlete (profile tiles
   are a UX switch, not a security boundary), the access code is still shared and all-or-nothing until
-  `1d`, and the movement-name list is still common to every household.
+  `1d`, and the movement-name list is still common to every household. ⚠️ **And one thing the notice
+  now says that it did not:** removing someone **hides** their membership rather than erasing it, so
+  it keeps their account identifier until the whole household is deleted — the inventory said that
+  and the published page did not, which matters because this change makes membership removal the
+  recommended lever. The inventory's staleness command also could not see
+  `packages/db/src/queries/`, the directory the published claim rests on; it watches it now, and §8
+  records the new in-process store of Clerk ids behind the bound.
   🔴 **Both new captures are BOUNDED per principal.** States B′ and C are reachable on every page
   read, and page reads are not rate-limited — `checkMutationLimit` covers the seven mutating actions
   — so one admitted account looping `GET /p/<id>` emitted an unbounded stream. The cost is secondary:
@@ -89,13 +96,39 @@ join "households"`. ⚠️ `household.test.ts`'s `no_scope` case was the one to 
   to make noticeable, and at `1d` "admitted by the Clerk instance" is the only requirement left.
   `session.ts` already called its own cap _"the `scope_outcome` precedent"_ while this path had none.
   **Per principal rather than once per process**, which is the whole argument for C having its own
-  outcome — once-per-process would hide the second affected family behind the first.
+  outcome — once-per-process would hide the second affected family behind the first. ⚠️ **What that
+  buys is a count, not an identity:** the payload is a fixed message and one tag, so two principals'
+  events are byte-identical and group into one issue, and the runbook row says so rather than telling
+  an operator to act on an account the event cannot name.
+  🔴 **Two halves of that bound were wrong in the first attempt, and both were found by review.**
+  (1) `reportScopeMiss`'s `no_scope` rode the **same loop uncapped**, so the stream the bound exists
+  to stop survived under a different value — it joins the bound now, while `cross_household` and
+  `unknown_resource` stay uncapped **on purpose**, because those two are the signal ADR 0006
+  obligation 3 raises and `runbooks.md`'s _"more than 3 events in 1 hour"_ rule is written against
+  them. Both directions are pinned: under-bounding and over-bounding each turn a different case red.
+  (2) `schema_missing` shared one never-evicted 100-slot budget with the attacker-fillable
+  `no_membership`, so **100 distinct no-membership principals could silence _"production is dark for
+  everyone"_ for the life of the process.** B′ is deployment-wide, so it takes `session.ts`'s shape
+  instead — one boolean, once per process — and reaching the per-principal cap now **emits once**, so
+  the blackout after it is visible rather than inferred from silence.
   ⚠️ **The membership-containment guard was one-sided.** `scope.test.ts` greps `apps/web` for the
   symbol, which cannot see a rename that happens in `packages/db`: one
   `export { membershipHousehold as lookupHousehold }` line republishes it on the `"."` specifier
   under a name the sweep has never heard of, and every guard stays green while a page holds a raw
   internal `household_id`. The sibling guard for `householdScopeForScript` already carried the
-  DB-side mirror; this one now does too, probed RED by planting the alias.
+  DB-side mirror; this one now does too. ⚠️ **The first version exempted the declaring module, which
+  is the one file where the alias would actually publish** — the barrel star-exports it, so anything
+  it exports reaches the app's specifier — and the probe planted the alias in the barrel, where the
+  filter did reach. The sibling's exemption is safe only because its home is unreachable from
+  `apps/web` at all. Exemption dropped, three redundant patterns collapsed to one, a directory-barrel
+  star-export added, and re-probed by planting the alias **inside** the declaring module: red.
+  ⚠️ **`runbooks.md` carried two more claims the new seed throw falsified**, neither containing
+  `1c-4` — the lesson this PR adds, applied to it: _"`db:seed` is idempotent"_, the last line an
+  operator reads before dispatching against production, and "Precondition 2", whose stated failure
+  mode on deleting a seeded household is now only the **single-household** branch. With a second live
+  household present — the intended end state once a family is invited — the seed skips, finds nothing
+  under its `public_id` and **throws**, so `migrate.yml` is red on every merge until a row under that
+  id exists again. Both branches and the recovery are written down.
   📌 Also: the `householdState` cases were titled _"zero/two live households"_ while their bodies set
   memberships, so a red test would have named a state that cannot occur; `household.ts`'s lead
   docblock still documented the deleted algorithm, `SQL` and all, thirty lines above the block saying
