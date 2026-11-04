@@ -29,8 +29,9 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > ⛔ **The scoping control is now code; the remaining controls are still operational.** `TEN-1` has
 > landed, so every read and write that touches household data carries a household scope and the
 > isolation is proved against a real database in both directions. Two things that does **not** mean:
-> it is not **authorization** (`AUTH-1` is, and until then the principal is a shared access code),
-> and — until `TEN-2b` (2026-10-10) — it did not cover **`movements`**. It does now: that write is
+> it was not **authorization** — ✅ `AUTH-1` 1c-4 made it so, at the household boundary, by deriving
+> the scope from the principal's membership; see the Scoping bullet below for what that does and does
+> not cover — and — until `TEN-2b` (2026-10-10) — it did not cover **`movements`**. It does now: that write is
 > household-scoped and global-first. ✅ **`TEN-2c` (2026-10-12) dropped the non-partial
 > `movements_slug_unique`, closing the cross-household DENIAL window**, and ✅ **`TEN-2d` (2026-10-13)
 > `VALIDATE`d the end-state CHECK and deleted the `23505` fallback.** ⚠️ One residual survives
@@ -110,10 +111,16 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     0006 obligation 3): it returns `void` and is how the miss path tells `cross_household` from
     `unknown_resource`. Both exceptions are enforced as an allowlist with a reason per entry, not as
     prose — `apps/web/lib/dal/scoped.test.ts`.
-  - ⚠️ **Scoping is not authorization.** Before `AUTH-1` the principal is a shared access code, so
-    what holds today is _consistent scoping_: one household's data is unreachable from a request
-    scoped to another. It does not prove the requester is who they claim. `AUTH-1` authorizes it,
-    and this is the most likely thing on this page to over-read.
+  - ✅ **Scoping IS authorization at the household boundary, since `AUTH-1` 1c-4 (2026-11-03).**
+    ⚠️ This block said the opposite — _"before `AUTH-1` the principal is a shared access code … it
+    does not prove the requester is who they claim"_ — and that was true until the resolver became
+    membership-derived. `getHouseholdScope()` reads the Clerk principal's `household_members` row
+    now, so one household's data is unreachable from a request by anyone who is not a member of it,
+    and TEN-1's _consistent scoping_ became authorization without a call site changing.
+    ⚠️ **At the household boundary only.** Inside one household there is still no per-profile
+    authorization and there is not meant to be: profile tiles are a UX switch, not a security
+    boundary (AGENTS.md). The shared access code is also still shared and still unrevocable; `1d`
+    deletes it.
 - Public/URL/API IDs are **UUIDv7** (non-enumerable → anti-IDOR).
 - **Middleware is NOT the auth boundary** (CVE-2025-29927) — the real checks live in the DAL, on
   every read and write. Keep Next.js patched.

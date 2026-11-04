@@ -681,20 +681,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " to remove one person's access. Ask, and their\nsign-in account is deleted at Clerk — that is the lever that works today. ⚠️ "
+              "text": " to remove one person's access to the code\nitself — rotating it signs everybody out. ✅ "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "Removing someone\nfrom the household in the database does not currently stop them"
+                  "text": "Removing someone from the household now does stop\nthem"
                 }
               ]
             },
             {
               "k": "text",
-              "text": ", because the app does not yet\nwork out whose data you get from who you are; that is the next piece of work. And signing in does\nnot mean the app records "
+              "text": " (changed 2026-11-03): the app works out whose data you get from who you are, so once their\nmembership is removed they see nothing, even with the code. Deleting their sign-in account at\nClerk also still works. Ask for either. And signing in does not mean the app records "
             },
             {
               "k": "strong",
@@ -707,7 +707,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " did what — it still does not. See the limitation below."
+              "text": " did\nwhat — it still does not. See the limitation below."
             }
           ]
         }
@@ -721,39 +721,39 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "Households are not yet separated by the code itself."
+                  "text": "Separating one family's data from another's is done in the parts that read your log"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " The work to guarantee that one family's\ndata is unreachable from another's is underway and not finished. "
+              "text": " (changed\n2026-11-03): who you are signed in as decides which household's data the app will show you, and\nthat is checked on every read and every write. "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "That is exactly why the beta\nstarts with a single invited family."
+                  "text": "One part is still shared:"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " Until it is done, please treat the app as if anyone who was\ninvited could see anyone's log.\n"
+              "text": " the list of exercise\nnames is common to every household (see \"Movement names\" below), and it has to be separated before\na second family is invited. "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "One part of this is separate work:"
+                  "text": "The beta still starts with a single invited family"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " the list of exercise names is shared by every household (see\n\"Movement names\" below), and it has to be separated before a second family is invited."
+              "text": ", because that\nlast part is not finished."
             }
           ]
         }
@@ -767,13 +767,39 @@ export const NOTICE_BLOCKS: readonly Block[] = [
               "children": [
                 {
                   "k": "text",
-                  "text": "Anyone with your access code can download any athlete's full history."
+                  "text": "Anyone signed in to your household can download any athlete's full history"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " That follows from (1) and\n(2). Guard the code the way you would guard a password."
+              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What changed on\n2026-11-03 is that the access code alone is no longer enough: it takes the code "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "and"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " a sign-in\n"
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "and"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " a membership in your household. That follows from (1) and (2): the code is still shared,\nand the exercise-name list is still common to every household. Guard the code the way you would\nguard a password."
             }
           ]
         }

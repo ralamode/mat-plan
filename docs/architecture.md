@@ -130,13 +130,15 @@ offender by name, asking the question differently per kind: a **page** or **Rout
 checks itself, while an **action** must call `enterMutation` and **return its refusal** — the two
 conjuncts, their order, and the mutation limiter are asserted once inside that helper.
 
-**Why both.** `getHouseholdScope()` does not consult the principal until **`1c-4`**, so until then a
-session alone means _"anyone this Clerk instance admits"_ — deleting the gate first would **widen**
-access, not narrow it. And a request that skips the proxy (SEC-1's scar was a prefetch header missing
-the matcher; CVE-2025-29927 is the general case) meets nothing at all if the in-process gate check is
-removed; [SECURITY.md](../.github/SECURITY.md) refuses to call middleware a boundary. **So `1c-4`
-lands before `1d`**, which is what deletes the gate half —
-[beta-1](./milestones/beta-1.md) records that as a security obligation rather than a preference.
+**Why both.** Two reasons, and ✅ **the first is discharged at `1c-4`**: `getHouseholdScope()` did
+not consult the principal until then, so a session alone meant _"anyone this Clerk instance admits"_
+and deleting the gate first would have **widened** access rather than narrowing it. The scope is
+membership-derived now, which is what `1d` was waiting for. The second reason still stands and is
+what keeps the gate until `1d` deletes it: a request that skips the proxy (SEC-1's scar was a
+prefetch header missing the matcher; CVE-2025-29927 is the general case) meets nothing at all if the
+in-process check is removed, and [SECURITY.md](../.github/SECURITY.md) refuses to call middleware a
+boundary. [beta-1](./milestones/beta-1.md) records the ordering as a security obligation rather than
+a preference.
 
 ⚠️ **The proxy no longer forwards a cookie-holder from `/` or `/gate` to `/p`.** That arm was
 convenience routing (never authorization), but once the pages also required a session it **looped**
@@ -205,8 +207,10 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 - ✅ **Scoping IS authorization now, and that is what unblocks `1d`.** Until 1c-4 the scope came from
   the single live household, so a session proved only that the caller was someone this Clerk instance
   admits — deleting the access gate then would have **widened** access. A session now decides _whose_
-  data you get. ⚠️ The gate still stands until `1d` deletes it, because a request bypassing the proxy
-  meets nothing otherwise (SEC-1's scar; CVE-2025-29927).
+  data you get. ⚠️ **At the household boundary only** — inside one household there is still no
+  per-profile authorization, and there is not meant to be: profile tiles are a UX switch, not a
+  security boundary (AGENTS.md). ⚠️ The gate still stands until `1d` deletes it, because a request
+  bypassing the proxy meets nothing otherwise (SEC-1's scar; CVE-2025-29927).
 - ⚠️ **The ≥2-live-households throw is gone with the old body**, and was not ported to an alert: two
   live households is the intended end state once a family is invited, so it would fire on every
   request forever. The creator is closed instead — `seed.ts` refuses to insert when a live household

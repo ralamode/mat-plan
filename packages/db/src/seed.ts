@@ -179,11 +179,14 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
   //
   // ⚠️ Still by `public_id`, deliberately: this is the SEED's household, and the rows below belong
   // to it. On a database that already held a different live household the guard above skipped the
-  // insert, so this finds nothing — and the seed then fails on `household.id` below rather than
-  // seeding fixture profiles into somebody else's household. That is the right outcome and it is
-  // LOUD, but it is a TypeError rather than a sentence, so the operator gets a stack trace instead
-  // of an explanation. Worth an explicit throw the next time this file is open; not worth widening
-  // this PR for.
+  // insert, so this finds nothing — and the seed must refuse rather than seed fixture profiles into
+  // somebody else's household.
+  //
+  // 🔴 **The refusal is an explicit throw, and that is what makes the guard PROVABLE.** It used to
+  // fall through to a `TypeError` on `household.id` — the right outcome, reached by accident, and an
+  // assertion pinning a `TypeError` pins the absence of a property rather than the decision. The
+  // message is what `db:verify`'s seed-guard block asserts on, so `migrate.yml`'s red run also says
+  // why it went red instead of handing the operator a stack trace.
   //
   // 📌 **It also means `db:seed` is no longer unconditionally idempotent against an arbitrary
   // database** — only against one that is empty or already seed-owned, which is every database this
@@ -192,6 +195,14 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .select({ id: schema.households.id })
     .from(schema.households)
     .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+
+  if (!household) {
+    throw new Error(
+      'seed: refusing to seed into a household this seed does not own — a live household exists ' +
+        'under a different public_id, so the guard above skipped the insert and there is no ' +
+        'seed-owned household to scope fixture rows to',
+    );
+  }
 
   // V1-3: the two kid profiles the picker tiles render. Both scoped to the root
   // household; idempotent by public_id. ⚠️ `onConflictDoNothing` means a re-seed CANNOT rename a row

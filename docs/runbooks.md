@@ -798,13 +798,41 @@ be a cross-tenant linkage over minors' health data.
 2. **Many events, many distinct `resource` values** → id probing. UUIDv7 public ids are not
    enumerable, so this means ids leaked (a screenshot, a log, a shared link). Rotate the access-gate
    code (§ "Rotate a secret") and re-check who has it.
-3. **`outcome = no_scope` instead** → not an attack: the server could not resolve a household at all.
-   Zero live households means an empty or wrong database; see § "Manually re-seed / re-apply prod".
-4. **The app is down with `household scope is ambiguous`** → **two or more live households exist
-   before AUTH-1.** The resolver throws by design: it cannot tell whose data it holds and picking one
-   would be a silent cross-wire. Find the extra row
-   (`select id, public_id, name from households where deleted_at is null`) and soft-delete whichever
-   was created in error, or bring AUTH-1 forward. Do **not** "fix" the resolver by reading `rows[0]`.
+3. **`scope_outcome` carries something other than `cross_household` or `unknown_resource`** → not an
+   attack: the server could not resolve a household at all. 🔴 **Since `AUTH-1` 1c-4 the resolver
+   reads the principal's membership, never a household count, so these mean per-PERSON things and
+   the old "re-seed prod" answer is wrong for all of them.** `apps/web/lib/dal/household.ts` →
+   `SCOPE_OUTCOME` is the source of the values:
+
+   | `scope_outcome`  | What it means                                                                         | What to do                                                                                                                                                                                                                                                                       |
+   | ---------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `no_membership`  | This signed-in account holds **no live `household_members` row**                      | **The common one.** An invited account that was never linked, the wrong Google account, or the maintainer before the claim correction. Confirm with § "The claim correction has been run with `--apply`" step 6, then run the claim correction for that account. Do NOT re-seed. |
+   | `schema_missing` | `household_members` is not there (`42P01`/`42703`)                                    | A deploy ahead of migration `0019`, or an un-migrated preview. Fix the migration state; the app is dark for **everyone**, not one person.                                                                                                                                        |
+   | `no_scope`       | A miss-path event: the request reached a scoped read with no scope at all             | The same two causes as above, seen one layer up. Triage by the resolver's own event, not this one.                                                                                                                                                                               |
+   | `no_household`   | ⚠️ **Retired at 1c-4 — nothing can emit it.** An event carrying it is OLDER than 1c-4 | Read it as history. Do not reason about current behaviour from it.                                                                                                                                                                                                               |
+
+4. **The app is down for ONE account with `household scope is ambiguous`** → 🔴 **this changed
+   meaning at `AUTH-1` 1c-4, and the old remedy here destroyed data.** It used to mean "two or more
+   live households exist", and said to soft-delete a household. It now means **one principal holds
+   two or more live `household_members` rows**, which is per-account: that account gets `error.tsx`
+   everywhere, everyone else is fine, and **two live households is the intended end state** once a
+   family is invited. **Never soft-delete a household in response to this alert** — you would be
+   deleting a real family. Find the duplicate MEMBERSHIP and soft-delete the one created in error:
+
+   ```sql
+   SELECT id, household_id, clerk_user_id, role, created_at
+     FROM household_members
+    WHERE deleted_at IS NULL
+      AND clerk_user_id IN (
+          SELECT clerk_user_id FROM household_members
+           WHERE deleted_at IS NULL GROUP BY clerk_user_id HAVING count(*) > 1);
+   ```
+
+   ⚠️ It should be unreachable: `uq_household_members_clerk_user` is partial-unique on
+   `clerk_user_id` alone, so the second row cannot be inserted. If this alert fires, that constraint
+   is missing or was dropped — check it before treating the rows. Do **not** "fix" the resolver by
+   reading `rows[0]`: picking one is the silent cross-wire the throw exists to prevent, and a state-C
+   fallback to "the one live household" would reinstate exactly the widening 1c-4 removed.
 
 ⚠️ **Rate limiting is not wired for this.** `apps/web/lib/rate-limit.ts` deliberately does not limit
 the mutating actions; AUTH-1 re-keys the limiter from IP to user id and is where probing gets

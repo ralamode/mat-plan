@@ -24,13 +24,17 @@
   is now conditional on no live household existing — `migrate.yml` seeds **production** on every
   merge, which made the seed the one automated creator of household #2. The parent plan's Q5 assigned
   that fix to `1b` and it was never written.
-  ⏳ **That guard's proof is OWED, and said so in place rather than faked.** A `db:verify` assertion
-  was written, probed, and found **vacuous**: the state it is about is _"a live household and none
-  under the seed's `public_id`"_, and that file's database is already seeded by the time any block
-  runs — so inserting another makes it the second, which the guard correctly skips past, passing with
-  the guard **deleted**. The gap is recorded where the proof would have been, citing
-  `mutations/README.md`: _"a boundary test that cannot fail is worse than none, because it is counted
-  as coverage."_
+  ✅ **That guard is proved, and the first version of the proof was vacuous — which is the lesson.**
+  The state the guard is about is _"a live household and none under the seed's `public_id`"_, and
+  `db:verify`'s database is already seeded by the time any block runs, so **inserting** another
+  household makes the seed row the second — the guard correctly skips past it and the assertion
+  passed with the guard **deleted**. The construction that works moves the seed row out of the way
+  instead: nothing references `households.public_id` (children carry `household_id`) and
+  `households_public_id_unique` is a plain UNIQUE, so **renaming it** is reversible and local. The
+  seed's refusal is now an explicit throw rather than a `TypeError` on `household.id`, because an
+  assertion pinning a `TypeError` pins the absence of a property and not the decision — and
+  `migrate.yml`'s red run now says why. `pnpm db:mutations` is at **ten** patches, all RED
+  (`10-seed-ignores-live-household`).
   `membershipHousehold` is barrel-exported, which its own docblock refused because it returns
   **internal** household ids — but `packages/db`'s `exports` map publishes only `"."`, so the DAL had
   no other route and a lookalike in the app is what TEN-1 extracted these modules to prevent. The
@@ -42,8 +46,59 @@
 join "households"`. ⚠️ `household.test.ts`'s `no_scope` case was the one to watch: it would have
   gone **green for the wrong reason**, and it is the only assertion standing between
   `reportScopeMiss` and reporting every legitimate request as a cross-household probe.
-  **The sweep was grep PLUS a read**, because the grep cannot see a claim that describes the
-  behaviour without naming the chunk: `.github/SECURITY.md` cited the removed throw as an **enforced
-  control**, `schema.ts` said creating a second household _"takes the app down"_, `profiles.ts` said
-  the ≥2 case _"never reaches here"_, and `architecture.md`'s §2b node and edge both stated the old
-  outcomes. None of those four contains the string `1c-4`.
+  🔴 **The sweep is grep PLUS a read, and the read is the half that found the dangerous one.** The
+  grep catches claims that NAME the chunk; the expensive ones **describe the behaviour**:
+  `.github/SECURITY.md` cited the removed throw as an **enforced control**, `schema.ts` said creating
+  a second household _"takes the app down"_, `profiles.ts` said the ≥2 case _"never reaches here"_,
+  `plan.md` told a future `OBS-2` the same thing, and `architecture.md`'s §2b Mermaid **node** and
+  **edge** carried the old outcomes where no prose did (that file does contain `1c-4` — the grep saw
+  the file and not the claim).
+  ⚠️ **`runbooks.md`'s triage was the one that mattered.** Its step 4 read _"the app is down with
+  `household scope is ambiguous` → two or more live households exist"_ and told the operator to
+  **soft-delete a household**. That message now means one principal holds two memberships, which is
+  per-account — so following the old step would have deleted a real family. Step 4 now treats the
+  duplicate **membership**, step 3 is a `scope_outcome` table (`no_membership`, `schema_missing`,
+  `no_scope`, and `no_household` marked retired), and the ambiguous case notes that
+  `uq_household_members_clerk_user` should make it unreachable at all.
+  Also swept, each found by review rather than by the grep: the **sixth** _"until 1c-4"_ block
+  (`export/route.ts`), `screenshot-ephemeral.ts`'s claim to run _"the same query
+  `getHouseholdScope()` runs"_, `household-scope.ts` predicting a retirement that did not happen (it
+  survives for `db:verify` and that one fixture script), `recording-db.ts`'s _"the households
+  probe"_, a retired `no_household` in a `sentry-scrub` fixture, and three living docs still saying
+  the resolver _"throws on a second live household"_ in the present tense.
+  📌 **`docs/lessons.md` now carries the entry this is the FOURTH occurrence of** (1c-3a → #320,
+  1c-3b → #323 and #324, 1c-4 → #330), with the two-pass sweep written down — grep the chunk id,
+  then grep the **behaviour** — and the rule that the PR states the list, never a count.
+  🔴 **The published privacy notice was telling parents a protection did NOT work that this chunk
+  makes work.** `notice.md`'s limitation 1 read _"removing someone from the household in the database
+  does not currently stop them, because the app does not yet work out whose data you get from who you
+  are; that is the next piece of work"_ — this **is** that work, and `membershipHousehold` filters
+  both `deleted_at` conjuncts (proved by `07-membership-ignores-soft-delete`), so removing a
+  membership drops that person to the no-household screen. Limitation 3's _"anyone with your access
+  code can download any athlete's full history"_ now needs the code **and** a session **and** a
+  membership. `data-inventory.md` §4's export row gave **both** halves of a reason that are now
+  false, and it is the row `.github/SECURITY.md` — edited by this PR — redirects readers to as the
+  source of truth for what is enforced. All corrected, `notice-content.ts` regenerated. ⚠️ **What did
+  NOT change:** inside one household any member still reads and exports any athlete (profile tiles
+  are a UX switch, not a security boundary), the access code is still shared and all-or-nothing until
+  `1d`, and the movement-name list is still common to every household.
+  🔴 **Both new captures are BOUNDED per principal.** States B′ and C are reachable on every page
+  read, and page reads are not rate-limited — `checkMutationLimit` covers the seven mutating actions
+  — so one admitted account looping `GET /p/<id>` emitted an unbounded stream. The cost is secondary:
+  a flood of `no_membership` is what buries the `cross_household` event ADR 0006 obligation 3 exists
+  to make noticeable, and at `1d` "admitted by the Clerk instance" is the only requirement left.
+  `session.ts` already called its own cap _"the `scope_outcome` precedent"_ while this path had none.
+  **Per principal rather than once per process**, which is the whole argument for C having its own
+  outcome — once-per-process would hide the second affected family behind the first.
+  ⚠️ **The membership-containment guard was one-sided.** `scope.test.ts` greps `apps/web` for the
+  symbol, which cannot see a rename that happens in `packages/db`: one
+  `export { membershipHousehold as lookupHousehold }` line republishes it on the `"."` specifier
+  under a name the sweep has never heard of, and every guard stays green while a page holds a raw
+  internal `household_id`. The sibling guard for `householdScopeForScript` already carried the
+  DB-side mirror; this one now does too, probed RED by planting the alias.
+  📌 Also: the `householdState` cases were titled _"zero/two live households"_ while their bodies set
+  memberships, so a red test would have named a state that cannot occur; `household.ts`'s lead
+  docblock still documented the deleted algorithm, `SQL` and all, thirty lines above the block saying
+  what 1c-4 changed; a `db:verify` **gate** asserted _"the state `getHouseholdScope()` THROWS on"_;
+  and the notice's own flattener compared probes against the author's hard line breaks, so
+  re-wrapping a corrected sentence reddened two tests without changing a rendered word.

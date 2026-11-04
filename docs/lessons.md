@@ -481,6 +481,21 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing
   version-sensitive code (per `apps/web/AGENTS.md`). (V0-4)
 
+## Docs / claims that go stale
+
+- **A committed comment or doc says "until `<chunk>`" and that chunk has now shipped, so the file
+  states the opposite of the truth.** Fourth occurrence: 1c-3a → #320, 1c-3b → #323 and #324, 1c-4 →
+  #330. Each time it was found by review, not by the author. → `git grep -l '<chunk>'` finds only the
+  claims that NAME the chunk. The expensive ones **describe the behaviour** instead: `SECURITY.md`
+  called a removed throw an "enforced control", `schema.ts` said a second household "takes the app
+  down", `plan.md` told a future chunk the same thing, and a Mermaid **node** and **edge** carried the
+  old outcomes where no prose did. → Sweep in two passes, and record both in the PR: (1) `git grep -l`
+  on the chunk id; (2) grep the **behaviour** — the removed error message, the old predicate, the
+  phrase the old mechanism was described by (`grep -rn "throws on a second"`) — because a claim that
+  never names the chunk is invisible to pass 1. Then **state the list, never a count**: a list can be
+  checked against the tree, a count can only be re-derived. Dated history (`docs/changelog/*`, merged
+  `docs/plans/*`) is NOT rewritten.
+
 ## Git / commits
 
 - **`Unknown skill: <name>` for a skill that is on `main`.** → Project skills load from the

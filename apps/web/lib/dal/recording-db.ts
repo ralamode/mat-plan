@@ -85,7 +85,11 @@ export function createRecordingDb(
   };
 }
 
-/** The first recorded query whose text matches — never `queries[0]`, which is the households probe. */
+/**
+ * The first recorded query whose text matches — never `queries[0]`, which is the scope probe
+ * (`household_members inner join households` since `AUTH-1` 1c-4; it was a bare `households` select
+ * before, and a regex keyed on that is exactly how three suites broke in that chunk).
+ */
 export function queryMatching(rec: RecordingDb, pattern: RegExp): RecordedQuery {
   const found = rec.queries.find((q) => pattern.test(q.text));
   if (!found) {

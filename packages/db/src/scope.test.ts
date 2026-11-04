@@ -157,6 +157,35 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([DERIVES_SCOPE]);
   });
 
+  it('🔴 the membership query is never ALIASED out of packages/db — the app-side grep only sees its own name', () => {
+    // ⚠️ **The guard above is one-sided, and its sibling at `householdScopeForScript` is not.** That
+    // one carries a second, DB-side assertion precisely because a grep for a symbol in `apps/web`
+    // cannot see a rename that happened in `packages/db`: one line —
+    // `export { membershipHousehold as lookupHousehold } from './queries/household-membership'` —
+    // republishes it on the `"."` specifier the app already imports, under a name the app-side sweep
+    // has never heard of. Every other guard in this file stays green while a page holds a raw
+    // internal `household_id`, which is the ADR 0006 fwd-1 outcome the guard above exists to stop.
+    //
+    // `export * from './queries/household-membership'` in `src/index.ts` is the ONE intended route
+    // and is exempt by name; a star-export of that module from anywhere else is not.
+    const BARREL = 'packages/db/src/index.ts';
+    const HOME = 'packages/db/src/queries/household-membership.ts';
+    const offenders = DB_SOURCES.filter((f) => {
+      const rel = relative('', f);
+      if (rel === HOME) return false;
+      const src = code(join(REPO, f));
+      if (/export\s*\{[^}]*\bas\s+membershipHousehold/.test(src)) return true;
+      if (/export\s*\{[^}]*\bmembershipHousehold\b[^}]*\bas\b/.test(src)) return true;
+      if (/export\s*\{[^}]*\bmembershipHousehold\b/.test(src)) return true;
+      if (/export\s+\*\s+from\s+['"][^'"]*household-membership/.test(src)) return rel !== BARREL;
+      return false;
+    });
+    expect(
+      offenders.map((f) => relative('', f)).sort(),
+      'membershipHousehold must reach apps/web under its OWN name only — an aliased or extra re-export makes the app-side containment guard vacuous',
+    ).toEqual([]);
+  });
+
   it('exactly one module derives a scope from a request (plus the one named fixture script)', () => {
     const derivers = WEB_SOURCES.filter((f) =>
       /\bhouseholdScopeForRequest\b/.test(code(join(REPO, f))),

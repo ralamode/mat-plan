@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * TEN-1 1b — `getHouseholdScope()`'s three states, pinned (the plan's acceptance 8).
+ * `getHouseholdScope()`'s states, pinned — TEN-1 1b's three, then `AUTH-1` 1c-4's five.
  *
- * Before AUTH-1 there is no principal, so the scope is *"the one live household, and nothing if that
- * is ambiguous"*. The reason this needs a test rather than a comment is that **zero and ≥2 are
- * different states that must not share a path**:
+ * ⚠️ **This docblock described the pre-AUTH-1 algorithm as current** (*"before AUTH-1 there is no
+ * principal, so the scope is the one live household"*). Since 1c-4 the resolver reads the principal
+ * and then that principal's membership, and never counts households. The reason these need tests
+ * rather than comments is unchanged: **`null` and the throw are different states that must not share
+ * a path**:
  *
- * - **zero** → `null`, the app goes dark, and the picker's empty state is the honest answer;
- * - **≥2** → **throws**, because the server cannot tell whose data it holds. Returning `null` here
- *   would render *"No profiles found. Seed the database to get started."* — reporting an invariant
- *   violation to a parent as *"your data does not exist"*, with a production write as the suggested
- *   remedy.
+ * - **no live membership** → `null` + `scope_outcome: no_membership`, and the no-household screen is
+ *   the honest answer;
+ * - **≥2 memberships for one principal** → **throws**, because the server cannot tell whose data it
+ *   holds. Returning `null` here would render the empty state — reporting an invariant violation to a
+ *   parent as *"your data does not exist"*, with a production write as the suggested remedy.
  *
  * And the third thing, which is the one a later author would break: **`rows[0]` must never be read
  * as a pick.** *"Just use the first one"* is exactly the edit someone makes to "fix" a dark app, and
@@ -44,9 +46,19 @@ vi.mock('./session', () => ({ getCurrentUser: async () => state.principal }));
 
 import { getHouseholdScope, HOUSEHOLD_STATE, householdState } from './household';
 
+/**
+ * ⚠️ **A fresh principal per test, and that is load-bearing.** `household.ts` bounds its B′/C
+ * captures to once per principal (an unbounded capture on a page read is a Sentry-quota drain any
+ * admitted account can pull), and the `Set` behind that bound is module-level — so a shared fixture
+ * id would make the SECOND test to reach B′ or C capture nothing, and every single-capture assertion
+ * in this file would pass or fail by test ORDER. One test pins the bound deliberately, below.
+ */
+let principalSeq = 0;
+const nextPrincipal = () => ({ userId: `user_householdSuiteFixturePrincipal${++principalSeq}` });
+
 beforeEach(() => {
   state.memberships = [];
-  state.principal = { userId: 'user_householdSuiteFixturePrincipal' };
+  state.principal = nextPrincipal();
   state.probeThrows = null;
   recording.queries.length = 0;
   captureMessage.mockClear();
@@ -148,7 +160,21 @@ describe('getHouseholdScope — the one place a household is derived from a requ
     state.memberships = [[11]];
     await getHouseholdScope();
     const probe = recording.queries.find((q) => /from "household_members"/.test(q.text));
-    expect(probe?.values).toContain('user_householdSuiteFixturePrincipal');
+    expect(probe?.values).toContain(state.principal?.userId);
+  });
+
+  it('(C) bounds its capture to ONCE per principal, and still reports the NEXT principal', async () => {
+    // The bound is why `no_membership` is safe on an unlimited page read. Three calls, one event —
+    // and then a different account still gets its own, which once-per-process would have swallowed.
+    // That distinction is the whole argument for C having its own outcome.
+    await getHouseholdScope();
+    await getHouseholdScope();
+    await getHouseholdScope();
+    expect(captureMessage).toHaveBeenCalledTimes(1);
+
+    state.principal = nextPrincipal();
+    await getHouseholdScope();
+    expect(captureMessage).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -253,21 +279,26 @@ describe('reportScopeMiss — the miss-path event', () => {
  *   `typeof value === 'string'` only restates the return type. `packages/db/src/scope.test.ts`
  *   enforces it, by failing the build if any file under `app/` or `components/` names the resolver;
  * - it is **coarser than the resolver on purpose**, collapsing five causes into one honest screen;
- * - it does **NOT** collapse the ambiguous case. `≥2 live households` still throws. Reporting
- *   "no household for this account" when the server cannot tell *whose* data it holds would tell a
- *   family their data is gone and send the operator looking in the wrong place.
+ * - it does **NOT** collapse the ambiguous case: **≥2 live MEMBERSHIPS for one principal** still
+ *   throws. Reporting "no household for this account" when the server cannot tell *whose* data it
+ *   holds would tell a family their data is gone and send the operator looking in the wrong place.
+ *
+ * ⚠️ **These three titles named "live households" until 1c-4.** The bodies always set
+ * `state.memberships`, so the assertions were right and only the labels were wrong — but a failure
+ * here would then print the name of a state that cannot occur, which is how a reader learns the
+ * wrong model from a red test.
  */
 describe('householdState — "does this request resolve a household", without handing out the scope', () => {
-  it('exactly one live household → resolved', async () => {
+  it('exactly one live membership → resolved', async () => {
     state.memberships = [[11]];
     await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.resolved);
   });
 
-  it('zero live households → none', async () => {
+  it('no live membership → none', async () => {
     await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.none);
   });
 
-  it('two live households → THROWS; it must not degrade to "none"', async () => {
+  it('two live memberships for one principal → THROWS; it must not degrade to "none"', async () => {
     state.memberships = [[11], [22]];
     await expect(householdState()).rejects.toThrow(/ambiguous/);
   });

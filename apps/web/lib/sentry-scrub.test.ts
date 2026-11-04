@@ -327,14 +327,19 @@ describe('the identified user never reaches Sentry (AUTH-1 1c-1)', () => {
   });
 
   it('leaves the observability this app DOES want — neither tag names a person', () => {
+    // ⚠️ `no_membership`, not the `no_household` this used to carry: that value is RETIRED at
+    // `AUTH-1` 1c-4 and nothing can emit it, so a fixture emitting it made this assertion describe a
+    // payload the app cannot produce. Deliberately a literal rather than `SCOPE_OUTCOME` — importing
+    // `lib/dal/household` would pull `server-only` and the DB client into a suite that tests the
+    // scrubber; the value is a sample here, not the contract under test.
     const event = scrubSentryEvent({
       user: { id: 'user_abc' },
-      tags: { scope_outcome: 'no_household' },
+      tags: { scope_outcome: 'no_membership' },
       contexts: { scope_miss: { reason: 'cross_household', profilePublicId: 'p_1' } },
     } as never as Parameters<typeof scrubSentryEvent>[0]);
 
     expect(event.user).toBeUndefined();
-    expect(event.tags?.scope_outcome).toBe('no_household');
+    expect(event.tags?.scope_outcome).toBe('no_membership');
     // `contexts.scope_miss` is the shape the app ACTUALLY emits (`lib/dal/household.ts`), so an
     // over-broad future scrub that deleted it would turn this red. The previous version asserted an
     // invented `contexts.household` and so guarded nothing.

@@ -279,8 +279,10 @@ and complete; this is the one thing it cannot reach.
   is deleted at `1d`. ✅ **`1c-4` has landed**, so the household scope is membership-derived and a
   session now decides _whose_ data a request gets — which is what made `1d` safe. Until `1d` the gate
   half stays for the other reason: a request that bypasses the proxy meets nothing without it. ⚠️ The
-  routine editor's own BOLA row closes here too — `updateProfileRoutine` already writes through
-  `isLiveProfile(publicId, scope)`, so membership-derivation turns that scoping into authorization.
+  routine editor's BOLA row closes **its authz half** here — `updateProfileRoutine` already writes
+  through `isLiveProfile(publicId, scope)`, so membership-derivation turns that scoping into
+  authorization for a caller outside the household. Inside one household any member still reaches any
+  kid's routine, by design, and that row's other halves stay open ([tech-debt](../tech-debt.md)).
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never

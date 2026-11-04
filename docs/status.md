@@ -10,7 +10,8 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-🔴 **AUTH-1 is no longer dark: signing in is REQUIRED (through 1c-3b, 2026-11-01).**
+🔴 **AUTH-1 is no longer dark: signing in is REQUIRED, and the session now decides WHOSE data
+you get (through 1c-4, 2026-11-03).**
 `@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional** (`1a`), the CSP is widened
 for Clerk **by exact origin derived from the publishable key, never a wildcard**, `/sign-in` is public
 and `noindex`, the **`/api` matcher hole** is closed, and `lib/access-gate.ts` is split so chunk `1d`
@@ -195,12 +196,14 @@ three remaining obligations and answered the one question the milestone attached
   that slug for everyone, and the other household's **own correctly-scoped** Today card renders it;
   and a session write the household seam **refuses** has already committed the caller's text — a
   cross-tenant _write_ primitive surviving its own refusal. `beta-1.md`'s criterion fired as written.
-  **TEN-2's deadline is the invite, not AUTH-1's merge:** nothing can serve two households before
-  AUTH-1 (the resolver **throws** on a second live household), so **AUTH-1 is still next** and
+  **TEN-2's deadline is the invite, not AUTH-1's merge:** nothing could serve two households before
+  AUTH-1 (the resolver **threw** on a second live household — removed at 1c-4), so **AUTH-1 was
+  still next** and
   TEN-2's three PRs run beside it. Evidence, the alternative considered, and the recommendation —
   explicitly the maintainer's call — are in
   [the plan](./plans/ten-1-household-scope.md) → "1d as built".
-- `pnpm db:mutations` is at **five** patches, all RED. The two new ones cover 1d's own proofs, and
+- `pnpm db:mutations` is at **ten** patches, all RED — `01`–`06` from TEN-1 and TEN-2c, `07`–`09`
+  from `AUTH-1` 1b, `10` from 1c-4. The two TEN-1 1d ones cover its own proofs, and
   the catalog one deliberately breaks the shared slug derivation — the _global arbiter_ the verdict
   rests on — because "scope the catalog" is TEN-2, not a one-line mutation.
 

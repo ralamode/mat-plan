@@ -19,8 +19,11 @@ import { schema } from '../client';
  * `profiles.household_id` still points at it. That is a statement about rows, which only a real
  * database can prove — and only if the proof runs this function rather than a re-typed lookalike.
  *
- * AUTH-1 replaces `getHouseholdScope()`'s body with session → `household_members`, at which point
- * this query stops being the resolution and this module goes with it.
+ * ⚠️ **This module predicted its own retirement and it did NOT happen.** `AUTH-1` 1c-4 replaced
+ * `getHouseholdScope()`'s body with session → `household_members`, so this query stopped being the
+ * resolution — but it did not go with it. Two callers keep it: `db:verify`'s own soft-delete proofs,
+ * and `screenshot-ephemeral.ts`'s fixture scope, which must derive a household without naming an id.
+ * ⚠️ **It is no longer a request-path query**, so do not cite it as what the app resolves through.
  */
 export function liveHouseholdIds(db: NodePgDatabase<typeof schema>) {
   return db

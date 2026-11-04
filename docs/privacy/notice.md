@@ -91,19 +91,24 @@ still works.
 **Three honest limitations during the beta:**
 
 1. **The access code is shared**, even though signing in is not. Everyone in the household types the
-   same code, and there is **no control in the app** to remove one person's access. Ask, and their
-   sign-in account is deleted at Clerk — that is the lever that works today. ⚠️ **Removing someone
-   from the household in the database does not currently stop them**, because the app does not yet
-   work out whose data you get from who you are; that is the next piece of work. And signing in does
-   not mean the app records **who** did what — it still does not. See the limitation below.
-2. **Households are not yet separated by the code itself.** The work to guarantee that one family's
-   data is unreachable from another's is underway and not finished. **That is exactly why the beta
-   starts with a single invited family.** Until it is done, please treat the app as if anyone who was
-   invited could see anyone's log.
-   **One part of this is separate work:** the list of exercise names is shared by every household (see
-   "Movement names" below), and it has to be separated before a second family is invited.
-3. **Anyone with your access code can download any athlete's full history.** That follows from (1) and
-   (2). Guard the code the way you would guard a password.
+   same code, and there is **no control in the app** to remove one person's access to the code
+   itself — rotating it signs everybody out. ✅ **Removing someone from the household now does stop
+   them** (changed 2026-11-03): the app works out whose data you get from who you are, so once their
+   membership is removed they see nothing, even with the code. Deleting their sign-in account at
+   Clerk also still works. Ask for either. And signing in does not mean the app records **who** did
+   what — it still does not. See the limitation below.
+2. **Separating one family's data from another's is done in the parts that read your log** (changed
+   2026-11-03): who you are signed in as decides which household's data the app will show you, and
+   that is checked on every read and every write. **One part is still shared:** the list of exercise
+   names is common to every household (see "Movement names" below), and it has to be separated before
+   a second family is invited. **The beta still starts with a single invited family**, because that
+   last part is not finished.
+3. **Anyone signed in to your household can download any athlete's full history** — including a
+   child tapping a sibling's tile. The tiles are a convenience, not a lock. What changed on
+   2026-11-03 is that the access code alone is no longer enough: it takes the code **and** a sign-in
+   **and** a membership in your household. That follows from (1) and (2): the code is still shared,
+   and the exercise-name list is still common to every household. Guard the code the way you would
+   guard a password.
 
 ## Who else it passes through
 

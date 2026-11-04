@@ -17,39 +17,45 @@ import { getCurrentUser } from './session';
  * **THE household scope point (TEN-1).** The one place in the repo that DERIVES a household for a
  * request; everything else is handed the result.
  *
- * ## How it resolves, before AUTH-1
+ * ## How it resolves — FIVE outcomes, since `AUTH-1` 1c-4
  *
- * There is no principal yet — the access gate is a shared code, not an identity — so the scope is
- * *"the one live household, and nothing if that is ambiguous"*:
+ * It reads the **principal**, then that principal's membership. It never counts households.
  *
  * ```sql
- * SELECT id FROM households WHERE deleted_at IS NULL LIMIT 2
+ * SELECT household_id FROM household_members
+ *   INNER JOIN households ON households.id = household_members.household_id
+ *  WHERE clerk_user_id = $1 AND household_members.deleted_at IS NULL
+ *    AND households.deleted_at IS NULL
+ *  LIMIT 2
  * ```
  *
- * - **exactly one row** → that household.
- * - **ZERO rows** → `null`. A genuinely empty database; the picker's empty state is the honest
- *   answer, and a Sentry **message** (not an exception — an empty database is not a server fault)
- *   records that it happened. The payload is the fixed message plus `scope_outcome`, and
- *   deliberately carries **no count, no id and no name**, so SECURITY.md → Logging is satisfied by
- *   construction rather than by judgement.
- * - **TWO rows** → **THROW**. The server cannot tell whose data it holds. That is an unexpected
- *   server state, not a user error, so `write-path.md` invariant 4 routes it to a throw →
- *   `error.tsx` + a Sentry exception with a stack.
+ * | #   | condition                       | answer                                                     |
+ * | --- | ------------------------------- | ---------------------------------------------------------- |
+ * | A   | one live membership             | that household's scope                                     |
+ * | B   | no principal                    | `null`, **silently** — 1c-3b refused that caller upstream   |
+ * | B′  | `household_members` missing     | `null` + `scope_outcome: schema_missing` (`42P01`/`42703`)  |
+ * | C   | principal, no live membership   | `null` + `scope_outcome: no_membership`                     |
+ * | D   | principal, **two** memberships  | **THROW** — "pick one" is a silent cross-wire               |
+ *
+ * ⚠️ **This block used to describe the pre-AUTH-1 algorithm as current** — `SELECT id FROM
+ * households … LIMIT 2`, with *"ZERO rows → a genuinely empty database"* and *"TWO rows → THROW"*.
+ * None of that is true now: zero means **this account has no membership**, which is the common case,
+ * and nothing throws on a second live household (two of them is the intended Beta 0 end state once a
+ * family is invited). `liveHouseholdIds` survives for `db:verify` and one fixture script only.
  *
  * ⚠️ **The `LIMIT 2` exists to DETECT ambiguity. `rows[0]` must NEVER be read as a pick.** *"Just use
  * the first one"* is exactly the edit a later author makes to "fix" a dark app, and it is a silent
  * cross-wire between two families. There is deliberately **no `ORDER BY`**: there is no correct
  * ordering, because there is no correct answer.
  *
- * ⚠️ **Zero and ≥2 must not share a path.** Returning `null` for both would map an invariant
- * violation onto the unknown-profile path, which renders the picker's empty state — so *"the server
- * cannot tell whose data this is"* would reach the operator as *"your data does not exist"*, with a
- * production write as the suggested remedy. A Sentry message is loud to a dashboard; the empty state
- * is what a parent reads on a gym floor at 6:30pm.
+ * ⚠️ **`null` and the throw must not share a path.** Returning `null` for D too would map an
+ * invariant violation onto the unknown-profile path, which renders the picker's empty state — so
+ * *"the server cannot tell whose data this is"* would reach the operator as *"your data does not
+ * exist"*, with a production write as the suggested remedy. A Sentry message is loud to a dashboard;
+ * the empty state is what a parent reads on a gym floor at 6:30pm.
  *
- * It does **NOT** select `households.synthetic` — that column ships dark until OBS-2, and reading it
- * here would make a deploy that lands ahead of migration 0014 a `42703` on every route (the plan's
- * §Design 1a).
+ * ⚠️ **And a state-C fallback to "the one live household" must never be written.** It would
+ * reinstate exactly the widening 1c-4 removed, which is what made `1d` safe.
  *
  * ## Why `cache()`
  *
@@ -108,10 +114,12 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
     // ⚠️ **FIXED MESSAGE AND TAG ONLY — never the error, never `extra`.** The caught error is a
     // `DrizzleQueryError` whose message embeds `params:`, and the param here IS the Clerk user id.
     // `scrubSentryEvent` has no allowlist for hand-built contexts; the DAL does not rely on it.
-    Sentry.captureMessage('household scope unresolved: membership schema missing', {
-      level: 'error',
-      tags: { scope_outcome: SCOPE_OUTCOME.schemaMissing },
-    });
+    if (shouldReportUnresolved(user.userId, SCOPE_OUTCOME.schemaMissing)) {
+      Sentry.captureMessage('household scope unresolved: membership schema missing', {
+        level: 'error',
+        tags: { scope_outcome: SCOPE_OUTCOME.schemaMissing },
+      });
+    }
     return null;
   }
 
@@ -127,10 +135,12 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
     // The fixed message and the tag are the WHOLE payload — no count, no ids, and above all not the
     // Clerk user id (ADR 0006 obligation 3: a requester→owner mapping at a third party is the
     // cross-tenant linkage the owning household id is forbidden for).
-    Sentry.captureMessage('household scope unresolved: principal has no live membership', {
-      level: 'warning',
-      tags: { scope_outcome: SCOPE_OUTCOME.noMembership },
-    });
+    if (shouldReportUnresolved(user.userId, SCOPE_OUTCOME.noMembership)) {
+      Sentry.captureMessage('household scope unresolved: principal has no live membership', {
+        level: 'warning',
+        tags: { scope_outcome: SCOPE_OUTCOME.noMembership },
+      });
+    }
     return null;
   }
 
@@ -151,9 +161,12 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
  * 🔴 **Why the resolver's own `scope_outcome` values are a const (AUTH-1 1c-4).**
  *
  * They were two inline literals — `'no_household'` for zero live households and nothing else, since
- * every other path either resolved or threw. 1c-4 makes it four, and two of them are states a PERSON
- * now reaches: `no_membership` is an invited parent whose account was never linked, or the
- * maintainer before the claim correction.
+ * every other path either resolved or threw. ⚠️ **Count carefully, because two different counts are
+ * in play:** the resolver has **five outcomes** (A resolve · B no principal · B′ schema missing · C
+ * no membership · D throw) and exactly **two of them emit a tag**, which is what this map holds. A
+ * resolves, B is silent by design (1c-3b refused that caller upstream) and D throws. `no_membership`
+ * is the one a PERSON now reaches: an invited parent whose account was never linked, the wrong
+ * Google account, or the maintainer before the claim correction.
  *
  * `constants.ts`'s `NO_HOUSEHOLD_COPY` argues that all of those causes deliberately share ONE screen
  * **because the telemetry carries the cause**. That argument is only true if the telemetry actually
@@ -166,16 +179,55 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
  */
 export const SCOPE_OUTCOME = {
   /**
+   * A principal with no live membership. THE state 1c-4 makes person-reachable.
+   *
    * ⚠️ **`no_household` is RETIRED at 1c-4 and is deliberately absent from this map.** The resolver
    * no longer counts households, so nothing can emit it — and a member nothing can produce is a
    * state a reader will believe in. An event carrying it in Sentry is therefore pre-1c-4, which is
-   * the one fact an operator triaging an old alert needs.
+   * the one fact an operator triaging an old alert needs. (It lives in this member's doc rather than
+   * its own block above: two consecutive JSDoc blocks attach only the second, so the note was
+   * invisible at the hover that is the one place a reader meets it.)
    */
-  /** A principal with no live membership. THE state 1c-4 makes person-reachable. */
   noMembership: 'no_membership',
   /** `household_members` is not there: a deploy ahead of `0019`, or an un-migrated preview. */
   schemaMissing: 'schema_missing',
 } as const;
+
+/** The two values this map can emit — the type `shouldReportUnresolved` keys its bound on. */
+export type ScopeOutcome = (typeof SCOPE_OUTCOME)[keyof typeof SCOPE_OUTCOME];
+
+/**
+ * 🔴 **BOUNDED, per principal — the bound `session.ts` already called "the `scope_outcome`
+ * precedent" while this path did not have one.**
+ *
+ * States B′ and C are reachable on every **page read**, and page reads are not rate-limited at all
+ * (`checkMutationLimit` covers the seven mutating actions). So one signed-in account with no
+ * membership looping `GET /p/<id>` emits an unbounded stream — a Sentry-quota drain anyone admitted
+ * by the Clerk instance can pull, and worse than the cost: a flood of `no_membership` is what buries
+ * the `cross_household` event ADR 0006 obligation 3 exists to make noticeable. At `1d`, the chunk
+ * this one unblocks, "admitted by the instance" is the only requirement left.
+ *
+ * ⚠️ **Per principal rather than once per process**, which is the whole argument for giving C its own
+ * outcome: once-per-process would hide the second affected family behind the first. One event per
+ * distinct principal answers the runbook's question ("which account is unresolved"); the 10,000th
+ * from the same account answers nothing. `REPORT_CAP` bounds the set itself, so a loop over many
+ * accounts cannot grow it without limit — and an attacker holding one account burns one slot, not
+ * every slot.
+ *
+ * The ids stay in **process memory only**: never logged, never emitted (the tag is still the whole
+ * payload), and gone on the next deploy. The DAL already holds the id for the duration of the
+ * request; this keeps it no longer than the process.
+ */
+const REPORT_CAP = 100;
+const reportedUnresolved = new Set<string>();
+
+function shouldReportUnresolved(userId: string, outcome: ScopeOutcome): boolean {
+  const key = `${outcome}:${userId}`;
+  if (reportedUnresolved.has(key)) return false;
+  if (reportedUnresolved.size >= REPORT_CAP) return false;
+  reportedUnresolved.add(key);
+  return true;
+}
 
 /**
  * Postgres codes that mean "the schema has not caught up", and nothing else.
