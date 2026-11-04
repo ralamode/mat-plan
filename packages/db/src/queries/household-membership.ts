@@ -17,7 +17,10 @@ import type { Executor } from '../writers/executor';
  *
  * ⚠️ Returns INTERNAL ids, which are the one thing a caller may not freely hold — so the only
  * legitimate consumer is `getHouseholdScope()`, which immediately wraps it into a `HouseholdScope`.
- * It is deliberately NOT exported from the package barrel.
+ * ⚠️ **It IS exported from the package barrel since `AUTH-1` 1c-4, and this said the opposite.** The
+ * `exports` map publishes only `"."`, so the DAL had no other way to reach it; what keeps the
+ * sentence above true is now a guard rather than module resolution — `src/scope.test.ts` pins that
+ * exactly one file under `apps/web` names this function.
  *
  * `deleted_at IS NULL` repeats `uq_household_members_clerk_user`'s own predicate, which is also the
  * index this lookup rides.

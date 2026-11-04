@@ -269,6 +269,9 @@ console.log('✓ migration applied to PGlite');
   );
 }
 
+// The 1c-4 seed guard's proof is BELOW, after the idempotency block it depends on — see
+// "AUTH-1 1c-4: the seed refuses a household it does not own".
+
 // Seed twice → must be idempotent.
 await seed(asPg);
 await seed(asPg);
@@ -325,6 +328,85 @@ assert.equal(
 console.log(
   `✓ idempotent seed: ${units.length} units, ${categories.length} categories, ${households.length} household, ${profiles.length} profiles`,
 );
+
+// 🔴 **AUTH-1 1c-4: the seed refuses a household it does not own.**
+//
+// `seed.ts`'s household insert is conditional on no live household existing. It is the replacement
+// for the detector 1c-4 removed — the resolver used to throw on a second live household, so a seed
+// that created one announced itself as an outage; it counts a principal's memberships now, and two
+// live households is the intended Beta 0 end state, so there is nothing left to be loud.
+// `migrate.yml` seeds PRODUCTION on every merge to `main`, which makes this seed the one automated
+// creator of household #2. The guard closes the creator.
+//
+// ⚠️ **The first version of this proof was vacuous, and the reason is the lesson.** The state the
+// guard is about is "a live household, and NONE under the seed's `public_id`". Inserting an extra
+// household here cannot produce it — the seed row is already present, so the new one is the SECOND
+// and the guard correctly skips past it, which passes with the guard deleted. The construction that
+// DOES produce it is to move the seed row out of the way: nothing references
+// `households.public_id` (children carry `household_id` → `households.id`) and
+// `households_public_id_unique` is a plain UNIQUE, so renaming it is reversible and local.
+{
+  // A fresh UUIDv7, deliberately NOT from `SEED_PUBLIC_ID_PREFIX`: the whole construction is "a live
+  // household the seed does not own", and borrowing the seed namespace to express that would be
+  // self-contradicting.
+  const PROOF_SWAP_PUBLIC_ID = newId();
+  const liveBefore = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(isNull(schema.households.deletedAt));
+
+  await db
+    .update(schema.households)
+    .set({ publicId: PROOF_SWAP_PUBLIC_ID })
+    .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+
+  // ⚠️ `finally`, because the rename is the only destructive step in this file. If an assertion
+  // below throws, every later block would otherwise run against a seed household under a FOREIGN
+  // `public_id` and fail for a reason that has nothing to do with what broke.
+  try {
+    // The guard skips the insert, so the `public_id` resolve finds nothing and the seed REFUSES.
+    // With the `if (!liveHousehold)` guard deleted the insert lands, the resolve succeeds and
+    // `seed()` returns — which is what makes this assertion able to fail
+    // (`10-seed-ignores-live-household.patch`).
+    await assert.rejects(
+      () => seed(asPg),
+      /refusing to seed into a household this seed does not own/,
+      'AUTH-1 1c-4: a live household under a foreign public_id makes the seed REFUSE, by the message it throws — not by a TypeError',
+    );
+
+    const liveAfter = await db
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(isNull(schema.households.deletedAt));
+    assert.equal(
+      liveAfter.length,
+      liveBefore.length,
+      'AUTH-1 1c-4: the refused seed created NO household — the point of the guard is that household #2 never appears',
+    );
+  } finally {
+    // 🔴 **The restore must be CONFLICT-FREE, or it hides the failure it is protecting.** In the
+    // world where the assertion above fails — the guard deleted, which is
+    // `10-seed-ignores-live-household.patch` — the seed DID insert its own household under
+    // `SEED_HOUSEHOLD_PUBLIC_ID`, so renaming the original back violates
+    // `households_public_id_unique`, and an error thrown from a `finally` REPLACES the assertion
+    // error. The mutation gate compares the first failing assertion against `.expect`, so that
+    // swap turned a correct RED into "RED, but on the WRONG assertion". Restore only when the id
+    // is free; when it is not, the proof has already failed and the process is exiting.
+    const [occupied] = await db
+      .select({ id: schema.households.id })
+      .from(schema.households)
+      .where(eq(schema.households.publicId, SEED_HOUSEHOLD_PUBLIC_ID));
+    if (!occupied) {
+      await db
+        .update(schema.households)
+        .set({ publicId: SEED_HOUSEHOLD_PUBLIC_ID })
+        .where(eq(schema.households.publicId, PROOF_SWAP_PUBLIC_ID));
+    }
+  }
+  console.log(
+    '✓ AUTH-1 1c-4: the seed refuses a live household it does not own, and creates nothing',
+  );
+}
 
 // V1-1a: every seed profile must be scoped to the root household (household_id NOT NULL
 // enforced by the migration's CHECK; the migration backfill + seed both set it).
@@ -4549,14 +4631,18 @@ const [verifyProfileRow] = await db
   .from(schema.profiles)
   .where(eq(schema.profiles.publicId, VERIFY_PROFILE_PUBLIC_ID));
 
-// ── (0) The RESOLVER's own query (`liveHouseholdIds`, the one `getHouseholdScope()` runs) ─────────
-// Two live households exist by now, which is exactly the state `getHouseholdScope()` THROWS on —
-// it cannot tell whose data it holds, and "pick the first" is a silent cross-wire. The LIMIT 2 is
-// an ambiguity probe, so seeing 2 is the proof that the probe detects it.
+// ── (0) `liveHouseholdIds` — the AMBIGUITY PROBE, no longer the resolver's query ──────────────────
+// ⚠️ **This block used to say "the one `getHouseholdScope()` runs" and "exactly the state
+// `getHouseholdScope()` THROWS on". Both stopped being true at `AUTH-1` 1c-4**, which moved the
+// resolver onto `membershipHousehold` — it counts a principal's memberships now, and two live
+// households is the intended Beta 0 end state. A gate asserting a control that no longer exists is
+// worse than no gate, so what this proves is re-stated as what it is: `liveHouseholdIds` keeps its
+// `LIMIT 2` ambiguity probe, and its two surviving callers (this file, and
+// `screenshot-ephemeral.ts`'s fixture scope) both refuse rather than pick when it returns 2.
 assert.equal(
   (await liveHouseholdIds(asPg)).length,
   2,
-  'TEN-1: the resolver probe SEES two live households (the state getHouseholdScope() throws on)',
+  'TEN-1: liveHouseholdIds SEES two live households — its LIMIT 2 is an ambiguity probe, so its callers can refuse instead of picking (NOT the resolver since 1c-4)',
 );
 
 // A SOFT-DELETED household stops resolving, so its profiles become unreachable even though

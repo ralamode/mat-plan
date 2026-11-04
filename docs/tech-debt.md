@@ -380,8 +380,10 @@ success.` Harmless there — nothing referenced the files yet.
   on the Clerk principal (`checkMutationLimit`, 120 / 5 min), placed after the session check and
   **before** the zod parse, so an unauthenticated flood costs zero Redis and zero DB work.
   ⏳ **The zip export route is NOT** — the eighth surface this entry counts, and the most expensive
-  single request in the app. Deferred to `1c-4`, where the principal becomes the thing being
-  _scoped_ rather than merely identified.
+  single request in the app. ⚠️ **Deferred to `1c-4` PR 4 specifically, not to "1c-4"** — 1c-4's PR 2
+  (the resolver, 2026-11-03) is what made the principal the thing being _scoped_, and it did not
+  touch this route; `export/route.ts` still imports no limiter. A reader who sees 1c-4 merged would
+  otherwise take this as delivered.
 - **Impact:** low today. Reaching these actions requires the gate cookie **and** a Clerk session,
   both re-checked inside each action, so neither a proxy-skipping request nor a session-only caller
   gets through (`1c-3b`); the gate half is deleted at `1d`, after `1c-4`. The **gate itself** is rate
@@ -392,10 +394,11 @@ success.` Harmless there — nothing referenced the files yet.
 - **Proposed fix:** ✅ **the mutations half shipped at `AUTH-1` 1c-3b**, keyed by Clerk user id through
   **`checkMutationLimit`** — a second instance of the same fail-open seam, with its own
   `mat-plan:mutate` prefix, not `checkRateLimit` itself — exactly as AGENTS.md's rate-limit line ("auth + mutations +
-  `/api/sync`") presumes. ⏳ **What is left:** the zip export at `1c-4`, and `/api/sync`, which should
+  `/api/sync`") presumes. ⏳ **What is left:** the zip export at **`1c-4` PR 4**, and `/api/sync`, which should
   land limited from day one — the batch flush is the genuine amplification endpoint.
-- **Severity:** low (accepted until **`1c-4`**, not "until Clerk" — Clerk landed at Beta 0 and the
-  mutations half shipped at `1c-3b`; the seam and its contract already exist).
+- **Severity:** low (accepted until **`1c-4` PR 4**, not "until Clerk" and not "until 1c-4" — Clerk
+  landed at Beta 0, the mutations half shipped at `1c-3b`, and 1c-4's resolver shipped without it;
+  the seam and its contract already exist).
 
 ### Sentry ships without source maps, so stack frames are minified (V1-14a)
 
@@ -583,7 +586,16 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low today (single trusted household, pre-Clerk, occasional edits). The BOLA gap is the real
   item; the two semantics are edge cases a single coach won't hit. The two sharp edges above are newly
   **reachable** as of V1-23 — still low (one coach, three kids), but no longer hidden behind a URL.
-- **Proposed fix:** **`AUTH-1` 1c-4** closes the authz gap — not "Clerk v1.5": Clerk landed at Beta 0
+- ✅ **The authz half is closed at `AUTH-1` 1c-4 (2026-11-03) — the row is NOT.**
+  `updateProfileRoutine` already wrote through `isLiveProfile(publicId, scope)`, so
+  membership-derivation is what turns that scoping into authorization: a caller holding the access
+  code but no membership in this household can no longer reach any kid's routine. ⚠️ **Three things
+  this did not close.** (a) _"ANY gate-holder can edit ANY kid's routine"_ is still true **within one
+  household**, and deliberately — profile tiles are a UX switch, not a security boundary (AGENTS.md).
+  (b) The two accepted write semantics above (default-freeze, the LWW clobber) are untouched. (c) The
+  two sharp edges V1-23 exposed are untouched and still deferred. So the heading's _"no real authz"_
+  is what changed; the rest of this entry stands as written.
+- **Proposed fix (as written):** **`AUTH-1` 1c-4** closes the authz gap — not "Clerk v1.5": Clerk landed at Beta 0
   and `1c-3b` already requires a session here; 1c-4 is what derives the scope from the principal. Scope
   the DAL read + write by `household_id` (the
   ownership seam every writer already re-resolves through). The LWW clobber is paid down with the offline/sync

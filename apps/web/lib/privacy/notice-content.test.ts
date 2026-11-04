@@ -60,8 +60,19 @@ function headingText(kind: 'h1' | 'h2' | 'h3'): string[] {
   return NOTICE_BLOCKS.flatMap((b) => (b.k === kind ? [inlineText(b.children)] : []));
 }
 
-/** Everything the page says, at every nesting depth. The gate below depends on this being total. */
-const flattened = NOTICE_BLOCKS.map(blockText).join(' ');
+/**
+ * Everything the page says, at every nesting depth. The gate below depends on this being total.
+ *
+ * ⚠️ **Whitespace-normalised, and that is a fix rather than a convenience.** `blockText` preserves
+ * the author's hard line breaks, so every content probe below was silently coupled to where
+ * `notice.md` happens to WRAP: re-flowing a sentence across two lines — which an editor does freely,
+ * and `.prettierrc` sets no `proseWrap`, so prettier never normalises it — broke probes with no
+ * change to a single rendered word. The browser collapses this whitespace anyway, so normalising
+ * here makes the probes test the TEXT, which is what they claim to test. (Found at `AUTH-1` 1c-4,
+ * when a corrected limitation re-wrapped "Guard the code the way you would guard a password.")
+ */
+const norm = (t: string) => t.replace(/\s+/g, ' ');
+const flattened = norm(NOTICE_BLOCKS.map(blockText).join(' '));
 
 describe('the rendered outline matches the source, in order', () => {
   it('has exactly one h1, first, and it is the source `#` line', () => {
@@ -162,7 +173,8 @@ describe('the zero-placeholder gate', () => {
       (m) => JSON.parse(m[1]!) as string,
     );
     expect(texts.length).toBeGreaterThan(100);
-    for (const text of texts) expect(flattened).toContain(text);
+    // Both sides normalised — a raw node carries the same authored line breaks `flattened` does.
+    for (const text of texts) expect(flattened).toContain(norm(text));
   });
 
   it('carries no ⏳ and no blank-to-fill underscore run', () => {
@@ -303,7 +315,9 @@ describe('the renderer undoes the preflight rules the notice depends on', () => 
   it('numbers the ordered list — `notice.md` cross-references "(1) and (2)"', () => {
     // Preflight sets `list-style: none` on `ol`. Without `list-decimal` the paragraph that tells a
     // parent the worst-case exposure points at numbers that are not on the page.
-    expect(flattened).toContain('That follows from (1) and');
+    // The WHOLE sentence: it was truncated at "(1) and" only because the old wrap split it, and
+    // `flattened` normalises whitespace now, so the probe can be what the page actually says.
+    expect(flattened).toContain('That follows from (1) and (2)');
     expect(BLOCK_CLASS.ol).toContain('list-decimal');
     expect(BLOCK_CLASS.ul).toContain('list-disc');
   });

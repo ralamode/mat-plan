@@ -27,13 +27,13 @@ export default async function RoutineEditorPage({
 }: {
   params: Promise<{ profileId: string }>;
 }) {
-  // 🔴 **BOTH, in-process — AUTH-1 1c-3b adds the session, it does not replace the gate.**
-  // `getHouseholdScope()` does not consult the principal until 1c-4, so until then a session alone
-  // would mean "anyone this Clerk instance admits". And a swap would leave `mp_gate` enforced by the
-  // proxy alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
-  // prefetch header skipping the matcher). The gate check is deleted at 1d, AFTER 1c-4 has made the
-  // scope membership-derived — which is why "1c-4 before 1d" is a security obligation, not an order
-  // of convenience.
+  // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
+  // ⚠️ This said `getHouseholdScope()` "does not consult the principal until 1c-4" — it does now, so
+  // a session proves WHOSE data this is rather than only that the caller is someone the Clerk
+  // instance admits. That was the obligation blocking 1d, and it is discharged.
+  // The gate check still stands until 1d because a swap would leave `mp_gate` enforced by the proxy
+  // alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
+  // prefetch header skipping the matcher).
   await requireGatedPage(); // SEC-1: the proxy is not the boundary
   await requireSession();
   const { profileId } = await params;

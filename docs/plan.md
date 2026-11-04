@@ -652,9 +652,14 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
   `getHouseholdScope()` resolves _the household of this request_, so a per-request single-tenant scope
   cannot exclude a household from a **cross-household** aggregate — which is what adherence, streaks,
   export and dashboards are. OBS-2 reads the column where it needs it. (b) **A synthetic household
-  must not exist in production before AUTH-1:** until then `getHouseholdScope()` resolves THE single
-  live household and throws on ≥2, so creating one takes the app down. OBS-2 is therefore strictly
-  post-AUTH-1. The seed must also never name the column — on a fresh or restored database it inserts
+  must not exist in production before AUTH-1**, and OBS-2 is therefore strictly post-AUTH-1. ⚠️ **The
+  reason recorded here is gone as of `AUTH-1` 1c-4:** it was that `getHouseholdScope()` resolved THE
+  single live household and threw on ≥2, so creating one took the app down and the mistake announced
+  itself. The resolver counts a principal's memberships now, so a second household is ordinary and
+  creating one is **silent**. The constraint stands on its own terms — a fixture household in
+  production is a real row a real principal can end up a member of — but nothing enforces it except
+  `seed.ts` refusing to insert when a live household exists, which closes only the automated creator.
+  So OBS-2 owes this a check of its own rather than inheriting one. The seed must also never name the column — on a fresh or restored database it inserts
   the real household's row, so a seeded value would label a real family's data a test fixture.
 
   The first-run persona writes real rows on every run, so it either targets a non-production
@@ -1457,7 +1462,8 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   (`packages/db/src/scope.test.ts` for the type's containment, `apps/web/lib/dal/scoped.test.ts` for
   the DAL's call sites, two enumerated exceptions and no more). `db:verify` proves in **both**
   directions that a second household cannot read, write, correct or export the first's data, and
-  `pnpm db:mutations` runs five committed patches that must each turn it red.
+  `pnpm db:mutations` runs ten committed patches that must each turn it red — `01`–`06` from TEN-1
+  and TEN-2c, `07`–`09` from `AUTH-1` 1b, `10` from 1c-4.
   **[ADR 0006](./decisions/0006-household-addressing.md)** was chunk 0 — ✅ Accepted (option A,
   session-only) _(the maintainer, 2026-10-07; #252)_. **Folds in DAL-2.** AUTH-1 replaces only
   `getHouseholdScope()`'s body. ⚠️ **It buys _consistent scoping_, not authorization** (AUTH-1's), and
@@ -1504,7 +1510,7 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   every write from code deployed before 2b; moving the writer into 2c just moves the boundary) — so the
   control was the sequencing rule plus 2b's `23505` fallback, which degraded the denial into the
   pre-existing read leak. `0017` removed it structurally, and it was never reachable in production (the
-  scope resolver throws on a second live household). ✅ **`TEN-2d`'s `VALIDATE` — the arc's only
+  scope resolver threw on a second live household — removed at 1c-4). ✅ **`TEN-2d`'s `VALIDATE` — the arc's only
   mechanical production-side gate, and the last invite precondition this arc owned — is DISCHARGED**
   (`0018`, 2026-10-13; its blocker count was measured zero first, so it could not wedge). What the
   invite now waits on is **`AUTH-1`** and the self-serve step
@@ -1526,9 +1532,9 @@ Rows the beta milestone needs that had no home. Order and exit criteria live in 
   the fifth, **`2c-1`, is a measured no-op on current data and stays open as a conditional**:
   re-measure immediately before the invite, implement only if non-zero. `TEN-2b-1` and `TEN-2b-2`
   remain as their own deferred rows.
-  **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing can serve
-  two households before AUTH-1 (the resolver throws on a second live household), so the window opens
-  the moment household #2 exists. Evidence, the alternative considered and the recommendation:
+  **Its deadline is [beta-1](./milestones/beta-1.md)'s invite, not AUTH-1's merge:** nothing could serve
+  two households before AUTH-1 (the resolver threw on a second live household — removed at 1c-4), so
+  the window opens the moment household #2 exists. Evidence, the alternative considered and the recommendation:
   [TEN-1's plan](./plans/ten-1-household-scope.md) → "1d as built — the catalog verdict". _(Beta 0.)_
 - **TEN-2a — expand: `movements.household_id`, nullable, shipping dark.**
   [Plan](./plans/ten-2a-household-movements.md) _(Beta 0; TEN-2's first of three; seven-lens panel —

@@ -276,9 +276,13 @@ and complete; this is the one thing it cannot reach.
   page under `/p/` needs both lines — `app/pages-are-gated.test.ts` reports by name any page missing
   either conjunct. The only exemptions are `isUngatedPath`'s: `/gate`, the public landing and
   `/privacy` (`PUBLIC_PATHS`), and the whole `/sign-in` subtree (`PUBLIC_PATH_TREES`). The gate half
-  is deleted at `1d`, after `1c-4` makes the household scope membership-derived — until then a session
-  alone would not be a boundary, because the resolver still answers the same household for any
-  principal.
+  is deleted at `1d`. ✅ **`1c-4` has landed**, so the household scope is membership-derived and a
+  session now decides _whose_ data a request gets — which is what made `1d` safe. Until `1d` the gate
+  half stays for the other reason: a request that bypasses the proxy meets nothing without it. ⚠️ The
+  routine editor's BOLA row closes **its authz half** here — `updateProfileRoutine` already writes
+  through `isLiveProfile(publicId, scope)`, so membership-derivation turns that scoping into
+  authorization for a caller outside the household. Inside one household any member still reaches any
+  kid's routine, by design, and that row's other halves stay open ([tech-debt](../tech-debt.md)).
 
 - **Fixture athletes are role-named, and the name is a const.** `SEED_PROFILE_NAME` /
   `SEED_PROFILE_2_NAME` (`packages/shared/src/seed-ids.ts`) hold `Athlete One` / `Athlete Two`. Never

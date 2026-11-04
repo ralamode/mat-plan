@@ -52,10 +52,11 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ profileId: string }> },
 ) {
-  // 🔴 **Gate AND session, both in-process — AUTH-1 1c-3b.** The gate is not swapped out: until
-  // 1c-4 `getHouseholdScope()` ignores the principal, so a session alone would mean "anyone this
-  // Clerk instance admits", and dropping the in-process gate check would leave `mp_gate` enforced by
-  // the proxy alone. The gate half is deleted at 1d, after 1c-4.
+  // 🔴 **Gate AND session, both in-process — AUTH-1 1c-3b.** ⚠️ This said `getHouseholdScope()`
+  // "ignores the principal" until 1c-4 — it does not any more, so a session proves WHOSE data this
+  // export is rather than only that the caller is someone this Clerk instance admits. That was the
+  // obligation blocking 1d and it is discharged. The gate half stays until 1d for the other reason:
+  // dropping the in-process check would leave `mp_gate` enforced by the proxy alone.
   //
   // ⚠️ **`hasGateAccess()`, not a hand-rolled cookie read.** This handler carried its own copy of
   // that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — since

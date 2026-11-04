@@ -111,11 +111,12 @@ flowchart LR
    if (!entry.ok) return entry;
    ```
 
-   The reason is the window: `getHouseholdScope()` does not consult the principal until **1c-4**, so
-   a session alone would mean _"anyone this Clerk instance admits"_ — and dropping the in-process
-   gate check would leave `mp_gate` enforced by the proxy alone, which `SECURITY.md` refuses to call
-   a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
-   **Therefore `1c-4` must land before `1d`** — a security obligation, recorded in `beta-1.md`.
+   The reason was the window: `getHouseholdScope()` did not consult the principal until **1c-4**, so
+   a session alone would have meant _"anyone this Clerk instance admits"_. ✅ **`1c-4` has landed** —
+   the scope is membership-derived, so a session decides _whose_ data you get and the obligation that
+   gated `1d` is discharged. The gate stays until `1d` deletes it for the other reason: dropping the
+   in-process check would leave `mp_gate` enforced by the proxy alone, which `SECURITY.md` refuses to
+   call a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
 
    🔴 **The export handler calls `hasGateAccess()` like everything else (2026-11-01).** It hand-rolled
    that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — from
@@ -230,7 +231,9 @@ flowchart LR
      (TEN-1 1c). `apps/web/scripts/screenshot-ephemeral.ts` writes fixtures through `packages/db`'s
      write cores into a throwaway embedded Postgres, so since 1c it needs a scope — and the module
      boundary above means it cannot use the _script_ constructor. It **derives** one from the
-     throwaway database through `liveHouseholdIds`, the resolver's own probe, and throws on anything
+     throwaway database through `liveHouseholdIds` — ⚠️ **no longer "the resolver's own probe"**, since
+     `AUTH-1` 1c-4 moved the resolver onto the membership lookup; `liveHouseholdIds` survives for this
+     script and `db:verify` only — and throws on anything
      but exactly one live household. `scope.test.ts` allowlists that one path **and** adds a second,
      absolute assertion that nothing under `app/`, `lib/` or `components/` mints a scope at all. If
      you need a scope in a script, put the script under `scripts/` and derive — never name an id.

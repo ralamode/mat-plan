@@ -140,6 +140,62 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([UNWRAPS_SCOPE]);
   });
 
+  it('🔴 exactly one module names the MEMBERSHIP query — it returns raw household ids', () => {
+    // `AUTH-1` 1c-4 barrel-exported `membershipHousehold` because the DAL had no other way to reach
+    // it (`packages/db`'s `exports` map publishes only `"."`). That traded a module-resolution
+    // boundary for an honour one: the module's own docblock says its ids are *"the one thing a
+    // caller may not freely hold"*, and every guard in this file would stay green while a page under
+    // `app/` held a raw `household_id` for the signed-in user — none of them names this function,
+    // reads `scope.householdId`, or calls `getHouseholdScope`. ADR 0006 fwd-1 forbids exactly that.
+    //
+    // The SYMBOL, not a call: `bypass-is-contained.test.ts` records an aliased import walking
+    // straight through a `\s*\(` form.
+    const namers = WEB_SOURCES.filter((f) => /\bmembershipHousehold\b/.test(code(join(REPO, f))));
+    expect(
+      namers.map((f) => relative('', f)).sort(),
+      'the membership query returns INTERNAL household ids — only the resolver may hold them',
+    ).toEqual([DERIVES_SCOPE]);
+  });
+
+  it('🔴 the membership query is never ALIASED out of packages/db — the app-side grep only sees its own name', () => {
+    // ⚠️ **The guard above is one-sided, and its sibling at `householdScopeForScript` is not.** That
+    // one carries a second, DB-side assertion precisely because a grep for a symbol in `apps/web`
+    // cannot see a rename that happened in `packages/db`: one line —
+    // `export { membershipHousehold as lookupHousehold } from './queries/household-membership'` —
+    // republishes it on the `"."` specifier the app already imports, under a name the app-side sweep
+    // has never heard of. Every other guard in this file stays green while a page holds a raw
+    // internal `household_id`, which is the ADR 0006 fwd-1 outcome the guard above exists to stop.
+    //
+    // `export * from './queries/household-membership'` in `src/index.ts` is the ONE intended route
+    // and is exempt by name; a star-export of that module from anywhere else is not.
+    //
+    // 🔴 **The declaring module is NOT exempt, and exempting it was the bug.** The sibling guard
+    // exempts its own home safely, because `writers/household-scope-script.ts` is unreachable from
+    // `apps/web` by `packages/db`'s `exports` map at all. This module is the opposite: the barrel
+    // star-exports it, so **anything it exports is published on the `"."` specifier the app
+    // imports** — one `export { membershipHousehold as lookupHousehold };` added INSIDE it reaches
+    // the app under a name no guard knows. Copying the sibling's exemption without that adjustment
+    // left the guard green against exactly the evasion it was written for, and the first probe of it
+    // planted the alias in the barrel, where the filter did reach.
+    const BARREL = 'packages/db/src/index.ts';
+    const offenders = DB_SOURCES.filter((f) => {
+      const rel = relative('', f);
+      const src = code(join(REPO, f));
+      // One pattern, not three: `{ x as membershipHousehold }` and `{ membershipHousehold as x }`
+      // both contain the bare symbol inside the braces, so the two narrower forms were subsumed.
+      if (/export\s*\{[^}]*\bmembershipHousehold\b/.test(src)) return true;
+      // A star-export naming the module, OR a directory barrel that would re-publish it indirectly.
+      if (/export\s+\*\s+from\s+['"][^'"]*(household-membership|\/queries)['"]/.test(src)) {
+        return rel !== BARREL;
+      }
+      return false;
+    });
+    expect(
+      offenders.map((f) => relative('', f)).sort(),
+      'membershipHousehold must reach apps/web under its OWN name only — an aliased or extra re-export makes the app-side containment guard vacuous',
+    ).toEqual([]);
+  });
+
   it('exactly one module derives a scope from a request (plus the one named fixture script)', () => {
     const derivers = WEB_SOURCES.filter((f) =>
       /\bhouseholdScopeForRequest\b/.test(code(join(REPO, f))),

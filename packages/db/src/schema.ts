@@ -140,7 +140,10 @@ export const households = pgTable('households', {
   //
   // ⚠️ A synthetic household must NOT exist in prod before AUTH-1: until then TEN-1's
   // `getHouseholdScope()` resolves THE single live household and THROWS on >= 2 live rows (it cannot
-  // tell whose data it holds), so creating a second household takes the app down.
+  // tell whose data it holds), so creating a second household took the app down.
+  // ⚠️ **No longer true since `AUTH-1` 1c-4**, and the replacement is earlier rather than louder:
+  // the resolver counts a principal's memberships now, so a second household is ordinary. What
+  // stops one appearing by accident is `seed.ts` refusing to insert when a live household exists.
   synthetic: boolean('synthetic').notNull().default(false),
   ...timestamps,
 });

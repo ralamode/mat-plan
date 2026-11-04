@@ -18,8 +18,9 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * its own rather than inside the diff that moved the boundary. **Live since `1c-3b`**, which switched
  * the call sites: `requireSession()` in the four gated pages, `sessionUserOrNull()` in
  * `app/p/[profileId]/mutation-entry.ts` (on behalf of all seven mutating actions) and in
- * `app/p/[profileId]/export/route.ts`. ⏳ `1c-4` is still owed — it switches the **resolver**, so
- * until then a session says *that* you are someone, not *whose* data you get.
+ * `app/p/[profileId]/export/route.ts`. ⚠️ This said `1c-4` was **still owed** — *"until then a session
+ * says that you are someone, not whose data you get"*. It has shipped: `getHouseholdScope()` reads
+ * this principal's `household_members` row, so a session now decides **whose** data a request gets.
  *
  * **ONE module, not two.** The plan's first draft split `user.ts` (the principal) from `session.ts`
  * (the refusals) and the panel rejected it: the second file's functions would be thin wrappers over
@@ -27,9 +28,11 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * this replaces — holds its predicate and its redirect together in 28 lines.
  *
  * ⚠️ **`lib/dal/gate.ts` is NOT deleted here, and not at `1c-3b` either.** From `1c-3b` the boundary
- * is the gate **AND** a session, both re-checked in-process; `1d` is what removes the gate half, and
- * `1c-4` gates `1d` — until the household scope is membership-derived, a session alone would mean
- * "anyone this Clerk instance admits".
+ * is the gate **AND** a session, both re-checked in-process; `1d` is what removes the gate half.
+ * ✅ The obligation that gated `1d` — *"until the household scope is membership-derived, a session
+ * alone would mean 'anyone this Clerk instance admits'"* — is **discharged at `1c-4`**. The gate half
+ * stays until `1d` deletes it for the other reason: a request that bypasses the proxy meets nothing
+ * without it (`SECURITY.md` refuses to call middleware a boundary; CVE-2025-29927).
  */
 
 /**

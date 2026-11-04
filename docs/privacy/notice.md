@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-03. This is a beta.**
+**Last updated: 2026-11-04. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -91,19 +91,26 @@ still works.
 **Three honest limitations during the beta:**
 
 1. **The access code is shared**, even though signing in is not. Everyone in the household types the
-   same code, and there is **no control in the app** to remove one person's access. Ask, and their
-   sign-in account is deleted at Clerk — that is the lever that works today. ⚠️ **Removing someone
-   from the household in the database does not currently stop them**, because the app does not yet
-   work out whose data you get from who you are; that is the next piece of work. And signing in does
-   not mean the app records **who** did what — it still does not. See the limitation below.
-2. **Households are not yet separated by the code itself.** The work to guarantee that one family's
-   data is unreachable from another's is underway and not finished. **That is exactly why the beta
-   starts with a single invited family.** Until it is done, please treat the app as if anyone who was
-   invited could see anyone's log.
-   **One part of this is separate work:** the list of exercise names is shared by every household (see
-   "Movement names" below), and it has to be separated before a second family is invited.
-3. **Anyone with your access code can download any athlete's full history.** That follows from (1) and
-   (2). Guard the code the way you would guard a password.
+   same code, and there is **no control in the app** to remove one person's access to the code
+   itself — rotating it means everyone has to enter the new code. ✅ **Removing someone from the household now does stop
+   them** (new in this version): the app works out whose data you get from who you are, so once their
+   membership is removed they see nothing, even with the code. Deleting their sign-in account at
+   Clerk also still works. Ask for either. ⚠️ **Removing someone from the household hides their
+   membership record rather than erasing it, so it keeps their account identifier until the whole
+   household is deleted** — deleting their Clerk account is the lever that leaves nothing behind. And signing in does not mean the app records **who** did
+   what — it still does not. See the limitation below.
+2. **Separating one family's data from another's is done in the parts that read your log** (new in
+   this version): who you are signed in as decides which household's data the app will show you, and
+   that is checked on every read and every write. **One part is still shared:** the list of exercise
+   names is common to every household (see "Movement names" below), and it has to be separated before
+   a second family is invited. **The beta still starts with a single invited family**, because that
+   last part is not finished.
+3. **Anyone signed in to your household can download any athlete's full history** — including a
+   child tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this
+   version is that the access code alone is no longer enough: it takes the code **and** a sign-in
+   **and** a membership in your household. That follows from (1) and (2): the code is still shared,
+   and the exercise-name list is still common to every household. Guard the code the way you would
+   guard a password.
 
 ## Who else it passes through
 
@@ -271,7 +278,9 @@ one.**
 **Reviewed in full against the code and signed off by the maintainer (the household operator),
 2026-10-26. Re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
-answered.
+answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out
+whose data you get from who you are, which made three of the limitations below out of date in the
+direction of understating what the app protects.
 
 **This notice must be reviewed again when** a new company starts receiving data, a retention period
 changes, a new kind of information starts being stored, sign-in goes live, or anything is made

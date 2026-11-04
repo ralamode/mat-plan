@@ -1,0 +1,20 @@
+diff --git a/packages/db/src/seed.ts b/packages/db/src/seed.ts
+--- a/packages/db/src/seed.ts
++++ b/packages/db/src/seed.ts
+@@ -167,12 +167,10 @@
+     .where(isNull(schema.households.deletedAt))
+     .limit(1);
+ 
+-  if (!liveHousehold) {
+-    await db
+-      .insert(schema.households)
+-      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
+-      .onConflictDoNothing({ target: schema.households.publicId });
+-  }
++  await db
++    .insert(schema.households)
++    .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
++    .onConflictDoNothing({ target: schema.households.publicId });
+ 
+   // Resolve the root household id to scope the seed profile (household_id is enforced
+   // NOT NULL by the migration's CHECK, so the profile must carry it).

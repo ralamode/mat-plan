@@ -83,7 +83,7 @@ flowchart LR
   P1 --> P2[PRIV-2 PR 2 · serve /privacy ✅]
   P2 --> AU
   C[ADR 0006 · household addressing ✅] --> T[2 · TEN-1 scope seam + proofs ✅]
-  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅ 1c-2 ✅<br/>1c-3a ✅ 1c-3b ✅ · 1c-4 · 1d]
+  T --> AU[3 · AUTH-1 · Clerk, invite-only, claim the maintainer's household<br/>1a ✅ 1b-bis ✅ 1c-pre ✅ 1b ✅ 1c-1 ✅ 1c-2 ✅<br/>1c-3a ✅ 1c-3b ✅ 1c-4a ✅ 1c-4 ✅ · 1d]
   T --> T2[TEN-2 · movements per household · FIVE rows<br/>2a ✅ 2b ✅ 2c ✅ 2d ✅ · 2c-1 no-op, re-measure]
   AU --> S[4 · PROF-1, ONB-2, V1-9b]
   S --> I[invite family #1]
@@ -112,12 +112,12 @@ That must never be what an invited parent reads.
 
 **Ordering obligations, so they are gates and not preferences:**
 
-| Step      | Must not land before | Why                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔴 **1d** | **1c-4 merged**      | **A security obligation, not a sequencing preference.** `1c-3b` made every entry point check the gate **AND** a session, in-process; `1d` is what deletes the gate half. Until `1c-4` makes the household scope membership-derived, a session alone means _"anyone this Clerk instance admits"_ — so deleting the gate before `1c-4` would **widen** access, not narrow it. `SECURITY.md`: middleware is not the auth boundary.     |
-| **1c-4**  | **1c-3 merged**      | 1c-4 is what makes the no-household screen reachable by a parent. `NO_HOUSEHOLD_COPY.wrongAccount` prescribes signing out, and **1c-3 is what makes that performable** — before it, signing out of Clerk leaves the gate cookie in place.                                                                                                                                                                                           |
-| **1c-3**  | —                    | Deletes `NO_HOUSEHOLD_COPY.notYet` (the "signing out isn't in the app yet" line) in the same PR as the control, and owes `data-inventory.md` §7/§8 the Upstash rows. Any NEW `householdState()` call site must establish a principal first.                                                                                                                                                                                         |
-| **1c-4**  | —                    | Flips `notice.md`'s _"it is not switched on … nobody has an account"_ paragraph and §7's Clerk/Google cells to present tense **in the same PR**: `wrongAccount` becomes true at that commit, not before. Also re-reads `PICKER_EMPTY_COPY`, whose committed audience argument (_"the reader either deployed this or was handed the code by whoever did"_) becomes false once an invited parent can reach an athlete-less household. |
+| Step      | Must not land before          | Why                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔴 **1d** | ✅ **1c-4 merged 2026-11-03** | **A security obligation, not a sequencing preference.** `1c-3b` made every entry point check the gate **AND** a session, in-process; `1d` is what deletes the gate half. Until `1c-4` makes the household scope membership-derived, a session alone means _"anyone this Clerk instance admits"_ — so deleting the gate before `1c-4` would **widen** access, not narrow it. `SECURITY.md`: middleware is not the auth boundary.     |
+| **1c-4**  | **1c-3 merged**               | 1c-4 is what makes the no-household screen reachable by a parent. `NO_HOUSEHOLD_COPY.wrongAccount` prescribes signing out, and **1c-3 is what makes that performable** — before it, signing out of Clerk leaves the gate cookie in place.                                                                                                                                                                                           |
+| **1c-3**  | —                             | Deletes `NO_HOUSEHOLD_COPY.notYet` (the "signing out isn't in the app yet" line) in the same PR as the control, and owes `data-inventory.md` §7/§8 the Upstash rows. Any NEW `householdState()` call site must establish a principal first.                                                                                                                                                                                         |
+| **1c-4**  | —                             | Flips `notice.md`'s _"it is not switched on … nobody has an account"_ paragraph and §7's Clerk/Google cells to present tense **in the same PR**: `wrongAccount` becomes true at that commit, not before. Also re-reads `PICKER_EMPTY_COPY`, whose committed audience argument (_"the reader either deployed this or was handed the code by whoever did"_) becomes false once an invited parent can reach an athlete-less household. |
 
 ⚠️ **`TEN-2` entered this chart on 2026-10-08, and it entered as a FINDING rather than a plan
 change.** Step 2's own criterion said _"either TEN-1 proves the picker and the metadata stay per
@@ -211,8 +211,9 @@ they are how to schedule any milestone, not facts about this one.
 
   **So TEN-2 moves into Beta 0** — recommendation recorded with its evidence in
   [the plan](../plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_, the
-  maintainer's call. **Its deadline is step 4's invite, not AUTH-1's merge:** nothing can serve two
-  households before AUTH-1 (the resolver **throws** on a second live household), and the window opens
+  maintainer's call. **Its deadline is step 4's invite, not AUTH-1's merge:** nothing could serve two
+  households before AUTH-1 (the resolver **threw** on a second live household — removed at 1c-4), and
+  the window opens
   the moment household #2 exists — which is AUTH-1's _"a new user gets a new, empty household"_ plus
   _"invite family #1"_. So **AUTH-1 is still next**; TEN-2's five rows ran beside AUTH-1's dashboard
   and runbook work, and ✅ **four of them have landed** — the fifth, `TEN-2c-1`, is a measured no-op
@@ -231,7 +232,8 @@ they are how to schedule any milestone, not facts about this one.
   2c just moves the boundary) — so the control was the **schedule**, with 2b's `23505` fallback
   degrading the denial into the pre-existing read leak. **Migration `0017` removed it structurally**:
   the two partial indexes are the only arbiters now, so B's own row simply inserts, and the window was
-  never reachable in production (the scope resolver throws on a second live household).
+  never reachable in production (the scope resolver threw on a second live household — removed at
+  1c-4).
   Reasoning: [TEN-2a's plan](../plans/ten-2a-household-movements.md) → _"The 2b→2c window"_.
   ✅ **And this settles the PR count: TEN-2 is FIVE rows, not three or four** — `2a`, `2b`, `2c`,
   `2c-1` (the split backfill) and `2d` (the `VALIDATE` plus the fallback's deletion), all filed in

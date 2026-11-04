@@ -124,13 +124,16 @@ const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
  *   but `householdScopeForScript` lives in a module `packages/db`'s `exports` map makes unreachable
  *   from `apps/web` **by module resolution**, deliberately. So a fixture script in `apps/web` has to
  *   derive instead, and deriving is the stronger half of the rule: it **never names a household
- *   id**, it asks the database which household is live, through the resolver's own single-sourced
- *   probe (`liveHouseholdIds`) — the same query `getHouseholdScope()` runs.
+ *   id**, it asks the database which household is live, through `liveHouseholdIds`. ⚠️ **That is no
+ *   longer "the resolver's own probe"**: `AUTH-1` 1c-4 moved `getHouseholdScope()` onto the
+ *   membership lookup, so `liveHouseholdIds` now serves this script and `db:verify` only. Deriving
+ *   is still the stronger half of the rule — the script asks the database rather than naming an id.
  * - It runs only under `pnpm --filter web screenshot:ephemeral`, against a **throwaway embedded
  *   Postgres** this script created seconds earlier. It is never on a request path, and a scope it
  *   mints can never reach one.
- * - `≥2` throws rather than picking, exactly as `getHouseholdScope()` does: a fixture written into
- *   the wrong household would produce a screenshot of a leak and call it a feature.
+ * - `≥2` throws rather than picking — for the same reason `getHouseholdScope()` throws on a principal
+ *   holding two memberships, though no longer by the same query: a fixture written into the wrong
+ *   household would produce a screenshot of a leak and call it a feature.
  */
 async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdScope> {
   const live = await liveHouseholdIds(db);

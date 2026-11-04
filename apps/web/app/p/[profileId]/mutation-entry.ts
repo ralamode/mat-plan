@@ -22,10 +22,11 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  * 🔴 **The entry check every mutating Server Action under `/p/[profileId]` runs first — three
  * checks, in this order, and the order is the design (AUTH-1 1c-3b).**
  *
- *  1. the **GATE**, unchanged. 1c-3b ADDS a session rather than swapping the gate out:
- *     `getHouseholdScope()` does not consult the principal until 1c-4, so a session alone would mean
- *     "anyone this Clerk instance admits", and a swap would leave `mp_gate` enforced by the proxy
- *     alone — which `SECURITY.md` refuses to call a boundary. Deleted at **1d**, after 1c-4.
+ *  1. the **GATE**, unchanged. 1c-3b ADDED a session rather than swapping the gate out, and ⚠️ the
+ *     reason given here — that `getHouseholdScope()` "does not consult the principal until 1c-4" —
+ *     is **discharged**: it does, so a session now proves whose data this is. What keeps the gate
+ *     until **1d** is the other half: a swap would leave `mp_gate` enforced by the proxy alone,
+ *     which `SECURITY.md` refuses to call a boundary.
  *  2. the **SESSION**. Same refusal copy as the gate on purpose: a caller must not be able to tell
  *     "no code" from "no session" from "wrong household" — `actions.test.ts` pins that the three
  *     refusals are byte-identical, which is ADR 0006's 404-never-403 argument. Hence `refusal` is a
