@@ -54,8 +54,13 @@ consumed by an LLM (a Claude skill) via a **scoped machine token** — that clau
 > `AUTH-1` is the row still outstanding
 > ([beta-1.md](../docs/milestones/beta-1.md): _"Accepted with one family; a breach with two"_, and
 > [ADR 0006](../docs/decisions/0006-household-addressing.md) makes it a constraint rather than a
-> hope). It is also enforced in code until `AUTH-1`: the scope resolver **throws** on a second live
-> household rather than picking one. What is and is not enforced is recorded once, in
+> hope). ⚠️ **It WAS enforced in code by the scope resolver throwing on a second live household;
+> `AUTH-1` 1c-4 removed that.** The resolver now counts a principal's memberships, and two live
+> households is the intended end state once a family is invited — so the throw had nothing left to
+> be loud about. What replaced it is narrower and earlier: `seed.ts` refuses to create a household
+> when a live one exists, closing the one automated creator (`migrate.yml` seeds production on every
+> merge). The resolver still throws on a principal holding **two memberships**, which is a different
+> invariant. What is and is not enforced is recorded once, in
 > [docs/privacy/data-inventory.md](../docs/privacy/data-inventory.md) §4 — so this file does not carry
 > a status that goes false on the next merge.
 

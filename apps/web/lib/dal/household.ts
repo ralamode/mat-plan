@@ -3,7 +3,7 @@ import 'server-only';
 import {
   householdScopeForRequest,
   type HouseholdScope,
-  liveHouseholdIds,
+  membershipHousehold,
   schema,
 } from '@mat-plan/db';
 import * as Sentry from '@sentry/nextjs';
@@ -11,6 +11,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { cache } from 'react';
 
 import { db } from './db';
+import { getCurrentUser } from './session';
 
 /**
  * **THE household scope point (TEN-1).** The one place in the repo that DERIVES a household for a
@@ -62,35 +63,149 @@ import { db } from './db';
  * precisely why it is acceptable on the *resolution* half while the *propagation* half is
  * compiler-checked by `isLiveProfile`'s required parameter.
  *
- * ## What AUTH-1 changes
+ * ## What `AUTH-1` 1c-4 changed
  *
  * **Only this function's body** — session → `household_members` → household. No page, action or
- * Route Handler signature holds a scope, so nothing else moves.
+ * Route Handler signature holds a scope, so nothing else moved, which is the whole reason the seam
+ * landed before its consumers.
+ *
+ * ⚠️ **`queries/household-scope.ts` did NOT go with it**, contrary to what that module and this
+ * docblock both said until 1c-4. `liveHouseholdIds` survives for two script consumers — the
+ * screenshot harness's fixture scope and `db:verify` section 0 — neither of which is a request.
+ *
+ * 🔴 **This is what makes `1d` safe.** Before it, a session proved only *that* you are someone the
+ * Clerk instance admits; the household came from "whichever one is live". Deleting the access gate
+ * at that point would have widened access rather than narrowing it. From here a session proves
+ * **whose** data you get, which is the property `1d` removes the gate against.
  */
 export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> => {
-  // Single-sourced in `packages/db/src/queries/household-scope.ts` so `db:verify` proves THIS
-  // query — including that a soft-deleted household stops resolving — against a real database.
-  const rows = await liveHouseholdIds(db);
+  // (B) No principal. SILENT: 1c-3b already refused this caller at all twelve entry points, so by
+  // the time anything calls this with no session the refusal has happened and a Sentry message would
+  // be noise on a path that is working as designed.
+  const user = await getCurrentUser();
+  if (!user) return null;
 
-  if (rows.length === 1) return householdScopeForRequest(rows[0].id);
-
-  if (rows.length === 0) {
-    // Not an exception: an empty database is a deployment state, not a fault. The fixed message and
-    // the `scope_outcome` tag are the WHOLE payload — no count, no ids, no names.
-    Sentry.captureMessage('household scope unresolved: no live household', {
-      level: 'warning',
-      tags: { scope_outcome: 'no_household' },
+  // Single-sourced in `packages/db/src/queries/household-membership.ts` so `db:verify` proves THIS
+  // query — both `deleted_at` conjuncts, and the LIMIT 2 ambiguity probe — against a real database.
+  let rows: number[];
+  try {
+    rows = await membershipHousehold(db, user.userId);
+  } catch (error) {
+    // (B′) The table is not there yet: a deploy that beat migration `0019`, or a preview on an
+    // un-migrated database. `null` rather than a throw, for the same reason zero households is
+    // `null` — a schema that has not caught up is a deployment state, not a fault — and the cause
+    // rides `scope_outcome` to a dashboard instead of a line on a family's screen.
+    //
+    // 🔴 **MATCH THE CODE, RETHROW EVERYTHING ELSE.** A bare `catch { return null }` would map
+    // `ECONNREFUSED`, pool exhaustion and a statement timeout onto "no household for this account",
+    // so during a database outage the real family reads *"Nothing is linked to this account"* and
+    // the operator goes looking for a membership problem.
+    //
+    // ⚠️ **The code is on `error.cause`, not on `error`** — drizzle wraps the driver's error. A test
+    // that fabricates `{ code: '42P01' }` on the error itself passes while production rethrows, which
+    // is a `42P01` on every route: the total outage this branch exists to prevent.
+    if (!isSchemaMissing(error)) throw error;
+    // ⚠️ **FIXED MESSAGE AND TAG ONLY — never the error, never `extra`.** The caught error is a
+    // `DrizzleQueryError` whose message embeds `params:`, and the param here IS the Clerk user id.
+    // `scrubSentryEvent` has no allowlist for hand-built contexts; the DAL does not rely on it.
+    Sentry.captureMessage('household scope unresolved: membership schema missing', {
+      level: 'error',
+      tags: { scope_outcome: SCOPE_OUTCOME.schemaMissing },
     });
     return null;
   }
 
-  // ≥ 2 live households before AUTH-1. Loud on purpose: "pick one" is a silent cross-wire, and the
-  // empty state would misreport this as "your data does not exist".
+  // (A) The only resolvable answer.
+  if (rows.length === 1) return householdScopeForRequest(rows[0]);
+
+  if (rows.length === 0) {
+    // (C) A principal with no membership — THE state this chunk makes reachable by a person. Five
+    // causes share one screen (`NO_HOUSEHOLD_COPY`) on purpose, because telemetry carries the cause;
+    // so this needs its OWN outcome, or "the maintainer is locked out before the claim correction"
+    // and "somebody signed in with the wrong Google account" are the same dashboard row.
+    //
+    // The fixed message and the tag are the WHOLE payload — no count, no ids, and above all not the
+    // Clerk user id (ADR 0006 obligation 3: a requester→owner mapping at a third party is the
+    // cross-tenant linkage the owning household id is forbidden for).
+    Sentry.captureMessage('household scope unresolved: principal has no live membership', {
+      level: 'warning',
+      tags: { scope_outcome: SCOPE_OUTCOME.noMembership },
+    });
+    return null;
+  }
+
+  // (D) ≥2 live memberships for one principal. Loud on purpose: "pick one" is a silent cross-wire
+  // between two families, and the empty state would misreport it as "your data does not exist".
+  //
+  // ⚠️ **Unreachable in production, and that is a property of a constraint rather than of this
+  // code**: `uq_household_members_clerk_user` is partial-unique on `clerk_user_id` alone. Its test
+  // mocks the query — an implementer trying to construct the row will not manage it. Its blast
+  // radius is now PER-PRINCIPAL: this account gets `error.tsx` everywhere, everyone else is fine.
   throw new Error(
-    'household scope is ambiguous: more than one live household exists before AUTH-1, so the ' +
+    'household scope is ambiguous: this account holds more than one live membership, so the ' +
       'server cannot tell whose data it holds',
   );
 });
+
+/**
+ * 🔴 **Why the resolver's own `scope_outcome` values are a const (AUTH-1 1c-4).**
+ *
+ * They were two inline literals — `'no_household'` for zero live households and nothing else, since
+ * every other path either resolved or threw. 1c-4 makes it four, and two of them are states a PERSON
+ * now reaches: `no_membership` is an invited parent whose account was never linked, or the
+ * maintainer before the claim correction.
+ *
+ * `constants.ts`'s `NO_HOUSEHOLD_COPY` argues that all of those causes deliberately share ONE screen
+ * **because the telemetry carries the cause**. That argument is only true if the telemetry actually
+ * distinguishes them — a single `no_household` for both "the database is empty" and "this account
+ * has no membership" collapses a deployment fault and a per-person one into the same dashboard row,
+ * and `runbooks.md`'s triage keys on this field.
+ *
+ * ⚠️ **No value here ever carries an identifier.** The tag is the whole payload; the Clerk user id
+ * must not reach Sentry (ADR 0006 obligation 3).
+ */
+export const SCOPE_OUTCOME = {
+  /**
+   * ⚠️ **`no_household` is RETIRED at 1c-4 and is deliberately absent from this map.** The resolver
+   * no longer counts households, so nothing can emit it — and a member nothing can produce is a
+   * state a reader will believe in. An event carrying it in Sentry is therefore pre-1c-4, which is
+   * the one fact an operator triaging an old alert needs.
+   */
+  /** A principal with no live membership. THE state 1c-4 makes person-reachable. */
+  noMembership: 'no_membership',
+  /** `household_members` is not there: a deploy ahead of `0019`, or an un-migrated preview. */
+  schemaMissing: 'schema_missing',
+} as const;
+
+/**
+ * Postgres codes that mean "the schema has not caught up", and nothing else.
+ *
+ * `42P01` undefined_table · `42703` undefined_column. Deliberately NOT a catch-all: every other code
+ * — a connection failure, pool exhaustion, a statement timeout, `42501` insufficient_privilege —
+ * must propagate, or a database outage renders as *"Nothing is linked to this account"* to the one
+ * family that does have data.
+ */
+const SCHEMA_MISSING_CODES = new Set(['42P01', '42703']);
+
+/**
+ * ⚠️ **The code is on `error.cause`, not on `error`.** drizzle wraps the driver's error in a
+ * `DrizzleQueryError`; reading `error.code` finds nothing and this returns `false`, which rethrows —
+ * so the failure mode of getting this wrong is a `42P01` on every route rather than a silent
+ * mis-classification. A test must therefore be built on a REAL wrapped error, not a fabricated
+ * `{ code }`, or it passes while production is down.
+ *
+ * This is the repo's first pg-error-code check: TEN-2d deleted the only other one, and
+ * `isUniqueViolationOn` was never written. Later ones should follow this shape.
+ */
+function isSchemaMissing(error: unknown): boolean {
+  const e = error as { cause?: { code?: unknown }; code?: unknown } | null;
+  // `cause` FIRST, then the error itself. pg puts the code on the error it throws; drizzle wraps
+  // that in a `DrizzleQueryError` whose `cause` is the pg error — so the live shape is `.cause.code`
+  // and the bare shape is what a caller sees if it ever reaches here unwrapped. Reading only `.code`
+  // finds nothing in production; reading only `.cause.code` misses the unwrapped case.
+  const code = e?.cause?.code ?? e?.code;
+  return typeof code === 'string' && SCHEMA_MISSING_CODES.has(code);
+}
 
 /**
  * The two answers `householdState()` can give. Hoisted rather than inlined so the page and the tests

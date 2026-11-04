@@ -19,54 +19,136 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const { state, recording, captureMessage } = await vi.hoisted(async () => {
   const { createRecordingDb } = await import('./recording-db');
-  const state = { households: [] as unknown[][] };
-  const recording = createRecordingDb((sql) =>
-    /from "households"/.test(sql) ? state.households : [],
-  );
+  const state = {
+    /** Rows the MEMBERSHIP probe answers — one per live membership for this principal. */
+    memberships: [] as unknown[][],
+    /** The principal. `null` is outcome B, which `getCurrentUser()` cannot produce under vitest. */
+    principal: { userId: 'user_householdSuiteFixturePrincipal' } as { userId: string } | null,
+    /** Set to make the probe throw, for the schema-missing branch. */
+    probeThrows: null as unknown,
+  };
+  const recording = createRecordingDb((sql) => {
+    if (!/from "household_members"/.test(sql)) return [];
+    if (state.probeThrows) throw state.probeThrows;
+    return state.memberships;
+  });
   const { vi: v } = await import('vitest');
   return { state, recording, captureMessage: v.fn() };
 });
 
 vi.mock('./db', () => ({ db: recording.db }));
 vi.mock('@sentry/nextjs', () => ({ captureMessage }));
+// AUTH-1 1c-4: the resolver consults the principal first. `./session` is the seam rather than the
+// three-mock Clerk stack — `getCurrentUser()`'s own contract is `session.test.ts`'s job.
+vi.mock('./session', () => ({ getCurrentUser: async () => state.principal }));
 
 import { getHouseholdScope, HOUSEHOLD_STATE, householdState } from './household';
 
 beforeEach(() => {
-  state.households = [];
+  state.memberships = [];
+  state.principal = { userId: 'user_householdSuiteFixturePrincipal' };
+  state.probeThrows = null;
   recording.queries.length = 0;
   captureMessage.mockClear();
 });
 
+/**
+ * 🔴 **The five outcomes, one case each (`AUTH-1` 1c-4).** The resolver answers *whose* data this
+ * request gets, so every branch is a boundary and none may be inferred from another.
+ *
+ * ⚠️ Three of these were previously written against the **households** probe, which the resolver no
+ * longer emits. Had they been left, `cross_household` and `unknown_resource` below would have gone
+ * red (visible) while `no_scope` went **green for the wrong reason** — the scope unresolvable
+ * because the principal was missing rather than because of what the test names.
+ */
 describe('getHouseholdScope — the one place a household is derived from a request', () => {
-  it('exactly one live household → that household’s scope', async () => {
-    state.households = [[11]];
+  it('(A) exactly one live membership → that household’s scope', async () => {
+    state.memberships = [[11]];
     await expect(getHouseholdScope()).resolves.toEqual({ householdId: 11 });
     expect(captureMessage).not.toHaveBeenCalled();
   });
 
-  it('zero live households → null, and a Sentry MESSAGE naming no ids', async () => {
+  it('(B) no principal → null, SILENTLY, and without touching the database', async () => {
+    // 1c-3b refuses a sessionless caller at all twelve entry points, so reaching here with no
+    // principal is a path working as designed — a Sentry message would be noise. And the probe must
+    // not run: an unauthenticated flood should cost zero database work.
+    state.principal = null;
+    await expect(getHouseholdScope()).resolves.toBeNull();
+    expect(captureMessage).not.toHaveBeenCalled();
+    expect(recording.queries).toHaveLength(0);
+  });
+
+  it('(B′) the membership table is missing → null, tagged, and NOT the error object', async () => {
+    // drizzle wraps the driver error, so the code is on `.cause`. Fixed message and tag only: the
+    // caught error's message embeds `params:`, and the param here IS the Clerk user id.
+    // ⚠️ The REAL shape: pg throws an error carrying `.code`, and drizzle wraps it — so what the
+    // resolver catches is a `DrizzleQueryError` whose `.cause` is this object. Writing
+    // `{ cause: { code } }` here instead would sit one level too deep and the branch would never
+    // fire, which is how a lenient implementation and a wrong test agree with each other.
+    state.probeThrows = Object.assign(new Error('relation does not exist'), { code: '42P01' });
     await expect(getHouseholdScope()).resolves.toBeNull();
     expect(captureMessage).toHaveBeenCalledTimes(1);
     const [message, options] = captureMessage.mock.calls[0];
-    expect(message).toMatch(/no live household/);
-    // A household COUNT is not personal data; an id or a name would be.
-    expect(JSON.stringify(options)).not.toMatch(/\d{4}/);
+    expect(message).toMatch(/schema missing/);
+    expect(options).toMatchObject({ tags: { scope_outcome: 'schema_missing' } });
+    const payload = JSON.stringify(options);
+    expect(payload).not.toMatch(/params/);
+    expect(payload).not.toContain('user_');
   });
 
-  it('two live households → THROWS (never "pick the first")', async () => {
-    state.households = [[11], [22]];
+  it('(B′) any OTHER database failure propagates — an outage is not "no household"', async () => {
+    // A bare `catch { return null }` would tell the one family that does have data that nothing is
+    // linked to their account, and send the operator looking for a membership problem.
+    state.probeThrows = Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' });
+    // ⚠️ The message asserted is drizzle's wrapper ("Failed query: …"), not the driver's — which is
+    // itself the point: what propagates is the real error, cause and all, rather than a `null` the
+    // picker would render as "nothing is linked to this account".
+    await expect(getHouseholdScope()).rejects.toThrow();
+    const rejection = await getHouseholdScope().catch((e: unknown) => e);
+    expect((rejection as { cause?: { code?: string } }).cause?.code).toBe('ECONNREFUSED');
+    expect(captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('(C) a principal with no membership → null, tagged `no_membership`, naming no ids', async () => {
+    await expect(getHouseholdScope()).resolves.toBeNull();
+    expect(captureMessage).toHaveBeenCalledTimes(1);
+    const [message, options] = captureMessage.mock.calls[0];
+    expect(message).toMatch(/no live membership/);
+    // 🔴 DISTINCT from `no_household`. Five causes share one screen because telemetry carries the
+    // cause; one tag for both would make "the maintainer is locked out" and "wrong Google account"
+    // the same dashboard row, and `runbooks.md`'s triage keys on this field.
+    expect(options).toMatchObject({ tags: { scope_outcome: 'no_membership' } });
+    const payload = JSON.stringify(options);
+    expect(payload).not.toContain('user_');
+    expect(payload).not.toMatch(/\d{4}/);
+  });
+
+  it('(D) two live memberships → THROWS (never "pick the first")', async () => {
+    // ⚠️ Unreachable in production — `uq_household_members_clerk_user` is partial-unique on
+    // `clerk_user_id` alone, proved by rejection in `db:verify`. So this case MOCKS the query; an
+    // implementer trying to construct the row will not manage it.
+    state.memberships = [[11], [22]];
     await expect(getHouseholdScope()).rejects.toThrow(/ambiguous/);
   });
 
   it('probes with LIMIT 2 and no ORDER BY — an ambiguity probe, not a pick', async () => {
-    state.households = [[11]];
+    state.memberships = [[11]];
     await getHouseholdScope();
-    const probe = recording.queries.find((q) => /from "households"/.test(q.text));
+    const probe = recording.queries.find((q) => /from "household_members"/.test(q.text));
     expect(probe?.text).toMatch(/limit \$\d/i);
     expect(probe?.values).toContain(2);
     expect(probe?.text.toLowerCase()).not.toContain('order by');
+    // BOTH conjuncts: a member of a soft-deleted household must not resolve a working scope. The
+    // first version of the query lost the second one.
+    expect(probe?.text).toContain('"household_members"."deleted_at" is null');
     expect(probe?.text).toContain('"households"."deleted_at" is null');
+  });
+
+  it('binds the PRINCIPAL, not something the caller supplied', async () => {
+    state.memberships = [[11]];
+    await getHouseholdScope();
+    const probe = recording.queries.find((q) => /from "household_members"/.test(q.text));
+    expect(probe?.values).toContain('user_householdSuiteFixturePrincipal');
   });
 });
 
@@ -83,10 +165,14 @@ describe('reportScopeMiss — the miss-path event', () => {
   const FOREIGN = '019826b4-0000-7000-8000-0000000000aa';
 
   /** Fresh module graph per case: `getHouseholdScope` is `cache()`d and the probe reads the pool. */
-  async function miss(households: unknown[][], profileExists: boolean) {
+  async function miss(memberships: unknown[][], profileExists: boolean) {
     const { createRecordingDb } = await import('./recording-db');
+    // ⚠️ The resolver's probe is the MEMBERSHIP lookup since `AUTH-1` 1c-4. Keyed on the old
+    // `from "households"` this answers nothing, every case resolves no scope, and `no_scope` goes
+    // GREEN for the wrong reason — which would leave the only assertion standing between
+    // `reportScopeMiss` and reporting every legitimate request as a cross-household probe.
     const rec = createRecordingDb((sql) =>
-      /from "households"/.test(sql) ? households : profileExists ? [[FOREIGN]] : [],
+      /from "household_members"/.test(sql) ? memberships : profileExists ? [[FOREIGN]] : [],
     );
     vi.doMock('./db', () => ({ db: rec.db }));
     vi.resetModules();
@@ -173,7 +259,7 @@ describe('reportScopeMiss — the miss-path event', () => {
  */
 describe('householdState — "does this request resolve a household", without handing out the scope', () => {
   it('exactly one live household → resolved', async () => {
-    state.households = [[11]];
+    state.memberships = [[11]];
     await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.resolved);
   });
 
@@ -182,7 +268,7 @@ describe('householdState — "does this request resolve a household", without ha
   });
 
   it('two live households → THROWS; it must not degrade to "none"', async () => {
-    state.households = [[11], [22]];
+    state.memberships = [[11], [22]];
     await expect(householdState()).rejects.toThrow(/ambiguous/);
   });
 });

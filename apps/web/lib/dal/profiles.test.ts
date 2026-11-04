@@ -20,6 +20,13 @@ const { recording } = await vi.hoisted(async () => {
 });
 
 vi.mock('./db', () => ({ db: recording.db }));
+// AUTH-1 1c-4: the resolver consults the PRINCIPAL first, and under vitest `getCurrentUser()` has no
+// Clerk keys and no bypass id — so without this every case falls to state B, the scope is `null`,
+// and the query under test is never emitted. `./session` is the seam rather than the three-mock
+// Clerk stack (`@clerk/nextjs`, `@/lib/clerk`, `@/lib/env`): `getCurrentUser`'s own contract is
+// covered by `session.test.ts`, and this suite is not testing auth.
+const FIXTURE_PRINCIPAL = 'user_recordingDbFixturePrincipal';
+vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRINCIPAL }) }));
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
@@ -44,8 +51,15 @@ describe('listProfiles — the picker is the whole isolation boundary (ADR 0006,
   it('resolves the household BEFORE reading profiles', async () => {
     // Order matters: a read that ran first and filtered after would have already left the database
     // with every household's rows.
+    //
+    // ⚠️ The resolver's probe is the MEMBERSHIP lookup since `AUTH-1` 1c-4 — `from
+    // "household_members" inner join "households"`. Matching `from "households"` finds nothing and
+    // this reads as "the household was never resolved", which is a confusing way to be told the
+    // regex is stale.
     await listProfiles();
-    const householdsAt = recording.queries.findIndex((q) => /from "households"/.test(q.text));
+    const householdsAt = recording.queries.findIndex((q) =>
+      /from "household_members"/.test(q.text),
+    );
     const profilesAt = recording.queries.findIndex((q) => /from "profiles"/.test(q.text));
     expect(householdsAt).toBeGreaterThanOrEqual(0);
     expect(householdsAt).toBeLessThan(profilesAt);

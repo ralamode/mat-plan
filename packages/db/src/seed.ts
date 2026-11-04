@@ -144,13 +144,50 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     .values(ACTIVITY_CATEGORY_ROWS)
     .onConflictDoNothing({ target: schema.activityTypeCategories.code });
 
-  await db
-    .insert(schema.households)
-    .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
-    .onConflictDoNothing({ target: schema.households.publicId });
+  // 🔴 **CONDITIONAL ON NO LIVE HOUSEHOLD EXISTING — `AUTH-1` 1c-4.**
+  //
+  // The arbiter used to be `onConflictDoNothing` on `public_id`, which is idempotent for THIS row
+  // and silent about every other: seed a database that already holds a household under a different
+  // `public_id` and you get a SECOND one. That was survivable only because the scope resolver threw
+  // on a second live household, so the mistake announced itself as an outage on the next request.
+  //
+  // ⚠️ **1c-4 removed that detector.** The resolver now counts a principal's memberships, not
+  // households, and two live households is the *intended* Beta 0 end state once a family is invited
+  // — so there is nothing left to be loud. `migrate.yml` runs this seed against **production** on
+  // every merge to `main`, which makes the seed itself the one automated creator of household #2.
+  // The parent plan's Q5 called this out and assigned the fix to 1b; it was never written, and
+  // porting the throw to an alert would have fired on every request forever instead.
+  //
+  // Closing the creator in code beats alerting on it: there is no window, no quota, and nothing to
+  // mute. An operator who genuinely wants a second household creates it deliberately, not by
+  // re-running a seed.
+  const [liveHousehold] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(isNull(schema.households.deletedAt))
+    .limit(1);
+
+  if (!liveHousehold) {
+    await db
+      .insert(schema.households)
+      .values({ publicId: SEED_HOUSEHOLD_PUBLIC_ID, name: 'Home' })
+      .onConflictDoNothing({ target: schema.households.publicId });
+  }
 
   // Resolve the root household id to scope the seed profile (household_id is enforced
   // NOT NULL by the migration's CHECK, so the profile must carry it).
+  //
+  // ⚠️ Still by `public_id`, deliberately: this is the SEED's household, and the rows below belong
+  // to it. On a database that already held a different live household the guard above skipped the
+  // insert, so this finds nothing — and the seed then fails on `household.id` below rather than
+  // seeding fixture profiles into somebody else's household. That is the right outcome and it is
+  // LOUD, but it is a TypeError rather than a sentence, so the operator gets a stack trace instead
+  // of an explanation. Worth an explicit throw the next time this file is open; not worth widening
+  // this PR for.
+  //
+  // 📌 **It also means `db:seed` is no longer unconditionally idempotent against an arbitrary
+  // database** — only against one that is empty or already seed-owned, which is every database this
+  // repo actually seeds (`migrate.yml`, the harnesses, `db:verify`).
   const [household] = await db
     .select({ id: schema.households.id })
     .from(schema.households)

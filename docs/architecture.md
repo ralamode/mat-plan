@@ -184,16 +184,33 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
   `NO_PROFILE_LOG` path, no new error shape and no new copy. The signal the scoped predicate destroys
   is recovered on the miss path only, as a structured `cross_household` / `unknown_resource` event
   (ADR 0006 obligation 3), never in the response.
-- **Zero live households → `null` (the app goes dark); ≥ 2 → THROW.** Different states, different
-  paths: `null` for both would tell a parent their data does not exist and suggest a production write.
-- **AUTH-1 replaces only `getHouseholdScope()`'s body** (session → `household_members` → household).
-  Nothing else moves, which is the whole reason the seam landed before its consumers. ⏳ **Still
-  pending at 1c-3b:** the entry points now _require_ a session, but the scope is not yet derived from
-  it. That is **`1c-4`**, and it is what makes `1d` safe.
-- ⚠️ **Scoping is not authorization.** Until **`1c-4`** the scope is still resolved from the single
-  live household rather than from the principal, so what is proved is _consistent scoping_. From
-  1c-3b a requester must hold a real Clerk session as well as the code, but the session does not yet
-  decide _whose_ data they get.
+- 🔴 **FIVE outcomes since `AUTH-1` 1c-4**, not the two this said. The resolver reads the principal,
+  then the membership — never a household count:
+
+  | #   | condition                      | answer                                               |
+  | --- | ------------------------------ | ---------------------------------------------------- |
+  | A   | one live membership            | that household's scope                               |
+  | B   | no principal                   | `null`, silently — 1c-3b refused the caller upstream |
+  | B′  | `household_members` missing    | `null` + `scope_outcome: schema_missing`             |
+  | C   | principal, no membership       | `null` + `scope_outcome: no_membership`              |
+  | D   | principal, **two** memberships | **THROW** — "pick one" is a silent cross-wire        |
+
+  `null` and the throw must stay different paths: `null` for both would tell a parent their data does
+  not exist and suggest a production write. ⚠️ **`no_household` is retired** — nothing counts
+  households now, so an event carrying it is pre-1c-4.
+
+- ✅ **`1c-4` replaced only `getHouseholdScope()`'s body** (session → `household_members` →
+  household). Nothing else moved, which is the whole reason the seam landed before its consumers —
+  no page, action or Route Handler signature carries a scope.
+- ✅ **Scoping IS authorization now, and that is what unblocks `1d`.** Until 1c-4 the scope came from
+  the single live household, so a session proved only that the caller was someone this Clerk instance
+  admits — deleting the access gate then would have **widened** access. A session now decides _whose_
+  data you get. ⚠️ The gate still stands until `1d` deletes it, because a request bypassing the proxy
+  meets nothing otherwise (SEC-1's scar; CVE-2025-29927).
+- ⚠️ **The ≥2-live-households throw is gone with the old body**, and was not ported to an alert: two
+  live households is the intended end state once a family is invited, so it would fire on every
+  request forever. The creator is closed instead — `seed.ts` refuses to insert when a live household
+  exists, which matters because `migrate.yml` seeds production on every merge.
 - ✅ **`movements` came inside the seam at `TEN-2b`.** `findOrCreateMovementId` takes a
   `HouseholdScope` and resolves **global-first** — the curated namespace (`household_id IS NULL`),
   then this household's own, then an insert into this household's own — so a name a household types
@@ -217,7 +234,7 @@ flowchart LR
   PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles<br/>+ Sign out (session only)"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
   ACT["Server Action<br/>log bodyweight / strength"]
-  SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>0 → null (dark) · ≥2 → throw"]
+  SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>principal → membership<br/>no membership → null · ≥2 memberships → throw"]
   DAL["DAL (server-only)<br/>isLiveProfile(publicId, scope)"]
 
   LANDING -->|"Household sign-in"| GATE
@@ -231,7 +248,7 @@ flowchart LR
   PICKER -.->|"no session → redirect (1c-3b)"| SIGNIN
   TODAY -.->|"no session → redirect (1c-3b)"| SIGNIN
   PICKER -.->|"Sign out: clears the Clerk session<br/>ONLY — clearing mp_gate too is a lockout"| SIGNIN
-  SCOPE -->|"the one live household<br/>(1c-4: the session's)"| PICKER
+  SCOPE -->|"the session's household<br/>(membership-derived, 1c-4)"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
   TODAY -->|"hidden field profileId"| ACT

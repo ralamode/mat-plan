@@ -41,8 +41,13 @@ export type ProfileDTO = {
  * obligation. An emitted-SQL assertion alone would only prove a conjunct was appended, never which
  * rows come back.
  *
- * A null scope returns `[]` — the picker's empty state, the honest answer to an empty database. The
- * ≥2-household case never reaches here: the resolver throws.
+ * A null scope returns `[]` — the picker's empty state. ⚠️ **Since `AUTH-1` 1c-4 that is no longer
+ * only "an empty database":** it is also a signed-in person with no membership, which is the common
+ * case now (an invited parent whose account was never linked, or the wrong Google account). The
+ * screen is the same by design and the cause rides `scope_outcome` to the dashboard.
+ *
+ * The ambiguous case still never reaches here — the resolver throws — but it is now **two
+ * memberships for one principal**, not two live households.
  */
 export async function listProfiles(): Promise<ProfileDTO[]> {
   const scope = await getHouseholdScope();

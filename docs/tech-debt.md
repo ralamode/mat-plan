@@ -583,7 +583,10 @@ success.` Harmless there — nothing referenced the files yet.
 - **Impact:** low today (single trusted household, pre-Clerk, occasional edits). The BOLA gap is the real
   item; the two semantics are edge cases a single coach won't hit. The two sharp edges above are newly
   **reachable** as of V1-23 — still low (one coach, three kids), but no longer hidden behind a URL.
-- **Proposed fix:** **`AUTH-1` 1c-4** closes the authz gap — not "Clerk v1.5": Clerk landed at Beta 0
+- ✅ **CLOSED at `AUTH-1` 1c-4 (2026-11-03).** `updateProfileRoutine` already wrote through
+  `isLiveProfile(publicId, scope)`; membership-derivation is what turns that scoping into
+  authorization. Kept for the reasoning.
+- **Proposed fix (as written):** **`AUTH-1` 1c-4** closes the authz gap — not "Clerk v1.5": Clerk landed at Beta 0
   and `1c-3b` already requires a session here; 1c-4 is what derives the scope from the principal. Scope
   the DAL read + write by `household_id` (the
   ownership seam every writer already re-resolves through). The LWW clobber is paid down with the offline/sync

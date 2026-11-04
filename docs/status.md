@@ -28,11 +28,12 @@ reached at all.
 🔴 **`1c-3b` ended that.** All twelve entry points — 4 pages, 7 Server Actions, 1 Route Handler — now
 require **the household access code AND a Clerk session**, both checked in-process, and **sign out
 exists**. (`1c-3a`, #319 and its hardening #320, shipped the test seam that lets the harnesses reach
-a page requiring a session at all.) It is an **AND rather than a swap** because `getHouseholdScope()`
-does not consult the principal until `1c-4`: a session alone would mean _"anyone this Clerk instance
-admits"_, and dropping the in-process gate check would leave `mp_gate` enforced by middleware alone,
-which `SECURITY.md` refuses to call a boundary. **So `1c-4` must land before `1d`**, which is what
-deletes the gate half — a security obligation, recorded in [beta-1](./milestones/beta-1.md).
+a page requiring a session at all.) It was an **AND rather than a swap** because `getHouseholdScope()`
+did not consult the principal until `1c-4`: a session alone would have meant _"anyone this Clerk
+instance admits"_. ✅ **`1c-4` has landed**, so the scope is membership-derived and that obligation is
+discharged — `1d` is unblocked. The gate half stays until `1d` deletes it, because dropping the
+in-process check would leave `mp_gate` enforced by middleware alone, which `SECURITY.md` refuses to
+call a boundary.
 
 **`1c` is split four ways and the resolver goes LAST** — `1c-1` principal → `1c-2` the "no household"
 screen → `1c-3` call sites + sign-out → `1c-4` the resolver. The chart, the reason the order is the

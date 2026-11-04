@@ -45,13 +45,25 @@ export const ONE_HOUSEHOLD_ID = 4242;
  * arbitrary but FIXED, so a test can assert it appears in the scoped query's bound values — which is
  * the assertion that distinguishes "a household conjunct" from "the right household's conjunct".
  *
+ * ⚠️ **The probe this matches MOVED at `AUTH-1` 1c-4.** It was `from "households"` — the tenancy
+ * census. The resolver now runs the MEMBERSHIP lookup, which emits
+ * `from "household_members" inner join "households" on …`, and `from "households"` does not match
+ * that: the table is `household_members`, and the households table arrives on an `inner join`
+ * rather than a `from`. Left unchanged, this stub answers zero rows for the probe, the resolver
+ * returns state C, and every scoped read short-circuits — the exact failure the section above says
+ * `rowsFor` exists to prevent, reproduced one layer up.
+ *
+ * 📌 **A principal is required now too, and this stub cannot supply one.** `getCurrentUser()` is
+ * mocked per-suite (`vi.mock('./session')`): under vitest there are no Clerk keys and no bypass id,
+ * so the real one answers `null` → state B → the same short-circuit, before any SQL is sent.
+ *
  * ⚠️ **Rows are ARRAYS, not objects.** drizzle's node-postgres session queries with
  * `rowMode: 'array'` and maps columns by position, so an object row yields `undefined` for every
  * field — which surfaced here as `household id must be a safe integer, got NaN` rather than as a
  * wrong value. The order is the order of the `.select({…})` under test.
  */
 export function oneHouseholdThenEmpty(sql: string): unknown[][] {
-  return /from "households"/.test(sql) ? [[ONE_HOUSEHOLD_ID]] : [];
+  return /from "household_members"/.test(sql) ? [[ONE_HOUSEHOLD_ID]] : [];
 }
 
 export function createRecordingDb(

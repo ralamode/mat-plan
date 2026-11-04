@@ -140,6 +140,23 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([UNWRAPS_SCOPE]);
   });
 
+  it('🔴 exactly one module names the MEMBERSHIP query — it returns raw household ids', () => {
+    // `AUTH-1` 1c-4 barrel-exported `membershipHousehold` because the DAL had no other way to reach
+    // it (`packages/db`'s `exports` map publishes only `"."`). That traded a module-resolution
+    // boundary for an honour one: the module's own docblock says its ids are *"the one thing a
+    // caller may not freely hold"*, and every guard in this file would stay green while a page under
+    // `app/` held a raw `household_id` for the signed-in user — none of them names this function,
+    // reads `scope.householdId`, or calls `getHouseholdScope`. ADR 0006 fwd-1 forbids exactly that.
+    //
+    // The SYMBOL, not a call: `bypass-is-contained.test.ts` records an aliased import walking
+    // straight through a `\s*\(` form.
+    const namers = WEB_SOURCES.filter((f) => /\bmembershipHousehold\b/.test(code(join(REPO, f))));
+    expect(
+      namers.map((f) => relative('', f)).sort(),
+      'the membership query returns INTERNAL household ids — only the resolver may hold them',
+    ).toEqual([DERIVES_SCOPE]);
+  });
+
   it('exactly one module derives a scope from a request (plus the one named fixture script)', () => {
     const derivers = WEB_SOURCES.filter((f) =>
       /\bhouseholdScopeForRequest\b/.test(code(join(REPO, f))),

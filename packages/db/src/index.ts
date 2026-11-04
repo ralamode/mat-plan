@@ -18,6 +18,13 @@ export * from './queries/export-month';
 // is byte-identical for every household, so this query is the app front door's whole isolation
 // boundary — db:verify must run the DAL's own function, not a lookalike.
 export * from './queries/household-profiles';
+// AUTH-1 1c-4: the resolver's identity lookup. ⚠️ It returns INTERNAL household ids, and its own
+// docblock refused this export for exactly that reason — but `packages/db`'s `exports` map publishes
+// only `"."`, so `apps/web`'s DAL cannot reach it any other way, and the alternative (a lookalike in
+// the app) is the thing TEN-1 extracted these modules to prevent. The containment is a GUARD instead:
+// `src/scope.test.ts` pins that exactly one file under `apps/web` names it, and that file is the DAL
+// resolver. A module-resolution boundary became an enforced one rather than an honour one.
+export * from './queries/household-membership';
 // The single-sourced pre-AUTH-1 scope resolution (TEN-1 1b) — db:verify proves the soft-deleted
 // household case against a real database, which prose cannot.
 export * from './queries/household-scope';

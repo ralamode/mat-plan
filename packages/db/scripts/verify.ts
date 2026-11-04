@@ -269,6 +269,23 @@ console.log('✓ migration applied to PGlite');
   );
 }
 
+// ⏳ **The 1c-4 seed guard's proof is OWED, and the reason is worth recording rather than hiding.**
+//
+// `seed.ts` now refuses to insert its household when a live one already exists — closing the one
+// automated creator of household #2, since 1c-4 removed the resolver throw that used to announce it
+// (`migrate.yml` seeds production on every merge). The guard is real; what is missing is a proof.
+//
+// It cannot be built here. The state the guard is about is "a live household, and NONE under the
+// seed's `public_id`", and this file's database is already seeded by the time any block runs — so
+// inserting another household makes it the SECOND, which the guard correctly skips past, and the
+// assertion passes with the guard deleted. That version was written, probed, and found vacuous.
+//
+// What it needs is a database this file does not have: freshly migrated, unseeded, with one
+// unrelated live household. The honest options are a second PGlite instance here, or a mutation
+// patch under `scripts/mutations/`. Neither is free, and a passing assertion that proves nothing is
+// worse than this comment — `mutations/README.md`: "a boundary test that cannot fail is worse than
+// none, because it is counted as coverage."
+
 // Seed twice → must be idempotent.
 await seed(asPg);
 await seed(asPg);

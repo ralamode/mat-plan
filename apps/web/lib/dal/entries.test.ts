@@ -16,6 +16,13 @@ const { recording } = await vi.hoisted(async () => {
 });
 
 vi.mock('./db', () => ({ db: recording.db }));
+// AUTH-1 1c-4: the resolver consults the PRINCIPAL first, and under vitest `getCurrentUser()` has no
+// Clerk keys and no bypass id — so without this every case falls to state B, the scope is `null`,
+// and the query under test is never emitted. `./session` is the seam rather than the three-mock
+// Clerk stack (`@clerk/nextjs`, `@/lib/clerk`, `@/lib/env`): `getCurrentUser`'s own contract is
+// covered by `session.test.ts`, and this suite is not testing auth.
+const FIXTURE_PRINCIPAL = 'user_recordingDbFixturePrincipal';
+vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRINCIPAL }) }));
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
@@ -121,7 +128,8 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
     // `db:verify` cannot prove (its version is a fixture that calls find-or-create itself).
     let movementSelects = 0;
     const rows = (await import('./recording-db')).createRecordingDb((sql) => {
-      if (/from "households"/.test(sql)) return [[ONE_HOUSEHOLD_ID]];
+      // The resolver's probe since 1c-4 — see `recording-db.ts`'s `oneHouseholdThenEmpty`.
+      if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID]];
       if (/from "activity_types"/.test(sql)) return [[1, null]]; // { id, defaultUnit }
       if (/^select .* from "movements"/.test(sql)) {
         movementSelects += 1;
