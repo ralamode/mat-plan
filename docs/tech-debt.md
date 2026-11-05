@@ -74,7 +74,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     mark, whose removal is a **paid-tier** feature. Styling around a mark that stays buys a
     half-integrated component that every CDN build can break, for no gain. The PAGE is sized to the
     card instead (`page.tsx`'s `max-w-[432px]` against its 400px), and `SIGN_IN_APPEARANCE` is pinned
-    to an exact set of three a11y keys so a cosmetic one added later has to argue for itself.
+    to an exact set of four a11y keys so a cosmetic one added later has to argue for itself.
     **Reconsider only if the branding is ever paid for.**
     **Re-verify on the next `@clerk/nextjs` bump** — these numbers are a dated reading of a CDN build.
 - **Why it was accepted:** the plan specifies Clerk's **prebuilt** component, the alternative

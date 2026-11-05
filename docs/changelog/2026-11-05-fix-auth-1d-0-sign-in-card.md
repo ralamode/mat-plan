@@ -18,8 +18,12 @@
   Clerk's **"Secured by Clerk"** attribution, and removing that is a **paid-tier feature**, not a
   styling choice. Styling around a mark that stays buys a half-integrated component whose every CDN
   build can break the arrangement, for no gain. `SIGN_IN_APPEARANCE` is now pinned to an **exact set**
-  of three keys, all a11y rather than cosmetic, so a cosmetic key added later goes red and has to
-  argue for itself.
+  of four keys, all a11y rather than cosmetic, so a cosmetic key added later goes red and has to
+  argue for itself. `header: 'hidden'` is in that set because it **completes** the a11y override
+  rather than restyling Clerk: hiding only `headerTitle`/`headerSubtitle` leaves the header
+  CONTAINER in flow, so the card opened with ~35px of empty bordered box — the signature of a
+  half-rendered component, on the screen whose documented failure mode is "did it load?". Left
+  alone entirely, Clerk renders its own title there and no band; the band was ours.
   **Two things removed from the screen.** The access-code button is gone, which resolves the 1d plan's
   Open Question 1 early; it could not simply be deleted, because `e2e/a11y.spec.ts` pins an **exact**
   count of 1 link in `<main>`, CI only renders the dark state, and that button was the only link there

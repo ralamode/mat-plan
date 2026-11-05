@@ -143,6 +143,14 @@ export const CLERK_CSS_LAYER = 'clerk';
  *   spacing, but no control height. ✅ Measured 44.0px on the lit card, 2026-11-05.
  * - `headerTitle`/`headerSubtitle` hidden so the page's `<h1>` is the only one in the a11y tree.
  *   ✅ Verified 2026-11-05: Clerk's `<h1>` is in the DOM but `display:none`, so the tree holds one.
+ * - `header: 'hidden'` **completes that override rather than restyling Clerk.** Hiding only the two
+ *   children leaves Clerk's header CONTAINER in flow, so the card opens with ~35px of empty bordered
+ *   box — the visual signature of a half-rendered component, on the one screen whose documented
+ *   failure mode is "did it load?". The band is caused by the a11y choice above, not by Clerk's
+ *   default (left alone, Clerk renders its own title there and no band), which is why this key is on
+ *   the a11y side of the line and not the cosmetic one. The three are **not interchangeable**: the
+ *   child keys survive a vendor restructure that moves the title out of `header`, and `header` is
+ *   what removes the container. None is removable alone.
  *
  * 🔴 **This pins our INPUT, not the rendered outcome.** clerk-js ships from a CDN at a floating major
  * and is absent from the lockfile (`docs/tech-debt.md`), so a build that renames `cl-headerTitle` or
@@ -153,6 +161,7 @@ export const SIGN_IN_APPEARANCE = {
   elements: {
     headerTitle: 'hidden',
     headerSubtitle: 'hidden',
+    header: 'hidden',
     socialButtonsBlockButton: 'min-h-11',
   },
 } as const;

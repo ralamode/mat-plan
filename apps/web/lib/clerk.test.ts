@@ -106,6 +106,9 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
   it('hides the vendor header’s two children so the page owns the only <h1>', () => {
     expect(SIGN_IN_APPEARANCE.elements.headerTitle).toBe('hidden');
     expect(SIGN_IN_APPEARANCE.elements.headerSubtitle).toBe('hidden');
+    // `header` too: hiding only the children leaves Clerk's header CONTAINER in flow, which is ~35px
+    // of empty bordered box. The band is caused by the two lines above, not by Clerk's default.
+    expect(SIGN_IN_APPEARANCE.elements.header).toBe('hidden');
   });
 
   it('does NOT restyle Clerk’s card — the keys left are a11y, not cosmetics', () => {
@@ -115,6 +118,7 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
     // (`page.tsx`'s `max-w-[432px]`). This exact-set pin is what keeps that a decision, not a drift —
     // a cosmetic key added here goes red and has to argue for itself.
     expect(Object.keys(SIGN_IN_APPEARANCE.elements).sort()).toEqual([
+      'header',
       'headerSubtitle',
       'headerTitle',
       'socialButtonsBlockButton',
