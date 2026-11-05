@@ -46,16 +46,27 @@ export default function SignInPage() {
   const configured = clerkIsConfigured();
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-4 py-12">
+    /* `max-w-[432px]`, not `max-w-sm`: Clerk's card has its own fixed width (400px at the CDN build
+       measured 2026-11-05) and this app does NOT override it — see `SIGN_IN_APPEARANCE`. 400 + the
+       32px of `px-4` is 432, so the column is sized to the card rather than the card squeezed into
+       the column. ⚠️ If the card ever overhangs or leaves a gap, Clerk changed its width: re-measure
+       and change this number. Do not reach for `elements` to compress it. */
+    <main className="mx-auto flex w-full max-w-[432px] flex-1 flex-col justify-center gap-6 px-4 py-12">
       <header className="flex flex-col gap-2 text-center">
         {/* The page owns the ONE `<h1>` in both states; `appearance` below suppresses Clerk's card
             title so there is never a second one. axe cannot catch that — `heading-order` and
             `page-has-heading-one` are best-practice-tagged and `e2e/a11y.spec.ts` scans
             `wcag2a`/`wcag2aa` only — so it is a decision, not a check. */}
         <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
-        <p className="text-muted-foreground text-sm">
-          {configured ? SIGN_IN_COPY.processor : SIGN_IN_COPY.notYet}
-        </p>
+        {/* The lit state carries NO paragraph. `SIGN_IN_COPY.processor` used to sit here, putting
+            "what Google sends vs what this app stores" next to the control — the idiom
+            `lib/constants.ts` records. It was 59 words of grey text above the one button and it made
+            the screen read as a wall, so it was removed _(maintainer, 2026-11-05)_.
+            ⚠️ **The facts are not lost and must not be**: `notice.md` carries them verbatim, and the
+            privacy link below is on this screen, above the button, for exactly that reason. If that
+            link ever moves to the footer, this decision has to be revisited — the disclosure would
+            then be two taps from the act it describes. */}
+        {!configured && <p className="text-muted-foreground text-sm">{SIGN_IN_COPY.notYet}</p>}
       </header>
 
       {/* The privacy link renders in BOTH states, promoted out of the `configured` ternary when the

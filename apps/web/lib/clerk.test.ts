@@ -103,36 +103,22 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
     expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
   });
 
-  it('hides the vendor header AND its two children — none is removable alone', () => {
-    // `header` removes the empty ~35px container; the child keys keep the page's `<h1>` the only one
-    // in the a11y tree even if a vendor restructure moves the title out of `header`.
-    expect(SIGN_IN_APPEARANCE.elements.header).toBe('hidden');
+  it('hides the vendor header’s two children so the page owns the only <h1>', () => {
     expect(SIGN_IN_APPEARANCE.elements.headerTitle).toBe('hidden');
     expect(SIGN_IN_APPEARANCE.elements.headerSubtitle).toBe('hidden');
   });
 
-  it('makes the card follow the page column instead of its fixed 400px', () => {
-    expect(SIGN_IN_APPEARANCE.elements.rootBox).toContain('w-full');
-    expect(SIGN_IN_APPEARANCE.elements.cardBox).toContain('w-full');
-  });
-
-  it("renders seamlessly — no floating card, and the button matches the app's own", () => {
-    // The vendor card ships as a drop-shadowed white box floating on the page. This app puts its own
-    // heading and disclosure directly above it, so the box read as a second, competing surface. The
-    // chrome comes off `cardBox` (the shadow) and `card` (the white fill and padding), and the Google
-    // button takes the app's outline-button treatment so the two controls on the screen match.
-    expect(SIGN_IN_APPEARANCE.elements.cardBox).toContain('shadow-none');
-    expect(SIGN_IN_APPEARANCE.elements.card).toContain('bg-transparent');
-    expect(SIGN_IN_APPEARANCE.elements.card).toContain('shadow-none');
-    // `bg-none` as well as `bg-transparent`: Clerk tints the footer with a `linear-gradient`, which
-    // is `background-IMAGE`, so clearing `background-color` alone leaves a visible grey band.
-    expect(SIGN_IN_APPEARANCE.elements.footer).toContain('bg-none');
-    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('border');
-    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('rounded-lg');
-    // `border-input`, NOT `border-border`: Clerk redefines `--border` on its own elements, so
-    // `border-border` silently resolves the VENDOR's value. `--input` is not shadowed and carries
-    // the identical colour. A layer-order fix cannot help — the variable itself is overridden.
-    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('border-input');
+  it('does NOT restyle Clerk’s card — the keys left are a11y, not cosmetics', () => {
+    // The card's own chrome is deliberately untouched. Removing Clerk's "Secured by Clerk" mark is a
+    // PAID-tier feature, so styling around a mark that stays buys a half-integrated component whose
+    // every CDN build can break the arrangement, for no gain. The PAGE is sized to the card instead
+    // (`page.tsx`'s `max-w-[432px]`). This exact-set pin is what keeps that a decision, not a drift —
+    // a cosmetic key added here goes red and has to argue for itself.
+    expect(Object.keys(SIGN_IN_APPEARANCE.elements).sort()).toEqual([
+      'headerSubtitle',
+      'headerTitle',
+      'socialButtonsBlockButton',
+    ]);
   });
 
   it('declares @layer clerk BEFORE Tailwind, or min-h-11 stops applying', () => {

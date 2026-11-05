@@ -63,11 +63,19 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     but `display:none`, so the a11y tree holds exactly one; there is no horizontal overflow at 360px;
     `:focus-visible` applies a real 3px ring. Two defects were found and fixed in that PR — the card
     rendered a fixed `width: 400px` against the page's 352px column (**48px of overhang** at 1280px),
-    and hiding only the header's children left its ~35px container in flow.
+    and the chrome this app briefly removed is now left alone (see below).
     ⚠️ **One failure stands, and it is the vendor's:** Clerk's "Secured by Clerk" attribution link is
     **48×14px**, under this repo's 44px bar _and_ WCAG 2.2 SC 2.5.8 (24×24). `elements` exposes no key
     for it and hiding Clerk branding is a paid-plan feature, so it is un-met in one named place rather
     than silently un-met. `lib/clerk.ts`'s `SIGN_IN_APPEARANCE` now pins what we _do_ control.
+    🔴 **This app does NOT restyle the card, and that is a decision** _(maintainer, 2026-11-05)_. A
+    first pass stripped its shadow, fill and padding and matched its button to the app's own. It
+    worked — and the thing that actually makes the card read as foreign is the **"Secured by Clerk"**
+    mark, whose removal is a **paid-tier** feature. Styling around a mark that stays buys a
+    half-integrated component that every CDN build can break, for no gain. The PAGE is sized to the
+    card instead (`page.tsx`'s `max-w-[432px]` against its 400px), and `SIGN_IN_APPEARANCE` is pinned
+    to an exact set of three a11y keys so a cosmetic one added later has to argue for itself.
+    **Reconsider only if the branding is ever paid for.**
     **Re-verify on the next `@clerk/nextjs` bump** — these numbers are a dated reading of a CDN build.
 - **Why it was accepted:** the plan specifies Clerk's **prebuilt** component, the alternative
   (`useSignIn` + `signIn.authenticateWithRedirect`, our own markup) is a real option at this version but

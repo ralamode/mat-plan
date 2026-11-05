@@ -121,57 +121,38 @@ export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
 export const CLERK_CSS_LAYER = 'clerk';
 
 /**
- * `<SignIn>`'s appearance, in one place because the three facts it encodes are each load-bearing and
- * none of them is visible from the JSX that consumes it.
+ * `<SignIn>`'s appearance. **Deliberately minimal: this app does not restyle Clerk's card.**
+ *
+ * 🔴 **The decision, so nobody re-litigates it from the screenshots** _(maintainer, 2026-11-05)_.
+ * A first pass removed the card's shadow, fill and padding and matched its button to this app's own,
+ * which worked — and was the wrong trade. The thing that actually makes the card look foreign is
+ * Clerk's "Secured by Clerk" attribution, and removing that is a **paid-tier feature**, not a styling
+ * choice. Styling around a mark you cannot remove buys a half-integrated component whose every CDN
+ * build can break the arrangement, for no gain. So: leave the card alone, and size the PAGE to it —
+ * `app/sign-in/[[...rest]]/page.tsx`'s column is `max-w-[432px]` to fit the card's natural 400px.
+ * **Reconsider only if the branding is ever paid for.**
  *
  * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`. `UserDefinedStyle = string |
  * CSSObject`, and a `CSSObject` becomes a runtime-injected style — the production policy is
  * `style-src 'self' 'nonce-…'` with no `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be
- * dropped **silently**. A Tailwind class ships in our own `'self'` stylesheet and survives. A hard
- * constraint, not a preference, and `lib/clerk.test.ts` asserts every value is a string.
+ * dropped **silently**. `lib/clerk.test.ts` asserts every value is a string.
  *
+ * The three keys that remain are **a11y requirements, not cosmetics**, and each predates the above:
  * - `socialButtonsBlockButton: 'min-h-11'` is `MIN_TAP_TARGET_PX` in Tailwind's spelling, and
- *   `elements` is the only lever for it: Clerk's `variables` expose colours, fonts, radius and
- *   spacing, but no control height. The 44px arithmetic itself lives in
- *   `app/design/tokens/token-sets.test.ts`, derived from the const — not duplicated here.
- *   ✅ Measured 44.0px on the lit card against the development instance, 2026-11-04.
+ *   `elements` is the only lever for it — Clerk's `variables` expose colours, fonts, radius and
+ *   spacing, but no control height. ✅ Measured 44.0px on the lit card, 2026-11-05.
  * - `headerTitle`/`headerSubtitle` hidden so the page's `<h1>` is the only one in the a11y tree.
- *   ✅ Verified 2026-11-04: Clerk's `<h1>` is in the DOM but `display:none`, so the tree has one.
- *   `header` is hidden too, and the three are NOT interchangeable — `header` removes the empty ~35px
- *   container that hiding only the children leaves behind, while the child keys survive a vendor
- *   restructure that moves the title out of `header`. Neither is removable alone.
- * - `rootBox`/`cardBox: 'w-full'` make the card follow the page's column. Without them Clerk renders
- *   a fixed `width: 400px` against this page's 352px column (`max-w-sm` + `px-4`), overhanging it by
- *   48px at every viewport where the column hits its max — measured at 1280px, 2026-11-04. Widening
- *   `main` instead would leave a 16px misalignment pointing the other way.
- * - **The card renders seamlessly, not as a floating box.** Clerk ships it as a drop-shadowed white
- *   card, which on this screen read as a second surface competing with the page's own heading and
- *   disclosure directly above it. `cardBox` drops the shadow and `card` drops the white fill and
- *   padding, so the button sits on the page. The Google button then takes the app's own outline
- *   treatment (`rounded-lg border-border bg-background`, the exact classes `buttonVariants`' outline
- *   variant resolves to) so it and the page's other control match rather
- *   than being two different kinds of button stacked on each other.
- *   ⚠️ The footer needs `bg-none` as well as `bg-transparent`: Clerk tints it with a
- *   `linear-gradient`, i.e. `background-IMAGE`, so clearing the colour alone leaves a grey band.
- *   ⚠️ **"Secured by Clerk" stays.** It is the vendor's attribution on a free plan, and removing it
- *   is a paid-tier feature — not a styling choice. Clerk's orange "Development mode" badge below it
- *   is **development-instance only** and never reaches production, which is why captures taken
- *   against the dev instance show a band that production does not have.
+ *   ✅ Verified 2026-11-05: Clerk's `<h1>` is in the DOM but `display:none`, so the tree holds one.
  *
- * 🔴 **This pins our INPUT, not the rendered outcome.** It cannot detect a CDN build that renames
- * `cl-headerTitle`, moves the title out of that class, or changes the button's box model — clerk-js
- * ships from a CDN at a floating major and is absent from the lockfile (`docs/tech-debt.md`). What it
- * does buy: a refactor that drops a key currently reds nothing, because no CI run loads the lit card.
+ * 🔴 **This pins our INPUT, not the rendered outcome.** clerk-js ships from a CDN at a floating major
+ * and is absent from the lockfile (`docs/tech-debt.md`), so a build that renames `cl-headerTitle` or
+ * changes the button's box model is caught by nothing here. What it buys: a refactor that drops a key
+ * currently reds nothing, because no CI run loads the lit card.
  */
 export const SIGN_IN_APPEARANCE = {
   elements: {
     headerTitle: 'hidden',
     headerSubtitle: 'hidden',
-    header: 'hidden',
-    socialButtonsBlockButton: 'min-h-11 rounded-lg border border-input bg-background shadow-none',
-    rootBox: 'w-full',
-    cardBox: 'w-full shadow-none',
-    card: 'bg-transparent p-0 shadow-none',
-    footer: 'bg-transparent bg-none',
+    socialButtonsBlockButton: 'min-h-11',
   },
 } as const;
