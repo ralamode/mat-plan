@@ -159,9 +159,7 @@ Errors: expected → typed envelope { ok:false, error, fieldErrors? } + useActio
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
-Rate limit: @upstash/ratelimit (sliding window) on mutations; /api/sync + the LLM API when they land.
-       NOT auth: AUTH-1 1d deleted the gate login, so this repo limits nothing on the auth path
-       (sign-in is Clerk's). SECURITY.md carries the reasoning; keep the two in step.
+Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
         enableLogs + structured context (userId, householdId, batchId).
 ```

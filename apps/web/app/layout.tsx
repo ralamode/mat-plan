@@ -86,15 +86,26 @@ export default async function RootLayout({
       dynamic
       nonce={nonce}
       signInUrl={SIGN_IN_PATH}
+      // 🔴 **`signUpUrl` points at the SIGN-IN route on purpose (AUTH-1 1d), and there is no
+      // `<SignUp/>` in this app.** Sign-up is invitation-only, so a refused address is refused at
+      // Clerk's sign-UP step — and with this prop unset Clerk sends that caller to its own Account
+      // Portal, on **another origin**: no footer, no `/privacy`, no way back to this app. `1d` makes
+      // `/sign-in` the only door, so an off-origin dead end is the one outcome worth pre-empting.
+      // ⚠️ **Set defensively: the refusal path is NOT yet observed on the production instance.** The
+      // plan owes one run with an address that has never touched the instance (neither existing
+      // account can produce it — both exist). Pointing it here is correct whichever way that lands:
+      // a refused caller returns to a page that explains itself. Do not remove this without that
+      // observation in hand.
+      signUpUrl={SIGN_IN_PATH}
       signInFallbackRedirectUrl={APP_HOME_PATH}
       afterSignOutUrl={SIGN_IN_PATH}
       // `cssLayerName` is a GLOBAL appearance option, so it belongs here rather than on `<SignIn>`.
       // Tailwind v4 emits its utilities inside `@layer utilities`, and UNLAYERED styles beat any
       // layered rule regardless of specificity — so without a layer name, Clerk's own CSS would win
       // over the `min-h-11` the sign-in card sets for the 44px tap-target bar, with no test to say
-      // so. `app/globals.css` declares `@layer clerk` FIRST, which is what puts it below Tailwind's
-      // layers: layer priority is declaration order, so naming it anywhere later would make Clerk's
-      // styles win instead.
+      // so. ⚠️ `app/globals.css` names the layer BETWEEN Tailwind's `base` and `components` — this
+      // comment said "FIRST, which puts it below Tailwind's layers", which is the arrangement #333
+      // measured and replaced: below `base`, preflight strips Clerk's own spacing. See `lib/clerk.ts`.
       appearance={{ cssLayerName: CLERK_CSS_LAYER }}
     >
       {children}
