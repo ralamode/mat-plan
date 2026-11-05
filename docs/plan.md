@@ -2656,6 +2656,11 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   **PLAN: [auth-1-clerk-google.md](./plans/auth-1-clerk-google.md)** — **six chunks** (Clerk wired dark
   → the enumeration guard → `household_members` + the claim correction dark → the Playwright session
   story → the boundary moves → retire the gate), **hardened by a seven-lens panel**.
+  **Chunk `1d` has its own plan: [auth-1d-retire-the-gate.md](./plans/auth-1d-retire-the-gate.md)**
+  — twenty-two adversarial lens-runs across four rounds, splitting the chunk into PR 0 (shipped,
+  #333), PR A (the one-way door) and PR C (the guard rename). ⚠️ It is **not** the pure delete `1a`
+  framed it as: the gate is what several existing proofs are built on, so deleting it removes the
+  evidence along with the subject.
   ✅ **Chunk 1a is done (2026-10-16)** — `@clerk/nextjs@7.9.15` pinned, both keys **optional**, no
   instance configured, so the app is unchanged for every caller; `/sign-in` exists and says so. It
   also closed the **`/api` matcher hole** and split `lib/access-gate.ts` into `lib/safe-redirect.ts`
