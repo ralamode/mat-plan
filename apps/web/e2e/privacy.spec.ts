@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-import { GATE_PATH } from '../lib/access-gate';
 import {
   APP_HOME_PATH,
   FOOTER_COPY,
@@ -10,20 +9,21 @@ import {
 } from '../lib/constants';
 import { NOTICE_TITLE } from '../lib/privacy/notice-content';
 
-import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
+import { MOBILE_VIEWPORT } from './contexts';
 
 /**
  * PRIV-2 — `/privacy`, the URL the Clerk and Google consent screens point at.
  *
- * The un-gated cases run with NO storage state (the pattern `landing.spec.ts` establishes), because
- * with the project's gate cookie a "public" page is indistinguishable from a gated page the cookie
- * let through.
+ * ⚠️ **The empty-cookie-jar context is gone (AUTH-1 1d).** It existed because the project's gate
+ * cookie made a "public" page indistinguishable from a gated page the cookie let through. There is
+ * no such cookie, and the harness session is an environment variable no context can drop — so these
+ * cases assert what the PAGE renders, not what a stranger sees. See `e2e/contexts.ts`.
  */
 
 const noticeHeading = { level: 1 as const, name: NOTICE_TITLE, exact: true };
 
-test.describe('un-gated', () => {
-  test.use({ storageState: NO_GATE_STATE, viewport: MOBILE_VIEWPORT });
+test.describe('public', () => {
+  test.use({ viewport: MOBILE_VIEWPORT });
 
   test('a stranger can read the notice, with no code and no redirect', async ({ page }) => {
     await page.goto(PRIVACY_PATH);
@@ -54,20 +54,23 @@ test.describe('un-gated', () => {
   });
 
   test(`${PRIVACY_PATH}/ canonicalises to ${PRIVACY_PATH}`, async ({ page }) => {
-    // ⚠️ NOT a gate assertion. Next's trailing-slash redirect issues a 308 to `/privacy` BEFORE the
-    // proxy runs, so `/privacy/` never reaches `isPublicPath` over HTTP — which is why the
+    // ⚠️ NOT a boundary assertion. Next's trailing-slash redirect issues a 308 to `/privacy` BEFORE
+    // the proxy runs, so `/privacy/` never reaches `isPublicPath` over HTTP — which is why the
     // acceptance says "canonicalises". `isPublicPath('/privacy/') === false` is pinned in
-    // `lib/access-gate.test.ts` instead.
+    // `lib/public-paths.test.ts`. ⚠️ This comment used to cite `lib/access-gate.test.ts`, which
+    // `1d` deletes and which never held that pin in the first place.
     await page.goto(`${PRIVACY_PATH}/`);
     await expect(page).toHaveURL(PRIVACY_PATH);
   });
 
-  test(`${PRIVACY_PATH}/x stays gated — the subtree is NOT public`, async ({ page }) => {
-    // This is the subtree proof. AUTH-1 1a's generic prefix arm would flip it; `PUBLIC_PATH_TREES`
-    // is the opt-in that keeps it true.
-    await page.goto(`${PRIVACY_PATH}/x`);
-    await expect(page).toHaveURL(`${GATE_PATH}?from=${encodeURIComponent(`${PRIVACY_PATH}/x`)}`);
-  });
+  // 🔴 **The runtime arm of the subtree proof is RETIRED at `1d`, and the reason is that it decayed
+  // into a tautology.** It asserted `${PRIVACY_PATH}/x` → `/gate?from=…`, i.e. that the subtree is
+  // not public. After `1d` there is no bounce: the route simply does not exist, so the only
+  // observable outcome is a 404 — which cannot distinguish "not public" from "no such page", and
+  // would pass even if `PUBLIC_PATH_TREES` were widened to the whole subtree tomorrow.
+  // The claim still holds and is still proved, statically and exactly, by `lib/public-paths.test.ts`
+  // (`isPublicPath('/privacy/x') === false`). A test that cannot fail for its stated reason is worse
+  // than no test, so this one is removed rather than repointed at the 404.
 
   test('the footer marks the current page and offers a way out', async ({ page }) => {
     await page.goto(PRIVACY_PATH);

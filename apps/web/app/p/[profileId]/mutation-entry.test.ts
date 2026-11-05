@@ -4,7 +4,6 @@ import { NO_PROFILE_LOG, NO_PROFILE_SAVE, RATE_LIMITED } from '@/lib/constants';
 
 import { enterMutation } from './mutation-entry';
 
-const hasGateAccess = vi.hoisted(() => vi.fn());
 const sessionUserOrNull = vi.hoisted(() => vi.fn());
 const checkMutationLimit = vi.hoisted(() => vi.fn());
 const addBreadcrumb = vi.hoisted(() => vi.fn());
@@ -13,7 +12,6 @@ const addBreadcrumb = vi.hoisted(() => vi.fn());
 // spying on the export throws outright. This file reaches only `addBreadcrumb`.
 vi.mock('@sentry/nextjs', () => ({ addBreadcrumb }));
 
-vi.mock('@/lib/dal/gate', () => ({ hasGateAccess }));
 vi.mock('@/lib/dal/session', () => ({ sessionUserOrNull }));
 vi.mock('@/lib/rate-limit', () => ({ checkMutationLimit }));
 
@@ -21,7 +19,6 @@ const USER_ID = 'user_wellShapedButNotTheFixture00';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  hasGateAccess.mockResolvedValue(true);
   sessionUserOrNull.mockResolvedValue({ userId: USER_ID });
   checkMutationLimit.mockResolvedValue({ allowed: true, reason: 'ok' });
 });
@@ -32,6 +29,10 @@ beforeEach(() => {
  * `checkMutationLimit` never answers `limiter-error` under vitest, because `mutationLimiter` is
  * always `null` there. That branch is new code on the path that is silent by construction, so it
  * gets a direct test. (AUTH-1 1c-3b; the gap was found by review on #323.)
+ *
+ * ⚠️ **At `1d` the gate conjunct and its two cases are gone.** `enterMutation` now checks a
+ * session, then the limiter. The ORDERING claim survives and is what the first case below pins;
+ * what disappeared is a check that never identified a caller.
  */
 describe('enterMutation — the branches the action suites cannot reach', () => {
   it('🔴 a DEAD limiter lets the write through, and leaves a breadcrumb saying so', async () => {
@@ -66,31 +67,23 @@ describe('enterMutation — the branches the action suites cannot reach', () => 
   });
 
   it('refuses before asking the limiter anything when there is no session', async () => {
-    // The ordering claim, from the behavioural side: an unauthenticated flood must cost zero Redis.
+    // 🔴 The ordering claim, from the behavioural side: an unauthenticated flood must cost zero
+    // Redis and zero DB work. ⚠️ At `1d` this is the ONLY remaining ordering case — the gate's
+    // "refuses before asking for a session" went with the gate, and the limiter is still last.
     sessionUserOrNull.mockResolvedValue(null);
     expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: false, error: NO_PROFILE_LOG });
-    expect(checkMutationLimit).not.toHaveBeenCalled();
-  });
-
-  it('refuses before asking for a session when the gate is not held', async () => {
-    hasGateAccess.mockResolvedValue(false);
-    expect(await enterMutation(NO_PROFILE_LOG)).toEqual({ ok: false, error: NO_PROFILE_LOG });
-    expect(sessionUserOrNull).not.toHaveBeenCalled();
     expect(checkMutationLimit).not.toHaveBeenCalled();
   });
 
   it('returns the CALLER’s refusal copy, so the routine editor can say "save"', async () => {
-    // Why `refusal` is a parameter rather than a constant inside the helper: both of a caller's two
-    // refusal branches must use the same string, and the editor's string is not the logger's.
-    hasGateAccess.mockResolvedValue(false);
-    expect(await enterMutation(NO_PROFILE_SAVE)).toEqual({ ok: false, error: NO_PROFILE_SAVE });
+    // Why `refusal` is a parameter rather than a constant inside the helper: the editor's string is
+    // not the logger's, and the helper cannot know which caller it is serving.
     sessionUserOrNull.mockResolvedValue(null);
-    hasGateAccess.mockResolvedValue(true);
     expect(await enterMutation(NO_PROFILE_SAVE)).toEqual({ ok: false, error: NO_PROFILE_SAVE });
   });
 
   it('a rate limit does NOT borrow the not-found copy', async () => {
-    // The 404-never-403 argument covers "no code", "no session" and "wrong household". A rate limit
+    // The 404-never-403 argument covers "no session" and "wrong household". A rate limit
     // is not that class of refusal: it is actionable, and saying "No profile found to log against"
     // to a kid mid-session would be false as well as useless.
     checkMutationLimit.mockResolvedValue({ allowed: false, reason: 'limited' });

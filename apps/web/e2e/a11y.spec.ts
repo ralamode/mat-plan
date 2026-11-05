@@ -8,7 +8,6 @@ import {
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
 } from '@mat-plan/shared';
 
-import { GATE_PATH } from '../lib/access-gate';
 import {
   AMEND_COPY,
   APP_HOME_PATH,
@@ -37,7 +36,7 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
-import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
+import { MOBILE_VIEWPORT } from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -767,11 +766,10 @@ test('the profile picker does not overflow at 360px', async ({ page }) => {
 
 /**
  * OSS-2 — the public routes, scanned with NO gate cookie (with one, `/` and `/gate` both redirect to the
- * picker). The landing's CTAs and the gate's way back are LINKS, which `expectTapTargets` cannot see
- * (`Button asChild` adds no role), so they are counted and measured by `expectLinkTapTargets`.
+ * picker). The landing's CTAs are LINKS, which `expectTapTargets` cannot see (`Button asChild` adds
+ * no role), so they are counted and measured by `expectLinkTapTargets`.
  */
 test.describe('public routes', () => {
-  test.use({ storageState: NO_GATE_STATE });
 
   for (const viewport of [MOBILE_VIEWPORT, NARROW]) {
     test(`the landing at ${viewport.width}px: axe, no overflow, both CTA links ≥ the tap-target bar`, async ({
@@ -782,15 +780,6 @@ test.describe('public routes', () => {
       await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
       await expectLinkTapTargets(page, `landing (${viewport.width}px)`, 2);
-    });
-
-    test(`the gate at ${viewport.width}px: axe, no overflow, tap targets`, async ({ page }) => {
-      await page.setViewportSize(viewport);
-      await page.goto(GATE_PATH, { waitUntil: 'networkidle' });
-      await expectNoAxeViolations(page, `gate (${viewport.width}px)`);
-      await expectNoHorizontalOverflow(page, `gate (${viewport.width}px)`);
-      await expectTapTargets(page, `gate (${viewport.width}px)`);
-      await expectLinkTapTargets(page, `gate (${viewport.width}px)`, 1);
     });
 
     /**

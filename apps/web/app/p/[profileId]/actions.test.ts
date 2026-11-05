@@ -41,10 +41,8 @@ vi.mock('@/lib/dal/entries', () => ({
     items.map((i) => ({ clientId: i.clientId, id: 'checkin-pub-id', created: true })),
   ),
 }));
-// The access gate (SEC-1). Passes by default; the unauth suite flips it per action.
-vi.mock('@/lib/dal/gate', () => ({ hasGateAccess: vi.fn(async () => true) }));
-// AUTH-1 1c-3b: the session, alongside the gate rather than instead of it. Passes by default; the
-// no-session suite flips it per action, exactly as the un-gated one does.
+// AUTH-1 1c-3b, and from 1d the ONLY boundary mock. Passes by default; the unauth suite flips it
+// per action. ⚠️ The `@/lib/dal/gate` mock beside this was deleted with the module at 1d.
 vi.mock('@/lib/dal/session', () => ({
   sessionUserOrNull: vi.fn(async () => ({ userId: 'user_000000000000000000000000e2e' })),
 }));
@@ -75,7 +73,6 @@ import {
   logStrengthSession,
   ownedBodyweightValue,
 } from '@/lib/dal/entries';
-import { hasGateAccess } from '@/lib/dal/gate';
 import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
 import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
@@ -130,9 +127,9 @@ function form(fields: Record<string, string>): FormData {
 beforeEach(() => vi.clearAllMocks());
 
 // MANDATORY unauth → reject (AGENTS.md → Backend / API PR rules; SEC-1). A Server Action is a public
-// POST and the proxy is not the auth boundary: until SEC-1 its matcher let prefetch-flagged requests
-// skip the gate. Each action must refuse an un-gated caller BEFORE anything else runs, with the same
-// copy as not-found (so the refusal says nothing about the gate or the profile).
+// POST and the proxy is not the auth boundary: SEC-1's scar was a matcher that let prefetch-flagged
+// requests skip the check entirely. Each action must refuse a caller with no session BEFORE anything
+// else runs, with the same copy as not-found (so the refusal says nothing about the profile).
 /**
  * ALL SEVEN ACTIONS and the refusal each returns, enumerated once and shared by the unauth suite and
  * TEN-1's wrong-household suite below.
@@ -140,7 +137,7 @@ beforeEach(() => vi.clearAllMocks());
  * The copy comes from `@/lib/constants` rather than a re-typed literal (it was typed out seven times
  * here before TEN-1 1b, and the wrong-household suite would have made it fourteen). That matters
  * beyond tidiness: the security argument for 404-never-403 is that the refusal is **byte-identical**
- * across un-gated, unknown, soft-deleted and foreign-household — so a crafted cross-household id
+ * across no-session, unknown, soft-deleted and foreign-household — so a crafted cross-household id
  * learns nothing a stale id wouldn't. Asserting through the const makes that identity structural;
  * asserting through two copies of a string only makes it likely.
  */
@@ -175,31 +172,23 @@ const ALL_WRITERS = [
   editBodyweight,
 ];
 
-describe('every Server Action — unauth → reject before any DAL call (SEC-1)', () => {
-  it.each(ALL_ACTIONS)('%s refuses an un-gated caller', async (_name, action, notFound) => {
-    vi.mocked(hasGateAccess).mockResolvedValueOnce(false);
-    const res = await action(initial, form({ profileId: PROFILE_ID }));
-    expect(res).toEqual({ ok: false, error: notFound });
-    expect(getProfileByPublicId).not.toHaveBeenCalled();
-    for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
-    expect(updateProfileRoutine).not.toHaveBeenCalled();
-    expect(revalidatePath).not.toHaveBeenCalled();
-  });
-});
-
 /**
- * AUTH-1 1c-3b — the session is a SECOND required check, not a replacement.
+ * 🔴 **The MANDATORY unauth suite (AGENTS.md → Backend / API PR rules), and at `1d` it is the only
+ * one.** `1c-3b` added the session BESIDE the gate, so there were two suites — one flipping each
+ * conjunct — and either going green alone would have meant the AND had quietly become an OR.
  *
- * The suite above still passes with a valid session, and this one still refuses with a valid gate
- * cookie. Both together are what "AND" means, and either suite going green alone would mean the
- * conjunction had quietly become a disjunction.
+ * ⚠️ **`1d` deleted the gate suite rather than keeping both, and that is not a narrowing of
+ * coverage.** With one conjunct left, a second suite would have been the SAME test with a different
+ * mock name: duplicate, and duplicate in the way that rots, because the next author updates one.
+ * 🔴 What must never happen here is widening to an alternation — asserting that a caller is refused
+ * when EITHER check fails would pass a build where the surviving check does nothing.
  */
-describe('every Server Action — no session → reject before any DAL call (AUTH-1 1c-3b)', () => {
+describe('every Server Action — unauth → reject before any DAL call (SEC-1, AUTH-1 1c-3b)', () => {
   it.each(ALL_ACTIONS)('%s refuses a caller with no session', async (_name, action, notFound) => {
     vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
     const res = await action(initial, form({ profileId: PROFILE_ID }));
-    // 🔴 The SAME bytes as the un-gated refusal, deliberately: a caller must not be able to tell
-    // "no code" from "no session" from "another household". ADR 0006's 404-never-403 argument.
+    // 🔴 The SAME bytes as every other refusal, deliberately: a caller must not be able to tell
+    // "no session" from "another household" from "no such profile". ADR 0006's 404-never-403.
     expect(res).toEqual({ ok: false, error: notFound });
     expect(getProfileByPublicId).not.toHaveBeenCalled();
     for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
@@ -1635,8 +1624,10 @@ describe('every Server Action — wrong household → the same refusal as not-fo
       vi.mocked(getProfileByPublicId).mockResolvedValue(null);
       const res = await action(initial, VALID_BODY[name]!());
       expect(res).toEqual({ ok: false, error: notFound });
-      // The gate passed and the profile WAS looked up — this is the authZ refusal, not the authN one.
-      expect(hasGateAccess).toHaveBeenCalled();
+      // The session passed and the profile WAS looked up — the authZ refusal, not the authN one.
+      // ⚠️ Switched from `hasGateAccess` at 1d: the point is that the EARLIER conjunct ran and
+      // passed, so this must track whichever check is first, not be dropped.
+      expect(sessionUserOrNull).toHaveBeenCalled();
       expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
       for (const write of ALL_WRITERS) expect(write).not.toHaveBeenCalled();
       expect(updateProfileRoutine).not.toHaveBeenCalled();
@@ -1646,21 +1637,21 @@ describe('every Server Action — wrong household → the same refusal as not-fo
     },
   );
 
-  it('the refusal is byte-identical to the un-gated one, for every action', async () => {
+  it('the refusal is byte-identical to the no-session one, for every action', async () => {
     // The whole 404-never-403 argument (ADR 0006). If these two ever diverge the envelope becomes an
     // oracle for "that profile exists, just not for you".
     for (const [name, action, notFound] of ALL_ACTIONS) {
       vi.clearAllMocks();
-      vi.mocked(hasGateAccess).mockResolvedValueOnce(false);
-      const ungated = await action(initial, VALID_BODY[name]!());
+      vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+      const unauthed = await action(initial, VALID_BODY[name]!());
 
       vi.clearAllMocks();
       vi.mocked(getProfileByPublicId).mockResolvedValue(null);
       const foreign = await action(initial, VALID_BODY[name]!());
       vi.mocked(getProfileByPublicId).mockReset();
 
-      expect(foreign, `${name}: foreign-household and un-gated must be indistinguishable`).toEqual(
-        ungated,
+      expect(foreign, `${name}: foreign-household and unauthed must be indistinguishable`).toEqual(
+        unauthed,
       );
       expect(foreign.error).toBe(notFound);
     }

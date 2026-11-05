@@ -6,16 +6,23 @@ import type { Breadcrumb, ErrorEvent, Event, init, Log } from '@sentry/nextjs';
  * The wiring Sentry's own Next.js docs demonstrate would send three privileged things to a third party,
  * all verified against the SDK source rather than assumed:
  *
- *  1. **The `mp_gate` cookie — the app's entire credential.** `withServerActionInstrumentation(name,
- *     { headers }, cb)` copies EVERY header into the isolation scope. Sentry 10's
- *     `sendDefaultPii: false` still collected cookies (a deny-list `mp_gate` matched nothing in), and
- *     Sentry 11 replaced that switch with `dataCollection`, whose every field defaults to ON. So
+ *  1. **Clerk's session cookies — a bearer credential for the whole app.** `__session` is a JWT any
+ *     holder can replay until it expires, and `__clerk_handshake` carries the OAuth exchange.
+ *     `withServerActionInstrumentation(name, { headers }, cb)` copies EVERY header into the
+ *     isolation scope. Sentry 10's `sendDefaultPii: false` still collected cookies, and Sentry 11
+ *     replaced that switch with `dataCollection`, whose every field defaults to ON. So
  *     `SENTRY_DATA_COLLECTION` below turns each one off, and this scrubber is the second line. (We
  *     also never pass `headers`.)
+ *     🔴 **The strip is by STRUCTURE, not by name** — the whole cookie bag and the whole `cookie`
+ *     header go, so a cookie Clerk adds in a future version is covered without an edit here. That is
+ *     why `1d` deleting `mp_gate` changed this file's PROSE and not its mechanism. ⚠️ A deny-list
+ *     would have needed updating twice over: once when the gate's cookie arrived and once when it
+ *     left. Do not reintroduce one.
  *  2. **A kid's bodyweight.** `withServerActionInstrumentation`'s `formData` option does
  *     `setExtra('server_action_form_data.' + key, value)`. `.github/SECURITY.md`: "Kid bodyweight is
  *     privileged … never logged." (We never pass `formData`; again, defence in depth.)
- *  3. **The plaintext access code**, by the same route on the gate action.
+ *  3. **(Until `1d`, the plaintext access code**, by the same route on the gate action. The gate is
+ *     deleted; the route it travelled is not, which is why items 1, 2 and 4 are unchanged.)
  *  4. **Query parameters, bodyweight included (SEC-3).** drizzle-orm's `DrizzleQueryError` message is
  *     `Failed query: <sql>\nparams: <values>`, and the instrumentation captures it on ANY driver
  *     failure (a timeout, a dropped connection) — so a weigh-in write that fails ships the weight.
@@ -23,8 +30,8 @@ import type { Breadcrumb, ErrorEvent, Event, init, Log } from '@sentry/nextjs';
  *     goes. `extraErrorDataIntegration` (if ever enabled) would also copy the error's own `params`
  *     property into `contexts`/`extra`, so any key named `params` is dropped there too.
  *
- * Sentry 11's defaults also collect REQUEST BODIES (a Server Action's body is its form: a weight, the
- * access code) and STACK-FRAME LOCAL VARIABLES (a writer's locals hold the row it was writing). Both
+ * Sentry 11's defaults also collect REQUEST BODIES (a Server Action's body is its form: a weight, a
+ * movement name) and STACK-FRAME LOCAL VARIABLES (a writer's locals hold the row it was writing). Both
  * are off in `SENTRY_DATA_COLLECTION`, and both are stripped here too, so a future SDK default or a
  * config edit cannot reopen either on its own.
  *
@@ -136,7 +143,7 @@ export function scrubSentryEvent<T extends Event>(event: T): T {
     }
     // A query string could carry a `from` redirect or future token; not worth the risk.
     delete event.request.query_string;
-    // The request body: for a Server Action, its form fields (a weight, the access code).
+    // The request body: for a Server Action, its form fields (a weight, a movement name).
     delete event.request.data;
   }
 
