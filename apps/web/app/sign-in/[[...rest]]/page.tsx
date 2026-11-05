@@ -33,22 +33,35 @@ export const metadata: Metadata = {
  * Clerk's prebuilt sign-in, Google-only (AUTH-1 1a) — the app's new front door, and the first route
  * in `PUBLIC_PATH_TREES` because the handshake and the OAuth callback arrive on children of it.
  *
- * ⚠️ **Keep it household-data-free.** Like `/` and `/privacy`, this page reads no cookie, calls no
- * DAL, queries nothing and owns no Server Action. It is ungated, so that is the property that makes
- * widening `isPublicPath` to a subtree safe. It authorizes nothing either: in 1a the access gate was
- * still the only boundary, which is why the way in is also on the page. ⚠️ Since `1c-3b` the boundary
- * is the gate AND a session; the page keeps the gate link because the code is one of the two things a
- * caller needs until `1d`.
+ * 🔴 **From `1d` this is the app's ONLY door.** Every other route needs a session with a
+ * `household_members` row, and the access gate that used to be the fallback way in is deleted. So a
+ * failure on this screen is not a degraded experience, it is a locked building — which is why the
+ * CDN-timeout note below is a design constraint rather than a nicety.
  *
- * **Two states, and only the dark one reaches production at 1a.** `clerkIsConfigured()` is the same
+ * ⚠️ **Keep it household-data-free.** Like `/` and `/privacy`, this page reads no cookie, calls no
+ * DAL, queries nothing and owns no Server Action. It is public, so that is the property that makes
+ * widening `isPublicPath` to a subtree safe. It authorizes nothing either — `<SignIn>` is Clerk's,
+ * and the boundary is enforced in the pages, actions and handlers that read data.
+ *
+ * **Two states, and only the dark one is reachable without keys.** `clerkIsConfigured()` is the same
  * predicate `app/layout.tsx` uses to decide whether to render `<ClerkProvider>` — they MUST agree,
  * because `<SignIn/>` without a provider above it throws. With no keys the page is a plain
- * server-rendered panel naming the live door; it is a dead end by design, so the one thing it owes is
- * an exit. The heading renders ABOVE the Clerk mount in both states, so first paint is always text:
- * `/sign-in` is the only screen in this app whose content depends on two bundles fetched from a CDN,
- * and `@clerk/shared`'s loader waits 15s before it gives up (`scriptLoadTimeout ?? 15e3`). The gate
- * link stays in the lit state for the same reason — until 1d it is the only way out when the script
- * never arrives on gym LTE.
+ * server-rendered panel saying so.
+ * 🔴 **The dark state is now a genuine dead end, and that is a deliberate narrowing.** Until `1d` it
+ * offered the access code as a forward step; there is no such step any more, so its only exits are
+ * the mark (to `/`) and the privacy link. ⚠️ `SiteFooter` hides itself on this subtree, so those two
+ * links are the page's own — do not delete them expecting the footer to cover it.
+ *
+ * ⚠️ **First paint is always our text, never the vendor's.** This is the only screen whose content
+ * depends on two bundles fetched from a CDN, and `@clerk/shared`'s loader waits 15s before giving up
+ * (`scriptLoadTimeout ?? 15e3`). On gym LTE that is 15 seconds of blank card, so the mark and the
+ * disclosure render above the mount in BOTH states.
+ *
+ * 🔴 **ORDERING INVARIANT: the page's own disclosure renders above the Clerk mount, in both states.**
+ * "Secured by Clerk" is a vendor assurance inside the card and must never be the first mention of
+ * Clerk a reader meets — `SIGN_IN_COPY.invitation` and the privacy link are what disclose, and they
+ * are ours. ⚠️ No `aria-describedby` can reach into vendor DOM to associate them with the button, so
+ * placement and `text-foreground` ARE the compensation. Do not "fix" that with a client effect.
  */
 export default function SignInPage() {
   const configured = clerkIsConfigured();
@@ -89,11 +102,16 @@ export default function SignInPage() {
         </header>
       )}
 
-      {configured ? (
-        <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
-      ) : (
-        <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.codeStillWorks}</p>
+      {/* 🔴 **The precondition, before the tap.** `text-foreground`, not muted: `lib/constants.ts`
+          sets that rule for copy read once, cold, immediately before an act with no undo — and
+          Google's consent screen is exactly that. It names the SEQUENCING (consent first, invitation
+          checked after), so a stranger can stop before disclosing their address, name and picture.
+          Lit state only: with no keys there is nothing to consent to. */}
+      {configured && (
+        <p className="text-foreground text-center text-sm">{SIGN_IN_COPY.invitation}</p>
       )}
+
+      {configured && <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />}
 
       {/* 🔴 **Below the card, deliberately.** It renders in BOTH states and is the screen's one
           in-`main` link either way, which is the exact count `e2e/a11y.spec.ts` measures.

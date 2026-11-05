@@ -5,7 +5,6 @@ import { DAY_ROLES, type DayRole } from '@mat-plan/shared';
 import { ProgramReference } from '@/app/p/[profileId]/program-reference';
 import type { ProgramDayDTO } from '@/lib/programming/program-day';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { requireGatedPage } from '@/lib/dal/gate';
 import { requireSession } from '@/lib/dal/session';
 
 import { AA_LARGE, AA_NORMAL, formatRatio, ratioOf, toHex } from './contrast';
@@ -113,13 +112,14 @@ const NON_TEXT_PAIRS = [
 
 export default async function TokenSetsPage() {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
-  // ⚠️ This said `getHouseholdScope()` "does not consult the principal until 1c-4" — it does now, so
-  // a session proves WHOSE data this is rather than only that the caller is someone the Clerk
-  // instance admits. That was the obligation blocking 1d, and it is discharged.
-  // The gate check still stands until 1d because a swap would leave `mp_gate` enforced by the proxy
-  // alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
-  // prefetch header skipping the matcher).
-  await requireGatedPage(); // SEC-1: the proxy is not the boundary
+  // 🔴 **The session IS the boundary (AUTH-1 1d).** `getHouseholdScope()` resolves the signed-in
+  // principal's `household_members` row, so a session proves WHOSE data this is rather than only
+  // that the caller is someone this Clerk instance admits — the obligation 1d was blocked on, and
+  // the reason the gate could not simply be deleted before `1c-4`.
+  // Re-checked HERE rather than inherited from the proxy: SECURITY.md refuses to call a
+  // matcher-driven layer a boundary (CVE-2025-29927), and SEC-1's own scar was a prefetch header
+  // skipping the matcher entirely. `app/pages-are-gated.test.ts` is what keeps this call here
+  // (PR C renames that file to `pages-need-a-session.test.ts`; its contents already moved here).
   await requireSession();
 
   return (
