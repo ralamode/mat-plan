@@ -830,20 +830,28 @@ test.describe('public routes', () => {
      * to stop.
      *
      * ⚠️ `expectTapTargets` is NOT called, for the reason the notice above records: the fallback has
-     * no button, select, textarea or input — its one control is a `Button asChild` wrapping a `Link`,
-     * i.e. an `<a>` — so the selector would match nothing and fail its own "selector is wrong" guard.
-     * `expectLinkTapTargets` is the right helper, and the count is exact: ONE link in `<main>`, the
-     * way out to the gate. `/` and `PRIVACY_PATH` are deliberately absent from the page because the
-     * footer already carries them on every route.
+     * no button, select, textarea or input — its links are the mark (home) and the privacy notice —
+     * so the selector would match nothing and fail its own "selector is wrong" guard.
+     * `expectLinkTapTargets` is the right helper, and the count is exact: **TWO** links in `<main>`.
+     *
+     * 🔴 **It was ONE, and both halves of that comment are now false** _(AUTH-1 1d PR 0)_. The one
+     * link used to be the way out to the gate, with `/` and `PRIVACY_PATH` "deliberately absent
+     * because the footer already carries them". This screen no longer renders the footer at all
+     * (`SiteFooter` returns null on the sign-in subtree), so it carries its own: the mark links home
+     * above the card, the privacy notice sits below it. The count is still EXACT on purpose — a third
+     * link appearing here should go red and be measured, not pass quietly.
+     * ⚠️ CI has no Clerk keys, so this only ever measures the DARK state. Lit, Clerk's own
+     * attribution adds a third link inside the card, which is vendor DOM and 48×14px — the known
+     * exception on `docs/tech-debt.md`'s floating-major row.
      */
-    test(`the sign-in screen at ${viewport.width}px: axe, no overflow, its one way out`, async ({
+    test(`the sign-in screen at ${viewport.width}px: axe, no overflow, its two links`, async ({
       page,
     }) => {
       await page.setViewportSize(viewport);
       await page.goto(SIGN_IN_PATH, { waitUntil: 'networkidle' });
       await expectNoAxeViolations(page, `sign-in, dark state (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `sign-in, dark state (${viewport.width}px)`);
-      await expectLinkTapTargets(page, `sign-in, dark state (${viewport.width}px)`, 1);
+      await expectLinkTapTargets(page, `sign-in, dark state (${viewport.width}px)`, 2);
     });
   }
 });

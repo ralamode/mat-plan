@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
-import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS } from '@/lib/constants';
+import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS, SIGN_IN_PATH } from '@/lib/constants';
+import { matchesPathTree } from '@/lib/public-paths';
 
 /**
  * PRIV-2 — the one `<footer>`, in the root layout, so the privacy notice is reachable from every
@@ -22,6 +23,14 @@ import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS } from '@/lib/constants';
  * `<main>`, so the a11y spec's `expectLinkTapTargets` counts are untouched.
  */
 export function SiteFooter({ pathname }: { pathname: string | null }) {
+  // 🔴 **Not on the sign-in subtree** _(maintainer, 2026-11-05)_. That screen carries the mark as its
+  // own home link above the card and one `/privacy` link below it, so both of this footer's
+  // destinations are already present — rendering it there would be two links to `/` and two to
+  // `/privacy` on one page, the duplicate-destination problem this file's own docblock argues
+  // against. ⚠️ `matchesPathTree`, not equality: `/sign-in` is a catch-all (`[[...rest]]`) and OAuth
+  // lands on its CHILDREN, so an exact check would put the footer back mid-handshake.
+  if (pathname !== null && matchesPathTree(SIGN_IN_PATH, pathname)) return null;
+
   const items = [
     { href: '/', label: FOOTER_COPY.home },
     { href: PRIVACY_PATH, label: FOOTER_COPY.privacy },
@@ -29,7 +38,12 @@ export function SiteFooter({ pathname }: { pathname: string | null }) {
 
   return (
     <footer className="mx-auto w-full max-w-2xl px-4 pt-8 pb-6">
-      <ul className="flex flex-wrap gap-x-4 gap-y-1">
+      {/* Left-aligned on phones, centred from `sm` up _(maintainer, 2026-11-05)_. The footer's own
+          column is `max-w-2xl`, so left-aligned links sit at the left edge of a centred 672px box —
+          which on a wide screen reads as "off-centre" rather than "left-aligned", especially under a
+          centred card. On a phone the box IS the viewport, so left is simply left, and it keeps the
+          links on the thumb side with the rest of the app's text. */}
+      <ul className="flex flex-wrap justify-start gap-x-4 gap-y-1 sm:justify-center">
         {items.map((item) => (
           <li key={item.href}>
             <Link

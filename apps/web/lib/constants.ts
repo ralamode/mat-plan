@@ -191,7 +191,16 @@ export const SIGN_IN_COPY = {
    */
   processor:
     'This screen is run by Clerk. Signing in tells Clerk your email address, your name and your profile picture — that is Google’s minimum and cannot be narrowed. This app stores only which account signed in, and nothing about your athletes is ever sent to Google.',
-  privacyLink: 'What this app stores, and how to get it back or delete it',
+  /**
+   * Short on purpose _(maintainer, 2026-11-05)_. It read "What this app stores, and how to get it
+   * back or delete it" — accurate, and a full line of underlined text under a self-contained card,
+   * which read as a paragraph rather than a link. The page it reaches still covers export and
+   * deletion; the label only has to be worth tapping.
+   * ⚠️ Keep it a statement of what the reader GETS, not a category name. "Data Policy" or "Privacy"
+   * would be shorter still and tell them less — the register here is the `notYet` /
+   * `PICKER_EMPTY_COPY` family, plain language over labels.
+   */
+  privacyLink: 'What this app stores',
 } as const;
 
 /**

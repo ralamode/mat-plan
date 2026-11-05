@@ -41,6 +41,25 @@
   ⚠️ This was invisible for three chunks and could only ever be found by eye, because no CI run
   renders the lit card. The guard now pins the **relative** order and was probed RED both ways — below
   `base` (the original bug) and above `utilities` (which would break the tap-target bar).
+  **The screen now carries its own chrome, and drops the shared footer** _(maintainer, 2026-11-05)_.
+  The mark sits above the card and links home — it has to, because the card owns the heading while
+  lit, so the page's identity cannot come from a second `<h1>`. `MatPlanMark` is `aria-hidden` by
+  design, so the link gets its own accessible name rather than being a link with no text. Below the
+  card is one `/privacy` link, its label shortened from "What this app stores, and how to get it back
+  or delete it" to **"What this app stores"** — a full line of underlined text under a self-contained
+  card read as a paragraph, and the page it reaches still covers export and deletion.
+  `SiteFooter` then returns `null` on the sign-in subtree: both its destinations are already on the
+  screen, and rendering it would put two links to `/` and two to `/privacy` on one page — the
+  duplicate-destination problem that file's own docblock argues against. ⚠️ `matchesPathTree`, not
+  equality: `/sign-in` is a catch-all and OAuth lands on its **children**, so an exact check would put
+  the footer back mid-handshake. Every other route is untouched.
+  **The footer's links are left-aligned on phones and centred from `sm` up.** Its column is
+  `max-w-2xl`, so left-aligned links sat at the left edge of a centred 672px box — which on a wide
+  screen reads as off-centre rather than left-aligned. On a phone the box is the viewport, so left is
+  simply left.
+  ⚠️ `a11y.spec.ts`'s exact link count for `/sign-in` moves **1 → 2** and its title with it; the old
+  comment said `/` and `PRIVACY_PATH` were "deliberately absent because the footer already carries
+  them", which is now false on this route. Verified by running the spec, not by reasoning: 3 passed.
   **`lib/clerk.test.ts` pins what this repo controls**, and one assertion is there for a specific
   trap: `app/globals.css` must declare `@layer clerk` **before** `@import 'tailwindcss'`, or Clerk's
   CSS outranks the `min-h-11` holding the 44px bar on the Google button — and nothing tested that file

@@ -2,8 +2,16 @@ import { SignIn } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { MatPlanMark } from '@/components/brand/mat-plan-mark';
+
 import { clerkIsConfigured, SIGN_IN_APPEARANCE } from '@/lib/clerk';
-import { PRIVACY_PATH, QUIET_LINK_CLASS, SIGN_IN_COPY, SIGN_IN_PATH } from '@/lib/constants';
+import {
+  FOOTER_COPY,
+  PRIVACY_PATH,
+  QUIET_LINK_CLASS,
+  SIGN_IN_COPY,
+  SIGN_IN_PATH,
+} from '@/lib/constants';
 
 /**
  * `robots: noindex`, unconditionally and permanently.
@@ -60,6 +68,20 @@ export default function SignInPage() {
           `heading-order` are best-practice-tagged and `e2e/a11y.spec.ts` scans `wcag2a`/`wcag2aa`
           only — so this is a decision, not a check.
           ⚠️ The DARK state has no card, so it keeps the page's own heading and its one line. */}
+      {/* The mark links HOME, and is this screen's only route back to `/`. It sits above the card
+          because the card owns the heading while lit, so the page's own identity has to come from
+          something that is not a second `<h1>`. `aria-hidden` on the SVG is why the link needs its
+          own accessible name — the mark announces nothing by design (`MatPlanMark`'s docblock), so
+          without the sr-only text this would be a link with no text at all. */}
+      <Link
+        href="/"
+        aria-label={FOOTER_COPY.home}
+        className="focus-visible:ring-ring mx-auto inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-3"
+      >
+        <MatPlanMark className="size-8" />
+        <span className="sr-only">{FOOTER_COPY.home}</span>
+      </Link>
+
       {!configured && (
         <header className="flex flex-col gap-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
