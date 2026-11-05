@@ -55,6 +55,18 @@ export const SENTRY_DATA_COLLECTION: Required<Omit<DataCollection, 'frameContext
   urlQueryParams: false,
   graphQL: { document: false, variables: false },
   genAI: { inputs: false, outputs: false },
+  /**
+   * Added by `@sentry/core@11.10.0`, which is exactly what this object's `Required<…>` exists to
+   * catch — the bump that introduced it failed `typecheck` here rather than silently collecting.
+   * It records MCP tool-call ARGUMENTS and tool RESULTS, defaults to `{ inputs: true, outputs: true }`,
+   * and is gated separately from `genAI` even though it lands on `gen_ai.*` attributes.
+   *
+   * Off, and deliberately off BEFORE there is anything to collect: this app runs no MCP server today,
+   * so nothing is lost — but [SECURITY.md](../../../.github/SECURITY.md) plans a scoped MCP token, and
+   * `wrapMcpServerWithSentry`'s own `recordInputs`/`recordOutputs` take precedence over this value.
+   * Setting it now means the day an MCP server appears it is not collecting athletes' data by default.
+   */
+  mcp: { inputs: false, outputs: false },
   databaseQueryData: false,
   queues: false,
   stackFrameVariables: false,
