@@ -1,5 +1,6 @@
 - **2026-11-05** — **The sign-in screen is sized to Clerk's card, and stops trying to restyle it**
-  (`AUTH-1` 1d PR 0, ahead of the [1d plan](../plans/auth-1d-retire-the-gate.md)). Lands on its own
+  (`AUTH-1` 1d PR 0, ahead of [1d's own plan](../plans/auth-1-clerk-google.md), still in review).
+  Lands on its own
   because every file is gate-independent — `apps/web/app/sign-in/` and `apps/web/app/globals.css` are
   owned by no feature guide — and because it fixes a live defect on the screen `1d` is about to make
   the app's only door.
@@ -61,9 +62,9 @@
   comment said `/` and `PRIVACY_PATH` were "deliberately absent because the footer already carries
   them", which is now false on this route. Verified by running the spec, not by reasoning: 3 passed.
   **`lib/clerk.test.ts` pins what this repo controls**, and one assertion is there for a specific
-  trap: `app/globals.css` must declare `@layer clerk` **before** `@import 'tailwindcss'`, or Clerk's
-  CSS outranks the `min-h-11` holding the 44px bar on the Google button — and nothing tested that file
-  at all. It asserts **positively** (`indexOf` ≥ 0, then `<`), because the obvious
+  trap: the layer order is a **relative** invariant with a failure mode on each side (preflight wins
+  below `base`; Clerk beats `min-h-11` above `utilities`), and nothing tested that file at all. It
+  asserts **positively** (`indexOf` ≥ 0, then `<`), because the obvious
   `indexOf(a) < indexOf(b)` returns `-1 < n` and would have **passed on the exact regression it exists
   for**: the layer deleted. Comments are stripped first, the trap
   `app/design/tokens/token-sets.test.ts` already documents. Both new guards were probed RED.
@@ -76,6 +77,16 @@
   stands and it is the vendor's:** the attribution link is 48×14px, under the 44px bar and WCAG 2.2
   SC 2.5.8, with no `elements` key to reach it — recorded as un-met in one named place rather than
   silently un-met, with no allowlist added.
+  ⚠️ **`main` moved under this branch: #332 took `@clerk/nextjs` 7.9.19 → 7.9.22.** Every vendor claim
+  this PR's files assert was re-read against the new version before its citation was renumbered — the
+  `ClientClerkProvider` throw, the keyless feature-flag predicate, `DEFAULT_DIRECTIVES`,
+  `parsePublishableKey`/`isPublishableKey` and the `dynamic`-prop type — and all five still hold.
+  **The pixel readings were NOT re-taken and do not need to be:** `<SignIn>`'s DOM and CSS come from
+  clerk-js on Clerk's CDN, which is absent from the lockfile, so an npm bump cannot move them (and a
+  CDN build can move them with no bump at all — that is the tech-debt row, not this one). Only the
+  files already in this diff were renumbered; the ~20 other present-tense citations across the tree,
+  and the fact that nothing catches their drift, are now **their own tech-debt row** rather than a
+  rider on a UI change.
   **[design.md](../design.md) said "Both themes are scanned… on every route", which is false** and has
   been since UI-4: the dark pass loops `ROUTES`, so no public route gets one. Corrected here because
   `1d` makes `/sign-in` the only door and its lit card ships its own palette.

@@ -66,7 +66,7 @@ export default async function RootLayout({
   // read, and all three must agree: a provider without a middleware is an `auth()` that throws, and a
   // sign-in card without a provider is a render that throws. With no keys there is no
   // `<ClerkProvider>` at all — which is 1a's whole shape, and not a cosmetic choice: at the pinned
-  // 7.9.15 the provider itself CALLS `throwMissingPublishableKeyError()` when the keyless path is live
+  // 7.9.22 the provider itself CALLS `throwMissingPublishableKeyError()` when the keyless path is live
   // with no key, so an unconditional one would 500 every route on `pnpm dev`. See `lib/clerk.ts`.
   //
   // `nonce` + `dynamic` travel together because `@clerk/shared`'s own type for the prop says so

@@ -75,7 +75,7 @@ describe('clerkFrontendApiOrigin', () => {
 
 /**
  * The contract test AGENTS.md allows: these two literals are what `proxy.test.ts` proves land in the
- * CSP, and they were read off `@clerk/nextjs@7.9.15`'s own `DEFAULT_DIRECTIVES`. The literal belongs
+ * CSP, and they were read off `@clerk/nextjs@7.9.22`'s own `DEFAULT_DIRECTIVES`. The literal belongs
  * on the assertion side exactly once, and this is that once.
  */
 describe('the Clerk CSP origins', () => {

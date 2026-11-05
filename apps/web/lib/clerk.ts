@@ -19,7 +19,7 @@ import { env } from './env';
  * `next build` and un-wired previews legitimately run without them, and that is the state in
  * production until the maintainer configures an instance.
  *
- * Verified against the pinned `@clerk/nextjs@7.9.15`, because the plan's "no keys ⇒ dark, not open"
+ * Verified against `@clerk/nextjs@7.9.22`, because the plan's "no keys ⇒ dark, not open"
  * could not be asserted without reading it — and one of its two failure modes is real:
  * `dist/esm/app-router/client/ClerkProvider.js:ClientClerkProvider` ends in
  * `errorThrower.throwMissingPublishableKeyError()`, and `dist/esm/app-router/server/ClerkProvider.js`
@@ -56,7 +56,7 @@ export function clerkPublishableKey(): string | undefined {
  *
  * The key format is `pk_(test|live)_<unpadded base64 of "<frontendApi>$">`, mirroring
  * `@clerk/shared/keys.ts:parsePublishableKey` + `isPublishableKey` at the pinned
- * `@clerk/shared@4.40.0`. It is reimplemented rather than imported because `@clerk/shared` is a
+ * `@clerk/shared@4.41.0`. It is reimplemented rather than imported because `@clerk/shared` is a
  * TRANSITIVE dependency and `parsePublishableKey` is not re-exported by `@clerk/nextjs` or
  * `@clerk/nextjs/server` — reaching into a transitive's internals for six lines is the worse trade.
  * `clerk.test.ts` pins the decode against vendor-shaped keys, so a format change surfaces as a
@@ -85,7 +85,7 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
 
 /**
  * 🔴 **The CSP origins Clerk needs, by EXACT ORIGIN — never a wildcard.** Read off the pinned
- * `@clerk/nextjs@7.9.15`'s own `dist/esm/server/content-security-policy.js:DEFAULT_DIRECTIVES`, which
+ * `@clerk/nextjs@7.9.22`'s own `dist/esm/server/content-security-policy.js:DEFAULT_DIRECTIVES`, which
  * is the vendor's authoritative list at this version, then narrowed to what THIS app actually uses.
  * `proxy.ts:buildCsp` adds them only when `clerkIsConfigured()`, and `proxy.test.ts` pins each one.
  *
@@ -113,10 +113,18 @@ export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
 
 /**
  * The CSS layer Clerk's own stylesheet is confined to, passed to `<ClerkProvider appearance>` in
- * `app/layout.tsx`. `app/globals.css` declares `@layer clerk` **first**, which is what puts it below
- * Tailwind's layers — layer priority is declaration order, so naming it anywhere later would make
- * Clerk's styles win over the `min-h-11` below. `lib/clerk.test.ts` pins that ordering, because
- * nothing else did.
+ * `app/layout.tsx`.
+ *
+ * 🔴 **`app/globals.css` must name this layer BETWEEN Tailwind's `base` and `components`, and the
+ * position matters in both directions** — `@layer theme, base, clerk, components, utilities;`.
+ * Layer priority is declaration order, so:
+ *  - **above `base`**, or Tailwind's preflight (`margin: 0; padding: 0; border: 0` on `*`, inside
+ *    `@layer base`) outranks every spacing rule Clerk ships and the card renders stripped;
+ *  - **below `components`/`utilities`**, or Clerk's own CSS beats the `min-h-11` above.
+ *
+ * ⚠️ A bare `@layer clerk;` satisfies neither: it makes this the LOWEST layer, which is what shipped
+ * from 1a until the card was measured on 2026-11-05. `lib/clerk.test.ts` pins the relative order and
+ * was probed RED both ways; nothing else tests that file, and no CI run renders the lit card.
  */
 export const CLERK_CSS_LAYER = 'clerk';
 
