@@ -41,7 +41,7 @@ pnpm --filter web screenshot:ephemeral /p --theme dark            # the DARK hal
   capture is named `today`. **There is no `/p` shorthand any more** (OSS-2): `/p` is the real picker
   route, and the shorthand would have silently captured the wrong screen.
 - ⚠️ **Every route is captured the same way now.** This used to say a route in `PUBLIC_PATHS` (and
-  `/gate`) was captured *without* the gate login, because a logged-in capture of `/` would show the
+  `/gate`) was captured _without_ the gate login, because a logged-in capture of `/` would show the
   picker the proxy redirected to. Both halves are gone: there is no login step, and `1c-3b` already
   deleted that forward, so `/` renders the landing for everyone.
 - **`--theme light|dark`** (UI-4) emulates `prefers-color-scheme`, which the app's default `Auto`

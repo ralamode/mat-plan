@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-04. This is a beta.**
+**Last updated: 2026-11-05. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -85,20 +85,20 @@ still works.
   everything in it. There is no technical barrier to that, and pretending otherwise would be false.
 - **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
   no analytics about you, and your data is never sold or shared for anyone else's purposes. Three
-  pages can be opened without the code — the landing page, this notice, and the sign-in screen — and
+  pages can be opened without signing in — the landing page, this notice, and the sign-in screen — and
   none of the three reads your data.
 
 **Three honest limitations during the beta:**
 
-1. **The access code is shared**, even though signing in is not. Everyone in the household types the
-   same code, and there is **no control in the app** to remove one person's access to the code
-   itself — rotating it means everyone has to enter the new code. ✅ **Removing someone from the household now does stop
-   them** (new in this version): the app works out whose data you get from who you are, so once their
-   membership is removed they see nothing, even with the code. Deleting their sign-in account at
-   Clerk also still works. Ask for either. ⚠️ **Removing someone from the household hides their
-   membership record rather than erasing it, so it keeps their account identifier until the whole
-   household is deleted** — deleting their Clerk account is the lever that leaves nothing behind. And signing in does not mean the app records **who** did
-   what — it still does not. See the limitation below.
+1. ✅ **The shared access code is gone** (new in this version). Until now getting in took a code that
+   everyone in the household typed, with no way to withdraw it from one person — rotating it meant
+   everyone had to learn a new one. **Signing in with your own Google account is now the only way in**,
+   so access is per-person for the first time. **Removing someone from the household stops them**: the
+   app works out whose data you get from who you are. Deleting their sign-in account at Clerk also
+   works. Ask for either. ⚠️ **Removing someone hides their membership record rather than erasing it,
+   so it keeps their account identifier until the whole household is deleted** — deleting their Clerk
+   account is the lever that leaves nothing behind. And signing in still does not mean the app records
+   **who** did what. See the limitation below.
 2. **Separating one family's data from another's is done in the parts that read your log** (new in
    this version): who you are signed in as decides which household's data the app will show you, and
    that is checked on every read and every write. **One part is still shared:** the list of exercise
@@ -107,25 +107,27 @@ still works.
    last part is not finished.
 3. **Anyone signed in to your household can download any athlete's full history** — including a
    child tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this
-   version is that the access code alone is no longer enough: it takes the code **and** a sign-in
-   **and** a membership in your household. That follows from (1) and (2): the code is still shared,
-   and the exercise-name list is still common to every household. Guard the code the way you would
-   guard a password.
+   version is that getting in takes **your own sign-in and a membership in your household**, and
+   nothing else opens the app.
+   ⚠️ **Why that is still a limitation:** a membership is held by a PERSON, not by an athlete, so one
+   membership opens every athlete in the household — and the app does not record who did what. The
+   list of exercise names is also still common to every household (limitation 2). Guard your Google
+   account the way you would guard a password.
 
 ## Who else it passes through
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches | What they get                                                                                                                                                                                                                                                                                                           |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                   |
-| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                         |
-| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                      |
-| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                           |
-| **Upstash**    | **Your IP address**, briefly, to stop someone guessing the access code — and, since sign-in went live, **the identifier of whoever is signed in**, briefly, to stop the app being hammered. Both are counters that expire in minutes. No name, no email, and never any training or weigh-in data.                       |
-| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data.                            |
-| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google. |
-| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                  |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                    |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                          |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                       |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                            |
+| **Upstash**    | **The identifier of whoever is signed in**, briefly, to stop the app being hammered. A counter that expires in minutes. ✅ **It no longer receives your IP address at all** (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data. |
+| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data.                                                                             |
+| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                  |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                   |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
@@ -150,19 +152,19 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 
 ## How long we keep it
 
-| What                                                                         | How long                                                                                                                                                               |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Your training data                                                           | While you are using the app. Deleted when you ask, and we will ask you once when the beta ends.                                                                        |
-| **Something you "delete" in the app**                                        | ⚠️ **Hidden, not erased.** See below.                                                                                                                                  |
-| Access-code and timezone cookies                                             | One year                                                                                                                                                               |
-| **Your sign-in session** (a cookie, and the record at Clerk)                 | Held by Clerk, not by this app. Its exact length is Clerk's setting and this notice does not yet state it — ask and you will be told. Signing out ends it immediately. |
-| Your theme choice                                                            | In your browser, until you clear it                                                                                                                                    |
-| The IP address, and the signed-in account identifier, used for rate limiting | Minutes                                                                                                                                                                |
-| Server error reports                                                         | 30 days                                                                                                                                                                |
-| Server request logs                                                          | 24 hours                                                                                                                                                               |
-| Database backups                                                             | Point-in-time recovery: 6 hours. See below for the separate 7-day restore point.                                                                                       |
-| An export you have downloaded                                                | Yours — we cannot keep or delete it                                                                                                                                    |
-| The public source code                                                       | Permanently, including its history                                                                                                                                     |
+| What                                                         | How long                                                                                                                                                               |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Your training data                                           | While you are using the app. Deleted when you ask, and we will ask you once when the beta ends.                                                                        |
+| **Something you "delete" in the app**                        | ⚠️ **Hidden, not erased.** See below.                                                                                                                                  |
+| The timezone cookie                                          | One year. ⚠️ The access-code cookie listed here previously no longer exists; a browser still holding one is cleared on its next visit.                                 |
+| **Your sign-in session** (a cookie, and the record at Clerk) | Held by Clerk, not by this app. Its exact length is Clerk's setting and this notice does not yet state it — ask and you will be told. Signing out ends it immediately. |
+| Your theme choice                                            | In your browser, until you clear it                                                                                                                                    |
+| The signed-in account identifier, used for rate limiting     | Minutes. ⚠️ No IP address is used for this any more.                                                                                                                   |
+| Server error reports                                         | 30 days                                                                                                                                                                |
+| Server request logs                                          | 24 hours                                                                                                                                                               |
+| Database backups                                             | Point-in-time recovery: 6 hours. See below for the separate 7-day restore point.                                                                                       |
+| An export you have downloaded                                | Yours — we cannot keep or delete it                                                                                                                                    |
+| The public source code                                       | Permanently, including its history                                                                                                                                     |
 
 ⚠️ **Right now, "delete" means "hidden".** The app has no Delete button yet. The only way anything comes
 out of the database today is deleting a whole athlete or household, and the one time a row has been
@@ -178,9 +180,10 @@ follow that are worth saying plainly.
   tapped it. Occasionally a restore will not be possible, because something else has since taken that
   item's place in the day — when that happens the app will say so rather than fail quietly.
 - **It hides from everyone in your household, not just from the person who deleted it.** The app does
-  not record who deleted what, and anyone with your access code can open any athlete. So a child can
-  delete a weigh-in and a parent will not see it either, until they use Restore. That is the honest
-  shape of it today, and it is one of the things per-person sign-in is meant to improve.
+  not record who deleted what, and anyone signed in to your household can open any athlete. So a child
+  can delete a weigh-in and a parent will not see it either, until they use Restore. ⚠️ That is still
+  the honest shape of it: per-person sign-in is now the only way in, but the app records no author on
+  an entry, so sign-in alone did not fix this one.
 
 There is still **no way to permanently remove one single item on demand** — the finest grain for a
 permanent removal is an athlete. Ask, and that is done.
@@ -206,8 +209,7 @@ Ask, and your household is deleted: every profile, every logged session, every s
 every readiness note and your program — **permanently removed from the database**, not hidden. Your
 sign-in accounts are deleted too.
 
-Because this cannot be undone, and signing in does not yet prove which household is asking — the
-access code is still the shared part:
+Because this cannot be undone, both of the steps below stay in place:
 
 - **We will confirm the request through the channel your invitation came through** — not simply by
   replying to whatever message arrives. This is to stop someone else having your family's data deleted.
@@ -239,7 +241,29 @@ access code is still the shared part:
   current code does not remove it from the history**. That is being worked on, and it is a permanent
   limitation of having built this in the open.
 
+## What changed on 5 November 2026
+
+**The shared access code is retired.** Until now getting into the app took two things: this
+household's access code AND a sign-in. The code is gone, and **signing in with your own Google
+account is the only way in**. Nothing else opens the app. This supersedes the paragraph below, which
+said both were required "until the code is retired in a later release" — this is that release.
+
+**Upstash stops receiving your IP address.** It was only ever used to count failed guesses at the
+shared code, briefly, and there is no code to guess. Upstash now sees only the identifier of whoever
+is signed in, for the same few minutes, to stop the app being hammered. That is a reduction in what
+one of our processors is given, so it is recorded here rather than only in the source.
+
+**If you are refused at the door, a record of you already exists.** Signing up is by invitation only,
+and Google's consent screen appears **before** this app checks whether your address was invited — so
+an address that is then refused has already given Clerk its email address, name and profile picture.
+⚠️ **You can have that record deleted without being invited to anything.** Write to the address under
+"Asking for anything"; there is no household to protect in that case, so nothing has to be confirmed
+through an invitation channel first.
+
 ## What changed on 1 November 2026
+
+_(This section describes what was true on 1 November 2026. The access-code half of it was superseded
+on 5 November 2026 — see the section above. The text is left as published rather than rewritten.)_
 
 **Sign-in with Google is switched on.** You sign in with your Google account, and you **also** need
 this household's access code — both are required until the code is retired in a later release. Clerk
@@ -276,7 +300,9 @@ does not attempt to describe. **If you need that answered, it needs a lawyer, an
 one.**
 
 **Reviewed in full against the code and signed off by the maintainer (the household operator),
-2026-10-26. Re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
+2026-10-26. Re-reviewed 2026-11-05** against the retirement of the shared access code, which changed
+who can get in, what Upstash is sent, and what a refused sign-up leaves behind.
+**Previously re-reviewed 2026-11-03** against the sign-in claims, after sign-in went live on
 1 November 2026 — one of the triggers this notice sets for itself below, which had fired and not been
 answered. **Re-reviewed again 2026-11-04** against the household-scope change: the app now works out
 whose data you get from who you are, which made three of the limitations below out of date in the

@@ -4,13 +4,7 @@ import Link from 'next/link';
 import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';
-import {
-  APP_NAME,
-  CTA_CLASS,
-  GITHUB_REPO_URL,
-  LANDING_COPY,
-  SIGN_IN_PATH,
-} from '@/lib/constants';
+import { APP_NAME, CTA_CLASS, GITHUB_REPO_URL, LANDING_COPY, SIGN_IN_PATH } from '@/lib/constants';
 
 export const metadata: Metadata = {
   description: LANDING_COPY.lead,

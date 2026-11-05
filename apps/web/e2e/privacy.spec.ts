@@ -42,7 +42,9 @@ test.describe('public', () => {
     await expect(
       page.getByRole('heading', { level: 2, name: 'How long we keep it' }),
     ).toBeVisible();
-    await expect(page.getByText('That follows from (1) and')).toBeVisible();
+    // ⚠️ Repointed at AUTH-1 1d — see `notice-content.test.ts` for why the old cross-reference
+    // ("That follows from (1) and (2)") could not simply be re-quoted.
+    await expect(page.getByText('(limitation 2)')).toBeVisible();
   });
 
   test('the data-inventory link points at the real file in the public repo', async ({ page }) => {

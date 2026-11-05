@@ -30,7 +30,7 @@ flowchart TB
   CLERK["Clerk<br/>household auth"]
   CLAUDE["Claude skills<br/>/retro · /daily-plan"]
   SENTRY["Sentry<br/>server + edge errors only"]
-  UPSTASH["Upstash Redis<br/>gate rate limit"]
+  UPSTASH["Upstash Redis<br/>mutation rate limit"]
   GHA["GitHub Actions<br/>migrate.yml"]
 
   UI -->|"Server Action"| ACT
@@ -39,14 +39,14 @@ flowchart TB
   DAL --> DRIZZLE --> NEON
   ACT -.->|"auth()"| CLERK
   RH -.->|"auth()"| CLERK
-  PROXY["proxy.ts<br/>gate · nonce CSP · clerkMiddleware()"]
+  PROXY["proxy.ts<br/>nonce CSP · clerkMiddleware()<br/>enforces nothing (1d)"]
   UI --> PROXY
   PROXY -.->|"authenticateRequest()"| CLERK
   UI ==>|"AUTH-1 1a: BROWSER egress — clerk-js + sign-in<br/>exact Frontend API origin in connect-src"| CLERK
   RH -->|"CSV export v1 · MCP+REST v3"| CLAUDE
   ACT -.->|"scrubbed errors"| SENTRY
   RSC -.->|"scrubbed errors"| SENTRY
-  ACT -.->|"visitor IP, gate only"| UPSTASH
+  ACT -.->|"Clerk user id, mutations only"| UPSTASH
   GHA ==>|"prod DDL + seed on every merge<br/>holds DATABASE_URL_UNPOOLED"| NEON
 ```
 
@@ -122,37 +122,40 @@ sequenceDiagram
 ## 2b. Profile routing — landing → picker → scoped Today (V1-3, OSS-2, PRIV-2)
 
 `/` is the **public landing** (OSS-2): no cookie read, no DB query — and since `AUTH-1` 1c-3b
-**every caller sees it**, gated or not.
+**every caller sees it**, signed in or not.
 
-🔴 **Every gated surface requires the access code AND a Clerk session, both re-checked in-process
-(1c-3b).** Not one or the other, and never the proxy alone. `app/pages-are-gated.test.ts` reports the
-offender by name, asking the question differently per kind: a **page** or **Route Handler** names both
-checks itself, while an **action** must call `enterMutation` and **return its refusal** — the two
-conjuncts, their order, and the mutation limiter are asserted once inside that helper.
+🔴 **Every non-public surface requires a Clerk session whose principal holds a `household_members`
+row, re-checked in-process — and as of `1d` that is the ONLY requirement.**
+`app/pages-are-gated.test.ts` reports the offender by name, asking the question differently per kind:
+a **page** or **Route Handler** names the check itself, while an **action** must call `enterMutation`
+and **return its refusal** — the session check, the limiter and their order are asserted once inside
+that helper.
 
-**Why both.** Two reasons, and ✅ **the first is discharged at `1c-4`**: `getHouseholdScope()` did
-not consult the principal until then, so a session alone meant _"anyone this Clerk instance admits"_
-and deleting the gate first would have **widened** access rather than narrowing it. The scope is
-membership-derived now, which is what `1d` was waiting for. The second reason still stands and is
-what keeps the gate until `1d` deletes it: a request that skips the proxy (SEC-1's scar was a
-prefetch header missing the matcher; CVE-2025-29927 is the general case) meets nothing at all if the
-in-process check is removed, and [SECURITY.md](../.github/SECURITY.md) refuses to call middleware a
-boundary. [beta-1](./milestones/beta-1.md) records the ordering as a security obligation rather than
-a preference.
+**Why in-process, and why it matters MORE now.** `1c-3b` required the access code AND a session
+because `getHouseholdScope()` did not consult the principal until `1c-4`, so a session alone meant
+_"anyone this Clerk instance admits"_ — deleting the gate first would have **widened** access.
+`1c-4` discharged that and `1d` deleted the gate. ⚠️ **What `1d` also removed is the backup**: the
+proxy's bounce used to stand between a stranger and a page, so these per-surface checks are now the
+only thing there. SEC-1's scar was a prefetch header missing the matcher, CVE-2025-29927 is the
+general case, and [SECURITY.md](../.github/SECURITY.md) refuses to call middleware a boundary.
+[beta-1](./milestones/beta-1.md) records the ordering as a security obligation rather than a
+preference.
+🔴 **The proxy now enforces nothing, literally.** The gate bounce was the one thing it enforced
+itself; its matcher stays wide for a different reason — `auth()` must be able to answer and the
+security headers must land.
 
-⚠️ **The proxy no longer forwards a cookie-holder from `/` or `/gate` to `/p`.** That arm was
-convenience routing (never authorization), but once the pages also required a session it **looped**
-for every cookie-holder without one, which is everyone at deploy — both exits from `/sign-in` led
-straight back to it:
+⚠️ **Two routing arms were deleted, one per chunk, and neither was authorization.** `1c-3b` removed
+the forward that sent a cookie-holder from `/` or `/gate` to `/p`: it **looped** once the pages also
+required a session, and meant such a visitor could never reach the landing at all. `1d` removed the
+bounce itself, with the gate:
 
 ```text
-/sign-in → "use the access code" → /gate → (forward) → /p → requireSession() → /sign-in
-/sign-in → footer "mat-plan"     → /     → (forward) → /p → requireSession() → /sign-in
+1c-3b deleted:  /sign-in → footer "mat-plan" → /     → (forward) → /p → requireSession() → /sign-in
+1d    deleted:  any un-gated request         → /gate?from=…  (the bounce, and /gate with it)
 ```
 
-The second arm also meant such a visitor could never reach the landing page at all. Nothing
-security-relevant went with it: an unauthenticated caller never reached that branch, so behaviour for
-a cookie-less caller is bit-identical.
+Nothing security-relevant went with either: an unauthenticated caller never reached the forward, and
+the bounce was never the boundary.
 
 **`PUBLIC_PATHS` holds TWO routes since PRIV-2**: `/` and `/privacy`. The notice at `/privacy` is a
 compiled copy of [`docs/privacy/notice.md`](./privacy/notice.md) — rendered from a committed data
@@ -163,9 +166,11 @@ exists because the Clerk and Google consent screens need a privacy-policy **URL*
 ⚠️ **Both public routes now render in place for every caller** — the asymmetry that once sent `/`
 to the picker went with the forward above. Keep its reasoning in mind before re-adding any bounce: a
 public path that jumped into the app would be unreadable to the person who most needs it, and the
-notice is the URL the Clerk and Google consent screens point at. `/privacy` owns **no subtree**:
-`/privacy/x` is gated (`PUBLIC_PATH_TREES` is the separate opt-in a route with children joins), and
-`/privacy/` 308s to `/privacy` before the proxy runs.
+notice is the URL the Clerk and Google consent screens point at. ✅ **From `1d` the notice is also
+`index`able** — the reason it was not (publishing a description of a lock whose limiter could fail
+open) is dissolved rather than satisfied, because the lock is deleted. `/privacy` owns **no
+subtree**: `/privacy/x` is NOT public (`PUBLIC_PATH_TREES` is the separate opt-in a route with
+children joins) and now simply 404s, and `/privacy/` 308s to `/privacy` before the proxy runs.
 
 The picker at `/p` lists profiles; a tile routes to `/p/[profileId]` (the profile's UUIDv7 `public_id`). The
 selection lives entirely in the URL — no client state. The `profileId` rides the log forms as a hidden
@@ -204,13 +209,14 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 - ✅ **`1c-4` replaced only `getHouseholdScope()`'s body** (session → `household_members` →
   household). Nothing else moved, which is the whole reason the seam landed before its consumers —
   no page, action or Route Handler signature carries a scope.
-- ✅ **Scoping IS authorization now, and that is what unblocks `1d`.** Until 1c-4 the scope came from
-  the single live household, so a session proved only that the caller was someone this Clerk instance
-  admits — deleting the access gate then would have **widened** access. A session now decides _whose_
-  data you get. ⚠️ **At the household boundary only** — inside one household there is still no
-  per-profile authorization, and there is not meant to be: profile tiles are a UX switch, not a
-  security boundary (AGENTS.md). ⚠️ The gate still stands until `1d` deletes it, because a request
-  bypassing the proxy meets nothing otherwise (SEC-1's scar; CVE-2025-29927).
+- ✅ **Scoping IS authorization now, and that is what unblocked `1d` — which has landed.** Until 1c-4
+  the scope came from the single live household, so a session proved only that the caller was someone
+  this Clerk instance admits, and deleting the access gate then would have **widened** access. A
+  session now decides _whose_ data you get, and `1d` deleted the gate. ⚠️ **At the household boundary
+  only** — inside one household there is still no per-profile authorization, and there is not meant to
+  be: profile tiles are a UX switch, not a security boundary (AGENTS.md). ⚠️ **The consequence of the
+  gate going:** a request that bypasses the proxy now meets only the in-process check, so that check
+  is the whole boundary (SEC-1's scar; CVE-2025-29927).
 - ⚠️ **The ≥2-live-households throw is gone with the old body**, and was not ported to an alert: two
   live households is the intended end state once a family is invited, so it would fire on every
   request forever. The creator is closed instead — `seed.ts` refuses to insert when a live household
@@ -233,25 +239,23 @@ into `packages/db`, so no page, action or Route Handler signature carries a scop
 flowchart LR
   LANDING["/ — public landing<br/>(no cookie, no DB)"]
   PRIVACY["/privacy — the notice<br/>compiled from docs/privacy/notice.md<br/>(no cookie, no DB, no request input)"]
-  GATE["/gate — access code"]
-  SIGNIN["/sign-in — Clerk<br/>(invite-only)"]
+  SIGNIN["/sign-in — Clerk<br/>(invite-only) — THE ONLY DOOR (1d)"]
   PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles<br/>+ Sign out (session only)"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
   ACT["Server Action<br/>log bodyweight / strength"]
   SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>principal → membership<br/>no membership → null · ≥2 memberships → throw"]
   DAL["DAL (server-only)<br/>isLiveProfile(publicId, scope)"]
 
-  LANDING -->|"Household sign-in"| GATE
-  GATE -->|"code OK → APP_HOME_PATH"| PICKER
+  LANDING -->|"Household sign-in"| SIGNIN
   LANDING -->|"site footer"| PRIVACY
-  GATE -->|"site footer"| PRIVACY
   PICKER -->|"site footer"| PRIVACY
   PRIVACY -->|"footer: mat-plan"| LANDING
-  SIGNIN -->|"SIGN_IN_COPY.gateCta<br/>(the code is ONE of two things)"| GATE
+  SIGNIN -->|"its own privacy link<br/>(SiteFooter hidden here, 1d)"| PRIVACY
+  SIGNIN -->|"its own mark links home"| LANDING
   SIGNIN -->|"session OK"| PICKER
   PICKER -.->|"no session → redirect (1c-3b)"| SIGNIN
   TODAY -.->|"no session → redirect (1c-3b)"| SIGNIN
-  PICKER -.->|"Sign out: clears the Clerk session<br/>ONLY — clearing mp_gate too is a lockout"| SIGNIN
+  PICKER -.->|"Sign out: clears the Clerk session —<br/>the whole story since 1d"| SIGNIN
   SCOPE -->|"the session's household<br/>(membership-derived, 1c-4)"| PICKER
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
@@ -464,7 +468,7 @@ flowchart TB
     E["<b>e2e</b><br/>Postgres 17 service · migrate+seed · Playwright smoke<br/>auto-skips docs-only PRs · ci-skip-e2e label override"]
     G["<b>gitleaks</b> (required)"]
   end
-  CI --> PREV["Vercel preview<br/>(preview scope: seed-only Neon project,<br/>own gate code + Upstash, no prod secret)"]
+  CI --> PREV["Vercel preview<br/>(preview scope: seed-only Neon project,<br/>own Upstash, no prod secret)"]
   DEV -. "a writer comments @claude review<br/>(on request only)" .-> CR["<b>claude-review</b> (advisory, never required)<br/>review: model, read-only token, PR head as data<br/>→ post: no model; scans, then one comment"]
   CR -. "one review comment" .-> REV
   PREV --> REV["review + squash-merge to main"]

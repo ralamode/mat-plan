@@ -35,16 +35,22 @@ test('the export refuses an unknown profile, and says nothing about it', async (
 test('the export is gated — a request without the access cookie gets nothing', async ({
   browser,
 }) => {
-  // ⚠️ This route lives under /p/ and not /api/ because the gate matcher EXCLUDED `/api` when
-  // V1-13b sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection —
-  // what protects the handler is its own in-process gate + session check. This asserts the refusal
-  // from outside, with a fresh context so none of the project's storageState leaks in.
-  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  // ⚠️ This route lives under /p/ and not /api/ because the matcher EXCLUDED `/api` when V1-13b
+  // sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection — what
+  // protects the handler is its own in-process **session** check (the gate conjunct went at 1d).
+  // 🔴 **The fresh context is now theatre, and saying so is the point.** It exists to stop the
+  // project's `storageState` leaking in — and after `1d` there IS no authenticated storage state:
+  // the harness arms a principal in the process env, which no browser context can drop. So this
+  // request is NOT unauthenticated, and the assertion below is correspondingly weak. Kept because
+  // it still catches a 200-with-a-zip from an unexpected shape; the real unauth proof is the unit
+  // test. An honest runtime proof needs a second, un-bypassed server — `docs/tech-debt.md`.
+  const context = await browser.newContext();
   const res = await context.request.get(`${SEED_PROFILE_ROUTE}/export`, {
     maxRedirects: 0,
   });
-  // Either the middleware redirects to the gate, or the handler's own check 404s. Both are correct;
-  // what must never happen is a 200 with a zip body.
+  // ⚠️ Before `1d` either arm was correct: the proxy redirected to the gate, or the handler 404'd.
+  // There is no redirect any more, so a pass here means the handler itself refused — or, under the
+  // bypass, that something else went wrong. What must never happen is a 200 with a zip body.
   expect(res.status()).not.toBe(200);
   await context.close();
 });

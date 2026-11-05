@@ -17,7 +17,7 @@ write any comment, call any endpoint, and put hostile text in anything the syste
 its Server
 conventions and "don't" list. Read first: `.github/SECURITY.md` and
 `docs/tech-debt.md`. ⚠️ Read what they say **now**, not what you remember: this line used to brief
-you that `/api/*` sits outside the gate matcher, which has been false since `AUTH-1` 1a and is the
+you that `/api/*` sits outside the matcher, which has been false since `AUTH-1` 1a and is the
 kind of premise a reviewer builds a whole finding on.
 
 Look for:
@@ -67,11 +67,14 @@ each is a finding the first time it appears, not a later cleanup.
   (`app/p/[profileId]/export/route.ts`), so nothing is exposed — but **`/api/sync` is planned as a
   `POST` Route Handler**, and it will sit outside the protection everything else relies on. A
   state-changing Route Handler with no explicit origin/token check is a **P0**. ✅ `/api/*` IS inside
-  the gate matcher since `AUTH-1` 1a (`apps/web/proxy.ts` → `config.matcher`), so the bounce and the
-  security headers reach it — but the matcher is **not** the boundary, so a handler there still owes
-  its own in-process gate + session check.
-- **Cookies** carry `SameSite=Lax` + `httpOnly` + `secure` in prod (`app/gate/actions.ts`). Lax is
-  what stops a cross-site POST carrying the session at all; a change to `SameSite=None`, or a
+  the matcher since `AUTH-1` 1a (`apps/web/proxy.ts` → `config.matcher`), so the security headers
+  reach it — but the matcher is **not** the boundary, so a handler there still owes its own
+  in-process **session** check. ⚠️ **As of `1d` there is no gate and no bounce**: the proxy enforces
+  nothing, so a missing in-process check is backed up by nothing at all.
+- **Cookies**: this app sets exactly one (`tz`, non-`httpOnly` by necessity — a client writes it).
+  The session cookies are **Clerk's**, and we do not set their `SameSite`: `@clerk/shared`'s cookie
+  handler sets none, so a client-written one takes the browser default. `.github/SECURITY.md` has the
+  reasoning and records a production `Set-Cookie` dump as still owed. A change to `SameSite=None`, or a
   mutation moved to `GET` (which Lax does _not_ protect), is a finding.
 - There are **no CSRF tokens anywhere, deliberately** — the three layers above cover the current
   surface. Say so when it comes up, rather than reporting a missing token as a gap; the real finding

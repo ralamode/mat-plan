@@ -190,10 +190,16 @@ describe('the flattener reaches every nesting depth', () => {
   it.each([
     ['a paragraph', 'Children do not have accounts.'],
     ['a `ul` item', 'The tiles are a convenience, not a lock.'],
-    ['an `ol` item', 'Guard the code the way you would guard a password.'],
+    // ⚠️ Repointed at AUTH-1 1d, to surviving text at the SAME DEPTH. Was "Guard the code the way
+    // you would guard a password." — the code is deleted. Repointed rather than dropped: these are
+    // DEPTH probes, so losing one silently narrows the flattener's coverage, which is exactly what
+    // let PRIV-1's placeholders go unnoticed.
+    ['an `ol` item', 'Guard your Google account the way you would guard a password.'],
     ['a `dl` head', 'How long'],
     ['a `dl` term', 'Upstash'],
-    ['a `dl` desc', 'to stop someone guessing the access code'],
+    // ⚠️ Repointed at AUTH-1 1d, same depth. Was "to stop someone guessing the access code" —
+    // quoted from the Upstash row, whose subject changed when the IP-keyed limiter was deleted.
+    ['a `dl` desc', 'to stop the app being hammered'],
     ['the signed-off line', 'signed off by the maintainer'],
   ])('surfaces text from %s', (_depth, probe) => {
     expect(flattened).toContain(probe);
@@ -315,9 +321,13 @@ describe('the renderer undoes the preflight rules the notice depends on', () => 
   it('numbers the ordered list — `notice.md` cross-references "(1) and (2)"', () => {
     // Preflight sets `list-style: none` on `ol`. Without `list-decimal` the paragraph that tells a
     // parent the worst-case exposure points at numbers that are not on the page.
-    // The WHOLE sentence: it was truncated at "(1) and" only because the old wrap split it, and
-    // `flattened` normalises whitespace now, so the probe can be what the page actually says.
-    expect(flattened).toContain('That follows from (1) and (2)');
+    // 🔴 **Repointed at AUTH-1 1d, and NOT just to stay green.** The old probe was
+    // "That follows from (1) and (2)" — but `1d` changed limitation 1 from "the access code is
+    // shared" to "the shared code is gone", so that derivation's premises no longer hold. Keeping
+    // the string would have passed while the sentence it quoted was false. The derivation is
+    // rewritten to name its premises in words, and keeps ONE numeric cross-reference — which is all
+    // this test actually needs, because its subject is whether the numbers are VISIBLE.
+    expect(flattened).toContain('(limitation 2)');
     expect(BLOCK_CLASS.ol).toContain('list-decimal');
     expect(BLOCK_CLASS.ul).toContain('list-disc');
   });

@@ -4,7 +4,7 @@ owns:
   - apps/web/lib/dal/
   - apps/web/app/p/[profileId]/actions.ts
   - apps/web/app/p/[profileId]/action-state.ts
-  # AUTH-1 1c-3b: the gate + session + limiter for all seven mutations live in ONE function now, so
+  # AUTH-1 1c-3b, narrowed at 1d: the session + limiter for all seven mutations live in ONE function, so
   # the blast radius of an edit here is every write in the app. The enumeration it is checked against
   # lives next to it.
   - apps/web/app/p/[profileId]/mutation-entry.ts
@@ -81,29 +81,29 @@ flowchart LR
 
 1. **Every Server Action is a PUBLIC endpoint.** Page middleware does not protect it — it is a POST
    anyone can craft. Re-authenticate, re-authorize ownership, and zod-validate **inside** each one.
-   Re-authenticating means `hasGateAccess()` (`lib/dal/gate.ts`) as the action's **first** line,
-   returning the action's not-found copy. Until SEC-1 no action did, and requests carrying a prefetch
-   header skipped the proxy, so every action was reachable without the gate cookie.
+   Re-authenticating means **`sessionUserOrNull()`** (`lib/dal/session.ts`) as the action's **first**
+   line, returning the action's not-found copy. Until SEC-1 no action re-authenticated at all, and
+   requests carrying a prefetch header skipped the proxy, so every action was reachable without any
+   check.
 
-   🔴 **`AUTH-1` 1c-1 lands the replacement, dark: `lib/dal/session.ts`.** `hasGateAccess()` becomes
-   **`sessionUserOrNull()`** for the seven actions and `requireGatedPage()` becomes
-   **`requireSession()`** for the four pages — same shapes, so `1c-3` is a symbol swap at the call
-   sites and `1d` is a deletion rather than a rewrite. ⚠️ The action refusal returns the **principal,
-   not a boolean**: a boolean cannot supply the `userId` that `checkMutationLimit()` keys on, and two
-   shapes asking one question at one call site is how the source guard ends up matching the weaker
-   call. 🔴 **`1c-3b` made it an ADDITION, not a swap, and that is the invariant to keep.** Every
-   entry point now checks **the gate AND a session, both in-process**:
+   🔴 **As of `AUTH-1` 1d this is ONE check, and the history matters because it explains the shape.**
+   `1c-1` landed the session DARK beside the gate; `1c-3b` made it an **addition, not a swap**,
+   because `getHouseholdScope()` did not consult the principal until `1c-4`, so a session alone meant
+   _"anyone this Clerk instance admits"_; `1c-4` discharged that; `1d` deletes the gate.
+   ⚠️ **Dropping a conjunct narrowed the CHECK, not the boundary** — the gate was a SHARED code, so
+   it never identified a caller. ⚠️ The action refusal returns the **principal, not a boolean**: a
+   boolean cannot supply the `userId` that `checkMutationLimit()` keys on, and two shapes asking one
+   question at one call site is how the source guard ends up matching the weaker call.
 
    🔴 **It is ONE function, `enterMutation`, not seven copies** (`app/p/[profileId]/mutation-entry.ts`
    — collapsed on review of #323). Seven pasted copies of a security predicate is seven places to land
    one conjunct short, and six of those are only caught by a reviewer noticing an absence.
 
    ```
-   // mutation-entry.ts — the three checks, in this order, once:
-   if (!(await hasGateAccess())) return { ok: false, error: refusal };  // SEC-1 — deleted at 1d
-   const user = await sessionUserOrNull();                              // AUTH-1 1c-3b
+   // mutation-entry.ts — the two checks, in this order, once (a third, the gate, went at 1d):
+   const user = await sessionUserOrNull();              // AUTH-1 1c-3b
    if (!user) return { ok: false, error: refusal };     // the SAME bytes: 404-never-403, ADR 0006
-   const limit = await checkMutationLimit(user.userId); // keyed on the principal, so it comes third
+   const limit = await checkMutationLimit(user.userId); // keyed on the principal, so it comes second
 
    // every action — and `refusal` is a PARAMETER because six answer NO_PROFILE_LOG and the
    // routine editor answers NO_PROFILE_SAVE, and both of a caller's branches use the same string:
@@ -111,21 +111,19 @@ flowchart LR
    if (!entry.ok) return entry;
    ```
 
-   The reason was the window: `getHouseholdScope()` did not consult the principal until **1c-4**, so
-   a session alone would have meant _"anyone this Clerk instance admits"_. ✅ **`1c-4` has landed** —
-   the scope is membership-derived, so a session decides _whose_ data you get and the obligation that
-   gated `1d` is discharged. The gate stays until `1d` deletes it for the other reason: dropping the
-   in-process check would leave `mp_gate` enforced by the proxy alone, which `SECURITY.md` refuses to
-   call a boundary (CVE-2025-29927; SEC-1's own scar was a prefetch header skipping the matcher).
+   🔴 **The in-process call is MORE load-bearing after `1d`, not less.** The proxy's gate bounce used
+   to be a second, independent thing standing between a stranger and an action; it is gone, so these
+   calls are the only thing there. The proxy was never the boundary anyway — CVE-2025-29927, and
+   SEC-1's own scar was a prefetch header skipping the matcher.
 
-   🔴 **The export handler calls `hasGateAccess()` like everything else (2026-11-01).** It hand-rolled
-   that function's exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — from
-   V1-13b until the follow-up to 1c-3b, and `gate.ts`'s own docblock acknowledged the duplicate.
-   1c-3b added the session conjunct **beside** that copy without removing it, which is the thing this
-   chunk's argument is against. It was also the only reason the handler imported `@/lib/env` — the
-   validated facade, not a raw `process.env` read, which the file never had. The Route-Handler guard in `pages-are-gated.test.ts` narrowed with
-   it: the `isValidGateCookie|hasGateAccess` alternation existed only for that copy, so it now names
-   the one helper and a reintroduced raw cookie read fails CI.
+   🔴 **The export handler checks a session like everything else.** It hand-rolled the gate predicate's
+   exact body — `isValidGateCookie(cookies().get(GATE_COOKIE_NAME), env.…)` — from V1-13b until the
+   follow-up to 1c-3b, which is the duplication this chunk's argument is against; `1d` removed the
+   predicate entirely. ⚠️ **One consequence to know before editing that file:** its
+   `export const dynamic = 'force-dynamic'` is now the ONLY thing marking the handler dynamic, because
+   the gate's unconditional `cookies()` read is gone. Remove it and a cached response is one
+   household's CSV served to another. The Route-Handler guard in `pages-are-gated.test.ts` narrowed
+   with each step and must stay a single named helper, never an alternation.
 
    📌 **`lib/rate-limit.ts`'s MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
    LIVE from `1c-3b`.** Not the whole of `rate-limit.ts` — its **gate** limiter has been live since
@@ -158,9 +156,10 @@ flowchart LR
 
    The action list has one source, `app/p/[profileId]/mutating-actions.ts`. Adding an action to
    `actions.ts` without adding it there turns the cross-check red; adding it there without binding a
-   function is a **type** error. ⚠️ **1c switches the asserted call from `hasGateAccess` to the session
-   check; it must never widen the regex to an alternation** — one matching either passes on either and
-   proves neither.
+   function is a **type** error. ⚠️ **`1c` switched the asserted call to the session check and `1d`
+   left it as the only one; it must never widen the regex to an alternation** — one matching either
+   passes on either and proves neither. That rule is why the gate conjunct was DELETED at `1d` rather
+   than folded into an `||` with the session one.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
@@ -481,13 +480,16 @@ flowchart LR
   was correct while movements were lb/kg-only and became an FK violation — surfacing as a 500 — the
   moment a movement could be logged in `sec`. Derive it (`UNIT_DIMENSION_BY_CODE[unit]`).
 
-- **✅ The access-gate matcher INCLUDES `/api` — since `AUTH-1` 1a, and this bullet said the opposite
-  until 2026-11-01.** It did exclude `/api` and `/api/*`, which is why V1-13b's export lives at
+- **✅ The proxy matcher INCLUDES `/api` — since `AUTH-1` 1a, and this bullet said the opposite until
+  2026-11-01.** It did exclude `/api` and `/api/*`, which is why V1-13b's export lives at
   `/p/[profileId]/export`. 1a dropped the exclusion (`auth()` throws when `clerkMiddleware()` did not
-  run, so an excluded handler could not authenticate at all), and ⚠️ **what has NOT changed is the rule:** the matcher is
-  not an authorization boundary, so a handler under `/api` still owes its own in-process gate +
-  session check, and `/api/sync` additionally owes an origin or token check.
-  `app/pages-are-gated.test.ts` requires **both conjuncts** of every Route Handler it discovers.
+  run, so an excluded handler could not authenticate at all), and ⚠️ **what has NOT changed is the
+  rule:** the matcher is not an authorization boundary, so a handler under `/api` still owes its own
+  in-process **session** check, and `/api/sync` additionally owes an origin or token check.
+  `app/pages-are-gated.test.ts` requires that check of every Route Handler it discovers — **one named
+  helper, never an alternation**. ⚠️ At `1d` the matcher's own justification changed too: it is no
+  longer "what decides whether the gate runs" but "`auth()` must be able to answer and the headers
+  must land".
 
   🔴 **This is the ONE list of where the stale claims lived** — both classes, since the sweeps kept
   finding them together: the `/api`-matcher claim, and the auth-state claim ("no auth until Clerk
@@ -510,9 +512,15 @@ flowchart LR
   - `.claude/skills/review-pr/reporting-contract.md` — a second copy of the auth state, reaching a
     reviewer **before** the corrected one
 
-  📌 **The corrected claim now appears in roughly a dozen files.** Deliberate for now — each serves a
-  different reader — but at `1d`, when the gate conjunct goes, every copy is a separate place to get
-  it wrong. Reconcile them against this bullet.
+  ✅ **RECONCILED at `AUTH-1` 1d (2026-11-05)**, which is exactly what this note asked for: when the
+  gate conjunct went, every copy became a separate place to get it wrong. Updated in the same PR —
+  `.github/SECURITY.md`, `AGENTS.md`'s rate-limit line, `.claude/agents/security-reviewer.md`,
+  `.claude/skills/review-pr/SKILL.md`, `.claude/skills/add-server-action/SKILL.md`,
+  `apps/web/e2e/export-csv.spec.ts`, `apps/web/app/p/[profileId]/export/route.ts`, `docs/runbooks.md`,
+  `docs/status.md` and `docs/plans/ai-1-nl-logging.md` (not history — a live design doc).
+  ⚠️ **Dated plans and changelog fragments are NOT rewritten**, so a grep for the old claim still
+  finds them; that is the policy, not an oversight. Still no count here: two attempts at one were
+  both wrong.
 
 - **⚠️ The bodyweight export carries each row's UNIT; `kg` is converted, everything but `lb`/`kg`
   throws (CSV-1).** The legacy column is `weight_lb`, so a kg weigh-in written bare reads as pounds

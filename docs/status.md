@@ -10,12 +10,13 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-🔴 **AUTH-1 is no longer dark: signing in is REQUIRED, and the session now decides WHOSE data
-you get (through 1c-4, 2026-11-03).**
-`@clerk/nextjs@7.9.15` is pinned and deployed with **both keys optional** (`1a`), the CSP is widened
-for Clerk **by exact origin derived from the publishable key, never a wildcard**, `/sign-in` is public
-and `noindex`, the **`/api` matcher hole** is closed, and `lib/access-gate.ts` is split so chunk `1d`
-is a pure delete. Since then: **`1b-bis`** (#300) made every Server Action's boundary call enforced by
+🔴 **AUTH-1 is COMPLETE: the shared access code is gone, and a Clerk session with a household
+membership is the only way in (through 1d, 2026-11-05).**
+`@clerk/nextjs` is pinned and deployed, the CSP is widened for Clerk **by exact origin derived from the
+publishable key, never a wildcard**, `/sign-in` is public (and, from `1d`, **indexable** — so is
+`/privacy`), and the **`/api` matcher hole** is closed. ⚠️ `1a` split `lib/access-gate.ts` so that
+chunk `1d` would be "a pure delete"; **it was not** — the gate turned out to be what several existing
+proofs were built on, so `1d` had to replace the evidence as well as remove the subject. Since then: **`1b-bis`** (#300) made every Server Action's boundary call enforced by
 enumeration rather than by remembering; **`1c-pre`** (#302) renamed the login seam so `1c` and `1d`
 do not have to; **`1b`** (#308) added `household_members` + migration `0019` + the claim correction,
 with #310 restoring the household conjunct the first draft of `membershipHousehold` lost; and
@@ -26,23 +27,29 @@ _"adding an athlete takes a change to this deployment's seed data"_, plus a link
 `1c-2` was dark in the same sense the rest were: with one live household the state could not be
 reached at all.
 
-🔴 **`1c-3b` ended that.** All twelve entry points — 4 pages, 7 Server Actions, 1 Route Handler — now
-require **the household access code AND a Clerk session**, both checked in-process, and **sign out
-exists**. (`1c-3a`, #319 and its hardening #320, shipped the test seam that lets the harnesses reach
-a page requiring a session at all.) It was an **AND rather than a swap** because `getHouseholdScope()`
-did not consult the principal until `1c-4`: a session alone would have meant _"anyone this Clerk
-instance admits"_. ✅ **`1c-4` has landed**, so the scope is membership-derived and that obligation is
-discharged — `1d` is unblocked. The gate half stays until `1d` deletes it, because dropping the
-in-process check would leave `mp_gate` enforced by middleware alone, which `SECURITY.md` refuses to
-call a boundary.
+🔴 **`1c-3b` ended that, and `1d` finished it.** All twelve entry points — 4 pages, 7 Server Actions,
+1 Route Handler — require a **Clerk session whose principal holds a `household_members` row**, checked
+in-process, and **sign out exists**. (`1c-3a`, #319 and its hardening #320, shipped the test seam that
+lets the harnesses reach a page requiring a session at all.) `1c-3b` made it an **AND with the access
+code rather than a swap**, because `getHouseholdScope()` did not consult the principal until `1c-4`: a
+session alone would have meant _"anyone this Clerk instance admits"_, so deleting the gate first would
+have **widened** access. ✅ `1c-4` discharged that, and **`1d` deleted the gate**.
+⚠️ **Dropping a conjunct narrowed the CHECK, not the boundary** — the gate was a shared code, so it
+never identified a caller. 🔴 **What `1d` also removed is the backup:** the proxy's bounce used to
+stand between a stranger and a page, so the in-process checks are now the only thing there, and
+`SECURITY.md` has always refused to call middleware a boundary.
 
 **`1c` is split four ways and the resolver goes LAST** — `1c-1` principal → `1c-2` the "no household"
 screen → `1c-3` call sites + sign-out → `1c-4` the resolver. The chart, the reason the order is the
 reverse of the plan's, and the ordering obligations are in
-[beta-1](./milestones/beta-1.md). **Nothing a visitor sees has changed yet:** the shared access gate
-is still the boundary, and **production Clerk keys stay unset until `1c` is done** — between `1a` and
-`1c` a completed Google sign-in would land on a shared-password prompt. Two Clerk-dashboard boxes the
-maintainer owns still stand between here and a lit instance ([runbooks.md](./runbooks.md)).
+[beta-1](./milestones/beta-1.md). ✅ **Production is lit and signing in works** — both Clerk-dashboard
+boxes are done and the keys are set. ⚠️ Getting there found and fixed a **production sign-in loop**,
+traced to a bad `CLERK_SECRET_KEY` **value** rather than its format (a correctly-shaped `sk_live_…`
+key still produced `clerkReason: "unexpected-error"`); regenerating it is the diagnostic, and the
+procedure is now "Rotate a secret"'s worked example in [runbooks.md](./runbooks.md).
+🔴 **One operator action is owed:** `ACCESS_GATE_PASSWORD` must be removed from Vercel (all
+environments) and `.env.local`. Nothing reads it, so leaving it set breaks nothing — which is exactly
+why it will be forgotten.
 
 ⚠️ Nothing in this repo can measure the LIT sign-in screen (no keys in CI, Clerk's DOM ships from a
 CDN at a floating major) — [tech-debt.md](./tech-debt.md) carries the row and the runbook carries the

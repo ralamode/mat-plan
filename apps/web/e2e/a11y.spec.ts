@@ -770,7 +770,6 @@ test('the profile picker does not overflow at 360px', async ({ page }) => {
  * no role), so they are counted and measured by `expectLinkTapTargets`.
  */
 test.describe('public routes', () => {
-
   for (const viewport of [MOBILE_VIEWPORT, NARROW]) {
     test(`the landing at ${viewport.width}px: axe, no overflow, both CTA links ≥ the tap-target bar`, async ({
       page,

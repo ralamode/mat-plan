@@ -15,6 +15,53 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
+
+- **What & why:** the e2e harness arms a principal in the **process environment**
+  (`E2E_SESSION_BYPASS_USER_ID`, snapshotted at module scope in `lib/env.ts`), so **no browser context
+  in the suite can be unauthenticated.** While the gate existed that did not matter: the proxy bounced
+  a cookie-less request, and three specs used that bounce as their witness. `1d` deletes it, and with
+  it:
+  - `e2e/landing.spec.ts`'s unauthenticated-action proof loses **variant 1** — the as-is replay, whose
+    only protection was "the internal fetch meets the proxy without a cookie". After `1d` that fetch
+    is bypass-authenticated, the Save action genuinely runs, and the spec's own tail assertion would
+    redden. Variant 2 (spoofed `x-action-forwarded`) survives on its own premise.
+  - `landing.spec.ts`'s "the app itself is still gated" is **deleted, not repointed**: the equivalent
+    claim is "`/p` redirects to `/sign-in`", which this harness cannot establish.
+  - `e2e/export-csv.spec.ts`'s fresh browser context is now **theatre** — it exists to stop a
+    `storageState` leaking in, and there is no authenticated storage state to leak. Its assertion is
+    correspondingly weak and the file says so.
+- **Impact:** production is **still protected** — the in-action `requireSession()` and the per-page
+  `requireSession()` are unit-proved, and `app/pages-are-gated.test.ts` asserts the call per route.
+  What is lost is the **runtime** proof that an unauthenticated request does no work. 🔴 **Do not cite
+  "no unauthenticated request reaches the DB" as a property this SUITE demonstrates any more** — it
+  was cited that way in `docs/plans/ai-1-nl-logging.md`'s spend argument, and both halves of that
+  evidence vanished in one diff.
+- **Fix:** a **second, un-bypassed Playwright `webServer`** — one project whose server boots without
+  the bypass variable, carrying only the specs that need a genuine stranger. ⚠️ Deliberately NOT done
+  in `1d`: three review lenses independently found that a second server also proves the
+  _dark-deployment_ branch rather than the one under test (the harness has no Clerk keys either), and
+  it would break `test/bypass-is-contained.test.ts`'s pin on the exact set of sources naming the
+  bypass variable — Playwright's `webServer.env` can only SET a key, so the config must name it.
+  Design it against both constraints or not at all.
+- **Interim:** `proxy.test.ts` pins the matcher's SHAPE (`has`/`missing` absent on the compiled entry),
+  which catches the SEC-1 mutation at the config layer. It does **not** catch the exclusion being
+  re-introduced at another layer — an early `return` in `proxy()` keyed on a header.
+
+### The `mp_gate` tombstone is removable on 2027-02-04 (added 2026-11-05, AUTH-1 1d)
+
+- **What & why:** `apps/web/proxy.ts` → `withRetiredCookies` appends a `Max-Age=0` `Set-Cookie` for
+  `mp_gate` whenever a request still carries one, so a browser holding the retired gate cookie is
+  cleared rather than left to expire. The cookie's own `COOKIE_MAX_AGE` was **one year**, but the last
+  deploy that could set one was 2026-11-05, and no live holder can remain long after the cookie's own
+  three-month-ish practical session horizon — hence the trigger date rather than a year.
+- **Impact:** trivial. One `if` and one header append on matched responses where the cookie is present;
+  nothing for an ordinary visitor (`proxy.test.ts` has the negative case).
+- **Fix:** on or after **2027-02-04**, delete `RETIRED_GATE_COOKIE`, `withRetiredCookies`, its call in
+  `proxy()`, and the five tombstone cases in `proxy.test.ts`. ⚠️ Deleting the function but leaving
+  `proxy()`'s return unwrapped is the whole change — do not also narrow `proxy()`'s return type back
+  to `NextResponse`, which is wrong for an unrelated reason (`withClerk`'s auto-proxy branch).
+
 ### Clerk's script loads on the PUBLIC pages, including the privacy notice (found 2026-11-03, #326 review)
 
 - **What:** `app/layout.tsx` renders `<ClerkProvider dynamic>` conditioned on `clerkIsConfigured()` —

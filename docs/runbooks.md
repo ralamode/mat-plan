@@ -151,11 +151,13 @@ Against the **development** instance, signed in:
 1. Press **Sign out** on `/p`.
 2. Devtools → Application → Cookies: `__session` and `__client_uat` are **gone**.
 3. 🔴 **`mp_gate` is STILL THERE.** This is the invariant, not a detail: sign-out clears the Clerk
-   session **only**. Clearing the gate cookie too would bounce the user to `/gate` needing the shared
+   session **only** — and since `AUTH-1` 1d there is nothing else to clear. ⚠️ Historically, clearing
+   the gate cookie too would have bounced the user to `/gate` needing the shared
    household code to re-enter **their own household** — and after `1c-4` that reader is an invited
    parent who does not have it. A button labelled "Sign out" that does that is a permanent lockout.
 4. Navigate to `/p`: it redirects to `/sign-in`.
-5. Sign in again: you land back on the picker without re-entering the access code.
+5. Sign in again: you land back on the picker. ⚠️ Said "without re-entering the access code" until
+   `AUTH-1` 1d; signing in is now the only step there is.
 
 If step 3 fails, **stop** — the control is a lockout and must not reach anyone outside the
 maintainer's own browser.
@@ -514,15 +516,16 @@ made, anonymously, because the repo is public. With no Upstash credentials `lib/
 **Project → Settings → Environment Variables.** The rule: **no variable may target more than one
 scope.** Create a separate record per scope, even where the value is the same.
 
-| Variable                   | Production            | Preview                                | Development         |
-| -------------------------- | --------------------- | -------------------------------------- | ------------------- |
-| `DATABASE_URL`             | production **pooled** | preview **pooled**                     | preview **pooled**  |
-| `ACCESS_GATE_PASSWORD`     | rotated in step 7     | **a NEW long random code** (≥24 chars) | same as Preview     |
-| `UPSTASH_REDIS_REST_URL`   | production            | the step-4 database                    | the step-4 database |
-| `UPSTASH_REDIS_REST_TOKEN` | production            | the step-4 database                    | the step-4 database |
-| `SENTRY_DSN`               | production            | **unset**                              | **unset**           |
-| `SKIP_ENV_VALIDATION`      | **never**             | **never**                              | **never**           |
-| `ALLOW_LIVE_DB`            | **never**             | **never**                              | **never**           |
+| Variable                   | Production            | Preview                  | Development         |
+| -------------------------- | --------------------- | ------------------------ | ------------------- |
+| `DATABASE_URL`             | production **pooled** | preview **pooled**       | preview **pooled**  |
+| ~~`ACCESS_GATE_PASSWORD`~~ | **retired at 1d**     | **retired at 1d**        | **retired at 1d**   |
+| `CLERK_SECRET_KEY`         | production instance   | **development instance** | development         |
+| `UPSTASH_REDIS_REST_URL`   | production            | the step-4 database      | the step-4 database |
+| `UPSTASH_REDIS_REST_TOKEN` | production            | the step-4 database      | the step-4 database |
+| `SENTRY_DSN`               | production            | **unset**                | **unset**           |
+| `SKIP_ENV_VALIDATION`      | **never**             | **never**                | **never**           |
+| `ALLOW_LIVE_DB`            | **never**             | **never**                | **never**           |
 
 - **Development gets the preview string too.** Vercel's Development scope held the same production
   values, and `vercel env pull` hands those to a laptop. `pnpm dev` uses an embedded Postgres and
@@ -689,12 +692,13 @@ deployment** (rotation is not retroactive).
 
 - A preview is a **publicly-listed, internet-reachable** deployment. Unless step 0's Deployment
   Protection is on, its only control is a shared code.
-- ⚠️ **`/api` IS inside the gate matcher since `AUTH-1` 1a** — this bullet said "not gated at all"
-  and cited a `tech-debt.md` entry that no longer exists. The bounce and the security headers reach
-  `/api/*`. **The operational conclusion is unchanged**, for a different reason: the matcher is not
-  the boundary, the preview gate code is shared, and a handler's own check is what holds — so once a
-  **mutating** Route Handler exists, still assume the preview database is writable by anyone who
-  finds a preview URL and the code.
+- ⚠️ **`/api` IS inside the proxy matcher since `AUTH-1` 1a** — this bullet said "not gated at all"
+  and cited a `tech-debt.md` entry that no longer exists. The security headers reach `/api/*`.
+  **The operational conclusion is unchanged**, and `1d` narrows the reason rather than removing it:
+  the matcher is not the boundary and a handler's own session check is what holds — so once a
+  **mutating** Route Handler exists, still assume the preview database is writable by anyone who can
+  sign in to the preview's Clerk instance. ⚠️ That is now a **development** Clerk instance with
+  shared OAuth credentials, not a shared code — a different exposure, not a smaller one to assume.
 - The preview Neon project has **no IP allowlist** on the free tier: the connection string is full
   DDL access, and it now lives in two places (the Vercel Preview scope and an Actions secret).
 - **Therefore the preview estate must hold nothing you would mind being public.** That is the whole
@@ -728,15 +732,33 @@ Precondition 2 below.
 <!-- Placeholder runbooks — fill in when first needed. Keep titles even before the body exists so we
      have a known home for each procedure. -->
 
-## Rotate a secret (Neon password / access-gate code / GitHub Actions secret)
+## Rotate a secret (Clerk key / Neon password / GitHub Actions secret)
 
-_Still a TODO as a general procedure._ **One case is written up**, because OPS-1 needed it: rotating
-the production `ACCESS_GATE_PASSWORD` and the production Neon role password together, propagating to
-the Vercel Production scope and the `DATABASE_URL_UNPOOLED` Actions secret — see
-[OPS-1 step 7](#7-purge-the-historical-previews-and-rotate-what-they-hold-️) above. Generalise from
-there when the next rotation comes up, and carry its one durable lesson with you: **rotation is not
-retroactive.** A credential that was ever injected into a Vercel build stays in that build, so the
-deployments built before a rotation have to be purged, not merely superseded.
+_Still a TODO as a general procedure._ **Two cases are written up.** ⚠️ The access-gate code was the
+original worked example and is gone — `AUTH-1` 1d deleted the variable — so what replaced it is a
+rotation that has actually been performed rather than one written from imagination.
+
+**`CLERK_SECRET_KEY` — performed 2026-11-04, and it fixed a live production outage.**
+
+1. Clerk dashboard → API keys → regenerate the **secret** key for the **production** instance.
+2. Set it in Vercel's **Production** scope, alongside `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — both, even
+   if only one changed, so the pair cannot drift.
+3. **Redeploy.** The key is read at runtime, but `lib/env.ts` validates at import, so a deploy is what
+   proves the new value is actually present.
+4. Sign in. ⚠️ **The symptom this fixed is worth knowing, because its cause was invisible:** sign-in
+   looped — `/sign-in` → a flash of the app → back to `/sign-in` — and the browser console carried
+   `clerkReason: "unexpected-error"` while a valid-looking `__session` JWT was being issued. The key
+   had the right FORMAT (`sk_live_…`) and was still wrong, so "check it starts with `sk_live_`" does
+   not distinguish the two. **Regenerating is the diagnostic**: if a correctly-shaped live key
+   produces `unexpected-error`, replace it rather than inspecting it further.
+
+**The Neon role password + Actions secret — OPS-1 step 7**, propagating to the Vercel Production scope
+and the `DATABASE_URL_UNPOOLED` Actions secret: see
+[OPS-1 step 7](#7-purge-the-historical-previews-and-rotate-what-they-hold-️) above.
+
+Generalise from these when the next rotation comes up, and carry the one durable lesson with you:
+**rotation is not retroactive.** A credential that was ever injected into a Vercel build stays in that
+build, so the deployments built before a rotation have to be purged, not merely superseded.
 
 ### `CLAUDE_CODE_OAUTH_TOKEN` (the `@claude review` workflow, DX-1)
 
@@ -894,18 +916,29 @@ it did pre-V1-14a — that absence path is what CI and local dev exercise.
      collects both by default; `SENTRY_DATA_COLLECTION` turns them off);
    - no bodyweight value anywhere in the payload.
      If any of those appear, `lib/sentry-scrub.ts` is not running — treat it as a **security incident**,
-     revoke the DSN, and rotate `ACCESS_GATE_PASSWORD`.
+     revoke the DSN, and rotate `CLERK_SECRET_KEY` (§ "Rotate a secret"). ⚠️ Said "rotate
+     `ACCESS_GATE_PASSWORD`" until `AUTH-1` 1d; the credential a leaked payload would expose is now a
+     Clerk session cookie, so the key that invalidates sessions is the one to rotate.
 
-### 2. The gate rate limit is enforcing
+### 2. The mutation rate limit is enforcing
+
+🔴 **Rewritten at `AUTH-1` 1d: the subject of this procedure was deleted.** It verified the GATE's
+limiter by submitting a wrong access code 11 times and watching for "Too many attempts." There is no
+code, no form and no IP-keyed limiter. The surviving limiter is `MUTATION_RATE_LIMIT` — 120 writes
+per 5 minutes, keyed on the signed-in Clerk user id.
 
 1. Set `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` in Vercel and redeploy.
-2. On the preview URL, submit a **wrong** access code 11 times in under 10 minutes.
-3. Expect the first ~10 to say "Incorrect access code." and the next to say **"Too many attempts. Try
-   again in a few minutes."** — rendered in the form, NOT an error page. An error page means the limit
-   is throwing instead of returning its envelope.
-4. Wait out the window, confirm a correct code works again.
-5. Sanity-check the fail-open path: temporarily set a bogus `UPSTASH_REDIS_REST_TOKEN`. The gate must
-   still **work** (fail-open), and later Sentry events should carry a `rate-limit` breadcrumb.
+2. ⚠️ **This one cannot be checked by hand**, and that is a real difference from the gate's: 120
+   writes in 5 minutes is not something a person does on a phone. Exercise it from a script against a
+   **preview** deployment, or accept it as unverified in production and say so.
+3. The refusal copy is `RATE_LIMITED` (`lib/constants.ts`), returned in the action's envelope — **not**
+   an error page. An error page means the limiter is throwing instead of returning.
+4. Sanity-check the fail-open path: temporarily set a bogus `UPSTASH_REDIS_REST_TOKEN`. Logging must
+   still **work** (fail-open, by design — a Redis outage must not stop a kid logging), and a Sentry
+   event should carry a `rate-limit` breadcrumb saying the limiter was unavailable. ⚠️ That breadcrumb
+   is the ONLY signal of a permanently dead limiter, which is why it exists.
+5. ⏳ **The zip export is not rate-limited at all** — the most expensive single request in the app,
+   and since `1d` the only unlimited surface (`docs/tech-debt.md`).
 
 ### 3. Confirm CI is unaffected
 
@@ -929,8 +962,10 @@ Until then it is typed by hand, which is why every guard below is written out ra
 
 ### ⛔ Precondition 1 — verify the requester through the invitation channel
 
-Beta 0 has **one shared access code and no per-person identity**, so there is nothing to authenticate
-an irreversible request against. Confirm the request through **the channel the invitation went out
+⚠️ **Updated at `AUTH-1` 1d: Beta 0 now HAS per-person identity** — signing in with your own Google
+account is the only way in. The procedure below does **not** change, because a signed-in session still
+does not prove that the person asking for an irreversible deletion is entitled to ask for it, and
+nothing in the app records who requested what. Confirm the request through **the channel the invitation went out
 on** — the same thread or address — or against a word agreed at invite time. **Never act on whatever
 address the request arrived from**: that is how one adult gets another family's data destroyed, and
 how a training log disappears from a dispute it was evidence in.
@@ -1134,8 +1169,10 @@ the repoint above rather than stopping — it is the one pre-flight with a docum
 **4. Apply — one explicit transaction, and re-check inside it.**
 
 ⚠️ **This procedure creates its own write window between steps 3 and 4**: step 1 has the household
-using the app, and precondition 1 adds a 7-day pause. With one shared access code and **no per-person
-revocation**, the operator cannot close that window without locking every family out. So step 3's
+using the app, and precondition 1 adds a 7-day pause. ⚠️ **`1d` changed the reason but not the
+window:** per-person revocation now exists (remove the `household_members` row), so the operator CAN
+close the window for one person — but not for the household being deleted without locking out the very
+people who may still want to cancel. So step 3's
 numbers are stale by construction, and re-checking inside the transaction is the only mechanism
 available.
 
@@ -1404,8 +1441,9 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       **Config**, not Secret — it is public by design and Vercel refuses the contradiction). Kept for
       the reasoning, which is still the reason not to light an instance early. This was about _not_ doing
       something, and it is the UX panel's finding, not a precaution: between 1a and 1c a completed
-      Google sign-in grants nothing, lands on `APP_HOME_PATH`, and is bounced to `/gate` for the shared
-      password — so the reward for signing in is a password prompt, with no explanation on screen. Use
+      Google sign-in granted nothing, landed on `APP_HOME_PATH`, and was bounced to `/gate` for the
+      shared password — so the reward for signing in was a password prompt, with no explanation on
+      screen. ✅ That shape is gone at `1d`: sign-in is the only door and lands on the picker. Use
       the **development** instance for everything in this list. The Clerk user id that chunk 1b's claim
       correction needs is read from **Clerk's own dashboard**, which is where the 1b box below already
       sends you; it does not require the app's `/sign-in` to be live in production.
@@ -1462,9 +1500,19 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       the dashboard — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` is public by design, so Clerk's Frontend API
       is reachable without going through this app and no code here can sit in front of sign-up. The
       exit criterion is narrower and **is** held in code: an uninvited Google account cannot create a
-      **household**. Record the residual even if the setting works — an unrestricted instance means
-      **Clerk holds uninvited people's email addresses**, which is a `data-inventory.md` §7 re-review
-      trigger, not merely an availability concern.
+      **household**. Record the residual even if the setting works — an unrestricted instance **would
+      mean** Clerk holds uninvited people's email addresses, which is a `data-inventory.md` §7
+      re-review trigger, not merely an availability concern.
+      ✅ **DISPOSITIONED 2026-11-05 (`AUTH-1` 1d).** The trigger fired and was checked: the production
+      Users list holds **two accounts, both the maintainer's own Google accounts** — no third party's
+      address is held. The §7 re-read is logged in `data-inventory.md`.
+      🔴 **The past tense above is deliberate and was earned the hard way.** This sentence read
+      _"an unrestricted instance means Clerk holds uninvited people's email addresses"_ in the
+      **present** tense, with the disposition recorded nowhere — and **two independent readers** (the
+      1d plan's author and its privacy lens) each reached the same false P0 straight from this text,
+      one of them mid-panel. A conditional written as a fact is a finding generator. ⏳ **Still
+      genuinely unobserved:** whether a refused sign-up leaves a Clerk user record at all — see the
+      1d plan's lit-panel finding 5.
 - [ ] **The production instance's own Google OAuth credentials**, development instance kept separate.
       ✅ **The separation is automatic, not a discipline to maintain** (verified 2026-10-21): a
       development instance uses _"preconfigured shared OAuth credentials and redirect URIs"_ of
@@ -1620,6 +1668,12 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       in this repo. Before 1d retires the gate: run a **full three-lens panel on the lit screen**, with
       Playwright captures at 360 / 390 / 820 / 1280 and a keyboard pass, against the development
       instance.
+      ✅ **RUN 2026-11-04, and it found a production-visible defect nothing in CI can see** — Clerk's
+      card overhung its column by 48px, and its own spacing had been stripped since `1a` by Tailwind's
+      preflight (a `@layer` ordering bug). Fixed in #333; the dated measurements are on
+      `tech-debt.md`'s floating-major row. ⚠️ **One failure stands and it is the vendor's:** Clerk's
+      attribution link is 48×14px, under the 44px bar and WCAG 2.2 SC 2.5.8, with no `elements` key to
+      reach it.
 - [ ] 🔴 **Bot/abuse protection enabled**, and **the session lifetime actually configured.** Whether the
       Cloudflare Turnstile widget appears decides whether the `frame-src` source above is load-bearing
       or merely harmless.
@@ -1632,6 +1686,13 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       shell history** afterwards; never paste the dry-run output into a PR.
 - [ ] **1b:** the pre-1c check — **all three** of `gh run list` on the merge SHA,
       `information_schema.columns` and `pg_get_constraintdef`.
-- [ ] **1d:** `ACCESS_GATE_PASSWORD` **removed** from Vercel (all environments), GitHub Actions and
-      `.env.local` — **after** the code that reads it is gone, never before.
-- [ ] **1d:** "Rotate a secret" loses the access-gate code.
+- [ ] 🔴 **1d — THE ONE OPERATOR ACTION THIS CHUNK LEAVES:** `ACCESS_GATE_PASSWORD` **removed** from
+      Vercel (all environments), GitHub Actions and `.env.local` — **after** the code that reads it is
+      gone, never before. ✅ **That code is gone as of this PR**, so it is now safe to do and is owed.
+      ⚠️ `lib/env.ts` no longer declares the variable, so leaving it set breaks nothing — which is
+      exactly why it will be forgotten unless it is done now. GitHub Actions never held it as a
+      secret (it was an inline non-secret placeholder in `ci.yml`, removed here).
+- [x] **1d:** "Rotate a secret" loses the access-gate code. ✅ **Done 2026-11-05** — the section is
+      retitled and takes the `CLERK_SECRET_KEY` rotation as its worked example, which is a procedure
+      that has actually been performed (it fixed the sign-in loop) rather than one written from
+      imagination.

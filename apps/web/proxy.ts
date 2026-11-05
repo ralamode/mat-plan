@@ -202,7 +202,10 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
   //   `scripts/capture.ts`               why a logged-in `/` or `/gate` could not be screenshotted
   //   `docs/architecture.md` §2b         the routing diagram and the public-route asymmetry
 
-  const response = withSecurityHeaders(await withClerk(request, event, forward(request, nonce, csp)), csp);
+  const response = withSecurityHeaders(
+    await withClerk(request, event, forward(request, nonce, csp)),
+    csp,
+  );
   return withRetiredCookies(request, response);
 }
 

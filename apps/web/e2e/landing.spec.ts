@@ -81,7 +81,6 @@ test.describe('authenticated', () => {
       page.getByRole('link', { name: LANDING_COPY.signInCta, exact: true }),
     ).toBeVisible();
   });
-
 });
 
 /** The routine's labels, in order — the whole routine, not just one row. */

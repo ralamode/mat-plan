@@ -165,9 +165,9 @@ describe('public pages pull no Server Action into their module graph', () => {
   // own non-vacuity check threw ENOENT rather than failing with a useful message. It must name a
   // module that really does carry the directive, which is now the only one left.
   it('can see an action module (the detector is not vacuous)', () => {
-    expect(
-      USE_SERVER_MENTION_RE.test(code(join(APP_DIR, 'p', '[profileId]', 'actions.ts'))),
-    ).toBe(true);
+    expect(USE_SERVER_MENTION_RE.test(code(join(APP_DIR, 'p', '[profileId]', 'actions.ts')))).toBe(
+      true,
+    );
   });
 
   it.each(publicPages.map((f) => [routeOf(f), f]))('%s (with its segment files)', (_r, file) => {

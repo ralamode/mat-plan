@@ -102,9 +102,13 @@ goes false the day a scope lands. Do not read the named exceptions below as perm
     namespace only and **refuses** loudly instead. ⚠️ **Still true and unchanged:** the surviving-row
     primitive needs no second household, because `logStrengthSession` runs find-or-create _before_ the
     write core's in-transaction profile resolve (`apps/web/lib/dal/entries.ts`) — moving it inside is
-    `TEN-2b-1`. And **the rate limiter is wired to the gate login only**, so a gate-code holder can
-    still mint unbounded `movements` rows of chosen text; after `TEN-2b` they land in that holder's own
-    household rather than the shared catalog. Verdict and evidence:
+    `TEN-2b-1`. ⚠️ **This said "the rate limiter is wired to the gate login only, so a gate-code
+    holder can still mint unbounded `movements` rows of chosen text" — that is false as of AUTH-1 1d,
+    in the SAFE direction, and leaving it would tell a reader a live minting primitive exists.** The
+    gate and its limiter are deleted; every mutation now goes through `enterMutation`, which checks a
+    household-scoped session and then a per-principal limiter. So minting requires an invited account
+    with a membership, and is rate-limited per person. After `TEN-2b` such rows land in that
+    account's own household rather than the shared catalog. Verdict and evidence:
     [the plan](../docs/plans/ten-1-household-scope.md) → _"1d as built — the catalog verdict"_;
     `TEN-2b`: [its plan](../docs/plans/ten-2b-scoped-movement-lookup.md).
   - The one other deliberately unscoped read is `reportScopeMiss`'s **existence-only** probe (ADR
@@ -161,11 +165,38 @@ what _reaches_ a sink, never whether the string appears.
 
 **CSRF — no tokens, deliberately. Three layers cover the current surface:**
 
-| Shape                                     | Protected by                                                                                                                       |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding. |
-| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. The only one today is `GET` (`app/p/[profileId]/export/route.ts`).          |
-| **Cookies**                               | `SameSite=Lax` + `httpOnly` + `secure` in prod (`app/gate/actions.ts`). Lax is what stops a cross-site POST carrying the session.  |
+| Shape                                     | Protected by                                                                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Server Actions** (every mutation today) | Next's built-in **Origin-vs-Host** check. `experimental.serverActions.allowedOrigins` is **unset**; adding an origin is a finding.                            |
+| **Route Handlers**                        | 🔴 **Nothing** — Next's check does not extend to them. The only one today is `GET` (`app/p/[profileId]/export/route.ts`).                                     |
+| **Cookies**                               | 🔴 **Two layers and a vendor default, not three — see below.** This app sets exactly one cookie now (`tz`), and it is Clerk's cookies that carry the session. |
+
+🔴 **The cookie row, honestly, after AUTH-1 1d.** The row used to read
+`SameSite=Lax + httpOnly + secure in prod (app/gate/actions.ts)` and claim three layers. All of that
+described the gate's cookie, which is deleted. What is true now:
+
+- **This app sets exactly one cookie: `tz`** (`app/p/[profileId]/tz-sync.tsx`), as
+  `path=/; max-age=…; SameSite=Lax` — deliberately **neither `httpOnly` nor `secure`**, because a
+  CLIENT writes it. It carries a timezone string and no credential.
+- **The session cookies are Clerk's**, and `SameSite` is what the row's own argument rests on —
+  "Lax is what stops a cross-site POST carrying the session". ⚠️ **We do not set it and cannot
+  assert it from the lockfile.** `@clerk/shared@4.41.0`'s cookie handler (`dist/cookie.mjs`) is a
+  thin `js-cookie` wrapper that sets **no `sameSite` of its own** — read at that version; its only
+  mention of the attribute is a docstring about removal. So a client-written Clerk cookie takes the
+  **browser default**, not a uniform `Lax` we chose.
+- ⚠️ **Do not write "`httpOnly` does not apply".** That is true on the custom domain, where clerk-js
+  reads the cookies from JavaScript. On the `*.vercel.app` alias Clerk's auto-proxy forwards the
+  Frontend API's own `Set-Cookie` verbatim, with whatever attributes Clerk chooses — which can
+  include `HttpOnly`. The two deployments differ.
+
+**So the post-`1d` CSRF story is Next's Origin-vs-Host check PLUS a vendor default — two layers and a
+dependency, not the three the row claimed.**
+
+⏳ **OWED, and not yet done: a dated production `Set-Cookie` dump**, capturing **`SameSite`**
+specifically (an earlier instruction said to capture `httpOnly`, which would have measured the wrong
+attribute and left this claim unsupported). Until that exists, the vendor-default sentence above is
+reasoning from source, not observation, and is labelled as such. **Re-verify on any
+`@clerk/nextjs` bump, and on any change of custom domain or alias.**
 
 🔴 **`/api/sync` is planned as a `POST` Route Handler and will land outside all of this.** It needs
 its own origin or token check. ⚠️ **Corrected 2026-11-01:** this line read _"and `/api/*` is outside
@@ -275,8 +306,15 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 
 ## Rate limiting
 
-- `@upstash/ratelimit` (sliding window) on auth, mutations, `/api/sync`, and the LLM-facing API.
-  In-memory counters don't work on serverless.
+- `@upstash/ratelimit` (sliding window) on **mutations**, and planned for `/api/sync` and the
+  LLM-facing API. In-memory counters don't work on serverless.
+- ⚠️ **"auth" was the first item on this list and is deliberately gone (AUTH-1 1d).** It meant the
+  gate login — an unauthenticated password oracle, the one surface where a limiter was the primary
+  control. `1d` deletes it. Sign-in is now Clerk's, so the brute-force surface and its limiting are
+  the vendor's, not ours: **this repo rate-limits nothing on the authentication path.** State that
+  rather than implying coverage we do not have.
+- ⏳ The zip export remains unlimited — the most expensive single request in the app
+  (`docs/tech-debt.md`).
 
 ## Supply chain
 
