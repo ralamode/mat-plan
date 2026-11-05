@@ -103,51 +103,42 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
     expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
   });
 
-  it('hides the vendor header’s two children so the page owns the only <h1>', () => {
-    expect(SIGN_IN_APPEARANCE.elements.headerTitle).toBe('hidden');
-    expect(SIGN_IN_APPEARANCE.elements.headerSubtitle).toBe('hidden');
-    // `header` too: hiding only the children leaves Clerk's header CONTAINER in flow, which is ~35px
-    // of empty bordered box. The band is caused by the two lines above, not by Clerk's default.
-    expect(SIGN_IN_APPEARANCE.elements.header).toBe('hidden');
+  it('carries exactly ONE override, and only because Clerk misses an a11y floor', () => {
+    // Measured 2026-11-05 with this map emptied: Clerk's social button renders at 32px, under
+    // MIN_TAP_TARGET_PX. `elements` is the only lever — `variables` expose no control height. Every
+    // other key was removed: the card is left as Clerk designed it (the mark that makes it look
+    // foreign is "Secured by Clerk", whose removal is paid), and the page yields its own `<h1>` to
+    // the card's rather than hiding Clerk's with three more keys. This exact-set pin is what keeps
+    // that a decision — a key added here goes red and has to argue for itself.
+    expect(Object.keys(SIGN_IN_APPEARANCE.elements)).toEqual(['socialButtonsBlockButton']);
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
   });
 
-  it('does NOT restyle Clerk’s card — the keys left are a11y, not cosmetics', () => {
-    // The card's own chrome is deliberately untouched. Removing Clerk's "Secured by Clerk" mark is a
-    // PAID-tier feature, so styling around a mark that stays buys a half-integrated component whose
-    // every CDN build can break the arrangement, for no gain. The PAGE is sized to the card instead
-    // (`page.tsx`'s `max-w-[432px]`). This exact-set pin is what keeps that a decision, not a drift —
-    // a cosmetic key added here goes red and has to argue for itself.
-    expect(Object.keys(SIGN_IN_APPEARANCE.elements).sort()).toEqual([
-      'header',
-      'headerSubtitle',
-      'headerTitle',
-      'socialButtonsBlockButton',
-    ]);
-  });
-
-  it('declares @layer clerk BEFORE Tailwind, or min-h-11 stops applying', () => {
-    // Layer priority is DECLARATION ORDER. Unlayered styles beat any layered rule, and a layer
-    // declared after Tailwind's would put Clerk's CSS above the utilities — silently losing the 44px
-    // bar on the Google button. Nothing tested this file's ordering before.
-    //
-    // Comments are stripped first: `globals.css`'s opening comment discusses `@layer`, `@import` and
-    // `clerk`, so a naive indexOf on raw source can match the prose instead of the declaration —
-    // the same trap `app/design/tokens/token-sets.test.ts` documents.
+  it('orders @layer clerk BETWEEN base and components — wrong either way is invisible in CI', () => {
+    // Position matters in BOTH directions, and no CI run renders the lit Clerk card to catch it:
+    //  - ABOVE `base`, or Tailwind's preflight (`margin:0; padding:0; border:0` on `*`) outranks every
+    //    spacing rule Clerk ships and the card renders stripped — button flush to the card edge,
+    //    footer flush to the button. That is what a bare `@layer clerk;` did from 1a to 2026-11-05.
+    //  - BELOW `components`/`utilities`, or Clerk's CSS beats the `min-h-11` holding its social
+    //    button to MIN_TAP_TARGET_PX.
+    // Comments are stripped first: globals.css's opening comment names every one of these layers, so
+    // a naive indexOf matches the prose — the trap `app/design/tokens/token-sets.test.ts` documents.
     const css = readFileSync(join(import.meta.dirname, '..', 'app', 'globals.css'), 'utf8').replace(
       /\/\*[\s\S]*?\*\//g,
       '',
     );
-    const layer = css.indexOf(`@layer ${CLERK_CSS_LAYER}`);
-    const tailwind = css.indexOf("@import 'tailwindcss'");
+    const decl = /@layer\s+([^;]+);/.exec(css);
+    expect(decl, '@layer declaration missing from globals.css').not.toBeNull();
 
-    // Asserted POSITIVELY: `indexOf` returns -1 for a missing needle, and `-1 < n` is true — so a
-    // bare `layer < tailwind` would pass on the exact regression (the layer deleted) it exists for.
-    expect(layer, `@layer ${CLERK_CSS_LAYER} is missing from globals.css`).toBeGreaterThanOrEqual(
-      0,
-    );
-    expect(tailwind, "@import 'tailwindcss' is missing from globals.css").toBeGreaterThanOrEqual(0);
-    expect(layer, `@layer ${CLERK_CSS_LAYER} must be declared before Tailwind`).toBeLessThan(
-      tailwind,
-    );
+    const order = decl![1]!.split(',').map((n) => n.trim());
+    const base = order.indexOf('base');
+    const clerk = order.indexOf(CLERK_CSS_LAYER);
+    const components = order.indexOf('components');
+
+    expect(base, 'base must be named in the layer order').toBeGreaterThanOrEqual(0);
+    expect(clerk, `${CLERK_CSS_LAYER} must be named in the layer order`).toBeGreaterThanOrEqual(0);
+    expect(components, 'components must be named in the layer order').toBeGreaterThanOrEqual(0);
+    expect(clerk, "Clerk's layer must outrank Tailwind's preflight reset").toBeGreaterThan(base);
+    expect(clerk, "Clerk's layer must not outrank Tailwind's utilities").toBeLessThan(components);
   });
 });

@@ -121,47 +121,38 @@ export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
 export const CLERK_CSS_LAYER = 'clerk';
 
 /**
- * `<SignIn>`'s appearance. **Deliberately minimal: this app does not restyle Clerk's card.**
+ * `<SignIn>`'s appearance. **One key, and only because the vendor misses an accessibility floor.**
  *
- * 🔴 **The decision, so nobody re-litigates it from the screenshots** _(maintainer, 2026-11-05)_.
- * A first pass removed the card's shadow, fill and padding and matched its button to this app's own,
- * which worked — and was the wrong trade. The thing that actually makes the card look foreign is
- * Clerk's "Secured by Clerk" attribution, and removing that is a **paid-tier feature**, not a styling
- * choice. Styling around a mark you cannot remove buys a half-integrated component whose every CDN
- * build can break the arrangement, for no gain. So: leave the card alone, and size the PAGE to it —
- * `app/sign-in/[[...rest]]/page.tsx`'s column is `max-w-[432px]` to fit the card's natural 400px.
- * **Reconsider only if the branding is ever paid for.**
+ * 🔴 **The decision, so nobody re-litigates it from a screenshot** _(maintainer, 2026-11-05)_. This
+ * app does **not** restyle Clerk's card. An earlier pass stripped its shadow, fill and padding and
+ * matched its button to this app's own; it worked and it was the wrong trade, because the thing that
+ * actually makes the card look foreign is the "Secured by Clerk" mark, and removing **that** is a
+ * paid-tier feature. Styling around a mark that stays buys a half-integrated component whose every
+ * CDN build can break the arrangement, for no gain. The PAGE is sized to the card instead
+ * (`app/sign-in/[[...rest]]/page.tsx`'s `max-w-[432px]` against its natural 400px).
+ *
+ * **Why `min-h-11` survives when nothing else does.** Measured 2026-11-05 with the `elements` map
+ * emptied: Clerk's social button renders at **32px**. AGENTS.md requires ≥44px
+ * (`MIN_TAP_TARGET_PX`), and this is the primary control on what `1d` makes the app's only door, used
+ * by a parent on a phone on a gym floor. `elements` is the only lever — Clerk's `variables` expose
+ * colours, fonts, radius and spacing, but no control height. ✅ 44.0px with the key.
+ *
+ * **The page's `<h1>` yields to Clerk's instead of hiding it.** With no overrides there are two
+ * visible `<h1>`s — ours and Clerk's "Sign in to MatPlan". The earlier fix hid Clerk's with three
+ * `header*` keys; the cheaper one is for the PAGE to render no heading while lit and let the card's
+ * be the only one. Same outcome, three fewer overrides, and nothing of Clerk's is touched.
  *
  * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`. `UserDefinedStyle = string |
  * CSSObject`, and a `CSSObject` becomes a runtime-injected style — the production policy is
  * `style-src 'self' 'nonce-…'` with no `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be
  * dropped **silently**. `lib/clerk.test.ts` asserts every value is a string.
  *
- * The three keys that remain are **a11y requirements, not cosmetics**, and each predates the above:
- * - `socialButtonsBlockButton: 'min-h-11'` is `MIN_TAP_TARGET_PX` in Tailwind's spelling, and
- *   `elements` is the only lever for it — Clerk's `variables` expose colours, fonts, radius and
- *   spacing, but no control height. ✅ Measured 44.0px on the lit card, 2026-11-05.
- * - `headerTitle`/`headerSubtitle` hidden so the page's `<h1>` is the only one in the a11y tree.
- *   ✅ Verified 2026-11-05: Clerk's `<h1>` is in the DOM but `display:none`, so the tree holds one.
- * - `header: 'hidden'` **completes that override rather than restyling Clerk.** Hiding only the two
- *   children leaves Clerk's header CONTAINER in flow, so the card opens with ~35px of empty bordered
- *   box — the visual signature of a half-rendered component, on the one screen whose documented
- *   failure mode is "did it load?". The band is caused by the a11y choice above, not by Clerk's
- *   default (left alone, Clerk renders its own title there and no band), which is why this key is on
- *   the a11y side of the line and not the cosmetic one. The three are **not interchangeable**: the
- *   child keys survive a vendor restructure that moves the title out of `header`, and `header` is
- *   what removes the container. None is removable alone.
- *
  * 🔴 **This pins our INPUT, not the rendered outcome.** clerk-js ships from a CDN at a floating major
- * and is absent from the lockfile (`docs/tech-debt.md`), so a build that renames `cl-headerTitle` or
- * changes the button's box model is caught by nothing here. What it buys: a refactor that drops a key
- * currently reds nothing, because no CI run loads the lit card.
+ * and is absent from the lockfile (`docs/tech-debt.md`), so a build that changes the button's box
+ * model is caught by nothing here — the 32px reading is dated, not guarded.
  */
 export const SIGN_IN_APPEARANCE = {
   elements: {
-    headerTitle: 'hidden',
-    headerSubtitle: 'hidden',
-    header: 'hidden',
     socialButtonsBlockButton: 'min-h-11',
   },
 } as const;

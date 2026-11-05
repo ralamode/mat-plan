@@ -12,29 +12,35 @@
   the column hit its max. The one action on the screen sat outside the column.
   **The fix is on this app's side of the boundary: the column is now `max-w-[432px]`** — 400 plus the
   32px of `px-4` — so the page is sized to the card rather than the card squeezed into the page.
-  🔴 **A first pass did the opposite and it was the wrong trade** _(reverted, maintainer 2026-11-05)_.
-  It stripped the card's shadow, fill and padding and matched its button to this app's own outline
-  button; it worked, and it still lost. The thing that actually makes the card read as foreign is
-  Clerk's **"Secured by Clerk"** attribution, and removing that is a **paid-tier feature**, not a
-  styling choice. Styling around a mark that stays buys a half-integrated component whose every CDN
-  build can break the arrangement, for no gain. `SIGN_IN_APPEARANCE` is now pinned to an **exact set**
-  of four keys, all a11y rather than cosmetic, so a cosmetic key added later goes red and has to
-  argue for itself. `header: 'hidden'` is in that set because it **completes** the a11y override
-  rather than restyling Clerk: hiding only `headerTitle`/`headerSubtitle` leaves the header
-  CONTAINER in flow, so the card opened with ~35px of empty bordered box — the signature of a
-  half-rendered component, on the screen whose documented failure mode is "did it load?". Left
-  alone entirely, Clerk renders its own title there and no band; the band was ours.
-  **Two things removed from the screen.** The access-code button is gone, which resolves the 1d plan's
-  Open Question 1 early; it could not simply be deleted, because `e2e/a11y.spec.ts` pins an **exact**
-  count of 1 link in `<main>`, CI only renders the dark state, and that button was the only link there
-  — so the privacy link is promoted out of the `configured` ternary and the count stays 1. And the
-  lit state's 59-word `SIGN_IN_COPY.processor` paragraph is gone _(maintainer, 2026-11-05)_: nothing
-  pinned it, and Clerk's own "Require express consent to legal documents" setting is the formal
-  consent mechanism. ⚠️ **The facts are not lost and must not be** — [notice.md](../privacy/notice.md)
-  carries them verbatim, and the privacy link stays **on this screen, above the button**. If that link
-  ever moves to the footer, revisit: the disclosure would then be two taps from the act it describes.
-  ⚠️ The gate itself is untouched. `/gate` still exists and the landing still links to it; this screen
-  simply stops advertising a second door. `1d` deletes the gate.
+  🔴 **`SIGN_IN_APPEARANCE` carries exactly ONE key, and the route is reversed from where this PR
+  started** _(maintainer, 2026-11-05)_. A first pass stripped the card's shadow, fill and padding and
+  matched its button to this app's outline button. It worked, and it still lost: the thing that makes
+  the card read as foreign is Clerk's **"Secured by Clerk"** mark, and removing **that** is a
+  **paid-tier** feature. Styling around a mark that stays buys a half-integrated component whose every
+  CDN build can break the arrangement, for no gain. So the card is left exactly as Clerk designed it.
+  **What survives, and why it has to.** Measured with the map emptied: Clerk's social button renders
+  at **32px**, under `MIN_TAP_TARGET_PX`, on the primary control of what `1d` makes the app's only
+  door — a parent on a phone on a gym floor. `elements` is the only lever (`variables` expose no
+  control height), so `socialButtonsBlockButton: 'min-h-11'` stays. ✅ 44.0px with it.
+  **What was removed instead of overridden.** With no overrides the page has **two** visible `<h1>`s —
+  ours and the card's "Sign in to MatPlan". Hiding Clerk's costs three `header*` keys; yielding ours
+  costs none, so the page renders no heading while lit and the card's is the only one. The privacy
+  link moved **below** the card in the same pass: a lone underlined line above a self-contained card
+  read as a stray fragment. ⚠️ `lib/constants.ts` records why it sat above — "put the fact next to the
+  control", because Google's consent appears only after the tap — and that argument is weakened, not
+  void: the disclosure is still on this screen, still before anything irreversible, and
+  [notice.md](../privacy/notice.md) carries the facts in full.
+  🔴 **And the card was never cramped by choice — Tailwind's preflight had been stripping Clerk's own
+  spacing since `1a`.** `globals.css` declared `@layer clerk;` ahead of the Tailwind import, which put
+  Clerk's CSS in the **lowest** layer. Tailwind's preflight resets `margin: 0; padding: 0; border: 0`
+  on `*` inside `@layer base` — so it outranked every spacing rule Clerk ships. `.cl-card` computed
+  `padding: 0`, the button sat flush to the card's edge and the "Secured by Clerk" row flush to the
+  button. The layer is now named in order, `@layer theme, base, clerk, components, utilities`, which
+  fixes it in **both** directions: Clerk's padding beats preflight (`padding: 0` → `32px 40px`, the
+  button-to-footer gap `0` → `24px`) while `min-h-11` still beats Clerk (button stays 44.0px).
+  ⚠️ This was invisible for three chunks and could only ever be found by eye, because no CI run
+  renders the lit card. The guard now pins the **relative** order and was probed RED both ways — below
+  `base` (the original bug) and above `utilities` (which would break the tap-target bar).
   **`lib/clerk.test.ts` pins what this repo controls**, and one assertion is there for a specific
   trap: `app/globals.css` must declare `@layer clerk` **before** `@import 'tailwindcss'`, or Clerk's
   CSS outranks the `min-h-11` holding the 44px bar on the Google button — and nothing tested that file

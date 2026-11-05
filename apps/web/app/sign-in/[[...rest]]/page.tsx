@@ -52,38 +52,40 @@ export default function SignInPage() {
        the column. ⚠️ If the card ever overhangs or leaves a gap, Clerk changed its width: re-measure
        and change this number. Do not reach for `elements` to compress it. */
     <main className="mx-auto flex w-full max-w-[432px] flex-1 flex-col justify-center gap-6 px-4 py-12">
-      <header className="flex flex-col gap-2 text-center">
-        {/* The page owns the ONE `<h1>` in both states; `appearance` below suppresses Clerk's card
-            title so there is never a second one. axe cannot catch that — `heading-order` and
-            `page-has-heading-one` are best-practice-tagged and `e2e/a11y.spec.ts` scans
-            `wcag2a`/`wcag2aa` only — so it is a decision, not a check. */}
-        <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
-        {/* The lit state carries NO paragraph. `SIGN_IN_COPY.processor` used to sit here, putting
-            "what Google sends vs what this app stores" next to the control — the idiom
-            `lib/constants.ts` records. It was 59 words of grey text above the one button and it made
-            the screen read as a wall, so it was removed _(maintainer, 2026-11-05)_.
-            ⚠️ **The facts are not lost and must not be**: `notice.md` carries them verbatim, and the
-            privacy link below is on this screen, above the button, for exactly that reason. If that
-            link ever moves to the footer, this decision has to be revisited — the disclosure would
-            then be two taps from the act it describes. */}
-        {!configured && <p className="text-muted-foreground text-sm">{SIGN_IN_COPY.notYet}</p>}
-      </header>
-
-      {/* The privacy link renders in BOTH states, promoted out of the `configured` ternary when the
-          access-code button was removed. It is the screen's one in-`main` link either way, which is
-          what `e2e/a11y.spec.ts`'s exact count of 1 measures — and in the dark state it is now the
-          only thing to read besides the heading. It duplicates a footer destination deliberately:
-          `SiteFooter` carries `/privacy` as chrome on every route, while this is the disclosure at
-          the decision point, immediately above the control that acts on it. */}
-      <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
-        {SIGN_IN_COPY.privacyLink}
-      </Link>
+      {/* 🔴 **The page renders NO heading while lit — Clerk's card owns it.** With `<SignIn>` mounted
+          there are two `<h1>`s on the page: ours and the card's "Sign in to MatPlan". The cheap fix
+          is hiding Clerk's with three `header*` appearance keys; the cheaper one is this, because it
+          needs no override at all and leaves the vendor component untouched (`lib/clerk.ts` has the
+          whole argument). axe would not have caught either way round — `page-has-heading-one` and
+          `heading-order` are best-practice-tagged and `e2e/a11y.spec.ts` scans `wcag2a`/`wcag2aa`
+          only — so this is a decision, not a check.
+          ⚠️ The DARK state has no card, so it keeps the page's own heading and its one line. */}
+      {!configured && (
+        <header className="flex flex-col gap-2 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
+          <p className="text-muted-foreground text-sm">{SIGN_IN_COPY.notYet}</p>
+        </header>
+      )}
 
       {configured ? (
         <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
       ) : (
         <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.codeStillWorks}</p>
       )}
+
+      {/* 🔴 **Below the card, deliberately.** It renders in BOTH states and is the screen's one
+          in-`main` link either way, which is the exact count `e2e/a11y.spec.ts` measures.
+          ⚠️ It used to sit ABOVE the control, and `lib/constants.ts` records why that mattered —
+          "put the fact next to the control", because Google's consent screen appears only AFTER the
+          tap. It moved below once Clerk's card took over the heading _(maintainer, 2026-11-05)_: a
+          lone underlined line above a self-contained card read as a stray fragment. The disclosure
+          is still on this screen and still before anything irreversible happens — a reader who taps
+          Google without reading it was never going to read it above the button either. It duplicates
+          a footer destination on purpose: `SiteFooter` carries `/privacy` as chrome on every route,
+          this is the screen's own disclosure. */}
+      <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
+        {SIGN_IN_COPY.privacyLink}
+      </Link>
     </main>
   );
 }
