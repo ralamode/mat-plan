@@ -1317,6 +1317,34 @@ review` on a PR and gets one verified P0/P1/P2 review comment. Subscription auth
 
 Rows the beta milestone needs that had no home. Order and exit criteria live in the milestone file.
 
+<a id="invite-1"></a>
+
+- **INVITE-1 — a way for a stranger to ask in, instead of a door that only refuses.**
+  _(Filed by the maintainer 2026-11-05, from the `AUTH-1` 1d PR 0 sign-in review.)_ Today `/sign-in`
+  offers one control. A person who is not invited taps it, hands Google their email, name and profile
+  picture, and is **then** refused — the disclosure lands after the irreversible step. Replace the
+  dead end with an email capture: _ask to join_, held as a waitlist.
+
+  **Start by reading the vendor, because this may be mostly a dashboard setting.** Clerk's access mode
+  has three values and the third is **`Waitlist`** (`waitlist`), alongside `Open` (`public`) and
+  `Invite-only` (`restricted`) — [runbooks.md](./runbooks.md), the AUTH-1 Clerk console checklist,
+  which records the mode is **per-instance**. Clerk ships a `<Waitlist />` component, so the work may
+  be a mode change plus a mounted component rather than a form, a table and an email path of our own.
+  **Confirm against the installed version before planning anything**, not against its marketing page.
+
+  🔴 **This is a privacy decision before it is a feature.** A waitlist means this app deliberately
+  starts holding **strangers' email addresses** — the exact residual
+  [runbooks.md](./runbooks.md) names as a `data-inventory.md` §7 re-review trigger when it warns that
+  an unrestricted instance "means Clerk holds uninvited people's email addresses". Invite-only avoids
+  that by refusing before anything is stored. So INVITE-1 owes, before any UI: what is stored and
+  where (Clerk's waitlist vs a table of ours), how long it is kept, how someone withdraws, and what
+  the notice says — on an app holding **minors' health data** in a **public repo**. Gets the
+  `privacy-reviewer` lens.
+
+  **Depends on** `AUTH-1` 1d (the gate is gone and `/sign-in` is the only door). **Not** a Beta 0
+  blocker: the invited family can already get in, and shipping a dead end to strangers is the status
+  quo rather than a regression.
+
 <a id="onb-2"></a>
 
 - **ONB-2 — a default program for new households: The Daily Five.** _(Filed by Ray 2026-09-28; doses
