@@ -151,6 +151,8 @@ export const CLERK_CSS_LAYER = 'clerk';
  *   treatment (`rounded-lg border-border bg-background`, the exact classes `buttonVariants`' outline
  *   variant resolves to) so it and the page's other control match rather
  *   than being two different kinds of button stacked on each other.
+ *   ⚠️ The footer needs `bg-none` as well as `bg-transparent`: Clerk tints it with a
+ *   `linear-gradient`, i.e. `background-IMAGE`, so clearing the colour alone leaves a grey band.
  *   ⚠️ **"Secured by Clerk" stays.** It is the vendor's attribution on a free plan, and removing it
  *   is a paid-tier feature — not a styling choice. Clerk's orange "Development mode" badge below it
  *   is **development-instance only** and never reaches production, which is why captures taken
@@ -170,6 +172,6 @@ export const SIGN_IN_APPEARANCE = {
     rootBox: 'w-full',
     cardBox: 'w-full shadow-none',
     card: 'bg-transparent p-0 shadow-none',
-    footer: 'bg-transparent',
+    footer: 'bg-transparent bg-none',
   },
 } as const;

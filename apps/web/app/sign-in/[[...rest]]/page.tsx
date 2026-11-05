@@ -2,16 +2,8 @@ import { SignIn } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
-import { GATE_PATH } from '@/lib/access-gate';
 import { clerkIsConfigured, SIGN_IN_APPEARANCE } from '@/lib/clerk';
-import {
-  CTA_CLASS,
-  PRIVACY_PATH,
-  QUIET_LINK_CLASS,
-  SIGN_IN_COPY,
-  SIGN_IN_PATH,
-} from '@/lib/constants';
+import { PRIVACY_PATH, QUIET_LINK_CLASS, SIGN_IN_COPY, SIGN_IN_PATH } from '@/lib/constants';
 
 /**
  * `robots: noindex`, unconditionally and permanently.
@@ -66,36 +58,21 @@ export default function SignInPage() {
         </p>
       </header>
 
+      {/* The privacy link renders in BOTH states, promoted out of the `configured` ternary when the
+          access-code button was removed. It is the screen's one in-`main` link either way, which is
+          what `e2e/a11y.spec.ts`'s exact count of 1 measures — and in the dark state it is now the
+          only thing to read besides the heading. It duplicates a footer destination deliberately:
+          `SiteFooter` carries `/privacy` as chrome on every route, while this is the disclosure at
+          the decision point, immediately above the control that acts on it. */}
+      <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
+        {SIGN_IN_COPY.privacyLink}
+      </Link>
+
       {configured ? (
-        <>
-          <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
-            {SIGN_IN_COPY.privacyLink}
-          </Link>
-          <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
-        </>
+        <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
       ) : (
         <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.codeStillWorks}</p>
       )}
-
-      {/* ONE forward control, styled like the landing's own second CTA so the single real action
-          looks the same on both screens. It points at `GATE_PATH` rather than `/` because the access
-          code is one of the two things a caller needs until 1d (AUTH-1 1c-3b).
-
-          ⚠️ Its original justification — "that serves both readers in one link, because `proxy.ts`
-          sends a caller who already holds the cookie straight on to `APP_HOME_PATH`" — died with that
-          forward. For a reader who already holds the cookie, which is everyone at deploy, this is now
-          a round trip: /gate → code → /p → requireSession() → back here. It is still the right
-          control for a reader WITHOUT the code, and the page cannot yet tell the two apart.
-          ⚠️ Suppressing it for a valid-cookie caller is not quite free: this page's own docblock
-          leans on "reads no cookie". The AUTHORITATIVE justification for the subtree widening is
-          `lib/public-paths.ts`'s — "reads no household data and queries nothing" — which a read of
-          the caller's OWN gate cookie does not violate, so the widening survives. Only this page's
-          phrasing of it would need updating. Deliberately not done in the one-way-door chunk. `/` and `PRIVACY_PATH` are absent — `SiteFooter` renders both on every route,
-          and two same-href links in one document read as a duplicate destination in a screen-reader
-          link list. */}
-      <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
-        <Link href={GATE_PATH}>{SIGN_IN_COPY.gateCta}</Link>
-      </Button>
     </main>
   );
 }

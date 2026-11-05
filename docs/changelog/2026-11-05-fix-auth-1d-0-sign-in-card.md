@@ -19,6 +19,15 @@
   Google button takes the app's outline-button treatment so the two controls on the screen match
   instead of being two different kinds of button stacked on each other — verified identical in radius,
   border width, border colour and background.
+  🔴 **Two more things were painting chrome, and the second is a trap worth naming.** Clerk tints the
+  footer with a `linear-gradient`, i.e. `background-IMAGE` — so `bg-transparent`, which clears only
+  `background-color`, left a visible grey band behind "Secured by Clerk". It needs `bg-none` as well.
+  **The access-code button is gone from this screen**, which resolves the 1d plan's Open Question 1
+  early. It could not simply be deleted: `e2e/a11y.spec.ts` pins an EXACT count of 1 link in `<main>`,
+  and in the dark state that button was the only one. So the privacy link is promoted out of the
+  `configured` ternary to render in both states — the count stays 1, and the dark state gains the one
+  thing worth reading besides its heading. The gate itself is untouched and still reachable from the
+  landing; `1d` deletes it.
   🔴 **That last point exposed a design-token collision worth knowing about: Clerk redefines `--border`
   on its own elements** (`light-dark(#2F3037, #ffffff)`), so `border-border` silently resolves the
   **vendor's** value rather than this app's. The layer ordering cannot help — the variable itself is

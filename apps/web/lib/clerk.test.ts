@@ -124,6 +124,9 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
     expect(SIGN_IN_APPEARANCE.elements.cardBox).toContain('shadow-none');
     expect(SIGN_IN_APPEARANCE.elements.card).toContain('bg-transparent');
     expect(SIGN_IN_APPEARANCE.elements.card).toContain('shadow-none');
+    // `bg-none` as well as `bg-transparent`: Clerk tints the footer with a `linear-gradient`, which
+    // is `background-IMAGE`, so clearing `background-color` alone leaves a visible grey band.
+    expect(SIGN_IN_APPEARANCE.elements.footer).toContain('bg-none');
     expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('border');
     expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('rounded-lg');
     // `border-input`, NOT `border-border`: Clerk redefines `--border` on its own elements, so
