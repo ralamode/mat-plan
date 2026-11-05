@@ -8,8 +8,10 @@ import { matchesPathTree } from '@/lib/public-paths';
  * screen rather than only by typing the URL, and so a family inside the app can find it too.
  *
  * Two items, because `/privacy` is the SECOND room a stranger can walk into: someone arriving from a
- * consent screen with no idea what this app is needs a way to the landing, exactly as the gate's own
- * way-back link does (`GATE_COPY.back` — "the one room a stranger can walk into needs an exit").
+ * consent screen with no idea what this app is needs a way to the landing. ⚠️ The precedent cited
+ * here was the gate page's own way-back link (`GATE_COPY.back` — "the one room a stranger can walk
+ * into needs an exit"), which `1d` deletes; the rule outlives it, and the sign-in screen now applies
+ * it directly by carrying its own mark and privacy link while this footer hides itself there.
  *
  * A `<ul>` of two `<li>`s and **no `<nav>`**: one `contentinfo` landmark is enough, and a second
  * unlabeled landmark is what axe's `landmark-unique` complains about. Preflight's `list-style: none`

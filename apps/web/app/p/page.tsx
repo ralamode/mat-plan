@@ -60,14 +60,14 @@ export default async function ProfilePickerPage() {
             imperative with no object when the list is empty — it tells the reader to pick from nothing,
             40px above the block that says there is nothing to pick, and a screen reader hears both with
             nothing to supersede the false one.
-            🔴 **AUTH-1 1c-2: the `<h1>` NOW BRANCHES.** It used to be pinned because `e2e/login.ts`'s
-            `gateLogin` asserted `pickerHeading`, and "Who's logging today?" above "No household for this
-            account" is simply false. What actually forced the change is the screenshot harness:
-            `scripts/capture.ts` calls `gateLogin` BEFORE navigating, so `--state no-household` could not
-            be captured at all while the helper demanded the picker's heading. The picker assertion did
-            not disappear — it moved to `e2e/global.setup.ts`, the one consumer that needs it, so a deploy
-            where household resolution silently breaks still fails loudly at setup instead of as a missing
-            tile. */}
+            🔴 **AUTH-1 1c-2: the `<h1>` BRANCHES.** It used to be pinned because the deleted
+            `e2e/login.ts` helper asserted the picker's heading on every login, and "Who's logging
+            today?" above "No household for this account" is simply false. What forced the change was
+            the screenshot harness: the helper ran BEFORE navigating, so `--state no-household` could
+            not be captured at all while it demanded that heading. The picker assertion did not
+            disappear — it moved to `e2e/global.setup.ts`, the one consumer that needs it, so a deploy
+            where household resolution silently breaks still fails loudly at setup instead of as a
+            missing tile. ⚠️ `1d` deleted the helper itself; the assertion's new home is unaffected. */}
         <p className="text-muted-foreground">
           {noHousehold
             ? NO_HOUSEHOLD_COPY.subhead

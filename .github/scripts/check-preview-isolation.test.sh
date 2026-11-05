@@ -36,11 +36,15 @@ project() { printf '"project":{"gitForkProtection":%s,"autoExposeSystemEnvs":%s}
 # env_var <key> <targets-json>
 env_var() { printf '{"key":"%s","type":"encrypted","target":%s}' "$1" "$2"; }
 
+# ⚠️ The second key is realistic PADDING, not a requirement: the real guard's `REQUIRED_PER_SCOPE` is
+# `['DATABASE_URL']` alone. It was `ACCESS_GATE_PASSWORD` until AUTH-1 1d deleted that variable, and a
+# fixture naming a variable the app no longer has reads as a stale guard. `CLERK_SECRET_KEY` is the
+# per-scope secret that actually exists now.
 ISOLATED_ENV="\"env\":{\"envs\":[
   $(env_var DATABASE_URL '["production"]'),
   $(env_var DATABASE_URL '["preview","development"]'),
-  $(env_var ACCESS_GATE_PASSWORD '["production"]'),
-  $(env_var ACCESS_GATE_PASSWORD '["preview","development"]'),
+  $(env_var CLERK_SECRET_KEY '["production"]'),
+  $(env_var CLERK_SECRET_KEY '["preview","development"]'),
   $(env_var SENTRY_DSN '["production"]')
 ]}"
 

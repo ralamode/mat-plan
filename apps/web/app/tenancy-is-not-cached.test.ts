@@ -20,11 +20,13 @@ import { code } from '@/test/source-scan';
  *
  * ⚠️ **A Route Handler does NOT inherit a layout's segment config**, which is why the export handler
  * gets its own assertion rather than riding the layout's. 🔴 **What satisfies that assertion changed
- * twice.** It used to be the handler's own `cookies()` call; `1c-3b` added `export const dynamic =
- * 'force-dynamic'`, and the follow-up moved the cookie read inside `hasGateAccess()` — so the
- * directive is now the **only** in-file signal, and the `cookies()` arm of the disjunction below is
- * dead for this file. Keep the arm for a future handler that has one; do not read a green run as
- * evidence that this handler still touches a dynamic API itself.
+ * three times.** It used to be the handler's own `cookies()` call; `1c-3b` added `export const
+ * dynamic = 'force-dynamic'`; the follow-up moved the cookie read into the gate DAL; and `1d` deleted
+ * the gate, taking that read with it. So the directive is the **only** in-file signal and the
+ * `cookies()` arm of the disjunction below is dead for this file. Keep the arm for a future handler
+ * that has one; do not read a green run as evidence that this handler touches a dynamic API itself.
+ * ⚠️ After `1d` a cached response here is one household's CSV served to another, with nothing else
+ * marking the request dynamic — see the handler's own docblock.
  *
  * `revalidatePath` is deliberately **not** affected: profile public ids are globally unique, so the
  * 12 call sites cannot collide across households. Non-obvious, and the reason TEN-1 needed no route
