@@ -225,8 +225,8 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
  * production and the hostname matches, returning a plain `Response` whose `.cookies` is `undefined`
  * — laundered past TypeScript by the cast in `withClerk`. Typing this `NextResponse` would re-tell
  * that lie. (`Response.redirect()` headers ARE immutable and would throw on append; Clerk builds its
- * handshake with `NextResponse.redirect`, which is mutable, and `proxy.test.ts` pins that case so a
- * vendor switch fails loudly rather than silently.)
+ * handshake with `NextResponse.redirect`, which is mutable, and `proxy.test.ts` → "rides on a Clerk
+ * handshake redirect" pins that case so a vendor switch fails loudly rather than silently.)
  *
  * **Only when the cookie is present**, so an ordinary visitor never receives a spurious `Set-Cookie`.
  * `Path=/` matches what the gate action set since V0-4, so no stale `mp_gate` can exist at another

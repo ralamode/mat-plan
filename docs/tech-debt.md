@@ -53,9 +53,17 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 - **What & why:** `apps/web/proxy.ts` → `withRetiredCookies` appends a `Max-Age=0` `Set-Cookie` for
   `mp_gate` whenever a request still carries one, so a browser holding the retired gate cookie is
-  cleared rather than left to expire. The cookie's own `COOKIE_MAX_AGE` was **one year**, but the last
-  deploy that could set one was 2026-11-05, and no live holder can remain long after the cookie's own
-  three-month-ish practical session horizon — hence the trigger date rather than a year.
+  cleared rather than left to expire.
+  ⚠️ **The date is a convenience, NOT an expiry calculation, and an earlier draft of this row got that
+  wrong.** It claimed no holder could remain past "the cookie's three-month-ish practical session
+  horizon". There is no such horizon: the gate set `maxAge: COOKIE_MAX_AGE` = **one year**, and a
+  browser keeps a `Max-Age` cookie for its full lifetime whether or not the site is visited (Chrome
+  caps at 400 days). The last deploy that could set one was 2026-11-05, so a holder can still be
+  sending it on **2027-11-05**. Removing the tombstone on 2027-02-04 therefore leaves some browsers
+  carrying a dead cookie — **which is harmless, and that is the actual justification**: nothing reads
+  `mp_gate`, no code branches on it, and its value was only ever a hash of a deleted secret. Pick the
+  earlier date to delete the code sooner, or 2027-11-06 to clear every holder first; do not repeat
+  the expiry claim.
 - **Impact:** trivial. One `if` and one header append on matched responses where the cookie is present;
   nothing for an ordinary visitor (`proxy.test.ts` has the negative case).
 - **Fix:** on or after **2027-02-04**, delete `RETIRED_GATE_COOKIE`, `withRetiredCookies`, its call in

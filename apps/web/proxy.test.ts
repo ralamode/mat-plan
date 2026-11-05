@@ -61,7 +61,13 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
  * cannot pin the VENDOR's half — a future `@clerk/nextjs` that ignores the handler's response would
  * pass this test, which is why AGENTS.md wants a Clerk bump treated as its own reviewed PR.
  */
-const ROTATED_COOKIE = '__session=rotated; Path=/; HttpOnly';
+// 🔴 **The value carries `+`, `/` and `=` deliberately.** These are the characters
+// `ResponseCookies.replace()` would round-trip through `encodeURIComponent` — so putting them in the
+// cookie Clerk APPENDS is what makes the byte-identity case below able to fail. A first version put
+// them in the inbound request `Cookie` header instead, where no implementation re-emits them: the
+// case was green under `headers.append` AND under `response.cookies.delete()`, i.e. it could not
+// fail on the thing it was named for.
+const ROTATED_COOKIE = '__clerk_handshake=a+b/c==; Path=/; HttpOnly';
 const clerkCalls: { handled: boolean }[] = [];
 /**
  * 🔴 **AUTH-1 1d — the auto-proxy branch, which returns a PLAIN `Response`.** `clerkMiddleware.js`
@@ -70,11 +76,23 @@ const clerkCalls: { handled: boolean }[] = [];
  * hides from TypeScript. The tombstone has to survive it, so the mock can produce it on demand.
  */
 let clerkReturnsPlainResponse = false;
+/** Clerk's handshake: `NextResponse.redirect`, built WITHOUT calling our handler. */
+let clerkReturnsRedirect = false;
 vi.mock('@clerk/nextjs/server', () => ({
   clerkMiddleware:
     (handler: () => NextResponse) =>
     async (_request: unknown, _event: unknown): Promise<NextResponse | Response> => {
       clerkCalls.push({ handled: true });
+      if (clerkReturnsRedirect) {
+        // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
+        // handshake, and the reason the tombstone must wrap the function's single `return`.
+        // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
+        // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
+        const { NextResponse: NR } = await import('next/server');
+        const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
+        redirect.headers.append('set-cookie', ROTATED_COOKIE);
+        return redirect;
+      }
       const res = handler();
       res.headers.append('set-cookie', ROTATED_COOKIE);
       if (clerkReturnsPlainResponse) {
@@ -88,6 +106,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 beforeEach(() => {
   clerkConfigured = false;
   clerkReturnsPlainResponse = false;
+  clerkReturnsRedirect = false;
   clerkCalls.length = 0;
 });
 
@@ -196,16 +215,35 @@ describe('the mp_gate tombstone', () => {
   });
 
   /**
-   * ⚠️ **Labelled honestly: this cannot fail under `headers.append`, because nothing parses an
-   * existing header.** It is a MECHANISM-CHOICE TRIPWIRE. Probe it by reverting the implementation to
-   * `response.cookies.delete()`, which re-emits the whole parsed bag through
-   * `decodeURIComponent`/`encodeURIComponent` — that is when a Clerk cookie containing `+`, `/` or
-   * `=` comes back mangled and this goes red.
+   * 🔴 **The MECHANISM-CHOICE tripwire, and it took a correction to make it able to fail.** It
+   * asserts that the Clerk cookie Clerk appended survives byte-identically alongside our tombstone.
+   * ✅ **Probed RED**: swap `withRetiredCookies`'s `headers.append` for
+   * `(response as NextResponse).cookies.delete(RETIRED_GATE_COOKIE)` and this reddens, because
+   * `ResponseCookies.replace()` deletes the whole `set-cookie` header and re-serialises the parsed
+   * bag — `__clerk_handshake=a+b/c==` comes back `a%2Bb%2Fc%3D%3D`.
+   * ⚠️ The special characters have to be in the APPENDED cookie's value (`ROTATED_COOKIE`), not in
+   * the inbound request `Cookie` header: nothing re-emits request cookies, so an inbound-only version
+   * was green under both implementations.
    */
   it('leaves a Clerk cookie containing +, / and = byte-identical', async () => {
     clerkConfigured = true;
-    const { res } = await run('/', { cookie: `${RETIRED}=x; __session=a+b/c=d` });
+    const { res } = await run('/', { cookie: `${RETIRED}=x` });
     expect(res.headers.getSetCookie()).toContain(ROTATED_COOKIE);
+    expect(tombstones(res)).toHaveLength(1);
+  });
+
+  /**
+   * 🔴 **The Clerk HANDSHAKE case, which `withRetiredCookies`'s docblock claimed was pinned and was
+   * not.** Clerk builds its handshake with `NextResponse.redirect`, whose headers are MUTABLE.
+   * `Response.redirect()`'s are not, and `headers.append` on one throws — which would be a 500 for
+   * every visitor still carrying `mp_gate`. This is the case that fails loudly if a Clerk bump
+   * switches construction, instead of that landing in production.
+   */
+  it('rides on a Clerk handshake redirect', async () => {
+    clerkConfigured = true;
+    clerkReturnsRedirect = true;
+    const { res } = await run('/', { cookie: `${RETIRED}=x` });
+    expect(res.status).toBe(307);
     expect(tombstones(res)).toHaveLength(1);
   });
 
@@ -431,7 +469,9 @@ describe('proxy matcher', () => {
    * OBJECT entry, and `getMiddlewareMatchers` is what turns one into `has`/`missing` fields.
    *
    * This also does not cover re-introducing the exclusion at another layer — an early `return` in
-   * `proxy()` keyed on the header. `e2e/landing.spec.ts` carries the runtime witness for that.
+   * `proxy()` keyed on the header. `e2e/landing.spec.ts` → "a prefetch-flagged request still goes
+   * through the proxy (SEC-1)" is the runtime witness for that, and it replaces the deleted
+   * `e2e/gate-prefetch.spec.ts`. ⚠️ This comment asserted that witness existed before it did.
    */
   it('carries no header condition — a matcher condition decides whether the proxy runs at all', () => {
     expect(matcher).not.toHaveProperty('has');

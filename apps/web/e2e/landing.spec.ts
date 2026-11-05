@@ -2,6 +2,7 @@ import { expect, test, type Page, type Request } from '@playwright/test';
 
 import { PUBLIC_PATHS } from '../lib/public-paths';
 import {
+  APP_HOME_PATH,
   APP_NAME,
   FOOTER_COPY,
   GITHUB_REPO_URL,
@@ -173,4 +174,58 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
   await page.unroute(routine);
   await page.goto(routine, { waitUntil: 'networkidle' });
   expect(await routineOrder(page)).toEqual(before);
+});
+
+/**
+ * 🔴 **SEC-1's runtime witness, and it is a REPLACEMENT for a proof `1d` deleted.**
+ *
+ * `e2e/gate-prefetch.spec.ts` was the only runtime evidence that a request carrying a prefetch
+ * header still goes through the proxy. SEC-1's scar was a `missing:` matcher condition that let any
+ * such request skip the proxy entirely, and that spec proved it by watching the gate bounce. `1d`
+ * deletes the bounce, so the spec had to go — but its SUBJECT did not, and deleting it without this
+ * would have left the regression caught by nothing at runtime.
+ *
+ * ⚠️ **After `1d` the regression fails QUIETLY, which is why a runtime witness still matters.**
+ * `auth()` throws when `clerkMiddleware()` did not run, so a re-introduced exclusion makes the route
+ * 500 or refuse — which an ordinary spec reads as "redirected to sign-in" and passes.
+ *
+ * 🔴 **The witness is the CSP header, not page content.** `withSecurityHeaders` is called from
+ * nowhere but `proxy()` (verified: an unconditional early `return` in `proxy()` makes the header
+ * `undefined`), so its presence proves the proxy ran on THIS request — a claim that survives the
+ * harness bypass, where "no app content on the wire" cannot be asserted at all because every request
+ * is authenticated. `proxy.test.ts` pins the matcher's SHAPE; this pins that nothing skips the proxy
+ * at any other layer, such as an early `return` keyed on the header.
+ *
+ * ✅ **Probed RED**: an early `if (request.headers.get('purpose') === 'prefetch') return
+ * NextResponse.next();` in `proxy()` fails this test. That is the exact SEC-1 mutation, at the layer
+ * the matcher pin cannot see.
+ */
+test('a prefetch-flagged request still goes through the proxy (SEC-1)', async ({ browser }) => {
+  const context = await browser.newContext();
+
+  // 🔴 **`purpose: prefetch` ONLY, and the reason is measured, not assumed.** A first version of this
+  // test also sent `next-router-prefetch: 1` — the header SEC-1's matcher condition actually named.
+  // **It never reaches the server.** Probed by having `proxy.ts` echo what it saw: with
+  // `{ 'next-router-prefetch': '1' }` the server reports `false`; with `{ purpose: 'prefetch' }` it
+  // reports `prefetch`. Next reserves the `next-router-*` namespace and strips it from an external
+  // request, so an assertion on that arm would have passed while exercising nothing.
+  // ⚠️ That is worth knowing beyond this test: of SEC-1's two prefetch signals, **only `purpose` is
+  // client-settable**, so it is the one an attacker has and the only one worth a runtime witness.
+  for (const route of [APP_HOME_PATH, SEED_PROFILE_ROUTE]) {
+    const res = await context.request.get(route, {
+      headers: { purpose: 'prefetch' },
+      maxRedirects: 0,
+    });
+    expect(
+      res.headers()['content-security-policy'],
+      `${route}: no CSP — the proxy did not run on a prefetch-flagged request`,
+    ).toContain("frame-ancestors 'none'");
+    expect(res.headers()['x-content-type-options'], `${route}: no nosniff`).toBe('nosniff');
+  }
+
+  // 🔴 **Non-vacuity control.** A matcher-EXCLUDED path must carry no CSP — otherwise this test would
+  // pass even if the header came from somewhere other than the proxy, and would assert nothing.
+  const excluded = await context.request.get('/_next/static/nonexistent.js', { maxRedirects: 0 });
+  expect(excluded.headers()['content-security-policy']).toBeUndefined();
+  await context.close();
 });

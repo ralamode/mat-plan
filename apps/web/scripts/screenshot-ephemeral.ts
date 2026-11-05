@@ -922,12 +922,15 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
   }
 }
 
-/** Poll the running server until the gate route responds (or time out). */
+/** Poll the running server until the landing responds (or time out). */
 async function waitForServer(baseUrl: string, timeoutMs = 90_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${baseUrl}/gate`);
+      // ⚠️ `/` — the landing, which needs no session. It was `/gate`, which 404s after AUTH-1 1d:
+      // `res.status < 500` accepts a 404, so this probe did not hang, it just stopped meaning
+      // anything. Third copy of this route literal; `playwright.config.ts` has the other.
+      const res = await fetch(`${baseUrl}/`);
       if (res.status < 500) return;
     } catch {
       // not up yet

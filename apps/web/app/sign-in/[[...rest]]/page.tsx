@@ -1,4 +1,4 @@
-import { SignIn } from '@clerk/nextjs';
+import { ClerkFailed, ClerkLoading, SignIn } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -83,13 +83,20 @@ export default function SignInPage() {
           ⚠️ The DARK state has no card, so it keeps the page's own heading and its one line. */}
       {/* The mark links HOME, and is this screen's only route back to `/`. It sits above the card
           because the card owns the heading while lit, so the page's own identity has to come from
-          something that is not a second `<h1>`. `aria-hidden` on the SVG is why the link needs its
-          own accessible name — the mark announces nothing by design (`MatPlanMark`'s docblock), so
-          without the sr-only text this would be a link with no text at all. */}
+          something that is not a second `<h1>`. `aria-hidden` on the SVG is why the link needs an
+          accessible name of its own — the mark announces nothing by design (`MatPlanMark`'s docblock),
+          so without the sr-only text this would be a link with no text at all.
+          ⚠️ **One name source, not two.** There was also an `aria-label` here; with both present
+          accname step 2C makes the label win and the `sr-only` span contribute nothing — two sources
+          for one string, where editing either leaves the other silently load-bearing. The span is the
+          one kept: real text survives translation and find-in-page, and AGENTS.md wants native text
+          before ARIA.
+          🔴 **`min-w-11`, not just `min-h-11`.** With a `size-8` child and no width floor this was
+          32×44 — under the 44px bar on the one control that gets a stranded reader off this screen,
+          and invisible to `expectLinkTapTargets`, which measures height only. */}
       <Link
         href="/"
-        aria-label={FOOTER_COPY.home}
-        className="focus-visible:ring-ring mx-auto inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-3"
+        className="focus-visible:ring-ring mx-auto inline-flex min-h-11 min-w-11 items-center justify-center rounded-sm outline-none focus-visible:ring-3"
       >
         <MatPlanMark className="size-8" />
         <span className="sr-only">{FOOTER_COPY.home}</span>
@@ -108,10 +115,39 @@ export default function SignInPage() {
           checked after), so a stranger can stop before disclosing their address, name and picture.
           Lit state only: with no keys there is nothing to consent to. */}
       {configured && (
-        <p className="text-foreground text-center text-sm">{SIGN_IN_COPY.invitation}</p>
+        <div className="flex flex-col gap-2 text-center">
+          <p className="text-foreground text-sm">{SIGN_IN_COPY.invitation}</p>
+          {/* 🔴 **This is the disclosure the ordering invariant above is ABOUT, and it was missing.**
+              #333 removed it from this page while adding that invariant, so the first mention of
+              Clerk a reader met was the vendor's own "Secured by Clerk" badge inside the card —
+              exactly what the invariant forbids. `invitation` names the SEQUENCING (consent first,
+              invitation checked after); this names WHAT is handed over, which is what a stranger
+              deciding whether to stop actually needs. `lib/constants.ts` records why its wording is
+              load-bearing: a standing prohibition forbids reintroducing "nothing but an email
+              address", which is false at the token. */}
+          <p className="text-foreground text-sm">{SIGN_IN_COPY.processor}</p>
+        </div>
       )}
 
-      {configured && <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />}
+      {configured && (
+        <>
+          {/* 🔴 **The CDN-failure states, and they are not decoration (AUTH-1 1d).** This screen's
+              content comes from two bundles on Clerk's CDN, and `@clerk/shared`'s loader waits 15s
+              before giving up. Since `1d` there is no access code to fall back to, so a reader who
+              gets nothing is locked out of the app entirely — the docblock above calls that a design
+              constraint, and these two lines are what answers it.
+              ⚠️ **Our text, not vendor DOM**, and rendered BEFORE the mount so first paint carries
+              them. `ClerkLoading` / `ClerkFailed` are exported by `@clerk/nextjs@7.9.22` (verified
+              against `dist/types/index.d.ts`) and swap themselves out once clerk-js settles. */}
+          <ClerkLoading>
+            <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.loading}</p>
+          </ClerkLoading>
+          <ClerkFailed>
+            <p className="text-foreground text-center text-sm">{SIGN_IN_COPY.failed}</p>
+          </ClerkFailed>
+          <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
+        </>
+      )}
 
       {/* 🔴 **Below the card, deliberately.** It renders in BOTH states and is the screen's one
           in-`main` link either way, which is the exact count `e2e/a11y.spec.ts` measures.
@@ -123,7 +159,10 @@ export default function SignInPage() {
           Google without reading it was never going to read it above the button either. It duplicates
           a footer destination on purpose: `SiteFooter` carries `/privacy` as chrome on every route,
           this is the screen's own disclosure. */}
-      <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
+      {/* ⚠️ `mx-auto`: `QUIET_LINK_CLASS` is `inline-flex`, so in this centred column the link
+          otherwise hugs the left edge under centred text — which reads as a mistake rather than a
+          choice. Caught on the dark-state capture, not in review. */}
+      <Link href={PRIVACY_PATH} className={`${QUIET_LINK_CLASS} mx-auto`}>
         {SIGN_IN_COPY.privacyLink}
       </Link>
     </main>

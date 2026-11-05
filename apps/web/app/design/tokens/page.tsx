@@ -30,11 +30,11 @@ import './token-sets.css';
  *
  * This PR also ships a user-facing theme switch. A gated user who wandered to `/theme` expecting
  * theme settings and found a token-comparison harness would be right to be confused, and the repo's
- * convention is that a path names what the page is for (`/gate`, `/p/[id]/routine`).
+ * convention is that a path names what the page is for (`/p/[id]/routine`).
  *
  * ## Gating, and its lifetime
  *
- * Gated like every other page (`requireGatedPage()`, which `app/pages-are-gated.test.ts` enforces
+ * Needs a session like every other page (`requireSession()`, which `app/pages-are-gated.test.ts` enforces
  * statically), plus `noindex`. It is deliberately NOT excluded from production: the Vercel preview
  * IS a production build, so a `NODE_ENV` guard would delete the capability that justified choosing a
  * route in the first place. It holds **no data** — every value on this page is a literal in its own

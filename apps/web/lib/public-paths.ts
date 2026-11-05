@@ -32,10 +32,12 @@ export const PUBLIC_PATHS = ['/', PRIVACY_PATH] as const;
  * separate list is what keeps `/privacy/` and `/privacy/x` gated — both `PUBLIC_PATHS` entries are
  * leaves, so generalising that list to a prefix match would have opened them.
  *
- * Why the sign-in tree is public from 1a, when it authorizes nothing yet: `proxy.ts`'s gate bounce
- * does `url.search = ''`, so a gated `/sign-in/...` loses every Clerk handshake parameter — a loop,
- * not a flow — and `app/pages-are-gated.test.ts` requires every `page.tsx` to await
- * `requireGatedPage()` or be an ungated path, which Clerk's prebuilt page does neither of. The
+ * Why the sign-in tree is public: Clerk's prebuilt page is a catch-all and the OAuth handshake
+ * arrives on its CHILDREN, so the whole subtree must be reachable without a session.
+ * ⚠️ **The original reasons are both deleted by `AUTH-1` 1d** and are recorded only so nobody
+ * reinstates a narrower rule from them: the proxy's gate bounce did `url.search = ''`, which would
+ * have destroyed the handshake parameters, and `app/pages-are-gated.test.ts` required every
+ * `page.tsx` to await `requireGatedPage()` — a function that no longer exists. The
  * surface this widens is a screen that reads no household data and queries nothing, the same shape
  * as the public landing.
  */

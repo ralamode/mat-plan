@@ -28,7 +28,7 @@ migrates + seeds it via the `packages/db` scripts, runs `next start` against it,
 and tears everything down. It manages the server + DB itself — no manual build/start, no `.env.local`.
 
 ```bash
-pnpm --filter web screenshot:ephemeral /                          # the PUBLIC landing (captured un-gated)
+pnpm --filter web screenshot:ephemeral /                          # the PUBLIC landing
 pnpm --filter web screenshot:ephemeral /p                         # the profile picker (also the default)
 pnpm --filter web screenshot:ephemeral /p/<seed-id> --state empty           # a seeded profile's Today
 pnpm --filter web screenshot:ephemeral /p/<seed-id> --state already-logged  # Today with a habit + a

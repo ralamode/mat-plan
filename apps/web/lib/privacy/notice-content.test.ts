@@ -197,9 +197,14 @@ describe('the flattener reaches every nesting depth', () => {
     ['an `ol` item', 'Guard your Google account the way you would guard a password.'],
     ['a `dl` head', 'How long'],
     ['a `dl` term', 'Upstash'],
-    // ⚠️ Repointed at AUTH-1 1d, same depth. Was "to stop someone guessing the access code" —
-    // quoted from the Upstash row, whose subject changed when the IP-keyed limiter was deleted.
-    ['a `dl` desc', 'to stop the app being hammered'],
+    // ⚠️ Repointed at AUTH-1 1d. Was "to stop someone guessing the access code" — quoted from the
+    // Upstash row, whose subject changed when the IP-keyed limiter was deleted.
+    // 🔴 **Same depth AND unique.** A first pass used "to stop the app being hammered", which the new
+    // dated section repeats in a PARAGRAPH — so a flattener regression that dropped every `dl`
+    // description (the processor table and the retention table, the two things this notice exists to
+    // publish) would still have matched via the paragraph and passed. Depth probes must discriminate
+    // the depth, which means the string has to occur in exactly one place.
+    ['a `dl` desc', 'A counter that expires in minutes'],
     ['the signed-off line', 'signed off by the maintainer'],
   ])('surfaces text from %s', (_depth, probe) => {
     expect(flattened).toContain(probe);

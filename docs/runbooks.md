@@ -585,7 +585,9 @@ When the runbook was executed (2026-10-09), Vercel held **440** preview deployme
    pnpm preview:purge
    pnpm preview:purge --yes
    ```
-3. **Rotate `ACCESS_GATE_PASSWORD` in the Production scope** to a new long random value, and
+3. ~~**Rotate `ACCESS_GATE_PASSWORD` in the Production scope**~~ — ⚠️ **retired at `AUTH-1` 1d**; the
+   variable no longer exists. This step is kept struck rather than deleted because the steps are
+   numbered and referenced from the text above. Rotate `CLERK_SECRET_KEY` instead, and
    redeploy production.
 4. **Rotate the Neon production role password only if the string could have left the server.**
    `DATABASE_URL` is read server-side and never sent to a browser, so a purged preview did not expose
@@ -824,7 +826,7 @@ be a cross-tenant linkage over minors' health data.
 1. **One event, one `resource`** → almost certainly a stale bookmark or a shared link. No action.
 2. **Many events, many distinct `resource` values** → id probing. UUIDv7 public ids are not
    enumerable, so this means ids leaked (a screenshot, a log, a shared link). Rotate the access-gate
-   code (§ "Rotate a secret") and re-check who has it.
+   credential (§ "Rotate a secret" — the Clerk secret key since `AUTH-1` 1d) and re-check who has it.
 3. **`scope_outcome` carries something other than `cross_household` or `unknown_resource`** → not an
    attack: the server could not resolve a household at all. 🔴 **Since `AUTH-1` 1c-4 the resolver
    reads the principal's membership, never a household count, so these mean per-PERSON things and

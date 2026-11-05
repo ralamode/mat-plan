@@ -135,8 +135,9 @@ export const LANDING_COPY = {
  * maintainer verifying a deploy can tell dark from broken — and asks the reader for nothing.
  * 🔴 **`codeStillWorks` and `gateCta` are DELETED at 1d, not reworded.** They pointed at `/gate`,
  * which was a real forward step while the access code was one of two requirements. After `1d` there
- * is no second requirement and no `/gate`, so the dark state's only exit is the footer — recorded on
- * the page itself rather than left as a silent deletion.
+ * is no second requirement and no `/gate`, so the dark state's only exits are **the page's own mark
+ * (home) and privacy link** — `SiteFooter` is suppressed on this subtree. ⚠️ An earlier draft of this
+ * line said "the footer", which is exactly wrong on the one route where the footer is `null`.
  *
  * `processor` + `privacyLink` are the lit state only, and they are DISCLOSURE AT THE DECISION POINT:
  * the footer's "Privacy notice" link is chrome below a vendor card, Google's own consent screen
@@ -167,6 +168,18 @@ export const SIGN_IN_COPY = {
    */
   invitation:
     'Signing in needs an address this household has invited, and Google’s consent screen appears before that is checked.',
+  /**
+   * 🔴 **The CDN-failure state, and it exists because `1d` made this the only door.** `clerk-js` and
+   * `ui.browser.js` come from Clerk's CDN, and `@clerk/shared`'s loader waits 15s before giving up
+   * (`scriptLoadTimeout ?? 15e3`). On gym LTE that is fifteen seconds of empty card — and after `1d`
+   * there is no access code to fall back to, so a reader who gets nothing has no way in at all.
+   * ⚠️ Without these two lines the screen's failure state is a mark, one sentence about invitations
+   * and a privacy link — which to a kid reads as "you're not allowed", not "it didn't load".
+   * `loading` is in the `notYet` register (a state, not an imperative); `failed` names the one action
+   * that helps, because reloading re-requests the bundle.
+   */
+  loading: 'The Google sign-in button is loading…',
+  failed: 'The sign-in button didn’t load. Reloading this page is the fix.',
   /**
    * 🔴 **Corrected 2026-11-03 — it said the prohibited thing, on the consent screen.** It read
    * _"tells us the email address on your Google account — **nothing else from it**"_, which is false
@@ -199,8 +212,8 @@ export const SIGN_IN_COPY = {
  * someone arriving from a consent screen with no idea what this app is — and the deleted gate page's
  * way-back link recorded the same rule: the one room a stranger can walk into needs an exit. One
  * `<footer>` in the root layout, so a family inside the app can reach the notice too.
- * ⚠️ From `1d` this footer is ALSO the dark sign-in state's only exit, and `SiteFooter` hides itself
- * on the `/sign-in` subtree — that screen carries its own copies of both links.
+ * ⚠️ From `1d` `SiteFooter` returns `null` on the `/sign-in` subtree — that screen carries its own
+ * mark and privacy link instead, so it is NOT this footer that gets a reader out of there.
  */
 export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as const;
 
@@ -312,7 +325,9 @@ export const ROUTINE_COPY = {
   save: 'Save routine',
 } as const;
 
-/** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */
+/** The `tz` cookie's lifetime (seconds) — 1 year. Two consumers, both writing that one cookie:
+ *  `app/p/[profileId]/tz-sync.tsx` and `scripts/capture.ts`. ⚠️ Said "shared by the access-gate
+ *  cookie and the tz cookie" until AUTH-1 1d deleted the former. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**

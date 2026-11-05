@@ -253,12 +253,13 @@ shared code, briefly, and there is no code to guess. Upstash now sees only the i
 is signed in, for the same few minutes, to stop the app being hammered. That is a reduction in what
 one of our processors is given, so it is recorded here rather than only in the source.
 
-**If you are refused at the door, a record of you already exists.** Signing up is by invitation only,
-and Google's consent screen appears **before** this app checks whether your address was invited — so
-an address that is then refused has already given Clerk its email address, name and profile picture.
-⚠️ **You can have that record deleted without being invited to anything.** Write to the address under
-"Asking for anything"; there is no household to protect in that case, so nothing has to be confirmed
-through an invitation channel first.
+**If you are refused at the door, Clerk has already been given your details.** Signing up is by
+invitation only, and Google's consent screen appears **before** this app checks whether your address
+was invited — so an address that is then refused has already passed its email address, name and
+profile picture to Clerk. That part is certain: it follows from the order the two screens run in.
+⚠️ **What we do not yet know is whether Clerk keeps a record of a refusal**, and this notice will not
+guess. If it does, you can ask for it to be deleted — write to the address under "Asking for
+anything" — and we will tell you what was found either way.
 
 ## What changed on 1 November 2026
 

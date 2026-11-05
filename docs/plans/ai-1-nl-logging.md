@@ -386,7 +386,9 @@ itself for exactly this reason.
 **S9 — the extraction's limiter fails CLOSED.** This is a deliberate departure from
 `checkRateLimit`'s contract, which fails **open** on purpose (`apps/web/lib/rate-limit.ts:72`–`:91`):
 "a Redis outage locking Ray out of his own app is a worse outcome than an outage briefly widening the
-brute-force window." That trade is right for the gate and wrong here — what a dead limiter widens on
+brute-force window." ⚠️ That quote was `checkRateLimit`'s docblock, a function `AUTH-1` 1d deleted; the
+same fail-open contract now lives on `checkMutationLimit`. The trade was right for the gate and is
+wrong here — what a dead limiter widens on
 this endpoint is **metered third-party spend**, and the feature is a convenience whose fallback (type
 the movement names) is the status quo, not a lockout. See § "Cost, the key, and the bound".
 
