@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import { FOOTER_COPY, PRIVACY_PATH, QUIET_LINK_CLASS, SIGN_IN_PATH } from '@/lib/constants';
 import { matchesPathTree } from '@/lib/public-paths';
@@ -18,13 +21,29 @@ import { matchesPathTree } from '@/lib/public-paths';
  * is CORRECT here — this is a chrome link row, not prose. (That it must be undone for the notice's
  * lists and kept for this one is why `notice-article.tsx` sets classes per block.)
  *
+ * 🔴 **A CLIENT component, and it had to become one — `AUTH-1` 1d, found by a failing e2e test.**
+ * It was a server component reading `x-pathname`, a header the proxy forwards, with a docblock
+ * arguing that `usePathname()` would mean "a client component on every route for one attribute".
+ * ⚠️ **That argument was wrong about the cost and silent about a bug.** This is ONE leaf in the root
+ * layout with no data dependencies — making it client re-renders nothing else — and **Next does not
+ * re-render the root layout on a client-side navigation**, so the forwarded header is STALE after a
+ * soft nav. `aria-current` was quietly wrong that way all along (the old comment considered a
+ * SPOOFED header, never a stale one). `1d` made the staleness load-bearing by hanging the footer's
+ * VISIBILITY on it: clicking the landing's sign-in link left the footer rendered on `/sign-in`, so
+ * that screen showed two links to `/` and two to `/privacy` — exactly what the suppression exists to
+ * prevent. It only passed before because every test reached `/sign-in` by `page.goto` (a hard
+ * navigation, which does re-render the layout).
+ * ⚠️ `proxy.ts` still forwards `x-pathname` and `proxy.test.ts` still pins it; it now has **no
+ * consumer** — see `docs/tech-debt.md`.
+ *
  * 360px, with the arithmetic rather than a trust in flex-wrap: `px-4` leaves a 328px content box;
  * `mat-plan` (~62px at 14px) + `gap-x-4` (16px) + `Privacy notice` (~95px) ≈ 173px, one line with
  * room to spare. `flex-wrap` + `gap-y-1` is for 200% zoom (≈164px effective), where the row stacks
  * instead of overflowing. `min-h-11` on each link is the gate's pattern, and the footer sits OUTSIDE
  * `<main>`, so the a11y spec's `expectLinkTapTargets` counts are untouched.
  */
-export function SiteFooter({ pathname }: { pathname: string | null }) {
+export function SiteFooter() {
+  const pathname = usePathname();
   // 🔴 **Not on the sign-in subtree** _(maintainer, 2026-11-05)_. That screen carries the mark as its
   // own home link above the card and one `/privacy` link below it, so both of this footer's
   // destinations are already present — rendering it there would be two links to `/` and two to
@@ -51,8 +70,8 @@ export function SiteFooter({ pathname }: { pathname: string | null }) {
             <Link
               href={item.href}
               className={QUIET_LINK_CLASS}
-              // The pathname comes from the header the proxy forwards, so this stays a SERVER
-              // component. The worst case of a spoofed `x-pathname` is a wrong `aria-current`.
+              // `usePathname()`, so this is correct after a client-side navigation too — which the
+              // forwarded header was not. See the docblock.
               aria-current={pathname === item.href ? 'page' : undefined}
             >
               {item.label}

@@ -28,9 +28,10 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     redden. Variant 2 (spoofed `x-action-forwarded`) survives on its own premise.
   - `landing.spec.ts`'s "the app itself is still gated" is **deleted, not repointed**: the equivalent
     claim is "`/p` redirects to `/sign-in`", which this harness cannot establish.
-  - `e2e/export-csv.spec.ts`'s fresh browser context is now **theatre** — it exists to stop a
-    `storageState` leaking in, and there is no authenticated storage state to leak. Its assertion is
-    correspondingly weak and the file says so.
+  - `e2e/export-csv.spec.ts`'s "a request without the access cookie gets nothing" is **deleted**, and
+    it is the one case that was caught by observation rather than reasoning: it went RED in
+    `e2e:local`, because the export now correctly returns **200 with a real zip** to the
+    bypass-authenticated request. Rewriting it to accept 200 would have inverted its own subject.
 - **Impact:** production is **still protected** — the in-action `requireSession()` and the per-page
   `requireSession()` are unit-proved, and `app/pages-are-gated.test.ts` asserts the call per route.
   What is lost is the **runtime** proof that an unauthenticated request does no work. 🔴 **Do not cite

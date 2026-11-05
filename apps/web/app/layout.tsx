@@ -56,9 +56,12 @@ export default async function RootLayout({
 }>) {
   const requestHeaders = await headers();
   const nonce = requestHeaders.get('x-nonce') ?? undefined;
-  // PRIV-2: the footer's `aria-current` needs the current route. The proxy forwards it the same way
-  // it forwards the nonce, which keeps `SiteFooter` a server component on every route.
-  const pathname = requestHeaders.get('x-pathname');
+  // ⚠️ **`x-pathname` is read nowhere now (AUTH-1 1d).** PRIV-2 forwarded it so the footer's
+  // `aria-current` could be set from a SERVER component — but the root layout is not re-rendered on a
+  // client-side navigation, so the value was stale after a soft nav, and `1d` made that visible by
+  // hanging the footer's visibility on it. `SiteFooter` now uses `usePathname()`. The proxy still
+  // forwards the header and `proxy.test.ts` still pins it; removing both is its own small change
+  // (`docs/tech-debt.md`), not a rider here.
 
   // AUTH-1 1a — Clerk, INSIDE the nonce/theme providers and only when both keys are present.
   //
@@ -109,7 +112,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider nonce={nonce}>
           {body}
-          <SiteFooter pathname={pathname} />
+          <SiteFooter />
         </ThemeProvider>
       </body>
     </html>

@@ -94,8 +94,8 @@ test.describe('public', () => {
   });
 });
 
-test.describe('gated', () => {
-  test('a gated caller reads the same page — /privacy does not bounce to the app', async ({
+test.describe('authenticated', () => {
+  test('an authenticated caller reads the same page — /privacy does not bounce to the app', async ({
     page,
   }) => {
     // The assertion that pins `proxy.ts`'s `pathname === '/'` arm against a careless change to
