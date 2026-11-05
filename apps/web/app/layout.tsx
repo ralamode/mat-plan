@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 
 import { SiteFooter } from '@/components/layout/site-footer';
 import { ThemeProvider } from '@/components/theme/theme-provider';
-import { clerkIsConfigured } from '@/lib/clerk';
+import { CLERK_CSS_LAYER, clerkIsConfigured } from '@/lib/clerk';
 import { APP_HOME_PATH, APP_NAME, SIGN_IN_PATH } from '@/lib/constants';
 
 import './globals.css';
@@ -92,7 +92,7 @@ export default async function RootLayout({
       // so. `app/globals.css` declares `@layer clerk` FIRST, which is what puts it below Tailwind's
       // layers: layer priority is declaration order, so naming it anywhere later would make Clerk's
       // styles win instead.
-      appearance={{ cssLayerName: 'clerk' }}
+      appearance={{ cssLayerName: CLERK_CSS_LAYER }}
     >
       {children}
     </ClerkProvider>

@@ -1,10 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   CLERK_BOT_PROTECTION_ORIGIN,
+  CLERK_CSS_LAYER,
   CLERK_IMG_ORIGIN,
   clerkFrontendApiOrigin,
   clerkIsConfigured,
+  SIGN_IN_APPEARANCE,
 } from './clerk';
 
 /**
@@ -77,5 +82,63 @@ describe('the Clerk CSP origins', () => {
   it('are exact origins, never wildcards', () => {
     expect(CLERK_IMG_ORIGIN).toBe('https://img.clerk.com');
     expect(CLERK_BOT_PROTECTION_ORIGIN).toBe('https://challenges.cloudflare.com');
+  });
+});
+
+describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
+  it('passes only class-name STRINGS, never a CSSObject the CSP would drop', () => {
+    // A `CSSObject` becomes a runtime-injected style, and `style-src 'self' 'nonce-…'` drops it
+    // SILENTLY — no error, no visual clue. A string is the only safe shape here.
+    for (const [key, value] of Object.entries(SIGN_IN_APPEARANCE.elements)) {
+      expect(typeof value, `elements.${key} must be a class string, not a CSSObject`).toBe(
+        'string',
+      );
+    }
+  });
+
+  it("keeps the 44px lever on Clerk's social button", () => {
+    // The arithmetic (does `min-h-11` actually clear MIN_TAP_TARGET_PX at this --spacing?) lives in
+    // `app/design/tokens/token-sets.test.ts`, derived from the const. This pins only that the lever
+    // is still attached — dropping the key currently reds nothing, because no CI run loads the card.
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
+  });
+
+  it('hides the vendor header AND its two children — none is removable alone', () => {
+    // `header` removes the empty ~35px container; the child keys keep the page's `<h1>` the only one
+    // in the a11y tree even if a vendor restructure moves the title out of `header`.
+    expect(SIGN_IN_APPEARANCE.elements.header).toBe('hidden');
+    expect(SIGN_IN_APPEARANCE.elements.headerTitle).toBe('hidden');
+    expect(SIGN_IN_APPEARANCE.elements.headerSubtitle).toBe('hidden');
+  });
+
+  it('makes the card follow the page column instead of its fixed 400px', () => {
+    expect(SIGN_IN_APPEARANCE.elements.rootBox).toBe('w-full');
+    expect(SIGN_IN_APPEARANCE.elements.cardBox).toBe('w-full');
+  });
+
+  it('declares @layer clerk BEFORE Tailwind, or min-h-11 stops applying', () => {
+    // Layer priority is DECLARATION ORDER. Unlayered styles beat any layered rule, and a layer
+    // declared after Tailwind's would put Clerk's CSS above the utilities — silently losing the 44px
+    // bar on the Google button. Nothing tested this file's ordering before.
+    //
+    // Comments are stripped first: `globals.css`'s opening comment discusses `@layer`, `@import` and
+    // `clerk`, so a naive indexOf on raw source can match the prose instead of the declaration —
+    // the same trap `app/design/tokens/token-sets.test.ts` documents.
+    const css = readFileSync(join(import.meta.dirname, '..', 'app', 'globals.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const layer = css.indexOf(`@layer ${CLERK_CSS_LAYER}`);
+    const tailwind = css.indexOf("@import 'tailwindcss'");
+
+    // Asserted POSITIVELY: `indexOf` returns -1 for a missing needle, and `-1 < n` is true — so a
+    // bare `layer < tailwind` would pass on the exact regression (the layer deleted) it exists for.
+    expect(layer, `@layer ${CLERK_CSS_LAYER} is missing from globals.css`).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(tailwind, "@import 'tailwindcss' is missing from globals.css").toBeGreaterThanOrEqual(0);
+    expect(layer, `@layer ${CLERK_CSS_LAYER} must be declared before Tailwind`).toBeLessThan(
+      tailwind,
+    );
   });
 });

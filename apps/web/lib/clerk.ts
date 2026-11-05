@@ -110,3 +110,53 @@ export const CLERK_IMG_ORIGIN = 'https://img.clerk.com';
  * guessed per-instance.
  */
 export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
+
+/**
+ * The CSS layer Clerk's own stylesheet is confined to, passed to `<ClerkProvider appearance>` in
+ * `app/layout.tsx`. `app/globals.css` declares `@layer clerk` **first**, which is what puts it below
+ * Tailwind's layers — layer priority is declaration order, so naming it anywhere later would make
+ * Clerk's styles win over the `min-h-11` below. `lib/clerk.test.ts` pins that ordering, because
+ * nothing else did.
+ */
+export const CLERK_CSS_LAYER = 'clerk';
+
+/**
+ * `<SignIn>`'s appearance, in one place because the three facts it encodes are each load-bearing and
+ * none of them is visible from the JSX that consumes it.
+ *
+ * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`. `UserDefinedStyle = string |
+ * CSSObject`, and a `CSSObject` becomes a runtime-injected style — the production policy is
+ * `style-src 'self' 'nonce-…'` with no `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be
+ * dropped **silently**. A Tailwind class ships in our own `'self'` stylesheet and survives. A hard
+ * constraint, not a preference, and `lib/clerk.test.ts` asserts every value is a string.
+ *
+ * - `socialButtonsBlockButton: 'min-h-11'` is `MIN_TAP_TARGET_PX` in Tailwind's spelling, and
+ *   `elements` is the only lever for it: Clerk's `variables` expose colours, fonts, radius and
+ *   spacing, but no control height. The 44px arithmetic itself lives in
+ *   `app/design/tokens/token-sets.test.ts`, derived from the const — not duplicated here.
+ *   ✅ Measured 44.0px on the lit card against the development instance, 2026-11-04.
+ * - `headerTitle`/`headerSubtitle` hidden so the page's `<h1>` is the only one in the a11y tree.
+ *   ✅ Verified 2026-11-04: Clerk's `<h1>` is in the DOM but `display:none`, so the tree has one.
+ *   `header` is hidden too, and the three are NOT interchangeable — `header` removes the empty ~35px
+ *   container that hiding only the children leaves behind, while the child keys survive a vendor
+ *   restructure that moves the title out of `header`. Neither is removable alone.
+ * - `rootBox`/`cardBox: 'w-full'` make the card follow the page's column. Without them Clerk renders
+ *   a fixed `width: 400px` against this page's 352px column (`max-w-sm` + `px-4`), overhanging it by
+ *   48px at every viewport where the column hits its max — measured at 1280px, 2026-11-04. Widening
+ *   `main` instead would leave a 16px misalignment pointing the other way.
+ *
+ * 🔴 **This pins our INPUT, not the rendered outcome.** It cannot detect a CDN build that renames
+ * `cl-headerTitle`, moves the title out of that class, or changes the button's box model — clerk-js
+ * ships from a CDN at a floating major and is absent from the lockfile (`docs/tech-debt.md`). What it
+ * does buy: a refactor that drops a key currently reds nothing, because no CI run loads the lit card.
+ */
+export const SIGN_IN_APPEARANCE = {
+  elements: {
+    headerTitle: 'hidden',
+    headerSubtitle: 'hidden',
+    header: 'hidden',
+    socialButtonsBlockButton: 'min-h-11',
+    rootBox: 'w-full',
+    cardBox: 'w-full',
+  },
+} as const;

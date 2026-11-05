@@ -56,6 +56,19 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     `e2e/a11y.spec.ts` measures the dark fallback; `screenshot:ephemeral` injects no Clerk keys either;
     and the `a11y` Playwright project sets `bypassCSP`, so even with keys it would not be measuring the
     production policy. Not one a11y property of Clerk's card is pinned by anything in this repo.
+
+    ✅ **Measured once, against the DEVELOPMENT instance, 2026-11-04** (`AUTH-1` 1d PR 0 — the lit
+    panel `runbooks.md` had owed since 1a). Dated observations, not guards, because clerk-js floats:
+    the Google button is **44.0px** so `elements`' `min-h-11` does land; Clerk's `<h1>` is in the DOM
+    but `display:none`, so the a11y tree holds exactly one; there is no horizontal overflow at 360px;
+    `:focus-visible` applies a real 3px ring. Two defects were found and fixed in that PR — the card
+    rendered a fixed `width: 400px` against the page's 352px column (**48px of overhang** at 1280px),
+    and hiding only the header's children left its ~35px container in flow.
+    ⚠️ **One failure stands, and it is the vendor's:** Clerk's "Secured by Clerk" attribution link is
+    **48×14px**, under this repo's 44px bar _and_ WCAG 2.2 SC 2.5.8 (24×24). `elements` exposes no key
+    for it and hiding Clerk branding is a paid-plan feature, so it is un-met in one named place rather
+    than silently un-met. `lib/clerk.ts`'s `SIGN_IN_APPEARANCE` now pins what we _do_ control.
+    **Re-verify on the next `@clerk/nextjs` bump** — these numbers are a dated reading of a CDN build.
 - **Why it was accepted:** the plan specifies Clerk's **prebuilt** component, the alternative
   (`useSignIn` + `signIn.authenticateWithRedirect`, our own markup) is a real option at this version but
   a different design decision, and 1a ships dark so nothing renders yet. Pinning `clerkJSVersion`

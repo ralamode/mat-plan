@@ -4,7 +4,7 @@ import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import { GATE_PATH } from '@/lib/access-gate';
-import { clerkIsConfigured } from '@/lib/clerk';
+import { clerkIsConfigured, SIGN_IN_APPEARANCE } from '@/lib/clerk';
 import {
   CTA_CLASS,
   PRIVACY_PATH,
@@ -71,31 +71,7 @@ export default function SignInPage() {
           <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
             {SIGN_IN_COPY.privacyLink}
           </Link>
-          <SignIn
-            path={SIGN_IN_PATH}
-            appearance={{
-              /**
-               * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`, and the reason is
-               * this app's CSP: `UserDefinedStyle = string | CSSObject`, and a `CSSObject` becomes a
-               * runtime-injected style — the production policy is `style-src 'self' 'nonce-…'` with no
-               * `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be dropped silently. A Tailwind
-               * class ships in our own `'self'` stylesheet and survives. This is a hard constraint
-               * here, not a preference.
-               *
-               * `min-h-11` is `MIN_TAP_TARGET_PX` (44) in Tailwind's spelling, and `elements` is the
-               * only lever for it: Clerk's `variables` expose colours, fonts, radius and spacing, but
-               * no control height. The cascade half of the same problem is `cssLayerName`, set on
-               * `<ClerkProvider>` in `app/layout.tsx` — see the comment there.
-               *
-               * `headerTitle`/`headerSubtitle` are hidden so the page's `<h1>` is the only heading.
-               */
-              elements: {
-                headerTitle: 'hidden',
-                headerSubtitle: 'hidden',
-                socialButtonsBlockButton: 'min-h-11',
-              },
-            }}
-          />
+          <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
         </>
       ) : (
         <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.codeStillWorks}</p>
