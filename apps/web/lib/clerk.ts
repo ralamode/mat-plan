@@ -19,7 +19,7 @@ import { env } from './env';
  * `next build` and un-wired previews legitimately run without them, and that is the state in
  * production until the maintainer configures an instance.
  *
- * Verified against the pinned `@clerk/nextjs@7.9.15`, because the plan's "no keys ⇒ dark, not open"
+ * Verified against `@clerk/nextjs@7.9.22`, because the plan's "no keys ⇒ dark, not open"
  * could not be asserted without reading it — and one of its two failure modes is real:
  * `dist/esm/app-router/client/ClerkProvider.js:ClientClerkProvider` ends in
  * `errorThrower.throwMissingPublishableKeyError()`, and `dist/esm/app-router/server/ClerkProvider.js`
@@ -56,7 +56,7 @@ export function clerkPublishableKey(): string | undefined {
  *
  * The key format is `pk_(test|live)_<unpadded base64 of "<frontendApi>$">`, mirroring
  * `@clerk/shared/keys.ts:parsePublishableKey` + `isPublishableKey` at the pinned
- * `@clerk/shared@4.40.0`. It is reimplemented rather than imported because `@clerk/shared` is a
+ * `@clerk/shared@4.41.0`. It is reimplemented rather than imported because `@clerk/shared` is a
  * TRANSITIVE dependency and `parsePublishableKey` is not re-exported by `@clerk/nextjs` or
  * `@clerk/nextjs/server` — reaching into a transitive's internals for six lines is the worse trade.
  * `clerk.test.ts` pins the decode against vendor-shaped keys, so a format change surfaces as a
@@ -85,7 +85,7 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
 
 /**
  * 🔴 **The CSP origins Clerk needs, by EXACT ORIGIN — never a wildcard.** Read off the pinned
- * `@clerk/nextjs@7.9.15`'s own `dist/esm/server/content-security-policy.js:DEFAULT_DIRECTIVES`, which
+ * `@clerk/nextjs@7.9.22`'s own `dist/esm/server/content-security-policy.js:DEFAULT_DIRECTIVES`, which
  * is the vendor's authoritative list at this version, then narrowed to what THIS app actually uses.
  * `proxy.ts:buildCsp` adds them only when `clerkIsConfigured()`, and `proxy.test.ts` pins each one.
  *
@@ -110,3 +110,57 @@ export const CLERK_IMG_ORIGIN = 'https://img.clerk.com';
  * guessed per-instance.
  */
 export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
+
+/**
+ * The CSS layer Clerk's own stylesheet is confined to, passed to `<ClerkProvider appearance>` in
+ * `app/layout.tsx`.
+ *
+ * 🔴 **`app/globals.css` must name this layer BETWEEN Tailwind's `base` and `components`, and the
+ * position matters in both directions** — `@layer theme, base, clerk, components, utilities;`.
+ * Layer priority is declaration order, so:
+ *  - **above `base`**, or Tailwind's preflight (`margin: 0; padding: 0; border: 0` on `*`, inside
+ *    `@layer base`) outranks every spacing rule Clerk ships and the card renders stripped;
+ *  - **below `components`/`utilities`**, or Clerk's own CSS beats the `min-h-11` above.
+ *
+ * ⚠️ A bare `@layer clerk;` satisfies neither: it makes this the LOWEST layer, which is what shipped
+ * from 1a until the card was measured on 2026-11-05. `lib/clerk.test.ts` pins the relative order and
+ * was probed RED both ways; nothing else tests that file, and no CI run renders the lit card.
+ */
+export const CLERK_CSS_LAYER = 'clerk';
+
+/**
+ * `<SignIn>`'s appearance. **One key, and only because the vendor misses an accessibility floor.**
+ *
+ * 🔴 **The decision, so nobody re-litigates it from a screenshot** _(maintainer, 2026-11-05)_. This
+ * app does **not** restyle Clerk's card. An earlier pass stripped its shadow, fill and padding and
+ * matched its button to this app's own; it worked and it was the wrong trade, because the thing that
+ * actually makes the card look foreign is the "Secured by Clerk" mark, and removing **that** is a
+ * paid-tier feature. Styling around a mark that stays buys a half-integrated component whose every
+ * CDN build can break the arrangement, for no gain. The PAGE is sized to the card instead
+ * (`app/sign-in/[[...rest]]/page.tsx`'s `max-w-[432px]` against its natural 400px).
+ *
+ * **Why `min-h-11` survives when nothing else does.** Measured 2026-11-05 with the `elements` map
+ * emptied: Clerk's social button renders at **32px**. AGENTS.md requires ≥44px
+ * (`MIN_TAP_TARGET_PX`), and this is the primary control on what `1d` makes the app's only door, used
+ * by a parent on a phone on a gym floor. `elements` is the only lever — Clerk's `variables` expose
+ * colours, fonts, radius and spacing, but no control height. ✅ 44.0px with the key.
+ *
+ * **The page's `<h1>` yields to Clerk's instead of hiding it.** With no overrides there are two
+ * visible `<h1>`s — ours and Clerk's "Sign in to MatPlan". The earlier fix hid Clerk's with three
+ * `header*` keys; the cheaper one is for the PAGE to render no heading while lit and let the card's
+ * be the only one. Same outcome, three fewer overrides, and nothing of Clerk's is touched.
+ *
+ * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`. `UserDefinedStyle = string |
+ * CSSObject`, and a `CSSObject` becomes a runtime-injected style — the production policy is
+ * `style-src 'self' 'nonce-…'` with no `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be
+ * dropped **silently**. `lib/clerk.test.ts` asserts every value is a string.
+ *
+ * 🔴 **This pins our INPUT, not the rendered outcome.** clerk-js ships from a CDN at a floating major
+ * and is absent from the lockfile (`docs/tech-debt.md`), so a build that changes the button's box
+ * model is caught by nothing here — the 32px reading is dated, not guarded.
+ */
+export const SIGN_IN_APPEARANCE = {
+  elements: {
+    socialButtonsBlockButton: 'min-h-11',
+  },
+} as const;

@@ -2,11 +2,11 @@ import { SignIn } from '@clerk/nextjs';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Button } from '@/components/ui/button';
-import { GATE_PATH } from '@/lib/access-gate';
-import { clerkIsConfigured } from '@/lib/clerk';
+import { MatPlanMark } from '@/components/brand/mat-plan-mark';
+
+import { clerkIsConfigured, SIGN_IN_APPEARANCE } from '@/lib/clerk';
 import {
-  CTA_CLASS,
+  FOOTER_COPY,
   PRIVACY_PATH,
   QUIET_LINK_CLASS,
   SIGN_IN_COPY,
@@ -54,72 +54,60 @@ export default function SignInPage() {
   const configured = clerkIsConfigured();
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-4 py-12">
-      <header className="flex flex-col gap-2 text-center">
-        {/* The page owns the ONE `<h1>` in both states; `appearance` below suppresses Clerk's card
-            title so there is never a second one. axe cannot catch that — `heading-order` and
-            `page-has-heading-one` are best-practice-tagged and `e2e/a11y.spec.ts` scans
-            `wcag2a`/`wcag2aa` only — so it is a decision, not a check. */}
-        <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
-        <p className="text-muted-foreground text-sm">
-          {configured ? SIGN_IN_COPY.processor : SIGN_IN_COPY.notYet}
-        </p>
-      </header>
+    /* `max-w-[432px]`, not `max-w-sm`: Clerk's card has its own fixed width (400px at the CDN build
+       measured 2026-11-05) and this app does NOT override it — see `SIGN_IN_APPEARANCE`. 400 + the
+       32px of `px-4` is 432, so the column is sized to the card rather than the card squeezed into
+       the column. ⚠️ If the card ever overhangs or leaves a gap, Clerk changed its width: re-measure
+       and change this number. Do not reach for `elements` to compress it. */
+    <main className="mx-auto flex w-full max-w-[432px] flex-1 flex-col justify-center gap-6 px-4 py-12">
+      {/* 🔴 **The page renders NO heading while lit — Clerk's card owns it.** With `<SignIn>` mounted
+          there are two `<h1>`s on the page: ours and the card's "Sign in to MatPlan". The cheap fix
+          is hiding Clerk's with three `header*` appearance keys; the cheaper one is this, because it
+          needs no override at all and leaves the vendor component untouched (`lib/clerk.ts` has the
+          whole argument). axe would not have caught either way round — `page-has-heading-one` and
+          `heading-order` are best-practice-tagged and `e2e/a11y.spec.ts` scans `wcag2a`/`wcag2aa`
+          only — so this is a decision, not a check.
+          ⚠️ The DARK state has no card, so it keeps the page's own heading and its one line. */}
+      {/* The mark links HOME, and is this screen's only route back to `/`. It sits above the card
+          because the card owns the heading while lit, so the page's own identity has to come from
+          something that is not a second `<h1>`. `aria-hidden` on the SVG is why the link needs its
+          own accessible name — the mark announces nothing by design (`MatPlanMark`'s docblock), so
+          without the sr-only text this would be a link with no text at all. */}
+      <Link
+        href="/"
+        aria-label={FOOTER_COPY.home}
+        className="focus-visible:ring-ring mx-auto inline-flex min-h-11 items-center rounded-sm outline-none focus-visible:ring-3"
+      >
+        <MatPlanMark className="size-8" />
+        <span className="sr-only">{FOOTER_COPY.home}</span>
+      </Link>
+
+      {!configured && (
+        <header className="flex flex-col gap-2 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">{SIGN_IN_COPY.heading}</h1>
+          <p className="text-muted-foreground text-sm">{SIGN_IN_COPY.notYet}</p>
+        </header>
+      )}
 
       {configured ? (
-        <>
-          <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
-            {SIGN_IN_COPY.privacyLink}
-          </Link>
-          <SignIn
-            path={SIGN_IN_PATH}
-            appearance={{
-              /**
-               * ⚠️ `elements` values are CLASS-NAME STRINGS, never a `CSSObject`, and the reason is
-               * this app's CSP: `UserDefinedStyle = string | CSSObject`, and a `CSSObject` becomes a
-               * runtime-injected style — the production policy is `style-src 'self' 'nonce-…'` with no
-               * `'unsafe-inline'` (`proxy.ts:buildCsp`), so it would be dropped silently. A Tailwind
-               * class ships in our own `'self'` stylesheet and survives. This is a hard constraint
-               * here, not a preference.
-               *
-               * `min-h-11` is `MIN_TAP_TARGET_PX` (44) in Tailwind's spelling, and `elements` is the
-               * only lever for it: Clerk's `variables` expose colours, fonts, radius and spacing, but
-               * no control height. The cascade half of the same problem is `cssLayerName`, set on
-               * `<ClerkProvider>` in `app/layout.tsx` — see the comment there.
-               *
-               * `headerTitle`/`headerSubtitle` are hidden so the page's `<h1>` is the only heading.
-               */
-              elements: {
-                headerTitle: 'hidden',
-                headerSubtitle: 'hidden',
-                socialButtonsBlockButton: 'min-h-11',
-              },
-            }}
-          />
-        </>
+        <SignIn path={SIGN_IN_PATH} appearance={SIGN_IN_APPEARANCE} />
       ) : (
         <p className="text-muted-foreground text-center text-sm">{SIGN_IN_COPY.codeStillWorks}</p>
       )}
 
-      {/* ONE forward control, styled like the landing's own second CTA so the single real action
-          looks the same on both screens. It points at `GATE_PATH` rather than `/` because the access
-          code is one of the two things a caller needs until 1d (AUTH-1 1c-3b).
-
-          ⚠️ Its original justification — "that serves both readers in one link, because `proxy.ts`
-          sends a caller who already holds the cookie straight on to `APP_HOME_PATH`" — died with that
-          forward. For a reader who already holds the cookie, which is everyone at deploy, this is now
-          a round trip: /gate → code → /p → requireSession() → back here. It is still the right
-          control for a reader WITHOUT the code, and the page cannot yet tell the two apart.
-          ⚠️ Suppressing it for a valid-cookie caller is not quite free: this page's own docblock
-          leans on "reads no cookie". The AUTHORITATIVE justification for the subtree widening is
-          `lib/public-paths.ts`'s — "reads no household data and queries nothing" — which a read of
-          the caller's OWN gate cookie does not violate, so the widening survives. Only this page's
-          phrasing of it would need updating. Deliberately not done in the one-way-door chunk. `/` and `PRIVACY_PATH` are absent — `SiteFooter` renders both on every route,
-          and two same-href links in one document read as a duplicate destination in a screen-reader
-          link list. */}
-      <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
-        <Link href={GATE_PATH}>{SIGN_IN_COPY.gateCta}</Link>
-      </Button>
+      {/* 🔴 **Below the card, deliberately.** It renders in BOTH states and is the screen's one
+          in-`main` link either way, which is the exact count `e2e/a11y.spec.ts` measures.
+          ⚠️ It used to sit ABOVE the control, and `lib/constants.ts` records why that mattered —
+          "put the fact next to the control", because Google's consent screen appears only AFTER the
+          tap. It moved below once Clerk's card took over the heading _(maintainer, 2026-11-05)_: a
+          lone underlined line above a self-contained card read as a stray fragment. The disclosure
+          is still on this screen and still before anything irreversible happens — a reader who taps
+          Google without reading it was never going to read it above the button either. It duplicates
+          a footer destination on purpose: `SiteFooter` carries `/privacy` as chrome on every route,
+          this is the screen's own disclosure. */}
+      <Link href={PRIVACY_PATH} className={QUIET_LINK_CLASS}>
+        {SIGN_IN_COPY.privacyLink}
+      </Link>
     </main>
   );
 }

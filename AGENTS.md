@@ -278,7 +278,9 @@ a guide at `docs/features/<slug>.md`. Today: strength logging, the write path, p
 - **pre-push:** `pnpm typecheck` + affected tests — **two** `tsc --noEmit` projects, `apps/web` and
   `packages/db` (`src/**` + `scripts/**`). ⚠️ **Not the whole repo:** `packages/shared` and
   `packages/engine` have no tsconfig and are checked only _transitively_, through the app's imports.
-- **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does, **~40s** warm:
+- **`pnpm verify` — run this before opening a PR.** Everything CI's `quality` job does **except
+  `status:check`** (see below — it takes a base SHA, so it is its own command and a green `verify`
+  says nothing about it), **~40s** warm:
   `format:check` → `lint` → `typecheck` → `test` → `db:verify` → `db:mutations` → `skills:check`
   (every path and `pnpm` script a skill cites exists) → `actions:check` (every action SHA-pinned) →
   `guards:test` (the guard self-tests) → `audit:check` (the production audit). `db:mutations` applies
@@ -287,7 +289,10 @@ a guide at `docs/features/<slug>.md`. Today: strength logging, the write path, p
   **This section is the one list of where each gate runs**; other docs point here rather than
   restating it. `skills:check`, `guards:test` (all nine guard self-tests) and `audit:check` run here
   **and** in CI's `quality`, from the same `package.json` definition; `status:check` runs locally and
-  on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)). `actions:check` runs here
+  on every PR (DX-5(b), [plan](./docs/plans/dx-5b-local-gates-in-ci.md)) — **separately**, as
+  `pnpm status:check $(git merge-base HEAD origin/main)`, and ⚠️ it names the fragment it wants from
+  the BRANCH (`<date>-<branch-with-slashes-as-dashes>.md`), so a descriptively-named one is found
+  and rejected. `actions:check` runs here
   as the script, and in CI as a direct `node` call before pnpm is set up (with `--resolve` when a
   workflow changes), the one gate whose CI form is not the `package.json` script. `db:verify` runs on
   **PGlite — no Docker, no Postgres install** — which is why the DB proofs are local-runnable at all.

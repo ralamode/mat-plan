@@ -78,7 +78,12 @@ and why the no-flash test asserts a mechanism rather than an end state — is in
   paint; `e2e/theme.spec.ts` asserts the nonce matches the response's CSP header and that the first
   class mutation lands while `readyState === 'loading'`.
 
-Both themes are scanned by `e2e/a11y.spec.ts` on every route.
+Both themes are scanned by `e2e/a11y.spec.ts` on the routes the household uses. ⚠️ **Not on the
+public ones** — the dark pass loops `ROUTES` (the picker, Today, the routine editor, token sets), so
+`/`, `/privacy` and `/sign-in` get the light pass only. For `/` and `/privacy` that is defensible and
+the spec says why: they carry app tokens and no colour of their own. **`/sign-in` is the exception
+worth knowing about**, because the lit Clerk card ships its own palette from a CDN, so its dark
+rendering is pinned by nothing here.
 
 ## Reskinning
 

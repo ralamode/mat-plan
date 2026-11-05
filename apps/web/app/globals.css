@@ -1,9 +1,19 @@
-/* AUTH-1 1a — Clerk's style layer, declared BEFORE Tailwind's so it sits BELOW them.
+/* AUTH-1 1a — Clerk's style layer, ordered BETWEEN Tailwind's `base` and `components`.
    Layer priority is declaration order, and `@layer` statements are the one thing CSS allows ahead of
-   `@import`. `<ClerkProvider appearance={{ cssLayerName: 'clerk' }}>` (app/layout.tsx) is what puts
-   Clerk's CSS in here; unlayered, it would beat every Tailwind utility this app uses to hold the
-   sign-in card to the 44px tap-target bar. Inert while 1a is dark: no provider, no Clerk CSS. */
-@layer clerk;
+   `@import`. `<ClerkProvider appearance={{ cssLayerName: CLERK_CSS_LAYER }}>` (app/layout.tsx) is
+   what puts Clerk's CSS in here.
+
+   🔴 **The position matters in BOTH directions, and getting it wrong is invisible in CI** — no CI run
+   renders the lit Clerk card, because every harness blanks the keys.
+     - Clerk must sit ABOVE `base`: Tailwind's preflight resets `margin: 0; padding: 0; border: 0` on
+       `*` inside `@layer base`. Below it, that reset outranks every padding, margin and border rule
+       Clerk ships, and the card renders with its spacing stripped — the button flush to the card
+       edge, the footer flush to the button. That is what `@layer clerk;` alone did from 1a until it
+       was measured on 2026-11-05.
+     - Clerk must sit BELOW `components`/`utilities`: otherwise Clerk's own CSS beats the `min-h-11`
+       that holds its social button to the 44px tap-target bar.
+   Naming all five fixes both. `lib/clerk.test.ts` pins the relative order. */
+@layer theme, base, clerk, components, utilities;
 
 @import 'tailwindcss';
 @import 'tw-animate-css';

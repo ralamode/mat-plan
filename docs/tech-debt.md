@@ -38,9 +38,30 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   the split has to keep all three true. Check whether a route-group layout is the cleanest seam.
 - **Severity:** medium. It is disclosed now, which is the floor, not the fix.
 
+### `@clerk/nextjs` version citations drift silently across the tree (found 2026-11-05, AUTH-1 1d PR 0)
+
+- **What & why:** roughly twenty comments and docs name the installed Clerk version in **present
+  tense** — "at the pinned `7.9.15`", "not exported from any public entry at `7.9.15`" — and a
+  Dependabot bump changes the lockfile without touching one of them. After #332 (7.9.19 → 7.9.22) the
+  tree cited **three different versions at once**, and `docs/privacy/data-inventory.md` disagreed with
+  itself between lines 21 and 391. Nothing catches it: the strings are prose.
+- **Impact:** low severity, real cost. These citations exist precisely because the claims were
+  _verified by reading the vendor's source_, so a reader who greps the version to re-check a claim is
+  sent to a version that is no longer installed — which quietly devalues the one practice that made
+  those claims trustworthy. It also makes a genuine vendor-behaviour change hard to date.
+- **Fix:** a sweep is its own chore PR, not a rider on a UI change. Two options, cheapest first:
+  (a) stop naming the version where the claim is version-independent and say "verified against the
+  installed `@clerk/nextjs`"; (b) for claims that really are version-specific, a small `skills:check`
+  -style guard that greps `@clerk/nextjs@<x.y.z>` in `apps/web/**` and `docs/` (excluding
+  `docs/changelog/` and `docs/plans/`, which are **dated history and are not rewritten**) and fails
+  when it disagrees with `pnpm-lock.yaml`.
+- **Deliberately not done here:** PR 0 renumbered only the files it already touches
+  (`lib/clerk.ts`, `lib/clerk.test.ts`, `app/layout.tsx`, this file), each claim re-read against
+  7.9.22 first. The rest are listed above rather than swept.
+
 ### Clerk's browser runtime is fetched from a CDN at a floating major, so nothing in CI sees it (found 2026-10-16, AUTH-1 1a)
 
-- **What & why:** `@clerk/nextjs@7.9.15` is pinned in `pnpm-lock.yaml`, but the code that actually
+- **What & why:** `@clerk/nextjs@7.9.22` is pinned in `pnpm-lock.yaml`, but the code that actually
   renders the sign-in screen is **not in the lockfile at all**. `@clerk/shared`'s
   `clerkJSScriptUrl` / `clerkUIScriptUrl` build
   `https://<frontend-api-host>/npm/@clerk/clerk-js@<v>/dist/clerk.browser.js` and
@@ -56,6 +77,27 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     `e2e/a11y.spec.ts` measures the dark fallback; `screenshot:ephemeral` injects no Clerk keys either;
     and the `a11y` Playwright project sets `bypassCSP`, so even with keys it would not be measuring the
     production policy. Not one a11y property of Clerk's card is pinned by anything in this repo.
+
+    ✅ **Measured once, against the DEVELOPMENT instance, 2026-11-04** (`AUTH-1` 1d PR 0 — the lit
+    panel `runbooks.md` had owed since 1a). Dated observations, not guards, because clerk-js floats:
+    the Google button is **44.0px** so `elements`' `min-h-11` does land; Clerk's `<h1>` is in the DOM
+    but `display:none`, so the a11y tree holds exactly one; there is no horizontal overflow at 360px;
+    `:focus-visible` applies a real 3px ring. Two defects were found and fixed in that PR — the card
+    rendered a fixed `width: 400px` against the page's 352px column (**48px of overhang** at 1280px),
+    and the chrome this app briefly removed is now left alone (see below).
+    ⚠️ **One failure stands, and it is the vendor's:** Clerk's "Secured by Clerk" attribution link is
+    **48×14px**, under this repo's 44px bar _and_ WCAG 2.2 SC 2.5.8 (24×24). `elements` exposes no key
+    for it and hiding Clerk branding is a paid-plan feature, so it is un-met in one named place rather
+    than silently un-met. `lib/clerk.ts`'s `SIGN_IN_APPEARANCE` now pins what we _do_ control.
+    🔴 **This app does NOT restyle the card, and that is a decision** _(maintainer, 2026-11-05)_. A
+    first pass stripped its shadow, fill and padding and matched its button to the app's own. It
+    worked — and the thing that actually makes the card read as foreign is the **"Secured by Clerk"**
+    mark, whose removal is a **paid-tier** feature. Styling around a mark that stays buys a
+    half-integrated component that every CDN build can break, for no gain. The PAGE is sized to the
+    card instead (`page.tsx`'s `max-w-[432px]` against its 400px), and `SIGN_IN_APPEARANCE` is pinned
+    to an exact set of four a11y keys so a cosmetic one added later has to argue for itself.
+    **Reconsider only if the branding is ever paid for.**
+    **Re-verify on the next `@clerk/nextjs` bump** — these numbers are a dated reading of a CDN build.
 - **Why it was accepted:** the plan specifies Clerk's **prebuilt** component, the alternative
   (`useSignIn` + `signIn.authenticateWithRedirect`, our own markup) is a real option at this version but
   a different design decision, and 1a ships dark so nothing renders yet. Pinning `clerkJSVersion`

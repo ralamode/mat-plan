@@ -1,10 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   CLERK_BOT_PROTECTION_ORIGIN,
+  CLERK_CSS_LAYER,
   CLERK_IMG_ORIGIN,
   clerkFrontendApiOrigin,
   clerkIsConfigured,
+  SIGN_IN_APPEARANCE,
 } from './clerk';
 
 /**
@@ -70,12 +75,70 @@ describe('clerkFrontendApiOrigin', () => {
 
 /**
  * The contract test AGENTS.md allows: these two literals are what `proxy.test.ts` proves land in the
- * CSP, and they were read off `@clerk/nextjs@7.9.15`'s own `DEFAULT_DIRECTIVES`. The literal belongs
+ * CSP, and they were read off `@clerk/nextjs@7.9.22`'s own `DEFAULT_DIRECTIVES`. The literal belongs
  * on the assertion side exactly once, and this is that once.
  */
 describe('the Clerk CSP origins', () => {
   it('are exact origins, never wildcards', () => {
     expect(CLERK_IMG_ORIGIN).toBe('https://img.clerk.com');
     expect(CLERK_BOT_PROTECTION_ORIGIN).toBe('https://challenges.cloudflare.com');
+  });
+});
+
+describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
+  it('passes only class-name STRINGS, never a CSSObject the CSP would drop', () => {
+    // A `CSSObject` becomes a runtime-injected style, and `style-src 'self' 'nonce-…'` drops it
+    // SILENTLY — no error, no visual clue. A string is the only safe shape here.
+    for (const [key, value] of Object.entries(SIGN_IN_APPEARANCE.elements)) {
+      expect(typeof value, `elements.${key} must be a class string, not a CSSObject`).toBe(
+        'string',
+      );
+    }
+  });
+
+  it("keeps the 44px lever on Clerk's social button", () => {
+    // The arithmetic (does `min-h-11` actually clear MIN_TAP_TARGET_PX at this --spacing?) lives in
+    // `app/design/tokens/token-sets.test.ts`, derived from the const. This pins only that the lever
+    // is still attached — dropping the key currently reds nothing, because no CI run loads the card.
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
+  });
+
+  it('carries exactly ONE override, and only because Clerk misses an a11y floor', () => {
+    // Measured 2026-11-05 with this map emptied: Clerk's social button renders at 32px, under
+    // MIN_TAP_TARGET_PX. `elements` is the only lever — `variables` expose no control height. Every
+    // other key was removed: the card is left as Clerk designed it (the mark that makes it look
+    // foreign is "Secured by Clerk", whose removal is paid), and the page yields its own `<h1>` to
+    // the card's rather than hiding Clerk's with three more keys. This exact-set pin is what keeps
+    // that a decision — a key added here goes red and has to argue for itself.
+    expect(Object.keys(SIGN_IN_APPEARANCE.elements)).toEqual(['socialButtonsBlockButton']);
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('min-h-11');
+  });
+
+  it('orders @layer clerk BETWEEN base and components — wrong either way is invisible in CI', () => {
+    // Position matters in BOTH directions, and no CI run renders the lit Clerk card to catch it:
+    //  - ABOVE `base`, or Tailwind's preflight (`margin:0; padding:0; border:0` on `*`) outranks every
+    //    spacing rule Clerk ships and the card renders stripped — button flush to the card edge,
+    //    footer flush to the button. That is what a bare `@layer clerk;` did from 1a to 2026-11-05.
+    //  - BELOW `components`/`utilities`, or Clerk's CSS beats the `min-h-11` holding its social
+    //    button to MIN_TAP_TARGET_PX.
+    // Comments are stripped first: globals.css's opening comment names every one of these layers, so
+    // a naive indexOf matches the prose — the trap `app/design/tokens/token-sets.test.ts` documents.
+    const css = readFileSync(join(import.meta.dirname, '..', 'app', 'globals.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const decl = /@layer\s+([^;]+);/.exec(css);
+    expect(decl, '@layer declaration missing from globals.css').not.toBeNull();
+
+    const order = decl![1]!.split(',').map((n) => n.trim());
+    const base = order.indexOf('base');
+    const clerk = order.indexOf(CLERK_CSS_LAYER);
+    const components = order.indexOf('components');
+
+    expect(base, 'base must be named in the layer order').toBeGreaterThanOrEqual(0);
+    expect(clerk, `${CLERK_CSS_LAYER} must be named in the layer order`).toBeGreaterThanOrEqual(0);
+    expect(components, 'components must be named in the layer order').toBeGreaterThanOrEqual(0);
+    expect(clerk, "Clerk's layer must outrank Tailwind's preflight reset").toBeGreaterThan(base);
+    expect(clerk, "Clerk's layer must not outrank Tailwind's utilities").toBeLessThan(components);
   });
 });
