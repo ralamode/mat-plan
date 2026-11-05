@@ -112,8 +112,24 @@ describe('the sign-in card contract (AUTH-1 1d PR 0)', () => {
   });
 
   it('makes the card follow the page column instead of its fixed 400px', () => {
-    expect(SIGN_IN_APPEARANCE.elements.rootBox).toBe('w-full');
-    expect(SIGN_IN_APPEARANCE.elements.cardBox).toBe('w-full');
+    expect(SIGN_IN_APPEARANCE.elements.rootBox).toContain('w-full');
+    expect(SIGN_IN_APPEARANCE.elements.cardBox).toContain('w-full');
+  });
+
+  it("renders seamlessly — no floating card, and the button matches the app's own", () => {
+    // The vendor card ships as a drop-shadowed white box floating on the page. This app puts its own
+    // heading and disclosure directly above it, so the box read as a second, competing surface. The
+    // chrome comes off `cardBox` (the shadow) and `card` (the white fill and padding), and the Google
+    // button takes the app's outline-button treatment so the two controls on the screen match.
+    expect(SIGN_IN_APPEARANCE.elements.cardBox).toContain('shadow-none');
+    expect(SIGN_IN_APPEARANCE.elements.card).toContain('bg-transparent');
+    expect(SIGN_IN_APPEARANCE.elements.card).toContain('shadow-none');
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('border');
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('rounded-lg');
+    // `border-input`, NOT `border-border`: Clerk redefines `--border` on its own elements, so
+    // `border-border` silently resolves the VENDOR's value. `--input` is not shadowed and carries
+    // the identical colour. A layer-order fix cannot help — the variable itself is overridden.
+    expect(SIGN_IN_APPEARANCE.elements.socialButtonsBlockButton).toContain('border-input');
   });
 
   it('declares @layer clerk BEFORE Tailwind, or min-h-11 stops applying', () => {

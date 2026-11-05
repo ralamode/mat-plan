@@ -144,6 +144,17 @@ export const CLERK_CSS_LAYER = 'clerk';
  *   a fixed `width: 400px` against this page's 352px column (`max-w-sm` + `px-4`), overhanging it by
  *   48px at every viewport where the column hits its max — measured at 1280px, 2026-11-04. Widening
  *   `main` instead would leave a 16px misalignment pointing the other way.
+ * - **The card renders seamlessly, not as a floating box.** Clerk ships it as a drop-shadowed white
+ *   card, which on this screen read as a second surface competing with the page's own heading and
+ *   disclosure directly above it. `cardBox` drops the shadow and `card` drops the white fill and
+ *   padding, so the button sits on the page. The Google button then takes the app's own outline
+ *   treatment (`rounded-lg border-border bg-background`, the exact classes `buttonVariants`' outline
+ *   variant resolves to) so it and the page's other control match rather
+ *   than being two different kinds of button stacked on each other.
+ *   ⚠️ **"Secured by Clerk" stays.** It is the vendor's attribution on a free plan, and removing it
+ *   is a paid-tier feature — not a styling choice. Clerk's orange "Development mode" badge below it
+ *   is **development-instance only** and never reaches production, which is why captures taken
+ *   against the dev instance show a band that production does not have.
  *
  * 🔴 **This pins our INPUT, not the rendered outcome.** It cannot detect a CDN build that renames
  * `cl-headerTitle`, moves the title out of that class, or changes the button's box model — clerk-js
@@ -155,8 +166,10 @@ export const SIGN_IN_APPEARANCE = {
     headerTitle: 'hidden',
     headerSubtitle: 'hidden',
     header: 'hidden',
-    socialButtonsBlockButton: 'min-h-11',
+    socialButtonsBlockButton: 'min-h-11 rounded-lg border border-input bg-background shadow-none',
     rootBox: 'w-full',
-    cardBox: 'w-full',
+    cardBox: 'w-full shadow-none',
+    card: 'bg-transparent p-0 shadow-none',
+    footer: 'bg-transparent',
   },
 } as const;

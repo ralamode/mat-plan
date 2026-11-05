@@ -13,6 +13,21 @@
   the column — and hiding `headerTitle`/`headerSubtitle` left the header's own ~35px container in
   flow, so the card opened with a band of empty bordered box. `rootBox`/`cardBox: 'w-full'` and
   `header: 'hidden'` fix both.
+  **The card is now seamless, not a floating box.** Clerk ships it as a drop-shadowed white card; on
+  this screen that read as a second surface competing with the page's own heading and disclosure
+  directly above it. The chrome comes off `cardBox` (shadow) and `card` (white fill, padding), and the
+  Google button takes the app's outline-button treatment so the two controls on the screen match
+  instead of being two different kinds of button stacked on each other — verified identical in radius,
+  border width, border colour and background.
+  🔴 **That last point exposed a design-token collision worth knowing about: Clerk redefines `--border`
+  on its own elements** (`light-dark(#2F3037, #ffffff)`), so `border-border` silently resolves the
+  **vendor's** value rather than this app's. The layer ordering cannot help — the variable itself is
+  shadowed, not the rule. `--input` is not shadowed and carries the identical colour, so the button
+  uses `border-input`, which is shadcn's conventional token for an outline variant anyway. Pinned,
+  with the reason, so the next author does not "fix" it back to `border-border`.
+  ⚠️ **"Secured by Clerk" stays** — vendor attribution on a free plan, not a styling choice. The orange
+  "Development mode" band below it is **development-instance only** and never reaches production,
+  which is why captures taken against the dev instance show a band production does not have.
   **The appearance object moved to `lib/clerk.ts` as `SIGN_IN_APPEARANCE`**, which is where that file
   already declares itself the home for "Clerk wiring facts… three call sites must agree" — a route
   module's export surface is reserved, and half the contract (`cssLayerName`) already lived in
