@@ -272,6 +272,10 @@ describe('SENTRY_DATA_COLLECTION — what the SDK may collect on its own (Sentry
       urlQueryParams: false,
       graphQL: { document: false, variables: false },
       genAI: { inputs: false, outputs: false },
+      // Added by `@sentry/core@11.10.0` (MCP tool-call arguments and results; defaults to ON).
+      // This pin is the SECOND guard that fired on that bump — the `Required<…>` type caught it at
+      // compile time, this one catches a field added to the const without a decision.
+      mcp: { inputs: false, outputs: false },
       databaseQueryData: false,
       queues: false,
       stackFrameVariables: false,
