@@ -98,14 +98,15 @@ Six PRs, **reordered by round 1** (UX1 B2, scope S1) so there is never a window 
 add an athlete and has no way to fix or retire one: the edit and archive paths ship first, on the seeded
 athletes, and **add** comes last.
 
-| #   | PR       | Branch                                   | What                                                                                                                                                                                                 | ~lines (hand-written, incl. tests)                                                                                                                             | Gate                                                                                                                        |
-| --- | -------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **a-0**  | `db/prof-1a-0-profile-lifecycle-columns` | Migration: `profiles.client_id` (nullable, **non-partial** UNIQUE) + `profiles.archived_at`. Dark. AGENTS.md convention line + `db-migration` skill pointer                                          | ~210 (+ generated `meta/` JSON)                                                                                                                                | AUTH-1 1b's migration on `main` (numbers are serial; see [migration order](#migration-order))                               |
-| 2   | **a-g**  | `fix/prof-1a-g-kid-only-program-read`    | `readsHouseholdProgram(kind)` in shared; the guard in `programDayRows`; the adult's role label/default and muted line on the day page; positive/negative/flip `db:verify`; two mutation patches      | ~260                                                                                                                                                           | none in code. **Deployed before a-r merges** (a-r can flip a kid to adult)                                                  |
-| 3   | **a-r**  | `feat/prof-1a-r-rename-athlete`          | `foldName` + the name schema; `app/p/profile-actions.ts` (first module); rename/kind writer, DAL, action; `/p/[id]/edit`; "→ Edit {name}" replaces the routine link; `PROFILE_KIND_LABELS`; wrapping | ~400                                                                                                                                                           | **AUTH-1 1c observed live** + **WP-1 merged** + a-0 applied in prod + a-g deployed + UX panel reconciled + notice re-signed |
-| 4   | **b**    | `feat/prof-1b-archive-athlete`           | Archive/restore writers, DAL, actions; `/settings` shell + athlete sections; picker filter + settings row; archived banner; notice + inventory                                                       | ~430 incl. the shared `UndoLine` + `Announcer` (~90); if the count runs over, those two ship first as `feat/prof-1b-0-undo-line` (unmounted, with their tests) | a-r + the settings-shell verdict (PM-5) + notice re-signed                                                                  |
-| 5   | **a-1**  | `feat/prof-1a-1-add-athlete`             | `createProfile` (replay-first, in `packages/db`), `addAthleteAction`, `/p/new`, the dashed tile, the empty state without GitHub, README; notice                                                      | ~390                                                                                                                                                           | b + notice re-signed                                                                                                        |
-| 6   | **a-1d** | `feat/prof-1a-1d-duplicate-warning`      | The duplicate warning for add **and** rename, archived rows included from day one; "Restore {name}" for an archived match                                                                            | ~260                                                                                                                                                           | a-1                                                                                                                         |
+| #   | PR       | Branch                                   | What                                                                                                                                                                                                          | ~lines (hand-written, incl. tests)                                                                                                                                                                                                                                                                       | Gate                                                                                                                        |
+| --- | -------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **a-0**  | `db/prof-1a-0-profile-lifecycle-columns` | Migration: `profiles.client_id` (nullable, **non-partial** UNIQUE) + `profiles.archived_at`. Dark. AGENTS.md convention line + `db-migration` skill pointer                                                   | ~210 (+ generated `meta/` JSON)                                                                                                                                                                                                                                                                          | AUTH-1 1b's migration on `main` (numbers are serial; see [migration order](#migration-order))                               |
+| 2   | **a-g**  | `fix/prof-1a-g-kid-only-program-read`    | `readsHouseholdProgram(kind)` in shared; the guard in `programDayRows`; the adult's role label/default and muted line on the day page; positive/negative/flip `db:verify`; two mutation patches               | ~260                                                                                                                                                                                                                                                                                                     | none in code. **Deployed before a-r merges** (a-r can flip a kid to adult)                                                  |
+| 3   | **a-r**  | `feat/prof-1a-r-rename-athlete`          | `foldName` + the name schema; `app/p/profile-actions.ts` (first module); rename/kind writer, DAL, action; `/p/[id]/edit`; "→ Edit {name}" replaces the routine link; `PROFILE_KIND_LABELS`; wrapping          | ~400                                                                                                                                                                                                                                                                                                     | **AUTH-1 1c observed live** + **WP-1 merged** + a-0 applied in prod + a-g deployed + UX panel reconciled + notice re-signed |
+| 4a  | **b-s**  | `feat/prof-1b-s-owner-scope`             | **Dark.** `role` on `HouseholdScope` from the same membership row; `OwnerScope` + `ownerScope()`; guard assertions; `db:verify` proof. Read by nothing yet.                                                   | ~120                                                                                                                                                                                                                                                                                                     | b-s ahead of b; `a-0` applied                                                                                               |
+| 4   | **b**    | `feat/prof-1b-archive-athlete`           | Archive/restore writers, DAL, actions **taking `OwnerScope`**; `canManageAthletes` + the member view; `/settings` shell + athlete sections; picker filter + settings row; archived banner; notice + inventory | ~470 incl. the shared `UndoLine` + `Announcer` (~90) and the member view + `canManageAthletes` (~40); the `OwnerScope` seam is **not** in this count — it is `b-s`. Over 400, so if the count runs over, `UndoLine` + `Announcer` ship first as `feat/prof-1b-0-undo-line` (unmounted, with their tests) | a-r + the settings-shell verdict (PM-5) + notice re-signed                                                                  |
+| 5   | **a-1**  | `feat/prof-1a-1-add-athlete`             | `createProfile` (replay-first, in `packages/db`), `addAthleteAction`, `/p/new`, the dashed tile, the empty state without GitHub, README; notice                                                               | ~390                                                                                                                                                                                                                                                                                                     | b + notice re-signed                                                                                                        |
+| 6   | **a-1d** | `feat/prof-1a-1d-duplicate-warning`      | The duplicate warning for add **and** rename, archived rows included from day one; "Restore {name}" for an archived match                                                                                     | ~260                                                                                                                                                                                                                                                                                                     | a-1                                                                                                                         |
 
 Each PR carries its changelog fragment, its `docs/status.md` pointer move and its `docs/roadmap.md` move
 in the same PR (AGENTS.md → Status rides with the work); that line is not repeated per PR below.
@@ -397,7 +398,7 @@ packages/shared/src/profiles.ts                       (NEW, a-r; re-exported fro
 apps/web/lib/dal/profiles.ts (DTOs)
   ProfileWithRoutineDTO + { archived: boolean }                                     (b)
   HouseholdAthletesDTO { live: ProfileDTO[], archived: ProfileDTO[] }               (b)
-  CreateAthleteResult  { ok: true, id } | { ok: false, reason: 'no_household' | 'refused' }
+  CreateAthleteResult  { ok: true, id } | { ok: false, reason: 'no_scope' | 'refused' }
                        | { ok: false, reason: 'duplicate', match: { id, name, archived } }   (a-1, a-1d)
 ```
 
@@ -461,8 +462,13 @@ apps/web/lib/dal/profiles.ts (DTOs)
 
 | Path                                                          | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/db/src/queries/household-membership.ts`             | EDIT   | **(b-s)** `membershipHousehold` → `{ householdId, role }[]`; both `deleted_at` conjuncts and the `LIMIT 2` ambiguity probe untouched. The role comes from **this** row — see § Role authority 1.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `packages/db/src/scope.ts` (+ `scope.test.ts`)                | EDIT   | **(b-s)** `HouseholdScope` gains `readonly role`; new brand `OwnerScope` + `ownerScope(scope)`. `scope.test.ts:278-280`'s `toEqual({ householdId: 7 })` and the constructors at `:199-221` move with it; `householdScopeForScript` defaults `owner`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `apps/web/lib/dal/household.ts` (+ test)                      | EDIT   | **(b-s)** `householdScopeForRequest(id, role)`; **(b)** `householdState()` gains `canManageAthletes: boolean` — the page's only view of the role (invariant 2).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `packages/db/src/writers/ownership.ts`                        | EDIT   | **(b-s)** the ONE reader of `scope.role` (`scope.test.ts:60`); owner conjunct for owner-authority writes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `packages/db/scripts/mutations/NN-archive-ignores-role.patch` | NEW    | **(b-s)** drops the owner conjunct; `db:mutations` asserts `db:verify` goes **RED**. Without it the conjunct is a boundary test that cannot fail.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `packages/shared/src/profiles.ts`                             | EDIT   | `archiveAthleteSchema`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `packages/db/src/writers/profile.ts`                          | EDIT   | `setProfileArchived(exec, scope, publicId, archived)` → `SET archived_at = (archived ? COALESCE(archived_at, now()) : NULL), updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id, archived_at`. **Seam docblock** _(scope S2)_: "[ASSIGN-1](../plans/assign-1-assignments.md) D-5 adds `closeOpenAssignments` here, in the same transaction, and returns the closed ids for Undo (criterion 47)." No tripwire test.                                                                                                                                                                                                                                                                                    |
+| `packages/db/src/writers/profile.ts`                          | EDIT   | `setProfileArchived(exec, ownerScope, publicId, archived)` — **`OwnerScope` by parameter type**, so a non-owner caller is a compile error and a non-owner scope is 0 rows. `setProfileArchived(exec, scope, publicId, archived)` → `SET archived_at = (archived ? COALESCE(archived_at, now()) : NULL), updated_at = now() WHERE isLiveProfile(publicId, scope) RETURNING public_id, archived_at`. **Seam docblock** _(scope S2)_: "[ASSIGN-1](../plans/assign-1-assignments.md) D-5 adds `closeOpenAssignments` here, in the same transaction, and returns the closed ids for Undo (criterion 47)." No tripwire test.                                                                                                         |
 | `packages/db/src/queries/household-profiles.ts`               | EDIT   | Select `archivedAt` too (`:39-44`); **predicate untouched** — it is the isolation boundary (`:14-25`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `packages/db/scripts/verify.ts`                               | EDIT   | Appended, own households: archive → row has `archived_at`; **archive replayed keeps the first date** (COALESCE); B archiving A's updates 0 rows; restore clears; an archived profile still resolves through `isLiveProfile` and its month rows come back from the `export-month.ts` query (criterion 5).                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `apps/web/lib/dal/profiles.ts` (+ test)                       | EDIT   | `listProfiles` drops archived (criterion 5); `listHouseholdAthletes()`; `archiveAthlete`, `restoreAthlete`; `getProfileByPublicId` adds `archived`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -472,12 +478,12 @@ apps/web/lib/dal/profiles.ts (DTOs)
 | `apps/web/components/undo-line.tsx` (+ test)                  | NEW    | **The shared Undo line** (spec → "Seams the plans settled", `crud-1-fix-it-yourself.md:548`); PROF-1 is the first to ship one, and V1-9b, ASSIGN-1, V1-22 A4, RETIRE-1 and CLONE-1 import it. Props: `message`, `undoLabel` (names what it undoes, A11Y-5), `onUndo`, `restoredFocusId`. Behaviour: static message text; Undo button `min-h-11`, `aria-describedby` → the message; focus to Undo when it mounts and to `restoredFocusId` after a successful undo, both **in effects**; announces through `announce()` below, never its own region. It owns no state the caller cannot reset, so a caller keys it (FE-6: V1-9b keys by athlete and day). Lives in `components/` (not colocated) because it is genuinely shared. |
 | `apps/web/components/announcer.tsx` (+ test)                  | NEW    | The one announce helper: an `<Announcer>` that mounts a persistent `role="status"` region **before** any text, and an `announce(text)` from its context. A page that already has an announcer (the weigh-in's `SavedAnnouncer`, `apps/web/app/p/[profileId]/saved-announcer.tsx`) states in its docblock which one owns a restore; `/settings` has none, so it mounts this one.                                                                                                                                                                                                                                                                                                                                                |
 | `apps/web/app/p/page.tsx`                                     | EDIT   | A `<nav aria-label="Household">` with "Household settings ›", sub-line showing the archived count when non-zero ("2 archived") _(UX3 6)_, below the tiles (prototype `:2102`). Never an archive control on the picker (criterion 8).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `apps/web/app/p/[profileId]/page.tsx`                         | EDIT   | If `profile.archived`: a notice "{name} is archived. Restore them in Household settings." (wraps) and the forms off (`writable && !profile.archived`); the export link stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/app/p/[profileId]/page.tsx`                         | EDIT   | **Owner:** if `profile.archived`, a notice "{name} is archived. Restore them in Household settings." (wraps) and the forms off (`writable && !profile.archived`); the export link stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `apps/web/app/p/[profileId]/edit/page.tsx`                    | EDIT   | "To archive an athlete, use Household settings" + link (prototype `:2188`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `apps/web/lib/constants.ts`                                   | EDIT   | `SETTINGS_PATH`, `SETTINGS_COPY`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `apps/web/lib/constants.ts`                                   | EDIT   | `SETTINGS_PATH`, `SETTINGS_COPY` (incl. `ownerOnly`), `OWNER_ONLY_ATHLETE`. ⚠️ The refusal joins the `NO_HOUSEHOLD_COPY`/`notYet` family — "this is not for you to do" — **not** the `NO_PROFILE_*` family, which is the 404-equivalence set that must stay byte-identical.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |     |
 | `apps/web/e2e/athletes.spec.ts`, `a11y.spec.ts`               | EDIT   | Archive → leaves the picker, appears under Archived → **Undo** → back on the picker _(UX1 S7)_; restore; NARROW overflow + tap targets on `/settings`; axe list.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `docs/features/write-path.md`                                 | EDIT   | CI-forced. Archive is a list filter, never in `isLiveProfile`; the D-5 seam.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `docs/privacy/data-inventory.md`, `notice.md`                 | EDIT   | Inventory banner; §1a/§2 `archived_at` written; **§5**: archive is not deletion. Notice _(privacy 4–6)_: a **retention** row ("An archived athlete: kept in full until you restore or delete them"); under "Deleting your data", archiving **deletes nothing** and **does not hide** the athlete from anyone who opens their link or Household settings — any household member can archive and restore; under "Getting your data out", an archived athlete is exported from Household settings. Bump Last updated; regenerate `notice-content.ts`.                                                                                                                                                                             |
+| `docs/privacy/data-inventory.md`, `notice.md`                 | EDIT   | Inventory banner; §1a/§2 `archived_at` written; **§5**: archive is not deletion. Notice _(privacy 4–6)_: a **retention** row ("An archived athlete: kept in full until you restore or delete them"); under "Deleting your data", archiving **deletes nothing** and **does not hide** the athlete from anyone who opens their link or Household settings — **the household owner archives and restores; any member can add and rename**; under "Getting your data out", an archived athlete is exported from Household settings. Bump Last updated; regenerate `notice-content.ts`.                                                                                                                                             |
 
 ### PR a-1 — `feat/prof-1a-1-add-athlete`
 
@@ -510,7 +516,7 @@ sequenceDiagram
   F->>A: FormData {name, kind, clientId}
   A->>A: sessionUserOrNull → checkMutationLimit → zod
   A->>D: input
-  D->>D: getHouseholdScope() — null → no_household
+  D->>D: getHouseholdScope() — null → no_scope
   D->>W: scope, input
   W->>W: 1 profileByClientId (scoped) — found → ok, id
   W->>W: 2 duplicate fold (a-1d)
@@ -536,30 +542,217 @@ AUTH-1 1a, 1b-bis and 1c-pre have shipped; **1b and 1c have not, and 1c is a one
 (`auth-1-clerk-google.md:1695-1700`). a-r, b, a-1 and a-1d start only once 1c is **observed live**.
 Then, before writing code:
 
-1. **Boundary call:** `sessionUserOrNull()` then `checkMutationLimit(user.userId)` (`:1707`, `:1715`;
-   Design §2, §8). `addAthleteAction` grows a table without bound, so it must be limited. Confirm the
-   enumeration test was **switched, not widened** (`pages-need-a-session.test.ts:211-217`, the pre-1c text).
-2. **Page check:** `requireSession()` on `/p/new`, `/p/[id]/edit`, `/settings`.
-3. **`getHouseholdScope()`'s five outcomes** (Design §3.2): add refuses with `NO_ATHLETE_ADD` in every
-   non-resolved state, and the tile renders only in state A (`householdState()`).
-4. **No household creation** (Q5, `:423-480`).
-5. **The ≥2-household alert** exists (Q5).
-6. **Roles.** Step-up is listed only for delete (`beta-1.md:425`); Q6 makes delete owner-only. This plan
-   assumes **any member** may add, rename, archive and restore; if 1c ships a role, the panel decides.
-7. **Sentry context** stays unset (`:1720`); no `formData`.
-8. **`p/page.tsx` and `p/[profileId]/page.tsx` are 1c files** (`:1708`, `:1711`): merge `main` first.
+> ✅ **RUN 2026-11-06**, after `AUTH-1` completed (`1d` PR C, #337). Every item below carries its
+> result. Three were wrong in the plan's favour and are corrected; one overturns a central assumption.
+
+1. ⚠️ **Boundary call:** `sessionUserOrNull()` then `checkMutationLimit(user.userId)`, in that order,
+   inside `enterMutation` (`app/p/[profileId]/mutation-entry.ts`). `addAthleteAction` grows a table
+   without bound, so it must go through the same helper.
+   🔴 **But it cannot, from where D5 puts it, and this plan never noticed.** D5 puts the athlete
+   actions in `app/p/profile-actions.ts`; the helper is one directory deeper, and
+   `pages-need-a-session.test.ts:273` pins the import **as a string literal** —
+   `/import\s*\{\s*enterMutation\s*\}\s*from\s*'\.\/mutation-entry'/` — so `./mutation-entry`
+   from `app/p/` resolves to `app/p/mutation-entry.ts`, which does not exist. Three ways out, and the
+   plan must pick one rather than discover it mid-PR: **move** the helper to `app/p/mutation-entry.ts`
+   and widen the guard's pinned module list; keep it and let `profile-actions.ts` import
+   `./[profileId]/mutation-entry` (which the guard's regex would reject as written); or copy it — the
+   seven-copies shape `write-path.md` invariant 1 exists to forbid. **Decided: move it**, in WP-1,
+   since the household-level actions are its own fixed point. Guard edits owed: `ENTRY_IMPORT`, the
+   pinned module list (`:306`) and the order assertion (`:379-386`).
+   ⚠️ **This rides on WP-1, which is NOT merged** (`roadmap.md:56` still lists it as planned), so
+   item 8's "merged" below covers `AUTH-1` only and D5's gate stands. The enumeration guard was **switched, not
+   widened** — `1d` deleted the gate conjunct rather than folding it into an `||`, and
+   `app/pages-need-a-session.test.ts` states that rule in its own docblock.
+2. ✅ **Page check:** `requireSession()` on `/p/new`, `/p/[id]/edit`, `/settings`. None exists yet;
+   `app/pages-need-a-session.test.ts` enumerates `**/page.tsx` and will demand the call of each new
+   one, so this cannot be forgotten silently — **unless the route is listed in `PUBLIC_PATHS`**: the
+   assertion is `sessioned || isPublicPath(route)` (`:65-70`). None of PROF-1's three routes is
+   public, so the guard holds for this plan; the escape is stated so a later reader does not
+   over-trust it.
+3. ⚠️ **Five paths, two reportable values — and one retired tag.** `getHouseholdScope()` has
+   (A) resolved, (B) no principal, (B′) `household_members` missing (`42P01`/`42703`), (C) a principal
+   with no live membership, (D) ≥2 live memberships (`household.ts:32-38`). 🔴 **`no_household` was
+   RETIRED at 1c-4** — the resolver no longer counts households, so nothing can emit it, and
+   `SCOPE_OUTCOME` carries **`noMembership`** and **`schemaMissing`** only (`household.ts:181-194`).
+   ✅ **`auth-1-clerk-google.md` § Design 3.2 needs no change**: it is titled "The five outcome
+   states" and already lists B′ by name. _(An earlier pass of this re-verification dropped B′ and
+   called for §3.2 to be rewritten — wrong on both counts, and corrected here before it could send
+   anyone to edit a shipped plan. Panel round 5, architecture B1 / security 3.)_ The conclusion is
+   unchanged and now exact: **add** refuses `NO_ATHLETE_ADD` on B, B′ and C (all `null`), D throws to
+   `error.tsx`, and the tile renders only on A.
+   ⚠️ Not a contradiction, though it reads like one: `household.ts:327` says the resolver has
+   **three** outcomes — scope, `null`, throw — and the same sentence reconciles it ("the five are the
+   causes that collapse into `null`"). Two levels of description, both correct.
+4. ✅ **No household creation.** Nothing under `apps/web` writes a `households` or
+   `household_members` row; the maintainer's membership came from a `db:correct` correction.
+5. ⚠️ **It is a THROW, not an alert, and it is unreachable in production.** (D) throws
+   _"household scope is ambiguous"_ rather than reporting, and
+   `uq_household_members_clerk_user` is partial-unique on `clerk_user_id` alone, so the row cannot be
+   constructed. Blast radius is **per-principal** — that account gets `error.tsx` everywhere, nobody
+   else is affected. PROF-1 needs no special handling for (D) beyond the error boundary.
+6. 🔴 **Roles — ANSWERED, and the plan's assumption is overturned.** `AUTH-1` 1c **did** ship a role:
+   `HOUSEHOLD_ROLES = ['owner', 'member']` (`packages/shared/src/enums.ts`), and
+   `household_members.role` is `NOT NULL`. This plan assumed **any member** may add, rename, archive
+   and restore. That assumption is replaced — see § Role authority below.
+   ⚠️ **The citation here was wrong:** step-up is at `beta-1.md:452`, not `:425`.
+7. ✅ **Sentry context stays unset**; no `formData`, no `headers`. `lib/sentry-scrub.ts` strips by
+   STRUCTURE (the whole cookie bag), so it needs no per-field edit for new actions.
+8. ✅ **Merged.** `main` is at `a4e9f8e`; `AUTH-1` is complete. ⚠️ Both pages changed under `1d` —
+   they now call `requireSession()` only, and `app/pages-need-a-session.test.ts` (renamed from
+   `pages-are-gated.test.ts` in PR C) is what enforces that per route.
+
+## Role authority (decided 2026-11-06, replacing this plan's "any member" assumption)
+
+`AUTH-1` 1c shipped `HOUSEHOLD_ROLES = ['owner', 'member']` and a `NOT NULL`
+`household_members.role`, which is the condition re-verify item 6 said would send this back to the
+panel. ⚠️ **Today the column is stored and read by nothing** — `role` appears in no query, no DAL
+function and no page. PROF-1 is the first feature that would read it.
+
+| Action                   | Who            | Why                                                                                                                    |
+| ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **add**, **rename**      | any member     | Additive and trivially reversible. Blocking a second parent from naming an athlete is friction with no risk behind it. |
+| **archive**, **restore** | **owner only** | _(maintainer, 2026-11-06)_ — see the reasoning below.                                                                  |
+| **delete**               | **owner only** | Already decided (Q6). ⚠️ Step-up is NOT available in Beta 0 — see the gap below.                                       |
+
+🔴 **Why owner-only for archive, when archive is reversible.** The usual argument against restricting
+a reversible action does apply here: PROF-1's archive is undoable (`UndoLine`), visible (archived
+athletes get their own `/settings` section rather than vanishing), and the history still exports. So
+this is not "archive is dangerous".
+
+The decision rests on two other things:
+
+1. **Tightening a permission later is a breaking change; loosening one is not.** Shipping any-member
+   and restricting it afterwards takes away something a parent was using. Shipping owner-only and
+   loosening it is a one-line policy change nobody notices. With one membership in existence, the
+   cost of starting strict is **zero today** and only begins when a second adult is invited.
+2. **The app records no author.** There is no `deleted_by` and no per-entry authorship, so even a
+   visible, reversible archive cannot answer "who did this?". Restricting _who can_ is the only
+   control that exists. `notice.md` already concedes the entry-level version of this problem; an
+   archived athlete is the larger case.
+3. 🔴 **The one that actually discriminates archive from rename: archive removes the athlete from
+   everyone's picker.** Reasons 1 and 2 are true of rename too, which this table leaves any-member —
+   so on their own they do not yield the split, and the security lens was right to say so (round 5,
+   finding 5). What makes archive different is its blast radius on someone else's screen:
+   `listProfiles` drops archived athletes, so one adult can take a kid off the other adult's
+   gym-floor picker mid-practice. A rename is visible in place and changes nothing about who can be
+   logged against.
+
+⚠️ **The honest cost of this split, stated rather than discovered later:** **add** is any-member and
+**archive** is the only way to reverse an add (delete is A3, deferred), so **a member who adds a
+wrong athlete cannot remove it** — they can rename it to something harmless, and the owner archives
+it. Accepted for Beta 0, where exactly one membership exists; it becomes real the day INVITE-1 mints
+a second. The alternative — letting the adding member archive within some window — needs authorship
+the app does not have, which is reason 2.
+
+### What a member actually sees _(UX panel round 5, findings 2, 3, 5, 6)_
+
+A member is **not** a cross-household caller — they can already see every athlete on `/settings` — so
+hiding the fact helps nobody and three of PROF-1's copy lines currently route them to a control they
+will not have.
+
+- **No per-row Archive for a member.** The row renders without the control, and the Archived section
+  carries **one statement of fact** instead of a disabled button per row: `SETTINGS_COPY.ownerOnly` —
+  _"Only the person who set up this household can archive or restore an athlete."_
+  ⚠️ **"The person who set up this household", never a name:** `household_members` stores
+  `clerk_user_id` and `role` and **no name or email** (`schema.ts:173-195`), and the DAL reads no
+  Clerk profile fields, so the app cannot say who the owner is. Copy that implies it could would be a
+  promise the data model cannot keep.
+- **If any inert control is kept instead, it is `aria-disabled` + `tabIndex={-1}`, not `disabled`** —
+  `Button`'s `disabled:opacity-50` fails contrast at this size, and the repo already has the
+  `aria-disabled` precedent. The 360px math is unaffected either way: removing a control only widens
+  the row.
+- **Three copy lines move with the decision**, each gaining an owner branch: `/p/[id]`'s archived
+  notice ("Restore them in Household settings" → for a member, "Ask the person who set up this
+  household to restore them"), `/p/[id]/edit`'s "To archive an athlete, use Household settings", and
+  a-1d's duplicate callout, whose **primary** is "Restore {name}" — a member must get the
+  acknowledge-and-add path as primary instead, since the restore they are offered would refuse.
+- **The server still refuses**, because a hidden control is not a boundary: `OWNER_ONLY_ATHLETE` on a
+  crafted POST, after ownership resolved, with its own matrix row.
+
+### 🔴 Where the check lives — the seam, not an `if` per action
+
+Both the security and architecture lenses returned the same design independently (round 5), and it is
+the repo's existing idiom rather than a new mechanism:
+
+1. **The role rides the scope, resolved from the SAME row in the SAME query.** `membershipHousehold`
+   returns `{ householdId, role }` instead of `number[]`; `HouseholdScope` gains a `readonly role`.
+   `scope.ts:10-12` was built for exactly this — _"a record rather than a `number` so COACH-1's 'not
+   mine, but shared with me' can widen the return type instead of replacing it"_.
+   🔴 **This is a safety property, not a tidiness one.** `uq_household_members_clerk_user` is partial
+   on `deleted_at IS NULL` (`schema.ts:196-198`), so one account can hold a **soft-deleted `owner`
+   row in household X beside a live `member` row in Y**. A second lookup keyed on `clerk_user_id` —
+   or one that forgets the `deleted_at` conjunct — returns the dead owner row and makes a member an
+   owner. Reading the role in the query that already carries both `deleted_at` conjuncts makes that
+   unrepresentable, and removes any TOCTOU window between the role read and the write.
+2. **The authority is a TYPE, so forgetting it is a compile error.** A second brand `OwnerScope` and
+   `ownerScope(scope): OwnerScope | null`; writers needing owner authority take `OwnerScope` **by
+   parameter type**. That is `scope.ts:20-21`'s own argument — _"the REQUIRED positional parameter on
+   `isLiveProfile` is the compile-time guarantee"_ — and it means INVITE-1 minting, member removal and
+   PRIV-3 deletion inherit the check by signature rather than by a reviewer remembering.
+3. **One reader of `scope.role`,** in `packages/db/src/writers/ownership.ts` — already the ONE module
+   allowed to unwrap the capability (`scope.test.ts:60`). `setProfileArchived` takes `OwnerScope` and
+   its predicate grows a fourth conjunct, so a non-owner write affects **0 rows** against a real
+   database.
+4. **The page learns it from a DAL boolean, never the role string and never the scope.**
+   `householdState()` (`household.ts:343-345`) gains `canManageAthletes: boolean`. A page may not name
+   `getHouseholdScope` — `scope.test.ts:60-62` fails the build on it — and the capability must not
+   leave `lib/dal` (`write-path.md` invariant 2).
+5. **Refusal order, which ADR 0006 already settles:** session → limiter → zod → `isLiveProfile`
+   (0 rows → `NO_ATHLETE_SAVE`) → **owner conjunct** → a distinct named refusal. ADR 0006:348 permits
+   this precisely: _"403 only for an id inside the caller's own household that its scope does not
+   permit; 404 for everything else."_ A member is not a cross-household caller — they can already see
+   the athlete — so a distinct message leaks nothing, **provided** it is only reachable after
+   ownership resolved. Ordering the role branch first would hand a member different strings for their
+   own and a foreign id, breaking the byte-identical matrix `actions.test.ts:1640-1656` pins, for no
+   gain.
+
+**Rejected, and why** — `if (scope.role !== 'owner')` inside each action: exercised only against a
+mocked DAL, and the seven-copies shape `enterMutation` was collapsed to kill
+(`mutation-entry.ts:40-44`). An owner conjunct in the `packages/db` predicate keyed on the principal:
+writers hold no principal, so it is a membership re-read per write.
+
+**Staging:** the seam lands as a **dark `b-0`** ahead of PR b — the scope widening, `OwnerScope`,
+the guard assertions and a `db:verify` proof, reading nothing yet — the same shape this plan already
+uses for `a-0`. ⚠️ `scope.test.ts:278-280` pins the scope shape with `toEqual({ householdId: 7 })`
+and `:199-221` pins the constructors, so widening is deliberate and visible;
+`householdScopeForScript` and the screenshot fixture need a role (default `owner`, stated).
+
+⚠️ **This supersedes a maintainer answer from 2026-10-23, and the earlier one is recorded rather than
+erased.** It read: _"the household owner, **or the athlete themself when not a child** (M45)"_.
+🔴 **The second half is not expressible in the current data model.** `profiles` has no
+`clerk_user_id`; `household_members` links a person to a **household**, not to an athlete. So the app
+cannot tell which profile, if any, is the signed-in member. Implementing it needs a new link between
+a minor's record and an account identity — a migration **and** a privacy change that
+`data-inventory.md` would have to carry. ⚠️ It also sits against `notice.md`'s published claim, twice
+stated, that **children do not have accounts** and are never asked to sign in. Deferred, not rejected:
+if athletes ever hold their own logins, that is its own chunk, and the notice moves with it.
+
+### Step-up: already settled, and not this plan's problem
+
+`beta-1.md:452` requires Clerk reverification before delete-athlete, and **step-up is a Beta 1 item**
+(`beta-1.md:67`) while PROF-1b ships in Beta 0. That is not a gap, because **delete is not in
+PROF-1**: § Out-of-scope stages it as **A3, _[later]_, "gated on A2, PRIV-3's runner and Beta 1
+step-up"**, and `crud-1-fix-it-yourself.md:41` agrees ("delete is **later** (Beta 1 step-up)"). The
+owner-only actions this plan ships are **archive and restore**, both reversible, neither needing
+reverification.
+
+_(An earlier pass of this refresh framed this as an open trade-off and asked the panel to choose
+between shipping delete without step-up and holding it back. All three lenses rejected the premise:
+the second option **is** the standing decision, and the first would move a milestone-owned step. The
+only true part was the citation, kept above. Panel round 5, architecture B3 / security 2 / UX 8.)_
 
 ## Test plan
 
 **Boundary tests (AGENTS.md → Backend rules):**
 
-| Case                                    | add (`household`)                                                                     | rename (`profile`)                     | archive / restore (`profile`)                                      |
-| --------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------ |
-| unauth → reject before any DAL call     | central matrix (`MUTATING_ACTIONS`), `NO_ATHLETE_ADD`                                 | central matrix, `NO_ATHLETE_SAVE`      | central matrix                                                     |
-| wrong owner / no scope                  | household suite via `scopeMiss` → `NO_ATHLETE_ADD`, byte-identical; `refused` → same  | foreign id → `NO_ATHLETE_SAVE`, 0 rows | foreign id → same, 0 rows                                          |
-| bad body → zod reject, no write         | blank, 41 chars, newline, combining-only, bad kind, missing/garbage `clientId`        | same + garbage `profileId`             | garbage `profileId`                                                |
-| replay → one effect, identical response | same `clientId` → 1 row, same id (also after archive; also when the name now matches) | same values → same state               | archive twice → one row, **first date kept**; restore twice → live |
-| duplicate (a-1d)                        | warning, not `fieldErrors`; acknowledged → adds; changed name re-warns                | same, excluding itself                 | —                                                                  |
+| Case                                         | add (`household`)                                                                     | rename (`profile`)                                                                                                                                                              | archive / restore (`profile`)                                      |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| unauth → reject before any DAL call          | central matrix (`MUTATING_ACTIONS`), `NO_ATHLETE_ADD`                                 | central matrix, `NO_ATHLETE_SAVE`                                                                                                                                               | central matrix                                                     |
+| wrong owner / no scope                       | household suite via `scopeMiss` → `NO_ATHLETE_ADD`, byte-identical; `refused` → same  | foreign id → `NO_ATHLETE_SAVE`, 0 rows                                                                                                                                          | foreign id → same, 0 rows                                          |
+| **member, own household, owner-only action** | n/a (add is any-member)                                                               | **refused with `OWNER_ONLY_ATHLETE`, 0 rows** — reached only after `isLiveProfile` resolved, so the byte-identical foreign-id matrix (`actions.test.ts:1640-1656`) is unchanged | same                                                               |
+| bad body → zod reject, no write              | blank, 41 chars, newline, combining-only, bad kind, missing/garbage `clientId`        | same + garbage `profileId`                                                                                                                                                      | garbage `profileId`                                                |
+| replay → one effect, identical response      | same `clientId` → 1 row, same id (also after archive; also when the name now matches) | same values → same state                                                                                                                                                        | archive twice → one row, **first date kept**; restore twice → live |
+| duplicate (a-1d)                             | warning, not `fieldErrors`; acknowledged → adds; changed name re-warns                | same, excluding itself                                                                                                                                                          | —                                                                  |
 
 Actions are plain async functions with the DAL mocked; `next/navigation` mocked and `redirect` asserted
 with `RedirectType.replace` on success only — for add, through the binding's `succeeded` predicate, which also asserts `revalidatePath(APP_HOME_PATH)` and `revalidatePath(SETTINGS_PATH)` ran before it. **`db:verify`** runs the real writers and queries, every new
@@ -630,9 +823,29 @@ an archived athlete is restorable by a build with Restore or a guarded correctio
 
 1. **An archived athlete's own page** — recommended: notice + forms off, export link kept, no new check
    in the existing actions (archive is not a security boundary). _For the UX panel's re-review._
-2. **Archive authority after AUTH-1** — any member, or owner only? (Re-verify item 6.) _For the
-   maintainer._
-3. **The notice wording** in a-r, b and a-1 needs the maintainer's re-sign before each merges.
+2. ✅ **Archive authority after AUTH-1 — ANSWERED 2026-11-06: owner only.** See § Role authority,
+   including why it supersedes the 2026-10-23 answer and why that answer's second half is not
+   expressible today. _(An earlier pass of this refresh opened a step-up question here; all three
+   lenses showed it was already settled — delete is A3, Beta 1. Removed, not answered.)_
+3. 🔴 **Should RESTORE be any-member, while archive stays owner-only?** _For the maintainer._ The UX
+   and security lenses argued it independently (round 5). The case for splitting them: restore moves
+   toward the **more visible, safer** state and is itself reversible, so the asymmetry is coherent —
+   "you need the owner to take a kid off everyone's screen; anyone can put them back". The scenario
+   is concrete and on the gym floor: the owner archives the wrong athlete at home, practice starts,
+   the other adult sees the tile gone and the kid's page with its forms off, and **nothing in the app
+   can recover it** until the owner is reachable. It also softens the add/archive asymmetry recorded
+   in § Role authority. The case against: two policies to hold in mind instead of one, and the
+   recorded decision was "archive/restore, owner only". **Recommended: split them** — archive
+   owner-only, restore any-member. Cost if taken: one row in the matrix, one `OwnerScope` parameter
+   not taken on the restore writer, and `SETTINGS_COPY.ownerOnly` narrows to archive.
+4. 🔴 **Does the owner-only rule belong to PROF-1, or to the household model?** _For the maintainer._
+   `docs/specs/crud-1-fix-it-yourself.md:1190` (M45) and `docs/plans/v1-9b-delete-and-restore.md:618`
+   still bind **V1-9b and RETIRE-1** to the superseded 2026-10-23 answer. Leaving them is how two
+   screens end up with two household models. **Recommended:** state it once as a rule — _anyone in
+   the household records and corrects; the owner decides who is in it_ — which is what `beta-1.md:447-450`
+   already implies, and point M45 at it. ⚠️ Not editable in this PR without widening it past a plan
+   refresh; owed as its own small docs PR if accepted.
+5. **The notice wording** in a-r, b and a-1 needs the maintainer's re-sign before each merges.
 
 _Closed by round 1:_ rename duplicates (the same check, excluding itself — D7); the adult's role label
 and default (accepted into a-g — D4); archive's release (the milestone puts PROF-1b in **Beta 0**,
@@ -715,3 +928,29 @@ spec's disagreement 1 should be updated when `plan.md` opens).
 | 2   | SHOULD   | Concurrent same-key requests: step 2 can match the twin's fresh row and answer "duplicate"      | accepted | `findNameMatch` excludes rows carrying the caller's `client_id`; `db:verify` insert → step 2 with the same key → no match (a-1d).               |
 | 3   | SHOULD   | Add did not revalidate before redirecting                                                       | accepted | `revalidatePath(APP_HOME_PATH)` and `(SETTINGS_PATH)` before `redirect`, asserted in `succeeded`.                                               |
 | 4   | NIT      | Full-width `foldName` case unpinned                                                             | accepted | `Ｚｏｅ` → `zoe` pinned (D11).                                                                                                                  |
+
+### Refresh panel, round 5 — 2026-11-06, after `AUTH-1` completed
+
+> Three lenses on the refresh only (UX · security · architecture), not a re-review of the design.
+> Panel cost: ux 118k · 4m22s, security 138k · 6m17s, architecture 119k · 5m49s.
+
+🔴 **Two of this refresh's own additions were the panel's two blocking findings, and a third was a
+correction that was itself wrong.** Recorded in full because the pattern is the useful part: a
+decision stated without a seam reads as planned when it is not, and a re-verification is exactly
+where a confident miscount does the most damage.
+
+| #   | Lens            | Finding                                                                                                                                     | Verdict           | Resolution                                                                                                                                                       |
+| --- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | ux · sec · arch | **BLOCKING.** § Role authority decides owner-only but nothing implements it — no seam, file row, test row, refusal const or page projection | **accepted**      | § "Where the check lives" + six file rows (`scope.ts`, `household-membership.ts`, `household.ts`, `ownership.ts`, `profile.ts`, a mutation patch) + a matrix row |
+| R2  | ux · arch       | **BLOCKING.** PR b's notice row still published "any household member can archive and restore"                                              | **accepted**      | Row now reads "the household owner archives and restores; any member can add and rename"                                                                         |
+| R3  | sec · arch · ux | **BLOCKING.** The step-up section argued a settled question — delete is A3, Beta 1, behind step-up (`:689`)                                 | **accepted**      | Section cut to two lines stating the standing decision; "newly open" removed from Q2                                                                             |
+| R4  | sec · arch      | **Re-verify item 3 was wrong**: five paths, not four — B′ (`schema_missing`) dropped, and §3.2 needed no rewrite                            | **accepted**      | Item 3 restored to five paths; the manufactured "rewrite §3.2" task struck; the `no_household`-retired half kept                                                 |
+| R5  | sec             | Item 1 is unsatisfiable from where D5 puts the actions: `./mutation-entry` does not resolve from `app/p/`                                   | **accepted**      | Item 1 now names the move, the three options and the three guard edits owed; WP-1 restated as **not merged**                                                     |
+| R6  | sec             | The stated reasons do not discriminate archive from rename, and a member cannot undo their own add                                          | **accepted**      | Reason 3 added (archive removes the athlete from everyone's picker); the add/archive asymmetry stated as an accepted cost                                        |
+| R7  | sec · arch      | Carry `role` on the scope from the same row — a second lookup can return a soft-deleted `owner` row                                         | **accepted**      | § Role authority 1, with the `uq_household_members_clerk_user` partial-index hazard as the reason                                                                |
+| R8  | arch            | Make the authority a **type** (`OwnerScope`), so later features inherit it by signature                                                     | **accepted**      | § Role authority 2; `setProfileArchived` takes `OwnerScope` by parameter type                                                                                    |
+| R9  | ux · sec        | Specify the member's view and a distinct refusal, joined to the `notYet` family not `NO_PROFILE_*`                                          | **accepted**      | § "What a member actually sees"; `OWNER_ONLY_ATHLETE`; refusal order fixed to post-ownership per ADR 0006:348                                                    |
+| R10 | ux · sec        | Restore has gym-floor recovery urgency that archive does not; consider any-member restore                                                   | **to maintainer** | Open question 4, with the scenario, the cost of taking it, and a recommendation to split                                                                         |
+| R11 | ux              | M45 and `v1-9b:618` still bind siblings to the superseded answer                                                                            | **to maintainer** | Open question 5; not editable here without widening a plan refresh into a spec change                                                                            |
+| R12 | arch            | `household.ts:327` carries a **third** outcome count ("three")                                                                              | **rejected**      | Not a defect: the same sentence reconciles it — "the five are the causes that collapse into `null`". Two levels of description, both correct                     |
+| R13 | arch · sec      | NITs: `reason: 'no_household'` reuses a retired name; item 2 overstates the page guard                                                      | **accepted**      | Renamed `no_scope` (matches `SCOPE_MISS_OUTCOME.noScope`); item 2 now says "unless listed public"                                                                |
