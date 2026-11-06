@@ -2056,13 +2056,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "If you are refused at the door, a record of you already exists."
+            "text": "If you are refused at the door, Clerk has already been given your details."
           }
         ]
       },
       {
         "k": "text",
-        "text": " Signing up is by invitation only,\nand Google's consent screen appears "
+        "text": " Signing up is by\ninvitation only, and Google's consent screen appears "
       },
       {
         "k": "strong",
@@ -2075,20 +2075,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " this app checks whether your address was invited — so\nan address that is then refused has already given Clerk its email address, name and profile picture.\n⚠️ "
+        "text": " this app checks whether your address\nwas invited — so an address that is then refused has already passed its email address, name and\nprofile picture to Clerk. That part is certain: it follows from the order the two screens run in.\n⚠️ "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "You can have that record deleted without being invited to anything."
+            "text": "What we do not yet know is whether Clerk keeps a record of a refusal"
           }
         ]
       },
       {
         "k": "text",
-        "text": " Write to the address under\n\"Asking for anything\"; there is no household to protect in that case, so nothing has to be confirmed\nthrough an invitation channel first."
+        "text": ", and this notice will not\nguess. If it does, you can ask for it to be deleted — write to the address under \"Asking for\nanything\" — and we will tell you what was found either way."
       }
     ]
   },
