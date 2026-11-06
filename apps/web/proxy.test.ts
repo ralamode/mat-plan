@@ -412,8 +412,10 @@ describe('Clerk composition', () => {
 });
 
 /**
- * PRIV-2 — the per-request values the proxy hands the renderer. The footer's `aria-current` needs
- * the current pathname in a SERVER component, and `x-nonce` already proves this mechanism works.
+ * PRIV-2 — the per-request value the proxy hands the renderer. ⚠️ This described the pre-`1d`
+ * design: the footer's `aria-current` set from a forwarded pathname in a SERVER component.
+ * `SiteFooter` is a client component on `usePathname()` now, and `x-nonce` is the only value still
+ * forwarded.
  */
 describe('forwarded request headers', () => {
   // ⚠️ **The `x-pathname` cases are GONE at AUTH-1 1d, with the header.** They pinned that the proxy
@@ -422,8 +424,9 @@ describe('forwarded request headers', () => {
   it('overwrites an INBOUND x-nonce', async () => {
     const name = 'x-nonce';
     // `forward()` builds its headers with `new Headers(request.headers)` and then `.set()`s, so a
-    // caller cannot inject either value. The worst case of a spoofed pathname is a wrong
-    // `aria-current`, not a security property — but the overwrite is the property, so it is pinned.
+    // caller cannot inject the value. ⚠️ The old note weighed "a spoofed pathname is a wrong
+    // `aria-current`, not a security property" — that was about the deleted header. For the NONCE
+    // the overwrite IS the security property, which is why it is pinned.
     const { res } = await run('/p/abc', { inbound: { [name]: 'spoofed' } });
     expect(forwarded(res, name)).not.toBe('spoofed');
   });

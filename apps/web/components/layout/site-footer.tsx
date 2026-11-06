@@ -22,7 +22,7 @@ import { matchesPathTree } from '@/lib/public-paths';
  * lists and kept for this one is why `notice-article.tsx` sets classes per block.)
  *
  * 🔴 **A CLIENT component, and it had to become one — `AUTH-1` 1d, found by a failing e2e test.**
- * It was a server component reading `x-pathname`, a header the proxy forwards, with a docblock
+ * It was a server component reading `x-pathname`, a header the proxy forwarded, with a docblock
  * arguing that `usePathname()` would mean "a client component on every route for one attribute".
  * ⚠️ **That argument was wrong about the cost and silent about a bug.** This is ONE leaf in the root
  * layout with no data dependencies — making it client re-renders nothing else — and **Next does not

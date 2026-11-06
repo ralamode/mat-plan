@@ -811,10 +811,13 @@ sent from a test. The first half holds. The second needed a correction twice ove
 dropped `next-router-prefetch` on the measured-but-misread basis that it "never reaches the server",
 when in fact Next strips it **only from the middleware body**
 (`server/web/adapter.js` — "Headers should only be stripped for middleware") while the matcher
-evaluates `has`/`missing` on the raw request beforehand. Both arms are sent now. ⚠️ The
-matcher-mutation probe **could not be run** — `next build` rejects an object-form `config.matcher`
-entry here — so that layer rests on `proxy.test.ts`'s compiled-entry pin, and the e2e arm covers
-"skips the proxy at some other layer".
+evaluates `has`/`missing` on the raw request beforehand. Both arms are sent now.
+✅ **The matcher-mutation probe WAS run, and the arm reddens on SEC-1's own regression.** ⚠️ An
+earlier version of this paragraph said it "could not be run — `next build` rejects an object-form
+`config.matcher` entry". That was wrong twice over: the object form is what V0-4 shipped and SEC-1
+removed, and Next 16.4.3's `MiddlewareMatcherInputSchema` still accepts `has`/`missing`. The real
+barrier is `proxy.test.ts`'s own `readonly string[]` parameter type — a far thinner guarantee, and
+one cast gets past it.
 
 ### Still open
 

@@ -205,7 +205,7 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
  * by `proxy.test.ts`'s own typing — `getMiddlewareMatchers(config.matcher, …)` takes
  * `readonly string[]` — not by Next, whose `MiddlewareMatcherInputSchema` still accepts `has`/
  * `missing`. ⚠️ **An earlier version of this comment blamed `next build` for rejecting the shape.
- * That was wrong**: SEC-1's own config used exactly this shape and shipped. The real barrier is a
+ * That was wrong**: the config SEC-1 *fixed* used exactly this shape and shipped. The real barrier is a
  * test's parameter type, which is a thinner guarantee than it sounded — hence this arm.
  */
 test('a prefetch-flagged request still goes through the proxy (SEC-1)', async ({ browser }) => {
