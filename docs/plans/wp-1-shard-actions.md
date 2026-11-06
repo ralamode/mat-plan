@@ -17,10 +17,11 @@
 docs/roadmap.md` → WP-1's row only). `ID-1`'s six keep-open items are answered in § Standing
 > obligations.
 >
-> ⚠️ **Rebase onto [#341](https://github.com/ralamode/mat-plan/pull/341) before implementing.** It
-> fixes `guides:check`, which was reading **3 of `write-path.md`'s 13** `owns:` entries — including
-> `mutation-entry.ts` and `mutating-actions.ts`, the two files this PR moves and edits. Until it
-> lands, this plan's guide obligations are not actually CI-enforced.
+> ✅ **The guide obligations below ARE now CI-enforced, as of
+> [#341](https://github.com/ralamode/mat-plan/pull/341) (`729db36`).** `guides:check` had been reading
+> **3 of `write-path.md`'s 13** `owns:` entries — `mutation-entry.ts` and `mutating-actions.ts`, the
+> two files this plan moves and edits, among the ten unguarded. Found by this panel and fixed ahead of
+> implementation, so a reader does not have to wonder whether the gate this plan leans on is real.
 
 ## Goal
 

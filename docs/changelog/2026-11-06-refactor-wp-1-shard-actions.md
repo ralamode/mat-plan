@@ -36,6 +36,6 @@
   **Five places still pinned `app/gate/actions.ts` after the refresh "fixed" two** — a test-plan probe
   told the reader to add an export to a file 1d deleted, and an acceptance assertion required an
   intersection to equal it. Found independently by four lenses.
-  ⚠️ **Rebase onto [#341](https://github.com/ralamode/mat-plan/pull/341) before implementing:** `guides:check` was reading 3 of `write-path.md`'s 13
-  `owns:` entries, `mutation-entry.ts` and `mutating-actions.ts` among the ten unguarded, so this
-  plan's guide obligations were not actually CI-enforced.
+  ✅ **The guide obligations are CI-enforced as of [#341](https://github.com/ralamode/mat-plan/pull/341):**
+  `guides:check` had been reading 3 of `write-path.md`'s 13 `owns:` entries, `mutation-entry.ts` and
+  `mutating-actions.ts` among the ten unguarded. Found by this panel and fixed before implementation.
