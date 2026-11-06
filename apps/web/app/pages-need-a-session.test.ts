@@ -24,8 +24,10 @@ import {
  * MORE load-bearing than before, not less.** The proxy's gate bounce used to be a second, independent
  * thing standing between a stranger and a page. It is gone, so these per-route assertions are now the
  * only thing that notices a page which forgets to check anything.
- * ⚠️ **PR C renames this file `pages-need-a-session.test.ts`** — its contents moved here, the rename
- * and the citation sweep are a separate PR so this one's diff stays about behaviour.
+ * ✅ **Renamed from `pages-are-gated.test.ts` at `AUTH-1` PR C.** `1d` moved the contents (the
+ * subject narrowed from "gated" to "needs a session"); the rename and its citation sweep were held
+ * back so that PR's diff stayed about behaviour. ⚠️ `git log --follow` is what shows the history
+ * across the move.
  *
  * Source is matched with comments STRIPPED, so a `// TODO: requireSession()` cannot satisfy it.
  */

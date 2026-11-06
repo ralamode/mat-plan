@@ -389,7 +389,7 @@ type ProgramHistoryDTO = {
   column exists in the projection.
 
 **Boundary tests (the read-only subset of AGENTS.md → Backend rules):** unauth → the page guard
-(`pages-are-gated.test.ts` globs `**/page.tsx`, so the new page is covered with no edit); wrong owner
+(`pages-need-a-session.test.ts` globs `**/page.tsx`, so the new page is covered with no edit); wrong owner
 → `getProfileByPublicId` returns null → 404, plus the DAL returning the empty shape under a mocked
 foreign scope (`programming.ts` precedent) and the `db:verify` row; bad input → malformed profile id
 → empty shape, malformed / future `?on` → the visible line. **No replay test:** nothing mutates.
@@ -440,7 +440,7 @@ active_to, created_at, deleted_at)` and `program_assignment_weekdays`
    same transaction as the move (so the comparison with an entry's `created_at` is meaningful).
 7. **AUTH-1 1c** (gates D3 via Beta 1, so landed by D7 in practice): the page guard is
    `requireSession()` not `requireGatedPage()` (`auth-1-clerk-google.md:655`) and
-   `pages-are-gated.test.ts` asserts the new name; `getHouseholdScope()` resolves the session's
+   `pages-need-a-session.test.ts` asserts the new name; `getHouseholdScope()` resolves the session's
    household (`household.ts` → "What AUTH-1 changes"), so this plan's calls do not change. Pages are
    globbed, so 1b-bis's action list needs no entry.
 8. **`firstDay` vs logged days:** whether any live entry predates its profile's `created_at` date.

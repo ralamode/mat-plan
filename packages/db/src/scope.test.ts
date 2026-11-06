@@ -26,7 +26,7 @@ import { householdScopeForScript } from './writers/household-scope-script';
  *    and nothing is unwrapped, so guards 1-4 all stay green while a `HouseholdScope` lands in a
  *    page, a component or a `'use server'` module under `lib/`.
  *
- * Source is matched with comments STRIPPED (the `pages-are-gated.test.ts` idiom), so a docblock that
+ * Source is matched with comments STRIPPED (the `pages-need-a-session.test.ts` idiom), so a docblock that
  * *describes* the hazard — this one included — cannot trip the guard, and a `// TODO: scope` cannot
  * satisfy one.
  *

@@ -37,9 +37,13 @@ only way a notice about minors' health data is worth anything.
 > ⚠️ **One thing this chunk ADDS to what a processor holds, and it is not a reduction:** sign-up is
 > invitation-only, but Google's consent screen runs **before** this app checks the invitation — so a
 > refused address has already given Clerk its email, name and picture. `notice.md`'s 5 November
-> section says so and states that such a record can be deleted without an invitation. ⏳ Whether a
-> refused sign-up leaves a Clerk user record at all is an unobserved production question (the 1d
-> plan, lit-panel finding 5); this row is where that gap is tracked.
+> section says so and states that such a record can be deleted without an invitation. ✅ **Partly answered
+> 2026-11-05 on production, under `Invite-only`: the refusal is ON-ORIGIN** — Clerk renders _"New
+> sign-ups are currently restricted."_ inside this app's own page, so a refused stranger is not sent
+> off-origin (the 1d plan, lit-panel finding 5). ⏳ **Still unobserved: whether Clerk RETAINS a user
+> record for that refusal.** The screen does not say and the app cannot tell — it is a console read.
+> This row is where that gap stays tracked. ⚠️ The observation is bound to `Invite-only`; production
+> moved to `Waitlist` the same day.
 >
 > ⚠️ **The staleness command below was RUN, not merely rewritten** (2026-11-05): against baseline
 > `38f62de` it printed **38 commits**, which is why the baseline is advanced with this entry. Three of

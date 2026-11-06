@@ -44,10 +44,9 @@ but DDL/migrations need a **direct** session (PgBouncer's transaction pooling ca
 must never target more than one scope (OPS-1).** Create a separate record for each, even where the
 value is identical:
 
-| Variable               | Production                 | Preview / Development              | Notes                               |
-| ---------------------- | -------------------------- | ---------------------------------- | ----------------------------------- |
-| `ACCESS_GATE_PASSWORD` | a long random code         | a **different** long random code   | V0-4 stopgap; see the warning below |
-| `DATABASE_URL`         | production Neon **pooled** | `mat-plan-preview` Neon **pooled** | app runtime only                    |
+| Variable       | Production                 | Preview / Development              | Notes            |
+| -------------- | -------------------------- | ---------------------------------- | ---------------- |
+| `DATABASE_URL` | production Neon **pooled** | `mat-plan-preview` Neon **pooled** | app runtime only |
 
 - Validated at boot by `lib/env.ts` — **the app refuses to start if either is missing/invalid**, and
   since OPS-1 it also refuses to start when `VERCEL_ENV` and the database the string names disagree
@@ -117,7 +116,6 @@ DATABASE_URL_UNPOOLED="<neon-direct-url>" pnpm db:seed
 Create `apps/web/.env.local` (gitignored) from `apps/web/.env.example`:
 
 ```bash
-ACCESS_GATE_PASSWORD="any-local-code-8+chars"
 DATABASE_URL="<neon-pooled-url>"            # only used by `pnpm dev:prod` (the opt-in)
 DATABASE_URL_UNPOOLED="<neon-direct-url>"   # only used by `pnpm dev:prod`
 ```
@@ -125,7 +123,8 @@ DATABASE_URL_UNPOOLED="<neon-direct-url>"   # only used by `pnpm dev:prod`
 **`pnpm dev` (the safe default)** does NOT read those `DATABASE_URL`s — it boots a **persistent
 local embedded Postgres** (fixed port `54329`, gitignored `apps/web/.local-db/`), migrates + seeds it,
 and runs `next dev` against it, so playing with the app never writes to prod Neon. Your play-data
-survives restarts; `ACCESS_GATE_PASSWORD` still comes from `.env.local` so the gate login works. Wipe
+survives restarts. ⚠️ `ACCESS_GATE_PASSWORD` used to be named here as still coming from `.env.local`;
+the variable was **deleted at `AUTH-1` 1d** and `lib/env.ts` no longer declares it. Wipe
 the sandbox with `pnpm db:local:reset`.
 
 `pnpm dev:prod` is the **deliberate opt-in** that runs the old `next dev` against `.env.local`'s Neon

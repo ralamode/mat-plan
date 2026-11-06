@@ -819,6 +819,26 @@ removed, and Next 16.4.3's `MiddlewareMatcherInputSchema` still accepts `has`/`m
 barrier is `proxy.test.ts`'s own `readonly string[]` parameter type — a far thinner guarantee, and
 one cast gets past it.
 
+### Finding 5 — ANSWERED on the production instance, 2026-11-05
+
+🔴 **The refusal path is on-origin.** An address that had never touched the instance signed in while
+the access mode was **`Invite-only`**: Clerk's card rendered the refusal **inside our page**, verbatim
+_"New sign-ups are currently restricted."_, with the mark, both disclosure paragraphs and the privacy
+link still on screen. No navigation to Clerk's Account Portal, no off-origin dead end. So the outcome
+this finding existed to catch does not occur, and `signUpUrl={SIGN_IN_PATH}` — set defensively in
+PR A — is belt rather than braces on that path.
+
+✅ **Destination (b) confirmed too:** an invited address that accepted its invitation signs in and
+lands on `NO_HOUSEHOLD_COPY`, exactly as `SIGN_IN_COPY.invitation` is worded not to over-promise. An
+invitation gets a Clerk account; a `household_members` row gets a household, and nothing under
+`apps/web` writes one.
+
+⚠️ **The observation is mode-specific, and the mode has since changed.** It was taken under
+`Invite-only`; production moved to **`Waitlist`** the same day, which replaces the refusal with a
+"Join waitlist" link that **does** leave the origin (`accounts.mat-plan.dev`). That is recorded in
+`docs/privacy/data-inventory.md` §7 and shipped in the notice (#336) — it does not retract this
+observation, it bounds it.
+
 ### Still open
 
 Open questions 2-4; Q1 is resolved. **No blocking critique survives**, with one gate: § The lit panel

@@ -473,7 +473,7 @@ remain valid rows. Cut a Neon restore branch before A4-1's migration.
 (`docs/plans/auth-1-clerk-google.md:549`). D4c sits behind Beta 1's gate, so 1c will be on `main`. Each PR
 re-checks against 1c as merged: (1) `getHouseholdScope()`'s session-derived body (`lib/dal/household.ts:68`)
 — re-run the boundary tests on 1c's fixture; (2) the page guard 1c leaves in place of `requireGatedPage()`
-(`lib/dal/gate.ts:26`) on the new route, seen by `pages-are-gated.test.ts`; (3) WP-1's registry lists both
+(`lib/dal/gate.ts:26`) on the new route, seen by `pages-need-a-session.test.ts`; (3) WP-1's registry lists both
 actions with scope `'household'`; (4) 1c's mutation limiter wraps both; (5) the role check ADR 0005 deferred
 to AUTH-1 (V1-22 spec → Decisions): creating and renaming a program use chunk 4's check; (6) Sentry context
 carries `userId`/`householdId` and never a program or workout name.

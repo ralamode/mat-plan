@@ -98,7 +98,7 @@ async function routineOrder(page: Page): Promise<string[]> {
  * forwards an action id the page doesn't own to the page that does. Capture a real action request
  * (the routine editor's Save) — aborted, so it never runs — then replay it to every public path with
  * a spoofed `x-action-forwarded: 1`, which makes Next skip forwarding and look in that page's OWN
- * action map. That map must be empty: `pages-are-gated.test.ts` keeps it so statically, and this
+ * action map. That map must be empty: `pages-need-a-session.test.ts` keeps it so statically, and this
  * proves it at runtime.
  *
  * 🔴 **`1d` DELETED variant 1, and this is a real loss of coverage, stated rather than papered over.**

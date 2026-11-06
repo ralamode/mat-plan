@@ -34,7 +34,7 @@ import './token-sets.css';
  *
  * ## Gating, and its lifetime
  *
- * Needs a session like every other page (`requireSession()`, which `app/pages-are-gated.test.ts` enforces
+ * Needs a session like every other page (`requireSession()`, which `app/pages-need-a-session.test.ts` enforces
  * statically), plus `noindex`. It is deliberately NOT excluded from production: the Vercel preview
  * IS a production build, so a `NODE_ENV` guard would delete the capability that justified choosing a
  * route in the first place. It holds **no data** — every value on this page is a literal in its own
@@ -118,7 +118,7 @@ export default async function TokenSetsPage() {
   // the reason the gate could not simply be deleted before `1c-4`.
   // Re-checked HERE rather than inherited from the proxy: SECURITY.md refuses to call a
   // matcher-driven layer a boundary (CVE-2025-29927), and SEC-1's own scar was a prefetch header
-  // skipping the matcher entirely. `app/pages-are-gated.test.ts` is what keeps this call here
+  // skipping the matcher entirely. `app/pages-need-a-session.test.ts` is what keeps this call here
   // (PR C renames that file to `pages-need-a-session.test.ts`; its contents already moved here).
   await requireSession();
 

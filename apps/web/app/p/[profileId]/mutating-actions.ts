@@ -9,7 +9,7 @@ import { NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
  *   cannot be added without the boundary suites covering it. Before this module, `ALL_ACTIONS` was a
  *   hand-maintained array and `docs/features/write-path.md` invariant 1 admitted the hole in writing:
  *   _"A new action without it fails the unauth suite only if you add it to that suite: do."_
- * - `pages-are-gated.test.ts` compares these keys against the actions it finds on disk, so the list
+ * - `pages-need-a-session.test.ts` compares these keys against the actions it finds on disk, so the list
  *   and the filesystem cannot drift. **The non-vacuity floor is `Object.keys(MUTATING_ACTIONS).length`,
  *   never a re-typed `7`** — a count written twice is the same defect one level up.
  *

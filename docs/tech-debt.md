@@ -33,7 +33,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
     `e2e:local`, because the export now correctly returns **200 with a real zip** to the
     bypass-authenticated request. Rewriting it to accept 200 would have inverted its own subject.
 - **Impact:** production is **still protected** — the in-action `requireSession()` and the per-page
-  `requireSession()` are unit-proved, and `app/pages-are-gated.test.ts` asserts the call per route.
+  `requireSession()` are unit-proved, and `app/pages-need-a-session.test.ts` asserts the call per route.
   What is lost is the **runtime** proof that an unauthenticated request does no work. 🔴 **Do not cite
   "no unauthenticated request reaches the DB" as a property this SUITE demonstrates any more** — it
   was cited that way in `docs/plans/ai-1-nl-logging.md`'s spend argument, and both halves of that
@@ -162,7 +162,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **The mitigations that DID ship in 1a**, so this entry is not "we shrugged": `appearance.elements`
   uses **class-name strings** (never a `CSSObject`, which the nonce'd `style-src` would drop silently),
   `cssLayerName: 'clerk'` with `@layer clerk` declared first in `globals.css` so Tailwind's utilities
-  win the cascade, `min-h-11` on the Google button, and `app/pages-are-gated.test.ts` pinning the exact
+  win the cascade, `min-h-11` on the Google button, and `app/pages-need-a-session.test.ts` pinning the exact
   set of `'use server'` modules `@clerk/nextjs` ships so a bump that adds one turns CI red.
 - **Proposed fix:** (a) a **full three-lens UX panel on the lit screen** against the development
   instance, with captures at 360/390/820/1280 and a keyboard pass, before 1d retires the gate — it is a
@@ -243,7 +243,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 - **What & why:** the same "comments out, strings kept" `code(file)` helper was defined separately in
   **five** places. `AUTH-1` 1b-bis extracted it to **`apps/web/test/source-scan.ts`** and converted the
-  three copies it touched — `apps/web/app/pages-are-gated.test.ts`,
+  three copies it touched — `apps/web/app/pages-need-a-session.test.ts`,
   `apps/web/app/tenancy-is-not-cached.test.ts` and `apps/web/lib/dal/scoped.test.ts`.
 - **What is left, and why each is still standing:**
   - `apps/web/lib/household-synthetic-is-dark.test.ts` — a straight conversion, but 1b-bis did not

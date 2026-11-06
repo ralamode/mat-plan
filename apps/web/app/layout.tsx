@@ -90,11 +90,12 @@ export default async function RootLayout({
       // Clerk's sign-UP step — and with this prop unset Clerk sends that caller to its own Account
       // Portal, on **another origin**: no footer, no `/privacy`, no way back to this app. `1d` makes
       // `/sign-in` the only door, so an off-origin dead end is the one outcome worth pre-empting.
-      // ⚠️ **Set defensively: the refusal path is NOT yet observed on the production instance.** The
-      // plan owes one run with an address that has never touched the instance (neither existing
-      // account can produce it — both exist). Pointing it here is correct whichever way that lands:
-      // a refused caller returns to a page that explains itself. Do not remove this without that
-      // observation in hand.
+      // ✅ **OBSERVED 2026-11-05 on production, under `Invite-only`: the refusal is ON-ORIGIN.** Clerk
+      // rendered _"New sign-ups are currently restricted."_ inside our card, with the mark and both
+      // disclosures still on screen — no Account Portal, no off-origin dead end. So this prop is belt
+      // rather than braces on that path. ⚠️ **Keep it anyway:** the access mode is a dashboard setting
+      // (now `Waitlist`), the observation is bound to the mode it was taken under, and clerk-js ships
+      // from a CDN at a floating major — none of which this repo can pin.
       signUpUrl={SIGN_IN_PATH}
       signInFallbackRedirectUrl={APP_HOME_PATH}
       afterSignOutUrl={SIGN_IN_PATH}

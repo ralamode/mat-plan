@@ -126,7 +126,7 @@ sequenceDiagram
 
 🔴 **Every non-public surface requires a Clerk session whose principal holds a `household_members`
 row, re-checked in-process — and as of `1d` that is the ONLY requirement.**
-`app/pages-are-gated.test.ts` reports the offender by name, asking the question differently per kind:
+`app/pages-need-a-session.test.ts` reports the offender by name, asking the question differently per kind:
 a **page** or **Route Handler** names the check itself, while an **action** must call `enterMutation`
 and **return its refusal** — the session check, the limiter and their order are asserted once inside
 that helper.

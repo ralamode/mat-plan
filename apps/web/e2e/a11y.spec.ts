@@ -808,7 +808,7 @@ test.describe('public routes', () => {
 
     /**
      * AUTH-1 1a — the sign-in screen, the THIRD public route. This describe ENUMERATES routes, so a
-     * new one joins no gate until somebody adds it; `app/pages-are-gated.test.ts` globs, which is
+     * new one joins no gate until somebody adds it; `app/pages-need-a-session.test.ts` globs, which is
      * why that half is easy to assume covers this one.
      *
      * ⚠️ **This measures the DARK state, and nothing in this repo can measure the other one.** CI has

@@ -538,7 +538,7 @@ Then, before writing code:
 
 1. **Boundary call:** `sessionUserOrNull()` then `checkMutationLimit(user.userId)` (`:1707`, `:1715`;
    Design §2, §8). `addAthleteAction` grows a table without bound, so it must be limited. Confirm the
-   enumeration test was **switched, not widened** (`pages-are-gated.test.ts:211-217`, the pre-1c text).
+   enumeration test was **switched, not widened** (`pages-need-a-session.test.ts:211-217`, the pre-1c text).
 2. **Page check:** `requireSession()` on `/p/new`, `/p/[id]/edit`, `/settings`.
 3. **`getHouseholdScope()`'s five outcomes** (Design §3.2): add refuses with `NO_ATHLETE_ADD` in every
    non-resolved state, and the tile renders only in state A (`householdState()`).

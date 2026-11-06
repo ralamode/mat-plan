@@ -32,7 +32,7 @@ import { code } from '@/test/source-scan';
  * 12 call sites cannot collide across households. Non-obvious, and the reason TEN-1 needed no route
  * sweep at all.
  *
- * Source is matched with comments STRIPPED (the `pages-are-gated.test.ts` idiom), so this docblock's
+ * Source is matched with comments STRIPPED (the `pages-need-a-session.test.ts` idiom), so this docblock's
  * own mention of `unstable_cache` cannot trip the guard.
  */
 

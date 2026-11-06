@@ -133,7 +133,7 @@ export const isRateLimitConfigured = mutationLimiter !== null;
  * kid logging a set is worse than an outage that briefly widens a window on a three-person app.
  *
  * 🔴 **ONE caller since `1c-3b`: `enterMutation`.** It is not called from an action directly, and the
- * guard in `pages-are-gated.test.ts` asserts it appears there in order, after the session check —
+ * guard in `pages-need-a-session.test.ts` asserts it appears there in order, after the session check —
  * because the key is the principal, and fail-open plus an unconfigured limiter under vitest means no
  * behavioural test can see this call misplaced or missing.
  */

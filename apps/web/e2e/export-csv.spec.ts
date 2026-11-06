@@ -45,7 +45,7 @@ test('the export refuses an unknown profile, and says nothing about it', async (
 // ⚠️ **Rewriting it to accept 200 would have inverted its own subject**, and leaving a weakened
 // version would have been a test named for a property it no longer examines. What it claimed is
 // still true and still proved — by the handler's unit-level session check and by
-// `app/pages-are-gated.test.ts`'s per-handler source guard. What is GONE is the runtime proof, and
+// `app/pages-need-a-session.test.ts`'s per-handler source guard. What is GONE is the runtime proof, and
 // that loss is recorded in `docs/tech-debt.md` ("Two runtime auth proofs went with the gate"),
 // together with the un-bypassed second server that would restore it.
 //

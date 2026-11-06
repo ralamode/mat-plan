@@ -1006,7 +1006,7 @@ Opened, not recalled, at `origin/main@9d46547`:
   `apps/web/components/profiles/profile-tile.tsx`; `apps/web/app/p/[profileId]/page.tsx` (Logged
   entries); `strength-form.tsx` (Movement field, Add movement); `packages/shared/src/catalog-movements.ts`
   (35 rows; grouped by `pattern` in this session); `packages/shared/src/enums.ts` → `PROFILE_KINDS`;
-  `apps/web/app/pages-are-gated.test.ts`; `apps/web/app/globals.css`
+  `apps/web/app/pages-need-a-session.test.ts`; `apps/web/app/globals.css`
 
 ## Review-response log
 

@@ -693,7 +693,7 @@ have shipped, 1b/1c/1d have not. Before PR c:
    (`docs/plans/auth-1-clerk-google.md:69-80`) — and that a household-scoped action with **no profile in the
    request** is authorized by the scope alone.
 2. **The unauth test's shape** after 1c ("no session", not "no gate cookie"), via WP-1's household suite.
-3. **The `'use server'` allowlist** (`pages-are-gated.test.ts:228`) as WP-1 and 1c leave it.
+3. **The `'use server'` allowlist** (`pages-need-a-session.test.ts:228`) as WP-1 and 1c leave it.
 4. **Who may archive.** ADR 0008 decision 4 revisits authority at AUTH-1; beta-1 → Roles names
    invite/remove/delete as owner acts (`docs/milestones/beta-1.md:423`). Archive is reversible and not a
    delete, so this plan **recommends any member**; if owner-only, c adds the role check and a wrong-role

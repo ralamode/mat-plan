@@ -15,7 +15,7 @@ runs SQL by hand and leaves no audit trail — the most privileged actor here, a
 one; and the **unauthenticated internet caller**, which is why every page, action and handler
 re-checks for itself and the proxy is never the boundary. ✅ **The `/api` matcher hole this paragraph
 used to point at is closed** (`AUTH-1` 1a): `apps/web/proxy.ts`'s matcher no longer excludes `api`, and
-`app/pages-are-gated.test.ts`'s handler suite gained the non-vacuity floor that makes its per-handler
+`app/pages-need-a-session.test.ts`'s handler suite gained the non-vacuity floor that makes its per-handler
 proof the other half — which is what `docs/tech-debt.md` always prescribed ("do both"). ⚠️ Read it as
 "no gap at any entry point that reads household data", **not** "no matcher-shaped gap":
 `_next/static/`, `_next/image` and `favicon.ico` are still excluded, and `/_next/image` is a live

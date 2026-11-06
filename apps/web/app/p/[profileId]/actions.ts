@@ -85,7 +85,7 @@ export async function logBodyweightAction(
   // Sentry: see the comment block above `logBodyweightAction`. `return await` is load-bearing.
   return await Sentry.withServerActionInstrumentation('logBodyweightAction', async () => {
     // The gate AND the session AND the limiter, in that order — `./mutation-entry` holds the one
-    // copy and the reasoning, and `pages-are-gated.test.ts` is what pins both.
+    // copy and the reasoning, and `pages-need-a-session.test.ts` is what pins both.
     const entry = await enterMutation(NO_PROFILE_LOG);
     if (!entry.ok) return entry;
     const parsed = logBodyweightSchema.safeParse({

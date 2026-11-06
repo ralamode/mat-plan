@@ -16,7 +16,7 @@ vars live in `apps/web/.env.local`, which is separately gitignored).
 
 ## Related local secrets (elsewhere)
 
-- **`apps/web/.env.local`** — `ACCESS_GATE_PASSWORD`, `DATABASE_URL` (Neon pooled),
+- **`apps/web/.env.local`** — `DATABASE_URL` (Neon pooled),
   `DATABASE_URL_UNPOOLED` (Neon direct). Loaded by `pnpm dev`.
 
 ## Rules

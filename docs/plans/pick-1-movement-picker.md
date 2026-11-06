@@ -686,7 +686,7 @@ compare ids (Gates).
   the session check, not `hasGateAccess` (`actions.ts:278`), and PR 2's unauth test asserts the new
   call; (b) `getHouseholdScope()`'s contract (null/throw) is unchanged — the two DAL reads rely only on
   it; (c) `e2e/login.ts` and `screenshot:ephemeral` follow 1c-pre's seam; (d) no new page or action, so
-  `pages-are-gated.test.ts` needs nothing.
+  `pages-need-a-session.test.ts` needs nothing.
 - **WP-1** (the `actions.ts` shard) — PICK-1 adds no action and does not edit `actions.ts`.
 - **Chunk 0** does not gate PICK-1.
 
