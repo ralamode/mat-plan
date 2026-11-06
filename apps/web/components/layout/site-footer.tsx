@@ -33,8 +33,8 @@ import { matchesPathTree } from '@/lib/public-paths';
  * that screen showed two links to `/` and two to `/privacy` — exactly what the suppression exists to
  * prevent. It only passed before because every test reached `/sign-in` by `page.goto` (a hard
  * navigation, which does re-render the layout).
- * ⚠️ `proxy.ts` still forwards `x-pathname` and `proxy.test.ts` still pins it; it now has **no
- * consumer** — see `docs/tech-debt.md`.
+ * ⚠️ `x-pathname` had no other consumer, so `1d` deleted `proxy.ts`'s forwarding and its pins in the
+ * same change rather than leaving them behind.
  *
  * 360px, with the arithmetic rather than a trust in flex-wrap: `px-4` leaves a 328px content box;
  * `mat-plan` (~62px at 14px) + `gap-x-4` (16px) + `Privacy notice` (~95px) ≈ 173px, one line with

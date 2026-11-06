@@ -59,9 +59,8 @@ export default async function RootLayout({
   // ⚠️ **`x-pathname` is read nowhere now (AUTH-1 1d).** PRIV-2 forwarded it so the footer's
   // `aria-current` could be set from a SERVER component — but the root layout is not re-rendered on a
   // client-side navigation, so the value was stale after a soft nav, and `1d` made that visible by
-  // hanging the footer's visibility on it. `SiteFooter` now uses `usePathname()`. The proxy still
-  // forwards the header and `proxy.test.ts` still pins it; removing both is its own small change
-  // (`docs/tech-debt.md`), not a rider here.
+  // hanging the footer's visibility on it. `SiteFooter` uses `usePathname()`, and `1d` deleted the
+  // forwarding and its pins with it rather than leaving plumbing with no consumer.
 
   // AUTH-1 1a — Clerk, INSIDE the nonce/theme providers and only when both keys are present.
   //

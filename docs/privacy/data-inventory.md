@@ -395,9 +395,12 @@ to that host for the whole sign-in exchange. So the honest statement is now in *
    requests to any Clerk host from `/` or `/sign-in`.
 2. **Once an instance is configured, there is exactly one external host the browser talks to**, and it
    is named by **exact origin** — derived from the publishable key, never a wildcard — in
-   `connect-src`, alongside `img-src https://img.clerk.com` (OAuth provider logos) and
-   `frame-src https://challenges.cloudflare.com` (Clerk's bot-protection widget). `proxy.test.ts` pins
-   each one and asserts the policy contains no `*` and no scheme-wide `https:`/`http:` source. What
+   `connect-src`, alongside `img-src https://img.clerk.com` (OAuth provider logos). `proxy.test.ts`
+   pins each one and asserts the policy contains no `*` and no scheme-wide `https:`/`http:` source.
+   ⚠️ **A third source, `frame-src https://challenges.cloudflare.com` for Clerk's bot-protection
+   widget, was REMOVED at `AUTH-1` 1d (2026-11-05)** — the production instance has that protection off
+   (`captcha_enabled: false`), so the policy named an origin nothing renders. `proxy.test.ts` now
+   asserts its absence in both states. One fewer host the browser may talk to. What
    leaves the browser is a sign-in exchange: Clerk sees the visitor's IP and browser on that screen,
    and the email address, name, profile picture and Google account identifier of whoever signs in (see the Google row below — the profile claims cannot be narrowed). **No training, bodyweight
    or athlete data is involved** — `/sign-in` reads none of it, by the same rule `/` and `/privacy`

@@ -196,15 +196,17 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
  * is authenticated. `proxy.test.ts` pins the matcher's SHAPE; this pins that nothing skips the proxy
  * at any other layer, such as an early `return` keyed on the header.
  *
- * ✅ **Probed RED** by an early `return NextResponse.next()` inside `proxy()` — the "skips the proxy
- * at some other layer" case, which the matcher pin cannot see.
- * ⚠️ **The matcher-condition probe could NOT be run, and saying so is the point.** Re-adding SEC-1's
- * own `missing: [{ type: 'header', key: 'next-router-prefetch' }]` requires an OBJECT entry in
- * `config.matcher`, and `next build` rejects that shape here — twice, including through a cast. So
- * the historical regression is currently blocked one step earlier than this test, by the config's
- * own typing plus `proxy.test.ts`'s compiled-entry pin. This arm is kept because that is a weak
- * barrier (a future Next may widen the type) and because its MECHANISM is source-verified above —
- * not because a probe demonstrated it.
+ * ✅ **Probed RED two ways.** (a) **SEC-1's own regression**: re-adding
+ * `missing: [{ type: 'header', key: 'next-router-prefetch' }]` to the `config.matcher` entry makes
+ * this test fail — the proxy stops running on a prefetch-flagged request and the CSP header
+ * disappears. (b) An early `return NextResponse.next()` inside `proxy()` — the "skips the proxy at
+ * some other layer" case the matcher pin cannot see.
+ * ⚠️ **(a) needs one cast to run, and the reason matters.** An object-form matcher entry is rejected
+ * by `proxy.test.ts`'s own typing — `getMiddlewareMatchers(config.matcher, …)` takes
+ * `readonly string[]` — not by Next, whose `MiddlewareMatcherInputSchema` still accepts `has`/
+ * `missing`. ⚠️ **An earlier version of this comment blamed `next build` for rejecting the shape.
+ * That was wrong**: SEC-1's own config used exactly this shape and shipped. The real barrier is a
+ * test's parameter type, which is a thinner guarantee than it sounded — hence this arm.
  */
 test('a prefetch-flagged request still goes through the proxy (SEC-1)', async ({ browser }) => {
   const context = await browser.newContext();

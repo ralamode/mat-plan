@@ -103,13 +103,16 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
 export const CLERK_IMG_ORIGIN = 'https://img.clerk.com';
 
 /**
- * Clerk's bot/abuse protection renders a Cloudflare Turnstile widget in an iframe. This app's CSP
- * declares NO `frame-src`, so the iframe would fall through to `default-src 'self'` and be blocked —
- * which presents as a sign-in button that does nothing. Whether the widget appears depends on a
- * dashboard setting (§ Runbook), so the source is added whenever Clerk is configured rather than
- * guessed per-instance.
+ * ⚠️ **`CLERK_BOT_PROTECTION_ORIGIN` was deleted at AUTH-1 1d**, with the `frame-src` entry it fed.
+ * It was `https://challenges.cloudflare.com`, for the Cloudflare Turnstile iframe Clerk's bot/abuse
+ * protection renders — and the production instance has that **off** (`captcha_enabled: false`), so
+ * the CSP named an origin nothing could render. `runbooks.md`'s rule: a dead source is "not left to
+ * look like working protection".
+ * 🔴 **If bot protection is ever switched on**, the widget falls through to `default-src 'self'` and
+ * is blocked, which presents as a sign-in button that does nothing. Re-add both the origin and the
+ * `frame-src` entry then — `proxy.ts` carries the same warning beside the directive's old home, and
+ * `proxy.test.ts` asserts the absence in both states, so this is a deliberate edit, not a silent one.
  */
-export const CLERK_BOT_PROTECTION_ORIGIN = 'https://challenges.cloudflare.com';
 
 /**
  * The CSS layer Clerk's own stylesheet is confined to, passed to `<ClerkProvider appearance>` in

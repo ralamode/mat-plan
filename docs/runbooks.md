@@ -1578,7 +1578,8 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `dist/esm/server/content-security-policy.js` (`DEFAULT_DIRECTIVES`), then narrowed to what this
       app uses: the instance's **Frontend API origin** in `connect-src` (derived from the publishable
       key, exact, never a wildcard), `https://img.clerk.com` in `img-src`,
-      `https://challenges.cloudflare.com` in `frame-src`, and `worker-src 'self' blob:`. **No host is
+      and `worker-src 'self' blob:`. ⚠️ `https://challenges.cloudflare.com` in `frame-src`
+      was REMOVED at `1d` — see the bot-protection box below. **No host is
       added to `script-src`** — `'strict-dynamic'` makes browsers ignore host sources there, and Clerk's
       script loads on this app's existing per-request nonce instead (`<ClerkProvider nonce dynamic>`;
       the vendor's own type says the nonce "requires the `dynamic` prop to also be set"). Clerk's own
@@ -1658,10 +1659,11 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
      source **by exact origin, never a wildcard** — and a wildcard subdomain on _any port_ would be
      the widest source in the policy. Only if (1) proves impossible, scoped to the `SIGN_IN_PATH`
      subtree and pinned in `proxy.test.ts` with the cost written down.
-     **Owed either way:** if (1) is taken, `CLERK_BOT_PROTECTION_ORIGIN`
-     (`lib/clerk.ts:112`) and its `frame-src` entry (`proxy.ts:82`) are **dead code for a mechanism
-     Clerk no longer uses** and should be removed by `1c` with a note saying why, not left to look
-     like working protection. **Re-check on every `@clerk/nextjs` bump** — this changed under us
+     ✅ **DONE at `AUTH-1` 1d (2026-11-05)**, one chunk later than this box asked: both
+     `CLERK_BOT_PROTECTION_ORIGIN` and its `frame-src` entry are **deleted**, with the reasoning kept
+     as prose in `lib/clerk.ts` where the const used to be. They were dead code for a mechanism the
+     instance has switched off, and the rule this box states — not left to look like working
+     protection — is exactly what they failed. **Re-check on every `@clerk/nextjs` bump** — this changed under us
      between the pinned version's own docs and its runtime CDN build.
 - [ ] 🔴 **The lit sign-in screen owes its own UX panel, and 1a could not give it one.** With no keys,
       Clerk renders nothing: every screenshot and every a11y assertion on the 1a PR measured the dark
@@ -1677,8 +1679,10 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       attribution link is 48×14px, under the 44px bar and WCAG 2.2 SC 2.5.8, with no `elements` key to
       reach it.
 - [ ] 🔴 **Bot/abuse protection enabled**, and **the session lifetime actually configured.** Whether the
-      Cloudflare Turnstile widget appears decides whether the `frame-src` source above is load-bearing
-      or merely harmless.
+      ⚠️ **As of `1d` this box has a consequence it did not have before:** the
+      `frame-src` source is deleted, so switching bot protection ON without re-adding it means the
+      Turnstile iframe is blocked by `default-src 'self'` — presenting as a sign-in button that does
+      nothing, on the app's only door. Re-add the origin and the directive in the same change.
 - [ ] 🔴 **The invitation record's spec** — where it lives, its fields, its retention. It is what makes
       "the invitation is the record" an actual record rather than a phrase.
 - [ ] **Free-tier limits:** MAU, custom domain, Organizations.

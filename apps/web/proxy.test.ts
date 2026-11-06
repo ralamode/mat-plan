@@ -61,12 +61,10 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
  * cannot pin the VENDOR's half — a future `@clerk/nextjs` that ignores the handler's response would
  * pass this test, which is why AGENTS.md wants a Clerk bump treated as its own reviewed PR.
  */
-// 🔴 **The value carries `+`, `/` and `=` deliberately.** These are the characters
-// `ResponseCookies.replace()` would round-trip through `encodeURIComponent` — so putting them in the
-// cookie Clerk APPENDS is what makes the byte-identity case below able to fail. A first version put
-// them in the inbound request `Cookie` header instead, where no implementation re-emits them: the
-// case was green under `headers.append` AND under `response.cookies.delete()`, i.e. it could not
-// fail on the thing it was named for.
+// 🔴 **An APPENDED cookie, which is what makes the byte-identity case below able to fail.** A first
+// version put the special characters in the inbound request `Cookie` header, where no implementation
+// re-emits them — green under both implementations, i.e. unable to fail on the thing it was named for.
+// ⚠️ The `+`, `/` and `=` are a secondary guard, NOT the mechanism; see that case's own note.
 const ROTATED_COOKIE = '__clerk_handshake=a+b/c==; Path=/; HttpOnly';
 const clerkCalls: { handled: boolean }[] = [];
 /**
@@ -215,15 +213,20 @@ describe('the mp_gate tombstone', () => {
   });
 
   /**
-   * 🔴 **The MECHANISM-CHOICE tripwire, and it took a correction to make it able to fail.** It
-   * asserts that the Clerk cookie Clerk appended survives byte-identically alongside our tombstone.
-   * ✅ **Probed RED**: swap `withRetiredCookies`'s `headers.append` for
-   * `(response as NextResponse).cookies.delete(RETIRED_GATE_COOKIE)` and this reddens, because
-   * `ResponseCookies.replace()` deletes the whole `set-cookie` header and re-serialises the parsed
-   * bag — `__clerk_handshake=a+b/c==` comes back `a%2Bb%2Fc%3D%3D`.
-   * ⚠️ The special characters have to be in the APPENDED cookie's value (`ROTATED_COOKIE`), not in
-   * the inbound request `Cookie` header: nothing re-emits request cookies, so an inbound-only version
-   * was green under both implementations.
+   * 🔴 **The MECHANISM-CHOICE tripwire.** It asserts that the Clerk cookie Clerk appended survives
+   * alongside our tombstone.
+   * ✅ **Probed RED, and the probe corrected what this comment used to claim.** Swapping
+   * `withRetiredCookies`'s `headers.append` for
+   * `(response as NextResponse).cookies.delete(RETIRED_GATE_COOKIE)` reddens it — but **not** because
+   * the value is re-encoded. Measured: after the swap the header set is exactly
+   * `['mp_gate=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT']`. **Clerk's cookie is dropped
+   * entirely.** `NextResponse` builds its `ResponseCookies` bag eagerly at construction
+   * (`next/dist/server/web/spec-extension/response.js`), so anything appended afterwards is not in
+   * the bag that `replace()` re-emits — it is lost, not mangled.
+   * ⚠️ An earlier version of this note said the value "comes back `a%2Bb%2Fc%3D%3D`". That is wrong,
+   * and it matters: an author who "fixed" the special characters would think they had changed this
+   * case's power. The characters are a secondary guard against a future re-encoding implementation;
+   * the thing that makes it fail today is that the cookie must be APPENDED, not inbound.
    */
   it('leaves a Clerk cookie containing +, / and = byte-identical', async () => {
     clerkConfigured = true;

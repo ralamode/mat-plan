@@ -105,8 +105,8 @@ export function buildCsp(nonce: string, isDev: boolean, clerkOrigin: string | nu
     // and `runbooks.md` already stated the rule: a dead CSP source is "not left to look like working
     // protection". Absent, an iframe falls through to `default-src 'self'` and is blocked.
     // ⚠️ **If bot protection is ever switched ON the widget will silently fail to render**, and
-    // sign-in will present as a button that does nothing. Put the directive back then; `lib/clerk.ts`
-    // keeps the origin and its reasoning for that day.
+    // sign-in will present as a button that does nothing. Put the directive AND the origin back then
+    // — `lib/clerk.ts` keeps the reasoning where the const used to be.
     ...(clerkOrigin
       ? [
           // clerk-js uses a blob: worker; Clerk's own default policy is `worker-src 'self' blob:`.
@@ -239,8 +239,10 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
  * Mutating `ResponseCookies` calls `replace()`, which does `headers.delete('set-cookie')` and
  * re-emits only the parsed bag — keyed by NAME ALONE and round-tripped through
  * `decodeURIComponent`/`encodeURIComponent`. On the very response that establishes a session that can
- * mangle `__clerk_handshake` and collapse same-name/different-`Domain` pairs. `headers.append` adds
- * one header and parses nothing.
+ * mangle `__clerk_handshake` and collapse same-name/different-`Domain` pairs. ⚠️ **Measured, and
+ * worse than mangling:** the bag is built eagerly at construction, so a cookie Clerk APPENDED after
+ * that is not in it and is **dropped entirely** by `replace()` — a silently signed-out user.
+ * `headers.append` adds one header and parses nothing.
  *
  * ⚠️ **The parameter is `Response`, not `NextResponse`, because `withClerk` does not always return
  * one.** `clerkMiddleware` auto-arms a frontend-API proxy branch when the publishable key is
