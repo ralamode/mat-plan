@@ -126,7 +126,12 @@ with no rule citation is taste. Mark it P2, or drop it.
    `docs/architecture.md` + a Mermaid diagram for a pivotal flow or model change.
 8. **Process obligations.** Is a plan owed (CI/migration/auth/subsystem/multi-file logic)? Did UI
    get a UX panel log and three-width screenshots? Is the title a lowercase Conventional Commit? Does
-   the description claim a gate that isn't in `.github/workflows/`?
+   the description claim a gate that isn't in `.github/workflows/`? **If the diff touches identity,
+   the household scope, roles, sharing or the movement catalog, does the plan's review-response log
+   answer [`ID-1`](../../../docs/plan.md)'s six keep-open items?** `ID-1` requires it of "any later
+   auth chunk" and nothing enforces it — `PROF-1` shipped an authorization decision past three lenses
+   without it (2026-11-06). **And does the plan name the `docs/plan.md` row that owns the question,
+   rather than asserting none exists?** Grep the capability before accepting such a claim.
 9. **Security** (the repo is **public**). No secret or real personal data in code, fixtures or
    screenshots. ⚠️ **Current state, as of `AUTH-1` 1d:** the boundary is **a Clerk session whose
    principal has a `household_members` row**, re-checked in every page, action and handler. The
