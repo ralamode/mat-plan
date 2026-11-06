@@ -1,10 +1,34 @@
-- **2026-11-06** — **PROF-1 names its authority model: the owner archives, any member records**
+- **2026-11-06** — **One household rule, stated in the spec: anyone records and corrects, the owner decides who belongs**
   (`PROF-1` plan refresh, [plan](../plans/prof-1-athletes.md), no code yet). The plan was panelled in
   October, before `AUTH-1` existed; `1c` has since shipped `household_members.role` and `1d` made a
   Clerk session with a household the only boundary, so the plan's "any member" assumption needed a
   decision and its eight-item re-verification gate needed running.
-  **The decision** _(maintainer, 2026-11-06)_: **add** and **rename** stay any-member; **archive**,
-  **restore** and **delete** are **owner-only**. The reason that actually discriminates archive from
+  **The decision** _(maintainer, 2026-11-06)_: **add**, **rename** and **restore** are any-member;
+  **archive** and **delete** are **owner-only**. It is stated once, in
+  [the CRUD-1 spec](../specs/crud-1-fix-it-yourself.md) § "Who may do what in a household", so
+  `V1-9b` and `RETIRE-1` inherit one rule instead of a superseded answer; **M45 is marked
+  superseded** rather than edited away.
+  🔴 **Restore splits from archive, and that is what makes the rule derivable instead of asserted.**
+  Archive takes an athlete off every adult's picker — a decision about who the household is
+  currently training. Restore puts back something that should not have gone — a correction, the same
+  category as fixing a typo'd name. So the split falls out of _"anyone records and corrects; the
+  owner decides who belongs"_ rather than being an exception to it, and the gym-floor recovery case
+  works as a consequence: the owner can archive the wrong athlete at home and the other adult can
+  put them back at practice without waiting for them.
+  ⚠️ **"Who belongs to the household" means two different sets, and the spec now says which.** A
+  **member** is an account (`household_members`, keyed by `clerk_user_id`); an **athlete** is a
+  `profiles` row and holds **no account**, which the notice states twice. The owner decides both
+  sets, but a rule written about "people in the household" is read the wrong way exactly once and
+  then built on.
+  **An athlete who ages out is not foreclosed by any of this, and the plan now says what it would
+  take** — a transfer is by definition a change to who belongs, so the rule already covers the
+  permission half. The data half is mostly free: authorization scopes by `profiles.household_id`
+  (`ownership.ts:115`), so one column moves the boundary, and `sessions` / `day_readiness` /
+  `prescription_targets` follow through `profile_id`. 🔴 **The real complication is `movements`:** a
+  transferred athlete's entries can reference **household-owned** movements belonging to the sending
+  household, which is precisely the cross-household reference `TEN-2c` proves reads ZERO
+  (`verify.ts:6304`) — so a naive transfer creates the violation an existing invariant forbids. The
+  identity half stays deferred, being the same unexpressible piece as M45's second half. The reason that actually discriminates archive from
   rename is blast radius on someone else's screen — `listProfiles` drops archived athletes, so one
   adult can take a kid off the other adult's gym-floor picker mid-practice, while a rename is visible
   in place. The two generic arguments (tightening a permission later is breaking; the app records no
