@@ -1484,7 +1484,15 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       DEVELOPMENT instance, and production stayed `Open` until 2026-10-29** — proven, not suspected:
       two accounts self-created from two Google addresses with no invitation, 20 minutes apart, while
       the checklist read as satisfied. **Access mode is per-instance, like everything else on this
-      page.** Set to `Invite-only` on production 2026-10-29. ✅ **It exists, it is called
+      page.** Set to `Invite-only` on production 2026-10-29.
+      🔴 **CHANGED AGAIN 2026-11-05: production is now `Waitlist`** _(maintainer)_, verified on the
+      instance. The sign-in card gains "Want early access? Join waitlist", which leaves the app for
+      `accounts.mat-plan.dev/waitlist` — Clerk's hosted page, no link to the notice.
+      ⚠️ **This mode is load-bearing for published copy.** `docs/privacy/notice.md` and
+      `SIGN_IN_COPY.invitation`/`.waitlist` describe it, and nothing in the repo can read the mode at
+      runtime — so **changing it here means changing both in the same breath**, or the published
+      notice becomes false. ⏳ Owed: the waitlist retention console read, which
+      `data-inventory.md` §7 tracks. ✅ **It exists, it is called
       `Invite-only`** (API value `restricted`), on the **Access mode** page
       (`dashboard.clerk.com/~/user-authentication/access-mode`), one of three modes with `Open`
       (`public`) and `Waitlist` (`waitlist`). ✅ **It blocks**, per Clerk's
