@@ -37,8 +37,6 @@ const BYPASS_ID_RE = /^user_[A-Za-z0-9]+$/;
 export const env = createEnv({
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    // Access-gate stopgap shared code — see lib/access-gate.ts. NOT an auth boundary.
-    ACCESS_GATE_PASSWORD: z.string().min(8, 'ACCESS_GATE_PASSWORD must be at least 8 characters.'),
     // Pooled Neon string (PgBouncer) for app runtime on the Node runtime. Migrations
     // use the DIRECT/unpooled string via drizzle-kit (tooling), not this app env.
     DATABASE_URL: z.string().url(),
@@ -109,7 +107,6 @@ export const env = createEnv({
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
-    ACCESS_GATE_PASSWORD: process.env.ACCESS_GATE_PASSWORD,
     DATABASE_URL: process.env.DATABASE_URL,
     VERCEL_ENV: process.env.VERCEL_ENV,
     ALLOW_LIVE_DB: process.env.ALLOW_LIVE_DB,

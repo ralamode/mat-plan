@@ -1,16 +1,18 @@
 import type { Page } from '@playwright/test';
 
-// Relative imports only: `login.ts` imports this, and the tsx-run screenshot scripts import that.
+// Relative imports only: the tsx-run screenshot scripts reach this through `capture.ts`.
 import { PICKER_COPY } from '../lib/constants';
 
 /**
- * Shared e2e context values (OSS-2). Kept dependency-light (no `@mat-plan/db`, unlike `steps.ts`) so the
- * login helper can use it.
+ * Shared e2e context values (OSS-2). Kept dependency-light (no `@mat-plan/db`, unlike `steps.ts`).
+ *
+ * ⚠️ **`NO_GATE_STATE` was deleted at AUTH-1 1d, not renamed.** It was `{ cookies: [], origins: [] }`
+ * — an empty jar, used to opt a spec OUT of the gate-authenticated `storageState`. There is no
+ * authenticated state to opt out of any more: the harness session comes from the process env
+ * (`E2E_SESSION_BYPASS_USER_ID`), which a cookie jar cannot override. 🔴 Renaming it
+ * `NO_SESSION_STATE` would have asserted exactly that false property, which is why it is gone
+ * instead. A spec that needs an unauthenticated server needs a SECOND SERVER — see `tech-debt.md`.
  */
-
-/** A browser context with NO gate cookie. The premise of every un-gated assertion: with the project's
- *  storageState, a "public" page could just be a gated page the cookie let through. */
-export const NO_GATE_STATE = { cookies: [], origins: [] };
 
 /** ~iPhone 14, the primary device — the a11y spec, the landing's above-the-fold check. */
 export const MOBILE_VIEWPORT = { width: 390, height: 844 };

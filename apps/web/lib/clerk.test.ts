@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  CLERK_BOT_PROTECTION_ORIGIN,
   CLERK_CSS_LAYER,
   CLERK_IMG_ORIGIN,
   clerkFrontendApiOrigin,
@@ -81,7 +80,6 @@ describe('clerkFrontendApiOrigin', () => {
 describe('the Clerk CSP origins', () => {
   it('are exact origins, never wildcards', () => {
     expect(CLERK_IMG_ORIGIN).toBe('https://img.clerk.com');
-    expect(CLERK_BOT_PROTECTION_ORIGIN).toBe('https://challenges.cloudflare.com');
   });
 });
 

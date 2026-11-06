@@ -3,7 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GATE_COOKIE_NAME } from '@/lib/access-gate';
 import { SIGN_OUT_COPY } from '@/lib/constants';
 import { code, WEB_DIR } from '@/test/source-scan';
 
@@ -20,19 +19,23 @@ afterEach(() => {
 });
 
 describe('SignOutButton (AUTH-1 1c-3b)', () => {
-  it('🔴 clears the Clerk session and NOTHING else — the gate cookie is not named here', () => {
-    // The lockout guard, and the reason it is a test rather than a comment: "sign-out doesn't clear
-    // the gate cookie" reads as an oversight to the next author, and the obvious "fix" is the
-    // permanent lockout — bounced to /gate, now needing the shared household code to re-enter their
-    // OWN household. After 1c-4 that reader is an invited parent who does not have it.
+  it('🔴 clears the Clerk session and touches no cookie API itself', () => {
+    // ⚠️ **`1d` deleted one third of this test, and deliberately not the other two.** The removed
+    // assertion was `not.toContain(GATE_COOKIE_NAME)`, which went TAUTOLOGICAL when the symbol did:
+    // a test that cannot fail is worse than no test. Its subject — the permanent lockout, where
+    // clearing both cookies bounced an invited parent to `/gate` and demanded a shared code they
+    // never had — is now impossible by construction, so there is nothing left to guard.
     //
-    // Asserted against the SOURCE because the clearing is done by `@clerk/clerk-js`, which is fetched
-    // from a CDN at a floating major and is absent from the lockfile — so the only honest claim is
-    // about our own code. The runbook carries the manual check.
-    // ⚠️ `code()`, not the raw file: the docblock above EXPLAINS the lockout and necessarily names
+    // 🔴 The two surviving assertions are NOT tautological, because the `tz` cookie still exists
+    // (`TimeZoneSync` writes it). "Sign out should clear cookies too" remains a reachable wrong turn,
+    // and hand-rolled cookie clearing in a component is the shape to refuse.
+    //
+    // Asserted against the SOURCE because the clearing is done by `@clerk/clerk-js`, fetched from a
+    // CDN at a floating major and absent from the lockfile — so the only honest claim is about our
+    // own code. The runbook carries the manual check.
+    // ⚠️ `code()`, not the raw file: the docblock above explains the historical lockout and names
     // the cookie. Comments stripped, the claim is about what the component does.
     const src = code(join(WEB_DIR, 'components/profiles/sign-out.tsx'));
-    expect(src).not.toContain(GATE_COOKIE_NAME);
     expect(src).not.toMatch(/\bcookies?\s*\(/);
     expect(src).not.toMatch(/document\.cookie/);
   });

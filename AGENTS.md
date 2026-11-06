@@ -159,7 +159,7 @@ Errors: expected → typed envelope { ok:false, error, fieldErrors? } + useActio
 Idempotency: client UUIDv7 per item + DB UNIQUE + ON CONFLICT; per-item results; NOT an app-level check.
 Cache:  per-user data dynamic (never cache across users). revalidatePath/Tag after every mutation.
 Secrets: import 'server-only' on secret modules; validate env with @t3-oss/env-nextjs+zod.
-Rate limit: @upstash/ratelimit (sliding window) on auth + mutations + /api/sync + the LLM API.
+Rate limit: @upstash/ratelimit (sliding window) on mutations ONLY; not auth — see SECURITY.md.
 Observability: Sentry — WRAP Server Actions in withServerActionInstrumentation (NOT auto-instrumented);
         enableLogs + structured context (userId, householdId, batchId).
 ```

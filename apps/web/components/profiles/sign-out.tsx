@@ -9,19 +9,21 @@ import { SIGN_OUT_COPY } from '@/lib/constants';
  * Sign out (AUTH-1 1c-3b) — the app's first real one, and the control `NO_HOUSEHOLD_COPY` spent a
  * chunk promising.
  *
- * 🔴 **It clears the CLERK SESSION ONLY, and that is a decision with a table behind it.**
- * _(Settled by the maintainer, 2026-10-29.)_ Between 1c-3b and 1d the boundary is `mp_gate` AND a
- * session, so:
+ * 🔴 **It clears the CLERK SESSION, and as of `1d` that is the whole story.** The session is the only
+ * boundary, so signing out of Clerk signs you out of the app — full stop.
  *
- *  - **Clerk session only** — everything the session protects is gone. The device keeps `mp_gate`,
- *    which on its own grants nothing but the right to be asked to sign in. Re-entry is one tap.
- *  - **Clerk + `mp_gate`** — a PERMANENT LOCKOUT. The user is bounced to `/gate` and now needs the
- *    shared household code to get back into their own household; after 1c-4 that reader is an
- *    invited parent who does not have it. And the button that did it said "Sign out".
- *  - **`mp_gate` only** — what #303 did, and why #303 was parked.
+ * ⚠️ **Between `1c-3b` and `1d` this was a decision with a table behind it** _(settled by the
+ * maintainer, 2026-10-29)_, and the reasoning is kept because it is what stops the obvious wrong
+ * "fix" coming back. The boundary was then `mp_gate` AND a session, which gave three options:
+ * clearing the session only (chosen — the device kept a cookie that granted nothing but the right to
+ * be asked to sign in); clearing BOTH, which was a **permanent lockout**, bouncing an invited parent
+ * to `/gate` and demanding a shared code they never had, from a button labelled "Sign out"; or
+ * clearing `mp_gate` only, which is what #303 did and why #303 was parked.
+ * `1d` dissolves the dilemma rather than resolving it: there is no second cookie left.
  *
- * `sign-out.test.tsx` pins that this file names no cookie, because "sign-out doesn't clear the gate
- * cookie" reads as an oversight to the next author and the obvious "fix" is the lockout above.
+ * `sign-out.test.tsx` still pins that this file touches no cookie API. The gate-cookie half of that
+ * assertion went tautological with the symbol, but the rest did not — **the `tz` cookie exists**, so
+ * "sign-out clears cookies" remains a thing a future author could reach for.
  * ⚠️ What actually clears the Clerk cookies is `@clerk/clerk-js`, fetched from a CDN at a floating
  * major and absent from the lockfile — so our assertion can only be about our own code. The runbook
  * carries the manual check.

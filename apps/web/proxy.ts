@@ -1,9 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 
-import { GATE_COOKIE_NAME, GATE_PATH, isUngatedPath, isValidGateCookie } from '@/lib/access-gate';
 import {
-  CLERK_BOT_PROTECTION_ORIGIN,
   CLERK_IMG_ORIGIN,
   clerkFrontendApiOrigin,
   clerkIsConfigured,
@@ -12,14 +10,39 @@ import {
 import { env } from '@/lib/env';
 
 /**
+ * The gate's cookie, retired at AUTH-1 1d. `withRetiredCookies` clears it; nothing reads it.
+ * Removal trigger: 2027-02-04 (docs/tech-debt.md), by when any live holder's cookie has expired.
+ * `proxy.test.ts` pins the value — the one sanctioned place a literal belongs on the assertion side,
+ * replacing the pin that `lib/access-gate.test.ts` carried before `1d` deleted it.
+ */
+const RETIRED_GATE_COOKIE = 'mp_gate';
+
+/**
  * Proxy (Next 16's renamed Middleware). Three responsibilities:
  *
- *  1. Access-gate stopgap — bounce un-gated requests to `/gate` (see
- *     lib/access-gate.ts for why this is a deterrent, not real authz).
- *  2. Security headers — a nonce-based CSP plus the standard hardening headers
+ *  1. Security headers — a nonce-based CSP plus the standard hardening headers
  *     on every document response (see .github/SECURITY.md).
- *  3. Clerk (AUTH-1 1a) — `clerkMiddleware()` composed on the pass-through path, so `auth()` can
- *     answer in a page, action or handler. It authorizes NOTHING in 1a; see `withClerk` below.
+ *  2. Clerk (AUTH-1 1a) — `clerkMiddleware()` composed so `auth()` can answer in a page, action or
+ *     handler. It authorizes NOTHING here; see `withClerk` below.
+ *  3. Retiring `mp_gate` (AUTH-1 1d) — a `Set-Cookie` tombstone for callers who still hold the
+ *     deleted gate cookie; see `withRetiredCookies`.
+ *
+ * ⚠️ **What an unauthenticated caller reaches through this layer**, now the bounce is gone:
+ * `PUBLIC_PATHS` (`/`, `/privacy`), the `/sign-in` subtree (`PUBLIC_PATH_TREES`), and Next's own 404
+ * / error boundary. Everything else renders only behind an in-process session check.
+ * 📌 Clerk's frontend-API relay at `/__clerk/*` would have been a fourth — before `1d` the bounce ran
+ * first, so a stranger could not drive it. `withClerk` disarms it explicitly rather than relying on
+ * the hostname never matching; see there.
+ *
+ * 🔴 **This layer ENFORCES NOTHING, and `1d` is what made that literally true.** Until `1d` it also
+ * bounced un-gated requests to `/gate`, which was the one thing the proxy itself enforced. That is
+ * gone with the gate, and the boundary is now a Clerk session with a `household_members` row,
+ * re-checked in every page, action and handler that reads household data. SEC-1's lesson is the
+ * reason the bounce was never the boundary even while it existed: a matcher condition decides
+ * whether this code runs AT ALL, any client can shape a request to dodge one (SEC-1's scar was a
+ * prefetch header), and CVE-2025-29927 is the general case. ⚠️ Do not add an authorization check
+ * here. A check in this file is unreachable for any request the matcher misses, which is why
+ * `app/pages-are-gated.test.ts` asserts the per-route calls instead.
  *
  * Nonce-based CSP requires dynamic rendering; the root layout opts the app in
  * with `export const dynamic = 'force-dynamic'` (this is an inherently per-user
@@ -45,7 +68,7 @@ import { env } from '@/lib/env';
  *   feeds the same per-request `x-nonce` this proxy already forwards into
  *   `@clerk/nextjs`'s `DynamicClerkScripts`, which stamps it onto both the `<script>`
  *   (`buildClerkJSScriptAttributes`) and the `<link rel=preload as=script>`. Verified at the pinned
- *   7.9.15; `@clerk/shared`'s own type for the prop says "Requires the `dynamic` prop to also be set",
+ *   7.9.22; `@clerk/shared`'s own type for the prop says "Requires the `dynamic` prop to also be set",
  *   which is why both are passed together.
  * - **`style-src` keeps its nonce and gains NOTHING.** Clerk's own recommended policy is
  *   `style-src 'self' 'unsafe-inline'`, and under CSP3 a nonce in `style-src` makes `'unsafe-inline'`
@@ -75,10 +98,17 @@ export function buildCsp(nonce: string, isDev: boolean, clerkOrigin: string | nu
     `connect-src 'self'${isDev ? ' ws:' : ''}${clerkOrigin ? ` ${clerkOrigin}` : ''}`,
     // Both directives exist ONLY when Clerk does: absent, they fall through to `default-src 'self'`,
     // which is the tighter policy and the one every pre-AUTH-1 route keeps.
+    // 🔴 **`frame-src` is GONE at AUTH-1 1d, and its absence is the TIGHTER policy.** It allowed
+    // `https://challenges.cloudflare.com` for Clerk's bot-protection Turnstile iframe — a widget whose
+    // appearance depends on a dashboard setting, which was read on the production instance and is
+    // **`captcha_enabled: false`** (`runbooks.md`). So the source admitted an origin nothing renders,
+    // and `runbooks.md` already stated the rule: a dead CSP source is "not left to look like working
+    // protection". Absent, an iframe falls through to `default-src 'self'` and is blocked.
+    // ⚠️ **If bot protection is ever switched ON the widget will silently fail to render**, and
+    // sign-in will present as a button that does nothing. Put the directive AND the origin back then
+    // — `lib/clerk.ts` keeps the reasoning where the const used to be.
     ...(clerkOrigin
       ? [
-          // Clerk's bot protection renders a Cloudflare Turnstile iframe.
-          `frame-src 'self' ${CLERK_BOT_PROTECTION_ORIGIN}`,
           // clerk-js uses a blob: worker; Clerk's own default policy is `worker-src 'self' blob:`.
           `worker-src 'self' blob:`,
         ]
@@ -117,23 +147,21 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
  * **Our response is MERGED, never replaced.** `forward()` is passed as Clerk's *handler*, so Clerk
  * decorates the response WE built — `handlerResult = userHandlerResult || NextResponse.next()` in
  * `clerkMiddleware.js` — appending its `requestState` headers and its `x-middleware-request-*`
- * overrides onto ours. The `x-nonce` / `x-pathname` forwarding the theme script and the footer depend
- * on therefore survives (verified: `setRequestHeadersOnNextResponse` only re-seeds the override list
+ * overrides onto ours. The `x-nonce` forwarding the theme script depends on therefore survives (verified: `setRequestHeadersOnNextResponse` only re-seeds the override list
  * when `x-middleware-override-headers` is absent, and `NextResponse.next({ request })` has already set
  * it). Returning Clerk's OWN `next()` instead would silently drop both, and a rotated session cookie
  * in the other direction — R3's "a dark app for the only user, blamed on Clerk".
  *
- * **Order: the gate runs FIRST, Clerk second, on the pass-through path only.** A bounced request
- * renders nothing, so nothing can call `auth()` and Clerk has no question to answer; running vendor
- * middleware on every request from an un-gated stranger would widen the unauthenticated surface for
- * no benefit while the gate is the only thing THE PROXY ITSELF enforces. ⚠️ That clause is about
- * this layer, not about the app: since 1c-3b the boundary is the gate AND a Clerk session, both
- * re-checked in-process. Every request that DOES render — including
- * the un-gated `/`, `/privacy` and the whole `/sign-in` SUBTREE (`PUBLIC_PATH_TREES`, not
- * `PUBLIC_PATHS` — Clerk's prebuilt page is a catch-all and the handshake arrives on its children) —
- * passes through here, which is what `auth()` needs. ⚠️ This
- * is NOT "the matcher/proxy is the boundary": SEC-1's lesson stands, pages and actions re-check
- * independently, and the `/api` matcher change below is about `auth()` being ABLE to answer.
+ * 🔴 **Clerk now runs on ALL matched traffic, which is a change `1d` made.** It used to run second,
+ * on the pass-through path only: a gate-bounced request rendered nothing, so nothing could call
+ * `auth()`, and keeping vendor middleware off those requests avoided widening the unauthenticated
+ * surface for no benefit. With the bounce deleted there is no such path left — every matched request
+ * reaches here, including from a caller with no session at all. That is required, not incidental:
+ * `auth()` THROWS when `clerkMiddleware()` did not run on the request, and after `1d` the only way
+ * in is `/sign-in`, whose whole SUBTREE must work (`PUBLIC_PATH_TREES`, not `PUBLIC_PATHS` — Clerk's
+ * prebuilt page is a catch-all and the OAuth handshake arrives on its children).
+ * ⚠️ This is still NOT "the proxy is the boundary": pages, actions and handlers re-check
+ * independently, and the `/api` matcher inclusion below is about `auth()` being ABLE to answer.
  */
 async function withClerk(
   request: NextRequest,
@@ -144,90 +172,119 @@ async function withClerk(
   // Clerk's `NextMiddleware` type requires the event; it only ever forwards it to the handler, which
   // here ignores it. Next always supplies one in production — `proxy.test.ts` is what calls `proxy`
   // with one argument, and it exercises the un-configured branch above.
-  const composed = clerkMiddleware(() => response) as (
+  // 🔴 **`frontendApiProxy: { enabled: false }` DISARMS Clerk's auto-proxy explicitly (AUTH-1 1d).**
+  // Read off `@clerk/nextjs@7.9.22`'s `clerkMiddleware.js`: it reads `resolvedParams.frontendApiProxy`
+  // FIRST, and only when that is falsy does it auto-arm `{ enabled: true }` for a production
+  // publishable key on a hostname `shouldAutoProxy()` matches — i.e. `*.vercel.app`. An explicit
+  // `{ enabled: false }` makes `isEnabled` false, so the relay branch can never run.
+  // ⚠️ **Probed 2026-11-04**: on the custom domain `/__clerk/v1/client` returned 307 carrying OUR CSP
+  // header, which only `withSecurityHeaders` sets — so the relay was not armed there. What this
+  // closes is any OTHER `*.vercel.app` alias serving this deployment, which no check in this repo can
+  // observe. Free, and it does not depend on a hostname staying off a vendor list.
+  // 📌 Re-verify on a `@clerk/nextjs` bump: the option name and that precedence are vendor internals.
+  const composed = clerkMiddleware(() => response, { frontendApiProxy: { enabled: false } }) as (
     request: NextRequest,
     event: NextFetchEvent | undefined,
   ) => Promise<NextResponse>;
   return composed(request, event);
 }
 
-export async function proxy(request: NextRequest, event?: NextFetchEvent): Promise<NextResponse> {
+// ⚠️ **Returns `Response`, not `NextResponse`, and that is deliberate.** `withRetiredCookies` takes
+// and returns `Response` because `withClerk` can hand back a plain one (its auto-proxy branch), so
+// narrowing this signature back to `NextResponse` would re-tell the lie that cast already tells.
+// Next's proxy contract accepts any `Response`.
+export async function proxy(request: NextRequest, event?: NextFetchEvent): Promise<Response> {
   const isDev = env.NODE_ENV === 'development';
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const csp = buildCsp(nonce, isDev, clerkFrontendApiOrigin(clerkPublishableKey()));
 
   const { pathname, search } = request.nextUrl;
 
-  const authed = await isValidGateCookie(
-    request.cookies.get(GATE_COOKIE_NAME)?.value,
-    env.ACCESS_GATE_PASSWORD,
-  );
-
-  // Un-gated → send everything to the gate, except the gate itself and the public paths (OSS-2).
-  // `from` is always set: `/` is public now, so the old "no `from` for `/`" guard became unreachable.
+  // 🔴 **Nothing is enforced here any more (AUTH-1 1d).** This function used to read `mp_gate` and
+  // bounce an un-gated request to `/gate` before Clerk ran. Both are gone: the gate is deleted, and
+  // the boundary is a session with a `household_members` row, checked where the work happens.
   //
-  // `from` carries the QUERY STRING as well as the pathname (AUTH-1 1a). It used to be the pathname
-  // alone, and `url.search = ''` discarded the rest — so a gated `/p/x/routine?d=2026-09-30` came back
-  // from the gate as a bare `/p/x/routine`, silently on the wrong day. `safeInternalPath` (the gate
-  // page and the gate action both clamp through it) already preserves and normalizes a query string,
-  // and `internalPathname` already strips it where only the path is wanted, so this needs no new rule.
-  if (!authed && !isUngatedPath(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = GATE_PATH;
-    url.search = '';
-    url.searchParams.set('from', `${pathname}${search}`);
-    return withSecurityHeaders(NextResponse.redirect(url), csp);
-  }
-
-  // 🔴 **AUTH-1 1c-3b deleted the `authed && (GATE_PATH | '/')` → `APP_HOME_PATH` forward.** It was
-  // convenience routing, and its own comment said so — but once the pages also require a session it
-  // became a LOOP for every cookie-holder without one, which is everyone at deploy:
+  // ⚠️ **What went with the bounce, so nobody re-adds half of it.** `1c-3b` had already deleted the
+  // `authed && (GATE_PATH | '/')` → `APP_HOME_PATH` forward (ARM 2) because it looped every
+  // cookie-holder without a session. ARM 1 — the gate form forwarding to `/p`, where `requireSession()`
+  // bounced back to `/sign-in` — survived that chunk and is deleted HERE, with the form itself. The
+  // `?from=` escape hatch recorded at `app/sign-in/[[...rest]]/page.tsx` was the one thing that
+  // needed the gate cookie to close, and `1d` closes it by removing the cookie's meaning instead.
   //
-  //   /sign-in → tap the access-code button → /gate → (forward) → /p → requireSession() → /sign-in
-  //   /sign-in → tap the footer's "mat-plan" → /    → (forward) → /p → requireSession() → /sign-in
-  //
-  // 🔴 **ARM 2 IS GONE. ARM 1 SURVIVES, one form submit later** — do not read this deletion as having
-  // closed both. A cookie-holder now SEES the gate form instead of being forwarded past it, enters
-  // the code, and `submitGate`'s own `internalPathname(to) === '/' ? APP_HOME_PATH : to` sends them
-  // to `/p`, where `requireSession()` bounces them back to `/sign-in`. Closing that is the sign-in
-  // escape-hatch question recorded at `app/sign-in/[[...rest]]/page.tsx` — a Server-Component read of
-  // the caller's own gate cookie, deliberately not done in the one-way-door chunk.
-  //
-  // The second arm also meant such a visitor could never see the landing page at all. Nothing
-  // security-relevant went with it: an unauthenticated caller never reached this point (the un-gated
-  // bounce above returns first, and the `authed &&` conjunct was false for them), so behaviour for a
-  // cookie-less caller is bit-identical. A signed-in visitor now sees the landing at `/` instead of
-  // being forwarded, which after 1c-3b is the more honest answer anyway.
-  //
-  // ⚠️ **NO COUNT.** Committed rationales elsewhere referred to this forward and are corrected with
-  // it — listed, not numbered. The number was wrong every time it was written: "four" when none had
-  // been made, then "five" when it was seven, and that correction also swapped a true file name
+  // Committed rationales that referred to the forward or the bounce are corrected with it — listed,
+  // not numbered. ⚠️ **NO COUNT**: the number was wrong every time it was written ("four" when none
+  // had been made, then "five" when it was seven), and that correction also swapped a true file name
   // (`SIGN_IN_COPY`) for a false one (`GATE_COPY`). A list can be checked against the tree; a count
   // can only be checked by redoing the arithmetic, which is why it is the thing that goes stale.
   //
-  //   `app/page.tsx`                    the branchless-landing note
-  //   `app/gate/actions.ts`             the `from === '/'` substitution's ONE-hop reason
-  //   `APP_HOME_PATH`                   an HH-1 instruction to delete a rule already gone
-  //   `SIGN_IN_COPY`                    the one-exit-serves-both argument
+  //   `app/page.tsx`                     the branchless-landing note
+  //   `APP_HOME_PATH`                    an HH-1 instruction to delete a rule already gone
+  //   `SIGN_IN_COPY`                     the one-exit-serves-both argument
   //   `app/sign-in/[[...rest]]/page.tsx` the control's own copy of that argument
-  //   `scripts/capture.ts`              why a logged-in `/` or `/gate` could not be screenshotted
-  //   `docs/architecture.md` §2b        the routing diagram and the public-route asymmetry
-  //
-  // `e2e/landing.spec.ts` lost its "/ goes straight to the picker" case for the same reason.
+  //   `scripts/capture.ts`               why a logged-in `/` or `/gate` could not be screenshotted
+  //   `docs/architecture.md` §2b         the routing diagram and the public-route asymmetry
 
-  return withSecurityHeaders(await withClerk(request, event, forward(request, nonce, csp)), csp);
+  const response = withSecurityHeaders(
+    await withClerk(request, event, forward(request, nonce, csp)),
+    csp,
+  );
+  return withRetiredCookies(request, response);
+}
+
+/**
+ * 🔴 **The `mp_gate` tombstone (AUTH-1 1d).** A caller who still holds the deleted gate cookie keeps
+ * sending it forever; this clears it once, on the first matched response they receive.
+ *
+ * ⚠️ **A literal header, NOT `response.cookies.delete()`, and the distinction is load-bearing.**
+ * Mutating `ResponseCookies` calls `replace()`, which does `headers.delete('set-cookie')` and
+ * re-emits only the parsed bag — keyed by NAME ALONE and round-tripped through
+ * `decodeURIComponent`/`encodeURIComponent`. On the very response that establishes a session that can
+ * mangle `__clerk_handshake` and collapse same-name/different-`Domain` pairs. ⚠️ **Measured, and
+ * worse than mangling:** the bag is built eagerly at construction, so a cookie Clerk APPENDED after
+ * that is not in it and is **dropped entirely** by `replace()` — a silently signed-out user.
+ * `headers.append` adds one header and parses nothing.
+ *
+ * ⚠️ **The parameter is `Response`, not `NextResponse`, because `withClerk` does not always return
+ * one.** `clerkMiddleware` auto-arms a frontend-API proxy branch when the publishable key is
+ * production and the hostname matches, returning a plain `Response` whose `.cookies` is `undefined`
+ * — laundered past TypeScript by the cast in `withClerk`. Typing this `NextResponse` would re-tell
+ * that lie. (`Response.redirect()` headers ARE immutable and would throw on append; Clerk builds its
+ * handshake with `NextResponse.redirect`, which is mutable, and `proxy.test.ts` → "rides on a Clerk
+ * handshake redirect" pins that case so a vendor switch fails loudly rather than silently.)
+ *
+ * **Only when the cookie is present**, so an ordinary visitor never receives a spurious `Set-Cookie`.
+ * `Path=/` matches what the gate action set since V0-4, so no stale `mp_gate` can exist at another
+ * path and the `has()` guard cannot stick true. `Secure` is omitted deliberately — cookie identity is
+ * name/domain/path, so it is not needed to match, and omitting it also clears the cookie on plain
+ * HTTP in local dev.
+ *
+ * **Residual, benign, worth writing down:** any caller can send `Cookie: mp_gate=x` and force a
+ * `Set-Cookie` onto any matched response. It discloses nothing and both arms of ADR 0006's
+ * byte-identical refusal carry the same header, but it makes an otherwise-cacheable public response
+ * uncacheable for that one request.
+ */
+function withRetiredCookies(request: NextRequest, response: Response): Response {
+  if (request.cookies.has(RETIRED_GATE_COOKIE)) {
+    response.headers.append(
+      'set-cookie',
+      `${RETIRED_GATE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+    );
+  }
+  return response;
 }
 
 /**
  * Forward the nonce to the renderer via request headers; Next reads it from the
  * CSP header and stamps its own script/style tags automatically.
  *
- * `x-pathname` rides the same mechanism (PRIV-2) so the root layout's footer can set
- * `aria-current="page"` while staying a SERVER component — the alternative is a `usePathname()`
- * client component on every route in the app, for one attribute. Both are `.set()` on a COPY of the
- * inbound headers, so an inbound `x-pathname` (or `x-nonce`) is overwritten on every forwarded
- * request; `proxy.test.ts` asserts that for both. The worst case of a spoof here is a wrong
- * `aria-current`, not a security property.
+ * 🔴 **`x-pathname` is DELETED at AUTH-1 1d, not deferred.** PRIV-2 forwarded it so the root
+ * layout's footer could set `aria-current="page"` while staying a SERVER component. That never
+ * worked across a client-side navigation — Next does not re-render the root layout on a soft nav, so
+ * the value was stale — and `1d` made the staleness visible by hanging the footer's visibility on it.
+ * `SiteFooter` now uses `usePathname()`, leaving this header with **no consumer at all**, so it goes
+ * with its reason rather than lingering as plumbing nobody dares remove.
+ * ⚠️ `x-nonce` is unaffected and still `.set()` on a COPY of the inbound headers, so a caller cannot
+ * inject it; `proxy.test.ts` pins that overwrite.
  *
  * `x-nonce` is also what `<ClerkProvider nonce>` is given in `app/layout.tsx`, and what
  * `@clerk/nextjs`'s own `DynamicClerkScripts` reads straight off this header — so one nonce covers
@@ -236,20 +293,27 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent): Promi
 function forward(request: NextRequest, nonce: string, csp: string): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('x-pathname', request.nextUrl.pathname);
   requestHeaders.set('Content-Security-Policy', csp);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
   matcher: [
-    // Run on documents/actions; skip Next internals + static assets (which must
-    // load un-gated so the gate page itself can render).
+    // Run on documents/actions; skip Next internals + static assets.
     //
-    // ⚠️ NO `missing:` prefetch exclusion (SEC-1). A matcher condition decides whether the gate runs
-    // AT ALL, and any client can send a prefetch header, so excluding prefetches let every request
-    // that carried one skip the gate. Gating prefetches costs nothing: a gated user's prefetches
-    // carry the cookie and pass. Pages and actions re-check the gate too (lib/dal/gate.ts).
+    // 🔴 **The matcher body is UNCHANGED by `1d`; its justification is what changed.** It used to be
+    // "this is what decides whether the gate runs". There is no gate, so it is now: `auth()` must be
+    // able to answer, and the security headers must land. Both are properties of every matched
+    // request, which is why the body stays wide rather than narrowing to the routes that read data.
+    //
+    // ⚠️ NO `missing:` prefetch exclusion, and SEC-1's lesson OUTLIVES the gate it was learned on.
+    // A matcher condition decides whether this file runs AT ALL, and any client can send a prefetch
+    // header — so excluding prefetches once let every request carrying one skip the gate entirely.
+    // The same shape would now skip `clerkMiddleware()`, making `auth()` throw on exactly the
+    // requests an attacker chooses. Including prefetches costs nothing. ⚠️ This is also why the
+    // matcher is not the boundary: pages, actions and handlers re-check in-process
+    // (`app/pages-are-gated.test.ts`), and `proxy.test.ts` pins the matcher's SHAPE so a narrowing
+    // edit fails a test rather than silently un-authenticating a route.
     //
     // The lookahead is ANCHORED (OSS-2): each exclusion must end at a segment boundary or the end, so
     // `/favicon.icon` and `/_next/imagex` are gated. Unanchored, it skipped any path that
@@ -266,6 +330,8 @@ export const config = {
     // `/_next/image` is a live surface. The claim is "no gap at any entry point that reads household
     // data", and it is held by the per-page / per-action / per-handler checks —
     // `app/pages-are-gated.test.ts`, with the non-vacuity floor 1a added to its handler suite.
+    // ⚠️ After `1d` that claim rests on those checks ALONE, since the bounce that used to back it up
+    // is gone. `/_next/image` remains an excluded live surface and is still not a data entry point.
     '/((?!_next/static/|_next/image(?:/|$)|favicon\\.ico$).*)',
   ],
 };

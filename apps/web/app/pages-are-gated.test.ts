@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { isUngatedPath } from '@/lib/access-gate';
 import { isPublicPath } from '@/lib/public-paths';
 import {
   code,
@@ -17,11 +16,18 @@ import {
 
 /**
  * SEC-1's invariant as a test, not a sentence (OSS-2). The proxy is NOT the boundary: every page and
- * Route Handler re-checks the gate itself. OSS-2 made the first exception (the public landing), and a
- * prose rule plus a unit test of a string function would not notice a future page that forgets the call —
- * DUALS-1's merge accident (#153) was exactly that kind of silent loss.
+ * Route Handler re-checks the session itself. OSS-2 made the first exception (the public landing), and
+ * a prose rule plus a unit test of a string function would not notice a future page that forgets the
+ * call — DUALS-1's merge accident (#153) was exactly that kind of silent loss.
  *
- * Source is matched with comments STRIPPED, so a `// TODO: requireGatedPage()` cannot satisfy it.
+ * 🔴 **At `1d` this file's subject narrowed from "gated or session'd" to "needs a session", and it is
+ * MORE load-bearing than before, not less.** The proxy's gate bounce used to be a second, independent
+ * thing standing between a stranger and a page. It is gone, so these per-route assertions are now the
+ * only thing that notices a page which forgets to check anything.
+ * ⚠️ **PR C renames this file `pages-need-a-session.test.ts`** — its contents moved here, the rename
+ * and the citation sweep are a separate PR so this one's diff stays about behaviour.
+ *
+ * Source is matched with comments STRIPPED, so a `// TODO: requireSession()` cannot satisfy it.
  */
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
@@ -42,28 +48,28 @@ const app = (pattern: string) =>
 const pages = app('**/page.tsx');
 const handlers = app('**/route.ts');
 
-describe('every page is gated or deliberately un-gated', () => {
+describe('every page requires a session or is deliberately public', () => {
   it('finds the pages (an empty glob would pass everything below)', () => {
     expect(pages.length).toBeGreaterThan(2);
   });
 
   it.each(pages.map((f) => [routeOf(f), f]))('%s', (route, file) => {
     const src = code(file);
-    const gated = /\bawait\s+requireGatedPage\(\)/.test(src);
-    // 🔴 **ADDED, not widened — AUTH-1 1c-3b.** The file's own note bans widening a regex to accept
-    // EITHER helper, because a guard matching either proves neither. Two separate conjuncts, both
-    // required, is the opposite of that: each still proves its own call. The gate conjunct is
-    // deleted at 1d, after 1c-4 makes the scope membership-derived.
+    // 🔴 **ONE conjunct at `1d`, and it must stay a conjunct of one — never an alternation.**
+    // `1c-3b` required BOTH `requireGatedPage()` and `requireSession()`; `1d` deletes the former.
+    // ⚠️ The standing rule in this file is that a regex accepting EITHER helper proves neither, and
+    // that rule is why the gate conjunct was DELETED rather than folded into an `||` with the
+    // session one. If a second boundary helper ever arrives, add a second independent check.
     const sessioned = /\bawait\s+requireSession\(\)/.test(src);
     expect(
-      (gated && sessioned) || isUngatedPath(route),
-      `${route} must await BOTH requireGatedPage() and requireSession(), or be an ungated path ` +
-        `(PUBLIC_PATHS or the gate). Found gate=${gated} session=${sessioned}.`,
+      sessioned || isPublicPath(route),
+      `${route} must await requireSession(), or be a public path (PUBLIC_PATHS / ` +
+        `PUBLIC_PATH_TREES). Found session=${sessioned}.`,
     ).toBe(true);
   });
 });
 
-describe('every Route Handler checks the gate itself', () => {
+describe('every Route Handler checks the session itself', () => {
   /**
    * 🔴 AUTH-1 1a. The sibling page suite has had a non-vacuity floor since OSS-2; this one had none,
    * so an empty glob would have passed it silently. 1a is the chunk that leans on it: removing the
@@ -77,10 +83,10 @@ describe('every Route Handler checks the gate itself', () => {
 
   it.each(handlers.map((f) => [routeOf(f), f]))('%s', (route, file) => {
     const src = code(file);
-    // ⚠️ **No longer an alternation.** It accepted `isValidGateCookie` as well, because the export
-    // handler hand-rolled `hasGateAccess`'s exact body. That copy is gone, so the guard now names the
-    // one helper — and a handler that reintroduces the raw cookie read fails here rather than
-    // quietly passing. Still two INDEPENDENT conjuncts (gate AND session), never "either will do".
+    // ⚠️ **Not an alternation, and never was meant to be.** It once accepted `isValidGateCookie`
+    // too, because the export handler hand-rolled the gate predicate's body; that copy went at
+    // `1c-3b` and the gate itself at `1d`, leaving one named helper. A handler that reintroduces a
+    // raw cookie read fails here rather than quietly passing.
     //
     // 🔴 **A KNOWN SHAPE PROBLEM, recorded so the next author widens it the RIGHT way.** This asks
     // for both calls TEXTUALLY in the handler file, while the action half of this suite was reshaped
@@ -92,12 +98,10 @@ describe('every Route Handler checks the gate itself', () => {
     // CLOSED, so nothing is silently unprotected. **Then: mirror the action half** (accept delegation
     // plus the returned-refusal backreference), do NOT inline the predicate again and do NOT loosen
     // this to an alternation. With one handler in the tree there is nothing yet to generalise from.
-    const gated = /\bhasGateAccess\s*\(/.test(src);
     const sessioned = /\bsessionUserOrNull\s*\(/.test(src);
     expect(
-      gated && sessioned,
-      `${route}/route.ts must check BOTH the gate cookie and a session. ` +
-        `Found gate=${gated} session=${sessioned}.`,
+      sessioned,
+      `${route}/route.ts must check a session itself. Found session=${sessioned}.`,
     ).toBe(true);
   });
 });
@@ -105,7 +109,9 @@ describe('every Route Handler checks the gate itself', () => {
 /**
  * A `'use server'` function reachable from a PUBLIC page's module graph — root layout, error boundary and
  * every other root-segment file included — would be bundled for that page, and so invokable by an
- * unauthenticated POST to it with only its own gate check in the way. Public pages reach none.
+ * unauthenticated POST to it with only its own session check in the way. Public pages reach none.
+ * ⚠️ At `1d` this matters more: the gate bounce that used to stop such a POST before it reached Next
+ * is gone, and `e2e/landing.spec.ts` lost the runtime arm that proved it (see `tech-debt.md`).
  *
  * Follows local imports only (`@/…` and relative), including `export … from` re-exports and dynamic
  * `import()`; a package cannot contain this app's actions. The directive is matched ANYWHERE (inline
@@ -155,8 +161,13 @@ describe('public pages pull no Server Action into their module graph', () => {
     expect(publicPages.length).toBeGreaterThan(0);
   });
 
+  // ⚠️ Repointed at `1d`: this named `app/gate/actions.ts`, which `1d` deletes — so the detector's
+  // own non-vacuity check threw ENOENT rather than failing with a useful message. It must name a
+  // module that really does carry the directive, which is now the only one left.
   it('can see an action module (the detector is not vacuous)', () => {
-    expect(USE_SERVER_MENTION_RE.test(code(join(APP_DIR, 'gate', 'actions.ts')))).toBe(true);
+    expect(USE_SERVER_MENTION_RE.test(code(join(APP_DIR, 'p', '[profileId]', 'actions.ts')))).toBe(
+      true,
+    );
   });
 
   it.each(publicPages.map((f) => [routeOf(f), f]))('%s (with its segment files)', (_r, file) => {
@@ -228,11 +239,18 @@ describe('@clerk/nextjs is the first package in a public graph, so its Server Ac
  */
 describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', () => {
   /**
-   * The gate action issues the gate; it cannot require the thing it is about to grant. ⚠️ The
-   * dead-entry assertion below means **1d deleting this file forces the allowlist entry to go with
-   * it** — an allowlist that outlives its subject silently excuses a file somebody may recreate.
+   * 🔴 **EMPTY at `1d`, and that is the allowlist working as designed.** Its one entry was
+   * `app/gate/actions.ts` — the gate action, which issued the gate and so could not require the thing
+   * it was about to grant. `1d` deletes that file, and the dead-entry assertion below is what FORCED
+   * the entry to go with it: an allowlist that outlives its subject silently excuses a path somebody
+   * may later recreate.
+   *
+   * ⚠️ **`it.each([])` REGISTERS NO TESTS** — probed, Vitest 5.0.5, and it emits no warning — so the
+   * dead-entry loop below now proves nothing on its own. `expect(ALLOWLIST).toEqual([])` is what
+   * keeps the emptiness ASSERTED rather than merely true, and it is also the thing that goes red if
+   * a future author adds an entry without reinstating the `existsSync` loop's coverage.
    */
-  const ALLOWLIST = ['app/gate/actions.ts'];
+  const ALLOWLIST: string[] = [];
 
   /**
    * 🔴 **1c SWITCHES this, it does not WIDEN it.** A regex matching `hasGateAccess|requireSession`
@@ -261,8 +279,7 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    */
   const ENTRY_REFUSAL = /if\s*\(\s*!\s*(\w+)\.ok\s*\)\s*return\s+\1\s*;/;
 
-  const BOUNDARY_CALL = /\bhasGateAccess\s*\(/;
-  /** AUTH-1 1c-3b: the session, required alongside the gate before every mutation. */
+  /** AUTH-1 1c-3b, and from `1d` the only boundary conjunct before every mutation. */
   const SESSION_CALL = /\bsessionUserOrNull\s*\(/;
   /**
    * 🔴 **The limiter needs a SOURCE guard, because no behavioural test can catch its absence.**
@@ -283,7 +300,8 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * `app/`, so a `'use server'` module under `components/` or `lib/` was invisible to everything.
    */
   it('finds exactly the Server Action modules this app is known to have', () => {
-    expect(modules.sort()).toEqual(['app/gate/actions.ts', 'app/p/[profileId]/actions.ts']);
+    // ⚠️ `app/gate/actions.ts` was the other entry until `1d` deleted it.
+    expect(modules.sort()).toEqual(['app/p/[profileId]/actions.ts']);
   });
 
   it('the scan is not vacuous', () => {
@@ -297,6 +315,14 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
     expect(USE_SERVER_RE.test(code(actionState))).toBe(false);
   });
 
+  // 🔴 The emptiness is asserted, not assumed — see ALLOWLIST's note on `it.each([])`.
+  it('the allowlist is empty, so nothing is excused from the boundary', () => {
+    expect(ALLOWLIST).toEqual([]);
+  });
+
+  // ⚠️ Registers ZERO cases while the allowlist is empty. Kept deliberately: the moment an entry is
+  // added it starts proving that entry is not dead, and the assertion above is what covers the gap
+  // in the meantime.
   it.each(ALLOWLIST)('%s is allowlisted and still exists (no dead entries)', (rel) => {
     expect(existsSync(join(WEB_DIR, rel))).toBe(true);
   });
@@ -343,16 +369,17 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * principal, so it MUST come after the session, and both must come before the caller's zod parse
    * and DB read or an unauthenticated flood buys Redis and Postgres work. Nothing behavioural can
    * see any of this: the limiter fails open and is `null` under vitest.
+   *
+   * ⚠️ **Two conjuncts at `1d`, not three** — the gate's position assertion went with the gate. The
+   * surviving ordering claim (session before limiter) is the one that was load-bearing, because it
+   * is the one keyed on a value the earlier check produces.
    */
-  it('enterMutation holds the gate, the session and the limiter — in that order', () => {
+  it('enterMutation holds the session and the limiter — in that order', () => {
     const src = code(join(APP_DIR, 'p', '[profileId]', 'mutation-entry.ts'));
-    const gate = src.search(BOUNDARY_CALL);
     const session = src.search(SESSION_CALL);
     const limiter = src.search(LIMITER_CALL);
-    expect(gate, 'the gate check').toBeGreaterThan(-1);
     expect(session, 'the session check').toBeGreaterThan(-1);
     expect(limiter, 'checkMutationLimit').toBeGreaterThan(-1);
-    expect(gate, 'the gate must be checked before the session').toBeLessThan(session);
     expect(session, 'the principal must exist before it can key the limiter').toBeLessThan(limiter);
   });
 });

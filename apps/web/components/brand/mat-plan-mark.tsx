@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 /**
  * The mat-plan mark (OSS-2), converted from the design source `public/brand/mat-plan-mark.svg`.
  *
- * INLINE on purpose, never `<img src="/brand/…">`: a `public/` file is behind the access-gate matcher, so
+ * INLINE on purpose, never `<img src="/brand/…">`: ⚠️ one original reason — that a `public/` file sat behind the access-gate matcher — died with the gate at AUTH-1 1d; the surviving reasons below are sufficient on their own, so
  * an un-gated visitor would get a redirect, and `next/image` is no rescue (its optimizer re-enters the
  * proxy with no cookie → 400). Inline costs no request and no layout shift. The fill is `currentColor`,
  * set from the `--brand` token by the default class, so the hex lives in one place in the app.

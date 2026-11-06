@@ -56,9 +56,11 @@ export default async function RootLayout({
 }>) {
   const requestHeaders = await headers();
   const nonce = requestHeaders.get('x-nonce') ?? undefined;
-  // PRIV-2: the footer's `aria-current` needs the current route. The proxy forwards it the same way
-  // it forwards the nonce, which keeps `SiteFooter` a server component on every route.
-  const pathname = requestHeaders.get('x-pathname');
+  // ⚠️ **`x-pathname` is read nowhere now (AUTH-1 1d).** PRIV-2 forwarded it so the footer's
+  // `aria-current` could be set from a SERVER component — but the root layout is not re-rendered on a
+  // client-side navigation, so the value was stale after a soft nav, and `1d` made that visible by
+  // hanging the footer's visibility on it. `SiteFooter` uses `usePathname()`, and `1d` deleted the
+  // forwarding and its pins with it rather than leaving plumbing with no consumer.
 
   // AUTH-1 1a — Clerk, INSIDE the nonce/theme providers and only when both keys are present.
   //
@@ -83,15 +85,26 @@ export default async function RootLayout({
       dynamic
       nonce={nonce}
       signInUrl={SIGN_IN_PATH}
+      // 🔴 **`signUpUrl` points at the SIGN-IN route on purpose (AUTH-1 1d), and there is no
+      // `<SignUp/>` in this app.** Sign-up is invitation-only, so a refused address is refused at
+      // Clerk's sign-UP step — and with this prop unset Clerk sends that caller to its own Account
+      // Portal, on **another origin**: no footer, no `/privacy`, no way back to this app. `1d` makes
+      // `/sign-in` the only door, so an off-origin dead end is the one outcome worth pre-empting.
+      // ⚠️ **Set defensively: the refusal path is NOT yet observed on the production instance.** The
+      // plan owes one run with an address that has never touched the instance (neither existing
+      // account can produce it — both exist). Pointing it here is correct whichever way that lands:
+      // a refused caller returns to a page that explains itself. Do not remove this without that
+      // observation in hand.
+      signUpUrl={SIGN_IN_PATH}
       signInFallbackRedirectUrl={APP_HOME_PATH}
       afterSignOutUrl={SIGN_IN_PATH}
       // `cssLayerName` is a GLOBAL appearance option, so it belongs here rather than on `<SignIn>`.
       // Tailwind v4 emits its utilities inside `@layer utilities`, and UNLAYERED styles beat any
       // layered rule regardless of specificity — so without a layer name, Clerk's own CSS would win
       // over the `min-h-11` the sign-in card sets for the 44px tap-target bar, with no test to say
-      // so. `app/globals.css` declares `@layer clerk` FIRST, which is what puts it below Tailwind's
-      // layers: layer priority is declaration order, so naming it anywhere later would make Clerk's
-      // styles win instead.
+      // so. ⚠️ `app/globals.css` names the layer BETWEEN Tailwind's `base` and `components` — this
+      // comment said "FIRST, which puts it below Tailwind's layers", which is the arrangement #333
+      // measured and replaced: below `base`, preflight strips Clerk's own spacing. See `lib/clerk.ts`.
       appearance={{ cssLayerName: CLERK_CSS_LAYER }}
     >
       {children}
@@ -109,7 +122,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider nonce={nonce}>
           {body}
-          <SiteFooter pathname={pathname} />
+          <SiteFooter />
         </ThemeProvider>
       </body>
     </html>

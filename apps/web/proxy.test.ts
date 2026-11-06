@@ -3,20 +3,25 @@ import { createRequire } from 'node:module';
 import { NextRequest, type NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GATE_COOKIE_NAME, GATE_PATH, gateTokenFor } from '@/lib/access-gate';
-import { CLERK_BOT_PROTECTION_ORIGIN, CLERK_IMG_ORIGIN } from '@/lib/clerk';
+import { CLERK_IMG_ORIGIN } from '@/lib/clerk';
 import { APP_HOME_PATH, PRIVACY_PATH, SIGN_IN_PATH } from '@/lib/constants';
 
 import { buildCsp, config, proxy } from './proxy';
 
 /**
- * The proxy's routing (OSS-2) and its matcher. The proxy is NOT the authorization boundary — pages and
- * actions re-check the gate (lib/dal/gate.ts) — but it is what sends a stranger to the landing instead of
- * a password prompt, and the family past both.
+ * The proxy's behaviour and its matcher.
  *
- * AUTH-1 1a adds three things it is the only place to prove: the CSP widening by exact origin, that
- * `clerkMiddleware()` is composed without replacing our response, and that none of it arms itself
- * while Clerk is un-configured.
+ * 🔴 **`1d` deleted the whole routing suite, and that is the honest consequence of the proxy no
+ * longer routing.** Every case in it asserted a gate bounce — "bounces un-gated `/p` to the gate with
+ * `?from=`", "serves the gate itself", "preserves the query string in `?from=`". There is no bounce
+ * and no `/gate`, so those cases could only have been kept by inventing a new subject for them.
+ * What replaces them is narrower and real: the proxy REDIRECTS NOTHING (a reintroduced redirect is a
+ * loop, so it is worth one assertion), the matcher's SHAPE is pinned, and the `mp_gate` tombstone is
+ * covered five ways.
+ *
+ * This file still proves what only it can: the CSP widening by exact origin, that `clerkMiddleware()`
+ * is composed without replacing our response, and that none of it arms itself while Clerk is
+ * un-configured.
  */
 
 const ORIGIN = 'http://localhost:3000';
@@ -48,7 +53,7 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
 
 /**
  * A stand-in for `clerkMiddleware()` that mimics the ONE contract this proxy depends on, read off
- * `@clerk/nextjs@7.9.15`'s `clerkMiddleware.js`: it calls the handler, and
+ * `@clerk/nextjs@7.9.22`'s `clerkMiddleware.js`: it calls the handler, and
  * `handlerResult = userHandlerResult || NextResponse.next()` — so OUR response is the one decorated.
  * It then appends a rotated session cookie the way `requestState.headers.forEach(… append)` does.
  *
@@ -56,33 +61,64 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
  * cannot pin the VENDOR's half — a future `@clerk/nextjs` that ignores the handler's response would
  * pass this test, which is why AGENTS.md wants a Clerk bump treated as its own reviewed PR.
  */
-const ROTATED_COOKIE = '__session=rotated; Path=/; HttpOnly';
+// 🔴 **An APPENDED cookie, which is what makes the byte-identity case below able to fail.** A first
+// version put the special characters in the inbound request `Cookie` header, where no implementation
+// re-emits them — green under both implementations, i.e. unable to fail on the thing it was named for.
+// ⚠️ The `+`, `/` and `=` are a secondary guard, NOT the mechanism; see that case's own note.
+const ROTATED_COOKIE = '__clerk_handshake=a+b/c==; Path=/; HttpOnly';
 const clerkCalls: { handled: boolean }[] = [];
+/**
+ * 🔴 **AUTH-1 1d — the auto-proxy branch, which returns a PLAIN `Response`.** `clerkMiddleware.js`
+ * arms a frontend-API proxy when the publishable key is production and the hostname matches, and
+ * that branch returns a plain `Response` whose `.cookies` is `undefined` — a shape `withClerk`'s cast
+ * hides from TypeScript. The tombstone has to survive it, so the mock can produce it on demand.
+ */
+let clerkReturnsPlainResponse = false;
+/** Clerk's handshake: `NextResponse.redirect`, built WITHOUT calling our handler. */
+let clerkReturnsRedirect = false;
 vi.mock('@clerk/nextjs/server', () => ({
   clerkMiddleware:
     (handler: () => NextResponse) =>
-    async (_request: unknown, _event: unknown): Promise<NextResponse> => {
+    async (_request: unknown, _event: unknown): Promise<NextResponse | Response> => {
       clerkCalls.push({ handled: true });
+      if (clerkReturnsRedirect) {
+        // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
+        // handshake, and the reason the tombstone must wrap the function's single `return`.
+        // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
+        // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
+        const { NextResponse: NR } = await import('next/server');
+        const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
+        redirect.headers.append('set-cookie', ROTATED_COOKIE);
+        return redirect;
+      }
       const res = handler();
       res.headers.append('set-cookie', ROTATED_COOKIE);
+      if (clerkReturnsPlainResponse) {
+        // A genuinely plain Response: no `.cookies`, headers carried across.
+        return new Response(null, { status: 200, headers: res.headers });
+      }
       return res;
     },
 }));
 
 beforeEach(() => {
   clerkConfigured = false;
+  clerkReturnsPlainResponse = false;
+  clerkReturnsRedirect = false;
   clerkCalls.length = 0;
 });
 
+/**
+ * ⚠️ **`run()` lost its `gated` flag at `1d`** — it minted a gate token and set the cookie, and
+ * there is nothing to mint. `cookie` replaces it: an explicit header string, used only by the
+ * tombstone cases, which are the one remaining reason this proxy cares about a cookie at all.
+ */
 async function run(
   pathname: string,
-  { gated, inbound = {} }: { gated: boolean; inbound?: Record<string, string> },
+  { cookie, inbound = {} }: { cookie?: string; inbound?: Record<string, string> } = {},
 ) {
   const headers = new Headers();
-  if (gated) {
-    const token = await gateTokenFor(process.env.ACCESS_GATE_PASSWORD ?? '');
-    headers.set('cookie', `${GATE_COOKIE_NAME}=${token}`);
-  }
+  if (cookie !== undefined) headers.set('cookie', cookie);
   for (const [name, value] of Object.entries(inbound)) headers.set(name, value);
   const res = await proxy(new NextRequest(new URL(pathname, ORIGIN), { headers }));
   const location = res.headers.get('location');
@@ -95,127 +131,136 @@ function forwarded(res: { headers: Headers }, name: string): string | null {
   return res.headers.get(`x-middleware-request-${name}`);
 }
 
-describe('proxy routing', () => {
-  it('serves the public landing to an un-gated caller', async () => {
-    const { location } = await run('/', { gated: false });
+describe('the proxy redirects nothing (AUTH-1 1d)', () => {
+  // 🔴 One assertion where there were ~24, because there is one behaviour where there were two.
+  // A reintroduced redirect here is a LOOP (every path bouncing to a path that bounces), so it is
+  // worth pinning even though "no redirect" sounds like asserting an absence.
+  // ⚠️ These are not "a stranger is served the app": the proxy never authorized anything, and after
+  // `1d` it does not even route. What a caller may SEE is proved per route in
+  // `app/pages-are-gated.test.ts` and in the e2e suite.
+  it.each([
+    '/',
+    PRIVACY_PATH,
+    APP_HOME_PATH,
+    '/p/x',
+    '/p/x/routine',
+    SIGN_IN_PATH,
+    `${SIGN_IN_PATH}/sso-callback`,
+    `${SIGN_IN_PATH}evil`,
+    `${PRIVACY_PATH}/x`,
+    '/api/sync',
+    '/%2F',
+  ])('passes %s through without a redirect', async (path) => {
+    const { location } = await run(path);
     expect(location).toBeNull();
   });
 
-  /**
-   * 🔴 **The inverse of what these two asserted before AUTH-1 1c-3b**, and the inversion is the
-   * point. The proxy used to forward a cookie-holder from `/` and `/gate` to the app home. Once the
-   * pages also require a session that became a LOOP — `/p` → `requireSession()` → `/sign-in`, whose
-   * only forward controls lead back to `/` and `/gate` — and the `/` arm meant such a visitor could
-   * never see the landing page at all.
-   *
-   * ⚠️ Written as "no redirect", not "no session", deliberately: the proxy reads no session either
-   * before or after, so a case claiming to exercise a sessionless visitor would be asserting a
-   * precondition this file cannot establish and does not need.
-   */
-  it('leaves a gated caller on / — the landing is reachable', async () => {
-    const { location } = await run('/', { gated: true });
-    expect(location).toBeNull();
-  });
-
-  it('leaves a gated caller on the gate — no forward to the app home', async () => {
-    // Still reachable on purpose: until 1d the access code is one of two things a visitor needs, so
-    // the gate form must stay available to someone who has a session but no cookie.
-    const { location } = await run(GATE_PATH, { gated: true });
-    expect(location).toBeNull();
-  });
-
-  // The pass-through branches: a regression here is a redirect LOOP (`/gate` → `/gate`, `/p` → `/p`).
-  it('serves the gate itself to an un-gated caller', async () => {
-    const { location } = await run(GATE_PATH, { gated: false });
-    expect(location).toBeNull();
-  });
-
-  it.each([APP_HOME_PATH, '/p/x', '/p/x/routine'])('serves %s to a gated caller', async (path) => {
-    const { location } = await run(path, { gated: true });
-    expect(location).toBeNull();
-  });
-
-  // `//` is not here: Next redirects repeated slashes BEFORE the proxy runs (resolve-routes), so the
-  // proxy never sees one.
-  it.each([APP_HOME_PATH, '/p/some-profile', '/profile', '/%2F', '/%20'])(
-    'bounces un-gated %s to the gate with ?from=',
-    async (path) => {
-      const { location } = await run(path, { gated: false });
-      expect(location?.pathname).toBe(GATE_PATH);
-      expect(location?.searchParams.get('from')).toBe(new URL(path, ORIGIN).pathname);
-    },
-  );
-
-  it('sets the security headers on the public landing too', async () => {
-    const { res } = await run('/', { gated: false });
+  it('sets the security headers on a public path too', async () => {
+    const { res } = await run('/');
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
   });
+});
 
-  // PRIV-2. The notice is the SECOND public path, and the only one that must be served to BOTH a
-  // stranger and the family: the authed-redirect arm is `pathname === '/'` precisely so a future
-  // public path does not bounce into the app.
-  it('serves the privacy notice to an un-gated caller', async () => {
-    const { location } = await run(PRIVACY_PATH, { gated: false });
-    expect(location).toBeNull();
-  });
-
-  it('serves the privacy notice to a GATED caller too — it does not bounce to the app', async () => {
-    const { location } = await run(PRIVACY_PATH, { gated: true });
-    expect(location).toBeNull();
-  });
-
-  it.each([`${PRIVACY_PATH}x`, `${PRIVACY_PATH}/x`, '/PRIVACY'])(
-    'still bounces un-gated %s to the gate',
-    async (path) => {
-      const { location } = await run(path, { gated: false });
-      expect(location?.pathname).toBe(GATE_PATH);
-    },
-  );
-
-  // AUTH-1 1a. The sign-in tree is the first entry in `PUBLIC_PATH_TREES`: the gate bounce does
-  // `url.search = ''`, so a gated `/sign-in/...` would lose every Clerk handshake parameter — a loop,
-  // not a flow — and Clerk's prebuilt page cannot await `requireGatedPage()`.
-  it.each([SIGN_IN_PATH, `${SIGN_IN_PATH}/sso-callback`, `${SIGN_IN_PATH}/factor-one`])(
-    'serves %s to an un-gated caller',
-    async (path) => {
-      const { location } = await run(path, { gated: false });
-      expect(location).toBeNull();
-    },
-  );
-
-  it('serves the sign-in screen to a GATED caller too — it does not bounce to the app', async () => {
-    const { location } = await run(SIGN_IN_PATH, { gated: true });
-    expect(location).toBeNull();
-  });
-
-  // The segment boundary, end to end: the tree arm must not open a neighbouring path.
-  it.each([`${SIGN_IN_PATH}evil`, `${SIGN_IN_PATH}-evil`, '/SIGN-IN'])(
-    'still bounces un-gated %s to the gate',
-    async (path) => {
-      const { location } = await run(path, { gated: false });
-      expect(location?.pathname).toBe(GATE_PATH);
-    },
-  );
+/**
+ * 🔴 **The `mp_gate` tombstone (AUTH-1 1d, § Design 3).** Five cases, and the fifth is what makes the
+ * other four mean anything.
+ *
+ * ⚠️ **Count OURS, never theirs.** Clerk builds its handshake with `requestState.headers.forEach(…)`,
+ * and `Headers.forEach` COMBINES multi-value headers, so a total `set-cookie` count is vendor-shaped
+ * and would drift with a Clerk bump. `getSetCookie()` returns the uncombined array, so filtering it
+ * by prefix is assertable — and that count is what catches a double-append if the wrapper is ever
+ * nested twice.
+ */
+describe('the mp_gate tombstone', () => {
+  const RETIRED = 'mp_gate';
+  const tombstones = (res: { headers: Headers }) =>
+    res.headers.getSetCookie().filter((c) => c.startsWith(`${RETIRED}=`));
 
   /**
-   * AUTH-1 1a — `?from=` carries the QUERY STRING, not the pathname alone. It used to be the
-   * pathname, with `url.search = ''` discarding the rest, so a gated `/p/x/routine?d=2026-09-30` came
-   * back from the gate as a bare `/p/x/routine` — silently the wrong day. `safeInternalPath` (which
-   * both the gate page and the gate action clamp through) already preserves a query string.
+   * 🔴 **The value, pinned exactly once, on the assertion side.** This replaces the pin that
+   * `lib/access-gate.test.ts` carried before `1d` deleted it. AGENTS.md § Constants sanctions a
+   * contract test pinning a const's literal — without it the const and its five uses here could be
+   * renamed in lockstep and clear a cookie nobody holds.
    */
-  it("preserves an un-gated caller's query string in ?from=", async () => {
-    const { location } = await run('/p/x/routine?d=2026-09-30&tab=strength', { gated: false });
-    expect(location?.pathname).toBe(GATE_PATH);
-    expect(location?.searchParams.get('from')).toBe('/p/x/routine?d=2026-09-30&tab=strength');
-    // And nothing else rides along on the gate URL.
-    expect([...location!.searchParams.keys()]).toEqual(['from']);
+  it('clears exactly the cookie the gate set', async () => {
+    const { res } = await run('/', { cookie: `${RETIRED}=whatever` });
+    expect(tombstones(res)).toHaveLength(1);
+    const [tombstone] = tombstones(res);
+    expect(tombstone).toContain(`${RETIRED}=;`);
+    expect(tombstone).toContain('Max-Age=0');
+    // `Path=/` is what the gate action used since V0-4 — a different path would not match the
+    // cookie's identity and the deletion would silently do nothing.
+    expect(tombstone).toContain('Path=/');
   });
 
-  // 1a removed the `api` matcher exclusion, so `/api/...` now reaches this function — and an un-gated
-  // caller must be bounced there like anywhere else rather than served.
-  it.each(['/api', '/api/sync'])('bounces un-gated %s to the gate', async (path) => {
-    const { location } = await run(path, { gated: false });
-    expect(location?.pathname).toBe(GATE_PATH);
+  /**
+   * 🔴 **THE case that gives the others meaning.** Without it, deleting the `has()` guard leaves
+   * every case above green while every visitor receives a spurious `Set-Cookie` on every matched
+   * response. Probed: removing the guard turns this red and nothing else.
+   */
+  it('sends NO tombstone to a caller who does not hold the cookie', async () => {
+    const { res } = await run('/');
+    expect(tombstones(res)).toHaveLength(0);
+  });
+
+  it('rides on a response Clerk has decorated', async () => {
+    clerkConfigured = true;
+    const { res } = await run(APP_HOME_PATH, { cookie: `${RETIRED}=x` });
+    expect(clerkCalls).toHaveLength(1);
+    expect(tombstones(res)).toHaveLength(1);
+    // Clerk's own rotated cookie survives alongside it — the tombstone appends, it does not replace.
+    expect(res.headers.getSetCookie()).toContain(ROTATED_COOKIE);
+  });
+
+  /**
+   * 🔴 **The MECHANISM-CHOICE tripwire.** It asserts that the Clerk cookie Clerk appended survives
+   * alongside our tombstone.
+   * ✅ **Probed RED, and the probe corrected what this comment used to claim.** Swapping
+   * `withRetiredCookies`'s `headers.append` for
+   * `(response as NextResponse).cookies.delete(RETIRED_GATE_COOKIE)` reddens it — but **not** because
+   * the value is re-encoded. Measured: after the swap the header set is exactly
+   * `['mp_gate=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT']`. **Clerk's cookie is dropped
+   * entirely.** `NextResponse` builds its `ResponseCookies` bag eagerly at construction
+   * (`next/dist/server/web/spec-extension/response.js`), so anything appended afterwards is not in
+   * the bag that `replace()` re-emits — it is lost, not mangled.
+   * ⚠️ An earlier version of this note said the value "comes back `a%2Bb%2Fc%3D%3D`". That is wrong,
+   * and it matters: an author who "fixed" the special characters would think they had changed this
+   * case's power. The characters are a secondary guard against a future re-encoding implementation;
+   * the thing that makes it fail today is that the cookie must be APPENDED, not inbound.
+   */
+  it('leaves a Clerk cookie containing +, / and = byte-identical', async () => {
+    clerkConfigured = true;
+    const { res } = await run('/', { cookie: `${RETIRED}=x` });
+    expect(res.headers.getSetCookie()).toContain(ROTATED_COOKIE);
+    expect(tombstones(res)).toHaveLength(1);
+  });
+
+  /**
+   * 🔴 **The Clerk HANDSHAKE case, which `withRetiredCookies`'s docblock claimed was pinned and was
+   * not.** Clerk builds its handshake with `NextResponse.redirect`, whose headers are MUTABLE.
+   * `Response.redirect()`'s are not, and `headers.append` on one throws — which would be a 500 for
+   * every visitor still carrying `mp_gate`. This is the case that fails loudly if a Clerk bump
+   * switches construction, instead of that landing in production.
+   */
+  it('rides on a Clerk handshake redirect', async () => {
+    clerkConfigured = true;
+    clerkReturnsRedirect = true;
+    const { res } = await run('/', { cookie: `${RETIRED}=x` });
+    expect(res.status).toBe(307);
+    expect(tombstones(res)).toHaveLength(1);
+  });
+
+  /**
+   * 🔴 **The plain-`Response` case — where `withClerk`'s cast is a lie.** `clerkMiddleware` auto-arms
+   * a frontend-API proxy branch (production key + matching hostname) and returns a plain `Response`
+   * whose `.cookies` is `undefined`. `withRetiredCookies` takes `Response` precisely so this works;
+   * a `response.cookies.*` implementation would throw here.
+   */
+  it('works when Clerk returns a plain Response, not a NextResponse', async () => {
+    clerkConfigured = true;
+    clerkReturnsPlainResponse = true;
+    const { res } = await run('/', { cookie: `${RETIRED}=x` });
+    expect(tombstones(res)).toHaveLength(1);
   });
 });
 
@@ -249,12 +294,9 @@ describe('buildCsp', () => {
     );
   });
 
-  it.each([TEST_FRONTEND_ORIGIN, CLERK_IMG_ORIGIN, CLERK_BOT_PROTECTION_ORIGIN])(
-    'names %s nowhere while dark',
-    (origin) => {
-      expect(dark).not.toContain(origin);
-    },
-  );
+  it.each([TEST_FRONTEND_ORIGIN, CLERK_IMG_ORIGIN])('names %s nowhere while dark', (origin) => {
+    expect(dark).not.toContain(origin);
+  });
 
   it.each(['frame-src', 'worker-src'])(
     'declares no %s while dark, so it falls through to the tighter default-src',
@@ -271,8 +313,13 @@ describe('buildCsp', () => {
     expect(lit).toContain(`img-src 'self' blob: data: ${CLERK_IMG_ORIGIN}`);
   });
 
-  it('declares frame-src for the bot-protection widget', () => {
-    expect(lit).toContain(`frame-src 'self' ${CLERK_BOT_PROTECTION_ORIGIN}`);
+  // 🔴 **INVERTED at AUTH-1 1d: there must be NO `frame-src`.** It allowed Cloudflare Turnstile for
+  // Clerk's bot protection, which the production instance has OFF — a CSP source admitting an origin
+  // nothing renders. Absent, an iframe falls through to `default-src 'self'` and is blocked, which is
+  // tighter. Asserted in BOTH states, so re-adding it is a deliberate edit with a test to change.
+  it('declares no frame-src in either state — the Turnstile source is removed', () => {
+    expect(lit).not.toContain('frame-src');
+    expect(dark).not.toContain('frame-src');
   });
 
   it("declares worker-src for clerk-js's blob: worker", () => {
@@ -321,7 +368,7 @@ describe('buildCsp', () => {
  */
 describe('Clerk composition', () => {
   it('composes nothing while un-configured — the public landing still renders', async () => {
-    const { res, location } = await run('/', { gated: false });
+    const { res, location } = await run('/');
     expect(location).toBeNull();
     expect(clerkCalls).toEqual([]);
     expect(res.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
@@ -329,14 +376,14 @@ describe('Clerk composition', () => {
   });
 
   it.each(['/', PRIVACY_PATH, SIGN_IN_PATH])('renders %s with no Clerk keys set', async (path) => {
-    const { res, location } = await run(path, { gated: false });
+    const { res, location } = await run(path);
     expect(location).toBeNull();
     expect(res.headers.get('content-security-policy')).toContain("connect-src 'self';");
   });
 
   it('runs Clerk on the pass-through path once configured', async () => {
     clerkConfigured = true;
-    const { res, location } = await run(APP_HOME_PATH, { gated: true });
+    const { res, location } = await run(APP_HOME_PATH);
     expect(location).toBeNull();
     expect(clerkCalls).toHaveLength(1);
     // The merge: a rotated session cookie Clerk appended survives `withSecurityHeaders`. Dropping it
@@ -344,43 +391,49 @@ describe('Clerk composition', () => {
     expect(res.headers.getSetCookie()).toContain(ROTATED_COOKIE);
     // … and so do OUR request-header overrides, which the theme script and the footer depend on.
     expect(forwarded(res, 'x-nonce')).not.toBeNull();
-    expect(forwarded(res, 'x-pathname')).toBe(APP_HOME_PATH);
     expect(res.headers.get('content-security-policy')).toContain(TEST_FRONTEND_ORIGIN);
   });
 
-  // Order: the gate runs FIRST. A bounced request renders nothing, so nothing can call `auth()` and
-  // there is no reason to run vendor middleware for an un-gated stranger while the gate is still the
-  // only boundary. The regression this guards is the other half: Clerk composition must not swallow
-  // the bounce, which would be the "app is open" failure mode of this whole plan.
-  it('still bounces an un-gated caller, without invoking Clerk', async () => {
+  /**
+   * 🔴 **INVERTED at `1d`, and the inversion is the whole point of the chunk.** This case asserted
+   * that an un-gated caller was bounced WITHOUT invoking Clerk — the gate ran first, a bounced
+   * request rendered nothing, so there was no reason to run vendor middleware for a stranger.
+   *
+   * After `1d` there is no bounce and no pass-through path: Clerk must run on EVERY matched request,
+   * because `auth()` throws when `clerkMiddleware()` did not run and `/sign-in` is the only way in.
+   * A case asserting Clerk is skipped would now be asserting the bug.
+   */
+  it('invokes Clerk on a cookie-less request too — there is no pass-through path left', async () => {
     clerkConfigured = true;
-    const { location } = await run('/p/x', { gated: false });
-    expect(location?.pathname).toBe(GATE_PATH);
-    expect(clerkCalls).toEqual([]);
+    const { location } = await run('/p/x');
+    expect(location).toBeNull();
+    expect(clerkCalls).toEqual([{ handled: true }]);
   });
 });
 
 /**
- * PRIV-2 — the per-request values the proxy hands the renderer. The footer's `aria-current` needs
- * the current pathname in a SERVER component, and `x-nonce` already proves this mechanism works.
+ * PRIV-2 — the per-request value the proxy hands the renderer. ⚠️ This described the pre-`1d`
+ * design: the footer's `aria-current` set from a forwarded pathname in a SERVER component.
+ * `SiteFooter` is a client component on `usePathname()` now, and `x-nonce` is the only value still
+ * forwarded.
  */
 describe('forwarded request headers', () => {
-  it.each([PRIVACY_PATH, '/p/abc'])('forwards the pathname for %s', async (path) => {
-    const { res } = await run(path, { gated: true });
-    expect(forwarded(res, 'x-pathname')).toBe(path);
-  });
-
-  it.each(['x-pathname', 'x-nonce'])('overwrites an INBOUND %s', async (name) => {
+  // ⚠️ **The `x-pathname` cases are GONE at AUTH-1 1d, with the header.** They pinned that the proxy
+  // forwarded the pathname and overwrote an inbound one. `SiteFooter` reads `usePathname()` now, so
+  // the header had no consumer at all; keeping its pins would have been a test guarding plumbing.
+  it('overwrites an INBOUND x-nonce', async () => {
+    const name = 'x-nonce';
     // `forward()` builds its headers with `new Headers(request.headers)` and then `.set()`s, so a
-    // caller cannot inject either value. The worst case of a spoofed pathname is a wrong
-    // `aria-current`, not a security property — but the overwrite is the property, so it is pinned.
-    const { res } = await run('/p/abc', { gated: true, inbound: { [name]: 'spoofed' } });
+    // caller cannot inject the value. ⚠️ The old note weighed "a spoofed pathname is a wrong
+    // `aria-current`, not a security property" — that was about the deleted header. For the NONCE
+    // the overwrite IS the security property, which is why it is pinned.
+    const { res } = await run('/p/abc', { inbound: { [name]: 'spoofed' } });
     expect(forwarded(res, name)).not.toBe('spoofed');
   });
 
   it('mints a fresh nonce per request (the reason /privacy declares no `dynamic` of its own)', async () => {
-    const a = await run(PRIVACY_PATH, { gated: false });
-    const b = await run(PRIVACY_PATH, { gated: false });
+    const a = await run(PRIVACY_PATH);
+    const b = await run(PRIVACY_PATH);
     expect(forwarded(a.res, 'x-nonce')).not.toBe(forwarded(b.res, 'x-nonce'));
   });
 });
@@ -408,10 +461,32 @@ describe('proxy matcher', () => {
   const [matcher] = getMiddlewareMatchers(config.matcher, {});
   const runsOn = (path: string) => new RegExp(matcher!.regexp).test(path);
 
+  /**
+   * 🔴 **SEC-1's regression, pinned by SHAPE (AUTH-1 1d, § Design 2).** SEC-1's hole was a `missing:`
+   * header condition on the matcher: any client could send a prefetch header and the proxy would not
+   * run on that request AT ALL. Before `1d` the gate bounce made that observable; after `1d` the
+   * failure mode is quieter — `auth()` throws when `clerkMiddleware()` did not run, so a route would
+   * 500 or refuse every caller, which an e2e spec reads as "redirected to sign-in" and passes.
+   *
+   * ⚠️ **Asserted on the COMPILED entry, not on `config.matcher`.** The obvious form,
+   * `config.matcher.every((m) => typeof m === 'string')`, is a TYPE-LEVEL TAUTOLOGY: `config.matcher`
+   * infers as `string[]`, so the predicate is unconditionally true in any tree that typechecks, and
+   * it only appears to probe red because Vitest does not typecheck. A header condition requires an
+   * OBJECT entry, and `getMiddlewareMatchers` is what turns one into `has`/`missing` fields.
+   *
+   * This also does not cover re-introducing the exclusion at another layer — an early `return` in
+   * `proxy()` keyed on the header. `e2e/landing.spec.ts` → "a prefetch-flagged request still goes
+   * through the proxy (SEC-1)" is the runtime witness for that, and it replaces the deleted
+   * `e2e/gate-prefetch.spec.ts`. ⚠️ This comment asserted that witness existed before it did.
+   */
+  it('carries no header condition — a matcher condition decides whether the proxy runs at all', () => {
+    expect(matcher).not.toHaveProperty('has');
+    expect(matcher).not.toHaveProperty('missing');
+  });
+
   it.each([
     '/',
     '/p',
-    '/gate',
     '/p/x/routine',
     PRIVACY_PATH,
     `${PRIVACY_PATH}/x`,
@@ -435,7 +510,7 @@ describe('proxy matcher', () => {
   });
 
   it.each(['/_next/static/chunk.js', '/_next/image', '/favicon.ico'])(
-    'skips %s (internals and static assets the gate page itself needs)',
+    'skips %s (Next internals and static assets)',
     (path) => {
       expect(runsOn(path)).toBe(false);
     },

@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-04. This is a beta."
+            "text": "Last updated: 2026-11-05. This is a beta."
           }
         ]
       }
@@ -629,7 +629,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. Three\npages can be opened without the code — the landing page, this notice, and the sign-in screen — and\nnone of the three reads your data."
+              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. Three\npages can be opened without signing in — the landing page, this notice, and the sign-in screen — and\nnone of the three reads your data."
             }
           ]
         }
@@ -658,56 +658,60 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           "k": "p",
           "children": [
             {
-              "k": "strong",
-              "children": [
-                {
-                  "k": "text",
-                  "text": "The access code is shared"
-                }
-              ]
-            },
-            {
               "k": "text",
-              "text": ", even though signing in is not. Everyone in the household types the\nsame code, and there is "
+              "text": "✅ "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "no control in the app"
+                  "text": "The shared access code is gone"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " to remove one person's access to the code\nitself — rotating it means everyone has to enter the new code. ✅ "
+              "text": " (new in this version). Until now getting in took a code that\neveryone in the household typed, with no way to withdraw it from one person — rotating it meant\neveryone had to learn a new one. "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "Removing someone from the household now does stop\nthem"
+                  "text": "Signing in with your own Google account is now the only way in"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " (new in this version): the app works out whose data you get from who you are, so once their\nmembership is removed they see nothing, even with the code. Deleting their sign-in account at\nClerk also still works. Ask for either. ⚠️ "
+              "text": ",\nso access is per-person for the first time. "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "Removing someone from the household hides their\nmembership record rather than erasing it, so it keeps their account identifier until the whole\nhousehold is deleted"
+                  "text": "Removing someone from the household stops them"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " — deleting their Clerk account is the lever that leaves nothing behind. And signing in does not mean the app records "
+              "text": ": the\napp works out whose data you get from who you are. Deleting their sign-in account at Clerk also\nworks. Ask for either. ⚠️ "
+            },
+            {
+              "k": "strong",
+              "children": [
+                {
+                  "k": "text",
+                  "text": "Removing someone hides their membership record rather than erasing it,\nso it keeps their account identifier until the whole household is deleted"
+                }
+              ]
+            },
+            {
+              "k": "text",
+              "text": " — deleting their Clerk\naccount is the lever that leaves nothing behind. And signing in still does not mean the app records\n"
             },
             {
               "k": "strong",
@@ -720,7 +724,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " did\nwhat — it still does not. See the limitation below."
+              "text": " did what. See the limitation below."
             }
           ]
         }
@@ -786,33 +790,33 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this\nversion is that the access code alone is no longer enough: it takes the code "
+              "text": " — including a\nchild tapping a sibling's tile. The tiles are a convenience, not a lock. What is new in this\nversion is that getting in takes "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "and"
+                  "text": "your own sign-in and a membership in your household"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " a sign-in\n"
+              "text": ", and\nnothing else opens the app.\n⚠️ "
             },
             {
               "k": "strong",
               "children": [
                 {
                   "k": "text",
-                  "text": "and"
+                  "text": "Why that is still a limitation:"
                 }
               ]
             },
             {
               "k": "text",
-              "text": " a membership in your household. That follows from (1) and (2): the code is still shared,\nand the exercise-name list is still common to every household. Guard the code the way you would\nguard a password."
+              "text": " a membership is held by a PERSON, not by an athlete, so one\nmembership opens every athlete in the household — and the app does not record who did what. The\nlist of exercise names is also still common to every household (limitation 2). Guard your Google\naccount the way you would guard a password."
             }
           ]
         }
@@ -987,26 +991,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             "children": [
               {
                 "k": "text",
-                "text": "Your IP address"
+                "text": "The identifier of whoever is signed in"
               }
             ]
           },
           {
             "k": "text",
-            "text": ", briefly, to stop someone guessing the access code — and, since sign-in went live, "
+            "text": ", briefly, to stop the app being hammered. A counter that expires in minutes. ✅ "
           },
           {
             "k": "strong",
             "children": [
               {
                 "k": "text",
-                "text": "the identifier of whoever is signed in"
+                "text": "It no longer receives your IP address at all"
               }
             ]
           },
           {
             "k": "text",
-            "text": ", briefly, to stop the app being hammered. Both are counters that expire in minutes. No name, no email, and never any training or weigh-in data."
+            "text": " (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data."
           }
         ]
       },
@@ -1303,13 +1307,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "term": [
           {
             "k": "text",
-            "text": "Access-code and timezone cookies"
+            "text": "The timezone cookie"
           }
         ],
         "desc": [
           {
             "k": "text",
-            "text": "One year"
+            "text": "One year. ⚠️ The access-code cookie listed here previously no longer exists; a browser still holding one is cleared on its next visit."
           }
         ]
       },
@@ -1354,13 +1358,13 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "term": [
           {
             "k": "text",
-            "text": "The IP address, and the signed-in account identifier, used for rate limiting"
+            "text": "The signed-in account identifier, used for rate limiting"
           }
         ],
         "desc": [
           {
             "k": "text",
-            "text": "Minutes"
+            "text": "Minutes. ⚠️ No IP address is used for this any more."
           }
         ]
       },
@@ -1540,7 +1544,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " The app does\nnot record who deleted what, and anyone with your access code can open any athlete. So a child can\ndelete a weigh-in and a parent will not see it either, until they use Restore. That is the honest\nshape of it today, and it is one of the things per-person sign-in is meant to improve."
+              "text": " The app does\nnot record who deleted what, and anyone signed in to your household can open any athlete. So a child\ncan delete a weigh-in and a parent will not see it either, until they use Restore. ⚠️ That is still\nthe honest shape of it: per-person sign-in is now the only way in, but the app records no author on\nan entry, so sign-in alone did not fix this one."
             }
           ]
         }
@@ -1685,7 +1689,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
-        "text": "Because this cannot be undone, and signing in does not yet prove which household is asking — the\naccess code is still the shared part:"
+        "text": "Because this cannot be undone, both of the steps below stay in place:"
       }
     ]
   },
@@ -1991,7 +1995,123 @@ export const NOTICE_BLOCKS: readonly Block[] = [
     "children": [
       {
         "k": "text",
+        "text": "What changed on 5 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The shared access code is retired."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Until now getting into the app took two things: this\nhousehold's access code AND a sign-in. The code is gone, and "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "signing in with your own Google\naccount is the only way in"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". Nothing else opens the app. This supersedes the paragraph below, which\nsaid both were required \"until the code is retired in a later release\" — this is that release."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Upstash stops receiving your IP address."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " It was only ever used to count failed guesses at the\nshared code, briefly, and there is no code to guess. Upstash now sees only the identifier of whoever\nis signed in, for the same few minutes, to stop the app being hammered. That is a reduction in what\none of our processors is given, so it is recorded here rather than only in the source."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "If you are refused at the door, Clerk has already been given your details."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Signing up is by\ninvitation only, and Google's consent screen appears "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "before"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " this app checks whether your address\nwas invited — so an address that is then refused has already passed its email address, name and\nprofile picture to Clerk. That part is certain: it follows from the order the two screens run in.\n⚠️ "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "What we do not yet know is whether Clerk keeps a record of a refusal"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and this notice will not\nguess. If it does, you can ask for it to be deleted — write to the address under \"Asking for\nanything\" — and we will tell you what was found either way."
+      }
+    ]
+  },
+  {
+    "k": "h2",
+    "children": [
+      {
+        "k": "text",
         "text": "What changed on 1 November 2026"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "(This section describes what was true on 1 November 2026. The access-code half of it was superseded\non 5 November 2026 — see the section above. The text is left as published rather than rewritten.)"
+          }
+        ]
       }
     ]
   },
@@ -2181,7 +2301,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Reviewed in full against the code and signed off by the maintainer (the household operator),\n2026-10-26. Re-reviewed 2026-11-03"
+            "text": "Reviewed in full against the code and signed off by the maintainer (the household operator),\n2026-10-26. Re-reviewed 2026-11-05"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " against the retirement of the shared access code, which changed\nwho can get in, what Upstash is sent, and what a refused sign-up leaves behind.\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Previously re-reviewed 2026-11-03"
           }
         ]
       },

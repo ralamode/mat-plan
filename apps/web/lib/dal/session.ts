@@ -27,11 +27,13 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * the first's one, which is a split personality rather than a seam. `lib/dal/gate.ts` — the module
  * this replaces — holds its predicate and its redirect together in 28 lines.
  *
- * ⚠️ **`lib/dal/gate.ts` is NOT deleted here, and not at `1c-3b` either.** From `1c-3b` the boundary
- * is the gate **AND** a session, both re-checked in-process; `1d` is what removes the gate half.
+ * ✅ **`lib/dal/gate.ts` IS deleted, at `AUTH-1` 1d** — this read "is NOT deleted here, and not at
+ * `1c-3b` either" while that was true. From `1c-3b` the boundary was the gate **AND** a session;
+ * `1d` removed the gate half, so this module is the whole boundary.
  * ✅ The obligation that gated `1d` — *"until the household scope is membership-derived, a session
- * alone would mean 'anyone this Clerk instance admits'"* — is **discharged at `1c-4`**. The gate half
- * stays until `1d` deletes it for the other reason: a request that bypasses the proxy meets nothing
+ * alone would mean 'anyone this Clerk instance admits'"* — is **discharged at `1c-4`**. ✅ **`1d` has deleted
+ * the gate half.** The reason the in-process check stays is unchanged and now carries alone: a
+ * request that bypasses the proxy meets nothing
  * without it (`SECURITY.md` refuses to call middleware a boundary; CVE-2025-29927).
  */
 
@@ -139,8 +141,9 @@ export async function sessionUserOrNull(): Promise<{ userId: string } | null> {
 
 /**
  * For the **four gated pages**: no session → the sign-in screen, as the proxy would have sent it.
- * Mirrors `requireGatedPage()`'s shape exactly, so `1c-3` is a symbol swap at the call sites rather
- * than a reshaping of them, and `1d` is a deletion rather than a rewrite.
+ * It mirrored `requireGatedPage()`'s shape exactly, which is what made `1c-3` a symbol swap at the
+ * call sites rather than a reshaping of them, and `1d` a deletion rather than a rewrite. ✅ Both have
+ * happened; that helper no longer exists.
  */
 export async function requireSession(): Promise<{ userId: string }> {
   const user = await getCurrentUser();

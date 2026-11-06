@@ -270,15 +270,18 @@ and complete; this is the one thing it cannot reach.
   PR 1b), and shows only while the current order still equals it, so an un-submitted edit can never
   read as persisted. Don't replace it with an effect or a boolean.
 
-- **Every gated page calls `requireGatedPage()` AND THEN `requireSession()`** — both, in-process
-  (`AUTH-1` 1c-3b), and the routine editor is one of the four. The proxy is not the auth boundary:
-  before SEC-1 a prefetch-flagged request skipped it, and CVE-2025-29927 is the general case. A new
-  page under `/p/` needs both lines — `app/pages-are-gated.test.ts` reports by name any page missing
-  either conjunct. The only exemptions are `isUngatedPath`'s: `/gate`, the public landing and
-  `/privacy` (`PUBLIC_PATHS`), and the whole `/sign-in` subtree (`PUBLIC_PATH_TREES`). The gate half
-  is deleted at `1d`. ✅ **`1c-4` has landed**, so the household scope is membership-derived and a
-  session now decides _whose_ data a request gets — which is what made `1d` safe. Until `1d` the gate
-  half stays for the other reason: a request that bypasses the proxy meets nothing without it. ⚠️ The
+- **Every page under `/p/` calls `requireSession()`, in-process** — and as of `AUTH-1` **1d** that is
+  the whole rule. The routine editor is one of the four. ⚠️ **This said "calls `requireGatedPage()`
+  AND THEN `requireSession()`" — both conjuncts — until `1d` deleted the gate.** What has NOT changed
+  is why the call is in the page: the proxy is not the auth boundary (before SEC-1 a prefetch-flagged
+  request skipped it; CVE-2025-29927 is the general case), and after `1d` these per-page calls are
+  the ONLY thing standing there, because the gate bounce that used to back them up is gone.
+  `app/pages-are-gated.test.ts` reports by name any page missing the call — and 🔴 **narrowing it to
+  one conjunct must never become an alternation**: a regex accepting either helper proves neither.
+  The only exemptions are `isPublicPath`'s: the public landing and `/privacy` (`PUBLIC_PATHS`), and
+  the whole `/sign-in` subtree (`PUBLIC_PATH_TREES`). ✅ **`1c-4` is what made this safe** — the
+  household scope is membership-derived, so a session decides _whose_ data a request gets; before it,
+  deleting the gate would have widened access. ⚠️ The
   routine editor's BOLA row closes **its authz half** here — `updateProfileRoutine` already writes
   through `isLiveProfile(publicId, scope)`, so membership-derivation turns that scoping into
   authorization for a caller outside the household. Inside one household any member still reaches any

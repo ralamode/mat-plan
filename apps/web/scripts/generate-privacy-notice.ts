@@ -256,7 +256,7 @@ const HEADER_COMMENT = `/**
  * The risk is one layer below HTML injection (React escapes text children, and
  * `dangerouslySetInnerHTML` is on AGENTS.md's "don't" list): a backtick or a `${…}` in the notice
  * lands in a `.ts` module that `next build` **compiles**. The worst shape is not hypothetical —
- * `${process.env.ACCESS_GATE_PASSWORD}` inside an emitted template literal would compile to the
+ * `${process.env.SOME_SECRET}` inside an emitted template literal would compile to the
  * live access code, in a file served to anyone. A backtick or `${` inside a double-quoted JSON
  * string is inert in TypeScript, which is the whole property, and the hostile round-trip fixture in
  * the test proves it rather than arguing it.

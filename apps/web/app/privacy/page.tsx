@@ -5,29 +5,30 @@ import { NOTICE_TITLE } from '@/lib/privacy/notice-content';
 import { NoticeArticle } from './notice-article';
 
 /**
- * `robots: noindex` — until AUTH-1, same as the gate.
+ * ✅ **INDEXABLE from AUTH-1 1d** _(maintainer, 2026-11-05)_. `robots: noindex` shipped with PRIV-2
+ * and is now removed.
  *
- * `noindex` does NOT affect fetchability: the response is still a 200, and Google's OAuth console
- * (or any human following the link) fetches it unchanged. The two properties are unrelated, which is
- * why this is not in tension with the page existing for a consent screen.
+ * 🔴 **The reason it shipped, and why `1d` is the right moment to lift it — which is NOT the reason
+ * that was written here.** The committed argument was that the notice is an honest inventory of the
+ * beta's weaknesses (one shared access code, households not separated, "delete" meaning "hidden")
+ * *while the gate's brute-force limiter fails open when Upstash is unconfigured* — so publishing a
+ * description of a lock before that lock's limiter was armed was a free gift to a scanner.
  *
- * The reason to ship it: the notice is an honest inventory of the beta's weaknesses — one shared
- * access code, households not yet separated, "treat the app as if anyone who was invited could see
- * anyone's log", "delete" currently meaning "hidden" — while the gate's brute-force limiter fails
- * open when Upstash is unconfigured (`lib/rate-limit.ts`), and `runbooks.md`'s "the gate rate limit
- * is enforcing" procedure still opens with *set the two variables in Vercel and redeploy*. Making
- * that document a search result before the lock it describes has its limiter armed is a free gift to
- * a scanner for no benefit: the audience is the invited family and the consent screen, and both
- * arrive by link.
+ * ⚠️ **`1d` does not arm that limiter. It DELETES it, along with the lock it protected.** So the
+ * stated premise is not satisfied, it is dissolved: there is no shared code to brute-force, and the
+ * surviving limiter is keyed on an authenticated principal. The weaknesses the notice lists are now
+ * about what a signed-in household member can see, which no amount of search-indexing helps an
+ * outsider with.
  *
- * ⚠️ **It comes off at AUTH-1 chunk 1d**, the chunk that retires the gate and makes the session the
- * boundary — named precisely, because "at AUTH-1" was ambiguous the moment AUTH-1 became six chunks.
- * 1a (Clerk wired and dark) was NOT it: the gate was still the only boundary then and `lib/rate-limit.ts`
- * still fails open with Upstash unconfigured, so every reason above still holds.
+ * And the page has a job that indexing serves: it is the URL Google's and Clerk's consent screens
+ * point at, and the only public description of what this app holds. A privacy notice that search
+ * engines cannot see is of limited use to the people it is written for.
+ *
+ * ⚠️ `noindex` never affected fetchability — the response was always a 200, and a human or an OAuth
+ * console following the link got it unchanged. Removing it changes discoverability only.
  */
 export const metadata: Metadata = {
   title: NOTICE_TITLE,
-  robots: { index: false, follow: false },
 };
 
 /**

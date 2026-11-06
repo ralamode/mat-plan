@@ -2,16 +2,21 @@ import { mkdir } from 'node:fs/promises';
 
 import { chromium, type Page } from '@playwright/test';
 
-import { gateLogin } from '../e2e/login';
-import { isUngatedPath } from '../lib/access-gate';
 import { COOKIE_MAX_AGE, TZ_COOKIE_NAME } from '../lib/constants';
 
 /**
- * Shared Playwright capture: log through the access gate (the SAME `login.ts`
- * helper the E2E smoke uses), navigate to a route, and write a full-page PNG PER
- * VIEWPORT to the gitignored `.screenshots/` folder. ONE capture path, two callers —
- * the plain `screenshot.ts` (server already running) and `screenshot-ephemeral.ts`
- * (boots its own throwaway server). Reads `ACCESS_GATE_PASSWORD` via `gateLogin`.
+ * Shared Playwright capture: navigate to a route and write a full-page PNG PER VIEWPORT to the
+ * gitignored `.screenshots/` folder. ONE capture path, two callers — the plain `screenshot.ts`
+ * (server already running) and `screenshot-ephemeral.ts` (boots its own throwaway server).
+ *
+ * 🔴 **This script no longer logs in, because `1d` deleted the thing it logged in with.** It used to
+ * call `gateLogin` (the same `e2e/login.ts` helper the smoke used) and read `ACCESS_GATE_PASSWORD`.
+ * There is no shared code any more, and a Google sign-in cannot be driven from a script, so a
+ * SESSION-GATED route is now captured the only way left: the harness sets the bypass principal
+ * (`E2E_SESSION_BYPASS_USER_ID`) before the server boots, so every request already arrives
+ * authenticated and no in-browser login step exists. ⚠️ That means a capture of a session-gated
+ * route is only possible under a harness that sets it — `screenshot.ts` against a plain `pnpm dev`
+ * will shoot the signed-out redirect instead. That is a property of the bypass, not a bug here.
  *
  * ADAPTIVE-BY-DEFAULT (AGENTS.md UI rules): the kids use this primarily on phones and
  * tablets, so every capture is taken at mobile + tablet + desktop widths — the reviewer
@@ -86,8 +91,9 @@ export async function captureScreenshot(opts: {
       });
       if (opts.timeZone) {
         // Seed the `tz` cookie DIRECTLY, don't rely on `TimeZoneSync` writing it. `timezoneId` only
-        // changes what the BROWSER reports; the RSC reads the cookie. The gate login lands on the
-        // picker (`APP_HOME_PATH`), which doesn't render TimeZoneSync, so without this the first paint uses DEFAULT_TIME_ZONE and
+        // changes what the BROWSER reports; the RSC reads the cookie. A capture lands wherever the
+        // route says — the picker (`APP_HOME_PATH`) doesn't render TimeZoneSync, so without this the
+        // first paint uses DEFAULT_TIME_ZONE and
         // the correct day arrives only via a post-hydration `router.refresh()` — a race against
         // `networkidle` that, when lost, silently yields a screenshot of the WRONG WEEKDAY. That is the
         // one failure this flag exists to prevent, on the artifact a reviewer approves from.
@@ -102,13 +108,10 @@ export async function captureScreenshot(opts: {
         ]);
       }
       const page = await context.newPage();
-      // An un-gated route is captured as a stranger sees it, which is the state that needs reviewing.
-      // ⚠️ Until AUTH-1 1c-3b this was also a HARD limit: the proxy forwarded a cookie-holder from `/`
-      // and `/gate` to the picker, so a logged-in capture of either was impossible. 1c-3b deleted that
-      // forward (it looped once the pages required a session), so both now render for a gated caller
-      // too — the `gateLogin` skip here is a choice about which state to shoot, no longer a workaround.
-      const pathname = new URL(opts.route, opts.baseUrl).pathname;
-      if (!isUngatedPath(pathname)) await gateLogin(page);
+      // ⚠️ No per-route branch any more. The plan said to swap `isUngatedPath` for `isPublicPath`,
+      // but once `gateLogin` goes the conditional has no body: there is nothing to do differently
+      // for a public route, because nothing logs in. Every route is navigated the same way, and
+      // whether the caller is authenticated is decided before the server boots.
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;

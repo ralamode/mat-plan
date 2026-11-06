@@ -1,10 +1,21 @@
 /**
  * Redirect safety (SEC-4) — clamp a caller-supplied redirect target to this origin.
  *
- * Split out of `lib/access-gate.ts` by AUTH-1 1a. It was never about the gate: the gate page, the
- * gate Server Action and (at 1c) Clerk's post-sign-in return all write a caller-supplied path into a
- * response header, and the rule that makes that safe must not drift between them. `access-gate.ts`
- * is deleted at AUTH-1 1d; this rule outlives it, so it lives here.
+ * 🔴 **KEPT at AUTH-1 1d with ZERO production callers, as a deliberate decision rather than an
+ * oversight** _(the 1d plan made "decide, don't go silent" an explicit obligation)_. Split out of
+ * `lib/access-gate.ts` at 1a, it had three callers: the gate page, the gate Server Action, and
+ * Clerk's post-sign-in return. `1d` deletes the first two, and Clerk's own `signInUrl` /
+ * `signInFallbackRedirectUrl` are set from constants in `app/layout.tsx` rather than from anything a
+ * caller supplies — so nothing in the app currently hands a user-controlled path to a redirect.
+ *
+ * **Why keep it rather than delete it.** SEC-4's rule is pre-positioned, not dead: the two surfaces
+ * that will need it are named and close — the sign-in `?from=` escape hatch recorded on
+ * `app/sign-in/[[...rest]]/page.tsx`, and `/api/sync`. `components/profiles/sign-out.tsx` already
+ * instructs the next author to route through it, so deleting it would leave an instruction pointing
+ * at nothing and invite a hand-rolled clamp — which is the exact failure SEC-4 exists to prevent. It
+ * is pure logic with its own tests; the carrying cost is a test run.
+ * ⚠️ **If a reviewer finds this still callerless when `/api/sync` lands, delete it then** — the
+ * argument above expires with those two surfaces, and an unused module is not free forever.
  *
  * Pure and edge-safe — no secrets, no IO — so the proxy can import it.
  */

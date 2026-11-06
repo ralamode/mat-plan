@@ -119,6 +119,19 @@ describe('the link allowlist (marked does no protocol filtering of its own)', ()
  * The rule is that every value derived from the notice is emitted via `JSON.stringify`. These three
  * assertions prove it instead of arguing it.
  */
+/**
+ * 🔴 **A FIXTURE secret this test places in the env itself (AUTH-1 1d).** The value assertion below
+ * used to read `process.env.ACCESS_GATE_PASSWORD`, which `vitest.config.ts` set purely so
+ * `lib/env.ts` boot-validation passed. `1d` deletes both the schema entry and that config line — and
+ * `not.toContain(undefined!)` is not a weaker test, it is a BROKEN one.
+ *
+ * ⚠️ The var has to be really present in `process.env`, not merely named, or the claim is vacuous:
+ * the whole point is that the emitter COULD have resolved it and does not. So the test owns it.
+ */
+const FIXTURE_SECRET_VAR = 'MAT_PLAN_NOTICE_EMITTER_FIXTURE_SECRET';
+const FIXTURE_SECRET_VALUE = 'fixture-value-never-a-real-credential-9f3a';
+process.env[FIXTURE_SECRET_VAR] = FIXTURE_SECRET_VALUE;
+
 describe('hostile round trip', () => {
   // `\</script>` rather than `</script>`: raw HTML throws (asserted above), so the only way the
   // literal characters can reach the module is as escaped text — which is what we want to prove
@@ -126,7 +139,7 @@ describe('hostile round trip', () => {
   const HOSTILE = [
     '# Hostile ` fixture',
     '',
-    'A lone backtick ` and a template hole ${process.env.ACCESS_GATE_PASSWORD} and',
+    'A lone backtick ` and a template hole ${process.env.' + FIXTURE_SECRET_VAR + '} and',
     'a wrapped line, "double" and \'single\' quotes, a backslash \\\\, a comment close */,',
     'an escaped tag \\</script>, and a line separator \u2028 here.',
     '',
@@ -170,11 +183,12 @@ describe('hostile round trip', () => {
     expect(JSON.parse(payload) as Block[]).toEqual(parseNotice(HOSTILE).blocks);
   });
 
-  it('keeps the live access code out of the output, by name and by value', () => {
+  it('keeps an interpolated secret out of the output, by name and by value', () => {
     const emitted = renderNoticeModule(HOSTILE);
     // The interpolation is DATA, not an expression: it survives verbatim inside a JSON string…
-    expect(emitted).toContain('${process.env.ACCESS_GATE_PASSWORD}');
-    // …and the secret it would have resolved to is nowhere in the file.
-    expect(emitted).not.toContain(process.env.ACCESS_GATE_PASSWORD!);
+    expect(emitted).toContain('${process.env.' + FIXTURE_SECRET_VAR + '}');
+    // …and the value it would have resolved to is nowhere in the file.
+    expect(process.env[FIXTURE_SECRET_VAR]).toBe(FIXTURE_SECRET_VALUE); // the claim is not vacuous
+    expect(emitted).not.toContain(FIXTURE_SECRET_VALUE);
   });
 });

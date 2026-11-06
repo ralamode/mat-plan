@@ -4,24 +4,24 @@ import Link from 'next/link';
 import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';
-import { GATE_PATH } from '@/lib/access-gate';
-import { APP_NAME, CTA_CLASS, GITHUB_REPO_URL, LANDING_COPY } from '@/lib/constants';
+import { APP_NAME, CTA_CLASS, GITHUB_REPO_URL, LANDING_COPY, SIGN_IN_PATH } from '@/lib/constants';
 
 export const metadata: Metadata = {
   description: LANDING_COPY.lead,
 };
 
 /**
- * The PUBLIC landing (OSS-2 §A) — one of the routes served without the access gate. ⚠️ Not "the one
- * page": `isUngatedPath` is `/gate` ∪ `PUBLIC_PATHS` (`/`, `/privacy`) ∪ `PUBLIC_PATH_TREES` (the
- * whole `/sign-in` subtree). Reading `PUBLIC_PATHS` as the full set is exactly how a correction
- * during `1c-3b` came to assert that `/sign-in` was gated.
+ * The PUBLIC landing (OSS-2 §A) — one of the routes served without a session. ⚠️ Not "the one page":
+ * the public set is `PUBLIC_PATHS` (`/`, `/privacy`) ∪ `PUBLIC_PATH_TREES` (the whole `/sign-in`
+ * subtree). Reading `PUBLIC_PATHS` as the full set is exactly how a correction during `1c-3b` came
+ * to assert that `/sign-in` was gated. (Before `1d` the set also included `/gate`, via an
+ * `isUngatedPath` that no longer exists.)
  *
- * ⚠️ Keep it branchless and private-free: no cookie read, no DAL import, no `requireGatedPage`, no
+ * ⚠️ Keep it branchless and private-free: no cookie read, no DAL import, no `requireSession`, no
  * Server Action. It renders identically for every caller, so there is no condition that could serve
- * household content to the internet. ⚠️ **Every caller sees it, gated or not** (AUTH-1 1c-3b): the
- * proxy used to forward a cookie-holder to the picker, which looped once the pages also required a
- * session. Branchless is what makes that safe — there is no state to leak by rendering it to
+ * household content to the internet. ⚠️ **Every caller sees it, signed in or not** (AUTH-1 1c-3b):
+ * the proxy used to forward a cookie-holder to the picker, which looped once the pages also required
+ * a session. Branchless is what makes that safe — there is no state to leak by rendering it to
  * everyone.
  */
 export default function LandingPage() {
@@ -45,9 +45,9 @@ export default function LandingPage() {
           </a>
         </Button>
         <Button asChild size="lg" variant="outline" className={CTA_CLASS}>
-          {/* No `?from=`: the gate action defaults to the app home, so "where does login land" has one
-              answer (and stays server-resolved if HH-1 makes home dynamic). */}
-          <Link href={GATE_PATH}>{LANDING_COPY.gateCta}</Link>
+          {/* No `?from=`: sign-in's own redirect config decides where login lands, so "where does
+              login land" has one answer (and stays server-resolved if HH-1 makes home dynamic). */}
+          <Link href={SIGN_IN_PATH}>{LANDING_COPY.signInCta}</Link>
         </Button>
       </div>
     </main>

@@ -84,7 +84,7 @@ export const PICKER_COPY = {
   subhead: 'Pick a profile to start logging.',
 } as const;
 
-/** The product name: the tab title, the landing's `<h1>` and the gate's. */
+/** The product name: the tab title and the landing's `<h1>`. */
 export const APP_NAME = 'mat-plan';
 
 /**
@@ -116,47 +116,28 @@ export const LANDING_COPY = {
   sourceCta: 'See how it’s built on GitHub',
   /** The README's own curated section, so a phone reader skips GitHub's file tree. */
   sourceAnchor: '#whats-interesting-here',
-  gateCta: 'Household sign-in',
-} as const;
-
-/** The gate page's copy. "Private preview." was dropped at OSS-2: the gate is now screen two of a
- *  public flow, and "preview" promised a timeline the landing deliberately doesn't. */
-export const GATE_COPY = {
-  /**
-   * ⚠️ AUTH-1 1c-3b: *"to continue"* is true for a visitor who already has a session and false for
-   * everyone else, because the code is now one of two requirements. Says so rather than implying the
-   * code is sufficient — the reader who is about to discover otherwise is the one this helps.
-   */
-  subhead: 'Enter the household access code. You’ll also sign in with Google.',
-  /** The way back out — the one room a stranger can walk into needs an exit. The page draws a
-   *  decorative `←` before it, hidden from screen readers so the link isn't "leftwards arrow, About…". */
-  back: `About ${APP_NAME}`,
-  /** A wrong code. */
-  incorrect: 'Incorrect access code.',
+  /** Points at `SIGN_IN_PATH`. Was `gateCta` and pointed at `/gate` until AUTH-1 1d. */
+  signInCta: 'Household sign-in',
 } as const;
 
 /**
- * The sign-in screen's copy (AUTH-1 1a).
+ * The sign-in screen's copy (AUTH-1 1a, narrowed at 1d).
  *
- * `heading` is the ONE `<h1>` in BOTH of the screen's states — over Clerk's card and over the dark
- * panel — and it names the MECHANISM rather than the product. `/gate`'s `<h1>` is `APP_NAME`, which
- * works above a form whose subhead explains itself but tells a reader of this screen nothing (WCAG
- * 2.4.6, which axe cannot evaluate). It also must not be a bare "Sign in": `LANDING_COPY.gateCta`
- * already calls the access code "Household sign-in", so a screen saying "sign-in isn't switched on"
- * would contradict the button the reader tapped one screen earlier. Naming Google separates them.
+ * `heading` names the MECHANISM rather than the product, and must not be a bare "Sign in":
+ * `LANDING_COPY.signInCta` calls this "Household sign-in", so a screen saying "sign-in isn't
+ * switched on" would contradict the button the reader tapped one screen earlier. Naming Google
+ * separates them. ⚠️ It is the `<h1>` of the DARK state ONLY — when Clerk is configured the card
+ * renders its own `<h1>` and this page deliberately yields rather than hiding the vendor's
+ * (see `lib/clerk.ts`).
  *
- * `notYet` + `codeStillWorks` + `gateCta` are the dark state, which is the ONLY state that reaches
- * production at 1a. It leads with the state rather than an imperative (the `PICKER_EMPTY_COPY.notYet`
- * family), says "isn't switched on yet" — a configuration fact, so the maintainer verifying the
- * deploy can tell dark from broken — and asks the reader for nothing. The exit points at `GATE_PATH`,
- * not `/`: the code is one of the two things a caller needs (AUTH-1 1c-3b), so the gate is the only
- * forward step a reader without it can take. ⚠️ The original argument was "ONE control serves both
- * readers, because `proxy.ts` sends a cookie-holder straight on to `APP_HOME_PATH`" — that forward is
- * gone, so a reader who ALREADY holds the cookie now makes a round trip through `/gate` to arrive
- * back here. Tracked as the escape-hatch question on the sign-in page. The footer already carries
- * `/` and `PRIVACY_PATH` on
- * every route, so the page adds neither — two same-href links in one document read as a duplicate
- * destination in a screen-reader link list, and axe does not flag it.
+ * `notYet` is the rest of the dark state. It leads with the state rather than an imperative (the
+ * `PICKER_EMPTY_COPY.notYet` family) and says "isn't switched on yet" — a configuration fact, so the
+ * maintainer verifying a deploy can tell dark from broken — and asks the reader for nothing.
+ * 🔴 **`codeStillWorks` and `gateCta` are DELETED at 1d, not reworded.** They pointed at `/gate`,
+ * which was a real forward step while the access code was one of two requirements. After `1d` there
+ * is no second requirement and no `/gate`, so the dark state's only exits are **the page's own mark
+ * (home) and privacy link** — `SiteFooter` is suppressed on this subtree. ⚠️ An earlier draft of this
+ * line said "the footer", which is exactly wrong on the one route where the footer is `null`.
  *
  * `processor` + `privacyLink` are the lit state only, and they are DISCLOSURE AT THE DECISION POINT:
  * the footer's "Privacy notice" link is chrome below a vendor card, Google's own consent screen
@@ -168,14 +149,39 @@ export const SIGN_IN_COPY = {
   heading: 'Sign in with Google',
   notYet: 'Signing in with Google isn’t switched on yet.',
   /**
-   * 🔴 **Kept and reworded, not deleted — AUTH-1 1c-3b.** A draft of that chunk deleted this line
-   * and the `/gate` button below it, which would have left **nothing in the app linking to a door
-   * that is still mandatory**: until 1d the boundary is the access code AND a session. The sentence
-   * is also simply TRUE under that AND, so deleting it was the dishonest direction. What changed is
-   * that it now says the code is one of two things rather than the only one.
+   * 🔴 **The precondition, stated BEFORE the tap — lit state only (AUTH-1 1d).** It names the
+   * SEQUENCING, which is what makes it actionable: Google's consent screen appears before this app
+   * checks anything, so a stranger can stop before disclosing their address, name and picture.
+   *
+   * ⚠️ **It deliberately does NOT promise that an invitation is sufficient, because it is not.**
+   * An invitation gets a Clerk account; a `household_members` row is what gets you a household, and
+   * nothing under `apps/web` writes one. So an invited parent signing in before that row exists
+   * lands on `NO_HOUSEHOLD_COPY` (`lib/dal/household.ts` names exactly this case) — `wrongAccount`
+   * describes the membership-row mechanism, Clerk's sign-up mode describes this one, and after `1d`
+   * "invitation" otherwise means two different gates on two screens with nothing linking them.
+   * Copy must never claim a precondition the endpoint does not honour.
+   *
+   * Statement of fact: no imperative, and no "yet" — an uninvited account is never linked.
+   * ⚠️ **No contact address here**, deliberately: `notice.md` carries one, this page is public, and the
+   * privacy link reaches the notice in one tap. ⚠️ An earlier draft said this page is "(from `1d`)
+   * indexed" — it is not; `/sign-in` sets `robots: noindex` permanently. It is **`/privacy`** that
+   * became indexable at `1d`. Recorded so the next author reads neither the absence nor the indexing
+   * claim as fact.
    */
-  codeStillWorks: 'You also need this household’s access code until the next release.',
-  gateCta: 'Enter the access code',
+  invitation:
+    'Signing in needs an address this household has invited, and Google’s consent screen appears before that is checked.',
+  /**
+   * 🔴 **The CDN-failure state, and it exists because `1d` made this the only door.** `clerk-js` and
+   * `ui.browser.js` come from Clerk's CDN, and `@clerk/shared`'s loader waits 15s before giving up
+   * (`scriptLoadTimeout ?? 15e3`). On gym LTE that is fifteen seconds of empty card — and after `1d`
+   * there is no access code to fall back to, so a reader who gets nothing has no way in at all.
+   * ⚠️ Without these two lines the screen's failure state is a mark, one sentence about invitations
+   * and a privacy link — which to a kid reads as "you're not allowed", not "it didn't load".
+   * `loading` is in the `notYet` register (a state, not an imperative); `failed` names the one action
+   * that helps, because reloading re-requests the bundle.
+   */
+  loading: 'The Google sign-in button is loading…',
+  failed: 'The sign-in button didn’t load. Reloading this page is the fix.',
   /**
    * 🔴 **Corrected 2026-11-03 — it said the prohibited thing, on the consent screen.** It read
    * _"tells us the email address on your Google account — **nothing else from it**"_, which is false
@@ -205,15 +211,18 @@ export const SIGN_IN_COPY = {
 
 /**
  * The site footer's two items (PRIV-2). `/privacy` is the SECOND room a stranger can walk into —
- * someone arriving from a consent screen with no idea what this app is — and `GATE_COPY.back`
- * already records why such a room needs an exit. One `<footer>` in the root layout, so a family
- * inside the app can reach the notice too.
+ * someone arriving from a consent screen with no idea what this app is — and the deleted gate page's
+ * way-back link recorded the same rule: the one room a stranger can walk into needs an exit. One
+ * `<footer>` in the root layout, so a family inside the app can reach the notice too.
+ * ⚠️ From `1d` `SiteFooter` returns `null` on the `/sign-in` subtree — that screen carries its own
+ * mark and privacy link instead, so it is NOT this footer that gets a reader out of there.
  */
 export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as const;
 
 /**
- * A quiet, tap-target-sized inline link. Extracted at PRIV-2: the gate's way-back link had it
- * inline and the footer is the second use site (AGENTS.md — the second occurrence is the trigger).
+ * A quiet, tap-target-sized inline link. Extracted at PRIV-2, when the (now deleted) gate page's
+ * way-back link had it inline and the footer became the second use site (AGENTS.md — the second
+ * occurrence is the trigger). The sign-in screen's privacy link is the third.
  */
 export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
@@ -222,9 +231,10 @@ export const QUIET_LINK_CLASS =
  * The picker's FIRST-RUN copy (ONB-0) — the screen a brand-new deployment actually opens on, which
  * until now read "No profiles found. Seed the database to get started."
  *
- * Who is reading it, because that decided every string: `/p` is gated and there is exactly one shared
- * access code, so the reader either deployed this or was handed the code by whoever did — the committed
- * UX panel's A5. `pnpm dev` re-seeds on every boot, so the state is unreachable locally. The copy
+ * Who is reading it, because that decided every string: `/p` needs a session with a household, so the
+ * reader either deployed this or was invited by whoever did — the committed UX panel's A5. ⚠️ The
+ * original argument said "there is exactly one shared access code", which `1d` deleted; the
+ * conclusion is unchanged, because a membership row is narrower than the code ever was. `pnpm dev` re-seeds on every boot, so the state is unreachable locally. The copy
  * addresses that person honestly instead of pretending to onboard a family who cannot yet exist.
  *
  * Checked against ONB-1 R20 ("the app's voice is a receipt, not a coach"): every line is phraseable as a
@@ -289,12 +299,12 @@ export const NO_HOUSEHOLD_COPY = {
   /**
    * The only cause the reader can fix alone.
    * ⚠️ **Predicated on the ACT, not on owning accounts.** "If you have more than one Google account"
-   * is true of most adults, so it never goes quiet — and today's only reader came through the access
-   * gate and never touched Google. "If you signed in with Google" self-disables for them.
-   * 🔴 **The control arrives at 1c-3, not here**: until the session is the boundary, signing out of
-   * Clerk would not sign you out of this app — the gate cookie still governs. Shipping a control that
-   * does not do what it says is what parked the lock-device PR (#303), and the same argument applies
-   * to its mirror image. `notYet` below is what says so on screen.
+   * is true of most adults, so it never goes quiet. "If you signed in with Google" self-disables for
+   * anyone who did not — which, before `1d`, was every reader, because they arrived through the
+   * access gate without touching Google.
+   * ✅ **The control exists from 1c-3, and from `1d` signing out of Clerk is the whole story** —
+   * there is no second cookie left to govern access. Until then it would have been a control that
+   * does not do what it says, which is what parked the lock-device PR (#303).
    */
   wrongAccount:
     'If you signed in with Google and have more than one account, this may be the wrong one. Signing out and signing back in with the address the invitation was sent to is the fix.',
@@ -317,7 +327,9 @@ export const ROUTINE_COPY = {
   save: 'Save routine',
 } as const;
 
-/** Cookie lifetime (seconds) — 1 year. Shared by the access-gate cookie and the tz cookie. */
+/** The `tz` cookie's lifetime (seconds) — 1 year. Two consumers, both writing that one cookie:
+ *  `app/p/[profileId]/tz-sync.tsx` and `scripts/capture.ts`. ⚠️ Said "shared by the access-gate
+ *  cookie and the tz cookie" until AUTH-1 1d deleted the former. */
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
@@ -626,8 +638,8 @@ export const SIGN_OUT_COPY = {
  *
  * Reusing a not-found string would tell a kid mid-session *"No profile found to log against"* when
  * the truth is "too many writes, briefly" — unactionable, and it would muddy the argument
- * `actions.test.ts` pins: that an un-gated caller, a caller with no session and a caller reaching
- * another household all get the SAME bytes, so none of them learns which it was. A rate limit is not
+ * `actions.test.ts` pins: that a caller with no session and a caller reaching another household get
+ * the SAME bytes, so neither learns which it was. (Before `1d` an un-gated caller was a third arm.) A rate limit is not
  * that class of refusal and must not borrow its copy.
  *
  * Says what to do, because unlike the others there is something to do.
@@ -638,8 +650,8 @@ export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try agai
  * The refusal every profile-addressed Server Action returns when it has no profile to act on —
  * promoted out of `actions.ts`'s module scope by TEN-1 1b (ADR 0006's consequence 4).
  *
- * ⚠️ **ONE message for four states, on purpose: un-gated, unknown id, soft-deleted, and — since
- * TEN-1 — ANOTHER HOUSEHOLD'S id.** A crafted cross-household id must learn nothing a stale id
+ * ⚠️ **ONE message for three states, on purpose: unknown id, soft-deleted, and — since TEN-1 —
+ * ANOTHER HOUSEHOLD'S id.** (`1d` removed a fourth, un-gated, by deleting the gate.) A crafted cross-household id must learn nothing a stale id
  * wouldn't, which is the same argument `AMEND_ERROR_COPY.notFound` makes for its three states and
  * ADR 0006 → "What a wrong-household request returns" makes for 404-never-403. The security
  * property *is* the byte-identity, so it lives in one place rather than being re-typed at each

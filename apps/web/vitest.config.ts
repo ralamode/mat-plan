@@ -34,8 +34,11 @@ export default defineConfig({
     exclude: ['**/e2e/**', '**/node_modules/**', '**/dist/**', '**/.next/**'],
     // Valid values so modules that import lib/env.ts don't fail boot validation
     // under test. Individual tests override/mock as needed.
+    // ⚠️ `ACCESS_GATE_PASSWORD` was here until AUTH-1 1d, for boot validation only — `lib/env.ts` no
+    // longer declares it. `generate-privacy-notice.test.ts` was the one test that READ it; it now
+    // owns a fixture secret of its own, because `not.toContain(undefined!)` is a broken assertion
+    // rather than a weaker one.
     env: {
-      ACCESS_GATE_PASSWORD: 'test-access-code-1234',
       DATABASE_URL: 'postgres://user:pass@localhost:5432/mat_plan_test',
     },
   },

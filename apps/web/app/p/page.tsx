@@ -7,7 +7,6 @@ import {
   SignOutPlaceholder,
 } from '@/components/profiles/sign-out';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { requireGatedPage } from '@/lib/dal/gate';
 import { requireSession } from '@/lib/dal/session';
 import { clerkIsConfigured } from '@/lib/clerk';
 import { NO_HOUSEHOLD_COPY, PICKER_COPY, PICKER_EMPTY_COPY, SIGN_OUT_COPY } from '@/lib/constants';
@@ -33,13 +32,14 @@ export const runtime = 'nodejs';
  */
 export default async function ProfilePickerPage() {
   // 🔴 **BOTH, in-process. The gate is deleted at 1d, and 1c-4 is what made that safe.**
-  // ⚠️ This said `getHouseholdScope()` "does not consult the principal until 1c-4" — it does now, so
-  // a session proves WHOSE data this is rather than only that the caller is someone the Clerk
-  // instance admits. That was the obligation blocking 1d, and it is discharged.
-  // The gate check still stands until 1d because a swap would leave `mp_gate` enforced by the proxy
-  // alone, which SECURITY.md refuses to call a boundary (CVE-2025-29927; SEC-1's own scar was a
-  // prefetch header skipping the matcher).
-  await requireGatedPage(); // SEC-1: the proxy is not the boundary
+  // 🔴 **The session IS the boundary (AUTH-1 1d).** `getHouseholdScope()` resolves the signed-in
+  // principal's `household_members` row, so a session proves WHOSE data this is rather than only
+  // that the caller is someone this Clerk instance admits — the obligation 1d was blocked on, and
+  // the reason the gate could not simply be deleted before `1c-4`.
+  // Re-checked HERE rather than inherited from the proxy: SECURITY.md refuses to call a
+  // matcher-driven layer a boundary (CVE-2025-29927), and SEC-1's own scar was a prefetch header
+  // skipping the matcher entirely. `app/pages-are-gated.test.ts` is what keeps this call here
+  // (PR C renames that file to `pages-need-a-session.test.ts`; its contents already moved here).
   await requireSession();
   const profiles = await listProfiles();
   // AUTH-1 1c-2: THREE states, not two. `listProfiles` returns `[]` for "no household" AND for "a
@@ -60,14 +60,14 @@ export default async function ProfilePickerPage() {
             imperative with no object when the list is empty — it tells the reader to pick from nothing,
             40px above the block that says there is nothing to pick, and a screen reader hears both with
             nothing to supersede the false one.
-            🔴 **AUTH-1 1c-2: the `<h1>` NOW BRANCHES.** It used to be pinned because `e2e/login.ts`'s
-            `gateLogin` asserted `pickerHeading`, and "Who's logging today?" above "No household for this
-            account" is simply false. What actually forced the change is the screenshot harness:
-            `scripts/capture.ts` calls `gateLogin` BEFORE navigating, so `--state no-household` could not
-            be captured at all while the helper demanded the picker's heading. The picker assertion did
-            not disappear — it moved to `e2e/global.setup.ts`, the one consumer that needs it, so a deploy
-            where household resolution silently breaks still fails loudly at setup instead of as a missing
-            tile. */}
+            🔴 **AUTH-1 1c-2: the `<h1>` BRANCHES.** It used to be pinned because the deleted
+            `e2e/login.ts` helper asserted the picker's heading on every login, and "Who's logging
+            today?" above "No household for this account" is simply false. What forced the change was
+            the screenshot harness: the helper ran BEFORE navigating, so `--state no-household` could
+            not be captured at all while it demanded that heading. The picker assertion did not
+            disappear — it moved to `e2e/global.setup.ts`, the one consumer that needs it, so a deploy
+            where household resolution silently breaks still fails loudly at setup instead of as a
+            missing tile. ⚠️ `1d` deleted the helper itself; the assertion's new home is unaffected. */}
         <p className="text-muted-foreground">
           {noHousehold
             ? NO_HOUSEHOLD_COPY.subhead

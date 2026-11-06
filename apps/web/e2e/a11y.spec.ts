@@ -8,7 +8,6 @@ import {
   IMPLAUSIBLE_BODYWEIGHT_MESSAGE,
 } from '@mat-plan/shared';
 
-import { GATE_PATH } from '../lib/access-gate';
 import {
   AMEND_COPY,
   APP_HOME_PATH,
@@ -19,6 +18,7 @@ import {
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
   PRIVACY_PATH,
+  SIGN_IN_COPY,
   SIGN_IN_PATH,
   THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
@@ -37,7 +37,7 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
-import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
+import { MOBILE_VIEWPORT } from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -68,8 +68,9 @@ import { MOBILE_VIEWPORT, NO_GATE_STATE } from './contexts';
  */
 const NARROW = { width: 360, height: 780 };
 
-/** The routes the household actually uses. The PUBLIC routes (`/`, `/gate`) are scanned separately
- *  below, in a storage-state-free context: the project's cookie would redirect past both. */
+/** The routes the household actually uses. The PUBLIC routes (`/`, `/privacy`, `/sign-in`) are
+ *  scanned separately below. ⚠️ Said "(`/`, `/gate`) … in a storage-state-free context: the project's
+ *  cookie would redirect past both" — both the route and the mechanism are gone at `AUTH-1` 1d. */
 const ROUTES = [
   { name: 'profile picker', path: APP_HOME_PATH },
   { name: 'Today', path: SEED_PROFILE_ROUTE },
@@ -766,13 +767,12 @@ test('the profile picker does not overflow at 360px', async ({ page }) => {
 });
 
 /**
- * OSS-2 — the public routes, scanned with NO gate cookie (with one, `/` and `/gate` both redirect to the
- * picker). The landing's CTAs and the gate's way back are LINKS, which `expectTapTargets` cannot see
- * (`Button asChild` adds no role), so they are counted and measured by `expectLinkTapTargets`.
+ * OSS-2 — the public routes. ⚠️ This said "scanned with NO gate cookie (with one, `/` and `/gate`
+ * both redirect to the picker)"; `1c-3b` deleted that forward and `1d` the cookie, so there is no
+ * cookie to withhold and `/` renders the landing for everyone. The landing's CTAs are LINKS, which `expectTapTargets` cannot see (`Button asChild` adds
+ * no role), so they are counted and measured by `expectLinkTapTargets`.
  */
 test.describe('public routes', () => {
-  test.use({ storageState: NO_GATE_STATE });
-
   for (const viewport of [MOBILE_VIEWPORT, NARROW]) {
     test(`the landing at ${viewport.width}px: axe, no overflow, both CTA links ≥ the tap-target bar`, async ({
       page,
@@ -782,15 +782,6 @@ test.describe('public routes', () => {
       await expectNoAxeViolations(page, `landing (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `landing (${viewport.width}px)`);
       await expectLinkTapTargets(page, `landing (${viewport.width}px)`, 2);
-    });
-
-    test(`the gate at ${viewport.width}px: axe, no overflow, tap targets`, async ({ page }) => {
-      await page.setViewportSize(viewport);
-      await page.goto(GATE_PATH, { waitUntil: 'networkidle' });
-      await expectNoAxeViolations(page, `gate (${viewport.width}px)`);
-      await expectNoHorizontalOverflow(page, `gate (${viewport.width}px)`);
-      await expectTapTargets(page, `gate (${viewport.width}px)`);
-      await expectLinkTapTargets(page, `gate (${viewport.width}px)`, 1);
     });
 
     /**
@@ -852,6 +843,21 @@ test.describe('public routes', () => {
       await expectNoAxeViolations(page, `sign-in, dark state (${viewport.width}px)`);
       await expectNoHorizontalOverflow(page, `sign-in, dark state (${viewport.width}px)`);
       await expectLinkTapTargets(page, `sign-in, dark state (${viewport.width}px)`, 2);
+
+      // 🔴 **Positive content assertions, which the plan asked for and the first pass omitted.**
+      // The three checks above would all pass on a page whose heading and copy had vanished — axe
+      // does not require text, the overflow check wants less of it, and the link count is satisfied
+      // by the two chrome links alone. On the app's only door that is not enough.
+      await expect(
+        page.getByRole('heading', { level: 1, name: SIGN_IN_COPY.heading, exact: true }),
+      ).toBeVisible();
+      await expect(page.getByRole('main')).toContainText(SIGN_IN_COPY.notYet);
+
+      // 🔴 **The footer's ABSENCE is why the count above is 2, so assert it rather than leave it
+      // implicit.** Until now it was proved only as a side effect — a strict-mode collision in
+      // `landing.spec.ts` when two links shared an accessible name. That is the exact bug #333
+      // shipped and this PR fixed, so it gets a direct assertion.
+      await expect(page.getByRole('contentinfo')).toHaveCount(0);
     });
   }
 });

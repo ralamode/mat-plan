@@ -60,8 +60,10 @@ import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-ac
 // `export async function`. `return await` is load-bearing — the SDK returns Promise<ReturnType<A>>,
 // i.e. Promise<Promise<ActionState>> for an async callback.
 //
-// NO `headers` and NO `formData` are passed: `headers` would ship the mp_gate cookie and `formData`
-// a kid's bodyweight, both to a third party (see lib/sentry-scrub.ts). The "every export is an async
+// NO `headers` and NO `formData` are passed: `headers` would ship Clerk's session cookie — a bearer
+// credential for the whole app — and `formData` a kid's bodyweight, both to a third party (see
+// lib/sentry-scrub.ts). ⚠️ This named `mp_gate` until `1d`; the reason SURVIVES the gate, because
+// what replaced it is a stronger credential, not a weaker one. The "every export is an async
 // function" rule is enforced by `use-server-exports.test.ts`. Expected failures RETURN a
 // typed envelope instead of throwing, so they never reach Sentry — that falls out of the envelope
 // convention for free rather than needing a filter.

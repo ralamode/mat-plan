@@ -28,9 +28,7 @@ import { LOCAL_DB_DIR, LOCAL_DB_PASSWORD, LOCAL_DB_PORT } from './local-db';
  *   3. migrate + seed it via the EXISTING `packages/db` scripts (both idempotent);
  *   4. spawn `next dev` with `DATABASE_URL`/`DATABASE_URL_UNPOOLED` set to the LOCAL
  *      connection string in the child env — these WIN over `.env.local` per the Next
- *      env-precedence fact (docs/lessons.md). `ACCESS_GATE_PASSWORD` is deliberately
- *      NOT overridden, so `next dev` reads it from `.env.local` and Ray's gate login
- *      keeps working;
+ *      env-precedence fact (docs/lessons.md);
  *   5. on SIGINT/SIGTERM/child-exit, stop the PG process cleanly — the DATA dir
  *      persists on disk for the next `pnpm dev`.
  *
@@ -84,10 +82,10 @@ async function main(): Promise<void> {
     // ON CONFLICT seed) so it never duplicates Ray's play-data.
     await migrateAndSeed(url);
 
-    // Inject the local DB into `next dev`'s env (wins over .env.local). Deliberately do
-    // NOT set ACCESS_GATE_PASSWORD — let next dev read it from .env.local so the gate
-    // login keeps working. `...process.env` only carries a gate password if the shell
-    // already exported one; we never inject the local override.
+    // Inject the local DB into `next dev`'s env (wins over .env.local).
+    // ⚠️ A note here explained why `ACCESS_GATE_PASSWORD` was deliberately NOT overridden — so
+    // `next dev` read it from `.env.local` and the gate login kept working. AUTH-1 1d deleted the
+    // variable; Clerk's keys still come from `.env.local` the same way, and are not injected here.
     const childEnv: NodeJS.ProcessEnv = {
       ...process.env,
       DATABASE_URL: url,

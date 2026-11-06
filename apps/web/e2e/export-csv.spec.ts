@@ -6,7 +6,7 @@ import { SEED_PROFILE_ROUTE } from './steps';
  * The CSV export, end to end (V1-13b).
  *
  * The formatters have golden vectors and the reads have `db:verify` proofs; this is the only thing
- * that exercises **the whole chain** — gate → route → ownership → reads → fold → CSV → zip → a real
+ * that exercises **the whole chain** — session → route → ownership → reads → fold → CSV → zip → a real
  * file arriving in a browser. It is the MVP's defining feature, so it gets a real download rather
  * than a status-code check.
  */
@@ -32,19 +32,22 @@ test('the export refuses an unknown profile, and says nothing about it', async (
   expect(res.status()).toBe(404);
 });
 
-test('the export is gated — a request without the access cookie gets nothing', async ({
-  browser,
-}) => {
-  // ⚠️ This route lives under /p/ and not /api/ because the gate matcher EXCLUDED `/api` when
-  // V1-13b sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection —
-  // what protects the handler is its own in-process gate + session check. This asserts the refusal
-  // from outside, with a fresh context so none of the project's storageState leaks in.
-  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
-  const res = await context.request.get(`${SEED_PROFILE_ROUTE}/export`, {
-    maxRedirects: 0,
-  });
-  // Either the middleware redirects to the gate, or the handler's own check 404s. Both are correct;
-  // what must never happen is a 200 with a zip body.
-  expect(res.status()).not.toBe(200);
-  await context.close();
-});
+// 🔴 **DELETED at AUTH-1 1d: "the export is gated — a request without the access cookie gets
+// nothing". It was not weakened, it was removed, because its assertion became FALSE.**
+//
+// It opened a fresh browser context (an empty cookie jar) and asserted the export did not return
+// 200. The empty jar was the whole mechanism: with no `mp_gate` cookie the proxy bounced the
+// request. After `1d` there is no cookie and no bounce, and the harness arms a principal in the
+// PROCESS ENVIRONMENT (`E2E_SESSION_BYPASS_USER_ID`) that no browser context can drop — so the
+// request is fully authenticated and the export correctly returns 200 with a real zip. Observed, not
+// reasoned: this test went red in `e2e:local` on exactly that.
+//
+// ⚠️ **Rewriting it to accept 200 would have inverted its own subject**, and leaving a weakened
+// version would have been a test named for a property it no longer examines. What it claimed is
+// still true and still proved — by the handler's unit-level session check and by
+// `app/pages-are-gated.test.ts`'s per-handler source guard. What is GONE is the runtime proof, and
+// that loss is recorded in `docs/tech-debt.md` ("Two runtime auth proofs went with the gate"),
+// together with the un-bypassed second server that would restore it.
+//
+// ⚠️ This route lives under `/p/` and not `/api/` because the matcher excluded `/api` when V1-13b
+// sited it. That exclusion is gone (AUTH-1 1a), so the siting is history, not protection.

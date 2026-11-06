@@ -84,9 +84,6 @@ import {
 
 // Throwaway-DB password (name + user come from the shared embedded-pg helper).
 const EPHEMERAL_DB_PASSWORD = 'screenshot';
-// The access-gate code for the throwaway server. We own BOTH sides (server env +
-// gateLogin), so a fixed value ≥8 chars satisfies env.ts and needs no real secret.
-const SCREENSHOT_GATE_PASSWORD = 'screenshot-ephemeral';
 // Bare `/p` (no id) → the seeded profile's Today page (where the check-ins form lives). The route is
 // single-sourced in `e2e/steps.ts` (V1-12) — the a11y spec and the smoke need the same one.
 
@@ -925,12 +922,15 @@ async function seedStrengthSession(dbUrl: string): Promise<void> {
   }
 }
 
-/** Poll the running server until the gate route responds (or time out). */
+/** Poll the running server until the landing responds (or time out). */
 async function waitForServer(baseUrl: string, timeoutMs = 90_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${baseUrl}/gate`);
+      // ⚠️ `/` — the landing, which needs no session. It was `/gate`, which 404s after AUTH-1 1d:
+      // `res.status < 500` accepts a 404, so this probe did not hang, it just stopped meaning
+      // anything. Third copy of this route literal; `playwright.config.ts` has the other.
+      const res = await fetch(`${baseUrl}/`);
       if (res.status < 500) return;
     } catch {
       // not up yet
@@ -982,7 +982,6 @@ async function runEphemeral(
       ...process.env,
       DATABASE_URL: dbUrl,
       DATABASE_URL_UNPOOLED: dbUrl,
-      ACCESS_GATE_PASSWORD: SCREENSHOT_GATE_PASSWORD,
       // AUTH-1 1c-3a — the session seam, so `/p` and the other gated routes stay capturable once
       // 1c-3b converts them. `assertDbTargetAllowed` above has already proved `dbUrl` is the
       // throwaway cluster, which is the same property `lib/env.ts` re-checks before arming.
@@ -1026,8 +1025,9 @@ async function runEphemeral(
     );
     await waitForServer(baseUrl);
 
-    // gateLogin reads ACCESS_GATE_PASSWORD from our env — match the server's gate code.
-    process.env.ACCESS_GATE_PASSWORD = SCREENSHOT_GATE_PASSWORD;
+    // ⚠️ A live ASSIGNMENT used to sit here, setting `ACCESS_GATE_PASSWORD` in THIS process so
+    // `gateLogin` matched the server's code. Both are gone at AUTH-1 1d: `capture.ts` performs no
+    // login, and the server is already authenticated by `E2E_SESSION_BYPASS_USER_ID` above.
     await captureScreenshot({
       route,
       baseUrl,

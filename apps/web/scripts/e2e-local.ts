@@ -39,7 +39,6 @@ import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
  * precedence — docs/lessons.md), so the app under test always talks to the embedded DB:
  *   - `DATABASE_URL` / `DATABASE_URL_UNPOOLED` → the embedded cluster (no PgBouncer
  *     locally, so pooled == unpooled == the same string);
- *   - `ACCESS_GATE_PASSWORD` → a fixed local code, matching what `gateLogin` reads;
  *   - `E2E_PORT` → a free port, so the run can never collide with (or, via the config's
  *     `reuseExistingServer`, silently ATTACH to) a `pnpm dev` server already running.
  *
@@ -54,10 +53,6 @@ import { E2E_SESSION_BYPASS_USER } from '@mat-plan/shared';
 
 // Throwaway-cluster password (DB name + superuser come from the shared helper).
 const EPHEMERAL_DB_PASSWORD = 'e2e-local';
-// The access-gate code for the throwaway server. We own BOTH sides (the server's env and
-// `gateLogin`), so a fixed, obviously-fake value ≥8 chars satisfies `env.ts` and is not a
-// secret. Low-entropy on purpose — a random-looking placeholder trips gitleaks (lessons.md).
-const E2E_LOCAL_GATE_PASSWORD = 'e2e-local-placeholder';
 
 async function main(): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), 'mat-plan-e2e-pg-'));
@@ -103,7 +98,6 @@ async function main(): Promise<void> {
       ...process.env,
       DATABASE_URL: dbUrl,
       DATABASE_URL_UNPOOLED: dbUrl,
-      ACCESS_GATE_PASSWORD: E2E_LOCAL_GATE_PASSWORD,
       E2E_PORT: String(appPort),
       // AUTH-1 1c-3a — the session seam. Without it, every spec reaching a `requireSession()` page
       // lands on `/sign-in` from 1c-3b onward. `lib/env.ts` refuses to arm unless `DATABASE_URL` is

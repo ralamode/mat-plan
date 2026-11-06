@@ -44,9 +44,11 @@ sources in-session**, not reasoned about, and each would have had to be answered
    **free text**, and the confirm chip's warning keys on `null` rather than on **membership failure** —
    so a hallucinated-but-plausible slug gets **no warning** and silently mints an unrecoverable catalog
    row, which is the precise hazard S7 exists to close.
-5. **No boundary tests** on what would be the app's first metered endpoint, and `hasGateAccess()`
-   — the gate check every shipped Server Action performs (`apps/web/app/p/[profileId]/actions.ts:84`)
-   — is **never named in this plan**, despite **S8** resting on the handler re-checking the gate.
+5. **No boundary tests** on what would be the app's first metered endpoint, and the boundary check
+   every shipped Server Action performs is **never named in this plan**, despite **S8** resting on the
+   handler re-checking it. ⚠️ **Updated at `AUTH-1` 1d (2026-11-05):** that check was
+   `hasGateAccess()`; it is now `sessionUserOrNull()` via `enterMutation`, and the gate is deleted.
+   The finding is unchanged — this plan still does not name whatever the boundary is.
 
 **Why parked rather than fixed — the scope lens, and the probe that settled it.** Every finding above
 is answerable. The scope lens' conclusion was that answering them buys the wrong thing first: after
@@ -384,7 +386,9 @@ itself for exactly this reason.
 **S9 — the extraction's limiter fails CLOSED.** This is a deliberate departure from
 `checkRateLimit`'s contract, which fails **open** on purpose (`apps/web/lib/rate-limit.ts:72`–`:91`):
 "a Redis outage locking Ray out of his own app is a worse outcome than an outage briefly widening the
-brute-force window." That trade is right for the gate and wrong here — what a dead limiter widens on
+brute-force window." ⚠️ That quote was `checkRateLimit`'s docblock, a function `AUTH-1` 1d deleted; the
+same fail-open contract now lives on `checkMutationLimit`. The trade was right for the gate and is
+wrong here — what a dead limiter widens on
 this endpoint is **metered third-party spend**, and the feature is a convenience whose fallback (type
 the movement names) is the status quo, not a lockout. See § "Cost, the key, and the bound".
 
@@ -481,33 +485,39 @@ Two facts constrain the design:
    actions are deliberately unlimited: their only identifier is a caller-supplied `profileId`, so an
    attacker rotates a fresh UUID per request for a fresh bucket. The same is true here. A
    per-household bound becomes real at AUTH-1/TEN-1; **AI-1 must not claim one it cannot key.**
-2. **`limiter` is one module-level instance bound to `GATE_RATE_LIMIT`** (`rate-limit.ts:36`, `:53`).
-   A second policy needs a second named instance, not a reused one.
+2. **Each policy needs its own module-level instance**, built through `buildLimiter` — a second
+   policy is never a reused one, because `slidingWindow()` bakes the window in at construction.
+   ⚠️ **Updated at `AUTH-1` 1d:** this read "`limiter` is one module-level instance bound to
+   `GATE_RATE_LIMIT`". Both that instance and that const are deleted; `mutationLimiter` /
+   `MUTATION_RATE_LIMIT` is the surviving pair and the shape of the rule is the same.
 
 So the bound is **two limits, both named consts in `apps/web/lib/rate-limit.ts`** (app-only policy
-values, per AGENTS.md's blast-radius rule — the same class as `GATE_RATE_LIMIT`, not `packages/shared`):
+values, per AGENTS.md's blast-radius rule — the same class as `MUTATION_RATE_LIMIT`, not
+`packages/shared`):
 
-| Bound                                                            | Identifier                                                                                                                            | What it holds                                                                                                                    |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Burst** — a sliding window on the order of 20 calls / 10 min   | the Vercel-computed client IP (`x-real-ip` via `@vercel/functions`), the gate's identifier and the only one an attacker cannot rotate | the spend bound that actually holds                                                                                              |
-| **Daily** — a fixed-window per-day cap on the order of 100 calls | the route's `profileId`                                                                                                               | a **cost ceiling and a UX signal, explicitly not a security bound** — stated in the docblock so nobody later mistakes it for one |
+| Bound                                                            | Identifier                                                                                                                                                                                                                                                                                                                                                                                                                                                       | What it holds                                                                                                                    |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Burst** — a sliding window on the order of 20 calls / 10 min   | 🔴 **Re-decide at `AUTH-1` 1d.** This said "the Vercel-computed client IP, the gate's identifier and the only one an attacker cannot rotate". `1d` deleted the gate and its IP-keyed limiter, so there is no precedent to inherit — and the Clerk **principal** is now an identifier an attacker cannot rotate either, and is the one `enterMutation` already uses. Prefer it; an IP would re-introduce a signal this repo deliberately stopped sending Upstash. | the spend bound that actually holds                                                                                              |
+| **Daily** — a fixed-window per-day cap on the order of 100 calls | the route's `profileId`                                                                                                                                                                                                                                                                                                                                                                                                                                          | a **cost ceiling and a UX signal, explicitly not a security bound** — stated in the docblock so nobody later mistakes it for one |
 
 Both **fail closed** (**S9**), and both are a single knob to tune when the real evening pattern is
 known (the household logs after 6:30pm, so the daily cap is sized against a session, not a day of
-browsing). With the burst limit the worst case an attacker holding the gate code can spend is bounded
-by IP × window × ~$0.04; without it, it is not bounded at all.
+browsing). With the burst limit the worst case an attacker **with an invited account and a household
+membership** can spend is bounded by identifier × window × ~$0.04; without it, it is not bounded at
+all. ⚠️ Said "an attacker holding the gate code" until `1d`; the attacker model is now narrower,
+because there is no shared code to hold.
 
 ## Risks / rollback
 
-| Risk                                                                                            | Mitigation                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A near-duplicate catalog row from an extracted movement name — **unrecoverable through the UI** | **S7**: closed vocabulary + explicit `null`, and the chip names a new movement before confirm. If one lands anyway, it is a `db:correct` correction plus its own bug PR, per AGENTS.md.                                                                                                                         |
-| The emit schema is widened later and a magnitude creeps in                                      | Acceptance 1's three layers, and the widening lesson is already written on `ScaffoldRow` (`strength-form-scaffold.ts:34`: "A future post-GAP-3 load chip widens this Pick deliberately; it cannot inherit the access by accident").                                                                             |
-| An un-gated metered endpoint                                                                    | **S8** — sited under `/p/`, gate re-checked in the handler, per the export route's precedent.                                                                                                                                                                                                                   |
-| A dead limiter silently un-bounds spend                                                         | **S9** fail-closed, plus `isRateLimitConfigured` (`rate-limit.ts:69`) already exists so "off" is distinguishable from "broken".                                                                                                                                                                                 |
-| The model's text is rendered unsafely                                                           | Treated as untrusted data: zod at the boundary, rendered as text, never `dangerouslySetInnerHTML` (AGENTS.md "don't" list). The movement name reaches `movements.name` and `entries.movement_name` verbatim, which is why the comma/newline refusal at `strength-session.ts:51`–`:59` is load-bearing here too. |
-| Minors' utterances leave the household to a third party                                         | **Privacy is its own review lens** (AGENTS.md). The utterance is sent; nothing is logged beyond a correlation id; no utterance or model output in Sentry breadcrumbs. This needs the `privacy-reviewer` lens on chunk 3, and the question "should we hold this at all" answered in the open, not assumed.       |
-| The eval fixture seeds real names                                                               | `docs/plan.md`:264 already requires the 15-case fixture be synthetic from the start. EVAL-0 owns it.                                                                                                                                                                                                            |
+| Risk                                                                                            | Mitigation                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A near-duplicate catalog row from an extracted movement name — **unrecoverable through the UI** | **S7**: closed vocabulary + explicit `null`, and the chip names a new movement before confirm. If one lands anyway, it is a `db:correct` correction plus its own bug PR, per AGENTS.md.                                                                                                                                    |
+| The emit schema is widened later and a magnitude creeps in                                      | Acceptance 1's three layers, and the widening lesson is already written on `ScaffoldRow` (`strength-form-scaffold.ts:34`: "A future post-GAP-3 load chip widens this Pick deliberately; it cannot inherit the access by accident").                                                                                        |
+| An un-gated metered endpoint                                                                    | **S8** — sited under `/p/`, gate re-checked in the handler, per the export route's precedent.                                                                                                                                                                                                                              |
+| A dead limiter silently un-bounds spend                                                         | **S9** fail-closed, plus `isRateLimitConfigured` (`apps/web/lib/rate-limit.ts`) already exists so "off" is distinguishable from "broken". ⚠️ At `AUTH-1` 1d that export was **rebound** from the deleted gate limiter to `mutationLimiter` — deliberately, because this plan cites it; the name and meaning are preserved. |
+| The model's text is rendered unsafely                                                           | Treated as untrusted data: zod at the boundary, rendered as text, never `dangerouslySetInnerHTML` (AGENTS.md "don't" list). The movement name reaches `movements.name` and `entries.movement_name` verbatim, which is why the comma/newline refusal at `strength-session.ts:51`–`:59` is load-bearing here too.            |
+| Minors' utterances leave the household to a third party                                         | **Privacy is its own review lens** (AGENTS.md). The utterance is sent; nothing is logged beyond a correlation id; no utterance or model output in Sentry breadcrumbs. This needs the `privacy-reviewer` lens on chunk 3, and the question "should we hold this at all" answered in the open, not assumed.                  |
+| The eval fixture seeds real names                                                               | `docs/plan.md`:264 already requires the 15-case fixture be synthetic from the start. EVAL-0 owns it.                                                                                                                                                                                                                       |
 
 **Rollback:** nothing here is a migration, so every chunk reverts by revert. Chunk 3 additionally
 reverts by removing `ANTHROPIC_API_KEY` from the environment — acceptance 9 makes the feature

@@ -12,7 +12,7 @@ import { captureScreenshot, routeSlug } from './capture';
  * embedded Postgres so a capture never touches the live kids' log. Use this only
  * against a server you have deliberately pointed at a DB:
  *   pnpm build && pnpm --filter web exec next start -p 3996
- *   ACCESS_GATE_PASSWORD=<code> pnpm --filter web screenshot /   # or any route
+ *   pnpm --filter web screenshot /                               # or any route
  *
  * Writes to the gitignored `.screenshots/` folder; attach the PNG to the PR
  * (never commit it). See docs/plans/v0-11-ci-postgres-playwright.md and

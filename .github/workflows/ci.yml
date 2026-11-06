@@ -362,7 +362,6 @@ jobs:
         run: pnpm build
         env:
           # lib/env.ts validates at build; values are non-secret CI placeholders.
-          ACCESS_GATE_PASSWORD: ci-build-placeholder
           DATABASE_URL: postgres://user:pass@localhost:5432/db
 
   e2e:
@@ -390,7 +389,6 @@ jobs:
       # SAME local instance. Non-secret placeholders; migrations never touch prod.
       DATABASE_URL: postgres://mat:mat@localhost:5432/mat_plan_test
       DATABASE_URL_UNPOOLED: postgres://mat:mat@localhost:5432/mat_plan_test
-      ACCESS_GATE_PASSWORD: ci-e2e-placeholder-1234
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
