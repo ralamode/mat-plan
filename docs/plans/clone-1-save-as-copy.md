@@ -529,7 +529,7 @@ gate, so 1c, the one-way door, lands first. **When PR 3 is written, re-verify ea
 - `requireSession()` is called inside the action;
 - `getHouseholdScope()`'s new body is what it resolves through (`household.ts:62-66`);
 - the mutation limiter wraps it;
-- WP-1's registry and `pages-are-gated.test.ts` include it;
+- WP-1's registry and `pages-need-a-session.test.ts` include it;
 - **whatever role check AUTH-1 added to the editor** (V1-22: "adds a role check rather than moving the
   route") also guards moving another athlete.
 

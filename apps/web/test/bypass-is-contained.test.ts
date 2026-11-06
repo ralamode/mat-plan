@@ -162,7 +162,7 @@ describe('the test session bypass is contained (AUTH-1 1c-3a)', () => {
   });
 
   it('every allowlisted file still exists — an allowlist must not outlive its subject', () => {
-    // `pages-are-gated.test.ts`'s dead-entry rule: a stale name silently excuses a file somebody may
+    // `pages-need-a-session.test.ts`'s dead-entry rule: a stale name silently excuses a file somebody may
     // later recreate at that exact path.
     const present = appSources().map(relative);
     for (const entry of [ARMS, ...INJECTORS, READS_PREDICATE]) {

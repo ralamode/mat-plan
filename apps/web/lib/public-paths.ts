@@ -6,7 +6,7 @@ import { PRIVACY_PATH, SIGN_IN_PATH } from './constants';
  * Split out of `lib/access-gate.ts` by AUTH-1 1a. It was never gate-shaped either: `access-gate.ts`
  * is deleted at 1d, and "which routes are public" is the rule that survives the gate. Pure and
  * edge-safe — no secrets, no IO — so the proxy and the
- * pages-are-gated test can both import it. ⚠️ Said "the proxy, the pages-are-gated test and the
+ * pages-need-a-session test can both import it. ⚠️ Said "the proxy, the pages-need-a-session test and the
  * screenshot capture all read the same one definition" — after `1d` the proxy routes on nothing and
  * `capture.ts` branches on nothing, so the source guard is the only reader.
  */
@@ -38,7 +38,7 @@ export const PUBLIC_PATHS = ['/', PRIVACY_PATH] as const;
  * arrives on its CHILDREN, so the whole subtree must be reachable without a session.
  * ⚠️ **The original reasons are both deleted by `AUTH-1` 1d** and are recorded only so nobody
  * reinstates a narrower rule from them: the proxy's gate bounce did `url.search = ''`, which would
- * have destroyed the handshake parameters, and `app/pages-are-gated.test.ts` required every
+ * have destroyed the handshake parameters, and `app/pages-need-a-session.test.ts` required every
  * `page.tsx` to await `requireGatedPage()` — a function that no longer exists. The
  * surface this widens is a screen that reads no household data and queries nothing, the same shape
  * as the public landing.

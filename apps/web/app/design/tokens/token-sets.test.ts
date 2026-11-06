@@ -35,7 +35,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = join(HERE, '..', '..');
 
 /** Comments stripped — the CSS is data a future author will annotate, and a commented-out block must
- *  not satisfy an assertion (the same trick `pages-are-gated.test.ts` uses on source). */
+ *  not satisfy an assertion (the same trick `pages-need-a-session.test.ts` uses on source). */
 const css = readFileSync(join(HERE, 'token-sets.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const globals = readFileSync(join(APP_DIR, 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 

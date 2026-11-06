@@ -46,7 +46,7 @@ export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
  * ⚠️ **The limiter fails OPEN, and under vitest `mutationLimiter` is always `null`** — so every call
  * answers `allowed: true`, and a `checkMutationLimit` placed after the write, or whose result is
  * ignored, is invisible to any behavioural test. Hence the **source** guard in
- * `app/pages-are-gated.test.ts` (PR C renames it `pages-need-a-session.test.ts`): per action, the
+ * `app/pages-need-a-session.test.ts` (PR C renames it `pages-need-a-session.test.ts`): per action, the
  * awaited `enterMutation` call, that its refusal is RETURNED, and that the import comes from this
  * module; and once, here, that the two conjuncts appear in the order above. Collapsing to one function is what made that order assertable at all.
  *

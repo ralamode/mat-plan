@@ -38,7 +38,7 @@ export default async function ProfilePickerPage() {
   // the reason the gate could not simply be deleted before `1c-4`.
   // Re-checked HERE rather than inherited from the proxy: SECURITY.md refuses to call a
   // matcher-driven layer a boundary (CVE-2025-29927), and SEC-1's own scar was a prefetch header
-  // skipping the matcher entirely. `app/pages-are-gated.test.ts` is what keeps this call here
+  // skipping the matcher entirely. `app/pages-need-a-session.test.ts` is what keeps this call here
   // (PR C renames that file to `pages-need-a-session.test.ts`; its contents already moved here).
   await requireSession();
   const profiles = await listProfiles();

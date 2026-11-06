@@ -276,7 +276,7 @@ and complete; this is the one thing it cannot reach.
   is why the call is in the page: the proxy is not the auth boundary (before SEC-1 a prefetch-flagged
   request skipped it; CVE-2025-29927 is the general case), and after `1d` these per-page calls are
   the ONLY thing standing there, because the gate bounce that used to back them up is gone.
-  `app/pages-are-gated.test.ts` reports by name any page missing the call — and 🔴 **narrowing it to
+  `app/pages-need-a-session.test.ts` reports by name any page missing the call — and 🔴 **narrowing it to
   one conjunct must never become an alternation**: a regex accepting either helper proves neither.
   The only exemptions are `isPublicPath`'s: the public landing and `/privacy` (`PUBLIC_PATHS`), and
   the whole `/sign-in` subtree (`PUBLIC_PATH_TREES`). ✅ **`1c-4` is what made this safe** — the

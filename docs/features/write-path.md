@@ -122,7 +122,7 @@ flowchart LR
    predicate entirely. ⚠️ **One consequence to know before editing that file:** its
    `export const dynamic = 'force-dynamic'` is now the ONLY thing marking the handler dynamic, because
    the gate's unconditional `cookies()` read is gone. Remove it and a cached response is one
-   household's CSV served to another. The Route-Handler guard in `pages-are-gated.test.ts` narrowed
+   household's CSV served to another. The Route-Handler guard in `pages-need-a-session.test.ts` narrowed
    with each step and must stay a single named helper, never an alternation.
 
    📌 **`lib/rate-limit.ts`'s MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
@@ -134,7 +134,7 @@ flowchart LR
    documents itself as unused while it holds the mutation boundary makes an unprotected surface and a
    protected one look identical in the docs.
 
-   **The source guard is SPLIT, and both halves are the claim.** `pages-are-gated.test.ts` requires,
+   **The source guard is SPLIT, and both halves are the claim.** `pages-need-a-session.test.ts` requires,
    **per action**, the awaited `enterMutation()` call, that its refusal is returned, and that
    `actions.ts` imports the helper from `./mutation-entry` (so a local function of the same name
    satisfies nothing); and **once, in the helper**, that the two conjuncts (three until `1d`) appear there **in
@@ -148,7 +148,7 @@ flowchart LR
    _"a new action without it fails the unauth suite only if you add it to that suite: do"_ — was an
    invariant that depended on remembering, which is not an invariant. Two guards close it from both
    sides, and **neither alone is sufficient**:
-   - `app/pages-are-gated.test.ts` → _"every Server Action re-checks the boundary itself"_ enumerates
+   - `app/pages-need-a-session.test.ts` → _"every Server Action re-checks the boundary itself"_ enumerates
      every `'use server'` module **under `apps/web`** (not just `app/`) and asserts the call appears
      **inside each exported function**, sliced per function so one check cannot cover the module. It is
      a **source-text** guard: it proves the call is present, not that it runs before the DAL.
@@ -487,7 +487,7 @@ flowchart LR
   run, so an excluded handler could not authenticate at all), and ⚠️ **what has NOT changed is the
   rule:** the matcher is not an authorization boundary, so a handler under `/api` still owes its own
   in-process **session** check, and `/api/sync` additionally owes an origin or token check.
-  `app/pages-are-gated.test.ts` requires that check of every Route Handler it discovers — **one named
+  `app/pages-need-a-session.test.ts` requires that check of every Route Handler it discovers — **one named
   helper, never an alternation**. ⚠️ At `1d` the matcher's own justification changed too: it is no
   longer "what decides whether the gate runs" but "`auth()` must be able to answer and the headers
   must land".

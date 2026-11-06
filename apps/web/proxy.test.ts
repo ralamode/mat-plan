@@ -137,7 +137,7 @@ describe('the proxy redirects nothing (AUTH-1 1d)', () => {
   // worth pinning even though "no redirect" sounds like asserting an absence.
   // ⚠️ These are not "a stranger is served the app": the proxy never authorized anything, and after
   // `1d` it does not even route. What a caller may SEE is proved per route in
-  // `app/pages-are-gated.test.ts` and in the e2e suite.
+  // `app/pages-need-a-session.test.ts` and in the e2e suite.
   it.each([
     '/',
     PRIVACY_PATH,
@@ -503,7 +503,7 @@ describe('proxy matcher', () => {
    * when `clerkMiddleware()` did not run on the request, so an excluded `/api` handler could not have
    * authenticated at all.
    *
-   * ⚠️ This is NOT "the matcher is the boundary". `app/pages-are-gated.test.ts` is, per handler.
+   * ⚠️ This is NOT "the matcher is the boundary". `app/pages-need-a-session.test.ts` is, per handler.
    */
   it.each(['/api', '/api/sync', '/api/x/y'])('runs on %s (the /api hole is closed)', (path) => {
     expect(runsOn(path)).toBe(true);

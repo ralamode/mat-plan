@@ -131,7 +131,7 @@ export const getCurrentUser = cache(async (): Promise<{ userId: string } | null>
  * 🔴 **Returns the principal, not a boolean.** A boolean cannot supply the `userId` the per-user
  * mutation limit needs, so every action would call `getCurrentUser()` a second time to fetch the key
  * it had just proved exists — two shapes asking one question at one call site, and the source guard
- * in `pages-are-gated.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s pre-1c-3b
+ * in `pages-need-a-session.test.ts` would then match the weaker of the two. `lib/rate-limit.ts`'s pre-1c-3b
  * docblock predicted this shape: _"Mutation limits land with Clerk at v1.5, when `getCurrentUser()`
  * provides a real identifier."_
  */

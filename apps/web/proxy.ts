@@ -42,7 +42,7 @@ const RETIRED_GATE_COOKIE = 'mp_gate';
  * whether this code runs AT ALL, any client can shape a request to dodge one (SEC-1's scar was a
  * prefetch header), and CVE-2025-29927 is the general case. ⚠️ Do not add an authorization check
  * here. A check in this file is unreachable for any request the matcher misses, which is why
- * `app/pages-are-gated.test.ts` asserts the per-route calls instead.
+ * `app/pages-need-a-session.test.ts` asserts the per-route calls instead.
  *
  * Nonce-based CSP requires dynamic rendering; the root layout opts the app in
  * with `export const dynamic = 'force-dynamic'` (this is an inherently per-user
@@ -312,7 +312,7 @@ export const config = {
     // The same shape would now skip `clerkMiddleware()`, making `auth()` throw on exactly the
     // requests an attacker chooses. Including prefetches costs nothing. ⚠️ This is also why the
     // matcher is not the boundary: pages, actions and handlers re-check in-process
-    // (`app/pages-are-gated.test.ts`), and `proxy.test.ts` pins the matcher's SHAPE so a narrowing
+    // (`app/pages-need-a-session.test.ts`), and `proxy.test.ts` pins the matcher's SHAPE so a narrowing
     // edit fails a test rather than silently un-authenticating a route.
     //
     // The lookahead is ANCHORED (OSS-2): each exclusion must end at a segment boundary or the end, so
@@ -329,7 +329,7 @@ export const config = {
     // matcher-shaped gap": `_next/static/`, `_next/image` and `favicon.ico` remain excluded, and
     // `/_next/image` is a live surface. The claim is "no gap at any entry point that reads household
     // data", and it is held by the per-page / per-action / per-handler checks —
-    // `app/pages-are-gated.test.ts`, with the non-vacuity floor 1a added to its handler suite.
+    // `app/pages-need-a-session.test.ts`, with the non-vacuity floor 1a added to its handler suite.
     // ⚠️ After `1d` that claim rests on those checks ALONE, since the bounce that used to back it up
     // is gone. `/_next/image` remains an excluded live surface and is still not a data entry point.
     '/((?!_next/static/|_next/image(?:/|$)|favicon\\.ico$).*)',

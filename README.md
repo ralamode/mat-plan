@@ -53,8 +53,7 @@ progress record, [docs/plan.md](./docs/plan.md) the per-PR backlog, and
 `pnpm dev` is a **local sandbox**: it starts a real (Dockerless) Postgres on port `54329` with a
 fixed, gitignored data dir at `apps/web/.local-db/`, runs `db:migrate` + `db:seed` (both idempotent),
 then launches `next dev` with `DATABASE_URL` pointed at that local DB. Play with the product freely —
-**your data survives restarts** and never reaches prod. `ACCESS_GATE_PASSWORD` still comes from your
-`.env.local`, so the gate login works as before. Reach for `pnpm dev:prod` only when you deliberately
+**your data survives restarts** and never reaches prod. Reach for `pnpm dev:prod` only when you deliberately
 want to hit live data (prefer a Neon **branch**, not production). This mirrors the screenshot flow
 (`screenshot:ephemeral`): local isolation is the default, prod is the deliberate exception. First run
 downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.example` first (see

@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest';
  * exactly when an unchecked claim starts to matter. The field was cut from the scope precisely so
  * the column could stay dark — and a claim that load-bearing should fail a build, not a review.
  *
- * Source is matched with comments STRIPPED (the `pages-are-gated.test.ts` idiom), so the schema's
+ * Source is matched with comments STRIPPED (the `pages-need-a-session.test.ts` idiom), so the schema's
  * own explanatory docblock and the migration header cannot satisfy or trip it.
  *
  * ⚠️ **OBS-2 deletes this file** in the PR that first reads the column. That is deliberate: the

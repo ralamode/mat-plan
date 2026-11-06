@@ -556,7 +556,7 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
 
   1. ✅ **§A — the public route** (#216): `/` public, picker → `/p`, copy + one link into the README's
      own "what's interesting here", `app/loading.tsx` → `app/p/loading.tsx`, the gate matcher's
-     unanchored lookahead fixed, a `pages-are-gated` test, `/` and `/gate` axe-scanned un-gated for the
+     unanchored lookahead fixed, a `pages-need-a-session` test, `/` and `/gate` axe-scanned un-gated for the
      first time, and every `'/'`-means-the-app-home literal routed through `APP_HOME_PATH`.
      **Built from mockups, with Ray's copy cuts:** the landing is the mark + name, one lead sentence,
      the origin line and the two stacked CTAs. Ray removed the README hook and the gate-explanation

@@ -164,7 +164,7 @@ non-movement-arm rows, plus the `''`/NULL readback. The _neither_ arm is the dis
 assert a removal stays removed **and** a compacted top slot is not refilled; chunk 6 — contiguity and
 set-preservation across a renumber. Chunk 4 owes the three boundary tests of acceptance 6.
 
-**Also owed, by chunk 4:** `requireGatedPage()` on the new page (`app/pages-are-gated.test.ts` fails CI
+**Also owed, by chunk 4:** `requireGatedPage()` on the new page (`app/pages-need-a-session.test.ts` fails CI
 without it), the route added to `a11y.spec.ts`'s `ROUTES`, a rate limit on the mutations, and a `§2e`
 write-path view in [docs/architecture.md](../architecture.md) — whose programming diagram still labels
 authoring _"TypeScript, no UI yet"_. ⚠️ `docs/features/programming.md`'s `owns:` covers

@@ -123,7 +123,8 @@ to on** (request bodies, headers, cookies, DB query data, stack-frame locals, AI
 `SENTRY_DATA_COLLECTION` in `lib/sentry-scrub.ts` turns each one off, and the scrubber in the same file
 strips the same things again as a second line. Both are unit-tested. **Run the verification pass in [runbooks.md](./runbooks.md) after wiring** — if a cookie
 or a bodyweight ever appears in a Sentry event, treat it as an incident: revoke the DSN and rotate
-`ACCESS_GATE_PASSWORD`.
+`CLERK_SECRET_KEY` (`runbooks.md` → "Rotate a secret"). ⚠️ Said `ACCESS_GATE_PASSWORD` until
+`AUTH-1` 1d deleted it; the credential a leaked payload would expose is now a Clerk session cookie.
 
 ---
 
@@ -138,7 +139,6 @@ each scope its own record, even where the value is identical.
 
 | Variable                   | Production                  | Preview                    | Development            |
 | -------------------------- | --------------------------- | -------------------------- | ---------------------- |
-| `ACCESS_GATE_PASSWORD`     | its own long random code    | a **different** one        | same as Preview        |
 | `DATABASE_URL` (pooled)    | the production Neon project | **`mat-plan-preview`**     | **`mat-plan-preview`** |
 | `UPSTASH_REDIS_REST_URL`   | the production Redis DB     | a **second**, preview-only | same as Preview        |
 | `UPSTASH_REDIS_REST_TOKEN` | the production Redis DB     | the same second DB         | same as Preview        |
@@ -181,7 +181,6 @@ deployment-branch policy, so a future workflow cannot reference them by accident
 
 | Variable                                 | Needed?                                                         |
 | ---------------------------------------- | --------------------------------------------------------------- |
-| `ACCESS_GATE_PASSWORD`                   | ✅ any ≥8 chars                                                 |
 | `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | only when targeting Neon — `pnpm dev` uses an embedded Postgres |
 | `UPSTASH_*`, `SENTRY_DSN`                | ❌ leave unset; both no-op                                      |
 

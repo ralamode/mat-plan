@@ -1578,7 +1578,7 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `__clerk_invalidate_cache_cookie_${Date.now()}` that by construction never exists — reads
       nothing, takes no arguments) and `app-router/keyless-actions.js` (`deleteKeylessAction`, inert
       because of the box above). Both are now reachable from every public page's module graph, because
-      `<ClerkProvider>` is in the root layout. `app/pages-are-gated.test.ts` asserts the set is
+      `<ClerkProvider>` is in the root layout. `app/pages-need-a-session.test.ts` asserts the set is
       **exactly those two**, so a bump that adds a third turns CI red. **Give a Clerk bump its own
       reviewed PR**, the treatment [SECURITY.md](../.github/SECURITY.md) already gives
       `claude-code-action` — not routine Dependabot noise.
@@ -1691,6 +1691,13 @@ moves them, so treat a path that does not resolve as a renamed page, not a missi
       `frame-src` source is deleted, so switching bot protection ON without re-adding it means the
       Turnstile iframe is blocked by `default-src 'self'` — presenting as a sign-in button that does
       nothing, on the app's only door. Re-add the origin and the directive in the same change.
+- [x] ✅ **The refusal path, observed 2026-11-05** (`AUTH-1` 1d, lit-panel finding 5). An address that
+      had never touched the production instance signed in under `Invite-only`: the refusal rendered
+      **on this app's origin**, verbatim _"New sign-ups are currently restricted."_, with the mark and
+      both disclosure paragraphs still on screen. No Account Portal, no off-origin dead end. An
+      invited-and-accepted address signs in and lands on `NO_HOUSEHOLD_COPY`, as intended.
+      ⚠️ **Bound to the mode it was taken under** — production moved to `Waitlist` the same day, which
+      replaces that refusal with a link that DOES leave the origin. Re-observe if the mode changes.
 - [ ] 🔴 **The invitation record's spec** — where it lives, its fields, its retention. It is what makes
       "the invitation is the record" an actual record rather than a phrase.
 - [ ] **Free-tier limits:** MAU, custom domain, Organizations.

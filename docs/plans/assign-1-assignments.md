@@ -1441,7 +1441,7 @@ Re-verify against the AUTH-1 plan's 1c row (`auth-1-clerk-google.md:549`):
 2. 1c's **mutation rate limiter** wraps both actions.
 3. `getHouseholdScope()`'s membership-based body is the only household source (ADR 0006).
 4. The new pages (`/p/[id]/program/first`, and the program page's changes) call the page guard and
-   `pages-are-gated.test.ts` finds them.
+   `pages-need-a-session.test.ts` finds them.
 5. **Who may change assignments** after AUTH-1. Open question 5.
 
 ## Out of scope / deferred
