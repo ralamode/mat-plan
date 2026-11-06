@@ -34,6 +34,14 @@ The bar:
   write path, the "LLM never authors loads" rule, and ownership scoping by `household_id`).
 - **Out-of-scope** is explicit. At ~4h/wk that section is load-bearing.
 - Ground every claim in code you have opened. Cite `path:line`.
+- 🔴 **Find the row that already owns the question, and never assert one does not exist without
+  grepping for it.** Search `docs/plan.md` and `docs/roadmap.md` for the **capability**, not the id you
+  expect — `git grep -in "<capability phrase>" -- docs/plan.md docs/roadmap.md`. A plan that says "no
+  backlog row exists for this" and is wrong sends the next reader to design something twice; a plan
+  that names the owning row inherits its constraints for free. Link it, and say what this plan does
+  and does not take from it. **This applies to a refresh as much as a new plan** — that is where it
+  was missed (`PROF-1`, 2026-11-06: the plan declared no row owned "an athlete who ages out" while
+  `ID-1` had owned it, by name and with the same complication identified, since 2026-10-24).
 
 Use the `Plan` subagent for the draft if the area is large. Either way, you own the result. If the
 plan depends on how existing code really behaves, run the `fact-sheet` agent **before drafting** and
@@ -61,6 +69,16 @@ Add a one-off lens (perf/CWV for a heavy page) with an inline prompt when no age
 **Claims about third-party behaviour cite the source at the pinned version**, not its README. On
 DX-1 that rule turned "read-only by default" into "writes the job token into `.git/config`".
 
+🔴 **A plan touching identity, the household scope, roles, sharing or the movement catalog adds one
+line to a lens's prompt:** _"check this against [`ID-1`](../../../docs/plan.md)'s six keep-open items
+and any owning `docs/plan.md` row."_ `ID-1` requires that _"a plan for AUTH-1 1c, or any later auth
+chunk, answers these six in its review-response log"_ — an obligation **no lens checks unless it is
+told to**, because no agent's standing checklist carries it. On `PROF-1` (2026-11-06) three lenses
+reviewed an owner-only authorization decision and none of them raised it; the six were answered only
+after the maintainer asked whether the work aligned with the longer-term roadmap. The six are cheap
+to answer and two of them turned out to be load-bearing — they are independently why "the athlete
+themself when not a child" is unbuildable.
+
 ## 3. Reconcile: every material critique gets a verdict
 
 For each BLOCKING and SHOULD critique, either **incorporate** it (edit the plan) or **push back with a
@@ -79,6 +97,11 @@ reason**. Record the result in the plan's `## Review-response log`:
 
 Pushbacks stay in the log; that record is the point. NITs may be batched in one line.
 
+**Standing obligations go in the log too, answered, not just the panel's findings.** `ID-1`'s six
+keep-open items are the one that exists today, and the log is where `ID-1` says to answer them — a
+short table, one row each, with the verdict and why. A plan that adds a column, a scope field or an
+authority check and leaves them unanswered has skipped a repo rule, not a nicety.
+
 ## 4. Re-review and hand off
 
 - If any BLOCKING critique was accepted in a way that reshaped the plan, send the **revised** plan
@@ -91,12 +114,14 @@ Pushbacks stay in the log; that record is the point. NITs may be batched in one 
 
 ## Common rationalizations
 
-| Thought                                                  | Reality                                                                                                                                  |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| "The change is obvious; the panel is ceremony."          | Panels here caught a 44px CI gate, a 360px row that only fit by luck, and an onboarding flow whose safety argument collapsed on a phone. |
-| "I'll run the panel after I've written the code."        | Then its job becomes defending sunk cost. The rule is before implementation.                                                             |
-| "All the critiques were fair, so I accepted everything." | Accepting everything usually bloats scope. Push back where the simplicity lens would.                                                    |
-| "One reviewer can cover all the lenses."                 | Distinct lenses find distinct problems. Keep them separate and parallel.                                                                 |
+| Thought                                                         | Reality                                                                                                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "The change is obvious; the panel is ceremony."                 | Panels here caught a 44px CI gate, a 360px row that only fit by luck, and an onboarding flow whose safety argument collapsed on a phone.                      |
+| "I'll run the panel after I've written the code."               | Then its job becomes defending sunk cost. The rule is before implementation.                                                                                  |
+| "All the critiques were fair, so I accepted everything."        | Accepting everything usually bloats scope. Push back where the simplicity lens would.                                                                         |
+| "One reviewer can cover all the lenses."                        | Distinct lenses find distinct problems. Keep them separate and parallel.                                                                                      |
+| "I know what's on the roadmap; I don't need to look."           | `PROF-1` declared "no backlog row exists for this" about a question `ID-1` had owned for two weeks, and three lenses let it through. Grep for the capability. |
+| "It's a refresh, not a plan — the checks were done in round 1." | A refresh is where the roadmap has moved MOST since the last read. It is the case that was missed, not the exception.                                         |
 
 ## Red flags
 
