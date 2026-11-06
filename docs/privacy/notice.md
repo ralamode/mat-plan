@@ -86,7 +86,8 @@ still works.
 - **Nobody else** — no page shows your data to anyone outside your household, there is no advertising,
   no analytics about you, and your data is never sold or shared for anyone else's purposes. Three
   pages can be opened without signing in — the landing page, this notice, and the sign-in screen — and
-  none of the three reads your data.
+  none of the three reads your data. ⚠️ The sign-in screen also links OUT to Clerk's waitlist page,
+  which is not ours and is covered above.
 
 **Three honest limitations during the beta:**
 
@@ -118,16 +119,16 @@ still works.
 
 Running the app means other companies handle some of your data. Each one, and what it gets:
 
-| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                    |
-| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                          |
-| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                       |
-| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                            |
-| **Upstash**    | **The identifier of whoever is signed in**, briefly, to stop the app being hammered. A counter that expires in minutes. ✅ **It no longer receives your IP address at all** (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data. |
-| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data.                                                                             |
-| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                  |
-| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                   |
+| Who it reaches | What they get                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon**       | The database — **everything stored**.                                                                                                                                                                                                                                                                                                                                                                                  |
+| **Vercel**     | Runs the app, so **everything you enter passes through it**. It also keeps request logs with your IP address, the time, and the page requested.                                                                                                                                                                                                                                                                        |
+| **GitHub**     | Hosts the public source code, and its automation **holds the key to the live database** in order to apply updates.                                                                                                                                                                                                                                                                                                     |
+| **Sentry**     | Error reports when something breaks on the server. Deliberately built to carry none of your data — see below.                                                                                                                                                                                                                                                                                                          |
+| **Upstash**    | **The identifier of whoever is signed in**, briefly, to stop the app being hammered. A counter that expires in minutes. ✅ **It no longer receives your IP address at all** (new in this version): the IP was only ever used to stop someone guessing the shared access code, and there is no code to guess. No name, no email, and never any training or weigh-in data.                                               |
+| **Clerk**      | Runs the sign-in screen, and **sign-in is switched on**. Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. ⚠️ **And, if you join the waitlist, your email address — with no account attached to it**, submitted on Clerk's own page. Never any training or weigh-in data. |
+| **Google**     | Provides the sign-in, and **it is the only sign-in method offered — so everyone who signs in goes through Google**. Google is told that you signed in to this app, and gives Clerk your email address, your name, your profile picture and your account identifier. Nothing about your athletes is ever sent to Google.                                                                                                |
+| **Anthropic**  | Only source code, and only when a code review is explicitly requested on a change. Never the database.                                                                                                                                                                                                                                                                                                                 |
 
 **On error reports.** The app strips cookies, request bodies, form data, query strings and headers
 before anything reaches Sentry, there is no error reporting in your browser at all, and no session
@@ -158,6 +159,7 @@ Clerk's own usage reporting is switched off in this app's code rather than left 
 | **Something you "delete" in the app**                        | ⚠️ **Hidden, not erased.** See below.                                                                                                                                  |
 | The timezone cookie                                          | One year. ⚠️ The access-code cookie listed here previously no longer exists; a browser still holding one is cleared on its next visit.                                 |
 | **Your sign-in session** (a cookie, and the record at Clerk) | Held by Clerk, not by this app. Its exact length is Clerk's setting and this notice does not yet state it — ask and you will be told. Signing out ends it immediately. |
+| **A waitlist entry** (your email address, no account)        | Held by Clerk. Its length is Clerk's setting and this notice does not yet state it — ask and you will be told. Ask to be removed at any time and you will be.          |
 | Your theme choice                                            | In your browser, until you clear it                                                                                                                                    |
 | The signed-in account identifier, used for rate limiting     | Minutes. ⚠️ No IP address is used for this any more.                                                                                                                   |
 | Server error reports                                         | 30 days                                                                                                                                                                |
@@ -253,13 +255,22 @@ shared code, briefly, and there is no code to guess. Upstash now sees only the i
 is signed in, for the same few minutes, to stop the app being hammered. That is a reduction in what
 one of our processors is given, so it is recorded here rather than only in the source.
 
-**If you are refused at the door, Clerk has already been given your details.** Signing up is by
-invitation only, and Google's consent screen appears **before** this app checks whether your address
-was invited — so an address that is then refused has already passed its email address, name and
-profile picture to Clerk. That part is certain: it follows from the order the two screens run in.
-⚠️ **What we do not yet know is whether Clerk keeps a record of a refusal**, and this notice will not
-guess. If it does, you can ask for it to be deleted — write to the address under "Asking for
-anything" — and we will tell you what was found either way.
+**There is now a waitlist, and joining it stores your email address.** The sign-in screen offers
+_"Want early access? Join waitlist"_. ⚠️ **That link leaves this app.** It opens a page at
+accounts.mat-plan.dev, run by **Clerk** — it is on a sub-domain of this app's
+address, so it looks like us, but it is theirs, and it does not carry a link to this notice. If you
+submit your address there, **Clerk stores it**, and we can see it. Nothing else is asked for and no
+account is created.
+**How long Clerk keeps a waitlist entry is Clerk's setting, and this notice does not yet state it —
+ask and you will be told.** It is not guessed at here. **You can ask to be taken off the list at any
+time**, whether or not you were ever invited: write to the address under "Asking for anything".
+
+**Signing IN still needs an invitation, and Google's consent screen comes first.** Google's screen
+appears **before** this app checks whether your address was invited — so an address that is then
+refused has already passed its email address, name and profile picture to Clerk. That part is
+certain: it follows from the order the two screens run in. ⚠️ **What we do not yet know is whether
+Clerk keeps a record of a refusal**, and this notice will not guess. If it does, you can ask for it
+to be deleted, and we will tell you what was found either way.
 
 ## What changed on 1 November 2026
 
@@ -272,8 +283,10 @@ holds your account and your sign-in sessions; Google tells Clerk your email addr
 profile picture and your Google account identifier. What each of them holds is listed in the table
 above. Nothing about your athletes is sent to either of them.
 
-**How your agreement is recorded.** Signing up is by invitation only, so the record of who was asked,
-and when, is the invitation itself — this app does not store a separate consent timestamp.
+**How your agreement is recorded.** Getting an account is still by invitation, so the record of who
+was asked, and when, is the invitation itself — this app does not store a separate consent timestamp.
+⚠️ **Joining the waitlist is not that**: it is you asking us, not us asking you, and the only record
+of it is the address Clerk holds.
 ⚠️ **This paragraph used to end _"if you would rather not have an account, say so and the shared code
 keeps working for you"_, and that stopped being true on 1 November 2026.** An adult now needs a Google
 account to get in; there is no longer a way in with the access code alone. (A child still never signs

@@ -126,6 +126,11 @@ export default function SignInPage() {
               load-bearing: a standing prohibition forbids reintroducing "nothing but an email
               address", which is false at the token. */}
           <p className="text-foreground text-sm">{SIGN_IN_COPY.processor}</p>
+          {/* ⚠️ **Describes a control inside Clerk's card, not one of ours.** The card's "Join
+              waitlist" link leaves this origin for Clerk's hosted page, which asks for an email and
+              shows no privacy link — so the disclosure has to be here, above it. `lib/constants.ts`
+              records that this copy is coupled to the Clerk access mode and must change with it. */}
+          <p className="text-foreground text-sm">{SIGN_IN_COPY.waitlist}</p>
         </div>
       )}
 

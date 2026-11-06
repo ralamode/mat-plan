@@ -171,6 +171,23 @@ export const SIGN_IN_COPY = {
   invitation:
     'Signing in needs an address this household has invited, and Google’s consent screen appears before that is checked.',
   /**
+   * 🔴 **The waitlist disclosure, and it exists because the control it describes is NOT ours.**
+   * Clerk's access mode is `Waitlist`, so its card renders "Want early access? Join waitlist" — and
+   * that link **leaves this origin** for `accounts.mat-plan.dev/waitlist`, Clerk's hosted page. That
+   * page asks for an email address and **carries no link to the privacy notice**, so a stranger
+   * would otherwise disclose an address having been told nothing. This repo's own rule is to put the
+   * fact next to the control; the control is a vendor's, so the fact has to sit above it.
+   *
+   * ⚠️ **COUPLED TO A DASHBOARD SETTING, which is the thing to know before editing.** It is true only
+   * while the Clerk access mode is `Waitlist`. In `Invite-only` (`restricted`) there is no join link
+   * and this sentence describes a control that is not on screen; in `Open` (`public`) the whole
+   * invitation framing above is wrong too. Nothing in this repo can read that mode at runtime —
+   * `clerkIsConfigured()` only knows whether keys exist — so **changing the mode means changing this
+   * copy and `docs/privacy/notice.md` in the same breath.** `runbooks.md` carries the console path.
+   */
+  waitlist:
+    'Asking for early access opens a page run by Clerk and leaves this app. It stores your email address with them; nothing else is asked for and no account is created.',
+  /**
    * 🔴 **The CDN-failure state, and it exists because `1d` made this the only door.** `clerk-js` and
    * `ui.browser.js` come from Clerk's CDN, and `@clerk/shared`'s loader waits 15s before giving up
    * (`scriptLoadTimeout ?? 15e3`). On gym LTE that is fifteen seconds of empty card — and after `1d`

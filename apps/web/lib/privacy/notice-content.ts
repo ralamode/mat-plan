@@ -629,7 +629,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
             },
             {
               "k": "text",
-              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. Three\npages can be opened without signing in — the landing page, this notice, and the sign-in screen — and\nnone of the three reads your data."
+              "text": " — no page shows your data to anyone outside your household, there is no advertising,\nno analytics about you, and your data is never sold or shared for anyone else's purposes. Three\npages can be opened without signing in — the landing page, this notice, and the sign-in screen — and\nnone of the three reads your data. ⚠️ The sign-in screen also links OUT to Clerk's waitlist page,\nwhich is not ours and is covered above."
             }
           ]
         }
@@ -1042,7 +1042,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           },
           {
             "k": "text",
-            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. Never any training or weigh-in data."
+            "text": ". Clerk holds your email address, your name, your profile picture, your Google account identifier and your sign-in sessions, and sees your IP address and browser when the sign-in screen loads. ⚠️ "
+          },
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "And, if you join the waitlist, your email address — with no account attached to it"
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": ", submitted on Clerk's own page. Never any training or weigh-in data."
           }
         ]
       },
@@ -1337,6 +1350,29 @@ export const NOTICE_BLOCKS: readonly Block[] = [
           {
             "k": "text",
             "text": "Held by Clerk, not by this app. Its exact length is Clerk's setting and this notice does not yet state it — ask and you will be told. Signing out ends it immediately."
+          }
+        ]
+      },
+      {
+        "term": [
+          {
+            "k": "strong",
+            "children": [
+              {
+                "k": "text",
+                "text": "A waitlist entry"
+              }
+            ]
+          },
+          {
+            "k": "text",
+            "text": " (your email address, no account)"
+          }
+        ],
+        "desc": [
+          {
+            "k": "text",
+            "text": "Held by Clerk. Its length is Clerk's setting and this notice does not yet state it — ask and you will be told. Ask to be removed at any time and you will be."
           }
         ]
       },
@@ -2056,13 +2092,109 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "If you are refused at the door, Clerk has already been given your details."
+            "text": "There is now a waitlist, and joining it stores your email address."
           }
         ]
       },
       {
         "k": "text",
-        "text": " Signing up is by\ninvitation only, and Google's consent screen appears "
+        "text": " The sign-in screen offers\n"
+      },
+      {
+        "k": "em",
+        "children": [
+          {
+            "k": "text",
+            "text": "\"Want early access? Join waitlist\""
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". ⚠️ "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "That link leaves this app."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " It opens a page at\naccounts.mat-plan.dev, run by "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Clerk"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " — it is on a sub-domain of this app's\naddress, so it looks like us, but it is theirs, and it does not carry a link to this notice. If you\nsubmit your address there, "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Clerk stores it"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", and we can see it. Nothing else is asked for and no\naccount is created.\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "How long Clerk keeps a waitlist entry is Clerk's setting, and this notice does not yet state it —\nask and you will be told."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " It is not guessed at here. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "You can ask to be taken off the list at any\ntime"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", whether or not you were ever invited: write to the address under \"Asking for anything\"."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Signing IN still needs an invitation, and Google's consent screen comes first."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Google's screen\nappears "
       },
       {
         "k": "strong",
@@ -2075,20 +2207,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " this app checks whether your address\nwas invited — so an address that is then refused has already passed its email address, name and\nprofile picture to Clerk. That part is certain: it follows from the order the two screens run in.\n⚠️ "
+        "text": " this app checks whether your address was invited — so an address that is then\nrefused has already passed its email address, name and profile picture to Clerk. That part is\ncertain: it follows from the order the two screens run in. ⚠️ "
       },
       {
         "k": "strong",
         "children": [
           {
             "k": "text",
-            "text": "What we do not yet know is whether Clerk keeps a record of a refusal"
+            "text": "What we do not yet know is whether\nClerk keeps a record of a refusal"
           }
         ]
       },
       {
         "k": "text",
-        "text": ", and this notice will not\nguess. If it does, you can ask for it to be deleted — write to the address under \"Asking for\nanything\" — and we will tell you what was found either way."
+        "text": ", and this notice will not guess. If it does, you can ask for it\nto be deleted, and we will tell you what was found either way."
       }
     ]
   },
@@ -2160,7 +2292,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " Signing up is by invitation only, so the record of who was asked,\nand when, is the invitation itself — this app does not store a separate consent timestamp.\n⚠️ "
+        "text": " Getting an account is still by invitation, so the record of who\nwas asked, and when, is the invitation itself — this app does not store a separate consent timestamp.\n⚠️ "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Joining the waitlist is not that"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ": it is you asking us, not us asking you, and the only record\nof it is the address Clerk holds.\n⚠️ "
       },
       {
         "k": "strong",
