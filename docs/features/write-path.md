@@ -126,7 +126,8 @@ flowchart LR
    with each step and must stay a single named helper, never an alternation.
 
    📌 **`lib/rate-limit.ts`'s MUTATION limiter and `lib/dal/session.ts` landed DARK in `1c-1` and are
-   LIVE from `1c-3b`.** Not the whole of `rate-limit.ts` — its **gate** limiter has been live since
+   LIVE from `1c-3b`.** ⚠️ Said "not the whole of `rate-limit.ts` — its **gate** limiter has been live since
+   V1-14a"; `1d` deletes that limiter, so the mutation limiter is the whole file. Live since
    V1-14a. Both carried "ships dark" / "nothing imports this module yet" contracts for two chunks
    after that stopped being true. Their docblocks are the ones a future author reads before touching either, so
    when a chunk switches a module on, its contract docblock moves in the same PR — a module that
@@ -136,7 +137,7 @@ flowchart LR
    **The source guard is SPLIT, and both halves are the claim.** `pages-are-gated.test.ts` requires,
    **per action**, the awaited `enterMutation()` call, that its refusal is returned, and that
    `actions.ts` imports the helper from `./mutation-entry` (so a local function of the same name
-   satisfies nothing); and **once, in the helper**, that the three conjuncts appear there **in
+   satisfies nothing); and **once, in the helper**, that the two conjuncts (three until `1d`) appear there **in
    order**. That order assertion only became expressible when the copies collapsed — seven slices with
    three independent presence checks could not say it — and it is load-bearing rather than stylistic:
    the limiter is keyed on the principal, so it must follow the session, and both must precede the

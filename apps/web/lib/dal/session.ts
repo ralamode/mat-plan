@@ -31,8 +31,9 @@ import { SIGN_IN_PATH } from '@/lib/constants';
  * `1c-3b` either" while that was true. From `1c-3b` the boundary was the gate **AND** a session;
  * `1d` removed the gate half, so this module is the whole boundary.
  * ✅ The obligation that gated `1d` — *"until the household scope is membership-derived, a session
- * alone would mean 'anyone this Clerk instance admits'"* — is **discharged at `1c-4`**. The gate half
- * stays until `1d` deletes it for the other reason: a request that bypasses the proxy meets nothing
+ * alone would mean 'anyone this Clerk instance admits'"* — is **discharged at `1c-4`**. ✅ **`1d` has deleted
+ * the gate half.** The reason the in-process check stays is unchanged and now carries alone: a
+ * request that bypasses the proxy meets nothing
  * without it (`SECURITY.md` refuses to call middleware a boundary; CVE-2025-29927).
  */
 

@@ -67,7 +67,7 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **Impact:** trivial. One `if` and one header append on matched responses where the cookie is present;
   nothing for an ordinary visitor (`proxy.test.ts` has the negative case).
 - **Fix:** on or after **2027-02-04**, delete `RETIRED_GATE_COOKIE`, `withRetiredCookies`, its call in
-  `proxy()`, and the five tombstone cases in `proxy.test.ts`. ⚠️ Deleting the function but leaving
+  `proxy()`, and the tombstone cases in `proxy.test.ts` (no count here — `proxy.ts` says why). ⚠️ Deleting the function but leaving
   `proxy()`'s return unwrapped is the whole change — do not also narrow `proxy()`'s return type back
   to `NextResponse`, which is wrong for an unrelated reason (`withClerk`'s auto-proxy branch).
 

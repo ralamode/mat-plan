@@ -72,8 +72,9 @@ each is a finding the first time it appears, not a later cleanup.
   in-process **session** check. ⚠️ **As of `1d` there is no gate and no bounce**: the proxy enforces
   nothing, so a missing in-process check is backed up by nothing at all.
 - **Cookies**: this app sets exactly one (`tz`, non-`httpOnly` by necessity — a client writes it).
-  The session cookies are **Clerk's**, and we do not set their `SameSite`: `@clerk/shared`'s cookie
-  handler sets none, so a client-written one takes the browser default. `.github/SECURITY.md` has the
+  The session cookies are **Clerk's**. ⚠️ `@clerk/shared`'s handler is a pure pass-through, so it
+  cannot tell you the attribute; the caller is clerk-js, which is CDN-loaded and **not in the
+  lockfile**, so it is not pinnable from the installed tree. `.github/SECURITY.md` has the
   reasoning and records a production `Set-Cookie` dump as still owed. A change to `SameSite=None`, or a
   mutation moved to `GET` (which Lax does _not_ protect), is a finding.
 - There are **no CSRF tokens anywhere, deliberately** — the three layers above cover the current

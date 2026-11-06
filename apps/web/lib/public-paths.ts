@@ -5,8 +5,10 @@ import { PRIVACY_PATH, SIGN_IN_PATH } from './constants';
  *
  * Split out of `lib/access-gate.ts` by AUTH-1 1a. It was never gate-shaped either: `access-gate.ts`
  * is deleted at 1d, and "which routes are public" is the rule that survives the gate. Pure and
- * edge-safe — no secrets, no IO — so the proxy, the pages-are-gated test and the screenshot capture
- * all read the same one definition.
+ * edge-safe — no secrets, no IO — so the proxy and the
+ * pages-are-gated test can both import it. ⚠️ Said "the proxy, the pages-are-gated test and the
+ * screenshot capture all read the same one definition" — after `1d` the proxy routes on nothing and
+ * `capture.ts` branches on nothing, so the source guard is the only reader.
  */
 
 /**

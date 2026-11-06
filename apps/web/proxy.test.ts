@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { NextRequest, type NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLERK_BOT_PROTECTION_ORIGIN, CLERK_IMG_ORIGIN } from '@/lib/clerk';
+import { CLERK_IMG_ORIGIN } from '@/lib/clerk';
 import { APP_HOME_PATH, PRIVACY_PATH, SIGN_IN_PATH } from '@/lib/constants';
 
 import { buildCsp, config, proxy } from './proxy';
@@ -291,12 +291,9 @@ describe('buildCsp', () => {
     );
   });
 
-  it.each([TEST_FRONTEND_ORIGIN, CLERK_IMG_ORIGIN, CLERK_BOT_PROTECTION_ORIGIN])(
-    'names %s nowhere while dark',
-    (origin) => {
-      expect(dark).not.toContain(origin);
-    },
-  );
+  it.each([TEST_FRONTEND_ORIGIN, CLERK_IMG_ORIGIN])('names %s nowhere while dark', (origin) => {
+    expect(dark).not.toContain(origin);
+  });
 
   it.each(['frame-src', 'worker-src'])(
     'declares no %s while dark, so it falls through to the tighter default-src',
@@ -313,8 +310,13 @@ describe('buildCsp', () => {
     expect(lit).toContain(`img-src 'self' blob: data: ${CLERK_IMG_ORIGIN}`);
   });
 
-  it('declares frame-src for the bot-protection widget', () => {
-    expect(lit).toContain(`frame-src 'self' ${CLERK_BOT_PROTECTION_ORIGIN}`);
+  // 🔴 **INVERTED at AUTH-1 1d: there must be NO `frame-src`.** It allowed Cloudflare Turnstile for
+  // Clerk's bot protection, which the production instance has OFF — a CSP source admitting an origin
+  // nothing renders. Absent, an iframe falls through to `default-src 'self'` and is blocked, which is
+  // tighter. Asserted in BOTH states, so re-adding it is a deliberate edit with a test to change.
+  it('declares no frame-src in either state — the Turnstile source is removed', () => {
+    expect(lit).not.toContain('frame-src');
+    expect(dark).not.toContain('frame-src');
   });
 
   it("declares worker-src for clerk-js's blob: worker", () => {
@@ -386,7 +388,6 @@ describe('Clerk composition', () => {
     expect(res.headers.getSetCookie()).toContain(ROTATED_COOKIE);
     // … and so do OUR request-header overrides, which the theme script and the footer depend on.
     expect(forwarded(res, 'x-nonce')).not.toBeNull();
-    expect(forwarded(res, 'x-pathname')).toBe(APP_HOME_PATH);
     expect(res.headers.get('content-security-policy')).toContain(TEST_FRONTEND_ORIGIN);
   });
 
@@ -412,12 +413,11 @@ describe('Clerk composition', () => {
  * the current pathname in a SERVER component, and `x-nonce` already proves this mechanism works.
  */
 describe('forwarded request headers', () => {
-  it.each([PRIVACY_PATH, '/p/abc'])('forwards the pathname for %s', async (path) => {
-    const { res } = await run(path);
-    expect(forwarded(res, 'x-pathname')).toBe(path);
-  });
-
-  it.each(['x-pathname', 'x-nonce'])('overwrites an INBOUND %s', async (name) => {
+  // ⚠️ **The `x-pathname` cases are GONE at AUTH-1 1d, with the header.** They pinned that the proxy
+  // forwarded the pathname and overwrote an inbound one. `SiteFooter` reads `usePathname()` now, so
+  // the header had no consumer at all; keeping its pins would have been a test guarding plumbing.
+  it('overwrites an INBOUND x-nonce', async () => {
+    const name = 'x-nonce';
     // `forward()` builds its headers with `new Headers(request.headers)` and then `.set()`s, so a
     // caller cannot inject either value. The worst case of a spoofed pathname is a wrong
     // `aria-current`, not a security property — but the overwrite is the property, so it is pinned.

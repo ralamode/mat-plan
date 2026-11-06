@@ -78,8 +78,8 @@
   the only auth limiter: **this repo now rate-limits nothing on the authentication path**, which is
   stated rather than implied. And its cookie row claimed three CSRF layers from the gate's cookie;
   the honest count is **two and a vendor default** — this app sets one cookie (`tz`), and
-  `@clerk/shared@4.41.0`'s handler sets no `sameSite`, so a client-written Clerk cookie takes the
-  browser default. ⏳ A dated production `Set-Cookie` dump capturing **`SameSite`** is owed; an earlier
+  `@clerk/shared@4.43.0`'s handler is a pure pass-through, so it cannot answer what `SameSite` is used;
+  the caller is clerk-js, CDN-loaded and outside the lockfile. ⏳ A dated production `Set-Cookie` dump capturing **`SameSite`** is owed; an earlier
   instruction said `httpOnly`, which would have measured the wrong attribute. `AGENTS.md`'s identical
   rate-limit line moved in the same PR, so the two cannot disagree.
   ✅ **`write-path.md`'s own note asked `1d` to reconcile ~a dozen copies of the auth claim, and it is

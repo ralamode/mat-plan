@@ -793,6 +793,29 @@ procedure does not exist and `data-inventory.md:413`'s retention window is still
 states only what is true (the record exists, Clerk holds it) until lit-panel finding 5's production run
 settles whether a refused sign-up leaves a record at all.
 
+### Shipped vs planned — PR A (2026-11-05)
+
+Three commitments this plan made for PR A were missing from the first implementation and were caught
+by the architecture lens on review. All three have **landed**; recorded here because the plan's own
+rule is that a deviation is stated, not left silent.
+
+| Commitment                                             | Where               | Outcome                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontendApiProxy: { enabled: false }`, pinned         | § Design 2 preamble | ✅ Landed in `proxy.ts` → `withClerk`, with the vendor precedence read off `clerkMiddleware.js` at 7.9.22 and a re-verify note for the next bump.                                                                                                                                     |
+| Remove `CLERK_BOT_PROTECTION_ORIGIN` + its `frame-src` | same                | ✅ Landed. The `proxy.test.ts` pin is **inverted** — it now asserts NO `frame-src` in either state, so re-adding it is a deliberate edit with a test to change.                                                                                                                       |
+| `lib/safe-redirect.ts` — "decide, don't go silent"     | § File-by-file      | ✅ Decided: **kept**, with the docblock rewritten to name the real surviving reason (`?from=` and `/api/sync` are the next callers, and `sign-out.tsx` already points future authors at it) **and an expiry condition** — delete it if it is still callerless when `/api/sync` lands. |
+
+⚠️ **One of this plan's own designs was wrong, and the correction is the useful part.** § Design 2's
+runtime witness said the CSP header proves the proxy ran, and that both prefetch headers could be
+sent from a test. The first half holds. The second needed a correction twice over: an implementation
+dropped `next-router-prefetch` on the measured-but-misread basis that it "never reaches the server",
+when in fact Next strips it **only from the middleware body**
+(`server/web/adapter.js` — "Headers should only be stripped for middleware") while the matcher
+evaluates `has`/`missing` on the raw request beforehand. Both arms are sent now. ⚠️ The
+matcher-mutation probe **could not be run** — `next build` rejects an object-form `config.matcher`
+entry here — so that layer rests on `proxy.test.ts`'s compiled-entry pin, and the e2e arm covers
+"skips the proxy at some other layer".
+
 ### Still open
 
 Open questions 2-4; Q1 is resolved. **No blocking critique survives**, with one gate: § The lit panel

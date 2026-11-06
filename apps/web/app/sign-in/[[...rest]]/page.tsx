@@ -17,7 +17,7 @@ import {
  * `robots: noindex`, unconditionally and permanently.
  *
  * While dark, "signing in with Google isn't switched on yet" is a worse search result for
- * "mat-plan sign in" than the password prompt `app/gate/page.tsx` already refuses to be. Once lit, an
+ * "mat-plan sign in" than the password prompt the deleted `app/gate/page.tsx` refused to be. Once lit, an
  * auth endpoint has no search value and its whole audience arrives by link — the consent screen, a
  * bookmark, the family. Unlike `/privacy`'s noindex, **this one never comes off**, and it is not
  * conditional on the keys either: a robots directive that depends on an environment variable is a
@@ -157,7 +157,8 @@ export default function SignInPage() {
           lone underlined line above a self-contained card read as a stray fragment. The disclosure
           is still on this screen and still before anything irreversible happens — a reader who taps
           Google without reading it was never going to read it above the button either. It duplicates
-          a footer destination on purpose: `SiteFooter` carries `/privacy` as chrome on every route,
+          a footer destination on purpose — on every OTHER route: `SiteFooter` carries `/privacy` as chrome
+            there, but returns `null` here,
           this is the screen's own disclosure. */}
       {/* ⚠️ `mx-auto`: `QUIET_LINK_CLASS` is `inline-flex`, so in this centred column the link
           otherwise hugs the left edge under centred text — which reads as a mistake rather than a

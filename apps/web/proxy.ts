@@ -2,7 +2,6 @@ import { clerkMiddleware } from '@clerk/nextjs/server';
 import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 
 import {
-  CLERK_BOT_PROTECTION_ORIGIN,
   CLERK_IMG_ORIGIN,
   clerkFrontendApiOrigin,
   clerkIsConfigured,
@@ -27,6 +26,13 @@ const RETIRED_GATE_COOKIE = 'mp_gate';
  *     handler. It authorizes NOTHING here; see `withClerk` below.
  *  3. Retiring `mp_gate` (AUTH-1 1d) — a `Set-Cookie` tombstone for callers who still hold the
  *     deleted gate cookie; see `withRetiredCookies`.
+ *
+ * ⚠️ **What an unauthenticated caller reaches through this layer**, now the bounce is gone:
+ * `PUBLIC_PATHS` (`/`, `/privacy`), the `/sign-in` subtree (`PUBLIC_PATH_TREES`), and Next's own 404
+ * / error boundary. Everything else renders only behind an in-process session check.
+ * 📌 Clerk's frontend-API relay at `/__clerk/*` would have been a fourth — before `1d` the bounce ran
+ * first, so a stranger could not drive it. `withClerk` disarms it explicitly rather than relying on
+ * the hostname never matching; see there.
  *
  * 🔴 **This layer ENFORCES NOTHING, and `1d` is what made that literally true.** Until `1d` it also
  * bounced un-gated requests to `/gate`, which was the one thing the proxy itself enforced. That is
@@ -92,10 +98,17 @@ export function buildCsp(nonce: string, isDev: boolean, clerkOrigin: string | nu
     `connect-src 'self'${isDev ? ' ws:' : ''}${clerkOrigin ? ` ${clerkOrigin}` : ''}`,
     // Both directives exist ONLY when Clerk does: absent, they fall through to `default-src 'self'`,
     // which is the tighter policy and the one every pre-AUTH-1 route keeps.
+    // 🔴 **`frame-src` is GONE at AUTH-1 1d, and its absence is the TIGHTER policy.** It allowed
+    // `https://challenges.cloudflare.com` for Clerk's bot-protection Turnstile iframe — a widget whose
+    // appearance depends on a dashboard setting, which was read on the production instance and is
+    // **`captcha_enabled: false`** (`runbooks.md`). So the source admitted an origin nothing renders,
+    // and `runbooks.md` already stated the rule: a dead CSP source is "not left to look like working
+    // protection". Absent, an iframe falls through to `default-src 'self'` and is blocked.
+    // ⚠️ **If bot protection is ever switched ON the widget will silently fail to render**, and
+    // sign-in will present as a button that does nothing. Put the directive back then; `lib/clerk.ts`
+    // keeps the origin and its reasoning for that day.
     ...(clerkOrigin
       ? [
-          // Clerk's bot protection renders a Cloudflare Turnstile iframe.
-          `frame-src 'self' ${CLERK_BOT_PROTECTION_ORIGIN}`,
           // clerk-js uses a blob: worker; Clerk's own default policy is `worker-src 'self' blob:`.
           `worker-src 'self' blob:`,
         ]
@@ -134,8 +147,7 @@ function withSecurityHeaders(response: NextResponse, csp: string): NextResponse 
  * **Our response is MERGED, never replaced.** `forward()` is passed as Clerk's *handler*, so Clerk
  * decorates the response WE built — `handlerResult = userHandlerResult || NextResponse.next()` in
  * `clerkMiddleware.js` — appending its `requestState` headers and its `x-middleware-request-*`
- * overrides onto ours. The `x-nonce` / `x-pathname` forwarding the theme script and the footer depend
- * on therefore survives (verified: `setRequestHeadersOnNextResponse` only re-seeds the override list
+ * overrides onto ours. The `x-nonce` forwarding the theme script depends on therefore survives (verified: `setRequestHeadersOnNextResponse` only re-seeds the override list
  * when `x-middleware-override-headers` is absent, and `NextResponse.next({ request })` has already set
  * it). Returning Clerk's OWN `next()` instead would silently drop both, and a rotated session cookie
  * in the other direction — R3's "a dark app for the only user, blamed on Clerk".
@@ -160,7 +172,17 @@ async function withClerk(
   // Clerk's `NextMiddleware` type requires the event; it only ever forwards it to the handler, which
   // here ignores it. Next always supplies one in production — `proxy.test.ts` is what calls `proxy`
   // with one argument, and it exercises the un-configured branch above.
-  const composed = clerkMiddleware(() => response) as (
+  // 🔴 **`frontendApiProxy: { enabled: false }` DISARMS Clerk's auto-proxy explicitly (AUTH-1 1d).**
+  // Read off `@clerk/nextjs@7.9.22`'s `clerkMiddleware.js`: it reads `resolvedParams.frontendApiProxy`
+  // FIRST, and only when that is falsy does it auto-arm `{ enabled: true }` for a production
+  // publishable key on a hostname `shouldAutoProxy()` matches — i.e. `*.vercel.app`. An explicit
+  // `{ enabled: false }` makes `isEnabled` false, so the relay branch can never run.
+  // ⚠️ **Probed 2026-11-04**: on the custom domain `/__clerk/v1/client` returned 307 carrying OUR CSP
+  // header, which only `withSecurityHeaders` sets — so the relay was not armed there. What this
+  // closes is any OTHER `*.vercel.app` alias serving this deployment, which no check in this repo can
+  // observe. Free, and it does not depend on a hostname staying off a vendor list.
+  // 📌 Re-verify on a `@clerk/nextjs` bump: the option name and that precedence are vendor internals.
+  const composed = clerkMiddleware(() => response, { frontendApiProxy: { enabled: false } }) as (
     request: NextRequest,
     event: NextFetchEvent | undefined,
   ) => Promise<NextResponse>;
@@ -253,12 +275,14 @@ function withRetiredCookies(request: NextRequest, response: Response): Response 
  * Forward the nonce to the renderer via request headers; Next reads it from the
  * CSP header and stamps its own script/style tags automatically.
  *
- * `x-pathname` rides the same mechanism (PRIV-2) so the root layout's footer can set
- * `aria-current="page"` while staying a SERVER component — the alternative is a `usePathname()`
- * client component on every route in the app, for one attribute. Both are `.set()` on a COPY of the
- * inbound headers, so an inbound `x-pathname` (or `x-nonce`) is overwritten on every forwarded
- * request; `proxy.test.ts` asserts that for both. The worst case of a spoof here is a wrong
- * `aria-current`, not a security property.
+ * 🔴 **`x-pathname` is DELETED at AUTH-1 1d, not deferred.** PRIV-2 forwarded it so the root
+ * layout's footer could set `aria-current="page"` while staying a SERVER component. That never
+ * worked across a client-side navigation — Next does not re-render the root layout on a soft nav, so
+ * the value was stale — and `1d` made the staleness visible by hanging the footer's visibility on it.
+ * `SiteFooter` now uses `usePathname()`, leaving this header with **no consumer at all**, so it goes
+ * with its reason rather than lingering as plumbing nobody dares remove.
+ * ⚠️ `x-nonce` is unaffected and still `.set()` on a COPY of the inbound headers, so a caller cannot
+ * inject it; `proxy.test.ts` pins that overwrite.
  *
  * `x-nonce` is also what `<ClerkProvider nonce>` is given in `app/layout.tsx`, and what
  * `@clerk/nextjs`'s own `DynamicClerkScripts` reads straight off this header — so one nonce covers
@@ -267,7 +291,6 @@ function withRetiredCookies(request: NextRequest, response: Response): Response 
 function forward(request: NextRequest, nonce: string, csp: string): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('x-pathname', request.nextUrl.pathname);
   requestHeaders.set('Content-Security-Policy', csp);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

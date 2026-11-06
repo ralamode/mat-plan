@@ -180,10 +180,17 @@ described the gate's cookie, which is deleted. What is true now:
   CLIENT writes it. It carries a timezone string and no credential.
 - **The session cookies are Clerk's**, and `SameSite` is what the row's own argument rests on —
   "Lax is what stops a cross-site POST carrying the session". ⚠️ **We do not set it and cannot
-  assert it from the lockfile.** `@clerk/shared@4.41.0`'s cookie handler (`dist/cookie.mjs`) is a
-  thin `js-cookie` wrapper that sets **no `sameSite` of its own** — read at that version; its only
-  mention of the attribute is a docstring about removal. So a client-written Clerk cookie takes the
-  **browser default**, not a uniform `Lax` we chose.
+  pinned from the lockfile.** `@clerk/shared@4.43.0`'s `createCookieHandler` (`dist/cookie.mjs`) is a
+  pure pass-through — `set(newValue, options = {}) { Cookies.set(cookieName, newValue, options) }` —
+  so it does not choose the attribute and **cannot answer the question either way**. The caller does,
+  and the caller is **clerk-js, fetched from a CDN at a floating major and absent from the lockfile**.
+  🔴 **An earlier version of this bullet said the handler "sets no `sameSite`, so the cookie takes the
+  browser default".** That conflated "this wrapper sets none" with "nobody sets one", and it is wrong:
+  clerk-js's published source sets `sameSite` explicitly — `Lax`, except when partitioned, in a
+  cross-origin iframe (which this app's `frame-ancestors 'none'` prevents) or on a listed third-party
+  host. ⚠️ That reading is from clerk-js's own repository, **not from anything installed here**, so it
+  is reasoning about a dependency this repo cannot pin — which is why the production observation below
+  is what settles it.
 - ⚠️ **Do not write "`httpOnly` does not apply".** That is true on the custom domain, where clerk-js
   reads the cookies from JavaScript. On the `*.vercel.app` alias Clerk's auto-proxy forwards the
   Frontend API's own `Set-Cookie` verbatim, with whatever attributes Clerk chooses — which can
@@ -268,7 +275,9 @@ explicit check is a **P0**. The same applies to any mutation moved to `GET`, whi
 ## Transport / headers
 
 - HSTS, nonce-based CSP (middleware), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy`, `Permissions-Policy`. Secure / HttpOnly / SameSite cookies.
+  `Referrer-Policy`, `Permissions-Policy`. ⚠️ **No credential cookie is set by this app** — the
+  only one it writes is `tz`, deliberately neither `Secure` nor `HttpOnly` because a client writes it;
+  the session cookies are Clerk's (see Injection / CSRF).
 - **CORS closed** — the LLM calls server-to-server, so no browser origin needs opening.
 
 ## Privacy (minors)

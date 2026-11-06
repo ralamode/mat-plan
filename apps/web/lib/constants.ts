@@ -162,9 +162,11 @@ export const SIGN_IN_COPY = {
    * Copy must never claim a precondition the endpoint does not honour.
    *
    * Statement of fact: no imperative, and no "yet" — an uninvited account is never linked.
-   * ⚠️ **No contact address here**, deliberately: `notice.md` carries one, this page is public and
-   * (from `1d`) indexed, and the footer reaches the notice in two taps. Recorded so the next author
-   * does not read the absence as an oversight.
+   * ⚠️ **No contact address here**, deliberately: `notice.md` carries one, this page is public, and the
+   * privacy link reaches the notice in one tap. ⚠️ An earlier draft said this page is "(from `1d`)
+   * indexed" — it is not; `/sign-in` sets `robots: noindex` permanently. It is **`/privacy`** that
+   * became indexable at `1d`. Recorded so the next author reads neither the absence nor the indexing
+   * claim as fact.
    */
   invitation:
     'Signing in needs an address this household has invited, and Google’s consent screen appears before that is checked.',

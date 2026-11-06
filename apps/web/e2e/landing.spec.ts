@@ -196,31 +196,47 @@ test('a forwarded-spoofed POST to a public path with a real action id runs nothi
  * is authenticated. `proxy.test.ts` pins the matcher's SHAPE; this pins that nothing skips the proxy
  * at any other layer, such as an early `return` keyed on the header.
  *
- * ✅ **Probed RED**: an early `if (request.headers.get('purpose') === 'prefetch') return
- * NextResponse.next();` in `proxy()` fails this test. That is the exact SEC-1 mutation, at the layer
- * the matcher pin cannot see.
+ * ✅ **Probed RED** by an early `return NextResponse.next()` inside `proxy()` — the "skips the proxy
+ * at some other layer" case, which the matcher pin cannot see.
+ * ⚠️ **The matcher-condition probe could NOT be run, and saying so is the point.** Re-adding SEC-1's
+ * own `missing: [{ type: 'header', key: 'next-router-prefetch' }]` requires an OBJECT entry in
+ * `config.matcher`, and `next build` rejects that shape here — twice, including through a cast. So
+ * the historical regression is currently blocked one step earlier than this test, by the config's
+ * own typing plus `proxy.test.ts`'s compiled-entry pin. This arm is kept because that is a weak
+ * barrier (a future Next may widen the type) and because its MECHANISM is source-verified above —
+ * not because a probe demonstrated it.
  */
 test('a prefetch-flagged request still goes through the proxy (SEC-1)', async ({ browser }) => {
   const context = await browser.newContext();
 
-  // 🔴 **`purpose: prefetch` ONLY, and the reason is measured, not assumed.** A first version of this
-  // test also sent `next-router-prefetch: 1` — the header SEC-1's matcher condition actually named.
-  // **It never reaches the server.** Probed by having `proxy.ts` echo what it saw: with
-  // `{ 'next-router-prefetch': '1' }` the server reports `false`; with `{ purpose: 'prefetch' }` it
-  // reports `prefetch`. Next reserves the `next-router-*` namespace and strips it from an external
-  // request, so an assertion on that arm would have passed while exercising nothing.
-  // ⚠️ That is worth knowing beyond this test: of SEC-1's two prefetch signals, **only `purpose` is
-  // client-settable**, so it is the one an attacker has and the only one worth a runtime witness.
-  for (const route of [APP_HOME_PATH, SEED_PROFILE_ROUTE]) {
-    const res = await context.request.get(route, {
-      headers: { purpose: 'prefetch' },
-      maxRedirects: 0,
-    });
-    expect(
-      res.headers()['content-security-policy'],
-      `${route}: no CSP — the proxy did not run on a prefetch-flagged request`,
-    ).toContain("frame-ancestors 'none'");
-    expect(res.headers()['x-content-type-options'], `${route}: no nosniff`).toBe('nosniff');
+  // 🔴 **BOTH headers, and the first one is the whole point — a correction to an earlier version of
+  // this test.** That version sent only `purpose: prefetch`, on the committed claim that
+  // `next-router-prefetch` "never reaches the server". **That claim was wrong**, and wrong in the
+  // direction that matters: it told the next author SEC-1's actual header was not attacker-settable.
+  //
+  // What is true, read off the installed Next 16.4.3: `next-router-prefetch` is in `FLIGHT_HEADERS`
+  // (`client/components/app-router-headers.js:104-110`), and `server/web/adapter.js:147-157` deletes
+  // those from the request — under the comment **"Headers should only be stripped for middleware"**.
+  // So it is invisible INSIDE `proxy()`, which is why an echo probe from there reports `false`.
+  // ⚠️ **The matcher sees it.** `shared/lib/router/utils/middleware-route-matcher.js:20` evaluates
+  // `matchHas(req, query, matcher.has, matcher.missing)` on the raw request, BEFORE the adapter builds
+  // the middleware request — and the matcher is exactly where SEC-1's `missing:` condition lived.
+  // Dropping this arm would have left the one regression this test is named for undetectable.
+  const PREFETCH_HEADERS: Record<string, string>[] = [
+    { 'next-router-prefetch': '1' },
+    { purpose: 'prefetch' },
+    { 'next-router-prefetch': '1', purpose: 'prefetch' },
+  ];
+  for (const headers of PREFETCH_HEADERS) {
+    for (const route of [APP_HOME_PATH, SEED_PROFILE_ROUTE]) {
+      const label = `${route} with ${Object.keys(headers).join('+')}`;
+      const res = await context.request.get(route, { headers, maxRedirects: 0 });
+      expect(
+        res.headers()['content-security-policy'],
+        `${label}: no CSP — the proxy did not run on a prefetch-flagged request`,
+      ).toContain("frame-ancestors 'none'");
+      expect(res.headers()['x-content-type-options'], `${label}: no nosniff`).toBe('nosniff');
+    }
   }
 
   // 🔴 **Non-vacuity control.** A matcher-EXCLUDED path must carry no CSP — otherwise this test would
