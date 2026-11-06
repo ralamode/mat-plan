@@ -41,9 +41,25 @@ function parseGuide(path) {
       continue;
     }
     if (inOwns) {
+      // 🔴 A COMMENT INSIDE `owns:` MUST NOT END THE BLOCK. The original `else if` treated every
+      // non-item, non-blank line as the end of the list, so the first `# …` note silently truncated
+      // it: `write-path.md` DECLARED thirteen entries and this parser READ three, leaving ten
+      // unguarded by both rot checks — `mutation-entry.ts`, `mutating-actions.ts`,
+      // `packages/db/src/writers/`, `scope.ts`, `seed.ts` and five more. The guard printed OK
+      // throughout, which is the worst failure mode a guard has: the rule was not wrong, it was not
+      // being applied, and it said nothing.
+      // ⚠️ Both comment forms are real. The WHOLE-LINE form is what `write-path.md` uses (four of
+      // them). The TRAILING form is what `docs/features/README.md`'s Format section documents —
+      // `- packages/db/src/writers/ # a trailing slash owns everything beneath` — and the old parser
+      // took the comment as part of the path, so rot check #1 would have failed on the comment text
+      // had anyone written the documented syntax.
+      const trimmed = line.trim();
+      if (trimmed.startsWith('#')) continue;
       const item = /^\s+-\s+(.+?)\s*$/.exec(line);
-      if (item) owns.push(item[1]);
-      else if (line.trim() !== '') inOwns = false;
+      if (item) {
+        const entry = item[1].replace(/\s+#.*$/, '').trim();
+        if (entry) owns.push(entry);
+      } else if (trimmed !== '') inOwns = false;
     }
   }
   return { path, feature: feature ?? path, owns };

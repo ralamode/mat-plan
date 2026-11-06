@@ -481,6 +481,26 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing
   version-sensitive code (per `apps/web/AGENTS.md`). (V0-4)
 
+## Guards that pass while guarding nothing
+
+- **`guides:check` reported OK while enforcing 3 of `write-path.md`'s 13 `owns:` entries.** → The
+  frontmatter parser ended the `owns:` list at the first line that was not a `- item`, and a `#`
+  comment is such a line (`check-feature-guides.mjs`, the `else if (line.trim() !== '')` branch).
+  `write-path.md` carries four explanatory comments inside `owns:`, so **ten paths — including
+  `mutation-entry.ts`, `mutating-actions.ts`, `packages/db/src/writers/`, `scope.ts` and `seed.ts` —
+  were covered by neither rot check**, and the guard printed "OK" on every PR that touched them.
+  The two other guides have no in-block comments and parsed fully, which is why nothing ever looked
+  wrong. ⚠️ **The documented syntax was broken too:** `docs/features/README.md`'s Format section shows
+  `- packages/db/src/writers/ # a trailing slash owns everything beneath`, and the parser took the
+  comment as part of the path, so rot check #1 would have failed on the comment text had anyone
+  written it that way.
+  → **Two lessons, and the second is the general one.** Specifically: skip whole-line comments inside
+  a list block rather than treating them as its end, and strip a trailing ` # …` from each item.
+  Generally: **this guard was the only one of ten with no self-test**, which is exactly why the bug
+  survived — the fix ships `check-feature-guides.test.sh`, whose comment cases were probed RED against
+  the old parser (case 3 exited **0**, silently owning nothing). A guard without a self-test is a
+  claim, not a check. (`fix/dx-guides-owns-parser`)
+
 ## Docs / claims that go stale
 
 - **A committed comment or doc says "until `<chunk>`" and that chunk has now shipped, so the file
