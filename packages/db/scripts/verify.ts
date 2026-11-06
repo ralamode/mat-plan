@@ -6882,4 +6882,93 @@ console.log(
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-0 — `profiles.client_id` is a NON-PARTIAL unique, and `archived_at` is not a soft delete.
+//
+// 🔴 THE PROPERTY UNDER TEST IS AN ABSENCE: `uq_profiles_client_id` has NO `WHERE` clause. An absence
+// cannot be proved by reading the catalog alone — a `WHERE` that is present but wrong reads the same
+// as absent to a naive check — so each case below makes the database REFUSE a real insert, with the
+// first row in a state (`archived_at` set, then `deleted_at` set) that WOULD have freed the slot had
+// the index been partial like every other `client_id` arbiter in this schema
+// (docs/decisions/0008-deletion.md:127).
+//
+// Its own throwaway household (DB N3), so nothing here can be satisfied by another block's rows.
+{
+  const A0_HH = '019826b4-0000-7000-8000-00000003a000';
+  const A0_P1 = '019826b4-0000-7000-8000-00000003a001';
+  const A0_P2 = '019826b4-0000-7000-8000-00000003a002';
+  const A0_P3 = '019826b4-0000-7000-8000-00000003a003';
+  const A0_P4 = '019826b4-0000-7000-8000-00000003a004';
+  const A0_CLIENT_ID = '019826b4-0000-7000-8000-00000003acc1';
+
+  await db.insert(schema.households).values({ publicId: A0_HH, name: 'Verify PROF-1 a-0 HH' });
+  const [a0Hh] = await db
+    .select({ id: schema.households.id })
+    .from(schema.households)
+    .where(eq(schema.households.publicId, A0_HH));
+
+  const addAthlete = (publicId: string, clientId: string | null) =>
+    db.insert(schema.profiles).values({
+      publicId,
+      clientId,
+      name: 'A0 Athlete',
+      kind: 'kid',
+      householdId: a0Hh.id,
+    });
+
+  // 1 · The ordinary case: the key is taken, so a replay-shaped second insert is refused.
+  await addAthlete(A0_P1, A0_CLIENT_ID);
+  await expectRejectedBy('uq_profiles_client_id', () => addAthlete(A0_P2, A0_CLIENT_ID));
+
+  // 2 · ARCHIVED does not free the slot. This is the case PROF-1b depends on: archive the athlete,
+  // retry the add, and get a refusal rather than a twin.
+  await db
+    .update(schema.profiles)
+    .set({ archivedAt: new Date() })
+    .where(eq(schema.profiles.publicId, A0_P1));
+  await expectRejectedBy('uq_profiles_client_id', () => addAthlete(A0_P2, A0_CLIENT_ID));
+
+  // 3 · SOFT-DELETED does not free it either — the half that distinguishes this index from every
+  // other `client_id` arbiter. A partial `WHERE deleted_at IS NULL` would ACCEPT this insert, so a
+  // pass here is the direct evidence that the predicate is absent.
+  await db
+    .update(schema.profiles)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.profiles.publicId, A0_P1));
+  await expectRejectedBy('uq_profiles_client_id', () => addAthlete(A0_P2, A0_CLIENT_ID));
+
+  // 4 · NULL keys coexist, which is what makes the column nullable usable at all: the seed and
+  // `db:correct` create profiles with no client key, and NULLs are DISTINCT in a unique index. If
+  // this ever fails, the column was made NOT NULL or the index gained a `coalesce`.
+  await addAthlete(A0_P3, null);
+  await addAthlete(A0_P4, null);
+  const nullKeyed = await db
+    .select({ publicId: schema.profiles.publicId })
+    .from(schema.profiles)
+    .where(and(eq(schema.profiles.householdId, a0Hh.id), isNull(schema.profiles.clientId)));
+  assert.equal(
+    nullKeyed.length,
+    2,
+    'PROF-1 a-0: two profiles with a NULL client_id coexist (NULLs are distinct in a unique index)',
+  );
+
+  // 5 · `archived_at` defaults to NULL — a new athlete is not born archived. Read off row 3, which
+  // nothing above touched, so this measures the column DEFAULT rather than an UPDATE.
+  const [freshRow] = await db
+    .select({ archivedAt: schema.profiles.archivedAt })
+    .from(schema.profiles)
+    .where(eq(schema.profiles.publicId, A0_P3));
+  assert.equal(
+    freshRow.archivedAt,
+    null,
+    'PROF-1 a-0: an inserted profile that never named archived_at is NOT archived',
+  );
+
+  console.log(
+    '✓ PROF-1 a-0: profiles.client_id is non-partial unique — the slot survives BOTH archived_at ' +
+      'and deleted_at on the holder (the property every other client_id arbiter lacks), NULL keys ' +
+      'coexist, and archived_at defaults to NULL',
+  );
+}
+
 console.log('✓ verify passed');

@@ -16,8 +16,10 @@ PR rules". Traps: [docs/lessons.md](../../../docs/lessons.md) → "Database / mi
 
 - There is one file, `packages/db/src/schema.ts`. Casing is `snake_case` via `drizzle.config.ts`.
 - Conventions: `bigint` identity PK, `public_id` UUIDv7 for anything that leaves the server,
-  `client_id` UUIDv7 with a **partial** unique index `WHERE deleted_at IS NULL`, `timestamptz`
-  everywhere, `deleted_at` for soft delete, an FK plus a covering index on every ref, and
+  `client_id` UUIDv7 with a **NON-partial** unique index for anything new — a partial arbiter stops
+  arbitrating once the row hides, so a replay inserts a twin
+  ([ADR 0008](../../../docs/decisions/0008-deletion.md) 3.4; `uq_profiles_client_id`, migration
+  `0020`, is the first built that way) — `timestamptz` everywhere, `deleted_at` for soft delete, an FK plus a covering index on every ref, and
   `idx_<table>_<cols>` naming.
 - Enums are **reference tables seeded from a `packages/shared` as-const array**, or text + CHECK for
   status. Never `pgEnum`.

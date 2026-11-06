@@ -132,7 +132,8 @@ between two files. Enforced by review.
 ```
 Keys:   internal PK = bigint GENERATED ALWAYS AS IDENTITY (never serial/UUIDv4 PK).
         Public/URL/API IDs = UUIDv7 (non-enumerable → anti-IDOR).
-        client_id = UUIDv7, NOT NULL, UNIQUE (partial: WHERE deleted_at IS NULL).
+        client_id = UUIDv7, UNIQUE, non-partial for NEW ones (ADR 0008 3.4); NOT NULL unless a
+        server-side creator needs NULL (say so in the column's docblock).
 Time:   all timestamptz, UTC, created_at DEFAULT now(). deleted_at NULL for soft delete.
         LWW: compare CLIENT-supplied updated_at/version (not server clock); upsert
         setWhere incoming >= stored. (offline clock-skew correctness)

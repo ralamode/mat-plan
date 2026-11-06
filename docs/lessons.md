@@ -513,6 +513,14 @@ main` in the main checkout (it stays on `main`; see `ship-pr` step 8), then spot
   your final work (`git show HEAD:<file> | grep <distinctive line>`). If missing, cherry-pick the dropped commits forward on a follow-up branch. (V0-11 → #24)
 - **Commit rejected: "subject must not be sentence-case / start-case".** → commitlint wants a
   **lowercase** subject start. → `feat(x): add …`, not `feat(x): Add …` / `feat(x): CI …`.
+- **Commit rejected: `type must be one of [build, chore, ci, docs, feat, fix, perf, refactor, revert,
+style, test]` — on a `db/…` branch.** → ⚠️ **`db` is a valid BRANCH type and NOT a valid commit
+  type.** AGENTS.md → "Git & branch workflow" lists `type ∈ feat|fix|chore|docs|refactor|perf|test|db`
+  for **branch names**; commitlint's `type-enum` is the Conventional Commits set, which has no `db`.
+  So every migration PR starts on a branch whose name invites a commit subject the hook then refuses.
+  → A dark migration is **`feat(<chunk>)`** — the precedent is `feat(auth-1b): household_members,
+migration 0019, and the claim correction — all dark` (#308). Keep the `db/` branch name; it is only
+  the commit type that differs. (PROF-1 a-0)
 
 ## tsx / scripts
 

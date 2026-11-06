@@ -208,6 +208,18 @@ export const profiles = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
+    /**
+     * PROF-1 a-0 — offline/replay idempotency for "add an athlete", UNIQUE via
+     * `uq_profiles_client_id` below, **non-partial** (see that index's note).
+     *
+     * 🔴 **NULLABLE, unlike every other `client_id` in this schema**, and deliberately: the seed and
+     * `db:correct` corrections create profiles server-side with no client to mint a key. NOT NULL
+     * would need a backfill plus the `NOT VALID` -> `VALIDATE` split — two more migrations — to store
+     * a fabricated UUID that means nothing. NULLs are distinct in a unique index, so seeded rows
+     * coexist without colliding. `addAthleteSchema` requires it for every app-created row, so this is
+     * a server-side-creator allowance, not an opening in the write path.
+     */
+    clientId: uuid('client_id'),
     name: text('name').notNull(),
     kind: text('kind').notNull(), // mirrors PROFILE_KINDS in @mat-plan/shared
     // V1-1a additive: household_id is the authz root (spec.md §4). Kept NULLABLE at the
@@ -222,11 +234,35 @@ export const profiles = pgTable(
     // it — see docs/tech-debt.md + the promotion trigger). `.$type` is a compile cast only; every read
     // zod-parses via `resolveRoutine` (the value is untrusted).
     routineConfig: jsonb('routine_config').$type<RoutineConfig>(),
+    /**
+     * PROF-1 b — archive an athlete. **Archive is NOT deletion and NOT a security boundary**:
+     * `deleted_at` is the soft delete; this is "not currently training". An archived athlete keeps
+     * every row, still exports, and is still reachable by anyone who opens their link — only the
+     * picker drops them (`listProfiles`). The privacy notice says so in those terms.
+     *
+     * ⚠️ **Never add this to `isLiveProfile`'s predicate** (`writers/ownership.ts`). That predicate is
+     * the ownership seam; folding a UX filter into it would turn "archived" into a 404 and make
+     * archive silently irreversible from the athlete's own page. Archive is a LIST filter —
+     * `docs/features/write-path.md` carries the invariant.
+     */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
     check('profiles_kind_check', sql`${t.kind} in ('kid', 'adult')`),
     index('idx_profiles_household').on(t.householdId), // covering index for the household FK
+    /**
+     * 🔴 **NON-PARTIAL — the only `client_id` arbiter in this schema that is.** ADR 0008 decision 3.4
+     * applied at birth rather than retrofitted. Every older arbiter is `WHERE deleted_at IS NULL`, so
+     * a soft-deleted row stops being an `ON CONFLICT` target and a replay inserts a TWIN
+     * (`docs/decisions/0008-deletion.md:127`); V1-9b's B0 exists to re-predicate five of them. With no
+     * predicate, an archived — or later deleted — profile keeps its slot, so a retried "add" resolves
+     * to the same athlete instead of minting a second one.
+     *
+     * ⚠️ The consequence, stated so nobody "fixes" it: a `client_id` can never be reused for a
+     * different athlete, even after the first is gone. That is the point, not an oversight.
+     */
+    uniqueIndex('uq_profiles_client_id').on(t.clientId),
   ],
 );
 
