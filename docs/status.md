@@ -10,6 +10,12 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
+**`CRUD-1` has started: `PROF-1` a-0 is the first chunk, migration `0020`** — `profiles.client_id`
+(non-partial unique, the slot survives archive **and** soft delete) and `profiles.archived_at`, both
+dark. The authority model landed first, in the spec rather than the plan: _anyone in the household
+records and corrects; the owner decides who belongs to it_, so archive is owner-only and **restore is
+any-member** (2026-11-06). Next: `a-g`, `a-r`, the `b-s` seam, `b`.
+
 🔴 **AUTH-1 is COMPLETE: the shared access code is gone, and a Clerk session with a household
 membership is the only way in (through 1d, 2026-11-05).**
 `@clerk/nextjs` is pinned and deployed, the CSP is widened for Clerk **by exact origin derived from the

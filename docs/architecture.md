@@ -405,6 +405,15 @@ erDiagram
   units ||--o{ metric_definitions : "unit"
   units ||--o{ entries : "unit"
 
+  profiles {
+    bigint id PK
+    uuid public_id UK "anti-IDOR — the athlete's id for life"
+    uuid client_id "UNIQUE NON-partial (PROF-1 a-0) — the slot is never freed"
+    bigint household_id FK "the authz root — isLiveProfile's household conjunct"
+    text kind "kid｜adult — marks a row as a minor; NOT an authority input"
+    timestamptz archived_at "not currently training — a LIST filter, never in isLiveProfile"
+    timestamptz deleted_at "the soft delete — distinct from archived_at"
+  }
   entries {
     bigint id PK
     uuid public_id UK "anti-IDOR"
