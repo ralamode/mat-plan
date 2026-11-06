@@ -53,7 +53,7 @@ vi.mock('@/lib/clerk', async (importOriginal) => {
 
 /**
  * A stand-in for `clerkMiddleware()` that mimics the ONE contract this proxy depends on, read off
- * `@clerk/nextjs@7.9.15`'s `clerkMiddleware.js`: it calls the handler, and
+ * `@clerk/nextjs@7.9.22`'s `clerkMiddleware.js`: it calls the handler, and
  * `handlerResult = userHandlerResult || NextResponse.next()` — so OUR response is the one decorated.
  * It then appends a rotated session cookie the way `requestState.headers.forEach(… append)` does.
  *
