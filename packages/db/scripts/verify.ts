@@ -28,6 +28,7 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  PROFILE_NAME_MAX,
   DAY_ROLES,
   newId,
   PROGRAM_SEED,
@@ -7056,12 +7057,19 @@ console.log(
 // household's name change". That is why `renameProfile` lives in `packages/db` rather than the app
 // DAL, next to a `updateProfileRoutine` that reasonably does not.
 //
-// ⚠️ **It rides A_SCOPE and B_SCOPE, and mints nothing** — `src/scope.test.ts` pins this file to
-// exactly two named scopes (the TEN-1 plan's R5(1)), and that guard is right: a scope minted beside
-// the assertion that uses it makes a wrong household invisible in review. So the isolation comes
-// from the ROWS instead: every profile below is inserted by this block, prefixed `A-r`, with
-// public_ids in its own range. A refusal here therefore cannot be satisfied by the absence of rows
-// some earlier block happened to leave behind, and nothing seeded is renamed.
+// ⚠️ **It rides A_SCOPE and B_SCOPE, mints nothing, and UNWRAPS nothing** — `src/scope.test.ts` pins
+// this file to exactly two named scopes (the TEN-1 plan's R5(1)) and, separately, pins the unwrap
+// `scope.householdId` to one module. Both guards are right, so the fixture inserts below take the
+// RAW ids the script already holds (`households[0].id`, `verifyHh.id`), exactly as every sibling
+// fixture block does, and the two scopes appear only where they are the thing under test — in the
+// `renameProfile` calls. 🔴 The first draft of this block unwrapped `A_SCOPE` with a `.householdId`
+// and the guard STAYED GREEN: its regex was case-sensitive on `[Ss]cope`, so a SCREAMING_CASE
+// constant walked past it. Found by the security lens on #350; the regex is now `/i` and this block
+// is what proved the widening non-vacuous.
+//
+// The isolation comes from the ROWS: every profile below is inserted by this block, prefixed `A-r`,
+// with public_ids in its own range. A refusal here therefore cannot be satisfied by the absence of
+// rows some earlier block happened to leave behind, and nothing seeded is renamed.
 {
   const AR_A_P = '019826b4-0000-7000-8000-00000004a001';
   const AR_B_P = '019826b4-0000-7000-8000-00000004b001';
@@ -7078,20 +7086,25 @@ console.log(
   };
 
   await db.insert(schema.profiles).values([
-    { publicId: AR_A_P, name: 'A-r Athlete A', kind: 'kid', householdId: A_SCOPE.householdId },
-    { publicId: AR_B_P, name: AR_B_ORIGINAL, kind: 'kid', householdId: B_SCOPE.householdId },
+    {
+      publicId: AR_A_P,
+      name: 'A-r Athlete A',
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+    },
+    { publicId: AR_B_P, name: AR_B_ORIGINAL, kind: PROFILE_KIND.kid, householdId: verifyHh.id },
     {
       publicId: AR_A_DELETED,
       name: 'A-r Deleted',
-      kind: 'kid',
-      householdId: A_SCOPE.householdId,
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
       deletedAt: new Date(),
     },
     {
       publicId: AR_A_ARCHIVED,
       name: 'A-r Archived',
-      kind: 'kid',
-      householdId: A_SCOPE.householdId,
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
       archivedAt: new Date(),
     },
   ]);
@@ -7163,6 +7176,23 @@ console.log(
     'PROF-1 a-r: the archived athlete’s new name is persisted',
   );
 
+  // 5b · 🔴 **The COLUMN accepts what the SCHEMA accepts.** `profiles.name` is unbounded `text` and
+  // `PROFILE_NAME_MAX` is an app-input cap, so nothing else in the repo ties the two together — a
+  // future `varchar(20)` would pass every unit test (they validate the schema, not the column) and
+  // fail only in production. `packages/shared/src/profiles.ts` names `db:verify` as the consumer
+  // that closes this; it was a claim before this assertion existed.
+  const AT_CAP = 'W'.repeat(PROFILE_NAME_MAX);
+  assert.equal(
+    (await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP))?.publicId,
+    AR_A_P,
+    'PROF-1 a-r: a name at PROFILE_NAME_MAX is accepted by the column',
+  );
+  assert.equal(
+    await nameOf(AR_A_P),
+    AT_CAP,
+    'PROF-1 a-r: …and stored in full, not silently truncated',
+  );
+
   // 6 · The rename touches exactly ONE row. The seeded profile in household A is the witness: a
   // predicate that lost its `public_id` conjunct would rename every live profile in the household
   // and still return a row, so every assertion above would pass. This is the case that catches it.
@@ -7175,8 +7205,8 @@ console.log(
   console.log(
     '✓ PROF-1 a-r: rename is scoped by public_id ∧ live ∧ household — the wrong household (BOTH ' +
       'directions), a soft-deleted row and an unknown id each update 0 rows and leave the stored ' +
-      'name intact (criterion 4 as a row count), only ONE row is touched, and an ARCHIVED athlete ' +
-      'is still renameable',
+      'name intact (criterion 4 as a row count), only ONE row is touched, an ARCHIVED athlete is ' +
+      'still renameable, and the COLUMN stores a PROFILE_NAME_MAX name in full',
   );
 }
 

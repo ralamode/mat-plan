@@ -44,7 +44,7 @@
   becomes **`← All athletes`** and the picker subhead becomes **"Tap your name to start logging."**
   (PUX-8 — "athlete" is the human noun, and the prototype's wording names the gesture);
   `PICKER_EMPTY_COPY.next` stops sending a first-run reader to the editor criterion 11 unlinks; and
-  `components/announcer.tsx` arrives early from PR b so the `role="status"` line is not copied a
+  `components/ui/announcer.tsx` arrives early from PR b so the `role="status"` line is not copied a
   fifth time.
   **Privacy:** `profiles.name` becomes the **third** UI-editable free-text field (the inventory said
   two). No new column, no new processor, no new retention — the `UPDATE` **overwrites** and keeps no
@@ -52,3 +52,33 @@
   `previous_name` column, so **a mis-correction is unrecoverable from the app**. The name reaches
   neither Sentry (no `formData`, no `headers`) nor the CSV export. **The published notice needs no
   edit** — it already says the app holds "a name for each athlete… whatever you type".
+  🔴 **A six-lens review panel on the pushed branch found seven things no gate did**, four of them
+  claims the code or the docs asserted and did not deliver — on a PR that was green on 1452 tests,
+  `db:verify`, 13 mutation patches, 66 e2e, lint, typecheck and the audit. The headline three:
+  **(1)** the criterion-11 e2e assertion **could not fail** — `/Edit routine/` never matched the link
+  it proved absent (`→ Edit {name}'s routine`), so it was 0 before the PR and would stay 0 if the
+  link came back; it asserts the **destination** now. **(2)** `db:verify`'s new block was the first
+  code outside `ownership.ts` to unwrap the household scope, and `scope.test.ts` **stayed green** —
+  its regex was case-sensitive on `[Ss]cope`, so `A_SCOPE.householdId` walked past the one guard
+  standing behind ADR 0006; the block takes raw ids now and **the regex is `/i`, probed red**.
+  **(3)** the `role="status"` "Name saved." line rendered **nothing** in either mode —
+  `useOnActionSuccess` seeds `useState(state)`, so the no-JS re-render it was written for never fires
+  the transition; `saved` is derived from `state.ok` now.
+  **Three lenses converged independently** on a fourth: `window.history.length > 1` is not "arrived
+  from inside the app" — it is true in almost every phone tab — so `router.back()` sent a parent who
+  typed the URL **off-site** after a successful save. `?from=` is built as D6 specified, with an e2e
+  that drives the outside-app branch. Two more: a zero-width space stored an invisible name, and a
+  NUL byte passed zod and made Postgres **throw past the typed envelope**.
+  ⚠️ **The notice did need an edit after all.** The "no edit owed" conclusion held on what is stored
+  but skipped `notice.md`'s **"Two text boxes have no filter"** — the plain-language derivation of
+  the inventory count this PR changed to three. It now reads three, says which of them reach the
+  export, and adds one sentence that a rename keeps no record of the old name.
+  Also from the panel: **"→ Rename {name}"** replaces "Edit" (one field, and under the day's logged
+  entries "Edit" read as _edit today_); the Kind block becomes one muted line instead of a `<dl>`
+  whose label out-weighted the real one; a refusal returns focus to the field; `NAV_LINK_CLASS`
+  replaces five hand-typed copies; `athletePath` is swept through `actions.ts` and its tests so
+  **zero `/p/${…}` literals remain** outside the helper; `AthleteForm` becomes `RenameForm` (a-1
+  cannot reuse it); the announcer moves to `components/ui/`; and `docs/architecture.md` §2b gains
+  the route and the second action module. One finding is **deferred with its reason**: a stale edit
+  tab silently overwrites a concurrent rename, which the no-history decision makes unrecoverable —
+  `tech-debt.md` carries it rather than a behaviour change made under review pressure.

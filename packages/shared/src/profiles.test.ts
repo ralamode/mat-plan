@@ -6,6 +6,9 @@ import { athleteNameSchema, PROFILE_NAME_MAX, renameAthleteSchema } from './prof
 const PROFILE_ID = '019826b4-0000-7000-8000-0000000000a1';
 
 /**
+ * ⚠️ **Every name below is INVENTED** — see `text.test.ts`'s note. They exercise a transform (a
+ * collapse, a trim, a combining mark), not a person.
+ *
  * PROF-1 a-r — the name boundary. Every case here is one a crafted body or a real parent can produce,
  * and the transform cases pin what gets STORED, not just what is accepted.
  */
@@ -38,7 +41,11 @@ describe('athleteNameSchema — what is refused', () => {
     ['   ', 'whitespace only — trims to blank'],
     ['\u0301\u0302', "combining marks only: it would store, render as nothing, and fold to ''"],
     ['a'.repeat(PROFILE_NAME_MAX + 1), 'one over the cap'],
-    ['Ada\nMae', 'an interior line break'],
+    // 🔴 Both found by a review lens, both probed accepted BEFORE the fix.
+    ['\u200b', 'a zero-width space only — it would store and render as nothing'],
+    ['\u200b\u2060\u00ad', 'format characters only — ZWSP, word joiner, soft hyphen'],
+    ['\u0000Ada', 'a NUL byte — `text` rejects it, so this THREW past the typed envelope'],
+    ['Ada\u0007', 'any other control character'],
   ])('refuses %j (%s), with exactly one message', (input) => {
     const parsed = athleteNameSchema.safeParse(input);
     expect(parsed.success).toBe(false);
@@ -55,9 +62,24 @@ describe('athleteNameSchema — what is refused', () => {
    * An interior CR/LF only reaches here from a crafted body — a text input strips them on paste — so
    * this is the trust-boundary half, the same guard `freeTextNoteSchema` makes for `notes`.
    */
-  it('refuses an interior line break', () => {
-    expect(athleteNameSchema.safeParse('Ada\nMae').success).toBe(false);
-    expect(athleteNameSchema.safeParse('Ada\r\nMae').success).toBe(false);
+  /** A zero-width space INSIDE a real name is still stored — the guard is about names that render
+   *  as nothing, not about policing every invisible codepoint in a name a person chose. */
+  it('keeps a name that merely CONTAINS a format character', () => {
+    expect(athleteNameSchema.safeParse('a\u200bb').success).toBe(true);
+  });
+
+  /**
+   * 🔴 **A line break in a NAME becomes a space; it is not refused** — and that is the deliberate
+   * difference from `freeTextNoteSchema`, which refuses one. That rule is the CSV contract ("a CR/LF
+   * splits the RECORD"), and `profiles.name` **never reaches an export** — so there is no record to
+   * split, and a spreadsheet paste should produce a usable name rather than an error. What IS
+   * refused is a control character that survives the collapse (above): the NUL that makes Postgres
+   * throw past the typed envelope.
+   */
+  it('turns a pasted line break or tab into a space rather than refusing it', () => {
+    expect(athleteNameSchema.parse('Ada\nMae')).toBe('Ada Mae');
+    expect(athleteNameSchema.parse('Ada\r\nMae')).toBe('Ada Mae');
+    expect(athleteNameSchema.parse('Ada\tMae')).toBe('Ada Mae');
   });
 });
 

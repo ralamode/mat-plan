@@ -1,3 +1,4 @@
+import { SEED_PROFILE_PUBLIC_ID } from '@mat-plan/db';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
@@ -11,6 +12,8 @@ import {
 import {
   AMEND_COPY,
   APP_HOME_PATH,
+  athleteEditPath,
+  athleteRoutinePath,
   BODYWEIGHT_COPY,
   changeLabel,
   STRENGTH_COPY,
@@ -37,7 +40,7 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
-import { MOBILE_VIEWPORT } from './contexts';
+import { MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -57,17 +60,6 @@ import { MOBILE_VIEWPORT } from './contexts';
  * the runtime for near-zero marginal signal. Desktop is the secondary case (AGENTS.md).
  */
 
-/**
- * The NARROWEST width AGENTS.md commits to ("every screen must work from ~360px up"). 390 is the
- * device; 360 is the contract, and the two are not the same test — the strength set row's own
- * comments budget against ~294px of usable width, which only exists at 360.
- *
- * Added at GAP-3 PR 4a, because the panel found this spec asserted neither 360 nor overflow: the
- * acceptance criterion "works at 360px with no horizontal scroll" was being claimed by a file that
- * never measured either.
- */
-const NARROW = { width: 360, height: 780 };
-
 /** The routes the household actually uses. The PUBLIC routes (`/`, `/privacy`, `/sign-in`) are
  *  scanned separately below. ⚠️ Said "(`/`, `/gate`) … in a storage-state-free context: the project's
  *  cookie would redirect past both" — both the route and the mechanism are gone at `AUTH-1` 1d. */
@@ -77,10 +69,10 @@ const ROUTES = [
   // ⚠️ KEPT after PROF-1 a-r unlinked it (criterion 11 / M30): the route still exists and still
   // renders, so dropping it from the scan would silently stop auditing a reachable page. It is
   // unlinked, not deleted — ACT-1 replaces it.
-  { name: 'routine editor', path: `${SEED_PROFILE_ROUTE}/routine` },
+  { name: 'routine editor', path: athleteRoutinePath(SEED_PROFILE_PUBLIC_ID) },
   // PROF-1 a-r. The rename form is the first screen in the app whose only control WRITES a value a
   // person typed, so a label or focus defect here costs more than on a logging surface.
-  { name: 'edit athlete', path: `${SEED_PROFILE_ROUTE}/edit` },
+  { name: 'rename athlete', path: athleteEditPath(SEED_PROFILE_PUBLIC_ID) },
   // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
   // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
   // leaves with the harness when UI-3 picks a set.
@@ -255,7 +247,7 @@ test.describe('dark theme', () => {
  * would tell UI-3 that "the page overflows" without naming which candidate is disqualified.
  */
 test('the token preview does not overflow at 360px, in any set', async ({ page }) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(TOKEN_SETS_PATH, { waitUntil: 'networkidle' });
 
   await expectNoHorizontalOverflow(page, 'token sets');
@@ -277,7 +269,7 @@ test('the token preview does not overflow at 360px, in any set', async ({ page }
       overflowing.push(`${result.id} (${result.scrollWidth} > ${result.clientWidth})`);
     }
   }
-  expect(overflowing, `token sets overflowing at ${NARROW.width}px`).toEqual([]);
+  expect(overflowing, `token sets overflowing at ${NARROW_VIEWPORT.width}px`).toEqual([]);
 });
 
 test('the strength form meets the tap-target bar in its EXPANDED state', async ({ page }) => {
@@ -317,13 +309,13 @@ async function expectNoHorizontalOverflow(page: Page, label: string): Promise<vo
   });
   expect(
     overflow.scrollWidth,
-    `${label}: the page scrolls horizontally at ${NARROW.width}px ` +
+    `${label}: the page scrolls horizontally at ${NARROW_VIEWPORT.width}px ` +
       `(scrollWidth ${overflow.scrollWidth} > clientWidth ${overflow.clientWidth})`,
   ).toBeLessThanOrEqual(overflow.clientWidth);
 }
 
 test('the strength form does not overflow horizontally at 360px', async ({ page }) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
   const strength = strengthSection(page);
@@ -390,7 +382,7 @@ test('the strength form does not overflow horizontally at 360px', async ({ page 
 test('the weigh-in is accessible as an empty form AND as a receipt, at 360px (V1-24)', async ({
   page,
 }, testInfo) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
   const section = bodyweightSection(page);
   const input = section.getByLabel('Weight', { exact: true });
@@ -468,7 +460,7 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
   page,
 }) => {
   const PROBE = 'A11y Probe Press';
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(`${SEED_PROFILE_2_ROUTE}?d=${isoDaysAgo(1)}`, { waitUntil: 'networkidle' });
   const entries = page.getByRole('region', { name: 'Logged entries', exact: true });
 
@@ -519,7 +511,7 @@ test('a logged strength set opens its Change editor accessibly at 360px (V1-24 3
 test('the strength section renders saved sessions as receipts, at 360px (V1-24 3a-ii)', async ({
   page,
 }, testInfo) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(SEED_PROFILE_2_ROUTE, { waitUntil: 'networkidle' });
   const strength = strengthSection(page);
   const receipts = strength.locator(`[id^="${STRENGTH_RECEIPT_ID_PREFIX}"]`);
@@ -596,7 +588,7 @@ test('the strength section renders saved sessions as receipts, at 360px (V1-24 3
 test("Today's program card is accessible in BOTH its expanded and collapsed states", async ({
   page,
 }) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(SEED_PROFILE_ROUTE, { waitUntil: 'networkidle' });
 
   const strength = strengthSection(page);
@@ -770,7 +762,7 @@ test('profile tiles are large touch targets (the link-card exception to the inli
  * cell (both themes, per-cell 360px overflow); `--state no-profiles` renders it for screenshots.
  */
 test('the profile picker does not overflow at 360px', async ({ page }) => {
-  await page.setViewportSize(NARROW);
+  await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   await expectNoAxeViolations(page, 'profile picker (360px)');
   await expectNoHorizontalOverflow(page, 'profile picker (360px)');
@@ -783,7 +775,7 @@ test('the profile picker does not overflow at 360px', async ({ page }) => {
  * no role), so they are counted and measured by `expectLinkTapTargets`.
  */
 test.describe('public routes', () => {
-  for (const viewport of [MOBILE_VIEWPORT, NARROW]) {
+  for (const viewport of [MOBILE_VIEWPORT, NARROW_VIEWPORT]) {
     test(`the landing at ${viewport.width}px: axe, no overflow, both CTA links ≥ the tap-target bar`, async ({
       page,
     }) => {

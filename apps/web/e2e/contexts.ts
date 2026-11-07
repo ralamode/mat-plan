@@ -17,6 +17,16 @@ import { PICKER_COPY } from '../lib/constants';
 /** ~iPhone 14, the primary device — the a11y spec, the landing's above-the-fold check. */
 export const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
+/**
+ * The NARROWEST width AGENTS.md commits to ("every screen must work from ~360px up"). 390 is the
+ * device; **360 is the contract**, and the two are not the same test — the strength set row's own
+ * comments budget against the ~294px of usable width that only exists at 360.
+ *
+ * Lifted here at PROF-1 a-r, when `athletes.spec.ts` became the second spec to need it and declared
+ * a copy whose comment read "mirrors `a11y.spec.ts`'s own constant" — a copy that knew it was one.
+ */
+export const NARROW_VIEWPORT = { width: 360, height: 780 };
+
 /** The picker's `<h1>` — what "landed on the app home" looks like. */
 export const pickerHeading = (page: Page) =>
   page.getByRole('heading', { name: PICKER_COPY.heading, exact: true, level: 1 });

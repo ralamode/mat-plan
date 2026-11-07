@@ -30,7 +30,12 @@ import {
 } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
-import { APP_HOME_PATH, DEFAULT_TIME_ZONE, STRENGTH_COPY } from '../lib/constants';
+import {
+  APP_HOME_PATH,
+  ATHLETE_FORM_COPY,
+  DEFAULT_TIME_ZONE,
+  STRENGTH_COPY,
+} from '../lib/constants';
 import { addDays, isIanaTimeZone, localDayIso, localWeekStartIso } from '../lib/date';
 import { SEED_PROFILE_ROUTE } from '../e2e/steps';
 import { captureScreenshot, routeSlug } from './capture';
@@ -520,8 +525,8 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   // PROF-1 a-r. Whitespace-only rather than empty: `required` stops a blank submit in the browser, so
   // an empty field would never reach the server's refusal — which is the state being captured.
   'rename-rejected': async (page) => {
-    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('   ');
-    await page.getByRole('button', { name: 'Save name', exact: true }).click();
+    await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill('   ');
+    await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
     await page.getByRole('alert').waitFor();
   },
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),

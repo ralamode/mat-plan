@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-05. This is a beta.**
+**Last updated: 2026-11-07. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -35,9 +35,13 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
 - **A daily readiness colour** (green, yellow, red), and the program your household is following,
   including any prescribed loads written for a specific athlete.
 
-**Two text boxes have no filter.** "How it felt", and the box where a movement can be typed by name.
-Whatever goes in is stored exactly as typed and appears in your export. Worth knowing, because of who
-is usually typing.
+**Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
+and, since the rename screen, an **athlete's name**. Whatever goes in is stored exactly as typed.
+Worth knowing, because of who is usually typing. The first two also appear in your export; a name
+does not — the export is filed under an id, not a name.
+
+**Renaming an athlete replaces the old name.** We keep no record of what it was before, so if you
+change it by mistake you will have to type the old one back from memory.
 
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item so the same entry is not saved twice.

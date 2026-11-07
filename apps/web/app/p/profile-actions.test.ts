@@ -1,4 +1,4 @@
-import { PROFILE_NAME_MAX } from '@mat-plan/shared';
+import { E2E_SESSION_BYPASS_USER, PROFILE_KIND, PROFILE_NAME_MAX } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -24,7 +24,7 @@ vi.mock('@/lib/dal/profiles', () => ({
   getProfileByPublicId: vi.fn(async () => ({
     id: PROFILE_ID,
     name: 'Athlete One',
-    kind: 'kid',
+    kind: PROFILE_KIND.kid,
     avatar: null,
     routine: { version: 1, order: [] },
     firstDay: '2026-01-01',
@@ -47,7 +47,7 @@ import { checkMutationLimit } from '@/lib/rate-limit';
 import type { ActionState } from './[profileId]/action-state';
 import { renameAthleteAction } from './profile-actions';
 
-const PRINCIPAL = 'user_000000000000000000000000e2e';
+const PRINCIPAL = E2E_SESSION_BYPASS_USER;
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
 const initial: ActionState = { ok: false, error: null };
 
@@ -65,7 +65,8 @@ describe('renameAthleteAction — boundary (bad body → zod-reject, nothing wri
     ['a whitespace-only name', { profileId: PROFILE_ID, name: '   ' }],
     ['a name one over the cap', { profileId: PROFILE_ID, name: 'a'.repeat(PROFILE_NAME_MAX + 1) }],
     ['a name that folds to nothing', { profileId: PROFILE_ID, name: '́̂' }],
-    ['an interior line break', { profileId: PROFILE_ID, name: 'Ada\nMae' }],
+    ['a NUL byte', { profileId: PROFILE_ID, name: '\u0000Ada' }],
+    ['a zero-width space only', { profileId: PROFILE_ID, name: '\u200b' }],
   ])('refuses %s as a FIELD error and never reaches the DAL', async (_label, fields) => {
     const res = await renameAthleteAction(initial, form(fields));
 
@@ -77,6 +78,19 @@ describe('renameAthleteAction — boundary (bad body → zod-reject, nothing wri
     expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(renameAthlete).not.toHaveBeenCalled();
     expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A line break in a NAME is COLLAPSED, not refused — see `athleteNameSchema`'s step 2. It is the
+   * one case here that reaches the DAL, so it is asserted as a success rather than left unstated.
+   */
+  it('collapses a pasted line break instead of refusing it', async () => {
+    const res = await renameAthleteAction(
+      initial,
+      form({ profileId: PROFILE_ID, name: 'Ada\nMae' }),
+    );
+    expect(res.ok).toBe(true);
+    expect(renameAthlete).toHaveBeenCalledWith(PROFILE_ID, 'Ada Mae');
   });
 
   it('refuses a missing name field (no `name` in the body at all)', async () => {

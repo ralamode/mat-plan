@@ -23,11 +23,44 @@ export const FREE_TEXT_NOTE_MAX = 500;
  * special meaning in a file that never quotes.
  */
 const LINE_BREAK_PATTERN = /[\r\n]/;
+
+/**
+ * Every C0/C1 CONTROL character, which is a superset of CR/LF.
+ *
+ * 🔴 **A NUL is the one that matters, and it is not a style concern.** `\u0000` passed every check
+ * `hasLineBreak` makes, reached Postgres, and `text` rejects it — *"invalid byte sequence for
+ * encoding UTF8"* — so the action **threw** instead of returning its typed envelope, and the parent
+ * got `error.tsx` rather than a field error. That is the envelope convention defeated by one byte
+ * (probed). Crafted-body only, since no input element emits a NUL.
+ */
+const CONTROL_PATTERN = /\p{Cc}/u;
 const COMMA_OR_LINE_BREAK_PATTERN = /[,\r\n]/;
 
 /** True when `value` contains a CR or LF — which would split one record into two on export. */
 export function hasLineBreak(value: string): boolean {
   return LINE_BREAK_PATTERN.test(value);
+}
+
+/**
+ * True when `value` contains ANY control character — CR/LF included, plus NUL and the rest of C0/C1.
+ *
+ * Deliberately separate from {@link hasLineBreak} rather than replacing it: the two answer different
+ * questions. `hasLineBreak` is the CSV-contract predicate ("would this split a record"), and its
+ * message says so; this is the trust-boundary predicate ("can this reach the database at all").
+ * A field that is exported uses the first; a field that is only stored uses this.
+ */
+export function hasControlChar(value: string): boolean {
+  return CONTROL_PATTERN.test(value);
+}
+
+/**
+ * Collapse every run of whitespace to one space. Shared because `athleteNameSchema` and
+ * {@link foldName} must agree about what was stored — the stored name, the duplicate warning and
+ * A3's typed-match confirmation all quote it, and a name that displays with three spaces while
+ * folding with one makes the warning read as nonsense.
+ */
+export function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/gu, ' ');
 }
 
 /**
@@ -85,11 +118,20 @@ export const freeTextNoteSchema = z
  * typed (whitespace-collapsed by the schema, nothing else); this output exists only to be compared.
  */
 export function foldName(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[‘’ʼ]/gu, "'")
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .toLowerCase();
+  return (
+    collapseWhitespace(value)
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '')
+      // 🔴 **FORMAT characters (`\p{Cf}`) too — zero-width space, ZWNJ, word joiner, soft hyphen.**
+      // Without this, a name made only of them folds to ITSELF rather than `''`, so
+      // `athleteNameSchema`'s "folds to nothing" guard — which exists precisely to refuse a name that
+      // renders as nothing — let it through: probed, `'\u200b'` was accepted and stored, giving a
+      // picker tile with no readable name. U+200B rides along on a paste from web content, so this is
+      // not a crafted-body case. ⚠️ Folding only, never storage: a ZWJ inside an emoji name is
+      // meaningful and stays stored.
+      .replace(/\p{Cf}/gu, '')
+      .replace(/[‘’ʼ]/gu, "'")
+      .trim()
+      .toLowerCase()
+  );
 }

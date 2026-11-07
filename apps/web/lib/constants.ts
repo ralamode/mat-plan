@@ -55,6 +55,12 @@ export const APP_HOME_PATH = '/p';
 export const athletePath = (publicId: string) => `${APP_HOME_PATH}/${publicId}`;
 /** The rename screen (PROF-1 a-r). `/p/<id>/edit`, the approved prototype's own path. */
 export const athleteEditPath = (publicId: string) => `${athletePath(publicId)}/edit`;
+/** The CSV zip (V1-13b) — a Route Handler, fetched by a plain `<a download>`, never `<Link>`. */
+export const athleteExportPath = (publicId: string) => `${athletePath(publicId)}/export`;
+/** The routine editor (V1-18). ⚠️ **UNLINKED since PROF-1 a-r** (criterion 11 / M30) — the route
+ *  still renders and `e2e/a11y.spec.ts` still scans it, so the helper exists for the SPECS, not for
+ *  a link. Nothing in `app/` or `components/` may use it until ACT-1 replaces that editor. */
+export const athleteRoutinePath = (publicId: string) => `${athletePath(publicId)}/routine`;
 
 /**
  * The served privacy notice (PRIV-2) — `docs/privacy/notice.md`, compiled into `app/privacy/`.
@@ -285,6 +291,22 @@ export const FOOTER_COPY = { home: APP_NAME, privacy: 'Privacy notice' } as cons
  * way-back link had it inline and the footer became the second use site (AGENTS.md — the second
  * occurrence is the trigger). The sign-in screen's privacy link is the third.
  */
+/**
+ * A quiet NAVIGATION link, tap-target-sized — the `←`/`→` arrows that move between screens.
+ *
+ * 🔴 **The same tokens as `QUIET_LINK_CLASS` minus the underline, plus `w-fit`**, and it exists
+ * because the string was hand-typed **five** times (three on the day page, two on the rename screen)
+ * before PROF-1 a-r named it. Those comments each call `min-h-11` "load-bearing and UNGUARDED by
+ * CI" — which is the argument for one constant, not for five copies a future edit can quietly drop
+ * the token from. AGENTS.md: the second occurrence is the trigger.
+ *
+ * ⚠️ **Not the same thing as `QUIET_LINK_CLASS`.** That one is underlined because it appears inside
+ * a block of prose (the footer, the sign-in screen's privacy link), where an underline is what marks
+ * it as a link at all. These sit alone on a line behind an arrow, which does that job.
+ */
+export const NAV_LINK_CLASS =
+  'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3';
+
 export const QUIET_LINK_CLASS =
   'text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-3';
 
@@ -767,12 +789,17 @@ export const ATHLETE_FORM_COPY = {
   /** Shown in a `role="status"` region after a successful rename, before the page navigates back. */
   saved: 'Name saved.',
   /** The kind, shown and not editable (criterion 9 asks the form to SHOW it). */
-  kindLabel: 'Kind',
   /**
-   * Why there is no control beside it. A screen that displays a value with no way to change it and
-   * no explanation reads as a bug; this says it is a decision and where the decision lives.
+   * Where the kind came from, and nothing more. ⚠️ It said "…and not editable **here**", which sends
+   * a parent hunting for the elsewhere that does not exist — a wrong kind is a `db:correct`
+   * correction (D7), not another screen. A screen that shows a value with no control and no
+   * explanation reads as a bug; one that says where the value was set reads as a decision.
    */
-  kindNote: 'Set when the athlete was added, and not editable here.',
+  kindNote: 'set when the athlete was added',
+  /** The day page's link to this screen, and the spec that locates it. One definition. */
+  renameLink: (name: string) => `→ Rename ${name}`,
+  /** The rename screen's way back to the athlete. */
+  backTo: (name: string) => `← ${name}`,
 } as const;
 
 /**

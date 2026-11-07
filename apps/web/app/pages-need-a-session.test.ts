@@ -263,8 +263,8 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * 🔴 **1c-3b made it three conjuncts, and review on #323 collapsed the seven copies into
    * `enterMutation` _(maintainer, 2026-11-01)_ — so the guard splits in two rather than loosening:**
    *
-   *  - **per action**, below: the action must call `enterMutation`, and `actions.ts` must import it
-   *    from `./mutation-entry` — so "calls something named like the helper" is not enough.
+   *  - **per action**, below: the action must call `enterMutation`, and the module must import it
+   *    from the ONE pinned alias — so "calls something named like the helper" is not enough.
    *  - **once, in the helper**: the three conjuncts appear there IN ORDER. The old per-action scan
    *    could not assert order at all (seven slices, three independent presence checks); one
    *    definition can. That is the half that is strictly stronger than what 1c-3b shipped.

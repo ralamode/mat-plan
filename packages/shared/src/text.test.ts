@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { foldName } from './text';
 
 /**
+ * ⚠️ **Every name below is INVENTED**, chosen for the Unicode property it exercises (a combining
+ * mark, the three apostrophes, a compatibility ligature, full-width letters) and not drawn from any
+ * real household. Said once, here, so the next personal-data sweep does not have to ask — the repo's
+ * FIXTURE convention is role names (`Athlete One`), which `db:verify` and the seed follow; a schema
+ * test needs inputs that actually decompose, which role names do not.
+ *
  * PROF-1 D11 — the name fold, pinned by the cases that drove each step. Four surfaces will compare
  * names through this (rename a-r, the duplicate warning a-1d, PICK-1, MOV-1), so a change here
  * changes what every one of them calls a duplicate.

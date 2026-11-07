@@ -360,7 +360,7 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 - **Impact:** low; each copy is tested. A fix to one (e.g. clearing on open) has to be made four times.
 - **Proposed fix:** PR 2 (check-ins) extracts the shared amend primitive (parent Decision 16); give
   it a small `useAnnounceAndFocus` hook and move all four onto it.
-  ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/announcer.tsx`.**
+  ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/ui/announcer.tsx`.**
   It owns the REGION — the `role="status"` element and the mounted-while-empty rule — and deliberately
   **not** the trigger: the four copies differ in _what_ announces, and that difference is load-bearing
   (`saved-announcer.tsx` explains why a value→value change must not announce). The transition half is
@@ -369,6 +369,22 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
   this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
   are the next consumers.
 - **Severity:** low.
+
+### A stale rename tab silently overwrites a concurrent rename (found 2026-11-07, #350 review)
+
+- **What & why:** `renameProfile` (`packages/db/src/writers/profile.ts`) has no `expected`/version
+  conjunct, so two devices — or one edit tab left open while someone renames from another — resolve
+  last-write-wins by server clock. ⚠️ **It compounds with the deliberate no-history decision**
+  (`PROF-1` a-r, 2026-11-07): the overwritten name is not recoverable from the app.
+- **Impact:** low today — two to five people in a household, and renaming is rare. It rises with
+  `COACH-1` (a second household's adult) and with any flow that leaves the screen open.
+- **Proposed fix:** carry the seeded name as a hidden `previousName`, add `eq(profiles.name,
+previousName)` to the UPDATE's `WHERE`, and map 0 rows to a typed _"this name changed on another
+  device"_ refusal — the `updateBodyweightEntryById` `seenValue` idiom, which already exists. One
+  more `db:verify` case and one more mutation patch. ⚠️ **It has a real cost to decide, not to
+  assume:** a replayed submit after a success would then refuse rather than no-op.
+- **Severity:** low. Deliberately deferred rather than built under review pressure — AGENTS.md's LWW
+  rule is scoped to `/api/sync`, so there is no standing convention this violates.
 
 ### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)
 

@@ -21,7 +21,8 @@ type MutationRefusal = ActionState & { ok: false };
 export type MutationEntry = { ok: true; userId: string } | MutationRefusal;
 
 /**
- * 🔴 **The entry check every mutating Server Action under `/p/[profileId]` runs first — two
+ * 🔴 **The entry check every mutating Server Action under `/p` runs first — in BOTH modules since
+ * PROF-1 a-r (`[profileId]/actions.ts` and `profile-actions.ts`), and two
  * checks, in this order, and the order is the design (AUTH-1 1c-3b, narrowed at 1d).**
  *
  *  1. the **SESSION**, and as of `1d` it is the whole boundary. It used to be the second of three:

@@ -29,9 +29,13 @@ import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
 import {
   APP_HOME_PATH,
+  ATHLETE_FORM_COPY,
   athleteEditPath,
+  athleteExportPath,
+  athletePath,
   CLOSED_DAY_NOTICE,
   NAME_WRAP_CLASS,
+  NAV_LINK_CLASS,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
@@ -156,10 +160,7 @@ export default async function TodayPage({
             made the same switch. `min-h-11` for the reason the edit link below carries it: this is
             the recovery path on a phone, and `e2e/a11y.spec.ts` excludes <a> from its tap-target
             scan, so nothing in CI would notice its absence. */}
-        <Link
-          href={APP_HOME_PATH}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
-        >
+        <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
           ← All athletes
         </Link>
         {/* `NAME_WRAP_CLASS` (D11): a 40-character unbroken name is wider than a 360px phone's 328px
@@ -192,11 +193,7 @@ export default async function TodayPage({
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
-        <a
-          href={`/p/${profileId}/export`}
-          download
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
-        >
+        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
           ↓ Export CSV
         </a>
       </header>
@@ -406,10 +403,10 @@ export default async function TodayPage({
           "→ Edit {name}'s routine", measured 322–384px against 328px of usable width at 360px for an
           average 40-character name: it overflowed, and had done since V1-23. */}
       <Link
-        href={athleteEditPath(profile.id)}
-        className={`text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3 ${NAME_WRAP_CLASS}`}
+        href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}
+        className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}
       >
-        → Edit {profile.name}
+        {ATHLETE_FORM_COPY.renameLink(profile.name)}
       </Link>
     </main>
   );
