@@ -19,6 +19,8 @@ import { z } from 'zod';
 import { getActiveTimeZone } from '@/lib/active-timezone';
 import {
   AMEND_ERROR_COPY,
+  athletePath,
+  athleteRoutinePath,
   BODYWEIGHT_COPY,
   NO_PROFILE_LOG,
   NO_PROFILE_SAVE,
@@ -122,11 +124,11 @@ export async function logBodyweightAction(
     // V1-24 1d: the day already holds a weigh-in (another device got there first). An expected
     // outcome → the typed envelope, not error.tsx. Revalidate so the receipt shows the row that landed.
     if ('dayTaken' in written) {
-      revalidatePath(`/p/${profile.id}`);
+      revalidatePath(athletePath(profile.id));
       return { ok: false, error: BODYWEIGHT_COPY.dayTaken };
     }
 
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
     return { ok: true, error: null };
   });
 }
@@ -233,7 +235,7 @@ export async function logCheckinsAction(
       items,
     });
 
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
 
     // A conflict on every item means nothing was written. `client_id` UNIQUE is GLOBAL
     // (not profile-scoped), so silently reporting success here would mask a lost write.
@@ -376,7 +378,7 @@ export async function logStrengthSessionAction(
       movements: parsed.data.movements,
     });
 
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
     // Idempotent by the session's `client_id`: a replay (network retry) dedupes via ON CONFLICT and
     // the end state is identical — that IS success (the form rotates the clientId on ok, so a
     // resubmit is a genuine retry, not a new session), not a destructive "already logged" error.
@@ -457,7 +459,7 @@ export async function logLifeActivitiesAction(
     if (!profile) return { ok: false, error: NO_PROFILE_LOG };
 
     await logCheckinEntries({ profilePublicId: profile.id, day: entryDay, items: [item] });
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
 
     // A one-tap life activity is idempotent by its fixed `client_id`: a replay (double-tap) dedupes via
     // ON CONFLICT and the end state is identical — that IS success, not the destructive "already logged"
@@ -505,7 +507,7 @@ export async function editStrengthSetAction(
       weight: parsed.data.weight,
     });
     // Revalidate on refusal too, so the page shows what IS saved (the copy says so).
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
     if (!updated) return { ok: false, error: AMEND_ERROR_COPY.notFound('set') };
 
     return { ok: true, error: null };
@@ -567,7 +569,7 @@ export async function editBodyweightAction(
       seenValue: parsed.data.seenValue,
     });
     if (updated) {
-      revalidatePath(`/p/${profile.id}`);
+      revalidatePath(athletePath(profile.id));
       return { ok: true, error: null };
     }
 
@@ -579,16 +581,16 @@ export async function editBodyweightAction(
     // crafted cross-profile id learns nothing a stale id wouldn't.
     // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
     if (!current) {
-      revalidatePath(`/p/${profile.id}`);
+      revalidatePath(athletePath(profile.id));
       return { ok: false, error: AMEND_ERROR_COPY.notFound('weight') };
     }
     // (b) REPLAY: the row already holds exactly what was asked for. One effect, success.
     if (current.value === parsed.data.value && current.unit === parsed.data.unit) {
-      revalidatePath(`/p/${profile.id}`);
+      revalidatePath(athletePath(profile.id));
       return { ok: true, error: null };
     }
     // (c) Someone else got there first. Revalidate so the receipt shows the value that won.
-    revalidatePath(`/p/${profile.id}`);
+    revalidatePath(athletePath(profile.id));
     return { ok: false, error: AMEND_ERROR_COPY.staleWrite };
   });
 }
@@ -637,8 +639,8 @@ export async function editRoutineAction(
     if (!saved) return { ok: false, error: NO_PROFILE_SAVE };
 
     // Refresh both the kid's Today (renders the new order) and this editor (re-reads the saved routine).
-    revalidatePath(`/p/${profile.id}`);
-    revalidatePath(`/p/${profile.id}/routine`);
+    revalidatePath(athletePath(profile.id));
+    revalidatePath(athleteRoutinePath(profile.id));
     return { ok: true, error: null };
   });
 }

@@ -18,11 +18,30 @@ export function keyBySelf<const T extends readonly string[]>(
   return Object.fromEntries(values.map((v) => [v, v])) as { readonly [K in T[number]]: K };
 }
 
-/** Profile kind — a kid or the adult (Ray). */
+/** Profile kind — a child or an adult. */
 export const PROFILE_KINDS = ['kid', 'adult'] as const;
 export type ProfileKind = (typeof PROFILE_KINDS)[number];
 export const profileKindSchema = z.enum(PROFILE_KINDS);
 export const PROFILE_KIND = keyBySelf(PROFILE_KINDS);
+
+/**
+ * How a `kind` is SHOWN to a person — the picker tile, the athlete form, household settings
+ * (PROF-1, acceptance criterion 9). The stored values stay `kid` / `adult`.
+ *
+ * 🔴 **One display map, beside the list it labels.** Before this, the tile rendered
+ * `className="capitalize"` over the raw column value, so the UI read "Kid" — the schema's word, not
+ * a parent's. Three surfaces need the label and the second one is the trigger to name it
+ * (AGENTS.md → "Constants, enums & shared values"); `satisfies Record<ProfileKind, string>` is what
+ * makes a new member of `PROFILE_KINDS` a compile error here rather than a surface that renders a
+ * raw enum value.
+ *
+ * ⚠️ **Display only.** Nothing branches on these strings — `readsHouseholdProgram(kind)`
+ * (`./programming`) owns the one behavioural question the kind answers. A label is not a predicate.
+ */
+export const PROFILE_KIND_LABELS = {
+  kid: 'Child',
+  adult: 'Adult',
+} as const satisfies Record<ProfileKind, string>;
 
 /**
  * Household role — who a Clerk account is to a household (AUTH-1 1b).

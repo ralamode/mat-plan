@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-05. This is a beta."
+            "text": "Last updated: 2026-11-07. This is a beta."
           }
         ]
       }
@@ -255,13 +255,26 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Two text boxes have no filter."
+            "text": "Three text boxes have no filter."
           }
         ]
       },
       {
         "k": "text",
-        "text": " \"How it felt\", and the box where a movement can be typed by name.\nWhatever goes in is stored exactly as typed and appears in your export. Worth knowing, because of who\nis usually typing."
+        "text": " \"How it felt\"; the box where a movement can be typed by name;\nand, since the rename screen, an "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "athlete's name"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ". Whatever goes in is stored exactly as typed.\nWorth knowing, because of who is usually typing. The first two also appear in your export; a name\ndoes not — the export is filed under an id, not a name."
       }
     ]
   },

@@ -242,7 +242,9 @@ flowchart LR
   SIGNIN["/sign-in — Clerk<br/>(invite-only) — THE ONLY DOOR (1d)"]
   PICKER["/p — profile picker<br/>householdProfileRows(scope) → tiles<br/>+ Sign out (session only)"]
   TODAY["/p/[profileId] — scoped Today<br/>getProfileByPublicId(id) → notFound() if null"]
-  ACT["Server Action<br/>log bodyweight / strength"]
+  RENAME["/p/[profileId]/edit — rename<br/>static title, never a name (PROF-1 a-r)"]
+  ACT["Server Action · app/p/[profileId]/actions.ts<br/>log bodyweight / strength / routine"]
+  ATHACT["Server Action · app/p/profile-actions.ts<br/>rename (add / archive / restore follow)"]
   SCOPE["getHouseholdScope()<br/>THE scope point, once per request<br/>principal → membership<br/>no membership → null · ≥2 memberships → throw"]
   DAL["DAL (server-only)<br/>isLiveProfile(publicId, scope)"]
 
@@ -260,7 +262,11 @@ flowchart LR
   PICKER -->|"tap tile → next/link"| TODAY
   TODAY -->|"back-link"| PICKER
   TODAY -->|"hidden field profileId"| ACT
+  TODAY -->|"→ Rename {name} ?from=/p/[id]"| RENAME
+  RENAME -->|"back-link, and router.back() after a save"| TODAY
+  RENAME -->|"hidden field profileId"| ATHACT
   ACT -->|"re-validate id (never trust the form)"| DAL
+  ATHACT -->|"re-validate id, then renameProfile(scope)"| DAL
   SCOPE -->|"required + positional:<br/>a missed site is a compile error"| DAL
   DAL -->|"wrong household → the SAME 404 as unknown"| TODAY
   DAL -->|"revalidatePath('/p/'+id)"| TODAY

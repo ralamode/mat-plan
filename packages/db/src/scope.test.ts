@@ -131,8 +131,17 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
   it('exactly one module reads `scope.householdId` (the scope stays a capability)', () => {
     // Any `<something>scope.householdId` — a call site that unwraps the capability to build its own
     // predicate. `schema.profiles.householdId` (a column) deliberately does not match.
+    //
+    // 🔴 **CASE-INSENSITIVE since PROF-1 a-r, and the `i` is load-bearing.** The pattern was
+    // `[Ss]cope`, which matches `scope` and `aScope` and **misses `A_SCOPE`** — and this file's two
+    // canonical fixtures are named `A_SCOPE` and `B_SCOPE`, so the most likely unwrap in the repo
+    // was the one shape the guard could not see. `db:verify`'s first PROF-1 a-r draft wrote
+    // `householdId: A_SCOPE.householdId` four times and all 24 assertions here stayed GREEN
+    // (probed). Found by a review lens on #350, not by the guard. ⚠️ `i` also widens the prefix
+    // class to `SCOPE`/`Scope`; that is the point, and nothing legitimate is caught by it — the
+    // assertion below still resolves to exactly `UNWRAPS_SCOPE`.
     const readers = [...DB_SOURCES, ...WEB_SOURCES].filter((f) =>
-      /\b[\w$]*[Ss]cope\.householdId\b/.test(code(join(REPO, f))),
+      /\b[\w$]*scope\.householdId\b/i.test(code(join(REPO, f))),
     );
     expect(
       readers.map((f) => relative('', f)).sort(),
