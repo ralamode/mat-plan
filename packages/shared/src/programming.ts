@@ -5,6 +5,7 @@ import {
   SEED_PROFILE_2_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
 } from './seed-ids';
+import { PROFILE_KIND, type ProfileKind } from './enums';
 import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions';
 
 /**
@@ -25,6 +26,31 @@ import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions
  * program day PRESCRIBES, and growing one must not perturb the other. The DB CHECK inlines these literals
  * (a migration can't import a const), so `db:verify` pins the CHECK's accepted set to this array.
  */
+/**
+ * 🔴 **The kid-only program read, defined ONCE** — `PROF-1` a-g, Q15 stopgap
+ * _(maintainer, 2026-10-22)_.
+ *
+ * Until `ASSIGN-READ` gives every athlete their own assignments, an athlete reads the household's
+ * newest program block **only if they are a child**. The adult (Ray) logs freely and gets his own
+ * program later; today he would otherwise inherit the kids' PPL block, which is not his training.
+ *
+ * ⚠️ **This predicate and its constant are DELETED by `ASSIGN-READ` (D4)**, along with both call
+ * sites — `packages/db/src/queries/program-day.ts`'s block subquery and the day page's role label.
+ * It is a stopgap with a named end, not a rule of the domain, which is why it lives beside the day
+ * roles rather than in `enums.ts` with the durable ones.
+ *
+ * 🔴 **Kind is read at QUERY time, so flipping a kid to adult empties `prescribed` in every PAST
+ * month of their export, and flipping back restores it.** That is deliberate — the program a
+ * non-child should not have been reading is not retroactively theirs — and it is asserted by a
+ * `db:verify` flip case and stated on the edit form. `docs/features/programming.md` carries it as an
+ * invariant.
+ */
+export const PROGRAM_READ_KIND = PROFILE_KIND.kid;
+
+export function readsHouseholdProgram(kind: ProfileKind): boolean {
+  return kind === PROGRAM_READ_KIND;
+}
+
 export const DAY_ROLES = [...SESSION_TYPES, 'strength_a', 'strength_b', 'strength_c'] as const;
 export type DayRole = (typeof DAY_ROLES)[number];
 export const dayRoleSchema = z.enum(DAY_ROLES);

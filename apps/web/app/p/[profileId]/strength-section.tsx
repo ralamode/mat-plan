@@ -26,6 +26,7 @@ import {
  */
 export function StrengthSection({
   headingId,
+  programNote,
   profileId,
   day,
   writable,
@@ -34,6 +35,13 @@ export function StrengthSection({
   sessions,
 }: {
   headingId: string;
+  /**
+   * PROF-1 a-g: why this section is empty, when the reason is a policy rather than an absence.
+   * Rendered **directly under the heading**, before the form — a person should know the household's
+   * program is not theirs BEFORE working through a strength entry, not after. `undefined` for every
+   * athlete who reads the program, and for a household that programs nothing at all.
+   */
+  programNote?: string;
   profileId: string;
   day: string;
   writable: boolean;
@@ -61,6 +69,9 @@ export function StrengthSection({
       <h2 id={headingId} className="text-lg font-medium">
         {STRENGTH_COPY.heading}
       </h2>
+      {/* PROF-1 a-g: directly under the heading, BEFORE the form — a person should know the
+          household's program is not theirs before working through a strength entry, not after. */}
+      {programNote && <p className="text-muted-foreground -mt-1 text-sm">{programNote}</p>}
       {sessions.map((s) => (
         <StrengthSessionReceipt
           key={`receipt-${s.session.id}`}

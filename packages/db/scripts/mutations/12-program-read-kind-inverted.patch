@@ -1,0 +1,13 @@
+diff --git a/packages/shared/src/programming.ts b/packages/shared/src/programming.ts
+index e123894..7225da6 100644
+--- a/packages/shared/src/programming.ts
++++ b/packages/shared/src/programming.ts
+@@ -45,7 +45,7 @@ import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions
+  * `db:verify` flip case and stated on the edit form. `docs/features/programming.md` carries it as an
+  * invariant.
+  */
+-export const PROGRAM_READ_KIND = PROFILE_KIND.kid;
++export const PROGRAM_READ_KIND = PROFILE_KIND.adult;
+ 
+ export function readsHouseholdProgram(kind: ProfileKind): boolean {
+   return kind === PROGRAM_READ_KIND;

@@ -4042,6 +4042,78 @@ assert.deepEqual(
   'YDP: programDayRows orders by the prescription idx (the coach’s authored order)',
 );
 
+// ── PROF-1 a-g: the kid-only program read, proved three ways ───────────────────────────────────
+// 🔴 **The POSITIVE case is the `athleteOneDayA` assertion above** — the seeded athlete is a `kid`
+// (`seed.ts:218`, `:227`; the seed writes no adult), so the 7 rows it just returned ARE the proof
+// that the new `profiles.kind` conjunct does not break the read it is meant to allow. Stated here
+// because a negative-only proof would pass just as well against a query that returns nothing at all.
+{
+  const AG_ADULT = '019826b4-0000-7000-8000-00000004a001';
+
+  // An ADULT in household A, which HAS a live block programming Day A — so the only thing that can
+  // empty this read is the kind conjunct.
+  await db.insert(schema.profiles).values({
+    publicId: AG_ADULT,
+    name: 'A-g Adult',
+    kind: 'adult',
+    householdId: households[0].id, // household A, the seeded one A_SCOPE wraps
+  });
+
+  const adultDayA = await programDayRows(asPg, {
+    scope: A_SCOPE,
+    profilePublicId: AG_ADULT,
+    dayRole: 'strength_a',
+  });
+  assert.equal(
+    adultDayA.length,
+    0,
+    'PROF-1 a-g: an ADULT reads no program rows, in a household whose block programs that day',
+  );
+
+  // 🔴 **THE FLIP, which is the case the maintainer has to understand before a-r ships.** `kind` is
+  // read at QUERY time, not snapshotted, so flipping a kid to adult empties `prescribed` in every
+  // PAST month of their export — and flipping back restores it. a-r can perform exactly this flip
+  // from the edit form, which is why that form says so. Asserted in both directions, because a
+  // one-way assertion would pass against a query that had simply stopped working.
+  await db
+    .update(schema.profiles)
+    .set({ kind: 'adult' })
+    .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+  const flippedToAdult = await programDayRows(asPg, {
+    scope: A_SCOPE,
+    profilePublicId: SEED_PROFILE_PUBLIC_ID,
+    dayRole: 'strength_a',
+  });
+  assert.equal(
+    flippedToAdult.length,
+    0,
+    'PROF-1 a-g: flipping a kid to adult empties a day that returned 7 rows a moment ago',
+  );
+
+  await db
+    .update(schema.profiles)
+    .set({ kind: 'kid' })
+    .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID));
+  const flippedBack = await programDayRows(asPg, {
+    scope: A_SCOPE,
+    profilePublicId: SEED_PROFILE_PUBLIC_ID,
+    dayRole: 'strength_a',
+  });
+  assert.equal(
+    flippedBack.length,
+    7,
+    'PROF-1 a-g: flipping back to kid restores all 7 rows — the read is not destructive',
+  );
+
+  // Leave no adult behind: later blocks count rows in household A.
+  await db.delete(schema.profiles).where(eq(schema.profiles.publicId, AG_ADULT));
+
+  console.log(
+    '✓ PROF-1 a-g: the program read is kid-only — an adult in a programmed household reads zero ' +
+      'rows, and the flip empties and restores a past day in both directions',
+  );
+}
+
 // Day B swaps the rotating pair for the swing — 6 movements, and the athlete does a jump OR a swing
 // every day while each individual movement lands every other session.
 const athleteOneDayB = await programDayRows(asPg, {

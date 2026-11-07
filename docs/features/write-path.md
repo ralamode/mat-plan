@@ -189,6 +189,12 @@ flowchart LR
    (`app/p/[profileId]/program/` for V1-22's edit actions). That rule is why the gate conjunct was DELETED at `1d` rather
    than folded into an `||` with the session one.
 
+   ⚠️ **`programBlockInHousehold(scope)` is the second PREFIXED helper (`PROF-1` a-g)**, per the
+   naming convention in `writers/ownership.ts`: `program_blocks` carries its own `household_id`, so
+   it gets a prefix rather than reaching through `profiles`. Its one consumer is
+   `householdHasProgram`, and it reads `scope.householdId` — which is why it lives in that module and
+   nowhere else.
+
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
    `bigint` id from a request. This is the BOLA/IDOR seam and it is why writers take
    `profilePublicId`, not `profileId`.

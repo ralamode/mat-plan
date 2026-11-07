@@ -317,6 +317,34 @@ const gotoDaysAgo = (n: number) => async (page: Page) => {
   await page.goto(url.toString(), { waitUntil: 'networkidle' });
 };
 
+/**
+ * PROF-1 a-g — the ADULT athlete, whose household DOES program. The only way to render the muted
+ * "Programs are for children for now" line, because the seed writes two kids and nothing else
+ * (`seed.ts`), so no live profile is an adult.
+ *
+ * ⚠️ Flips the SEEDED profile rather than inserting a new one: the day page is reached by the
+ * seeded id every other state uses, and an extra profile would change the picker in every shot.
+ */
+async function seedAdultAthlete(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const flipped = await db
+      .update(schema.profiles)
+      .set({ kind: 'adult', updatedAt: sql`now()` })
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
+      .returning({ publicId: schema.profiles.publicId });
+    if (flipped.length !== 1) {
+      throw new Error(
+        `screenshot --state adult-athlete: expected to flip exactly 1 seeded profile to adult, ` +
+          `flipped ${flipped.length} — did db:seed run?`,
+      );
+    }
+  } finally {
+    await pool.end();
+  }
+}
+
 /** Fixture seeders, keyed by `--state`. `empty` needs none (catalog seed is enough). */
 const STATES = {
   empty: null,
@@ -325,6 +353,9 @@ const STATES = {
   // AUTH-1 1c-2 — the "this account resolves no household" screen. The ONLY way to render it (see
   // `seedNoHousehold`): it needs zero live households, which breaks `selectProfile` in every spec.
   'no-household': seedNoHousehold,
+  // PROF-1 a-g: an ADULT on the day page — no day-role label, "Not a programmed day" as the form
+  // default, and the muted line explaining why the strength card is empty.
+  'adult-athlete': seedAdultAthlete,
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
   calisthenics: seedCalisthenics,

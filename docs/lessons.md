@@ -481,6 +481,23 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   `export const config = { matcher }`). → Read `node_modules/next/dist/docs/` before writing
   version-sensitive code (per `apps/web/AGENTS.md`). (V0-4)
 
+## Screenshots / visual verification
+
+- **A screenshot showed the OLD UI and I believed it.** → `screenshot:ephemeral` **reuses `.next`
+  when present** (its own docblock says so); without `--build` it serves a stale production build, so
+  a capture taken right after an edit can show the code from two edits ago. It cost two wrong
+  conclusions in one session: first that a fix had worked, then that a later one had broken it. →
+  **Pass `--build` whenever the capture is evidence for a change you just made.** Reuse is for
+  iterating on a state's fixtures, not for verifying code.
+- **A prop reached the component and rendered nothing, with typecheck and 1385 tests green.** → A
+  batched edit added `programNote` to `StrengthSection`'s signature AND its type but the third
+  replacement — the render line — silently did not match, and nothing asserted it had. **An unused
+  destructured prop is legal TypeScript**, so `tsc` was clean; no test covered the new line; and the
+  stale build above hid it. Same family as the GAP-1 P0-1 inert field below. → **Assert each edit
+  landed, individually**, and for a new rendered element grep the file afterwards for the render
+  itself, not just the prop name — `grep -c programNote` returning 3 (signature, type, render) is the
+  check that would have caught it at 2.
+
 ## Guards that pass while guarding nothing
 
 - **`CREATE EXTENSION` in a migration turns `db:verify` red on every PR afterwards.** → Every
