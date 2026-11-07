@@ -77,7 +77,11 @@ strong Vercel integration. Deferred until the need is real.
 ### 4. DB health → **Neon console + `pg_stat_statements`**
 
 - Neon dashboard (first-party, free): connections, compute/autoscaling, data size, query insights.
-- Enable **`pg_stat_statements`** for slow-query analysis.
+- Enable **`pg_stat_statements`** for slow-query analysis. ⚠️ **An operator action, never a
+  migration** — `db:verify` replays every migration on PGlite, which does not ship the extension
+  (probed 2026-11-06: `extension "pg_stat_statements" is not available`), so a `CREATE EXTENSION`
+  migration turns that gate red on every later PR. Procedure, verification and the privacy caveat on
+  reading `query`: [runbooks.md](../runbooks.md) → "Enable `pg_stat_statements` on prod".
 - App-side: Drizzle query logging in dev; pool-exhaustion / slow-query signals flow into Sentry.
 
 ## Phasing (tooling)
@@ -88,7 +92,7 @@ strong Vercel integration. Deferred until the need is real.
 | Error monitoring + API tracing (FE+BE)         | Sentry                            | **V1-14** (pull earlier if errors bite)                                      |
 | Core Web Vitals RUM + analytics                | Vercel Speed Insights / Analytics | **production cutover** (Ray, 2026-08-11) — prod-ONLY mount; see §2 amendment |
 | DB metrics                                     | Neon console                      | now (zero code)                                                              |
-| Slow-query insight                             | `pg_stat_statements`              | with real data (V1)                                                          |
+| Slow-query insight                             | `pg_stat_statements`              | with real data (V1) — **due now**; operator step, [runbook](../runbooks.md)  |
 | Queryable log dashboards                       | Axiom via Vercel Log Drain        | only if needed                                                               |
 
 ## Front-end best practices (standing commitment)

@@ -246,6 +246,81 @@ timeout` (the migration waits at most 5 s for `entries` — e.g. behind a long t
 
 ---
 
+## Enable `pg_stat_statements` on prod (slow-query insight) — do this ONCE
+
+[ADR 0001](./decisions/0001-observability-and-web-vitals.md) § 4 asks for it and its phasing table
+says "with real data (V1)". Prod has real data, so it is due.
+
+🔴 **This is an OPERATOR action, NOT a migration, and the reason is measured.** Every migration is
+replayed by `db:verify` on **PGlite**, which does not ship the extension:
+
+```
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements
+  →  ERROR: extension "pg_stat_statements" is not available
+SELECT 1 FROM pg_available_extensions WHERE name = 'pg_stat_statements'
+  →  0 rows
+```
+
+(probed on `@electric-sql/pglite@0.5.13`, 2026-11-06). So a migration carrying `CREATE EXTENSION`
+turns `db:verify` red on **every PR afterwards**, not just its own. It is also not schema the app
+depends on: nothing in `packages/db` or `apps/web` reads `pg_stat_statements`, so there is nothing for
+a migration to keep in sync. ⚠️ **Do not "fix" a red `db:verify` by guarding the statement** — the
+guard would make the extension silently absent in prod too, which is the failure this note exists to
+prevent.
+
+**The steps.** Run against the **direct/unpooled** string (`DATABASE_URL_UNPOOLED`), not the pooled
+one — PgBouncer in transaction mode is the wrong place for a session-scoped `CREATE EXTENSION`.
+
+1. Neon preloads the library on every project, so no console change is needed first. Confirm:
+
+   ```sql
+   SELECT name, default_version, installed_version
+   FROM pg_available_extensions WHERE name = 'pg_stat_statements';
+   ```
+
+   An empty result means it is **not** preloaded on this plan — stop and set it in the Neon console
+   (Settings → Postgres parameters → `shared_preload_libraries`), which needs a compute restart.
+
+2. Create it:
+
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+   ```
+
+3. Verify it is installed, not merely available:
+
+   ```sql
+   SELECT installed_version FROM pg_available_extensions WHERE name = 'pg_stat_statements';
+   SELECT count(*) FROM pg_stat_statements;   -- a number, not an error
+   ```
+
+4. **Read it a week later, not immediately** — it accumulates from creation, so a reading taken the
+   same minute says nothing. The query worth keeping:
+
+   ```sql
+   SELECT calls, round(mean_exec_time::numeric, 1) AS mean_ms,
+          round(total_exec_time::numeric) AS total_ms, left(query, 90) AS q
+   FROM pg_stat_statements
+   WHERE query NOT LIKE '%pg_stat_statements%'
+   ORDER BY total_exec_time DESC LIMIT 15;
+   ```
+
+   ⚠️ **`query` is normalised but not guaranteed free of personal data** — a literal that was not
+   parameterised appears verbatim. This app's writes go through Drizzle with bound parameters, so in
+   practice the text is shape-only, but **never paste the output of this query into the repo, a PR or
+   an issue** without reading it first (AGENTS.md → Privacy; the repo is public and holds minors'
+   data). `left(query, 90)` is in the query above for that reason, not for width.
+
+**Cost and reversibility.** Tracks a bounded number of statement shapes
+(`pg_stat_statements.max`, default 5000) in shared memory; the overhead is a few percent on very
+high-throughput systems and unmeasurable at this app's few-rows-per-athlete-per-day. Reversible with
+`DROP EXTENSION pg_stat_statements;` — and `SELECT pg_stat_statements_reset();` zeroes the counters
+without dropping it, which is what you want before measuring a specific change.
+
+**What this does NOT give you.** It is cumulative server-side timing, so it finds a slow query; it
+cannot tell you a page got slower for a person on a phone. That is Core Web Vitals, and it is blocked
+behind the `connect-src` decision in [OBS-1](./plan.md#obs-1).
+
 ## A pending migration wedges prod and the seed with it
 
 **When:** a `migrate.yml` run failed and left a migration **pending**. Promoted to its own heading at
