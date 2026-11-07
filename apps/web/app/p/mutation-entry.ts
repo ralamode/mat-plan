@@ -6,7 +6,10 @@ import { RATE_LIMITED } from '@/lib/constants';
 import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
 
-import type { ActionState } from './action-state';
+// ⚠️ `action-state.ts` did NOT move with this file (WP-1): it is imported by the route's form
+// components as well as by actions, so it stays beside them. The alias avoids spelling the dynamic
+// segment in a relative path.
+import type { ActionState } from '@/app/p/[profileId]/action-state';
 
 /**
  * A refusal is an `ActionState` **by type, not by resemblance**, so an action can `return entry`

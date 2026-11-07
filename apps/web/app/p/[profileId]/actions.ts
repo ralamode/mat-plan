@@ -45,7 +45,7 @@ import { localDayIso, localMinutesSinceMidnight } from '@/lib/date';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 
 import type { ActionState } from './action-state';
-import { enterMutation } from './mutation-entry';
+import { enterMutation } from '@/app/p/mutation-entry';
 import { resolveDeclaredDay } from '@/lib/entries/declared-day';
 import { DEFAULT_PRACTICE_MINUTES, LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
