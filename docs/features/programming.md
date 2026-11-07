@@ -228,6 +228,32 @@ and complete; this is the one thing it cannot reach.
    data in JSONB, because nothing queries _into_ it. It has a promotion trigger in
    [tech-debt.md](../tech-debt.md). Do not add a second without that conversation.
 
+8. 🔴 **Only a CHILD reads the household's program, and `kind` is read at QUERY time (`PROF-1` a-g,
+   Q15 stopgap).** `readsHouseholdProgram(kind)` and `PROGRAM_READ_KIND` live once in
+   `packages/shared/src/programming.ts`; the enforcement is a `profiles.kind` conjunct inside
+   `programDayRows`' block subquery, which `isLiveProfile` has already pinned to this profile's row.
+   An adult resolves no `blockId` and the query returns `[]` — the same "nothing programmed" shape
+   the DAL and page already handle.
+   **Guarded in the QUERY, not the page or the DAL**, because that one query feeds all three readers:
+   the day card, the scaffold/prefill through `getProgramDay`, and the export's `prescribedFor`.
+   Guarding the latter two separately would be two copies, and `db:verify` drives the query rather
+   than the DAL, so the copies would go unproven.
+   ⚠️ **THE CONSEQUENCE TO UNDERSTAND BEFORE `a-r` SHIPS: flipping a kid to adult empties
+   `prescribed` in every PAST month of their export, and flipping back restores it.** Nothing is
+   snapshotted. That is deliberate — a program a non-child should not have been reading is not
+   retroactively theirs — and `a-r`'s edit form says so, because it is the screen that can perform
+   the flip. Proved in both directions by a `db:verify` flip case, and by two `db:mutations` patches:
+   one drops the conjunct (an adult then reads the kids' program), the other inverts
+   `PROGRAM_READ_KIND` (kids read nothing), because a missing conjunct and a wrong constant are
+   different defects and one patch cannot catch both.
+   **The UI half** reads the same predicate on the day page: an adult gets no day-role label and a
+   `null` form default ("Not a programmed day"). When the household _does_ program and the athlete is
+   an adult, a muted line explains why the card is empty — `householdProgramsAnything()` exists only
+   to tell that state apart from "this household programs nothing", which says nothing because there
+   is nothing to explain.
+   ⚠️ **`ASSIGN-READ` DELETES this invariant and both halves**, replacing it with per-athlete
+   assignments. It is a stopgap with a named end, not a rule of the domain.
+
 ## Traps
 
 - **"B is purely additive" is wrong.** `programDayRows` returns one block by design; an A/B program and

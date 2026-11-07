@@ -1,4 +1,4 @@
-import { DAY_ROLE_LABELS } from '@mat-plan/shared';
+import { readsHouseholdProgram, DAY_ROLE_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -11,7 +11,7 @@ import { getWeeklyAdherence } from '@/lib/dal/adherence';
 import { listEntriesForDay } from '@/lib/dal/entries';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
-import { getProgramDay } from '@/lib/dal/programming';
+import { getProgramDay, householdProgramsAnything } from '@/lib/dal/programming';
 import { resolveDayRole } from '@/lib/programming/day-role-schedule';
 import {
   calisthenicsTotals,
@@ -88,13 +88,21 @@ export default async function TodayPage({
   // landed (`resolveDayRole(day): DayRole`, no rest days), so there is no "not a programmed day" branch
   // to guard: every calendar day resolves to a role and reads its program.
   const dayRole = resolveDayRole(day);
+  // 🔴 **PROF-1 a-g (Q15 stopgap):** only a child reads the household's program. The query enforces
+  // it (`programDayRows`' kind conjunct, proved by `db:verify`); this is the UI half, so an adult is
+  // not shown a day role and a form default that describe someone else's program. `ASSIGN-READ`
+  // deletes both halves.
+  const readsProgram = readsHouseholdProgram(profile.kind);
   // Independent reads → one round-trip (hot page, INP/LCP budget). `adherence` is [] until the ramp
   // schedule is seeded (V1-6b-1 ships it empty), so the "This week" section stays hidden today;
   // `programDay` is [] when the kid's household has no block for today's role.
-  const [entries, adherence, programDay] = await Promise.all([
+  const [entries, adherence, programDay, householdPrograms] = await Promise.all([
     listEntriesForDay(profile.id, day),
     getWeeklyAdherence(profile.id, weekStart),
     getProgramDay(profile.id, dayRole),
+    // ⚠️ Fires ONLY for an adult, and only to choose between two empty states — "nothing
+    // programmed here" and "programmed, but not for you". A kid never pays for it.
+    readsProgram ? Promise.resolve(false) : householdProgramsAnything(),
   ]);
 
   // Which check-in fields are already logged today — derived from the entries we just
@@ -163,7 +171,7 @@ export default async function TodayPage({
           day={day}
           today={today}
           floor={profile.firstDay}
-          dayRoleLabel={DAY_ROLE_LABELS[dayRole]}
+          dayRoleLabel={readsProgram ? DAY_ROLE_LABELS[dayRole] : undefined}
         />
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
@@ -214,9 +222,18 @@ export default async function TodayPage({
                 profileId={profile.id}
                 day={day}
                 writable={writable}
-                dayRole={dayRole}
+                dayRole={readsProgram ? dayRole : null}
                 programDay={programDay}
                 sessions={sessionRows}
+                // 🔴 PROF-1 a-g, from the UX panel (UX3 B1, UX1 S3). ONLY when the household programs
+                // something AND this athlete is an adult — the one case where an empty strength card
+                // needs a reason. A household that programs nothing says nothing, because there is
+                // nothing to explain.
+                programNote={
+                  householdPrograms
+                    ? `Programs are for children for now. ${profile.name} logs freely; their own program comes later.`
+                    : undefined
+                }
               />
             );
           }

@@ -179,6 +179,23 @@ export function movementInHousehold(scope: HouseholdScope) {
 }
 
 /**
+ * `program_blocks.household_id = <scope>` — THIS household's blocks (`PROF-1` a-g).
+ *
+ * The second **prefixed** helper, per the convention above: `program_blocks` carries its own
+ * `household_id`, so it gets a prefix rather than reaching through `profiles`. It reads
+ * `scope.householdId`, which is why it belongs in this module — `scope.test.ts` asserts exactly one
+ * module does.
+ *
+ * Its one consumer is `householdHasProgram`, which the day page needs to tell two states apart that
+ * look identical to the old query: **"this household programs nothing"** and **"this household
+ * programs, but you are an adult so none of it is yours"**. Without it the adult sees an unexplained
+ * empty day.
+ */
+export function programBlockInHousehold(scope: HouseholdScope) {
+  return eq(schema.programBlocks.householdId, scope.householdId);
+}
+
+/**
  * Insert a movement **owned by `scope`**, arbitrated by `uq_movements_household_slug`.
  *
  * ⚠️ **This performs the insert rather than returning the owner value, and that is the point.** A

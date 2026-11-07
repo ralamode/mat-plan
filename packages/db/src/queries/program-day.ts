@@ -1,10 +1,10 @@
-import { type DayRole } from '@mat-plan/shared';
+import { PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
-import { isLiveProfile } from '../writers/ownership';
+import { isLiveProfile, programBlockInHousehold } from '../writers/ownership';
 
 /**
  * The programmed movements for ONE kid on ONE `day_role` (V1-10 slice 2), single-sourced here so the app
@@ -80,7 +80,20 @@ export function programDayRows(
         isNull(schema.prescriptions.deletedAt),
       ),
     )
-    .where(and(isThisProfile, isNull(schema.programBlocks.deletedAt)))
+    .where(
+      and(
+        isThisProfile,
+        // 🔴 **The kid-only read (PROF-1 a-g, Q15).** `isThisProfile` already pins the `profiles` row
+        // this subquery joined, so the kind conjunct narrows THAT row: an adult resolves no
+        // `blockId`, the query returns `[]`, and that is the same "nothing programmed" shape the DAL
+        // already handles. ⚠️ **Guarded HERE, not in the page or the DAL**, because this one query
+        // feeds all three readers — the day card, the scaffold/prefill via `getProgramDay`, and the
+        // export's `prescribedFor`. Guarding the latter two separately would be two copies, and
+        // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
+        eq(schema.profiles.kind, PROGRAM_READ_KIND),
+        isNull(schema.programBlocks.deletedAt),
+      ),
+    )
     .orderBy(desc(schema.programBlocks.id))
     .limit(1);
 
@@ -142,3 +155,29 @@ export function programDayRows(
 
 /** One raw programmed-movement row (drizzle-inferred). The DAL maps this → its `ProgramDayDTO`. */
 export type ProgramDayRow = Awaited<ReturnType<typeof programDayRows>>[number];
+
+/**
+ * Does this household have ANY live program block? (`PROF-1` a-g)
+ *
+ * 🔴 **It exists to tell two states apart that `programDayRows` renders identically** — both return
+ * `[]`:
+ *  - the household programs nothing yet, so there is nothing to explain; and
+ *  - the household DOES program, but this athlete is an adult, so none of it is theirs.
+ *
+ * The day page shows its muted explanation only in the second case. Without this read an adult sees
+ * an empty strength card with no reason given, which reads as a bug rather than a policy.
+ *
+ * ⚠️ **Not day-scoped on purpose.** "Does the household program at all" is the question; narrowing to
+ * the requested `day_role` would hide the line on a rest day, when the explanation is just as true.
+ */
+export async function householdHasProgram(
+  db: NodePgDatabase<typeof schema>,
+  args: { scope: HouseholdScope },
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.programBlocks.id })
+    .from(schema.programBlocks)
+    .where(and(programBlockInHousehold(args.scope), isNull(schema.programBlocks.deletedAt)))
+    .limit(1);
+  return row !== undefined;
+}

@@ -1,0 +1,18 @@
+diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
+index 3574117..0c28a7b 100644
+--- a/packages/db/src/queries/program-day.ts
++++ b/packages/db/src/queries/program-day.ts
+@@ -1,4 +1,4 @@
+-import { PROGRAM_READ_KIND, type DayRole } from '@mat-plan/shared';
++import { type DayRole } from '@mat-plan/shared';
+ import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+ 
+@@ -90,7 +90,6 @@ export function programDayRows(
+         // feeds all three readers — the day card, the scaffold/prefill via `getProgramDay`, and the
+         // export's `prescribedFor`. Guarding the latter two separately would be two copies, and
+         // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
+-        eq(schema.profiles.kind, PROGRAM_READ_KIND),
+         isNull(schema.programBlocks.deletedAt),
+       ),
+     )

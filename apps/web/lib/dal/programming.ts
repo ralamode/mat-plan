@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { programDayRows } from '@mat-plan/db';
+import { householdHasProgram, programDayRows } from '@mat-plan/db';
 import { type DayRole, uuidSchema } from '@mat-plan/shared';
 
 import { type ProgramDayDTO, toProgramDay } from '@/lib/programming/program-day';
@@ -38,4 +38,22 @@ export async function getProgramDay(
   if (!uuidSchema.safeParse(profilePublicId).success) return [];
 
   return toProgramDay(await programDayRows(db, { profilePublicId, dayRole, scope }));
+}
+
+/**
+ * Does this household program at all? (`PROF-1` a-g)
+ *
+ * The day page needs it to tell apart two states `getProgramDay` renders identically, both `[]`:
+ * **"nothing is programmed here yet"** (say nothing) and **"this household programs, but you are an
+ * adult so none of it is yours"** (say so). Without it an adult sees an empty strength card with no
+ * reason, which reads as a breakage rather than a policy.
+ *
+ * ⚠️ **Returns a BOOLEAN, never the blocks.** The page has no business knowing what the household
+ * programs for someone else — a DTO of other people's prescriptions would be a new read surface for
+ * no gain. A null scope is `false`, the same shape as the dark app.
+ */
+export async function householdProgramsAnything(): Promise<boolean> {
+  const scope = await getHouseholdScope();
+  if (!scope) return false;
+  return householdHasProgram(db, { scope });
 }
