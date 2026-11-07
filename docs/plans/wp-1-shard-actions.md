@@ -535,6 +535,18 @@ resolved.
 
 _Round 3 pending._
 
+### Deviations from this plan, as shipped (2026-11-06, #345)
+
+🔴 **Recorded late, after a retrospective review caught them — which is itself the finding.** A plan
+is the reviewed artifact; shipping against it without saying so makes the next reader trust a
+document the code does not match.
+
+| What the plan said                                                                                                                                              | What shipped                                                             | Why it matters                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The household suite, with `scopeMiss` bindings, a pinned-empty literal and a **permanent** row-runner self-test (R1 accepted; **S3's "defer it" was REJECTED**) | Only the `scope` field and the profile filter — i.e. the rejected option | A `household` entry today meets unauth + rate-limit only. **No wrong-owner proof**, which AGENTS.md calls mandatory. A tripwire now pins the set empty (`mutating-actions.test.ts`); the suite is still owed, by `PROF-1` a-1. |
+| `VALID_BODY` folded into `ACTION_BINDINGS` (R4)                                                                                                                 | Still a separate map                                                     | Three parallel maps became two, not one. Fails closed; cosmetic.                                                                                                                                                               |
+| "An entry cannot carry both `scope` and `excluded` — a type error" (R3)                                                                                         | Compiled fine until this PR                                              | See § Shapes. The plan's own Risks row said "prose and review, not a type" **before** R3 claimed otherwise; R3 was accepted on an unverified claim.                                                                            |
+
 ### Panel round 3 — 2026-11-06, on the refresh and the proposed split
 
 > Five lenses: correctness · scope · architecture · reuse · security.

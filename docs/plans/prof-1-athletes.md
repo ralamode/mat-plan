@@ -142,7 +142,26 @@ file**; the journal is append-only and CI-enforced. (V1-24 1d is not in this que
 `0012_bodyweight_one_per_day.sql`.) "**a-0 applied in prod**" means the runbook's check, not a green
 `migrate.yml`: `information_schema.columns` lists `profiles.client_id` and `profiles.archived_at`, and
 `pg_indexes` lists `uq_profiles_client_id` with no `WHERE` — the same three-check shape
-`docs/runbooks.md:116` ("A pending migration wedges prod and the seed with it") is the recovery for.
+`docs/runbooks.md` → "A pending migration wedges prod and the seed with it" is the recovery for. ⚠️ **An earlier version of this line cited `:116`, which is a different section**; cite the heading, not a line number, since the file moves. **And the check set is wider than first written** — match `indexdef` byte-for-byte (a bare "has no WHERE" admits a NON-unique index), read `data_type`/`is_nullable`, and read the `drizzle.__drizzle_migrations` ledger. ⚠️ **The mechanism, read from `drizzle-orm@0.45.4`'s `pg-core/dialect.js:57` rather than assumed:** `migrate()` selects the **newest row only** (`order by created_at desc limit 1`) and applies every journal entry whose `when` exceeds that `created_at`. It never looks for a row per migration and never checks `hash`. So the check is **"newest `created_at` ≥ `1793984366840`"** (0020's journal `when`), not "a row for 0020 exists".
+🔴 **And the failure mode flips once `0021` lands.** While 0020 is newest, a missing row means the next deploy **re-runs** it — and `CREATE UNIQUE INDEX` deliberately has no `IF NOT EXISTS`, so it raises `42P07`, the transaction aborts, `migrate.yml` goes red and the seed is skipped (the "pending migration wedges prod" runbook). After 0021 records, a missing 0020 row causes a **silent permanent skip** instead, which is worse because nothing goes red. Reachable only by hand-applied SQL — drizzle commits the DDL and the ledger insert in one transaction — which SECURITY.md's threat model does name.
+
+The three reads, with what to expect:
+
+```sql
+SELECT column_name, data_type, is_nullable FROM information_schema.columns
+ WHERE table_name = 'profiles' AND column_name IN ('client_id','archived_at');
+-- client_id | uuid | YES      ·      archived_at | timestamp with time zone | YES
+
+SELECT indexdef FROM pg_indexes WHERE indexname = 'uq_profiles_client_id';
+-- EXACTLY this, and note it is `pg_get_indexdef()` OUTPUT, not the migration's text —
+-- schema-qualified and unquoted, so a textual diff against the .sql is not the check:
+-- CREATE UNIQUE INDEX uq_profiles_client_id ON public.profiles USING btree (client_id)
+
+SELECT created_at, hash FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1;
+-- created_at >= 1793984366840
+```
+
+⚠️ **The migration file's own header is frozen and now superseded.** `0020`'s SQL comment carries the first, weaker version of this check set and the wrong runbook line; it is an applied migration, so forward-only forbids editing it. **This plan is the reachable copy.**
 
 ## Design decisions (with the alternatives rejected)
 
@@ -375,7 +394,7 @@ with its own DAL (MOV-1 follows this decision).
   `index.html:2145`, `:2164`).
 - **Wrapping** _(UX2 B1)_: `overflow-wrap:anywhere` + `min-w-0` on **every** element that renders
   `profile.name`: the tile, the day page `<h1>`, the edit `<h1>`, back links, the duplicate callout, the
-  archived banner, the settings rows and the result line.
+  archived banner, the settings rows, the result line **and the a-g program note** (`strength-section.tsx`'s `programNote`, added after this list was written — it is the one renderer the list missed, and a-r's narrow e2e adds the 40-char athlete as a KID, so the adult-only line is never measured by it either; flip that fixture to adult for one overflow assertion).
 
 ## The contract this plan adds
 

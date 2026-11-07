@@ -251,6 +251,7 @@ and complete; this is the one thing it cannot reach.
    an adult, a muted line explains why the card is empty — `householdProgramsAnything()` exists only
    to tell that state apart from "this household programs nothing", which says nothing because there
    is nothing to explain.
+   ⚠️ The shared predicate's docblock names **the adult in the household**, not a person — AGENTS.md's no-personal-names rule covers source comments too.
    ⚠️ **`ASSIGN-READ` DELETES this invariant and both halves**, replacing it with per-athlete
    assignments. It is a stopgap with a named end, not a rule of the domain.
 

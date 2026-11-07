@@ -40,8 +40,24 @@ export const ACTION_SCOPES = ['profile', 'household'] as const;
 export type ActionScope = (typeof ACTION_SCOPES)[number];
 export const ACTION_SCOPE = keyBySelf(ACTION_SCOPES);
 
-/** An action the refusal matrices drive. */
-type MatrixEntry = { readonly refusal: string; readonly scope: ActionScope };
+/**
+ * An action the refusal matrices drive.
+ *
+ * 🔴 **`excluded?: never` is what makes the union EXCLUSIVE, and it was missing.** WP-1 claimed in
+ * five places — this file, `write-path.md`, the changelog, the commit and the PR — that "an entry
+ * cannot carry both `scope` and `excluded`, it is a type error". **It was not.** TypeScript's
+ * excess-property check on a non-discriminated union only requires each property to exist in *some*
+ * member, so `{ refusal, scope, excluded }` compiled (probed: `tsc --strict`, exit 0). The mapped
+ * filter then classified it as excluded, so it got no binding and no matrix — the dangerous
+ * direction — leaving only the runtime `excludedActionNames()` pin to catch it, which is the shape
+ * the claim said it had replaced. The plan's own Risks row said "prose and review, not a type"
+ * before a later round claimed otherwise.
+ */
+export type MatrixEntry = {
+  readonly refusal: string;
+  readonly scope: ActionScope;
+  readonly excluded?: never;
+};
 
 /**
  * An action deliberately outside the matrices, with the reason and the file that covers it instead.
@@ -57,7 +73,12 @@ type MatrixEntry = { readonly refusal: string; readonly scope: ActionScope };
  * `AUTH-1` 1d deleted. Every future entry is therefore an edit to a pinned assertion, read by a
  * human, rather than a line that slips in.
  */
-type ExcludedEntry = { readonly excluded: { readonly reason: string; readonly provenBy: string } };
+export type ExcludedEntry = {
+  readonly excluded: { readonly reason: string; readonly provenBy: string };
+  /** See `MatrixEntry.excluded` — these two are what make the union exclusive. */
+  readonly scope?: never;
+  readonly refusal?: never;
+};
 
 export const MUTATING_ACTIONS = {
   logBodyweightAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },

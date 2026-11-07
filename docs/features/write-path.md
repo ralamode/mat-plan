@@ -171,8 +171,11 @@ flowchart LR
    discriminated union, not a list beside a list. `scope` is **addressing**, never `HouseholdScope`:
    `profile` means the body carries a `profileId` the wrong-household matrix can make foreign;
    `household` means it does not, so a household matrix drives a DAL scope miss instead. Because the
-   two members are exclusive, **"a household-addressed action may never be excluded" is a type error
-   rather than a rule in prose**, and `excludedActionNames()` is pinned empty so every future
+   two members are exclusive — **which required `excluded?: never` on one and `scope?: never` on the
+   other; WP-1 claimed exclusivity without them and it was not true, since TypeScript's
+   excess-property check on a non-discriminated union only needs each property to exist in SOME
+   member** — **"a household-addressed action may never be excluded" is a type error rather than a
+   rule in prose**, and `excludedActionNames()` is pinned empty so every future
    exclusion is an edit a human reads.
    **New actions go in a per-feature `*-actions.ts` module under `app/p/`**, never appended to
    `actions.ts`. The settled list of module names lives in the CRUD-1 spec's seams table — it calls

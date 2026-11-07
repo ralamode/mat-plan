@@ -71,7 +71,12 @@ export function StrengthSection({
       </h2>
       {/* PROF-1 a-g: directly under the heading, BEFORE the form — a person should know the
           household's program is not theirs before working through a strength entry, not after. */}
-      {programNote && <p className="text-muted-foreground -mt-1 text-sm">{programNote}</p>}
+      {programNote && (
+        // `break-words`: this renders `profile.name`, and D11 gives every name renderer a wrap rule.
+        // At 360px `main` leaves 328px; a 40-char unbroken name in wide glyphs is ~500px, which would
+        // scroll the page sideways. This `<p>` was created after D11's list and was not on it.
+        <p className="text-muted-foreground -mt-1 text-sm break-words">{programNote}</p>
+      )}
       {sessions.map((s) => (
         <StrengthSessionReceipt
           key={`receipt-${s.session.id}`}
