@@ -6,7 +6,11 @@ description: Capture Playwright screenshot(s) of a mat-plan UI screen for a PR �
 # UI screenshot for a PR
 
 **When:** every PR that changes something visible (a page, component, or state), before finalizing
-the PR. Placement, the three widths and the `--note` rule are in AGENTS.md → "UI PR rules". Every
+the PR — and 🔴 **AFTER the review round on a PR deep enough to have one** _(maintainer, 2026-11-07)_.
+A capture is a prod build plus an ephemeral Postgres; a review that changes a heading or a label
+invalidates every image. `PROF-1` a-r paid for three capture-and-publish cycles on one screen because
+the camera came first. **build → panel / review → reconcile → capture → open the PR.** The UX panel
+itself still runs BEFORE implementation (AGENTS.md → UI PR rules); it is the camera that waits. Placement, the three widths and the `--note` rule are in AGENTS.md → "UI PR rules". Every
 capture is taken at mobile (390), tablet (820) and desktop (1280) automatically (`VIEWPORTS` in
 `apps/web/scripts/capture.ts`). PNGs go in the gitignored `.screenshots/` folder and are **never
 committed**.
