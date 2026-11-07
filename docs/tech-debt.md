@@ -15,6 +15,57 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### 🔴 PRIORITY — nothing measures how much JavaScript ships, and the CWV budget cannot be measured at all (added 2026-11-06)
+
+_(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.)_
+
+- **What & why it's debt:** AGENTS.md commits to a Core Web Vitals budget — **LCP < 2.5s · INP < 200ms
+  · CLS < 0.1, p75 mobile** — and `review-pr`'s rubric dimension 11 already admits "nothing measures
+  the budget". Two separate reasons it is unmeasured, and only one is fixable now:
+  - **The budget is a RUM budget.** p75-over-real-users cannot be produced in CI, and **INP cannot be
+    produced in a lab at all** — it needs real interaction. RUM is blocked behind
+    `OBS-1`'s `connect-src` decision ([plan.md](./plan.md)), and at three households p75 of anything is
+    noise anyway.
+  - **Lab timings in CI measure CI.** LCP on a shared runner swings substantially between identical
+    commits. A gate on it produces alerts you learn to ignore, which is worse than no gate.
+- **What IS deterministic: bytes.** `next build` already prints **First Load JS per route**, and CI
+  runs `pnpm build` (`ci.yml:362`) and **discards the output**. Nothing in the repo tracks bundle size
+  — verified 2026-11-06: no `@next/bundle-analyzer`, no `size-limit`, no Lighthouse, no size
+  assertion anywhere in `.github/workflows` or either `package.json`.
+- **Impact — the three regressions this codebase actually produces, none of which anything catches:**
+  1. **`'use client'` creep** — the mechanism by which an RSC-first app gets slow. ⚠️ **Live example,
+     same day this was filed:** `components/layout/site-footer.tsx` became a client component
+     (`usePathname()`) in `AUTH-1` 1d PR 0. Correct, necessary, reviewed — and the bundle cost was
+     invisible to every gate.
+  2. **A barrel file defeating tree shaking** — `export * from './x'`. A real risk as
+     `packages/shared` grows; nothing flags it.
+  3. **A heavy dependency on a hot route** — Recharts is planned for charts (AGENTS.md → Design), and
+     the `/p/[profileId]` day page is the hottest route in the app.
+     ⚠️ **Tree shaking and per-route code splitting are already ON** (App Router default + ESM; the
+     minimal `next.config.ts` adds nothing that defeats them), so this is not a bundler setting anyone
+     forgot. It is the absence of a _measurement_, and all three regressions above are habits rather than
+     config.
+- **Proposed fix** (sketch; it owes its own plan + panel, and the panel should push on the tolerance):
+  1. Capture `next build`'s per-route **First Load JS** in CI — parse the build output, or
+     `.next/app-build-manifest.json` plus chunk sizes if the printed table proves unstable to parse.
+  2. Commit a baseline (`perf/bundle-baseline.json`), one entry per route.
+  3. A guard fails the PR when a route grows beyond a tolerance, printing **route, before, after,
+     delta**. The number is the deliverable — "this PR adds 48KB to the day page" is actionable in a
+     way "LCP regressed" never is.
+  4. Baseline updates are a **deliberate committed diff**, so growth is approved rather than drifted
+     into — the `ALLOWLIST`-pinned-empty idiom (`pages-need-a-session.test.ts:321`).
+  5. ⚠️ **It needs a self-test and a RED probe before it is trusted** — see
+     [lessons.md](./lessons.md) → "Guards that pass while guarding nothing", where a CI gate silently
+     enforced 3 of 13 paths for two releases because it had no self-test. A size guard that parses
+     build output is exactly the shape that goes quietly vacuous when the output format changes.
+- **Severity:** **medium now, high later.** Nothing is slow today and there is no evidence of a
+  regression — the cost is that the budget AGENTS.md commits to is unfalsifiable, so the first real
+  regression will be found by a person on a gym floor rather than by a gate. It gets worse with every
+  client component and every chart. **Not a Beta 0 blocker** (not in `beta-1.md`'s exit criteria).
+- **Deliberately NOT in scope:** Lighthouse CI, a canary deploy (meaningless at three households), and
+  post-deploy CWV assertions — that last is `OBS-2`'s synthetic-monitoring job ([plan.md](./plan.md)),
+  which answers "is the deploy broken", not "did the baseline move".
+
 ### Two runtime auth proofs went with the gate, and the harness cannot replace them (found 2026-11-05, AUTH-1 1d)
 
 - **What & why:** the e2e harness arms a principal in the **process environment**
