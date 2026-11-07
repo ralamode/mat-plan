@@ -2036,6 +2036,41 @@ _Exit: zero hardcoded user-facing strings; a second locale could be added by dro
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
+- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** _(maintainer,
+  2026-11-07, from `PROF-1` a-r.)_ 🔴 **Gate: after CRUD-1's athlete and workout chunks are done,
+  BEFORE the first family outside the maintainer's is invited.** The maintainer has not invited
+  anyone and will not until a household can CRUD athletes and workouts, so `/privacy` has exactly
+  one reader today — which is what makes batching correct rather than lax.
+
+  **Why it is a row and not a per-PR checkbox.** AGENTS.md requires the inventory to move in the
+  same PR as the change, and it does; what this row batches is the **human sign-off** on the
+  published notice. a-r is the worked example: it changed one count sentence (`"Two text boxes have
+no filter"` → three, because a name became typeable), which is a real accuracy fix and shipped
+  with the code — but signing a document nobody has read, three or four times over, is ceremony.
+  ⚠️ **It is NOT a licence to let the notice go stale.** Each PR still edits `notice.md` and the
+  inventory to keep them TRUE; this row is the read-the-whole-thing-aloud pass before a stranger
+  relies on it.
+
+  **What will have accumulated by then** (each already owed by its own chunk):
+  - `a-r` ✅ — three unfiltered free-text boxes, and a name does not reach the export.
+  - `PROF-1 b` — the `archived_at` **writer** goes live. The notice must say what the schema already
+    does: an archived athlete is retained in full, still exports, and is still reachable by link.
+    It is **not** a deletion, and describing it as one would be the worst available error.
+  - `PROF-1 a-1` — the `client_id` **writer** goes live. §2 and the "Technical bits" paragraph
+    currently describe a column with no writer; after a-1 the device-generated identifier is real.
+  - `V1-9b` — delete and restore. The retention table and the deletion procedure both move.
+  - Anything `PROG-1` / workout CRUD adds to what is stored.
+
+  **Done when:** the maintainer has read `notice.md` end to end against
+  [data-inventory.md](./privacy/data-inventory.md), `Last updated` is the date of that read,
+  `pnpm privacy:generate` has run, and the inventory's banner records the sign-off with its date.
+  ⚠️ **Pair it with the other pre-invite conditionals** so one session clears them: `TEN-2c-1`'s
+  re-measure (a dated zero is not an invariant) and `PRIV-3`'s deletion rehearsal.
+
+  **What this row does NOT cover, decided 2026-11-07:** a warning that renaming has no undo. Nothing
+  requires disclosing what is _not_ retained; a rename is the exercise of the rectification right,
+  not an event needing a caveat. The retention answer lives in the inventory's §8.
+
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
   📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows

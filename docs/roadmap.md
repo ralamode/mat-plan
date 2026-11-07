@@ -140,6 +140,17 @@ do next.
   anonymized snapshot (OPS-1, [tech-debt](./tech-debt.md)).
 - **`e2e` is not a required check** and branch protection is off, so "CI green" is held by review, not
   by GitHub.
+- 🔴 **The notice's human sign-off is batched to [`PRIV-4`](./plan.md), not owed per PR**
+  _(maintainer, 2026-11-07)_. Each PR still edits `notice.md` and
+  [data-inventory.md](./privacy/data-inventory.md) **in the same PR** to keep them true — that is
+  unchanged and CI-adjacent. What waits is the read-it-end-to-end pass, which happens **once, after
+  CRUD-1's athlete and workout chunks and before the first outside family is invited**. A session
+  that finds a notice edit owed should make it and move on, not stall for a signature. Pair the
+  eventual read with `TEN-2c-1`'s re-measure and `PRIV-3`'s deletion rehearsal.
+- **Screenshots come AFTER the review round** on a PR deep enough to have one (`ship-pr` §4,
+  `ui-screenshot`). `PROF-1` a-r paid three capture-and-publish cycles on one screen because the
+  camera came first and a six-lens panel then changed the heading, the kind block and the error copy.
+  The UX panel still runs before implementation; it is the camera that waits.
 
 ## Recently landed
 

@@ -809,6 +809,77 @@ Precondition 2 below.
 <!-- Placeholder runbooks — fill in when first needed. Keep titles even before the body exists so we
      have a known home for each procedure. -->
 
+## "Sign-in is broken in dev or preview" — tell the four causes apart
+
+A **reusable diagnostic**, not the story of one evening: each command below distinguishes two causes,
+and production can be fine while both of the others are broken, which is exactly what makes this
+confusing. Run them in order; stop at the first that explains what you see.
+
+**1. Is the thing on `localhost:3000` even mat-plan?**
+
+```bash
+curl -s localhost:3000/ | grep -o '<title>[^<]*</title>'
+```
+
+`<title>mat-plan…` → it is ours. Anything else — `Create Next App`, another project — and **every
+mat-plan route will 404**, which reads exactly like "auth is broken" because `/sign-in` is one of
+them. `apps/web/scripts/dev-local.ts` spawns `next dev` with **no explicit port**, so when 3000 is
+taken Next silently moves to **3001** and prints it; a browser tab left on 3000 is then showing a
+different app. Check the port `pnpm dev` actually printed, or free 3000:
+
+```bash
+lsof -nP -iTCP:3000 -sTCP:LISTEN     # who has it
+curl -s localhost:3001/ | grep -o '<title>[^<]*</title>'
+```
+
+**2. Is Clerk configured at all in the environment you are looking at?**
+
+The page says **"Signing in with Google isn't switched on yet."** ⇒ `clerkIsConfigured()` is false
+⇒ one or both of `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` is missing from **that
+environment's** scope. Both keys are `.optional()` in `lib/env.ts` **by design** (`lib/clerk.ts`
+explains why), so a missing key is a dark page, never a boot failure — which is safe and silent.
+
+```bash
+# dev: presence only, never print the value
+grep -c '^NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=' apps/web/.env.local
+grep -c '^CLERK_SECRET_KEY=' apps/web/.env.local
+```
+
+For **Preview**, the keys live in Vercel's Preview scope, which `OPS-1` deliberately separated from
+Production — so setting production keys does **not** give previews any. ⚠️ `pnpm preview:check`
+audits Preview for _production credentials leaking in_; it says nothing about Clerk keys being
+_absent_, so a dark preview passes it.
+
+**3. If Preview has keys, are they the TEST ones?**
+
+A Clerk **production** instance is domain-locked to the domain configured for it (`clerk.mat-plan.dev`).
+A preview is served from `*.vercel.app`, so production keys there cannot work no matter how they are
+set. Previews need the **development** instance (`pk_test_…` / `sk_test_…`), which is reachable from
+any origin. Check which instance a key points at without revealing it — the publishable key is public
+by design and encodes its own Frontend API host:
+
+```bash
+# prints only the host, not the key
+grep '^NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=' apps/web/.env.local | cut -d= -f2- \
+  | sed 's/^pk_[a-z]*_//' | tr -d '"' | base64 -d | tr -d '$'
+```
+
+`…clerk.accounts.dev` = development instance. `clerk.<your-domain>` = production instance.
+
+**4. Is the instance itself alive and carrying Google?**
+
+```bash
+curl -s "https://<that-host>/v1/environment?__clerk_api_version=2025-04-10&_clerk_js_version=5" \
+  | head -c 200
+```
+
+`"identification_strategies":["oauth_google"]` ⇒ the instance is up and Google is on, so the fault is
+in **our** wiring (step 1–3), not Clerk's.
+
+⚠️ **A preview URL that returns `<title>Login – Vercel</title>` is Vercel Deployment Protection**, not
+our app and not Clerk — an anonymous fetch cannot get past it, so curl-based checks of a preview test
+nothing until you are signed in to Vercel in that browser.
+
 ## Rotate a secret (Clerk key / Neon password / GitHub Actions secret)
 
 _Still a TODO as a general procedure._ **Two cases are written up.** ⚠️ The access-gate code was the
