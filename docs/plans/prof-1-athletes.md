@@ -142,7 +142,7 @@ file**; the journal is append-only and CI-enforced. (V1-24 1d is not in this que
 `0012_bodyweight_one_per_day.sql`.) "**a-0 applied in prod**" means the runbook's check, not a green
 `migrate.yml`: `information_schema.columns` lists `profiles.client_id` and `profiles.archived_at`, and
 `pg_indexes` lists `uq_profiles_client_id` with no `WHERE` — the same three-check shape
-`docs/runbooks.md:116` ("A pending migration wedges prod and the seed with it") is the recovery for.
+`docs/runbooks.md` → "A pending migration wedges prod and the seed with it" is the recovery for. ⚠️ **An earlier version of this line cited `:116`, which is a different section**; cite the heading, not a line number, since the file moves. **And the check set is wider than first written** — match `indexdef` byte-for-byte (a bare "has no WHERE" admits a NON-unique index), read `data_type`/`is_nullable`, and read the `drizzle.__drizzle_migrations` ledger row: drizzle decides what is pending from it, so DDL present without the row means the next deploy RE-RUNS `0020`, whose `CREATE UNIQUE INDEX` deliberately has no `IF NOT EXISTS` and would wedge prod.
 
 ## Design decisions (with the alternatives rejected)
 
@@ -375,7 +375,7 @@ with its own DAL (MOV-1 follows this decision).
   `index.html:2145`, `:2164`).
 - **Wrapping** _(UX2 B1)_: `overflow-wrap:anywhere` + `min-w-0` on **every** element that renders
   `profile.name`: the tile, the day page `<h1>`, the edit `<h1>`, back links, the duplicate callout, the
-  archived banner, the settings rows and the result line.
+  archived banner, the settings rows, the result line **and the a-g program note** (`strength-section.tsx`'s `programNote`, added after this list was written — it is the one renderer the list missed, and a-r's narrow e2e adds the 40-char athlete as a KID, so the adult-only line is never measured by it either; flip that fixture to adult for one overflow assertion).
 
 ## The contract this plan adds
 

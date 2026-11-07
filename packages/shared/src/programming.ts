@@ -31,7 +31,7 @@ import { SESSION_TYPE_LABELS, SESSION_TYPES, type SessionType } from './sessions
  * _(maintainer, 2026-10-22)_.
  *
  * Until `ASSIGN-READ` gives every athlete their own assignments, an athlete reads the household's
- * newest program block **only if they are a child**. The adult (Ray) logs freely and gets his own
+ * newest program block **only if they are a child**. The adult in the household logs freely and gets their own
  * program later; today he would otherwise inherit the kids' PPL block, which is not his training.
  *
  * ⚠️ **This predicate and its constant are DELETED by `ASSIGN-READ` (D4)**, along with both call
