@@ -1195,6 +1195,22 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
        `(household_id, profile)` that moving a profile to another household would break.
     5. **No age-based permission logic** (`profiles.kind`, `profiles.birthdate`) in any auth chunk. The
        age policy arrives with this row, in one place.
+       🔴 **And so does the BIRTHDAY ITSELF — asked during `PROF-1` a-r, 2026-11-07, answered here.**
+       `profiles.birthdate` exists (`schema.ts`) with **zero readers and zero writers**, and
+       [notice.md](./privacy/notice.md) currently tells people _"there is no age and no date of
+       birth"_ and explains the empty column. So the first write is not a form field — it is a **new
+       category of personal data about a minor**: the notice bullet becomes false, the inventory and
+       the retention table each owe a row, and the regulatory floor rises (a date of birth is what
+       makes COPPA's under-13 tier knowable, and what turns a name from "Kid 1" into a person).
+       ⚠️ **Nothing in the app needs it yet, and that is the point.** `kind` already answers the one
+       behavioural question there is — _does this profile read the household's program_
+       (`readsHouseholdProgram`) — and **supervision is answered by `household_members.role`, not by
+       age**: the authority model decided 2026-11-06 is _anyone in the household records and
+       corrects; the owner decides who belongs to it_. Holding a child's date of birth to re-derive
+       an answer two shipped mechanisms already give is storage with no consumer.
+       **So: this row owns it, and the ordering is ADR → age policy module → first write.** Adding
+       the field to a-1's add form instead would scatter the policy into a form, which is exactly
+       what keep-open item 5 exists to prevent.
     6. **Household roles stay a shared const plus a CHECK** (1b's role list), so adding `guardian`
        later is an additive expansion.
 

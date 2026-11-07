@@ -286,24 +286,6 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Renaming an athlete replaces the old name."
-          }
-        ]
-      },
-      {
-        "k": "text",
-        "text": " We keep no record of what it was before, so if you\nchange it by mistake you will have to type the old one back from memory."
-      }
-    ]
-  },
-  {
-    "k": "p",
-    "children": [
-      {
-        "k": "strong",
-        "children": [
-          {
-            "k": "text",
             "text": "Technical bits"
           }
         ]

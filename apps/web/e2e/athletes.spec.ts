@@ -105,10 +105,8 @@ test('the day page links to Rename, which renames the athlete and returns', asyn
   await expect(
     page.getByRole('heading', { name: `Rename ${SEED_PROFILE_2_NAME}`, level: 1 }),
   ).toBeVisible();
-  // One muted line in the header band, not a field-shaped `<dl>` — so match the line, not the word.
-  await expect(
-    page.getByText(`${PROFILE_KIND_LABELS.kid} · ${ATHLETE_FORM_COPY.kindNote}`, { exact: true }),
-  ).toBeVisible();
+  // Just the label under the heading — no caption, no control.
+  await expect(page.getByText(PROFILE_KIND_LABELS.kid, { exact: true })).toBeVisible();
   // …and offers no way to CHANGE it (D7). Neither a radio nor a disabled one.
   await expect(page.getByRole('radio')).toHaveCount(0);
 

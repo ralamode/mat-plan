@@ -81,18 +81,16 @@ export default async function RenameAthletePage({
         <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
           Rename {profile.name}
         </h1>
-        {/* Criterion 9: the screen SHOWS the kind. 🔴 **One muted line in the header band, not a
-            `<dl>` and not a disabled radio.** The first version used a `<dl>` whose `<dt>` carried
-            the same `text-sm font-medium` as the Name `<label>` below it, so a parent scanning for
-            "where do I type" saw two field labels and one box. A greyed-out radio is worse: it reads
-            as "temporarily unavailable, try again later", which is false. This is DERIVED metadata
-            about the athlete, and the day page already has an idiom for exactly that — the role on
-            the date line (V1-23 D1). ⚠️ The copy says where the value comes from and stops; the
-            first version said "not editable **here**", which sends a parent hunting for the
-            elsewhere that does not exist (a wrong kind is a `db:correct` correction, D7). */}
-        <p className="text-muted-foreground text-sm">
-          {PROFILE_KIND_LABELS[profile.kind]} · {ATHLETE_FORM_COPY.kindNote}
-        </p>
+        {/* Criterion 9: the screen SHOWS the kind — as a **label under the heading, and nothing
+            else** _(maintainer, 2026-11-07)_. Two earlier versions over-built it: a `<dl>` whose
+            `<dt>` carried the same weight as the Name `<label>`, so a parent scanning for "where do
+            I type" saw two field labels and one box; then the same line plus "set when the athlete
+            was added", which explains a question nobody asked. A greyed-out radio would be worse
+            still — it reads as "temporarily unavailable", which is false.
+            The kind is page metadata about who this is, the same shape as the day role on the day
+            page's date line (V1-23 D1). It needs no caption, and the absence of a control is not a
+            thing to apologise for. */}
+        <p className="text-muted-foreground text-sm">{PROFILE_KIND_LABELS[profile.kind]}</p>
       </header>
 
       <RenameForm profileId={profile.id} name={profile.name} from={from} fallbackPath={own} />

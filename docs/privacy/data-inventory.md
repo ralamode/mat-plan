@@ -22,15 +22,22 @@ only way a notice about minors' health data is worth anything.
 > `previous_name` column, so a **mis-correction is unrecoverable from the app**. A later feature that
 > wants rename history is adding storage about a minor and owes this file a row. ⚠️ The name is NOT
 > sent to Sentry (`profile-actions.ts` passes neither `formData` nor `headers`) and is NOT exported.
-> 🔴 **The notice DID need an edit, and the first version of this banner said it did not.** The
-> storage claim it cited (`notice.md` → "a name for each athlete… whatever you type") is true and
-> unchanged — but the count sentence **"Two text boxes have no filter"** is the plain-language
+> 🔴 **The notice needed ONE edit, for accuracy — and not the warning that was first drafted.** Two
+> separate questions got conflated, so both answers are recorded here.
+> **(a) The count: edited.** `notice.md`'s **"Two text boxes have no filter"** is the plain-language
 > derivation of §3's own "two", the line this PR changed to three. A person can now type unfiltered
-> text into a third box. Found by the privacy lens on #350, after the "no edit" conclusion had been
-> recorded. The notice now reads **three**, says which of them reach the export (the name does not),
-> and adds one sentence saying a rename keeps no record of the old name. `Last updated` bumped and
-> `pnpm privacy:generate` re-run. **The lesson, for the next chunk:** a count in §3 is a claim the
-> notice restates in words, so changing the count is a notice edit even when nothing new is stored.
+> text into a third box, so the published sentence had become false. It reads **three** now and says
+> which of them reach the export (a name does not). Found by the privacy lens on #350, after a "no
+> edit owed" conclusion had already been recorded here. **The lesson:** a count in §3 is a claim the
+> notice restates in words, so changing it is a notice edit even when nothing new is stored.
+> **(b) The "no undo" warning: NOT added** _(maintainer, 2026-11-07)_. A draft added _"Renaming an
+> athlete replaces the old name — we keep no record of what it was before."_ It was removed before
+> merge: **nothing requires it.** A privacy notice states what is held, by whom, and for how long;
+> there is no obligation to disclose what is _not_ retained, and renaming without an undo is the
+> ordinary behaviour of every product people already use. GDPR Art. 16 makes a rename the
+> _exercise_ of the rectification right, not an event needing a caveat. The retention answer —
+> "a previous name: not kept" — belongs in §8 below, which is evidence, not in the notice, which is
+> for what a person needs to know. **Add a warning when a rule or a real harm asks for one.**
 > 🔴 **§7 / §8 re-read 2026-11-05** for the **waitlist** (`INVITE-1`'s privacy half, arriving ahead of
 > its plan because the setting was switched on in production): Clerk's access mode moved from
 > `Invite-only` (`restricted`) to **`Waitlist`** (`waitlist`), observed on the production instance.

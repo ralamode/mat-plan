@@ -40,9 +40,6 @@ and, since the rename screen, an **athlete's name**. Whatever goes in is stored 
 Worth knowing, because of who is usually typing. The first two also appear in your export; a name
 does not — the export is filed under an id, not a name.
 
-**Renaming an athlete replaces the old name.** We keep no record of what it was before, so if you
-change it by mistake you will have to type the old one back from memory.
-
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
 browser, and an identifier each device generates per logged item so the same entry is not saved twice.
 

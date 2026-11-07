@@ -789,13 +789,6 @@ export const ATHLETE_FORM_COPY = {
   /** Shown in a `role="status"` region after a successful rename, before the page navigates back. */
   saved: 'Name saved.',
   /** The kind, shown and not editable (criterion 9 asks the form to SHOW it). */
-  /**
-   * Where the kind came from, and nothing more. ⚠️ It said "…and not editable **here**", which sends
-   * a parent hunting for the elsewhere that does not exist — a wrong kind is a `db:correct`
-   * correction (D7), not another screen. A screen that shows a value with no control and no
-   * explanation reads as a bug; one that says where the value was set reads as a decision.
-   */
-  kindNote: 'set when the athlete was added',
   /** The day page's link to this screen, and the spec that locates it. One definition. */
   renameLink: (name: string) => `→ Rename ${name}`,
   /** The rename screen's way back to the athlete. */
