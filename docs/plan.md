@@ -2071,6 +2071,22 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   requires disclosing what is _not_ retained; a rename is the exercise of the rectification right,
   not an event needing a caveat. The retention answer lives in the inventory's §8.
 
+- **DX-12 — `db:verify` as per-feature suites.** 📐 **PLANNED, PANELLED AND DEFERRED 2026-11-07**
+  ([plan](./plans/dx-12-verify-suites.md)). `packages/db/scripts/verify.ts` is 7,213 lines and every
+  DB-touching PR appends before its last line — 26 commits in six weeks. `docs/parallel-work.md`
+  already names the response to a file that keeps failing gate 6: _"the file is doing two jobs —
+  which is a refactor, filed as a row"_. **This is that row.**
+  🔴 **Deferred because its premise did not survive the panel**, and the plan's review-response log
+  is the artifact: the split does **not** unlock parallel lanes (the CRUD-1 milestone's 2026-10-23
+  gate run already found _"gate 1 fails for every pair, on the guide alone"_, so CRUD-1's lanes are
+  orders of work, not concurrency), the proposed evidence could not prove no assertion was lost, and
+  **three** guards hard-code the path rather than one. **Do not re-plan this from scratch** — the log
+  carries five lenses' worth of findings, each verified against the tree.
+  **Trigger:** the next PR that would add a large block to `verify.ts`, or the first time two tracks
+  genuinely need to append to it. **Shape when it happens:** one PR — a `SUITES` loop at the bottom
+  of an otherwise untouched `verify.ts`, the newest self-contained blocks moved, the three guards
+  widened and each probed red. Not the three-PR version the plan's body describes.
+
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
   📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows
