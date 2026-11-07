@@ -240,8 +240,13 @@ and complete; this is the one thing it cannot reach.
    than the DAL, so the copies would go unproven.
    ⚠️ **THE CONSEQUENCE TO UNDERSTAND BEFORE `a-r` SHIPS: flipping a kid to adult empties
    `prescribed` in every PAST month of their export, and flipping back restores it.** Nothing is
-   snapshotted. That is deliberate — a program a non-child should not have been reading is not
-   retroactively theirs — and `a-r`'s edit form says so, because it is the screen that can perform
+   snapshotted. ⚠️ **The justification this invariant shipped with is half-false** _(2026-11-07)_: "a program a
+   non-child should not have been reading is not retroactively theirs" holds for the household's
+   adult and **not** for a kid who ages out, whose `prescribed` cells were legitimately theirs when
+   logged — and ageing out is the realistic trigger. `kind` was therefore made **not editable** in
+   `PROF-1` a-r, and the prerequisite for ever making it editable is that the export stop depending
+   on today's `kind`. The behaviour below is unchanged and still proved; only the reasoning is
+   corrected — and `a-r`'s edit form says so, because it is the screen that can perform
    the flip. Proved in both directions by a `db:verify` flip case, and by two `db:mutations` patches:
    one drops the conjunct (an adult then reads the kids' program), the other inverts
    `PROGRAM_READ_KIND` (kids read nothing), because a missing conjunct and a wrong constant are
