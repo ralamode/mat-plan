@@ -32,3 +32,17 @@
   query; it cannot tell you a page got slower for a person on a phone. That is Core Web Vitals, still
   blocked behind the `connect-src` decision in `OBS-1`.
   `docs/lessons.md` gains the general rule, because the next person reaches for a migration.
+  🔴 **`OBS-3` is also SCOPED, not just corrected** _(maintainer, 2026-11-06)_: _"I do think we should
+  track eventually — it doesn't mean we need the granularity of kids' private data, just the
+  interactions."_ The row stops reading as "analytics, probably never" and becomes **first-party,
+  aggregate interaction counts** — which screens and controls get used, in this app's own Postgres,
+  with **no third-party product, no `profile_id` on an event, no values, and no per-child stream**.
+  That narrowing is what makes it notice-compatible rather than a breach: `notice.md:138`'s "no
+  analytics product" stays **true**, because a first-party counter is not a product, while
+  `notice.md:86`'s _"no analytics about you"_ becomes false as written and gets the honest
+  replacement — _we count which screens get used, never who used them_ — in the same PR, with a
+  `data-inventory.md` row and the maintainer's re-signature.
+  ⚠️ **It does not wait on `OBS-1`:** first-party counts post to this app's own origin, so
+  `connect-src 'self'` already allows them. And the derive-from-`entries` route stays **first**,
+  because it needs no new storage — interaction counts answer only what it cannot, namely that a
+  control nobody taps leaves no row behind.
