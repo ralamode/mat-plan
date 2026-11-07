@@ -483,6 +483,17 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **`CREATE EXTENSION` in a migration turns `db:verify` red on every PR afterwards.** → Every
+  migration is replayed on **PGlite**, which ships no contrib extensions: `CREATE EXTENSION IF NOT
+EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_available_extensions`
+  has no row for it (probed on `@electric-sql/pglite@0.5.13`). The `IF NOT EXISTS` does **not** help —
+  it guards against already-installed, not against unavailable. → A Postgres extension the app does
+  not read is an **operator action against prod**, not schema: there is nothing for a migration to
+  keep in sync, and the runbook is the right artifact
+  ([runbooks.md](./runbooks.md) → "Enable `pg_stat_statements` on prod"). ⚠️ **And do not rescue a red
+  `db:verify` by wrapping the statement in a conditional** — that makes the extension silently absent
+  in production too, turning a loud failure into a quiet one. (`docs/obs-cookie-and-pg-stat-statements`)
+
 - **`guides:check` reported OK while enforcing 3 of `write-path.md`'s 13 `owns:` entries.** → The
   frontmatter parser ended the `owns:` list at the first line that was not a `- item`, and a `#`
   comment is such a line (`check-feature-guides.mjs`, the `else if (line.trim() !== '')` branch).
