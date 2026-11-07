@@ -40,7 +40,6 @@ export const ACTION_SCOPES = ['profile', 'household'] as const;
 export type ActionScope = (typeof ACTION_SCOPES)[number];
 export const ACTION_SCOPE = keyBySelf(ACTION_SCOPES);
 
-/** An action the refusal matrices drive. */
 /**
  * An action the refusal matrices drive.
  *
@@ -54,7 +53,7 @@ export const ACTION_SCOPE = keyBySelf(ACTION_SCOPES);
  * the claim said it had replaced. The plan's own Risks row said "prose and review, not a type"
  * before a later round claimed otherwise.
  */
-type MatrixEntry = {
+export type MatrixEntry = {
   readonly refusal: string;
   readonly scope: ActionScope;
   readonly excluded?: never;
@@ -74,7 +73,7 @@ type MatrixEntry = {
  * `AUTH-1` 1d deleted. Every future entry is therefore an edit to a pinned assertion, read by a
  * human, rather than a line that slips in.
  */
-type ExcludedEntry = {
+export type ExcludedEntry = {
   readonly excluded: { readonly reason: string; readonly provenBy: string };
   /** See `MatrixEntry.excluded` — these two are what make the union exclusive. */
   readonly scope?: never;

@@ -10,10 +10,16 @@
   it right first:** its Risks row read "prose and review, not a type" before a later panel round
   claimed otherwise and was accepted unverified. Fixed with `excluded?: never` /
   `scope?: never; refusal?: never`; probed RED (2 errors) and green.
-  **A new test file pins what is pinnable, and says what is not.** Exclusivity is a compile-time
-  property — a `@ts-expect-error` would pass whether or not the union is exclusive, since the
-  directive only needs _an_ error. So the tests assert the registry's observable contents instead,
-  and the compile half is held by the `never`s and `pnpm typecheck`.
+  🔴 **A first draft of this PR then shipped a SECOND unprobed claim, inside the PR about the first.**
+  Its new test file said exclusivity "cannot be asserted" because a `@ts-expect-error` "would pass
+  whether or not the union is exclusive, since the directive only needs _an_ error". **Probed, and
+  false:** against the pre-fix union the exact literal that used to compile produces no error at all,
+  so the directive goes unused and `tsc` fails with **TS2578**; against the post-fix union it passes.
+  Caught by the pre-merge lenses — the practice that was missing when #345 shipped. The file now
+  carries a real **exclusivity pin**: two `@ts-expect-error` literals that start compiling the moment
+  either `never` is deleted (probed RED, two TS2578s), plus two shapes that must still be accepted so
+  the pin cannot pass by rejecting everything. ⚠️ It is held by **`pnpm typecheck`**, not
+  `vitest run` — a green test run is not the proof, and the file says so.
   🔴 **WP-1 also shipped the option its own panel REJECTED.** S3 ("defer the household suite") was
   rejected in the log; the diff deferred it anyway and recorded no deviation. A `household` entry
   today would meet unauth + rate-limit only — **no wrong-owner proof**, which AGENTS.md calls

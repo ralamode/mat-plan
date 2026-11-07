@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { ACTION_SCOPE, MUTATING_ACTIONS, excludedActionNames } from './mutating-actions';
+import {
+  ACTION_SCOPE,
+  MUTATING_ACTIONS,
+  excludedActionNames,
+  type ExcludedEntry,
+  type MatrixEntry,
+} from './mutating-actions';
 
 /**
  * 🔴 **These tests exist because the claim they pin shipped FALSE.**
@@ -10,13 +16,42 @@ import { ACTION_SCOPE, MUTATING_ACTIONS, excludedActionNames } from './mutating-
  * requires each property to exist in *some* member, so an entry carrying both compiled, was
  * classified as excluded, and silently got no binding and no refusal matrix.
  *
- * ⚠️ **The exclusivity itself cannot be asserted at runtime** — it is a compile-time property, and a
- * `@ts-expect-error` here would pass whether the union is exclusive or not (the directive only
- * requires *an* error, and a wrong-shaped literal errors either way). What these tests pin is the
- * part that is observable: the registry's actual contents, and the invariant that every entry is one
- * kind or the other. The compile-time half is held by `MatrixEntry.excluded?: never` /
- * `ExcludedEntry.scope?: never` and by `pnpm typecheck`.
+ * 🔴 **The compile half IS pinnable, and the pin is below — an earlier draft of this file claimed it
+ * was not.** That draft said a `@ts-expect-error` "would pass whether or not the union is
+ * exclusive, since the directive only requires *an* error". **Probed, and false:** against the
+ * pre-fix union the exact literal that used to compile produces no error at all, so the directive
+ * goes unused and `tsc` fails with **TS2578**; against the post-fix union it passes. The directive
+ * distinguishes them precisely. ⚠️ Writing that unprobed reason into a PR whose whole subject was an
+ * unprobed claim is the same mistake one level up, which is why the retraction stays here.
+ *
+ * **Where each half is enforced:** the exclusivity pin below is held by **`pnpm typecheck`** — this
+ * file is inside `apps/web`'s tsconfig — **not** by `vitest run`, so a green test run is not the
+ * proof. The runtime `describe` is a second tripwire for the case where someone loosens the types
+ * *and* writes a bad entry.
  */
+
+/**
+ * 🔴 **THE EXCLUSIVITY PIN.** Each `@ts-expect-error` below asserts the literal beneath it does NOT
+ * satisfy the union. If someone deletes `MatrixEntry.excluded?: never` or `ExcludedEntry.scope?:
+ * never`, these literals start compiling, the directives become unused, and **`tsc` fails with
+ * TS2578** — the probe, made permanent. Verified RED against the pre-fix union and green against
+ * this one.
+ */
+const _exclusivityPin = {
+  // @ts-expect-error — an entry may not carry BOTH a scope and an exclusion (MatrixEntry.excluded)
+  both: { refusal: 'x', scope: ACTION_SCOPE.profile, excluded: { reason: 'r', provenBy: 'p' } },
+  // @ts-expect-error — nor an exclusion beside a scope without a refusal (ExcludedEntry.scope)
+  half: { scope: ACTION_SCOPE.profile, excluded: { reason: 'r', provenBy: 'p' } },
+} as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
+void _exclusivityPin;
+
+/** The two shapes that MUST still be accepted — so the pin above cannot pass by rejecting everything. */
+const _acceptedShapes = {
+  matrix: { refusal: 'x', scope: ACTION_SCOPE.profile },
+  excluded: { excluded: { reason: 'r', provenBy: 'p' } },
+} as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
+void _acceptedShapes;
+
 describe('the action registry is one kind of entry or the other', () => {
   it('no entry carries both a scope and an exclusion', () => {
     const both = Object.entries(MUTATING_ACTIONS)
