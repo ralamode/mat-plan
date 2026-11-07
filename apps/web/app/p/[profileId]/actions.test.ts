@@ -1,6 +1,3 @@
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import {
   ACTIVITY_TYPE_KEYS,
   BLANK_SET_MESSAGE,
@@ -105,8 +102,15 @@ import {
   logLifeActivitiesAction,
   logStrengthSessionAction,
 } from './actions';
-import { MUTATING_ACTIONS, type MutatingActionName } from './mutating-actions';
-import { code, exportedActionNames, USE_SERVER_RE } from '@/test/source-scan';
+import {
+  ACTION_SCOPE,
+  MUTATING_ACTIONS,
+  excludedActionNames,
+  matrixEntry,
+  type ActionScope,
+  type MatrixActionName,
+} from './mutating-actions';
+import { code, exportedActionNames, serverActionModules, USE_SERVER_RE } from '@/test/source-scan';
 
 // A valid tile-supplied public id (UUIDv7). The DAL re-validates it server-side;
 // the action must thread it through to both the ownership check and revalidate path.
@@ -144,33 +148,78 @@ beforeEach(() => vi.clearAllMocks());
 type ActionFn = (s: ActionState, f: FormData) => Promise<ActionState>;
 
 /**
- * AUTH-1 1b-bis: the NAMES and the refusal copy now come from `MUTATING_ACTIONS`, so this list cannot
- * silently fall behind `actions.ts`. This map only binds each name to its imported function — and
- * because it is a `Record<MutatingActionName, ActionFn>`, **forgetting an entry is a TYPE error**, not
- * a quietly thinner suite. The filesystem cross-check below closes the remaining direction.
+ * AUTH-1 1b-bis: the NAMES and the refusal copy come from `MUTATING_ACTIONS`, so this list cannot
+ * silently fall behind the modules on disk. Because it is keyed by `MatrixActionName`, **forgetting
+ * an entry is a TYPE error**, not a quietly thinner suite — and an action marked `excluded` in the
+ * registry cannot be given one. The filesystem cross-check below closes the remaining direction.
+ *
+ * 🔴 **ONE table per action, not three (WP-1).** `ACTION_FNS`, the hand-written `ALL_WRITERS` array
+ * and the `VALID_BODY` map were three structures keyed by the same names, so a new action had three
+ * places to be forgotten and `updateProfileRoutine` was asserted by hand beside the array it was
+ * missing from. `writers` is a **non-empty tuple at the type level**, so a binding cannot claim an
+ * action writes nothing.
  */
-const ACTION_FNS: Record<MutatingActionName, ActionFn> = {
-  logBodyweightAction,
-  logCheckinsAction,
-  logStrengthSessionAction,
-  logLifeActivitiesAction,
-  editStrengthSetAction,
-  editBodyweightAction,
-  editRoutineAction,
+/**
+ * ⚠️ `Writer` is deliberately loose, not `Mock`. These are the REAL DAL imports — `vi.mock` replaces
+ * them at runtime but their static types stay the originals, so annotating `Mock` does not compile.
+ * `(...a: never[]) => unknown` accepts any of them contravariantly while keeping the part that
+ * matters: a **non-empty tuple**, so a binding cannot claim an action writes nothing.
+ */
+type Writer = (...a: never[]) => unknown;
+
+type Binding = {
+  readonly fn: ActionFn;
+  readonly writers: readonly [Writer, ...Writer[]];
 };
 
-const ALL_ACTIONS: [string, ActionFn, string][] = (
-  Object.keys(MUTATING_ACTIONS) as MutatingActionName[]
-).map((name) => [name, ACTION_FNS[name], MUTATING_ACTIONS[name]]);
+const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
+  logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
+  logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
+  logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
+  // Shares `logCheckinEntries` with check-ins — the writer is the entry batch, not the screen.
+  logLifeActivitiesAction: { fn: logLifeActivitiesAction, writers: [logCheckinEntries] },
+  editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
+  editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
+  editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
+};
 
-/** Every writer the DAL exposes — none may run when an action refuses. */
-const ALL_WRITERS = [
-  logBodyweight,
-  logCheckinEntries,
-  logStrengthSession,
-  editStrengthSet,
-  editBodyweight,
-];
+/**
+ * 🔴 **One assertion ties each registration to the function it names (WP-1).** Shorthand properties
+ * hide a copy-paste: `fooAction: { fn: logBodyweightAction, … }` would pass every matrix below while
+ * the real `fooAction` was never called. Viable because every action is a plain
+ * `export async function` with the Sentry wrapper inside its body, so `.name` survives the build.
+ */
+describe('the bindings name the functions they claim', () => {
+  it.each(Object.keys(ACTION_BINDINGS) as MatrixActionName[])('%s binds its own function', (n) => {
+    expect(ACTION_BINDINGS[n].fn.name).toBe(n);
+  });
+});
+
+const MATRIX_NAMES = Object.keys(ACTION_BINDINGS) as MatrixActionName[];
+
+const ALL_ACTIONS: [string, ActionFn, string][] = MATRIX_NAMES.map((name) => [
+  name,
+  ACTION_BINDINGS[name].fn,
+  matrixEntry(name).refusal,
+]);
+
+/** Matrix rows for one addressing mode — `profile` today; `household` fills at PROF-1 a-1. */
+const actionsScoped = (scope: ActionScope): [string, ActionFn, string][] =>
+  MATRIX_NAMES.filter((n) => matrixEntry(n).scope === scope).map((name) => [
+    name,
+    ACTION_BINDINGS[name].fn,
+    matrixEntry(name).refusal,
+  ]);
+
+const PROFILE_ACTIONS = actionsScoped(ACTION_SCOPE.profile);
+
+/**
+ * Every writer any binding declares — **derived, never hand-listed**. The old array omitted
+ * `updateProfileRoutine`, which is why each refusal case carried a separate
+ * `expect(updateProfileRoutine).not.toHaveBeenCalled()`; a writer no binding declares is now
+ * asserted by construction.
+ */
+const ALL_WRITERS = [...new Set(MATRIX_NAMES.flatMap((n) => ACTION_BINDINGS[n].writers))];
 
 /**
  * 🔴 **The MANDATORY unauth suite (AGENTS.md → Backend / API PR rules), and at `1d` it is the only
@@ -1608,7 +1657,12 @@ describe('every Server Action — wrong household → the same refusal as not-fo
   it('every action has a body that reaches the ownership check (no vacuous case)', async () => {
     // The guard on the guard: with the default mocks every one of these must SUCCEED, so a case that
     // refuses below is refusing for the reason this suite is about.
-    for (const [name, action] of ALL_ACTIONS.map(([n, a]) => [n, a] as const)) {
+    // 🔴 PROFILE-ADDRESSED ONLY (WP-1). These three sites make a `profileId` foreign; an action
+    // with no `profileId` in its body cannot be driven that way, so a `household` entry is
+    // excluded here by scope rather than by being forgotten. ⚠️ The unauth and rate-limit
+    // suites above stay over ALL entries on purpose — a household action must still be
+    // rate-limited, and `addAthleteAction` is the one that grows a table without bound.
+    for (const [name, action] of PROFILE_ACTIONS.map(([n, a]) => [n, a] as const)) {
       vi.clearAllMocks();
       const res = await action(initial, VALID_BODY[name]!());
       expect(
@@ -1618,7 +1672,7 @@ describe('every Server Action — wrong household → the same refusal as not-fo
     }
   });
 
-  it.each(ALL_ACTIONS)(
+  it.each(PROFILE_ACTIONS)(
     '%s refuses a profile outside the request’s household',
     async (name, action, notFound) => {
       vi.mocked(getProfileByPublicId).mockResolvedValue(null);
@@ -1640,7 +1694,7 @@ describe('every Server Action — wrong household → the same refusal as not-fo
   it('the refusal is byte-identical to the no-session one, for every action', async () => {
     // The whole 404-never-403 argument (ADR 0006). If these two ever diverge the envelope becomes an
     // oracle for "that profile exists, just not for you".
-    for (const [name, action, notFound] of ALL_ACTIONS) {
+    for (const [name, action, notFound] of PROFILE_ACTIONS) {
       vi.clearAllMocks();
       vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
       const unauthed = await action(initial, VALID_BODY[name]!());
@@ -1668,18 +1722,61 @@ describe('every Server Action — wrong household → the same refusal as not-fo
  * It reads the module's SOURCE rather than its exports because `actions.ts` is mocked to the eyeballs
  * in this file — importing it for reflection would return the mocks, not the real surface.
  */
-describe('the action list matches the module on disk (AUTH-1 1b-bis)', () => {
-  const ACTIONS_TS = join(dirname(fileURLToPath(import.meta.url)), 'actions.ts');
+/**
+ * 🔴 **The registry matches EVERY Server Action module on disk, not just this one (WP-1).**
+ *
+ * Until WP-1 this `describe` hard-coded `actions.ts` in its own directory. That made the whole
+ * refusal apparatus single-module by construction: `ALL_ACTIONS` is built from the registry's keys,
+ * every `it.each(ALL_ACTIONS)` iterates it, and nothing forced a SECOND module's exports into the
+ * registry. So a new `app/p/*-actions.ts` could be added, pass the pinned module list, pass the
+ * source-text boundary guard — and face **no** unauth, rate-limit, wrong-household or
+ * byte-identical-refusal test at all. The source guard proves the call is PRESENT, not that it runs
+ * before the DAL, so that was the only thing covering it.
+ *
+ * Reading the scan instead closes it, and does so in the direction that matters: an exported action
+ * missing from the registry fails here, and once it is in the registry
+ * `Record<MatrixActionName, Binding>` forces a binding, and every matrix runs it. **Detecting an
+ * unlisted module would NOT have been enough** — that is bookkeeping, and the action would still be
+ * untested. This is why PROF-1 a-r is gated on WP-1: it registers `renameAthleteAction` while that
+ * function lives in `app/p/profile-actions.ts`, which would have made the old assertion fail with 8
+ * keys against 7 exports.
+ */
+describe('the registry matches every Server Action module on disk (WP-1)', () => {
+  const modules = serverActionModules();
 
-  it('actions.ts is a Server Action module, so the scan is looking at the right file', () => {
-    expect(USE_SERVER_RE.test(code(ACTIONS_TS))).toBe(true);
+  it('the scan finds at least one module, so nothing below is vacuous', () => {
+    expect(modules.length).toBeGreaterThan(0);
   });
 
-  it('exports exactly the actions MUTATING_ACTIONS names', () => {
-    expect(exportedActionNames(ACTIONS_TS).sort()).toEqual(Object.keys(MUTATING_ACTIONS).sort());
+  it('every scanned module really carries the directive', () => {
+    for (const m of modules) expect(USE_SERVER_RE.test(code(m))).toBe(true);
+  });
+
+  it('the exported actions across all modules are exactly the registry keys', () => {
+    const onDisk = modules.flatMap((m) => exportedActionNames(m)).sort();
+    expect(onDisk).toEqual(Object.keys(MUTATING_ACTIONS).sort());
   });
 
   it('the detector is not vacuous — it finds a name that is really there', () => {
-    expect(exportedActionNames(ACTIONS_TS)).toContain('logBodyweightAction');
+    expect(modules.flatMap((m) => exportedActionNames(m))).toContain('logBodyweightAction');
+  });
+
+  /**
+   * ⚠️ Pinned EMPTY, the `ALLOWLIST` idiom. Exclusion is a member of the registry union, so a
+   * household-addressed action cannot be excluded as a matter of type — but nothing stops a
+   * `profile` one being excused, so the list is asserted rather than assumed. Every future entry is
+   * an edit to this line, read by a human.
+   */
+  it('no action is excluded from the matrices', () => {
+    expect(excludedActionNames()).toEqual([]);
+  });
+
+  /**
+   * A name exported by two modules would make the registry ambiguous and silently drop one from the
+   * sorted equality above. Cheap to pin, impossible to debug if it ever happens.
+   */
+  it('no action name is exported by two modules', () => {
+    const names = modules.flatMap((m) => exportedActionNames(m));
+    expect(names.length).toBe(new Set(names).size);
   });
 });

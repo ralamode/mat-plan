@@ -270,7 +270,21 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    *    definition can. That is the half that is strictly stronger than what 1c-3b shipped.
    */
   const ENTRY_CALL = /\bawait\s+enterMutation\s*\(/;
-  const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'\.\/mutation-entry'/;
+  /**
+   * 🔴 **ONE literal, and it is the ALIAS — never an alternation (WP-1).** The helper moved up to
+   * `app/p/` so every `/p` action module can reach it, and the obvious edit was to accept `'./'` OR
+   * `'../'`. **This file's standing rule forbids that** (the one-conjunct notes above;
+   * `docs/features/write-path.md` invariant 1): a regex matching either passes on either and proves
+   * neither.
+   * ⚠️ **The alternation would also open a shadow**, which is the concrete reason rather than the
+   * stylistic one: a NEW local `app/p/[profileId]/mutation-entry.ts` — a weaker `enterMutation` that
+   * skips the limiter — would satisfy `'./mutation-entry'` from `actions.ts`, while the order `it`
+   * below inspects only the canonical file. That is the "local function of the same name" hole this
+   * conjunct exists for, returning as a local MODULE.
+   * ⚠️ **"Both depths" was never enough anyway:** the CRUD-1 spec puts V1-22's program edit actions
+   * under `app/p/[profileId]/program/`, a THIRD depth. The alias is depth-independent.
+   */
+  const ENTRY_IMPORT = /import\s*\{\s*enterMutation\s*\}\s*from\s*'@\/app\/p\/mutation-entry'/;
   /**
    * 🔴 **The one source-half conjunct the collapse WEAKENED, restored.** Before it, the gate was one
    * inseparable expression — `if (!(await hasGateAccess())) return {…}` — so matching the call and
@@ -358,9 +372,10 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
       [],
     );
     // A local function of the same name would satisfy the slice scan above and check nothing.
-    expect(ENTRY_IMPORT.test(src), `${rel} must import enterMutation from ./mutation-entry`).toBe(
-      true,
-    );
+    expect(
+      ENTRY_IMPORT.test(src),
+      `${rel} must import enterMutation from '@/app/p/mutation-entry' (the ONE pinned specifier — never a relative path, which a local shadow module could satisfy)`,
+    ).toBe(true);
   });
 
   /**
@@ -377,7 +392,9 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    * is the one keyed on a value the earlier check produces.
    */
   it('enterMutation holds the session and the limiter — in that order', () => {
-    const src = code(join(APP_DIR, 'p', '[profileId]', 'mutation-entry.ts'));
+    const src = code(join(APP_DIR, 'p', 'mutation-entry.ts')); // WP-1 moved it out of the dynamic
+    // segment; this path moves with it or the read throws ENOENT and takes the only
+    // order proof with it.;
     const session = src.search(SESSION_CALL);
     const limiter = src.search(LIMITER_CALL);
     expect(session, 'the session check').toBeGreaterThan(-1);

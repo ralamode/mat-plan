@@ -7,7 +7,9 @@ owns:
   # AUTH-1 1c-3b, narrowed at 1d: the session + limiter for all seven mutations live in ONE function, so
   # the blast radius of an edit here is every write in the app. The enumeration it is checked against
   # lives next to it.
-  - apps/web/app/p/[profileId]/mutation-entry.ts
+  # WP-1 moved this up out of the dynamic segment so every `/p` action module can import it by
+  # ONE pinned alias (`@/app/p/mutation-entry`) — see invariant 1.
+  - apps/web/app/p/mutation-entry.ts
   - apps/web/app/p/[profileId]/mutating-actions.ts
   - packages/db/src/writers/
   - packages/db/src/client.ts
@@ -156,10 +158,35 @@ flowchart LR
      when the action refuses — and cross-checks its own list against the module on disk.
 
    The action list has one source, `app/p/[profileId]/mutating-actions.ts`. Adding an action to
-   `actions.ts` without adding it there turns the cross-check red; adding it there without binding a
-   function is a **type** error. ⚠️ **`1c` switched the asserted call to the session check and `1d`
+   **any** Server Action module without adding it there turns the cross-check red; adding it there
+   without binding a function is a **type** error.
+   🔴 **The cross-check reads EVERY module since WP-1, not just `actions.ts`.** It used to hard-code
+   that one file, which made the whole refusal apparatus single-module: a new `app/p/*-actions.ts`
+   could pass the pinned module list and the source-text guard and face **no** unauth, rate-limit,
+   wrong-household or byte-identical test. Reading the scan forces every exported action into the
+   registry, where `Record<MatrixActionName, Binding>` then forces a binding and every matrix runs
+   it. ⚠️ Detecting an _unlisted module_ would not be equivalent — that is bookkeeping, and the
+   action would still be untested.
+   **Each registry entry is `{ refusal, scope }` or `{ excluded: { reason, provenBy } }`** — one
+   discriminated union, not a list beside a list. `scope` is **addressing**, never `HouseholdScope`:
+   `profile` means the body carries a `profileId` the wrong-household matrix can make foreign;
+   `household` means it does not, so a household matrix drives a DAL scope miss instead. Because the
+   two members are exclusive, **"a household-addressed action may never be excluded" is a type error
+   rather than a rule in prose**, and `excludedActionNames()` is pinned empty so every future
+   exclusion is an edit a human reads.
+   **New actions go in a per-feature `*-actions.ts` module under `app/p/`**, never appended to
+   `actions.ts`. The settled list of module names lives in the CRUD-1 spec's seams table — it calls
+   itself "the one home", so it is not copied here. ⚠️ **`1c` switched the asserted call to the session check and `1d`
    left it as the only one; it must never widen the regex to an alternation** — one matching either
-   passes on either and proves neither. That rule is why the gate conjunct was DELETED at `1d` rather
+   passes on either and proves neither.
+   🔴 **WP-1 tested that rule and kept it.** Moving `mutation-entry.ts` up to `app/p/` made
+   `'./mutation-entry'` wrong from the route folder, and the obvious edit was to accept `'./'` OR
+   `'../'`. That is the forbidden shape, and here it would open a concrete hole: a NEW local
+   `app/p/[profileId]/mutation-entry.ts` — a weaker `enterMutation` with no limiter — satisfies the
+   relative form from `actions.ts` while the order assertion inspects only the canonical file. The
+   fix is **one pinned specifier, the alias `@/app/p/mutation-entry`**, which is depth-independent
+   and cannot be satisfied by a sibling. It also survives the third depth the spec already plans
+   (`app/p/[profileId]/program/` for V1-22's edit actions). That rule is why the gate conjunct was DELETED at `1d` rather
    than folded into an `||` with the session one.
 
 2. **Ownership is proven by `public_id`, resolved inside the transaction.** Never trust an internal
