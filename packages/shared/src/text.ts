@@ -59,3 +59,37 @@ export const freeTextNoteSchema = z
   .refine((v) => !hasLineBreak(v), 'A note has to be a single line.')
   .transform((v) => v || undefined)
   .optional();
+
+/**
+ * Fold a person's NAME to a comparison key — "are these two the same name, to a human?" (PROF-1 D11).
+ *
+ * Created by PROF-1 a-r because rename is the first surface that has to ask the question; the
+ * duplicate warning (a-1d), the picker (PICK-1) and the movement catalog (MOV-1) are the other
+ * consumers, and all four must fold by the SAME rule or two of them disagree about what a duplicate
+ * is. One definition, imported — never a per-surface `.toLowerCase().trim()`.
+ *
+ * The steps, in order: **NFKD** → strip combining marks (`\p{M}`) → map the three apostrophes people
+ * actually type to `'` → collapse interior whitespace → trim → lower-case.
+ *
+ * ⚠️ **NFKD, not NFD, and that is the one choice worth arguing.** The question this answers is "would
+ * a parent read these as the same name", so the COMPATIBILITY forms must fold too: the ligature `ﬁ`
+ * and full-width `Ｚｏｅ` decompose to `fi` and `Zoe` under NFKD and stay distinct under NFD. Under NFD
+ * two names a parent reads as identical would not warn, which is the failure this exists to prevent.
+ *
+ * ⚠️ **It can return `''`** — a name of only combining marks folds to nothing. That is not a bug and
+ * callers must not treat the empty string as "no duplicate": `athleteNameSchema`
+ * (`packages/shared/src/profiles.ts`) rejects such a name at the boundary so it never reaches a
+ * comparison, which is why the fold is free to be lossy here.
+ *
+ * ⚠️ **A fold is NOT a display value and NOT a storage value.** The stored name is what the person
+ * typed (whitespace-collapsed by the schema, nothing else); this output exists only to be compared.
+ */
+export function foldName(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[‘’ʼ]/gu, "'")
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .toLowerCase();
+}

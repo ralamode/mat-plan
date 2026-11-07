@@ -59,6 +59,8 @@ vi.mock('@/lib/dal/profiles', () => ({
   })),
   // Default: the routine was persisted. The not-found test overrides to null.
   updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
+  // PROF-1 a-r. Default: the rename matched a live profile in this household.
+  renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
@@ -72,7 +74,7 @@ import {
 } from '@/lib/dal/entries';
 import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
-import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
+import { getProfileByPublicId, renameAthlete, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
@@ -102,6 +104,11 @@ import {
   logLifeActivitiesAction,
   logStrengthSessionAction,
 } from './actions';
+// 🔴 PROF-1 a-r — the first action imported here from a DIFFERENT module. Every matrix below is keyed
+// by the registry, not by this file's directory, so `renameAthleteAction` enters the unauth,
+// rate-limit, wrong-household and byte-identical-refusal suites exactly like the seven above. Its
+// own per-action behaviour lives beside it, in `app/p/profile-actions.test.ts` (WP-1's convention).
+import { renameAthleteAction } from '@/app/p/profile-actions';
 import {
   ACTION_SCOPE,
   MUTATING_ACTIONS,
@@ -181,6 +188,7 @@ const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
   editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
   editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
   editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
+  renameAthleteAction: { fn: renameAthleteAction, writers: [renameAthlete] },
 };
 
 /**
@@ -1652,6 +1660,7 @@ describe('every Server Action — wrong household → the same refusal as not-fo
       editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
     editBodyweightAction: () => amendForm(),
     editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+    renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
   };
 
   it('every action has a body that reaches the ownership check (no vacuous case)', async () => {

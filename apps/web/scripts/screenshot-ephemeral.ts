@@ -403,6 +403,11 @@ const STATES = {
   // V1-30b-ii — the history line with LENGTH units, which are now spelled out (`30 inches`,
   // `1 foot`). The lb/kg/sec/min codes are unchanged, so a lb-only session shows nothing.
   'history-spelled-units': seedLengthSession,
+  // PROF-1 a-r — the rename form's REFUSED state: the alert under the field, `aria-invalid` on the
+  // input, and the typed value STILL THERE. Interaction-only, and it is the one state that shows the
+  // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
+  // settles, refusals included, which would empty the box under its own "Enter a name." error).
+  'rename-rejected': null,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -511,6 +516,13 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await strength.getByLabel('Movement', { exact: true }).fill('Plank');
     // The chips vanish and the field word changes in the same update as the unit.
     await strength.getByLabel('What movement 1 measures').selectOption(UNIT_DIMENSION.time);
+  },
+  // PROF-1 a-r. Whitespace-only rather than empty: `required` stops a blank submit in the browser, so
+  // an empty field would never reach the server's refusal — which is the state being captured.
+  'rename-rejected': async (page) => {
+    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('   ');
+    await page.getByRole('button', { name: 'Save name', exact: true }).click();
+    await page.getByRole('alert').waitFor();
   },
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),

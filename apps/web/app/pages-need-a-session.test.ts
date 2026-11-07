@@ -317,7 +317,9 @@ describe('every Server Action re-checks the boundary itself (AUTH-1 1b-bis)', ()
    */
   it('finds exactly the Server Action modules this app is known to have', () => {
     // ⚠️ `app/gate/actions.ts` was the other entry until `1d` deleted it.
-    expect(modules.sort()).toEqual(['app/p/[profileId]/actions.ts']);
+    // PROF-1 a-r adds the second LIVE entry — the household-level athlete module WP-1's fixed set
+    // reserved. Every assertion in this describe now runs over both, which is the point of the list.
+    expect(modules.sort()).toEqual(['app/p/[profileId]/actions.ts', 'app/p/profile-actions.ts']);
   });
 
   it('the scan is not vacuous', () => {

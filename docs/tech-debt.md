@@ -360,6 +360,14 @@ _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.
 - **Impact:** low; each copy is tested. A fix to one (e.g. clearing on open) has to be made four times.
 - **Proposed fix:** PR 2 (check-ins) extracts the shared amend primitive (parent Decision 16); give
   it a small `useAnnounceAndFocus` hook and move all four onto it.
+  ✅ **Half of the destination exists as of `PROF-1` a-r (2026-11-07): `apps/web/components/announcer.tsx`.**
+  It owns the REGION — the `role="status"` element and the mounted-while-empty rule — and deliberately
+  **not** the trigger: the four copies differ in _what_ announces, and that difference is load-bearing
+  (`saved-announcer.tsx` explains why a value→value change must not announce). The transition half is
+  already single-sourced for action results, in `use-on-action-success.ts`.
+  ⚠️ **The count is still four.** a-r is the component's first consumer and converted none of them, so
+  this entry stays open; what changed is that there is now somewhere to move them to. a-1 and PROF-1 b
+  are the next consumers.
 - **Severity:** low.
 
 ### The strength writer's replay re-select is not scoped to the profile (found 2026-10-02, #212 review)

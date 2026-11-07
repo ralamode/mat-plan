@@ -56,7 +56,7 @@ export default async function ProfilePickerPage() {
         <h1 className="text-3xl font-semibold tracking-tight">
           {noHousehold ? NO_HOUSEHOLD_COPY.heading : PICKER_COPY.heading}
         </h1>
-        {/* ONB-0: the subhead BRANCHES. `PICKER_COPY.subhead` ("Pick a profile to start logging.") is an
+        {/* ONB-0: the subhead BRANCHES. `PICKER_COPY.subhead` ("Tap your name to start logging.") is an
             imperative with no object when the list is empty — it tells the reader to pick from nothing,
             40px above the block that says there is nothing to pick, and a screen reader hears both with
             nothing to supersede the false one.

@@ -74,7 +74,13 @@ const NARROW = { width: 360, height: 780 };
 const ROUTES = [
   { name: 'profile picker', path: APP_HOME_PATH },
   { name: 'Today', path: SEED_PROFILE_ROUTE },
+  // ⚠️ KEPT after PROF-1 a-r unlinked it (criterion 11 / M30): the route still exists and still
+  // renders, so dropping it from the scan would silently stop auditing a reachable page. It is
+  // unlinked, not deleted — ACT-1 replaces it.
   { name: 'routine editor', path: `${SEED_PROFILE_ROUTE}/routine` },
+  // PROF-1 a-r. The rename form is the first screen in the app whose only control WRITES a value a
+  // person typed, so a label or focus defect here costs more than on a logging surface.
+  { name: 'edit athlete', path: `${SEED_PROFILE_ROUTE}/edit` },
   // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
   // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
   // leaves with the harness when UI-3 picks a set.
@@ -89,8 +95,12 @@ const ROUTES = [
  * field, the check-in client-ids, the gate's `from`).
  *
  * `<a>` is EXCLUDED: WCAG 2.2 SC 2.5.8 has an explicit exception for links inline in a block of text,
- * and the app's links ("← All profiles", "Edit routine") are exactly that — growing them to 44px would
- * be a visual regression, not a fix. Link CARDS that behave like buttons are opted in separately below.
+ * and the app's links ("← All athletes", "→ Edit {name}") are exactly that — growing them to 44px
+ * would be a visual regression, not a fix. Link CARDS that behave like buttons are opted in
+ * separately below.
+ * ⚠️ **The consequence, now that those links carry `min-h-11` anyway:** nothing in THIS file asserts
+ * it. `athletes.spec.ts` measures the edit page's back link, because a link that is the recovery
+ * path from a writing screen is not "inline in a block of text" in any useful sense.
  */
 const INTERACTIVE = 'button, [role="button"], select, textarea, input:not([type="hidden"])';
 

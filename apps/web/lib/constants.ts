@@ -44,6 +44,19 @@ export const DEFAULT_TIME_ZONE = 'America/Los_Angeles';
 export const APP_HOME_PATH = '/p';
 
 /**
+ * The per-athlete routes, built from `APP_HOME_PATH` so there is one definition of where `/p` is
+ * (PROF-1 D8). Helpers rather than template literals at the call site: `/p/${id}` was written out in
+ * nine places across the day page, the tile, the routine editor and four specs, which is how one of
+ * them ends up pointing at a route that moved.
+ *
+ * ⚠️ **`athletePath` takes a PUBLIC id (UUIDv7)** — the only id the UI and URLs ever see. An internal
+ * `bigint` must never reach a path.
+ */
+export const athletePath = (publicId: string) => `${APP_HOME_PATH}/${publicId}`;
+/** The rename screen (PROF-1 a-r). `/p/<id>/edit`, the approved prototype's own path. */
+export const athleteEditPath = (publicId: string) => `${athletePath(publicId)}/edit`;
+
+/**
  * The served privacy notice (PRIV-2) — `docs/privacy/notice.md`, compiled into `app/privacy/`.
  *
  * It lands HERE, beside `APP_HOME_PATH`, not in `lib/access-gate.ts`: that module is the one AUTH-1
@@ -81,7 +94,15 @@ export const TOKEN_SETS_PATH = '/design/tokens';
 /** The profile picker's copy — one source for the page and the specs that land on it. */
 export const PICKER_COPY = {
   heading: 'Who’s logging today?',
-  subhead: 'Pick a profile to start logging.',
+  /**
+   * 🔴 **"Tap your name", not "Pick a profile" (PROF-1 a-r).** Two changes in one line, both from the
+   * approved prototype (`docs/prototypes/crud-1/index.html:2083`):
+   *   - **"Tap"** names the gesture on the device the screen is actually used on, which "Pick" does
+   *     not — the kids log on a phone on the gym floor.
+   *   - **"your name"** is the noun the person reading it uses. "Profile" is the schema's word; the
+   *     `PICKER_EMPTY_COPY` family already made that switch and this is the surface it was about.
+   */
+  subhead: 'Tap your name to start logging.',
 } as const;
 
 /** The product name: the tab title and the landing's `<h1>`. */
@@ -100,6 +121,29 @@ export const APP_NAME = 'mat-plan';
  * the second screen needing the same escape hatch (AGENTS.md — the second occurrence is the trigger).
  */
 export const CTA_CLASS = 'h-auto w-full py-2.5 text-center text-base whitespace-normal';
+
+/**
+ * The wrap rule for **every element that renders an athlete's name** (PROF-1 D11).
+ *
+ * 🔴 **`wrap-anywhere`, never `break-words`, and the difference is not cosmetic.** The two break
+ * lines identically — but only `anywhere` lets the break count toward the element's `min-content`
+ * width. So `break-words` does nothing wherever an element's width DERIVES from min-content, which
+ * is exactly where the names live: the picker tile's label (a row-flex item beside a
+ * `size-14 shrink-0` avatar), the "→ Edit {name}" link (`inline-flex w-fit`), and the day page's
+ * program note. An unbroken 40-character name then pushes the row past a 360px phone's 328px of
+ * usable width and the page scrolls sideways (SC 1.4.4).
+ *
+ * `min-w-0` is the other half: a flex item's default `min-width:auto` floors it at its content's
+ * min-content size, so the wrap rule has no effect until the floor is lifted.
+ *
+ * **One constant, not nine copies.** Three PRs apply this to nine renderers; it already drifted once
+ * (`strength-section.tsx` reached for `break-words` while citing this decision in its own comment).
+ * AGENTS.md → "Constants, enums & shared values": the second occurrence is the trigger.
+ *
+ * ⚠️ Not applicable to an **anonymous** flex item (text directly inside a flex container has no
+ * element to put a class on) — give it a wrapping `<span>` instead of settling for `break-words`.
+ */
+export const NAME_WRAP_CLASS = 'min-w-0 wrap-anywhere';
 
 /** The public source repository: `owner/name`, as the GitHub API wants it (screenshot publishing). */
 export const GITHUB_REPO = 'ralamode/mat-plan';
@@ -262,12 +306,18 @@ export const QUIET_LINK_CLASS =
  * "profile" (the schema's).
  */
 export const PICKER_EMPTY_COPY = {
-  /** Replaces `PICKER_COPY.subhead` when there are no athletes: "Pick a profile to start logging." is an
+  /** Replaces `PICKER_COPY.subhead` when there are no athletes: "Tap your name to start logging." is an
    *  imperative with no object here, and a screen reader hears it with nothing to supersede it. */
   subhead: 'Nobody is set up to log yet.',
   heading: 'No athletes yet',
   what: `${APP_NAME} is a logbook: you write down what an athlete did — strength sets, rep counts, time at practice — one day at a time. It doesn’t write the plan.`,
-  next: 'When an athlete exists, their day starts with a weigh-in and strength, and you add the rest from their routine editor.',
+  /**
+   * 🔴 **Rewritten at PROF-1 a-r because it named a screen this PR unlinks.** It used to end "…and
+   * you add the rest from their routine editor" — and acceptance criterion 11 (M30) removes the only
+   * link to that editor, so the sentence was about to send a first-run reader hunting for a route
+   * with no entry point. The SETTING stays the subject, per this family's own rule.
+   */
+  next: 'When an athlete exists, their day starts with a weigh-in and strength, and the rest follows the routine saved for them.',
   /** Leads with the STATE, not an imperative: "Add an athlete…" sends the reader hunting for a button
    *  that does not exist. Same phrasing family as `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked`. */
   notYet:
@@ -306,7 +356,7 @@ export const PICKER_EMPTY_COPY = {
  */
 export const NO_HOUSEHOLD_COPY = {
   /**
-   * Replaces `PICKER_COPY.subhead`: "Pick a profile to start logging." has no object here.
+   * Replaces `PICKER_COPY.subhead`: "Tap your name to start logging." has no object here.
    * ⚠️ **No "yet."** It promises the state resolves on its own, which is false in the wrong-account
    * case — that account is never linked, however long the reader waits.
    */
@@ -682,6 +732,48 @@ export const RATE_LIMITED = 'Too many saves just now. Wait a moment and try agai
 export const NO_PROFILE_LOG = 'No profile found to log against.';
 /** @see NO_PROFILE_LOG — the routine editor's wording of the same refusal. */
 export const NO_PROFILE_SAVE = 'No profile found to save against.';
+
+/**
+ * The refusal every **athlete-management** action returns (PROF-1 a-r; archive and restore join it
+ * at PROF-1 b).
+ *
+ * ⚠️ **ONE message for four states, for the reason `NO_PROFILE_LOG` gives: no session, an unknown
+ * id, a soft-deleted one, and another household's.** `actions.test.ts` pins the four as
+ * byte-identical, which is ADR 0006's 404-never-403 argument made structural rather than likely.
+ *
+ * 🔴 **It says "athlete", not "profile", and that is a deliberate break from `NO_PROFILE_*`**
+ * (PUX-8). "Profile" is the schema's word and it is the one the person reading this screen does not
+ * use; `PICKER_EMPTY_COPY` already made the same switch ("One noun throughout: **athlete** (the
+ * human word), not 'profile' (the schema's)"). The two older strings keep their wording because
+ * they are shown on the logging surfaces, where changing copy is a separate, UX-panelled decision.
+ */
+export const NO_ATHLETE_SAVE = 'No athlete found to save.';
+
+/**
+ * The athlete form's copy (PROF-1 a-r; a-1's add form reuses it).
+ *
+ * `legend`/`heading` are deliberately absent: the edit screen's `<h1>` already names the athlete
+ * ("Edit Ada"), so a second "Who is this?" above a single field would be a heading for nothing. The
+ * UX panel asked for that legend on **a-1's** add form, where the fieldset really does group a name
+ * and a kind.
+ *
+ * `saved` is a **statement of fact**, not praise — the `SAVED_STATE_COPY` / `PICKER_EMPTY_COPY`
+ * family ("the app's voice is a receipt, not a coach", ONB-1 R20).
+ */
+export const ATHLETE_FORM_COPY = {
+  nameLabel: 'Name',
+  /** The one submit. Named for what it saves, so it still reads correctly beside a 40-char name. */
+  save: 'Save name',
+  /** Shown in a `role="status"` region after a successful rename, before the page navigates back. */
+  saved: 'Name saved.',
+  /** The kind, shown and not editable (criterion 9 asks the form to SHOW it). */
+  kindLabel: 'Kind',
+  /**
+   * Why there is no control beside it. A screen that displays a value with no way to change it and
+   * no explanation reads as a bug; this says it is a decision and where the decision lives.
+   */
+  kindNote: 'Set when the athlete was added, and not editable here.',
+} as const;
 
 /**
  * Typed-error copy shared by every amend path (V1-24 PR 1b).

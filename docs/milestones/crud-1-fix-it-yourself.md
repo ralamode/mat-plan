@@ -56,7 +56,7 @@ deleted in the app"_ (`beta-1.md:441`, the whole milestone).
 ```mermaid
 flowchart LR
   AU[AUTH-1 1c observed live] --> P1a
-  W[0 · WP-1 every action module in the matrix ✅] --> P1a[1 · PROF-1 a-0 ✅ · a-g ✅ · a-r rename]
+  W[0 · WP-1 every action module in the matrix ✅] --> P1a[1 · PROF-1 a-0 ✅ · a-g ✅ · a-r rename ✅]
   P1a --> P1b[2 · PROF-1 b archive + settings]
   P1b --> P1c[2b · PROF-1 a-1 add · a-1d duplicate warning]
   B0[3 · V1-9b-0 freed client_id] --> B1

@@ -34,6 +34,10 @@ export * from './writers/bodyweight';
 // catalog's CROSS-HOUSEHOLD behaviour against the same function the app runs — `movements` has no
 // `household_id`, so that behaviour is TEN-2's verdict, not something this seam can close.
 export * from './writers/movement-catalog';
+// PROF-1 a-r: the profile-identity write core (rename today; archive/restore at PROF-1 b). Extracted
+// so `db:verify` runs the real UPDATE against two households — criterion 4 ("write nothing") is a
+// row count, which only a real database can report.
+export * from './writers/profile';
 export * from './writers/ownership';
 export * from './writers/strength-session';
 // The fixed-identity seed public_ids (household + kid profiles) — re-exported so

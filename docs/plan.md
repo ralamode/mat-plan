@@ -2753,6 +2753,14 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   household. Ship the slice, not the layer.
 
 > 📐 **PROF-1 planned and panelled (2026-10-23):** [plan](./plans/prof-1-athletes.md), [CRUD-1](./milestones/crud-1-fix-it-yourself.md) steps 1–2b.
+> ✅ **`a-0` merged 2026-11-06** (migration `0020`, applied in production), **`a-g` merged 2026-11-06**
+> (the kid-only program read), **`a-r` merged 2026-11-07** — the first athlete WRITE: rename, at
+> `/p/[id]/edit`, reachable from the athlete's own page (criterion 8), with the kind SHOWN and not
+> editable (criterion 9) and nothing in the app linking to `/routine` any longer (criterion 11).
+> 🔴 **`kind` editing is NOT in `a-r`, by decision** _(maintainer, 2026-11-07)_: it stays on `a-1`'s
+> ADD form, and the prerequisite for ever making it editable afterwards is in the plan's
+> § Out-of-scope — the export must stop depending on today's `kind`. Remaining: `b-s`, `b`, `a-1`,
+> `a-1d`.
 
 - **PROF-1 — profile create / edit.** _(Ray, 2026-09-24 — after the MVP.)_ There is **no
   profile-editing surface at all** today: profiles exist only because the seed writes them, names cannot
