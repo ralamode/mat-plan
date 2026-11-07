@@ -1,5 +1,7 @@
+import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
 import Link from 'next/link';
 
+import { athletePath, NAME_WRAP_CLASS } from '@/lib/constants';
 import type { ProfileDTO } from '@/lib/dal/profiles';
 
 /**
@@ -16,7 +18,7 @@ export function ProfileTile({ profile }: { profile: ProfileDTO }) {
 
   return (
     <Link
-      href={`/p/${profile.id}`}
+      href={athletePath(profile.id)}
       className="group/tile bg-card text-card-foreground ring-foreground/10 hover:ring-foreground/20 focus-visible:ring-ring flex min-h-24 items-center gap-4 rounded-xl px-5 py-4 ring-1 outline-none transition-all focus-visible:ring-3"
     >
       <span
@@ -25,9 +27,17 @@ export function ProfileTile({ profile }: { profile: ProfileDTO }) {
       >
         {profile.avatar ?? initial}
       </span>
-      <span className="flex flex-col gap-0.5">
-        <span className="text-lg font-medium">{profile.name}</span>
-        <span className="text-muted-foreground text-sm capitalize">{profile.kind}</span>
+      {/* 🔴 `min-w-0` on the COLUMN as well as on the name (`NAME_WRAP_CLASS`). This span is a
+          row-flex item beside a `size-14 shrink-0` avatar, so its default `min-width: auto` floors it
+          at its content's min-content width — and a wrap rule on the child cannot shrink a parent
+          that refuses to shrink. This is the renderer D11 is really about: `break-words` would change
+          nothing here, because only `overflow-wrap: anywhere` lets a break count toward min-content. */}
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className={`text-lg font-medium ${NAME_WRAP_CLASS}`}>{profile.name}</span>
+        {/* 🔴 `PROFILE_KIND_LABELS`, not `capitalize` over the raw column. `capitalize {profile.kind}`
+            rendered "Kid" — the schema's word shown to a parent — and criterion 9 asks for
+            Child / Adult from one display map beside `PROFILE_KINDS`. */}
+        <span className="text-muted-foreground text-sm">{PROFILE_KIND_LABELS[profile.kind]}</span>
       </span>
     </Link>
   );

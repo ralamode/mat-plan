@@ -27,7 +27,16 @@ import {
 
 import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 
-import { APP_HOME_PATH, CLOSED_DAY_NOTICE } from '@/lib/constants';
+import {
+  APP_HOME_PATH,
+  ATHLETE_FORM_COPY,
+  athleteEditPath,
+  athleteExportPath,
+  athletePath,
+  CLOSED_DAY_NOTICE,
+  NAME_WRAP_CLASS,
+  NAV_LINK_CLASS,
+} from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
 import { LifeForm } from './life-form';
@@ -146,13 +155,21 @@ export default async function TodayPage({
       {/* Reports the device tz → `tz` cookie so the RSC computes the local day (V1-6c). Renders nothing. */}
       <TimeZoneSync serverTimeZone={timeZone} />
       <header className="flex flex-col gap-2">
-        <Link
-          href={APP_HOME_PATH}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-fit rounded-sm text-sm outline-none focus-visible:ring-3"
-        >
-          ← All profiles
+        {/* 🔴 "athletes", not "profiles" (PUX-8). "Profile" is the schema's word and the one the
+            person reading this does not use; `PICKER_EMPTY_COPY` and `PICKER_COPY.subhead` already
+            made the same switch. `min-h-11` for the reason the edit link below carries it: this is
+            the recovery path on a phone, and `e2e/a11y.spec.ts` excludes <a> from its tap-target
+            scan, so nothing in CI would notice its absence. */}
+        <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
+          ← All athletes
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">{profile.name}</h1>
+        {/* `NAME_WRAP_CLASS` (D11): a 40-character unbroken name is wider than a 360px phone's 328px
+            of usable width at this type size. ⚠️ a-g's plan row claimed this wrap had shipped; it had
+            not — `gh pr diff 346` carries no wrap rule at all. It ships here, with every other
+            renderer, from one constant. */}
+        <h1 className={`text-3xl font-semibold tracking-tight ${NAME_WRAP_CLASS}`}>
+          {profile.name}
+        </h1>
         {/* V1-23 D1: the day ROLE rides the date line, so "which day is it?" is answered in the band
             that already answers "what day is it?" — before V1-23 the letter was only visible inside
             the program card, a screenful down. This is DERIVED page metadata (what the calendar says
@@ -176,11 +193,7 @@ export default async function TodayPage({
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
-        <a
-          href={`/p/${profileId}/export`}
-          download
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
-        >
+        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
           ↓ Export CSV
         </a>
       </header>
@@ -373,20 +386,27 @@ export default async function TodayPage({
         )}
       </section>
 
-      {/* V1-23 D3 — the routine editor's only entry point (V1-20's discoverability half). The editor
-          at /p/[profileId]/routine already does the whole job (Remove per item, one catalog entry per
-          individual check-in row); only the link was missing.
-          BELOW the logged entries on purpose: parents scroll to here, kids do not scroll past their own
-          work, and the header is already dense. Named for its audience ("Edit Nora's routine") rather
-          than a gear icon — a gear would be the only icon on a page whose idiom is text arrows, and it
-          reads as "settings for this screen".
+      {/* 🔴 **This slot used to link the ROUTINE EDITOR; PROF-1 a-r replaces it** (acceptance
+          criterion 11 / M30: nothing in the app links to `/routine` until ACT-1 replaces that editor;
+          the route stays in code, unlinked, as it was before V1-23 PR 2). A routine already saved
+          keeps rendering and logging above; a profile with none keeps the neutral default.
+          It becomes rename — criterion 8's "rename shall be reachable from the athlete's own page".
+          BELOW the logged entries, for the reason the routine link was: parents scroll to here, kids
+          do not scroll past their own work, and the header is already dense. Text, not a gear icon —
+          a gear would be the only icon on a page whose idiom is text arrows, and it reads as
+          "settings for this screen".
           ⚠️ `min-h-11` is load-bearing and UNGUARDED by CI: `e2e/a11y.spec.ts` excludes <a> from its
-          tap-target scan (the SC 2.5.8 inline-text exception), so a short link here fails no check. */}
+          tap-target scan (the SC 2.5.8 inline-text exception), so a short link here fails no check.
+          🔴 `NAME_WRAP_CLASS` — and this link is WHY the constant says `wrap-anywhere` rather than
+          `break-words` (D11). The element is `inline-flex w-fit`, so its width DERIVES from
+          min-content, and only `anywhere` lets a break count toward min-content. The previous copy,
+          "→ Edit {name}'s routine", measured 322–384px against 328px of usable width at 360px for an
+          average 40-character name: it overflowed, and had done since V1-23. */}
       <Link
-        href={`/p/${profileId}/routine`}
-        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 w-fit items-center rounded-sm text-sm outline-none focus-visible:ring-3"
+        href={`${athleteEditPath(profile.id)}?from=${encodeURIComponent(athletePath(profile.id))}`}
+        className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}
       >
-        → Edit {profile.name}&rsquo;s routine
+        {ATHLETE_FORM_COPY.renameLink(profile.name)}
       </Link>
     </main>
   );

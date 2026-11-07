@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { athletePath, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
@@ -43,14 +44,16 @@ export default async function RoutineEditorPage({
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
       <header className="flex flex-col gap-2">
-        <Link
-          href={`/p/${profile.id}`}
-          className="text-muted-foreground hover:text-foreground focus-visible:ring-ring w-fit rounded-sm text-sm outline-none focus-visible:ring-3"
-        >
+        {/* ⚠️ `NAV_LINK_CLASS` (so `min-h-11`) and `NAME_WRAP_CLASS` arrived at PROF-1 a-r. This page
+            is UNLINKED since criterion 11, but it still renders and `e2e/a11y.spec.ts` still scans
+            it — and the a-r changelog claimed the wrap rule landed on "every renderer that shows a
+            name", which was false by this one page until a review lens found it. An unlinked page is
+            not an exempt page. */}
+        <Link href={athletePath(profile.id)} className={`${NAV_LINK_CLASS} ${NAME_WRAP_CLASS}`}>
           ← Back to {profile.name}
         </Link>
         <h1 className="text-3xl font-semibold tracking-tight">Edit routine</h1>
-        <p className="text-muted-foreground">
+        <p className={`text-muted-foreground ${NAME_WRAP_CLASS}`}>
           Choose {profile.name}&rsquo;s activities and the order they log them in.
         </p>
       </header>

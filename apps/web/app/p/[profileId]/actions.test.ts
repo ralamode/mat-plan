@@ -59,6 +59,8 @@ vi.mock('@/lib/dal/profiles', () => ({
   })),
   // Default: the routine was persisted. The not-found test overrides to null.
   updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
+  // PROF-1 a-r. Default: the rename matched a live profile in this household.
+  renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
@@ -72,9 +74,9 @@ import {
 } from '@/lib/dal/entries';
 import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
-import { getProfileByPublicId, updateProfileRoutine } from '@/lib/dal/profiles';
+import { getProfileByPublicId, renameAthlete, updateProfileRoutine } from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
-import { DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
+import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
@@ -102,6 +104,11 @@ import {
   logLifeActivitiesAction,
   logStrengthSessionAction,
 } from './actions';
+// 🔴 PROF-1 a-r — the first action imported here from a DIFFERENT module. Every matrix below is keyed
+// by the registry, not by this file's directory, so `renameAthleteAction` enters the unauth,
+// rate-limit, wrong-household and byte-identical-refusal suites exactly like the seven above. Its
+// own per-action behaviour lives beside it, in `app/p/profile-actions.test.ts` (WP-1's convention).
+import { renameAthleteAction } from '@/app/p/profile-actions';
 import {
   ACTION_SCOPE,
   MUTATING_ACTIONS,
@@ -181,6 +188,7 @@ const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
   editStrengthSetAction: { fn: editStrengthSetAction, writers: [editStrengthSet] },
   editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
   editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
+  renameAthleteAction: { fn: renameAthleteAction, writers: [renameAthlete] },
 };
 
 /**
@@ -355,7 +363,7 @@ describe('logBodyweightAction — happy path + ownership', () => {
         day: localDay(), // the write lands on the day the page rendered (V1-6c)
       }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('fails gracefully (no write) when the profile is unknown', async () => {
@@ -378,7 +386,7 @@ describe('logBodyweightAction — happy path + ownership', () => {
       form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
     );
     expect(res).toEqual({ ok: false, error: BODYWEIGHT_COPY.dayTaken });
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('any OTHER write failure still throws (error.tsx), never a misleading envelope', async () => {
@@ -747,7 +755,7 @@ describe('logStrengthSessionAction — happy path (multi-movement session)', () 
         ],
       }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   // GAP-1 P0-1 regression. `dayRole` was parsed and then DROPPED on the way to the DAL, so
@@ -1064,7 +1072,7 @@ describe('logCheckinsAction — happy path + ownership', () => {
         items: [{ activityKey: HABIT.activityKey, metricKey: null, value: 1, clientId }],
       }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('writes a mixed batch: a habit, a bool metric, and a rated metric', async () => {
@@ -1281,7 +1289,7 @@ describe('logLifeActivitiesAction — happy path', () => {
       lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wake, clientId }),
     );
     expect(res.ok).toBe(true);
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
     const { items, day } = vi.mocked(logCheckinEntries).mock.calls[0]![0];
     expect(day).toBe(localDay());
     expect(items).toHaveLength(1);
@@ -1386,7 +1394,7 @@ describe('editStrengthSetAction — happy path + not-found', () => {
     expect(editStrengthSet).toHaveBeenCalledWith(
       expect.objectContaining({ profilePublicId: PROFILE_ID, setId, reps: 7, weight: 142.5 }),
     );
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('maps a not-found set (wrong owner / stale id) to the shared typed error, and revalidates', async () => {
@@ -1401,7 +1409,7 @@ describe('editStrengthSetAction — happy path + not-found', () => {
     // The SAME copy the bodyweight amend uses, and a revalidate so "the page now shows what's saved"
     // is true. A revalidate tells a crafted request nothing a stale one wouldn't.
     expect(res.error).toBe(AMEND_ERROR_COPY.notFound('set'));
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 });
 
@@ -1475,8 +1483,8 @@ describe('editRoutineAction — happy path + ownership', () => {
       version: ROUTINE_VERSION,
       order: [{ key: ROUTINE_K2 }, { key: ROUTINE_K1 }],
     });
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}/routine`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
+    expect(revalidatePath).toHaveBeenCalledWith(athleteRoutinePath(PROFILE_ID));
   });
 
   it('PRESERVES the opaque conditional marker through to the write (the V1-10 down-payment)', async () => {
@@ -1557,7 +1565,7 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
       unit: 'lb',
       seenValue: 84.5,
     });
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   it('rejects an unknown profile before writing (ownership seam)', async () => {
@@ -1578,7 +1586,7 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe(AMEND_ERROR_COPY.notFound('weight'));
     // Revalidated, so the receipt drops a value that no longer exists and the copy is true.
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 
   /**
@@ -1610,7 +1618,7 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
     const res = await editBodyweightAction(initial, amendForm());
     expect(res.ok).toBe(false);
     expect(res.error).toBe(AMEND_ERROR_COPY.staleWrite);
-    expect(revalidatePath).toHaveBeenCalledWith(`/p/${PROFILE_ID}`);
+    expect(revalidatePath).toHaveBeenCalledWith(athletePath(PROFILE_ID));
   });
 });
 
@@ -1652,6 +1660,7 @@ describe('every Server Action — wrong household → the same refusal as not-fo
       editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
     editBodyweightAction: () => amendForm(),
     editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+    renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
   };
 
   it('every action has a body that reaches the ownership check (no vacuous case)', async () => {

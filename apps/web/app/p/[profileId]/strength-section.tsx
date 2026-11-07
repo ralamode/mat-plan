@@ -1,6 +1,6 @@
 import type { DayRole } from '@mat-plan/shared';
 
-import { STRENGTH_COPY } from '@/lib/constants';
+import { NAME_WRAP_CLASS, STRENGTH_COPY } from '@/lib/constants';
 import { movementNames, sessionMovements, type SessionRow } from '@/lib/entries/activity-totals';
 import type { ProgramDayDTO } from '@/lib/programming/program-day';
 
@@ -72,10 +72,13 @@ export function StrengthSection({
       {/* PROF-1 a-g: directly under the heading, BEFORE the form — a person should know the
           household's program is not theirs before working through a strength entry, not after. */}
       {programNote && (
-        // `break-words`: this renders `profile.name`, and D11 gives every name renderer a wrap rule.
-        // At 360px `main` leaves 328px; a 40-char unbroken name in wide glyphs is ~500px, which would
-        // scroll the page sideways. This `<p>` was created after D11's list and was not on it.
-        <p className="text-muted-foreground -mt-1 text-sm break-words">{programNote}</p>
+        // 🔴 `NAME_WRAP_CLASS`, not the `break-words` this shipped with. This renders `profile.name`,
+        // and at 360px `main` leaves 328px while a 40-character unbroken name in wide glyphs is
+        // ~500px — so it needs a wrap rule. ⚠️ **It reached for the wrong utility while citing D11
+        // in this very comment**, which is the drift the one exported constant exists to stop: the
+        // two break lines identically, but only `overflow-wrap: anywhere` lets a break count toward
+        // min-content, and `min-w-0` (which `break-words` had no companion for) lifts the flex floor.
+        <p className={`text-muted-foreground -mt-1 text-sm ${NAME_WRAP_CLASS}`}>{programNote}</p>
       )}
       {sessions.map((s) => (
         <StrengthSessionReceipt
