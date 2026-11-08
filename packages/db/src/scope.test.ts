@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { householdScopeForRequest } from './scope';
+import { HOUSEHOLD_ROLE, HOUSEHOLD_ROLES } from '@mat-plan/shared';
+
+import {
+  householdScopeForRequest,
+  ownerScope,
+  type HouseholdScope,
+  type OwnerScope,
+} from './scope';
 import { householdScopeForScript } from './writers/household-scope-script';
 
 /**
@@ -62,6 +69,27 @@ const UNWRAPS_SCOPE = 'packages/db/src/writers/ownership.ts';
 const DERIVES_SCOPE = 'apps/web/lib/dal/household.ts';
 
 /**
+ * **The modules allowed to name `scope.role`, with the reason each is here** (`PROF-1 b-s`).
+ *
+ * 🔴 **Two, not one, and the split is the design rather than a concession.** `scope.ts` *narrows the
+ * type* (`ownerScope`); `writers/ownership.ts` *turns the role into SQL*. That mirrors `householdId`
+ * exactly, where `scope.ts` constructs the capability and `ownership.ts` is the only place that
+ * unwraps it into an `eq()`.
+ *
+ * A `Record<path, reason>` rather than a bare count, the `scoped.test.ts` → `ALLOWED_UNSCOPED`
+ * idiom: a third namer is then a visible edit that has to be justified in words, not a number
+ * quietly going from 2 to 3. The dead-entry assertion below keeps it from outliving its subject.
+ */
+const NAMES_ROLE: Readonly<Record<string, string>> = {
+  'packages/db/src/scope.ts':
+    '`ownerScope()` narrows a HouseholdScope to an OwnerScope. The brand lives here with the type ' +
+    'it brands, beside `makeHouseholdScope` — the same reason the household constructors do.',
+  'packages/db/src/writers/ownership.ts':
+    'THE owner predicate, which turns the role into a conjunct. Already the one module allowed to ' +
+    'unwrap `scope.householdId`, so the authority and the tenancy seam stay in one place.',
+};
+
+/**
  * The ONE fixture script allowed to derive one, recorded here with its reason (TEN-1 1c).
  *
  * `screenshot-ephemeral.ts` writes fixtures into a throwaway embedded Postgres it created seconds
@@ -79,6 +107,17 @@ const FIXTURE_DERIVES_SCOPE = 'apps/web/scripts/screenshot-ephemeral.ts';
 
 /** The request-serving tree: routes, DAL, components. No fixture script lives here. */
 const WEB_REQUEST_TREE = /^apps\/web\/(app|lib|components)\//;
+
+/**
+ * An OPTIONAL (`role?: T`) or DEFAULTED (`role: T = v`) **role parameter** — the shape that turns a
+ * missed call site into a silent owner.
+ *
+ * ⚠️ Deliberately NOT the `/\brole\s*[?=][^=]/` shape its `scope` sibling uses. Tried first, it
+ * matched JSX `role="status"` in sixteen `apps/web` files and matched the real
+ * `role: HouseholdRole = HOUSEHOLD_ROLE.owner` in **none** of them — a guard that fired everywhere
+ * except on its target, which is how a guard gets relaxed into uselessness.
+ */
+const ROLE_PARAM_DEFAULTED = /\brole\s*(?:\?\s*:|:[^,;)=]*=[^=])/;
 
 describe('the scope seam is structurally contained (TEN-1 1b)', () => {
   it('finds the sources (an empty glob would pass everything below)', () => {
@@ -99,6 +138,64 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     expect(
       offenders,
       'a defaulted/optional `scope` parameter makes a missed call site invisible — the one change the plan rejects (Alternative 5)',
+    ).toEqual([]);
+  });
+
+  it('no REQUEST-side or shared constructor DEFAULTS its role parameter (PROF-1 b-s)', () => {
+    // 🔴 **The dangerous direction is the silent UPGRADE.** `role: HouseholdRole = 'owner'` pasted
+    // onto `householdScopeForRequest` or `makeHouseholdScope` compiles every unconverted call site
+    // as an OWNER — the opposite of the `member` downgrade the plan worried about, and strictly
+    // worse. Guard 1 above only inspects the `scope` parameter, so `role` was prose with nothing
+    // behind it. `writers/household-scope-script.ts` is exempt BY NAME with its reason: a script
+    // that resolves its own household is the one legitimate owner-by-default, and it is lexically
+    // unreachable from `apps/web` (proved by the two guards below it).
+    const ALLOWED_ROLE_DEFAULT: Readonly<Record<string, string>> = {
+      'packages/db/src/writers/household-scope-script.ts':
+        'the SCRIPT constructor: seeds, db:verify and corrections act as the operator, who is the ' +
+        'owner; never reachable from apps/web (module boundary, guards below)',
+    };
+    const offenders = [...DB_SOURCES, ...WEB_SOURCES].filter(
+      (f) => !(f in ALLOWED_ROLE_DEFAULT) && ROLE_PARAM_DEFAULTED.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders,
+      'a defaulted `role` makes every unconverted call site an OWNER, silently — add the file to ' +
+        'ALLOWED_ROLE_DEFAULT with a reason only if that is genuinely what it means',
+    ).toEqual([]);
+  });
+
+  it('ALLOWED_ROLE_DEFAULT carries no dead entry', () => {
+    // The allowlist above is only honest while each entry still names a file that defaults a role.
+    // A stale entry is a standing permission for a file that no longer needs it.
+    expect(
+      ROLE_PARAM_DEFAULTED.test(
+        code(join(REPO, 'packages/db/src/writers/household-scope-script.ts')),
+      ),
+      'household-scope-script.ts no longer defaults its role — drop it from ALLOWED_ROLE_DEFAULT',
+    ).toBe(true);
+  });
+
+  it('🔴 the OwnerScope brand is never cast on — narrowing is the only way in', () => {
+    // ⚠️ **`as OwnerScope` compiles with ONE word, not three.** `OwnerScope` is a SUBTYPE of
+    // `HouseholdScope`, and TS allows `x as T` whenever either side is assignable to the other — so
+    // `archiveProfile(db, scope as OwnerScope, id)` in the DAL typechecks. It fails CLOSED (the
+    // owner conjunct binds `'member' = 'owner'` → 0 rows) but it fails INVISIBLY: 0 rows maps to
+    // `null` maps to the 404-shaped refusal, so every member's archive would silently return "no
+    // athlete found" and the owner-only refusal would never fire. `verify.ts`'s one named forgery is
+    // exempt — proving the cast is possible is its job.
+    const ALLOWED_CAST: Readonly<Record<string, string>> = {
+      'packages/db/src/scope.ts':
+        'ownerScope() itself — the ONE narrowing, which is what every other site must route through',
+      'packages/db/scripts/verify.ts':
+        'the ONE named forgery: proves a cast-past-the-narrowing writes 0 rows (PROF-1 b-s block)',
+    };
+    const offenders = [...DB_SOURCES, ...WEB_SOURCES, 'packages/db/scripts/verify.ts'].filter(
+      (f) => !(f in ALLOWED_CAST) && /\bas\s+OwnerScope\b/.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders,
+      'cast past ownerScope() and the refusal becomes a 404 nobody can explain — call ownerScope() ' +
+        'and branch on null instead',
     ).toEqual([]);
   });
 
@@ -256,6 +353,35 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([]);
   });
 
+  /**
+   * `PROF-1 b-s`. The role is an AUTHORITY field: a module that reads it can decide who may write,
+   * so the set of modules that can is the thing worth pinning — exactly as `scope.householdId` is.
+   */
+  it('exactly the named modules read `scope.role` (PROF-1 b-s)', () => {
+    const readers = [...DB_SOURCES, ...WEB_SOURCES].filter((f) =>
+      // Case-insensitive for the reason the unwrap guard is: a `SCREAMING_CASE` scope constant
+      // (`A_SCOPE.role`) walked past `[Ss]cope` and stayed green — found on #350.
+      /\b[\w$]*scope\.role\b/i.test(code(join(REPO, f))),
+    );
+    expect(
+      readers.map((f) => relative('', f)).sort(),
+      'the role decides who may write, so a new reader is a new authority decision — add it to ' +
+        'NAMES_ROLE with its reason, or route through ownerScope()/the owner predicate',
+    ).toEqual(Object.keys(NAMES_ROLE).sort());
+  });
+
+  it('NAMES_ROLE carries no dead entry', () => {
+    const live = new Set(
+      [...DB_SOURCES, ...WEB_SOURCES]
+        .filter((f) => /\b[\w$]*scope\.role\b/i.test(code(join(REPO, f))))
+        .map((f) => relative('', f)),
+    );
+    expect(
+      Object.keys(NAMES_ROLE).filter((p) => !live.has(p)),
+      'an entry for a module that no longer reads the role — delete it in the PR that stopped',
+    ).toEqual([]);
+  });
+
   it('db:verify mints exactly two named scopes (the plan’s R5(1))', () => {
     // With ~22 mechanical call-site edits, a scope minted AT a call site makes an assertion pass for
     // the wrong reason, invisibly. Two named constants mean a wrong scope is a wrong NAME.
@@ -280,11 +406,73 @@ describe('the scope constructors refuse an unresolved id', () => {
   it.each(bad.map((v) => [String(v), v]))(
     'householdScopeForRequest rejects %s',
     (_label, value) => {
-      expect(() => householdScopeForRequest(value as number)).toThrow(/safe integer/);
+      expect(() => householdScopeForRequest(value as number, HOUSEHOLD_ROLE.owner)).toThrow(
+        /safe integer/,
+      );
     },
   );
 
-  it('a valid id round-trips as a scope carrying only the household id', () => {
-    expect(householdScopeForScript(7)).toEqual({ householdId: 7 });
+  /**
+   * 🔴 **`toEqual` on the WHOLE object, deliberately — this is the shape pin.** It is what made
+   * `PROF-1 b-s`'s widening a visible, reviewed edit rather than a field that appeared: adding
+   * `role` broke this line and the two constructors' signatures, which is exactly what should happen
+   * when the capability grows. Keep it exhaustive; `toMatchObject` here would let the next field in
+   * silently.
+   */
+  it('a valid id round-trips as a scope carrying the household id and the role', () => {
+    expect(householdScopeForScript(7)).toEqual({ householdId: 7, role: HOUSEHOLD_ROLE.owner });
+    expect(householdScopeForScript(7, HOUSEHOLD_ROLE.member)).toEqual({
+      householdId: 7,
+      role: HOUSEHOLD_ROLE.member,
+    });
+  });
+
+  /**
+   * `PROF-1 b-s` — the narrowing, which is the whole point of the second brand.
+   *
+   * ⚠️ These assert BEHAVIOUR, not the type. The compile-time half (a `HouseholdScope` is not
+   * assignable where `OwnerScope` is required) is proved by the `@ts-expect-error` pin below —
+   * because a runtime test cannot see it, and a brand that compiles both ways is decoration.
+   */
+  describe('ownerScope — the authority narrowing (PROF-1 b-s)', () => {
+    it('narrows an owner scope to itself', () => {
+      const scope = householdScopeForScript(7, HOUSEHOLD_ROLE.owner);
+      expect(ownerScope(scope)).toBe(scope);
+    });
+
+    it('refuses a member scope with null, never a throw', () => {
+      expect(ownerScope(householdScopeForScript(7, HOUSEHOLD_ROLE.member))).toBeNull();
+    });
+
+    it('every role is either narrowed or refused — no third answer', () => {
+      for (const role of HOUSEHOLD_ROLES) {
+        const narrowed = ownerScope(householdScopeForScript(7, role));
+        expect(narrowed === null || narrowed.role === HOUSEHOLD_ROLE.owner).toBe(true);
+      }
+    });
   });
 });
+
+/**
+ * 🔴 **The COMPILE-TIME half of the authority, pinned where a runtime test cannot reach.**
+ *
+ * `OwnerScope`'s entire claim is that a writer requiring owner authority cannot be called with a
+ * plain `HouseholdScope` — _"forgetting it is a compile error, not a review miss"_. Nothing in the
+ * suite above can observe that: both values are the same object at runtime. So it is asserted the
+ * one way TypeScript allows, with `@ts-expect-error`, which **fails the build as `TS2578 Unused
+ * directive` if the error it guards ever stops happening** — i.e. if the brand quietly erodes.
+ *
+ * This is the idiom `app/p/[profileId]/mutating-actions.test.ts` established at `WP-1`, after a
+ * five-document claim that a union was exclusive turned out to be false under probing.
+ */
+function _ownerAuthorityIsAType(): void {
+  const needsOwner = (_scope: OwnerScope): void => {};
+  const plain: HouseholdScope = householdScopeForScript(7, HOUSEHOLD_ROLE.member);
+
+  // @ts-expect-error — a plain HouseholdScope is NOT an OwnerScope, which is the whole brand
+  needsOwner(plain);
+
+  // …and the narrowed one is, with no cast.
+  const narrowed = ownerScope(householdScopeForScript(7, HOUSEHOLD_ROLE.owner));
+  if (narrowed) needsOwner(narrowed);
+}

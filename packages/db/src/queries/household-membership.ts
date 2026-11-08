@@ -1,5 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
+import type { HouseholdRole } from '@mat-plan/shared';
+
 import { schema } from '../client';
 import type { Executor } from '../writers/executor';
 
@@ -25,9 +27,28 @@ import type { Executor } from '../writers/executor';
  * `deleted_at IS NULL` repeats `uq_household_members_clerk_user`'s own predicate, which is also the
  * index this lookup rides.
  */
-export async function membershipHousehold(exec: Executor, clerkUserId: string): Promise<number[]> {
+export type Membership = {
+  readonly householdId: number;
+  readonly role: HouseholdRole;
+};
+
+export async function membershipHousehold(
+  exec: Executor,
+  clerkUserId: string,
+): Promise<Membership[]> {
   const rows = await exec
-    .select({ householdId: schema.householdMembers.householdId })
+    .select({
+      householdId: schema.householdMembers.householdId,
+      // 🔴 **The ROLE comes from THIS row, not a second lookup (PROF-1 b-s), and that is a safety
+      // property rather than a saved query.** `uq_household_members_clerk_user` is partial on
+      // `deleted_at IS NULL` (`schema.ts`), so one account can hold a **soft-deleted `owner` row in
+      // household X beside a live `member` row in Y**. A second lookup keyed on `clerk_user_id` —
+      // or one that forgot the `deleted_at` conjunct — would return the dead owner row and make a
+      // member an owner. Reading the role in the query that already carries BOTH `deleted_at`
+      // conjuncts makes that unrepresentable, and leaves no TOCTOU window between the role read and
+      // the write it authorizes.
+      role: schema.householdMembers.role,
+    })
     .from(schema.householdMembers)
     .innerJoin(schema.households, eq(schema.households.id, schema.householdMembers.householdId))
     .where(
@@ -46,5 +67,8 @@ export async function membershipHousehold(exec: Executor, clerkUserId: string): 
     // the logs. The caller sees the count and decides; one live row is the only resolvable answer.
     .limit(2);
 
-  return rows.map((r) => r.householdId);
+  // The CHECK (`household_members_role_check`) pins the column to `HOUSEHOLD_ROLES`, and
+  // `db:verify` binds that CHECK back to the const — so the cast is the schema's guarantee surfacing
+  // in the type, the same shape `profiles.kind` uses at every read site.
+  return rows.map((r) => ({ householdId: r.householdId, role: r.role as HouseholdRole }));
 }

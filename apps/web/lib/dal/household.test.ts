@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
+
 /**
  * `getHouseholdScope()`'s states, pinned — TEN-1 1b's three, then `AUTH-1` 1c-4's five.
  *
@@ -74,10 +76,28 @@ beforeEach(() => {
  * because the principal was missing rather than because of what the test names.
  */
 describe('getHouseholdScope — the one place a household is derived from a request', () => {
-  it('(A) exactly one live membership → that household’s scope', async () => {
-    state.memberships = [[11]];
-    await expect(getHouseholdScope()).resolves.toEqual({ householdId: 11 });
+  it('(A) exactly one live membership → that household’s scope, ROLE INCLUDED', async () => {
+    // ⚠️ **`toStrictEqual`, not `toEqual`, and that is the whole point of this line.** The first
+    // version of this test stubbed one column (`[[11]]`), so drizzle mapped it to
+    // `{ householdId: 11, role: undefined }` and `toEqual` — which ignores keys whose value is
+    // `undefined` — passed against `{ householdId: 11 }`. The assertion named the role and could
+    // not fail on it. `toStrictEqual` does not ignore the key, so the role must really arrive.
+    state.memberships = [[11, HOUSEHOLD_ROLE.owner]];
+    await expect(getHouseholdScope()).resolves.toStrictEqual({
+      householdId: 11,
+      role: HOUSEHOLD_ROLE.owner,
+    });
     expect(captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('(A2) …and a MEMBER resolves as a member — the role is read, not assumed', async () => {
+    // The owner case alone cannot distinguish "reads the column" from "hard-codes the owner": owner
+    // is the value a hard-coding would pick. Two roles through one code path is what pins it.
+    state.memberships = [[11, HOUSEHOLD_ROLE.member]];
+    await expect(getHouseholdScope()).resolves.toStrictEqual({
+      householdId: 11,
+      role: HOUSEHOLD_ROLE.member,
+    });
   });
 
   it('(B) no principal → null, SILENTLY, and without touching the database', async () => {
@@ -139,12 +159,15 @@ describe('getHouseholdScope — the one place a household is derived from a requ
     // ⚠️ Unreachable in production — `uq_household_members_clerk_user` is partial-unique on
     // `clerk_user_id` alone, proved by rejection in `db:verify`. So this case MOCKS the query; an
     // implementer trying to construct the row will not manage it.
-    state.memberships = [[11], [22]];
+    state.memberships = [
+      [11, HOUSEHOLD_ROLE.owner],
+      [22, HOUSEHOLD_ROLE.member],
+    ];
     await expect(getHouseholdScope()).rejects.toThrow(/ambiguous/);
   });
 
   it('probes with LIMIT 2 and no ORDER BY — an ambiguity probe, not a pick', async () => {
-    state.memberships = [[11]];
+    state.memberships = [[11, HOUSEHOLD_ROLE.owner]];
     await getHouseholdScope();
     const probe = recording.queries.find((q) => /from "household_members"/.test(q.text));
     expect(probe?.text).toMatch(/limit \$\d/i);
@@ -157,7 +180,7 @@ describe('getHouseholdScope — the one place a household is derived from a requ
   });
 
   it('binds the PRINCIPAL, not something the caller supplied', async () => {
-    state.memberships = [[11]];
+    state.memberships = [[11, HOUSEHOLD_ROLE.owner]];
     await getHouseholdScope();
     const probe = recording.queries.find((q) => /from "household_members"/.test(q.text));
     expect(probe?.values).toContain(state.principal?.userId);
@@ -244,7 +267,7 @@ describe('reportScopeMiss — the miss-path event', () => {
   }
 
   it('a resolvable scope + a row that exists elsewhere → cross_household', async () => {
-    const call = await miss([[11]], true);
+    const call = await miss([[11, HOUSEHOLD_ROLE.owner]], true);
     expect(call?.[0]).toMatch(/cross_household/);
     expect(call?.[1]).toMatchObject({
       contexts: { scope_miss: { outcome: 'cross_household', resource: FOREIGN } },
@@ -252,7 +275,7 @@ describe('reportScopeMiss — the miss-path event', () => {
   });
 
   it('a resolvable scope + an id that exists nowhere → unknown_resource', async () => {
-    const call = await miss([[11]], false);
+    const call = await miss([[11, HOUSEHOLD_ROLE.owner]], false);
     expect(call?.[1]).toMatchObject({ contexts: { scope_miss: { outcome: 'unknown_resource' } } });
   });
 
@@ -304,12 +327,12 @@ describe('reportScopeMiss — the miss-path event', () => {
   it('🔴 cross_household is NOT bounded — capping the signal would defeat the event', async () => {
     // ADR 0006 obligation 3 exists to make this one noticeable, and `runbooks.md`'s alert rule is
     // "more than 3 events in 1 hour" — a bound here would make that rule unreachable.
-    const calls = await missTwice([[11]], true);
+    const calls = await missTwice([[11, HOUSEHOLD_ROLE.owner]], true);
     expect(tagged(calls, 'cross_household')).toHaveLength(2);
   });
 
   it('carries the id and NOTHING else — no name, no value, no owning household', async () => {
-    const call = await miss([[11]], true);
+    const call = await miss([[11, HOUSEHOLD_ROLE.owner]], true);
     const ctx = (call?.[1] as { contexts: { scope_miss: Record<string, unknown> } }).contexts
       .scope_miss;
     expect(Object.keys(ctx).sort()).toEqual(['action', 'actor', 'outcome', 'resource']);
@@ -365,7 +388,7 @@ describe('reportScopeMiss — the miss-path event', () => {
  */
 describe('householdState — "does this request resolve a household", without handing out the scope', () => {
   it('exactly one live membership → resolved', async () => {
-    state.memberships = [[11]];
+    state.memberships = [[11, HOUSEHOLD_ROLE.owner]];
     await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.resolved);
   });
 
@@ -374,7 +397,10 @@ describe('householdState — "does this request resolve a household", without ha
   });
 
   it('two live memberships for one principal → THROWS; it must not degrade to "none"', async () => {
-    state.memberships = [[11], [22]];
+    state.memberships = [
+      [11, HOUSEHOLD_ROLE.owner],
+      [22, HOUSEHOLD_ROLE.member],
+    ];
     await expect(householdState()).rejects.toThrow(/ambiguous/);
   });
 });

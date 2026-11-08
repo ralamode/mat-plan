@@ -1,3 +1,5 @@
+import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+
 import { type HouseholdScope, makeHouseholdScope } from '../scope';
 
 /**
@@ -32,6 +34,15 @@ import { type HouseholdScope, makeHouseholdScope } from '../scope';
  * module graph. That is safe only because nothing re-exports it and nothing in `apps/web` names it —
  * both pinned by `packages/db/src/scope.test.ts`. Do not relax either assertion.
  */
-export function householdScopeForScript(householdId: number): HouseholdScope {
-  return makeHouseholdScope(householdId, 'householdScopeForScript');
+export function householdScopeForScript(
+  householdId: number,
+  // ⚠️ **Defaults to `owner`, and this is the one place a default is right** (`PROF-1 b-s`). Every
+  // caller is a script the maintainer runs against a database they administer — `db:verify`,
+  // `db:correct`, the seed, the screenshot fixture. There is no principal to read a role from, and
+  // the alternative (a required parameter) would have ~25 call sites type `owner` by hand, which is
+  // a literal repeated 25 times rather than a decision made once. A script that needs to prove the
+  // MEMBER path passes `'member'` explicitly, which reads as the deliberate act it is.
+  role: HouseholdRole = HOUSEHOLD_ROLE.owner,
+): HouseholdScope {
+  return makeHouseholdScope(householdId, role, 'householdScopeForScript');
 }

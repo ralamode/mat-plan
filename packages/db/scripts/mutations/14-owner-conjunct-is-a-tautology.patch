@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 1c36cee..ec609d0 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -137,7 +137,7 @@ export function inHousehold(scope: HouseholdScope) {
+  * **Ships dark at b-s.** `PROF-1 b`'s `archiveProfile` is its first caller.
+  */
+ export function isOwnerOf(scope: OwnerScope) {
+-  return sql`${scope.role} = ${HOUSEHOLD_ROLE.owner}`;
++  return sql`TRUE`;
+ }
+ 
+ /** THE live-profile predicate, household-scoped. One definition; no call site can scope weaker. */

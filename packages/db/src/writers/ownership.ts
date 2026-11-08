@@ -1,8 +1,8 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
-import type { HouseholdRole } from '@mat-plan/shared';
-import type { HouseholdScope } from '../scope';
+import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+import type { HouseholdScope, OwnerScope } from '../scope';
 import type { Executor } from './executor';
 
 /**
@@ -113,6 +113,50 @@ import type { Executor } from './executor';
  */
 export function inHousehold(scope: HouseholdScope) {
   return eq(schema.profiles.householdId, scope.householdId);
+}
+
+/**
+ * The owner conjunct — **the scope's own `role`, bound as a parameter** (`PROF-1 b-s`).
+ *
+ * 🔴 **READ THIS BEFORE BUILDING ON IT: it consults no table.** The emitted SQL is `$1 = $2` with
+ * two bind parameters — `['member', 'owner']` for a non-owner scope. There is no column and no
+ * `household_members` in it; the database does not re-check membership, and this is **not** a
+ * second, independent check. The ONLY authority is `membershipHousehold`'s single live-row read
+ * (`queries/household-membership.ts`), which is where a reviewer must look.
+ *
+ * ⚠️ This docblock said "`household_members.role = 'owner'`, as SQL" and called itself "the
+ * database-side half … the half that survives a forgery" — through four other documents as well.
+ * It was wrong in a way that mattered: the next author would have under-reviewed the resolver,
+ * believing a row count was backstopping it. A probe settled it
+ * (`new PgDialect().sqlToQuery(isOwnerOf(forged))` → `$1 = $2`), not an argument.
+ *
+ * **What it genuinely buys, which is narrower and still worth the line:**
+ *
+ * 1. **A LOST NARROWING FAILS CLOSED, AND AS A ROW COUNT.** A scope whose role is honestly `member`
+ *    but which was cast past `ownerScope()` binds `'member' = 'owner'` → the UPDATE matches **0
+ *    rows** rather than succeeding. `db:verify` can assert that; a type cannot.
+ * 2. **IT PINS ITS CALLER'S SIGNATURE FROM INSIDE THE BODY.** Widening `archiveProfile(exec, scope:
+ *    HouseholdScope, …)` fails to compile *at the `isOwnerOf(scope)` call*, which the signature
+ *    alone does not give you.
+ * 3. **Mutation patch `14` makes its removal a RED gate** instead of a line nobody missed.
+ *
+ * ⚠️ **What it does NOT stop:** a forgery that *writes the role* —
+ * `{ ...scope, role: 'owner' } as OwnerScope` — passes this and the brand both, and the database
+ * cannot tell it from an honest owner. Closing that needs the **principal** on the scope and a real
+ * `EXISTS (SELECT 1 FROM household_members WHERE household_id = profiles.household_id AND … AND
+ * role = 'owner' AND deleted_at IS NULL)`. The scope carries no principal today, which is deliberate
+ * (plan § Role authority) and the right upgrade path at `INVITE-1`, when demotion becomes a live
+ * operation. Do not pretend this line already does it.
+ *
+ * ⚠️ **It takes an `OwnerScope`, so it cannot be called with an unnarrowed scope** — the parameter
+ * type is that check, exactly as `isLiveProfile`'s required positional `HouseholdScope` is. Reading
+ * `scope.role` here rather than in a caller keeps the authority decision in one of the two modules
+ * `src/scope.test.ts` names with a reason.
+ *
+ * **Ships dark at b-s.** `PROF-1 b`'s `archiveProfile` is its first caller.
+ */
+export function isOwnerOf(scope: OwnerScope) {
+  return sql`${scope.role} = ${HOUSEHOLD_ROLE.owner}`;
 }
 
 /** THE live-profile predicate, household-scoped. One definition; no call site can scope weaker. */
