@@ -1,8 +1,8 @@
 diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
-index 00124d0..8b377b5 100644
+index 1c36cee..99c6f87 100644
 --- a/packages/db/src/writers/ownership.ts
 +++ b/packages/db/src/writers/ownership.ts
-@@ -61,7 +61,8 @@ import type { Executor } from './executor';
+@@ -112,7 +112,8 @@ import type { Executor } from './executor';
   * such site instead of this one function. `packages/db/src/scope.test.ts` pins it.
   */
  export function inHousehold(scope: HouseholdScope) {
@@ -11,4 +11,4 @@ index 00124d0..8b377b5 100644
 +  return eq(schema.profiles.householdId, schema.profiles.householdId);
  }
  
- /** THE live-profile predicate, household-scoped. One definition; no call site can scope weaker. */
+ /**

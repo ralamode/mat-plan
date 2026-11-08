@@ -22,6 +22,7 @@ import {
   DEFAULT_SESSION_TYPE,
   E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
+  HOUSEHOLD_ROLE,
   METRIC_KEYS,
   newId,
   SEED_ACTIVITY_TYPE_KEYS,
@@ -145,7 +146,10 @@ async function fixtureScope(db: ReturnType<typeof createDb>): Promise<HouseholdS
         `— did db:seed run, or did a fixture create a second household?`,
     );
   }
-  return householdScopeForRequest(live[0].id);
+  // PROF-1 b-s: the fixture is the maintainer's own throwaway database, so `owner` is the honest
+  // role — it is what the seeded membership would carry. A capture that needs the MEMBER view (PR b's
+  // read-only settings) passes `'member'` here, deliberately and visibly.
+  return householdScopeForRequest(live[0].id, HOUSEHOLD_ROLE.owner);
 }
 
 /**

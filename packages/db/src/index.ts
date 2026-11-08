@@ -8,7 +8,16 @@ export type * from './types';
 // `householdScopeForScript`, which is why that one lives in a module this barrel never names at all
 // (writers/household-scope-script.ts → reachable only by relative path, from packages/db/scripts/**
 // and src/seed.ts; see that file's "Who may call it").
-export { householdScopeForRequest, type HouseholdScope } from './scope';
+// PROF-1 b-s adds `OwnerScope` and `ownerScope` to the same NAMED list, for the same reason:
+// `makeHouseholdScope` must not reach `apps/web` on a bare specifier. ⚠️ `ownerScope` is a pure
+// NARROWING, not a constructor — it cannot mint authority, only recognise it, so exporting it does
+// not widen what the app can forge.
+export {
+  householdScopeForRequest,
+  ownerScope,
+  type HouseholdScope,
+  type OwnerScope,
+} from './scope';
 // The single-sourced weekly-adherence query (V1-6b-2), run by both the app DAL and db:verify.
 export * from './queries/weekly-adherence';
 // The single-sourced programmed-day query (V1-10 slice 2), run by both the app DAL and db:verify.

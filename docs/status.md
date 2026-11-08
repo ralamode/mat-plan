@@ -21,7 +21,9 @@ BLOCKING)_: one radio served both "I added them as the wrong kind" and "they tur
 could not tell them apart. The radio stays on `a-1`'s **add** form, where there is no history to
 rewrite; the prerequisite for ever making it editable is the export ceasing to depend on today's
 `kind`, recorded in the plan's § Out-of-scope.
-The authority model landed first, in the spec rather than the plan: _anyone in the household records
+⏳ **`b-s` is next and lands DARK** (2026-11-08): the scope carries `role` from the same membership
+row, `OwnerScope` makes owner authority a **type**, and `isOwnerOf` is its SQL half. Nothing reads it
+until `b`'s archive. The authority model landed first, in the spec rather than the plan: _anyone in the household records
 and corrects; the owner decides who belongs to it_, so archive is owner-only and **restore is
 any-member** (2026-11-06). Next: the `b-s` seam, `b` (archive/restore + `/settings`), then `a-1`
 (add) and `a-1d` (the duplicate warning).

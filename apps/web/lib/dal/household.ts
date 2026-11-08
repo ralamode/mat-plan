@@ -5,6 +5,7 @@ import {
   type HouseholdScope,
   membershipHousehold,
   schema,
+  type Membership,
 } from '@mat-plan/db';
 import * as Sentry from '@sentry/nextjs';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -93,7 +94,7 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
 
   // Single-sourced in `packages/db/src/queries/household-membership.ts` so `db:verify` proves THIS
   // query — both `deleted_at` conjuncts, and the LIMIT 2 ambiguity probe — against a real database.
-  let rows: number[];
+  let rows: Membership[];
   try {
     rows = await membershipHousehold(db, user.userId);
   } catch (error) {
@@ -125,7 +126,11 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
   }
 
   // (A) The only resolvable answer.
-  if (rows.length === 1) return householdScopeForRequest(rows[0]);
+  // 🔴 **The role rides the SAME row as the id (PROF-1 b-s).** `membershipHousehold` selects both,
+  // so there is no second lookup to forget a `deleted_at` conjunct on and no TOCTOU window between
+  // reading the role and the write it authorizes — see that query's docblock for the soft-deleted
+  // `owner` row that makes this a safety property rather than a saved round trip.
+  if (rows.length === 1) return householdScopeForRequest(rows[0].householdId, rows[0].role);
 
   if (rows.length === 0) {
     // (C) A principal with no membership — THE state this chunk makes reachable by a person. Five

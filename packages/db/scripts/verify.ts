@@ -71,7 +71,7 @@ import { liveHouseholdIds } from '../src/queries/household-scope';
 // This file hand-wrote the `entries` half of it before 2c and missed `prescriptions` entirely.
 import { crossHouseholdMovementRefs, sharedMovementRows } from '../src/queries/movement-ownership';
 import { programDayRows } from '../src/queries/program-day';
-import type { HouseholdScope } from '../src/scope';
+import { ownerScope, type HouseholdScope, type OwnerScope } from '../src/scope';
 import { weeklyAdherenceRows } from '../src/queries/weekly-adherence';
 import {
   findAmendableBodyweight,
@@ -86,7 +86,13 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
-import { insertHouseholdMember, movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import {
+  insertHouseholdMember,
+  isLiveProfile,
+  isOwnerOf,
+  movementIsGlobal,
+  ownedEntryIds,
+} from '../src/writers/ownership';
 import { renameProfile } from '../src/writers/profile';
 import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
@@ -6665,7 +6671,7 @@ console.log(
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
-    (await membershipHousehold(asPg, CLERK_A))[0],
+    (await membershipHousehold(asPg, CLERK_A))[0]?.householdId,
     verifyHh.id,
     'AUTH-1 1b: membershipHousehold resolves the CLAIMED household, not merely the first one',
   );
@@ -6729,7 +6735,7 @@ console.log(
     role: HOUSEHOLD_ROLE.owner,
   });
   assert.equal(
-    (await membershipHousehold(asPg, CLERK_A))[0],
+    (await membershipHousehold(asPg, CLERK_A))[0]?.householdId,
     verifyHh.id,
     'AUTH-1 1b: the freed slot can be re-claimed',
   );
@@ -6752,7 +6758,7 @@ console.log(
       role: HOUSEHOLD_ROLE.owner,
     });
     assert.equal(
-      (await membershipHousehold(asPg, CLERK_D))[0],
+      (await membershipHousehold(asPg, CLERK_D))[0]?.householdId,
       tmpHh!.id,
       'AUTH-1 1b: a live membership on a live household resolves (the baseline for the next line)',
     );
@@ -6767,6 +6773,61 @@ console.log(
       'AUTH-1 1b: a LIVE membership on a SOFT-DELETED household resolves to nothing — 1c must land ' +
         'that user in state C, never in a deleted household',
     );
+
+    // (4b-bis) 🔴 **PROF-1 b-s — the ROLE comes from the SAME live row, and this is the case the
+    // whole design rests on.** `uq_household_members_clerk_user` is partial on `deleted_at IS NULL`,
+    // so ONE account can hold a **soft-deleted `owner` row in household X beside a live `member` row
+    // in Y**. A role read by a second lookup keyed on `clerk_user_id` — or by one that forgot the
+    // `deleted_at` conjunct — returns the DEAD owner row and silently makes a member an owner of
+    // somebody else's household. Constructing that state and asserting `member` is the only way to
+    // show the one-query design actually prevents it; prose cannot.
+    {
+      const [bsLiveHh] = await asPg
+        .insert(schema.households)
+        .values({ publicId: newId(), name: 'B-s Live HH' })
+        .returning({ id: schema.households.id });
+      const CLERK_BS = 'user_00000000000000000000000bs01';
+
+      // The DEAD owner row, in the already-soft-deleted household above.
+      await asPg.insert(schema.householdMembers).values({
+        publicId: newId(),
+        householdId: tmpHh!.id,
+        clerkUserId: CLERK_BS,
+        role: HOUSEHOLD_ROLE.owner,
+        deletedAt: new Date(),
+      });
+      // …and the LIVE member row, elsewhere.
+      await asPg.insert(schema.householdMembers).values({
+        publicId: newId(),
+        householdId: bsLiveHh!.id,
+        clerkUserId: CLERK_BS,
+        role: HOUSEHOLD_ROLE.member,
+      });
+
+      const resolved = await membershipHousehold(asPg, CLERK_BS);
+      assert.equal(resolved.length, 1, 'PROF-1 b-s: only the LIVE membership resolves');
+      assert.equal(
+        resolved[0]?.householdId,
+        bsLiveHh!.id,
+        'PROF-1 b-s: …and it is the live household, not the dead one',
+      );
+      assert.equal(
+        resolved[0]?.role,
+        HOUSEHOLD_ROLE.member,
+        'PROF-1 b-s: the role is MEMBER — read from the live row, never from the soft-deleted ' +
+          'owner row the same account holds elsewhere',
+      );
+      assert.equal(
+        ownerScope({ ...A_SCOPE, role: resolved[0]!.role }),
+        null,
+        'PROF-1 b-s: …so the narrowing refuses, and nothing can archive on a dead owner row',
+      );
+
+      await asPg
+        .delete(schema.householdMembers)
+        .where(eq(schema.householdMembers.clerkUserId, CLERK_BS));
+      await asPg.delete(schema.households).where(eq(schema.households.id, bsLiveHh!.id));
+    }
 
     // (4c) The LIMIT 2 ambiguity probe. Two live memberships for one account is a state the resolver
     // cannot represent, so the query must REPORT it rather than pick. `LIMIT 1` + no ORDER BY would
@@ -6924,7 +6985,7 @@ console.log(
     // (6d) --apply writes once, and a SECOND run is an idempotent no-op rather than a 23505.
     await claim.run(asCorrectionDb, true);
     assert.equal(
-      (await membershipHousehold(asPg, CLERK_C))[0],
+      (await membershipHousehold(asPg, CLERK_C))[0]?.householdId,
       verifyHh.id,
       'AUTH-1 1b: --apply binds the account to the NAMED household',
     );
@@ -7207,6 +7268,71 @@ console.log(
       'directions), a soft-deleted row and an unknown id each update 0 rows and leave the stored ' +
       'name intact (criterion 4 as a row count), only ONE row is touched, an ARCHIVED athlete is ' +
       'still renameable, and the COLUMN stores a PROFILE_NAME_MAX name in full',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 b-s — the owner conjunct, proved where the TYPE cannot reach.
+//
+// 🔴 THE POINT OF THIS BLOCK IS THE CASE THE BRAND CANNOT STOP. `OwnerScope` makes a non-owner
+// caller a COMPILE error, and `src/scope.test.ts`'s `@ts-expect-error` pin proves that half. What a
+// type cannot stop is `as unknown as OwnerScope` — a deliberate, reviewable forgery that `scope.ts`'s
+// own docblock says is the point of a brand ("it cannot happen by accident"). So the database-side
+// half has to hold on its own, and only a real database can show it: a forged owner scope carrying
+// `role: 'member'` must make the conjunct FALSE, i.e. 0 rows.
+//
+// ⚠️ Ships DARK — `isOwnerOf` has no caller until PROF-1 b's `archiveProfile`. This block is what
+// stops it shipping as an untested decoration in the meantime.
+{
+  const BS_P = '019826b4-0000-7000-8000-00000004e001';
+  await db.insert(schema.profiles).values({
+    publicId: BS_P,
+    name: 'B-s Athlete',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  });
+
+  const rowsMatching = async (scope: OwnerScope) =>
+    (
+      await asPg
+        .select({ publicId: schema.profiles.publicId })
+        .from(schema.profiles)
+        .where(and(isLiveProfile(BS_P, scope), isOwnerOf(scope)))
+    ).length;
+
+  // 1 · A genuine owner scope matches the row.
+  const ownerish = ownerScope(A_SCOPE);
+  assert.ok(ownerish, 'PROF-1 b-s: the script scope defaults to owner, so it narrows');
+  assert.equal(await rowsMatching(ownerish), 1, 'PROF-1 b-s: an OWNER scope matches its own row');
+
+  // 2 · 🔴 The forged one does not. This is the whole block: same household, same profile, same
+  // `isLiveProfile` — only the role differs, and the conjunct is what turns that into 0 rows.
+  // ⚠️ **SPREAD from A_SCOPE, never minted — and that is better than a mint, not a workaround for
+  // the two-scope guard.** The case under test is a FORGERY: `scope.ts` says a deliberate
+  // `as unknown as` is the one way past the brand, "a visible, reviewable forgery, which is the
+  // point". Constructing it with the real constructor would have tested a legitimately-made member
+  // scope instead — a different, weaker thing. Spreading the owner scope and overwriting the role is
+  // exactly the shape an attacker or a careless refactor produces.
+  const forged = { ...A_SCOPE, role: HOUSEHOLD_ROLE.member } as OwnerScope;
+  assert.equal(
+    await rowsMatching(forged),
+    0,
+    'PROF-1 b-s: a FORGED owner scope (role=member) matches 0 rows — the conjunct, not the type',
+  );
+
+  // 3 · …and `ownerScope()` refuses to produce that value in the first place, so reaching case 2
+  // requires the explicit cast. Both halves, stated: the narrowing refuses, the SQL refuses.
+  assert.equal(
+    ownerScope({ ...A_SCOPE, role: HOUSEHOLD_ROLE.member }),
+    null,
+    'PROF-1 b-s: ownerScope() refuses a member scope, so the forgery needs a deliberate cast',
+  );
+
+  await db.delete(schema.profiles).where(eq(schema.profiles.publicId, BS_P));
+
+  console.log(
+    '✓ PROF-1 b-s: the owner conjunct holds where the TYPE cannot — a forged OwnerScope carrying ' +
+      'role=member matches 0 rows, and ownerScope() refuses to mint one without a cast',
   );
 }
 

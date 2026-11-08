@@ -1,3 +1,5 @@
+import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+
 import type { HouseholdRow } from './types';
 
 /**
@@ -38,11 +40,62 @@ import type { HouseholdRow } from './types';
  * keeping it off means no PR between 1a and OBS-2 reads the column (the plan's §Design 1a).
  */
 declare const householdScopeBrand: unique symbol;
+declare const ownerScopeBrand: unique symbol;
 
 export type HouseholdScope = {
   readonly householdId: HouseholdRow['id'];
+  /**
+   * **What this principal is TO this household** (`PROF-1 b-s`), carried from the same
+   * `household_members` row the id came from — see `queries/household-membership.ts` for why a
+   * second lookup would be a safety defect rather than an extra query.
+   *
+   * ⚠️ **A capability field, not a permission check.** Nothing branches on this string outside
+   * `writers/ownership.ts` (the predicate) and `ownerScope()` below (the narrowing);
+   * `src/scope.test.ts` pins both. A page never sees it at all — `write-path.md` invariant 2 keeps
+   * the whole scope inside `lib/dal`, and PROF-1 b gives the page a `canManageAthletes` boolean.
+   */
+  readonly role: HouseholdRole;
   readonly [householdScopeBrand]: true;
 };
+
+/**
+ * A `HouseholdScope` whose principal is the household's **owner** (`PROF-1 b-s`).
+ *
+ * 🔴 **The authority is a TYPE, so forgetting it is a compile error, not a review miss.** A writer
+ * that requires owner authority takes `OwnerScope` **by parameter type** — `archiveProfile`,
+ * and later `INVITE-1`'s minting, member removal and `PRIV-3`'s deletion inherit the check by
+ * signature rather than by a reviewer remembering. That is `HouseholdScope`'s own argument one level
+ * up: *"the REQUIRED positional parameter on `isLiveProfile` is the compile-time guarantee, and it is
+ * what makes an unconverted call site a build failure rather than a review miss."*
+ *
+ * It is a SUBTYPE: an `OwnerScope` is a `HouseholdScope`, so a writer that needs only household
+ * authority accepts one without a cast, and widening never requires a second call.
+ *
+ * ⚠️ **The type is not the whole guard, and must not be sold as one.** A brand stops an accidental
+ * widening; it cannot stop `as unknown as OwnerScope`. The database-side half is the owner conjunct
+ * in `writers/ownership.ts`, which makes a non-owner write touch **0 rows** — and `db:verify` proves
+ * that against a real database, with a mutation patch proving the proof can fail.
+ */
+export type OwnerScope = HouseholdScope & {
+  readonly [ownerScopeBrand]: true;
+};
+
+/**
+ * Narrow a scope to an `OwnerScope`, or `null` when the principal is not the owner.
+ *
+ * ⚠️ **This is the SECOND of exactly two modules allowed to name `scope.role`**, and the division is
+ * deliberate: this file *narrows the type*, `writers/ownership.ts` *turns the role into SQL*. It
+ * mirrors `householdId`, where this file constructs the capability and `ownership.ts` is the only
+ * place that unwraps it into an `eq()`. `src/scope.test.ts` names both modules with a reason each,
+ * rather than allowing a bare count — a third namer is a visible test edit.
+ *
+ * 🔴 **Returns `null` rather than throwing.** A non-owner reaching an owner-only path is an ordinary
+ * refusal a caller renders as a typed envelope, not an exception: the alternative hands `error.tsx`
+ * to a parent who merely tapped the wrong control.
+ */
+export function ownerScope(scope: HouseholdScope): OwnerScope | null {
+  return scope.role === HOUSEHOLD_ROLE.owner ? (scope as OwnerScope) : null;
+}
 
 /**
  * The scope for a caller that HAS a request — derived, never supplied.
@@ -56,8 +109,8 @@ export type HouseholdScope = {
  * Asserts a safe integer: drizzle's `eq(col, undefined)` does **not** fail loudly, so an unresolved
  * id must throw here rather than silently widen a predicate to every household.
  */
-export function householdScopeForRequest(householdId: number): HouseholdScope {
-  return makeHouseholdScope(householdId, 'householdScopeForRequest');
+export function householdScopeForRequest(householdId: number, role: HouseholdRole): HouseholdScope {
+  return makeHouseholdScope(householdId, role, 'householdScopeForRequest');
 }
 
 /**
@@ -67,9 +120,17 @@ export function householdScopeForRequest(householdId: number): HouseholdScope {
  * `export * from './scope'` — precisely so this escapes into no bare-specifier import. It is reached
  * only by relative path, from inside `packages/db`.
  */
-export function makeHouseholdScope(householdId: number, who: string): HouseholdScope {
+export function makeHouseholdScope(
+  householdId: number,
+  role: HouseholdRole,
+  who: string,
+): HouseholdScope {
   if (!Number.isSafeInteger(householdId)) {
     throw new Error(`${who}: household id must be a safe integer, got ${String(householdId)}`);
   }
-  return { householdId } as HouseholdScope;
+  // ⚠️ **`role` is REQUIRED and positional, for the reason `householdId` is** — a defaulted or
+  // optional role would make every unconverted call site compile as `member`, silently, which is the
+  // one change that turns this widening from a compile error into an invisible downgrade. There is
+  // no "unknown" role: a scope exists only because a live membership row produced it.
+  return { householdId, role } as HouseholdScope;
 }

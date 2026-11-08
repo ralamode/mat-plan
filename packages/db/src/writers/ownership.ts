@@ -1,8 +1,8 @@
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
-import type { HouseholdRole } from '@mat-plan/shared';
-import type { HouseholdScope } from '../scope';
+import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+import type { HouseholdScope, OwnerScope } from '../scope';
 import type { Executor } from './executor';
 
 /**
@@ -113,6 +113,31 @@ import type { Executor } from './executor';
  */
 export function inHousehold(scope: HouseholdScope) {
   return eq(schema.profiles.householdId, scope.householdId);
+}
+
+/**
+ * THE owner conjunct — `household_members.role = 'owner'`, as SQL (`PROF-1 b-s`).
+ *
+ * 🔴 **The database-side half of the authority, and the reason `OwnerScope` is not sold as the whole
+ * guard.** The brand makes a non-owner caller a *compile* error; this makes a non-owner write touch
+ * **0 rows** against a real database, which is what `db:verify` can prove and a mutation patch can
+ * break. A type alone is defeated by one `as unknown as OwnerScope`; a predicate is not.
+ *
+ * ⚠️ **It takes an `OwnerScope`, so it CANNOT be called with an unnarrowed scope** — the parameter
+ * type is the check, exactly as `isLiveProfile`'s required positional `HouseholdScope` is. Reading
+ * `scope.role` here rather than in a caller is what keeps the authority decision in the one module
+ * `src/scope.test.ts` already pins for unwrapping the capability.
+ *
+ * 🔴 **It is a TAUTOLOGY ON PURPOSE, and that is the subtle part.** An `OwnerScope` only exists if
+ * `ownerScope()` already saw `role === 'owner'`, so this emits `TRUE` for every value it can legally
+ * receive. It is not a second check — it is the **first and only** check expressed where a row count
+ * can see it, so a write that lost its narrowing cannot silently succeed. ⚠️ Do NOT "optimise" it
+ * away: the mutation patch that deletes it is what proves the archive proof is not vacuous.
+ *
+ * **Ships dark at b-s.** `PROF-1 b`'s `archiveProfile` is its first caller.
+ */
+export function isOwnerOf(scope: OwnerScope) {
+  return sql`${scope.role} = ${HOUSEHOLD_ROLE.owner}`;
 }
 
 /** THE live-profile predicate, household-scoped. One definition; no call site can scope weaker. */
