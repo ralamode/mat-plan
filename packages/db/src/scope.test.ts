@@ -116,8 +116,12 @@ const WEB_REQUEST_TREE = /^apps\/web\/(app|lib|components)\//;
  * matched JSX `role="status"` in sixteen `apps/web` files and matched the real
  * `role: HouseholdRole = HOUSEHOLD_ROLE.owner` in **none** of them — a guard that fired everywhere
  * except on its target, which is how a guard gets relaxed into uselessness.
+ *
+ * The second alternative catches a **destructured** default — `({ householdId, role = 'owner' })` —
+ * which the first misses and which a signature rewrite could reach for. Both constructors are
+ * positional today, so this one is a tripwire rather than a live concern.
  */
-const ROLE_PARAM_DEFAULTED = /\brole\s*(?:\?\s*:|:[^,;)=]*=[^=])/;
+const ROLE_PARAM_DEFAULTED = /\brole\s*(?:\?\s*:|:[^,;)=]*=[^=])|\{[^}\n]*\brole\s*=[^=]/;
 
 describe('the scope seam is structurally contained (TEN-1 1b)', () => {
   it('finds the sources (an empty glob would pass everything below)', () => {
@@ -189,8 +193,11 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
       'packages/db/scripts/verify.ts':
         'the ONE named forgery: proves a cast-past-the-narrowing writes 0 rows (PROF-1 b-s block)',
     };
-    const offenders = [...DB_SOURCES, ...WEB_SOURCES, 'packages/db/scripts/verify.ts'].filter(
-      (f) => !(f in ALLOWED_CAST) && /\bas\s+OwnerScope\b/.test(code(join(REPO, f))),
+    const offenders = [...DB_SOURCES, ...WEB_SOURCES].filter(
+      // Both assertion syntaxes. `<OwnerScope>scope` is legal in a `.ts` file and no ESLint rule in
+      // this repo forbids it (`consistent-type-assertions` is not configured), so a guard that only
+      // knew `as` would be titled "the only way in" while leaving a second door.
+      (f) => !(f in ALLOWED_CAST) && /\bas\s+OwnerScope\b|<OwnerScope>/.test(code(join(REPO, f))),
     );
     expect(
       offenders,

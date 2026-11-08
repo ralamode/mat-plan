@@ -580,6 +580,19 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- **Generating a mutation patch swallowed the real source fix and then reverted it.** → The recipe
+  for a new `scripts/mutations/*.patch` is: edit the source, `git diff > the.patch`, then
+  `git checkout -- <file>` to put the source back. If that file **also holds uncommitted real edits**,
+  `git diff` captures BOTH — so the patch silently bundles the fix — and `git checkout --` then throws
+  the fix away. Observed on `PROF-1 b-s`: a corrected docblock and a `HouseholdRow['id']` type landed
+  **only inside patch `15`**, the review-response log recorded both as shipped, every gate stayed green
+  (the patch applies; `db:verify` still reddens), and `main` kept the false claim in the one module the
+  corrected documents all call _"the ONLY authority"_. A second-pass reviewer found it by diffing the
+  commits against the log, not by running anything. → **Commit the real edits BEFORE generating a
+  patch**, so `git diff` has nothing else to pick up and `git checkout --` restores from an index that
+  already holds them. Then check the patch contains only its one intended hunk: `grep '^+'` it.
+  (`fix/prof-1b-s-source-edits`)
+
 - **`Unknown skill: <name>` for a skill that is on `main`.** → Project skills load from the
   `.claude/` of the directory the session was **launched** in. A session started inside a linked
   worktree loads that worktree's skills; one launched in the **main checkout** loads whatever branch
