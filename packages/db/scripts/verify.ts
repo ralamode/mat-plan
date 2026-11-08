@@ -6987,7 +6987,7 @@ console.log(
       publicId,
       clientId,
       name: 'A0 Athlete',
-      kind: 'kid',
+      kind: PROFILE_KIND.kid,
       householdId: a0Hh.id,
     });
 
@@ -7068,13 +7068,27 @@ console.log(
 // is what proved the widening non-vacuous.
 //
 // The isolation comes from the ROWS: every profile below is inserted by this block, prefixed `A-r`,
-// with public_ids in its own range. A refusal here therefore cannot be satisfied by the absence of
-// rows some earlier block happened to leave behind, and nothing seeded is renamed.
+// with public_ids in the `…04d0xx` range this block owns. A refusal here therefore cannot be
+// satisfied by the absence of rows some earlier block happened to leave behind, and nothing seeded
+// is renamed.
+//
+// 🔴 **That sentence was FALSE when it shipped (#350), and the range is the fix.** The block used
+// `…04a001`, which `PROF-1 a-g` also uses (`AG_ADULT`) ~3,000 lines up — so "its own range" was a
+// claim the ids did not support, and the insert succeeded only because a-g hard-deletes its row
+// first (_"Leave no adult behind"_). A latent ordering dependency between two blocks that each
+// believed they were independent. ⚠️ It would have failed LOUDLY, not silently —
+// `profiles_public_id_unique` — which is why nothing was wrong with the proof, only with the
+// comment and the coupling. Found by a review panel on the `DX-12` plan, 2026-11-07.
+//
+// **The convention this establishes, for the next block:** pick a suffix range nothing else in this
+// file uses (`grep -oE '019826b4-[0-9a-f-]+' scripts/verify.ts | sort -u`), say which range is
+// yours, and insert every row you assert on. Ad-hoc ids that happen not to clash today are how two
+// blocks end up sharing one.
 {
-  const AR_A_P = '019826b4-0000-7000-8000-00000004a001';
-  const AR_B_P = '019826b4-0000-7000-8000-00000004b001';
-  const AR_A_DELETED = '019826b4-0000-7000-8000-00000004a002';
-  const AR_A_ARCHIVED = '019826b4-0000-7000-8000-00000004a003';
+  const AR_A_P = '019826b4-0000-7000-8000-00000004d001';
+  const AR_B_P = '019826b4-0000-7000-8000-00000004d0b1';
+  const AR_A_DELETED = '019826b4-0000-7000-8000-00000004d002';
+  const AR_A_ARCHIVED = '019826b4-0000-7000-8000-00000004d003';
   const AR_B_ORIGINAL = 'A-r Athlete B';
 
   const nameOf = async (publicId: string) => {
@@ -7155,7 +7169,7 @@ console.log(
 
   // 4 · An unknown id is refused the same way, so the three refusals are one answer (ADR 0006).
   assert.equal(
-    await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-0000000400ff', 'Nobody'),
+    await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-00000004d0ff', 'Nobody'),
     null,
     'PROF-1 a-r: an unknown public id updates 0 rows',
   );

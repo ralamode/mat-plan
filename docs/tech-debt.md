@@ -455,8 +455,18 @@ success.` Harmless there — nothing referenced the files yet.
 
 ### Several files have outgrown their shape; shared values are re-derived per call site (audit, 2026-09-24)
 
+- ⚠️ **Re-measured 2026-11-07: `verify.ts` is now 7,213 lines, 26 commits in six weeks** — it more
+  than doubled under this entry. **`DX-12` was planned and PANELLED against it and is DEFERRED, with
+  the reasons in [its plan](./plans/dx-12-verify-suites.md)'s review-response log.** Read that before
+  attempting the split: five lenses found that the `✓` output diff **cannot see a dropped assertion**
+  (the script is fail-fast, so a deleted assert changes zero bytes), that mutation patch `02` patches
+  `verify.ts` itself so "13/13 unchanged" is unachievable, that `B_SCOPE` is minted ~3,700 lines in
+  and so cannot move to a bootstrap, and that **three** guards hard-code this path, not one. 🔴 It
+  also found the split would **not** unlock parallel lanes — `docs/milestones/crud-1-fix-it-yourself.md`'s
+  2026-10-23 gate run already concluded _"gate 1 fails for every pair, on the guide alone"_. The
+  trigger below still stands; the next attempt starts from that log, not from scratch.
 - **What & why:** growth has concentrated rather than spread, and the big files are where reuse gets
-  missed. `packages/db/scripts/verify.ts` is **~3,000 lines** of sequential proofs with assertion
+  missed. `packages/db/scripts/verify.ts` was **~3,000 lines** of sequential proofs with assertion
   helpers (`expectRejectedBy`, `columnsOf`, `assertCheckCoversConst`) that had to be _rediscovered_
   mid-edit; `apps/web/app/p/[profileId]/page.tsx` is ~390 lines doing profile resolve, day derivation,
   five reads and the whole render; `strength-form.tsx` is ~660. Concrete symptoms already paid for:
