@@ -28,6 +28,7 @@ import {
   movementSlug,
   movementSlugMatchesName,
   PROFILE_KIND,
+  PROFILE_NAME_MAX,
   DAY_ROLES,
   newId,
   PROGRAM_SEED,
@@ -86,6 +87,7 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // run the code the app runs if that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import { insertHouseholdMember, movementIsGlobal, ownedEntryIds } from '../src/writers/ownership';
+import { renameProfile } from '../src/writers/profile';
 import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
@@ -95,6 +97,7 @@ import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   seed,
   seedProgram,
@@ -7040,6 +7043,170 @@ console.log(
     '✓ PROF-1 a-0: profiles.client_id is non-partial unique — the slot survives BOTH archived_at ' +
       'and deleted_at on the holder (the property every other client_id arbiter lacks), NULL keys ' +
       'coexist, and archived_at defaults to NULL',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-r — rename, and the two refusals that ARE acceptance criterion 4.
+//
+// 🔴 THE PROPERTY UNDER TEST IS A ROW COUNT. Criterion 4 reads: "if a rename names a profile outside
+// the session's household, the system shall respond as for an unknown profile and write nothing".
+// "Write nothing" is not something an emitted-SQL assertion can report — `lib/dal/profiles.test.ts`
+// proves the conjunct was APPENDED and bound to the resolved household, which is a different claim.
+// Only a real database can answer "how many rows did that UPDATE touch, and did the OTHER
+// household's name change". That is why `renameProfile` lives in `packages/db` rather than the app
+// DAL, next to a `updateProfileRoutine` that reasonably does not.
+//
+// ⚠️ **It rides A_SCOPE and B_SCOPE, mints nothing, and UNWRAPS nothing** — `src/scope.test.ts` pins
+// this file to exactly two named scopes (the TEN-1 plan's R5(1)) and, separately, pins the unwrap
+// `scope.householdId` to one module. Both guards are right, so the fixture inserts below take the
+// RAW ids the script already holds (`households[0].id`, `verifyHh.id`), exactly as every sibling
+// fixture block does, and the two scopes appear only where they are the thing under test — in the
+// `renameProfile` calls. 🔴 The first draft of this block unwrapped `A_SCOPE` with a `.householdId`
+// and the guard STAYED GREEN: its regex was case-sensitive on `[Ss]cope`, so a SCREAMING_CASE
+// constant walked past it. Found by the security lens on #350; the regex is now `/i` and this block
+// is what proved the widening non-vacuous.
+//
+// The isolation comes from the ROWS: every profile below is inserted by this block, prefixed `A-r`,
+// with public_ids in its own range. A refusal here therefore cannot be satisfied by the absence of
+// rows some earlier block happened to leave behind, and nothing seeded is renamed.
+{
+  const AR_A_P = '019826b4-0000-7000-8000-00000004a001';
+  const AR_B_P = '019826b4-0000-7000-8000-00000004b001';
+  const AR_A_DELETED = '019826b4-0000-7000-8000-00000004a002';
+  const AR_A_ARCHIVED = '019826b4-0000-7000-8000-00000004a003';
+  const AR_B_ORIGINAL = 'A-r Athlete B';
+
+  const nameOf = async (publicId: string) => {
+    const [row] = await db
+      .select({ name: schema.profiles.name })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, publicId));
+    return row?.name;
+  };
+
+  await db.insert(schema.profiles).values([
+    {
+      publicId: AR_A_P,
+      name: 'A-r Athlete A',
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+    },
+    { publicId: AR_B_P, name: AR_B_ORIGINAL, kind: PROFILE_KIND.kid, householdId: verifyHh.id },
+    {
+      publicId: AR_A_DELETED,
+      name: 'A-r Deleted',
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+      deletedAt: new Date(),
+    },
+    {
+      publicId: AR_A_ARCHIVED,
+      name: 'A-r Archived',
+      kind: PROFILE_KIND.kid,
+      householdId: households[0].id,
+      archivedAt: new Date(),
+    },
+  ]);
+
+  // 1 · The ordinary case: A renames A's own athlete, one row back, and the name really changed.
+  const renamed = await renameProfile(asPg, A_SCOPE, AR_A_P, 'A-r Renamed');
+  assert.equal(
+    renamed?.publicId,
+    AR_A_P,
+    'PROF-1 a-r: renaming an own live athlete returns its id',
+  );
+  assert.equal(await nameOf(AR_A_P), 'A-r Renamed', 'PROF-1 a-r: the name is persisted');
+
+  // 2 · 🔴 CRITERION 4. B tries to rename A's athlete: zero rows, `null`, and — the half a return
+  // value alone would not catch — A's name is UNTOUCHED.
+  assert.equal(
+    await renameProfile(asPg, B_SCOPE, AR_A_P, 'Renamed By The Wrong Household'),
+    null,
+    "PROF-1 a-r: household B renaming A's profile updates 0 rows",
+  );
+  assert.equal(
+    await nameOf(AR_A_P),
+    'A-r Renamed',
+    "PROF-1 a-r: A's name survives B's attempt — the refusal wrote NOTHING",
+  );
+
+  // 2b · …and the same in the OTHER direction, which is this file's standing rule for a seam: a
+  // predicate that happened to hard-code one household would pass case 2 and fail here.
+  assert.equal(
+    await renameProfile(asPg, A_SCOPE, AR_B_P, 'Renamed By The Wrong Household'),
+    null,
+    "PROF-1 a-r: household A renaming B's profile updates 0 rows",
+  );
+  assert.equal(
+    await nameOf(AR_B_P),
+    AR_B_ORIGINAL,
+    "PROF-1 a-r: B's name survives A's attempt, in both directions",
+  );
+
+  // 3 · A soft-deleted profile is not renameable, in its OWN household: `deleted_at IS NULL` is the
+  // second conjunct, and it is the one a "scope the writes by household" refactor would drop.
+  assert.equal(
+    await renameProfile(asPg, A_SCOPE, AR_A_DELETED, 'Renamed A Dead Row'),
+    null,
+    'PROF-1 a-r: a soft-deleted profile updates 0 rows even for its own household',
+  );
+  assert.equal(await nameOf(AR_A_DELETED), 'A-r Deleted', 'PROF-1 a-r: the dead row is untouched');
+
+  // 4 · An unknown id is refused the same way, so the three refusals are one answer (ADR 0006).
+  assert.equal(
+    await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-0000000400ff', 'Nobody'),
+    null,
+    'PROF-1 a-r: an unknown public id updates 0 rows',
+  );
+
+  // 5 · 🔴 AN ARCHIVED ATHLETE **CAN** BE RENAMED. The opposite direction from every case above, and
+  // the "fix" a future author is most likely to reach for: archive is "not currently training", not
+  // a lock (`schema.ts` → `profiles.archivedAt`), so a typo in an archived athlete's name must be
+  // fixable without restoring them first. If this ever fails, a UX filter has been folded into the
+  // ownership seam. Mutation patch `13-rename-locks-archived` is what proves this assertion can fail.
+  assert.equal(
+    (await renameProfile(asPg, A_SCOPE, AR_A_ARCHIVED, 'A-r Archived Renamed'))?.publicId,
+    AR_A_ARCHIVED,
+    'PROF-1 a-r: an ARCHIVED athlete is still renameable',
+  );
+  assert.equal(
+    await nameOf(AR_A_ARCHIVED),
+    'A-r Archived Renamed',
+    'PROF-1 a-r: the archived athlete’s new name is persisted',
+  );
+
+  // 5b · 🔴 **The COLUMN accepts what the SCHEMA accepts.** `profiles.name` is unbounded `text` and
+  // `PROFILE_NAME_MAX` is an app-input cap, so nothing else in the repo ties the two together — a
+  // future `varchar(20)` would pass every unit test (they validate the schema, not the column) and
+  // fail only in production. `packages/shared/src/profiles.ts` names `db:verify` as the consumer
+  // that closes this; it was a claim before this assertion existed.
+  const AT_CAP = 'W'.repeat(PROFILE_NAME_MAX);
+  assert.equal(
+    (await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP))?.publicId,
+    AR_A_P,
+    'PROF-1 a-r: a name at PROFILE_NAME_MAX is accepted by the column',
+  );
+  assert.equal(
+    await nameOf(AR_A_P),
+    AT_CAP,
+    'PROF-1 a-r: …and stored in full, not silently truncated',
+  );
+
+  // 6 · The rename touches exactly ONE row. The seeded profile in household A is the witness: a
+  // predicate that lost its `public_id` conjunct would rename every live profile in the household
+  // and still return a row, so every assertion above would pass. This is the case that catches it.
+  assert.equal(
+    await nameOf(SEED_PROFILE_PUBLIC_ID),
+    SEED_PROFILE_NAME,
+    "PROF-1 a-r: household A's OTHER profiles were never touched — the UPDATE matched one row",
+  );
+
+  console.log(
+    '✓ PROF-1 a-r: rename is scoped by public_id ∧ live ∧ household — the wrong household (BOTH ' +
+      'directions), a soft-deleted row and an unknown id each update 0 rows and leave the stored ' +
+      'name intact (criterion 4 as a row count), only ONE row is touched, an ARCHIVED athlete is ' +
+      'still renameable, and the COLUMN stores a PROFILE_NAME_MAX name in full',
   );
 }
 

@@ -30,7 +30,12 @@ vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRI
 
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
-import { getProfileByPublicId, listProfiles, updateProfileRoutine } from './profiles';
+import {
+  getProfileByPublicId,
+  listProfiles,
+  renameAthlete,
+  updateProfileRoutine,
+} from './profiles';
 
 const PROFILE = '019826b4-0000-7000-8000-000000000099';
 
@@ -96,8 +101,55 @@ describe('updateProfileRoutine — the write uses the SAME predicate as the read
   });
 });
 
+/**
+ * PROF-1 a-r. ⚠️ **This is the SECOND vehicle, exactly as this file's header says.** The emitted-SQL
+ * assertion proves the builder appended the conjunct bound to the resolved household; what it cannot
+ * prove is which rows a real Postgres then updates. Acceptance criterion 4 is a ROW COUNT ("write
+ * nothing"), so its proof is `db:verify` → "PROF-1 a-r", which runs `renameProfile` against two real
+ * households. Neither alone is the claim.
+ */
+describe('renameAthlete — the rename uses the SAME predicate as the read', () => {
+  it('scopes the UPDATE by public_id, live, AND household_id', async () => {
+    await renameAthlete(PROFILE, 'Renamed');
+    const update = queryMatching(recording, /^update "profiles"/i);
+    const where = whereOf(update);
+    expect(where).toContain('"profiles"."public_id" = $');
+    expect(where).toContain('"profiles"."deleted_at" is null');
+    expect(where).toContain('"profiles"."household_id" = $');
+    expect(update.values).toContain(ONE_HOUSEHOLD_ID);
+  });
+
+  /**
+   * 🔴 **`archived_at` must NOT be a conjunct.** An archived athlete can still be renamed — archive
+   * is "not currently training", not a lock (`schema.ts` → `profiles.archivedAt`). If this appears,
+   * a typo in an archived athlete's name has become unfixable without restoring them first, and
+   * `isLiveProfile` has quietly grown a UX filter.
+   */
+  it('does not filter on archived_at', async () => {
+    await renameAthlete(PROFILE, 'Renamed');
+    expect(whereOf(queryMatching(recording, /^update "profiles"/i))).not.toContain('archived_at');
+  });
+
+  /** It writes the name and the server-side `updated_at`, and nothing else — not `kind`. */
+  it('sets name and updated_at, and never kind', async () => {
+    await renameAthlete(PROFILE, 'Renamed');
+    const update = queryMatching(recording, /^update "profiles"/i);
+    const setClause = update.text.slice(0, update.text.toLowerCase().indexOf(' where '));
+    expect(setClause).toContain('"name" = $');
+    expect(setClause).toContain('"updated_at" = now()');
+    expect(setClause).not.toContain('"kind"');
+    expect(update.values).toContain('Renamed');
+  });
+
+  /** The returned shape is the public id only — never a row the caller could render as a name. */
+  it('returns the public id, not a row', async () => {
+    await renameAthlete(PROFILE, 'Renamed');
+    expect(queryMatching(recording, /^update "profiles"/i).text).toMatch(/returning "public_id"/i);
+  });
+});
+
 describe('no household → dark, not leaky', () => {
-  it('every one of the three emits no profiles query and answers empty', async () => {
+  it('every one of the FOUR emits no profiles query and answers empty', async () => {
     const dark = (await import('./recording-db')).createRecordingDb(() => []);
     vi.doMock('./db', () => ({ db: dark.db }));
     vi.resetModules();
@@ -108,6 +160,9 @@ describe('no household → dark, not leaky', () => {
     await expect(
       scoped.updateProfileRoutine(PROFILE, { version: 1, order: [{ key: 'strength' }] }),
     ).resolves.toBeNull();
+    // PROF-1 a-r: a rename with no resolved household must not reach the database either. Without
+    // this the new writer would be the one path in the file that fails OPEN of the scope check.
+    await expect(scoped.renameAthlete(PROFILE, 'Renamed')).resolves.toBeNull();
 
     // The ONLY profiles read allowed with no scope is the miss-path probe (ADR 0006 obligation 3),
     // which is an existence check that returns void. Everything else must not have run.

@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 568d60f..59b0009 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -1,4 +1,4 @@
+-import { sql } from 'drizzle-orm';
++import { and, isNull, sql } from 'drizzle-orm';
+ 
+ import { schema } from '../client';
+ import type { HouseholdScope } from '../scope';
+@@ -60,7 +60,7 @@ export async function renameProfile(
+   const rows = await exec
+     .update(schema.profiles)
+     .set({ name, updatedAt: sql`now()` })
+-    .where(isLiveProfile(publicId, scope))
++    .where(and(isLiveProfile(publicId, scope), isNull(schema.profiles.archivedAt)))
+     .returning({ publicId: schema.profiles.publicId });
+ 
+   return rows[0] ?? null;

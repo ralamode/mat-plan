@@ -1195,6 +1195,22 @@ parked** off P0 pending [PICK-1](#pick-1) usage data. Kept for provenance.
        `(household_id, profile)` that moving a profile to another household would break.
     5. **No age-based permission logic** (`profiles.kind`, `profiles.birthdate`) in any auth chunk. The
        age policy arrives with this row, in one place.
+       🔴 **And so does the BIRTHDAY ITSELF — asked during `PROF-1` a-r, 2026-11-07, answered here.**
+       `profiles.birthdate` exists (`schema.ts`) with **zero readers and zero writers**, and
+       [notice.md](./privacy/notice.md) currently tells people _"there is no age and no date of
+       birth"_ and explains the empty column. So the first write is not a form field — it is a **new
+       category of personal data about a minor**: the notice bullet becomes false, the inventory and
+       the retention table each owe a row, and the regulatory floor rises (a date of birth is what
+       makes COPPA's under-13 tier knowable, and what turns a name from "Kid 1" into a person).
+       ⚠️ **Nothing in the app needs it yet, and that is the point.** `kind` already answers the one
+       behavioural question there is — _does this profile read the household's program_
+       (`readsHouseholdProgram`) — and **supervision is answered by `household_members.role`, not by
+       age**: the authority model decided 2026-11-06 is _anyone in the household records and
+       corrects; the owner decides who belongs to it_. Holding a child's date of birth to re-derive
+       an answer two shipped mechanisms already give is storage with no consumer.
+       **So: this row owns it, and the ordering is ADR → age policy module → first write.** Adding
+       the field to a-1's add form instead would scatter the policy into a form, which is exactly
+       what keep-open item 5 exists to prevent.
     6. **Household roles stay a shared const plus a CHECK** (1b's role list), so adding `guardian`
        later is an additive expansion.
 
@@ -2020,6 +2036,41 @@ _Exit: zero hardcoded user-facing strings; a second locale could be added by dro
 
 Captured now so they aren't lost — not yet scoped. Revisit after the MVP.
 
+- **PRIV-4 — the pre-invite privacy re-read: one sign-off, not one per PR.** _(maintainer,
+  2026-11-07, from `PROF-1` a-r.)_ 🔴 **Gate: after CRUD-1's athlete and workout chunks are done,
+  BEFORE the first family outside the maintainer's is invited.** The maintainer has not invited
+  anyone and will not until a household can CRUD athletes and workouts, so `/privacy` has exactly
+  one reader today — which is what makes batching correct rather than lax.
+
+  **Why it is a row and not a per-PR checkbox.** AGENTS.md requires the inventory to move in the
+  same PR as the change, and it does; what this row batches is the **human sign-off** on the
+  published notice. a-r is the worked example: it changed one count sentence (`"Two text boxes have
+no filter"` → three, because a name became typeable), which is a real accuracy fix and shipped
+  with the code — but signing a document nobody has read, three or four times over, is ceremony.
+  ⚠️ **It is NOT a licence to let the notice go stale.** Each PR still edits `notice.md` and the
+  inventory to keep them TRUE; this row is the read-the-whole-thing-aloud pass before a stranger
+  relies on it.
+
+  **What will have accumulated by then** (each already owed by its own chunk):
+  - `a-r` ✅ — three unfiltered free-text boxes, and a name does not reach the export.
+  - `PROF-1 b` — the `archived_at` **writer** goes live. The notice must say what the schema already
+    does: an archived athlete is retained in full, still exports, and is still reachable by link.
+    It is **not** a deletion, and describing it as one would be the worst available error.
+  - `PROF-1 a-1` — the `client_id` **writer** goes live. §2 and the "Technical bits" paragraph
+    currently describe a column with no writer; after a-1 the device-generated identifier is real.
+  - `V1-9b` — delete and restore. The retention table and the deletion procedure both move.
+  - Anything `PROG-1` / workout CRUD adds to what is stored.
+
+  **Done when:** the maintainer has read `notice.md` end to end against
+  [data-inventory.md](./privacy/data-inventory.md), `Last updated` is the date of that read,
+  `pnpm privacy:generate` has run, and the inventory's banner records the sign-off with its date.
+  ⚠️ **Pair it with the other pre-invite conditionals** so one session clears them: `TEN-2c-1`'s
+  re-measure (a dated zero is not an invariant) and `PRIV-3`'s deletion rehearsal.
+
+  **What this row does NOT cover, decided 2026-11-07:** a warning that renaming has no undo. Nothing
+  requires disclosing what is _not_ retained; a rename is the exercise of the rectification right,
+  not an event needing a caveat. The retention answer lives in the inventory's §8.
+
 - **SCHED-1 — scheduling as data: multiple programs per athlete.** _(Ray, 2026-09-18.)_
   📋 **Plan: [plans/sched-1-scheduling-model.md](./plans/sched-1-scheduling-model.md)** (2026-10-11) — five chunks, the first two with no DB; it does **not** close this row.
   📐 **Model: [ADR 0007](./decisions/0007-scheduling-model.md)** — recurrence is a weekday SET as rows
@@ -2753,6 +2804,14 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
   household. Ship the slice, not the layer.
 
 > 📐 **PROF-1 planned and panelled (2026-10-23):** [plan](./plans/prof-1-athletes.md), [CRUD-1](./milestones/crud-1-fix-it-yourself.md) steps 1–2b.
+> ✅ **`a-0` merged 2026-11-06** (migration `0020`, applied in production), **`a-g` merged 2026-11-06**
+> (the kid-only program read), **`a-r` merged 2026-11-07** — the first athlete WRITE: rename, at
+> `/p/[id]/edit`, reachable from the athlete's own page (criterion 8), with the kind SHOWN and not
+> editable (criterion 9) and nothing in the app linking to `/routine` any longer (criterion 11).
+> 🔴 **`kind` editing is NOT in `a-r`, by decision** _(maintainer, 2026-11-07)_: it stays on `a-1`'s
+> ADD form, and the prerequisite for ever making it editable afterwards is in the plan's
+> § Out-of-scope — the export must stop depending on today's `kind`. Remaining: `b-s`, `b`, `a-1`,
+> `a-1d`.
 
 - **PROF-1 — profile create / edit.** _(Ray, 2026-09-24 — after the MVP.)_ There is **no
   profile-editing surface at all** today: profiles exist only because the seed writes them, names cannot

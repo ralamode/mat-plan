@@ -23,11 +23,44 @@ export const FREE_TEXT_NOTE_MAX = 500;
  * special meaning in a file that never quotes.
  */
 const LINE_BREAK_PATTERN = /[\r\n]/;
+
+/**
+ * Every C0/C1 CONTROL character, which is a superset of CR/LF.
+ *
+ * 🔴 **A NUL is the one that matters, and it is not a style concern.** `\u0000` passed every check
+ * `hasLineBreak` makes, reached Postgres, and `text` rejects it — *"invalid byte sequence for
+ * encoding UTF8"* — so the action **threw** instead of returning its typed envelope, and the parent
+ * got `error.tsx` rather than a field error. That is the envelope convention defeated by one byte
+ * (probed). Crafted-body only, since no input element emits a NUL.
+ */
+const CONTROL_PATTERN = /\p{Cc}/u;
 const COMMA_OR_LINE_BREAK_PATTERN = /[,\r\n]/;
 
 /** True when `value` contains a CR or LF — which would split one record into two on export. */
 export function hasLineBreak(value: string): boolean {
   return LINE_BREAK_PATTERN.test(value);
+}
+
+/**
+ * True when `value` contains ANY control character — CR/LF included, plus NUL and the rest of C0/C1.
+ *
+ * Deliberately separate from {@link hasLineBreak} rather than replacing it: the two answer different
+ * questions. `hasLineBreak` is the CSV-contract predicate ("would this split a record"), and its
+ * message says so; this is the trust-boundary predicate ("can this reach the database at all").
+ * A field that is exported uses the first; a field that is only stored uses this.
+ */
+export function hasControlChar(value: string): boolean {
+  return CONTROL_PATTERN.test(value);
+}
+
+/**
+ * Collapse every run of whitespace to one space. Shared because `athleteNameSchema` and
+ * {@link foldName} must agree about what was stored — the stored name, the duplicate warning and
+ * A3's typed-match confirmation all quote it, and a name that displays with three spaces while
+ * folding with one makes the warning read as nonsense.
+ */
+export function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/gu, ' ');
 }
 
 /**
@@ -59,3 +92,46 @@ export const freeTextNoteSchema = z
   .refine((v) => !hasLineBreak(v), 'A note has to be a single line.')
   .transform((v) => v || undefined)
   .optional();
+
+/**
+ * Fold a person's NAME to a comparison key — "are these two the same name, to a human?" (PROF-1 D11).
+ *
+ * Created by PROF-1 a-r because rename is the first surface that has to ask the question; the
+ * duplicate warning (a-1d), the picker (PICK-1) and the movement catalog (MOV-1) are the other
+ * consumers, and all four must fold by the SAME rule or two of them disagree about what a duplicate
+ * is. One definition, imported — never a per-surface `.toLowerCase().trim()`.
+ *
+ * The steps, in order: **NFKD** → strip combining marks (`\p{M}`) → map the three apostrophes people
+ * actually type to `'` → collapse interior whitespace → trim → lower-case.
+ *
+ * ⚠️ **NFKD, not NFD, and that is the one choice worth arguing.** The question this answers is "would
+ * a parent read these as the same name", so the COMPATIBILITY forms must fold too: the ligature `ﬁ`
+ * and full-width `Ｚｏｅ` decompose to `fi` and `Zoe` under NFKD and stay distinct under NFD. Under NFD
+ * two names a parent reads as identical would not warn, which is the failure this exists to prevent.
+ *
+ * ⚠️ **It can return `''`** — a name of only combining marks folds to nothing. That is not a bug and
+ * callers must not treat the empty string as "no duplicate": `athleteNameSchema`
+ * (`packages/shared/src/profiles.ts`) rejects such a name at the boundary so it never reaches a
+ * comparison, which is why the fold is free to be lossy here.
+ *
+ * ⚠️ **A fold is NOT a display value and NOT a storage value.** The stored name is what the person
+ * typed (whitespace-collapsed by the schema, nothing else); this output exists only to be compared.
+ */
+export function foldName(value: string): string {
+  return (
+    collapseWhitespace(value)
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '')
+      // 🔴 **FORMAT characters (`\p{Cf}`) too — zero-width space, ZWNJ, word joiner, soft hyphen.**
+      // Without this, a name made only of them folds to ITSELF rather than `''`, so
+      // `athleteNameSchema`'s "folds to nothing" guard — which exists precisely to refuse a name that
+      // renders as nothing — let it through: probed, `'\u200b'` was accepted and stored, giving a
+      // picker tile with no readable name. U+200B rides along on a paste from web content, so this is
+      // not a crafted-body case. ⚠️ Folding only, never storage: a ZWJ inside an emoji name is
+      // meaningful and stays stored.
+      .replace(/\p{Cf}/gu, '')
+      .replace(/[‘’ʼ]/gu, "'")
+      .trim()
+      .toLowerCase()
+  );
+}

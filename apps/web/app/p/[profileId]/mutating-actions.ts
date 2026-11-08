@@ -1,6 +1,6 @@
 import { keyBySelf } from '@mat-plan/shared';
 
-import { NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
+import { NO_ATHLETE_SAVE, NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
 
 /**
  * **The one source for "which Server Actions does this app expose, and what does each refuse with".**
@@ -88,6 +88,18 @@ export const MUTATING_ACTIONS = {
   editStrengthSetAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
   editBodyweightAction: { refusal: NO_PROFILE_LOG, scope: ACTION_SCOPE.profile },
   editRoutineAction: { refusal: NO_PROFILE_SAVE, scope: ACTION_SCOPE.profile },
+  /**
+   * PROF-1 a-r, and **the first entry whose function lives in a different module**
+   * (`app/p/profile-actions.ts`). That is the whole reason a-r was gated on WP-1: before it, the
+   * on-disk cross-check read `[profileId]/actions.ts` alone, so this key would have failed the
+   * equality with 8 registry names against 7 exports — and, worse, a module added without a key here
+   * would have faced no boundary suite at all.
+   *
+   * `scope: 'profile'` because the body carries a `profileId`, so the wrong-household matrix can hand
+   * it a foreign one. (a-1's `addAthleteAction` is the first `household` entry; it has no profile id
+   * to make foreign.)
+   */
+  renameAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
 } as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
 
 /** Every action this app exposes, in or out of the matrices. */

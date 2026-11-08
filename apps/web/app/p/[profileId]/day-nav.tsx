@@ -1,3 +1,4 @@
+import { athletePath } from '@/lib/constants';
 import Link from 'next/link';
 
 import { addDays, formatDayLong, formatDayShort, isoDayDiff, localWeekStartIso } from '@/lib/date';
@@ -31,7 +32,8 @@ export function DayNav({
   dayRoleLabel?: string;
 }) {
   const isToday = day === today;
-  const href = (d: string) => (d === today ? `/p/${profileId}` : `/p/${profileId}?d=${d}`);
+  const href = (d: string) =>
+    d === today ? athletePath(profileId) : `${athletePath(profileId)}?d=${d}`;
 
   // The SAME effective floor `resolveViewedDay` uses: never later than the earliest writable day, or
   // the arrows would disable a day the resolver would happily render (and the server would accept).

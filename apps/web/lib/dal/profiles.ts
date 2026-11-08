@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { householdProfileRows, isLiveProfile, schema } from '@mat-plan/db';
+import { householdProfileRows, isLiveProfile, renameProfile, schema } from '@mat-plan/db';
 import { type ProfileKind, type RoutineConfig, uuidSchema } from '@mat-plan/shared';
 
 import { resolveProfileRoutine } from '@/lib/routine/catalog';
@@ -175,4 +175,35 @@ export async function updateProfileRoutine(
     .returning({ id: schema.profiles.publicId });
 
   return row ? { id: row.id } : null;
+}
+
+/**
+ * Rename one athlete (PROF-1 a-r).
+ *
+ * The action has already re-resolved the profile through `getProfileByPublicId` — the ownership seam
+ * — so this is the second, deeper check rather than the only one, which is what `write-path.md`
+ * invariant 3 asks for ("a guard that exists only in the DAL is a guard no proof covers", and the
+ * converse: a guard that exists only in the action is one a second caller can skip). `renameProfile`
+ * rides `isLiveProfile(publicId, scope)`, so an unknown, soft-deleted or foreign id updates 0 rows
+ * and comes back `null`.
+ *
+ * The `name` is already trimmed, whitespace-collapsed and length-checked by `renameAthleteSchema`
+ * (`@mat-plan/shared`) BEFORE it arrives — this layer stores what it is given, the
+ * `updateProfileRoutine` convention. Non-UUID ids never reach here either, for the same reason that
+ * function states: the action resolves the profile first, which is also why the scope miss is
+ * reported there and not again here.
+ *
+ * ⚠️ **It returns `{ id }`, never the renamed row.** The action needs the public id to revalidate
+ * two paths and nothing else; handing back a DTO would invite a caller to render a name this
+ * function did not read back from the database.
+ */
+export async function renameAthlete(
+  publicId: string,
+  name: string,
+): Promise<{ id: string } | null> {
+  const scope = await getHouseholdScope();
+  if (!scope) return null;
+
+  const row = await renameProfile(db, scope, publicId, name);
+  return row ? { id: row.publicId } : null;
 }

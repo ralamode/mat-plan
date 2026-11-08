@@ -89,10 +89,27 @@ none` is noise. A plan or spec PR is not standalone — it advances its mileston
 - [docs/architecture.md](../../../docs/architecture.md): update the diagram if a pivotal flow or
   model changed.
 
-## 4. UI evidence
+## 4. UI evidence — **after the review round, not before it**
 
 Any visible change → run the `ui-screenshot` skill (three widths, `.screenshots/`, never committed).
 Confirm the **UX panel log** exists, in the plan or ready for the PR description.
+
+🔴 **ORDER: for a PR deep enough to earn a review round, iterate and reconcile FIRST, then capture.**
+_(maintainer, 2026-11-07, after `PROF-1` a-r.)_ On that PR the screens were captured and published,
+then a six-lens panel changed the heading, the kind block and the error copy — so the published
+images were stale the moment the fixes landed, and three capture-and-publish cycles went into one
+screen. Each cycle is a prod build plus an ephemeral Postgres: minutes, not seconds, and a reviewer
+who opens a stale image reviews a screen that no longer exists.
+
+**The sequence:** build → panel / review → reconcile → **capture** → open the PR with the images in
+the description. A screenshot is evidence of what you are shipping, so take it of the thing you are
+actually shipping.
+
+⚠️ **This does not defer the UX PANEL**, which AGENTS.md still requires **before implementation** —
+it defers the CAMERA. Nor does it mean a PR opens without images: it means the first publish is the
+one in the description, which is where AGENTS.md wants it anyway. A later revision still gets a
+comment with `--note`, and when a review legitimately changes a screen, re-capturing is correct —
+the rule is about not paying that cost on the first pass by default.
 
 ## 5. Definition-of-Done pass
 
