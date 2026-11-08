@@ -147,6 +147,11 @@ do next.
   CRUD-1's athlete and workout chunks and before the first outside family is invited**. A session
   that finds a notice edit owed should make it and move on, not stall for a signature. Pair the
   eventual read with `TEN-2c-1`'s re-measure and `PRIV-3`'s deletion rehearsal.
+- **`verify.ts` is 7,213 lines and every DB PR appends to it.** [`DX-12`](./plan.md) is planned,
+  panelled and **deferred** — its log is the artifact, and it records that the split does **not**
+  unlock parallel lanes. ⚠️ **CRUD-1's lanes are orders of work, not concurrency**
+  ([crud-1](./milestones/crud-1-fix-it-yourself.md)'s 2026-10-23 gate run: _"gate 1 fails for every
+  pair, on the guide alone"_) — read that before proposing two tracks.
 - **Screenshots come AFTER the review round** on a PR deep enough to have one (`ship-pr` §4,
   `ui-screenshot`). `PROF-1` a-r paid three capture-and-publish cycles on one screen because the
   camera came first and a six-lens panel then changed the heading, the kind block and the error copy.
