@@ -1,3 +1,4 @@
+import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
 import { createDb } from '@mat-plan/db';
 
 /**
@@ -63,7 +64,10 @@ export const ONE_HOUSEHOLD_ID = 4242;
  * wrong value. The order is the order of the `.select({…})` under test.
  */
 export function oneHouseholdThenEmpty(sql: string): unknown[][] {
-  return /from "household_members"/.test(sql) ? [[ONE_HOUSEHOLD_ID]] : [];
+  // BOTH columns `membershipHousehold` selects. A one-column row mapped to `role: undefined`,
+  // which `makeHouseholdScope` now rejects outright — before PROF-1 b-s it minted a role-less scope
+  // and every `toEqual` in the DAL suite ignored the missing key.
+  return /from "household_members"/.test(sql) ? [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]] : [];
 }
 
 export function createRecordingDb(

@@ -13,11 +13,18 @@
   forgetting it is a compile error — `INVITE-1`'s minting, member removal and `PRIV-3`'s deletion
   inherit the check by signature rather than by a reviewer remembering.
   ⚠️ **The type is not the whole guard and is not sold as one.** A brand stops an accidental
-  widening; `as unknown as OwnerScope` still compiles, deliberately. So both halves are proved
-  separately: the compile half by an `@ts-expect-error` pin that fails as **`TS2578`** if the brand
-  erodes (probed), and the database half by `db:verify` driving a **forged** `OwnerScope` carrying
-  `role: 'member'` and asserting it matches **0 rows**. Mutation patch `14` turns `isOwnerOf` into
-  `TRUE` and that assertion goes red, so the conjunct is not a tautology nobody noticed.
+  widening and an inline literal; a **one-word** `as OwnerScope` compiles, because `OwnerScope` is a
+  subtype — so `scope.test.ts` guards that cast lexically (`ownerScope()` and one named `verify.ts`
+  forgery are its only sites). The compile half is pinned by an `@ts-expect-error` that fails as
+  **`TS2578`** if the brand erodes (probed).
+  🔴 **`isOwnerOf` is NOT a database-side authority check**, and five documents in this PR's first
+  round said it was. It emits `$1 = $2` over the scope's own `role` field: no column, no
+  `household_members`, and a forgery that _writes_ `role: 'owner'` passes it. The **only** authority
+  is `membershipHousehold`'s single live-row read. What the conjunct buys is narrower and still worth
+  the line — a scope cast past `ownerScope()` while honestly holding `member` matches **0 rows**
+  instead of writing, so a lost narrowing fails CLOSED and fails as a row count. `db:verify` asserts
+  that; patch `14` reddens it; patch `15` pins where the role is read from. A principal-keyed
+  `EXISTS` is the real database-side check and belongs to `INVITE-1`, when demotion goes live.
   **Both constructors take `role` positionally, with no default** — so every unconverted call site is
   a compile error rather than a silent downgrade to `member`. Three fired immediately.
   `householdScopeForScript` is the one exception and says why: every caller is a maintainer-run

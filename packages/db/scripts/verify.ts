@@ -6782,16 +6782,28 @@ console.log(
     // somebody else's household. Constructing that state and asserting `member` is the only way to
     // show the one-query design actually prevents it; prose cannot.
     {
+      // 🔴 **BOTH households here are LIVE, and that is the whole sensitivity of this block.** The
+      // first draft put the dead `owner` row in the soft-deleted `tmpHh` above, where
+      // `households.deleted_at IS NULL` excluded it as well — so the assertions below held under
+      // EITHER conjunct and could not fail when one regressed (proved: patches 07 and 09 each left
+      // this block green). A negative fixture covered by two conjuncts proves neither. The state the
+      // docblock names — an owner REMOVED from a household that still exists, who then joins another
+      // — needs the dead row's household alive, so `household_members.deleted_at IS NULL` is the only
+      // thing standing between the resolver and a dead owner row.
+      const [bsDeadHh] = await asPg
+        .insert(schema.households)
+        .values({ publicId: newId(), name: 'B-s Dead-Row HH' })
+        .returning({ id: schema.households.id });
       const [bsLiveHh] = await asPg
         .insert(schema.households)
         .values({ publicId: newId(), name: 'B-s Live HH' })
         .returning({ id: schema.households.id });
       const CLERK_BS = 'user_00000000000000000000000bs01';
 
-      // The DEAD owner row, in the already-soft-deleted household above.
+      // The DEAD owner row — in a household that is itself LIVE (see above).
       await asPg.insert(schema.householdMembers).values({
         publicId: newId(),
-        householdId: tmpHh!.id,
+        householdId: bsDeadHh!.id,
         clerkUserId: CLERK_BS,
         role: HOUSEHOLD_ROLE.owner,
         deletedAt: new Date(),
@@ -6827,6 +6839,7 @@ console.log(
         .delete(schema.householdMembers)
         .where(eq(schema.householdMembers.clerkUserId, CLERK_BS));
       await asPg.delete(schema.households).where(eq(schema.households.id, bsLiveHh!.id));
+      await asPg.delete(schema.households).where(eq(schema.households.id, bsDeadHh!.id));
     }
 
     // (4c) The LIMIT 2 ambiguity probe. Two live memberships for one account is a state the resolver
@@ -7288,16 +7301,29 @@ console.log(
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // PROF-1 b-s — the owner conjunct, proved where the TYPE cannot reach.
 //
-// 🔴 THE POINT OF THIS BLOCK IS THE CASE THE BRAND CANNOT STOP. `OwnerScope` makes a non-owner
-// caller a COMPILE error, and `src/scope.test.ts`'s `@ts-expect-error` pin proves that half. What a
-// type cannot stop is `as unknown as OwnerScope` — a deliberate, reviewable forgery that `scope.ts`'s
-// own docblock says is the point of a brand ("it cannot happen by accident"). So the database-side
-// half has to hold on its own, and only a real database can show it: a forged owner scope carrying
-// `role: 'member'` must make the conjunct FALSE, i.e. 0 rows.
+// 🔴 **FIRST, WHAT THIS BLOCK DOES NOT PROVE.** `isOwnerOf` emits `$1 = $2` over the scope's OWN
+// `role` field — it reads no column, and the database never re-checks `household_members`. These
+// assertions are NOT a database-side authority check, and this header claimed they were ("the
+// database-side half has to hold on its own"). A probe settled it, not an argument:
+// `new PgDialect().sqlToQuery(isOwnerOf(forged))` → `{ sql: '$1 = $2', params: ['member','owner'] }`.
+//
+// **What they DO prove, which is narrower and still worth the block:** a scope whose role is
+// honestly `member` but which was cast past `ownerScope()` matches **0 rows** instead of writing —
+// the lost narrowing fails CLOSED, and fails as a row count that mutation patch `14` can redden. A
+// forgery that *writes* `role: 'owner'` passes every assertion here, and the database cannot tell it
+// from an honest owner; closing that needs the principal on the scope (`INVITE-1`).
+//
+// 🔴 THE CASE THE BRAND CANNOT STOP. `OwnerScope` makes a non-owner caller a COMPILE error, and
+// `src/scope.test.ts`'s `@ts-expect-error` pin proves that half. What a type cannot stop is a cast —
+// ONE word, `as OwnerScope`, not the `as unknown as OwnerScope` this header also claimed, since
+// `OwnerScope` is a SUBTYPE. `src/scope.test.ts` now guards that cast lexically, and the forgery
+// below is its one allowed appearance.
 //
 // ⚠️ Ships DARK — `isOwnerOf` has no caller until PROF-1 b's `archiveProfile`. This block is what
 // stops it shipping as an untested decoration in the meantime.
 {
+  // Ids `…04e0xx` are THIS block's range. #352 landed that convention after a-r and b-s both reused
+  // another block's `public_id` and collided on the UNIQUE; say which range is yours.
   const BS_P = '019826b4-0000-7000-8000-00000004e001';
   await db.insert(schema.profiles).values({
     publicId: BS_P,

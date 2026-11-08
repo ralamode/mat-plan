@@ -1,4 +1,4 @@
-import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+import { HOUSEHOLD_ROLE, HOUSEHOLD_ROLES, type HouseholdRole } from '@mat-plan/shared';
 
 import type { HouseholdRow } from './types';
 
@@ -21,9 +21,12 @@ import type { HouseholdRow } from './types';
  *
  * - **The REQUIRED positional parameter on `isLiveProfile`** is the compile-time guarantee, and it is
  *   what makes an unconverted call site a build failure rather than a review miss.
- * - **The BRAND** blocks an inline object literal standing in for a derived scope. A deliberate
- *   `as unknown as HouseholdScope` still compiles — that is a visible, reviewable forgery, which is
- *   the point: it cannot happen by accident.
+ * - **The BRAND** blocks an inline object literal standing in for a derived scope. ⚠️ A one-word
+ *   `as HouseholdScope` compiles too — this bullet claimed it took `as unknown as`, which is false
+ *   (line ~135 of this file does the one-word form, and so does `verify.ts`'s named forgery). TS
+ *   allows `x as T` whenever either side is assignable to the other. What the brand buys is that a
+ *   bare `{ householdId: 4 }` is a compile error, so a scope cannot be *conjured*; a cast is a
+ *   visible, greppable forgery, which `src/scope.test.ts` now also guards for `OwnerScope`.
  * - **The module boundary** keeps the SCRIPT constructor out of `apps/web` entirely:
  *   `householdScopeForScript` lives in `writers/household-scope-script.ts`, which `src/index.ts`
  *   does **not** re-export, and `packages/db/package.json` maps only `"."` — so a deep bare import
@@ -72,9 +75,14 @@ export type HouseholdScope = {
  * authority accepts one without a cast, and widening never requires a second call.
  *
  * ⚠️ **The type is not the whole guard, and must not be sold as one.** A brand stops an accidental
- * widening; it cannot stop `as unknown as OwnerScope`. The database-side half is the owner conjunct
- * in `writers/ownership.ts`, which makes a non-owner write touch **0 rows** — and `db:verify` proves
- * that against a real database, with a mutation patch proving the proof can fail.
+ * widening and an inline literal; a one-word `as OwnerScope` still compiles (it is a subtype), so
+ * `src/scope.test.ts` guards the cast lexically instead — `ownerScope()` here and one named forgery
+ * in `verify.ts` are the only places it may appear.
+ *
+ * ⚠️ **The owner conjunct in `writers/ownership.ts` is NOT a database-side second check** — this
+ * docblock said it was. It emits `$1 = $2` over the scope's own role field and reads no column; see
+ * its own docblock for what it does buy (a lost narrowing fails closed, as a row count). **The only
+ * authority is the single live-row read in `queries/household-membership.ts`.**
  */
 export type OwnerScope = HouseholdScope & {
   readonly [ownerScopeBrand]: true;
@@ -127,6 +135,16 @@ export function makeHouseholdScope(
 ): HouseholdScope {
   if (!Number.isSafeInteger(householdId)) {
     throw new Error(`${who}: household id must be a safe integer, got ${String(householdId)}`);
+  }
+  // ⚠️ **`role` is validated for the reason `householdId` is: a bad value FAILS CLOSED but SILENTLY.**
+  // `undefined` reaches `ownerScope()` as `undefined !== 'owner'` → refused, and reaches
+  // `isOwnerOf` as a NULL bind → 0 rows. An owner would simply stop being able to archive, with
+  // nothing in the logs saying why. A recording stub that returned one column too few produced
+  // exactly this value in `apps/web`'s DAL tests, where `toEqual` then ignored the missing key.
+  if (!HOUSEHOLD_ROLES.includes(role)) {
+    throw new Error(
+      `${who}: role must be one of ${HOUSEHOLD_ROLES.join(', ')}, got ${String(role)}`,
+    );
   }
   // ⚠️ **`role` is REQUIRED and positional, for the reason `householdId` is** — a defaulted or
   // optional role would make every unconverted call site compile as `member`, silently, which is the

@@ -108,6 +108,17 @@ const FIXTURE_DERIVES_SCOPE = 'apps/web/scripts/screenshot-ephemeral.ts';
 /** The request-serving tree: routes, DAL, components. No fixture script lives here. */
 const WEB_REQUEST_TREE = /^apps\/web\/(app|lib|components)\//;
 
+/**
+ * An OPTIONAL (`role?: T`) or DEFAULTED (`role: T = v`) **role parameter** — the shape that turns a
+ * missed call site into a silent owner.
+ *
+ * ⚠️ Deliberately NOT the `/\brole\s*[?=][^=]/` shape its `scope` sibling uses. Tried first, it
+ * matched JSX `role="status"` in sixteen `apps/web` files and matched the real
+ * `role: HouseholdRole = HOUSEHOLD_ROLE.owner` in **none** of them — a guard that fired everywhere
+ * except on its target, which is how a guard gets relaxed into uselessness.
+ */
+const ROLE_PARAM_DEFAULTED = /\brole\s*(?:\?\s*:|:[^,;)=]*=[^=])/;
+
 describe('the scope seam is structurally contained (TEN-1 1b)', () => {
   it('finds the sources (an empty glob would pass everything below)', () => {
     expect(DB_SOURCES.length).toBeGreaterThan(10);
@@ -127,6 +138,64 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     expect(
       offenders,
       'a defaulted/optional `scope` parameter makes a missed call site invisible — the one change the plan rejects (Alternative 5)',
+    ).toEqual([]);
+  });
+
+  it('no REQUEST-side or shared constructor DEFAULTS its role parameter (PROF-1 b-s)', () => {
+    // 🔴 **The dangerous direction is the silent UPGRADE.** `role: HouseholdRole = 'owner'` pasted
+    // onto `householdScopeForRequest` or `makeHouseholdScope` compiles every unconverted call site
+    // as an OWNER — the opposite of the `member` downgrade the plan worried about, and strictly
+    // worse. Guard 1 above only inspects the `scope` parameter, so `role` was prose with nothing
+    // behind it. `writers/household-scope-script.ts` is exempt BY NAME with its reason: a script
+    // that resolves its own household is the one legitimate owner-by-default, and it is lexically
+    // unreachable from `apps/web` (proved by the two guards below it).
+    const ALLOWED_ROLE_DEFAULT: Readonly<Record<string, string>> = {
+      'packages/db/src/writers/household-scope-script.ts':
+        'the SCRIPT constructor: seeds, db:verify and corrections act as the operator, who is the ' +
+        'owner; never reachable from apps/web (module boundary, guards below)',
+    };
+    const offenders = [...DB_SOURCES, ...WEB_SOURCES].filter(
+      (f) => !(f in ALLOWED_ROLE_DEFAULT) && ROLE_PARAM_DEFAULTED.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders,
+      'a defaulted `role` makes every unconverted call site an OWNER, silently — add the file to ' +
+        'ALLOWED_ROLE_DEFAULT with a reason only if that is genuinely what it means',
+    ).toEqual([]);
+  });
+
+  it('ALLOWED_ROLE_DEFAULT carries no dead entry', () => {
+    // The allowlist above is only honest while each entry still names a file that defaults a role.
+    // A stale entry is a standing permission for a file that no longer needs it.
+    expect(
+      ROLE_PARAM_DEFAULTED.test(
+        code(join(REPO, 'packages/db/src/writers/household-scope-script.ts')),
+      ),
+      'household-scope-script.ts no longer defaults its role — drop it from ALLOWED_ROLE_DEFAULT',
+    ).toBe(true);
+  });
+
+  it('🔴 the OwnerScope brand is never cast on — narrowing is the only way in', () => {
+    // ⚠️ **`as OwnerScope` compiles with ONE word, not three.** `OwnerScope` is a SUBTYPE of
+    // `HouseholdScope`, and TS allows `x as T` whenever either side is assignable to the other — so
+    // `archiveProfile(db, scope as OwnerScope, id)` in the DAL typechecks. It fails CLOSED (the
+    // owner conjunct binds `'member' = 'owner'` → 0 rows) but it fails INVISIBLY: 0 rows maps to
+    // `null` maps to the 404-shaped refusal, so every member's archive would silently return "no
+    // athlete found" and the owner-only refusal would never fire. `verify.ts`'s one named forgery is
+    // exempt — proving the cast is possible is its job.
+    const ALLOWED_CAST: Readonly<Record<string, string>> = {
+      'packages/db/src/scope.ts':
+        'ownerScope() itself — the ONE narrowing, which is what every other site must route through',
+      'packages/db/scripts/verify.ts':
+        'the ONE named forgery: proves a cast-past-the-narrowing writes 0 rows (PROF-1 b-s block)',
+    };
+    const offenders = [...DB_SOURCES, ...WEB_SOURCES, 'packages/db/scripts/verify.ts'].filter(
+      (f) => !(f in ALLOWED_CAST) && /\bas\s+OwnerScope\b/.test(code(join(REPO, f))),
+    );
+    expect(
+      offenders,
+      'cast past ownerScope() and the refusal becomes a 404 nobody can explain — call ownerScope() ' +
+        'and branch on null instead',
     ).toEqual([]);
   });
 

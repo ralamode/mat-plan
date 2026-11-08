@@ -116,23 +116,42 @@ export function inHousehold(scope: HouseholdScope) {
 }
 
 /**
- * THE owner conjunct — `household_members.role = 'owner'`, as SQL (`PROF-1 b-s`).
+ * The owner conjunct — **the scope's own `role`, bound as a parameter** (`PROF-1 b-s`).
  *
- * 🔴 **The database-side half of the authority, and the reason `OwnerScope` is not sold as the whole
- * guard.** The brand makes a non-owner caller a *compile* error; this makes a non-owner write touch
- * **0 rows** against a real database, which is what `db:verify` can prove and a mutation patch can
- * break. A type alone is defeated by one `as unknown as OwnerScope`; a predicate is not.
+ * 🔴 **READ THIS BEFORE BUILDING ON IT: it consults no table.** The emitted SQL is `$1 = $2` with
+ * two bind parameters — `['member', 'owner']` for a non-owner scope. There is no column and no
+ * `household_members` in it; the database does not re-check membership, and this is **not** a
+ * second, independent check. The ONLY authority is `membershipHousehold`'s single live-row read
+ * (`queries/household-membership.ts`), which is where a reviewer must look.
  *
- * ⚠️ **It takes an `OwnerScope`, so it CANNOT be called with an unnarrowed scope** — the parameter
- * type is the check, exactly as `isLiveProfile`'s required positional `HouseholdScope` is. Reading
- * `scope.role` here rather than in a caller is what keeps the authority decision in the one module
- * `src/scope.test.ts` already pins for unwrapping the capability.
+ * ⚠️ This docblock said "`household_members.role = 'owner'`, as SQL" and called itself "the
+ * database-side half … the half that survives a forgery" — through four other documents as well.
+ * It was wrong in a way that mattered: the next author would have under-reviewed the resolver,
+ * believing a row count was backstopping it. A probe settled it
+ * (`new PgDialect().sqlToQuery(isOwnerOf(forged))` → `$1 = $2`), not an argument.
  *
- * 🔴 **It is a TAUTOLOGY ON PURPOSE, and that is the subtle part.** An `OwnerScope` only exists if
- * `ownerScope()` already saw `role === 'owner'`, so this emits `TRUE` for every value it can legally
- * receive. It is not a second check — it is the **first and only** check expressed where a row count
- * can see it, so a write that lost its narrowing cannot silently succeed. ⚠️ Do NOT "optimise" it
- * away: the mutation patch that deletes it is what proves the archive proof is not vacuous.
+ * **What it genuinely buys, which is narrower and still worth the line:**
+ *
+ * 1. **A LOST NARROWING FAILS CLOSED, AND AS A ROW COUNT.** A scope whose role is honestly `member`
+ *    but which was cast past `ownerScope()` binds `'member' = 'owner'` → the UPDATE matches **0
+ *    rows** rather than succeeding. `db:verify` can assert that; a type cannot.
+ * 2. **IT PINS ITS CALLER'S SIGNATURE FROM INSIDE THE BODY.** Widening `archiveProfile(exec, scope:
+ *    HouseholdScope, …)` fails to compile *at the `isOwnerOf(scope)` call*, which the signature
+ *    alone does not give you.
+ * 3. **Mutation patch `14` makes its removal a RED gate** instead of a line nobody missed.
+ *
+ * ⚠️ **What it does NOT stop:** a forgery that *writes the role* —
+ * `{ ...scope, role: 'owner' } as OwnerScope` — passes this and the brand both, and the database
+ * cannot tell it from an honest owner. Closing that needs the **principal** on the scope and a real
+ * `EXISTS (SELECT 1 FROM household_members WHERE household_id = profiles.household_id AND … AND
+ * role = 'owner' AND deleted_at IS NULL)`. The scope carries no principal today, which is deliberate
+ * (plan § Role authority) and the right upgrade path at `INVITE-1`, when demotion becomes a live
+ * operation. Do not pretend this line already does it.
+ *
+ * ⚠️ **It takes an `OwnerScope`, so it cannot be called with an unnarrowed scope** — the parameter
+ * type is that check, exactly as `isLiveProfile`'s required positional `HouseholdScope` is. Reading
+ * `scope.role` here rather than in a caller keeps the authority decision in one of the two modules
+ * `src/scope.test.ts` names with a reason.
  *
  * **Ships dark at b-s.** `PROF-1 b`'s `archiveProfile` is its first caller.
  */

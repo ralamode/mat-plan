@@ -1,6 +1,8 @@
 import { ENTRY_STATUS } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HOUSEHOLD_ROLE } from '@mat-plan/shared';
+
 // DAL-1 / TEN-1 1b: `listEntriesForDay` must scope by THE live-profile predicate — so a soft-deleted
 // profile's entries never come back, and (since TEN-1) neither do another household's. The predicate
 // itself is proven against a real database in `db:verify` (the TEN-1 read matrix, both directions);
@@ -129,7 +131,9 @@ describe('logStrengthSession — catalog write order (TEN-1 1d)', () => {
     let movementSelects = 0;
     const rows = (await import('./recording-db')).createRecordingDb((sql) => {
       // The resolver's probe since 1c-4 — see `recording-db.ts`'s `oneHouseholdThenEmpty`.
-      if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID]];
+      // Both columns the membership query selects — a one-column row mints `role: undefined`,
+      // which `makeHouseholdScope` now rejects outright (PROF-1 b-s).
+      if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]];
       if (/from "activity_types"/.test(sql)) return [[1, null]]; // { id, defaultUnit }
       if (/^select .* from "movements"/.test(sql)) {
         movementSelects += 1;

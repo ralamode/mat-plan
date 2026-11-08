@@ -127,9 +127,11 @@ export const getHouseholdScope = cache(async (): Promise<HouseholdScope | null> 
 
   // (A) The only resolvable answer.
   // 🔴 **The role rides the SAME row as the id (PROF-1 b-s).** `membershipHousehold` selects both,
-  // so there is no second lookup to forget a `deleted_at` conjunct on and no TOCTOU window between
-  // reading the role and the write it authorizes — see that query's docblock for the soft-deleted
-  // `owner` row that makes this a safety property rather than a saved round trip.
+  // so there is no second lookup to forget a `deleted_at` conjunct on, and the id and role cannot
+  // disagree with each other — see that query's docblock for the soft-deleted `owner` row that makes
+  // this a safety property rather than a saved round trip. ⚠️ This comment also claimed "no TOCTOU
+  // window between reading the role and the write it authorizes"; that is false — this resolver is
+  // `cache()`d and the write is a later statement in the same request. See the query's docblock.
   if (rows.length === 1) return householdScopeForRequest(rows[0].householdId, rows[0].role);
 
   if (rows.length === 0) {

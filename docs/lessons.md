@@ -529,6 +529,40 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
   the old parser (case 3 exited **0**, silently owning nothing). A guard without a self-test is a
   claim, not a check. (`fix/dx-guides-owns-parser`)
 
+- **A negative fixture covered by TWO conjuncts proves neither.** → `db:verify`'s soft-deleted-owner
+  block (`PROF-1 b-s`) built the state it names — one account holding a dead `owner` row in household
+  X beside a live `member` row in Y — by putting the dead row in a household that was **itself**
+  soft-deleted. `membershipHousehold` carries `household_members.deleted_at IS NULL` **and**
+  `households.deleted_at IS NULL`, so each conjunct excluded the row on its own: mutation patches
+  `07` and `09` both left the block **green**, and the assertion the PR headlined as _"the case the
+  whole design rests on"_ could not fail for a conjunct regression. → When writing a fixture whose
+  point is that **one** predicate excludes a row, make every **other** predicate's answer _include_
+  it, then prove that by applying each neighbouring mutation patch and watching where it reddens.
+  ⚠️ **Fail-fast hides this**: patch `07` reddens at an earlier assertion, so the later block is
+  never reached and "14/14 RED" says nothing about it — a block that no patch can reach needs its own
+  patch (here `15`, which attacks the role's source). (`feat/prof-1b-s-owner-scope`)
+
+- **A guard regex that fires on sixteen wrong files and zero right ones.** → `scope.test.ts`'s
+  "no defaulted `scope` parameter" guard uses `/\bscope\s*[?=][^=]/`. Copied to `role`, that pattern
+  matched JSX `role="status"` across sixteen `apps/web` files and matched the actual target,
+  `role: HouseholdRole = HOUSEHOLD_ROLE.owner`, in **none** of them — the `:` after `role` never
+  satisfies `[?=]`. A guard noisy everywhere except on its target is how a guard gets relaxed into
+  uselessness. → Copying a guard to a new field means **re-deriving the pattern for that field's
+  syntax**, not reusing the sibling's, and then **probing it red** against the exact line it exists
+  to catch. The fixed form keys on the parameter shape: `/\brole\s*(?:\?\s*:|:[^,;)=]*=[^=])/`.
+  (`feat/prof-1b-s-owner-scope`)
+
+- **A SQL fragment that compares two bind parameters is not a database check.** →
+  `isOwnerOf(scope)` was documented in five places as _"the database-side half"_ /
+  _"`household_members.role = 'owner'`, as SQL"_ / _"the half that survives a forgery"_. Its body is
+  `` sql`${scope.role} = ${HOUSEHOLD_ROLE.owner}` ``, which emits `$1 = $2` with params
+  `['member', 'owner']` — **no table and no column**; the database never re-checks membership, and a
+  forgery that _writes_ `role: 'owner'` passes it. Four independent review lenses flagged it; one
+  probe settled it: `new PgDialect().sqlToQuery(frag)`. → **Before describing a `sql` fragment by
+  what it checks, dump what it emits.** The property that survived is real but narrower — a lost
+  narrowing fails closed as a row count — and the prose now says that instead.
+  (`feat/prof-1b-s-owner-scope`)
+
 ## Docs / claims that go stale
 
 - **A committed comment or doc says "until `<chunk>`" and that chunk has now shipped, so the file
