@@ -14,6 +14,8 @@ import {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_3_NAME,
+  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   UNITS,
@@ -111,8 +113,10 @@ export {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_2_NAME,
+  SEED_PROFILE_3_NAME,
 } from '@mat-plan/shared';
 
 export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
@@ -204,7 +208,8 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
     );
   }
 
-  // V1-3: the two kid profiles the picker tiles render. Both scoped to the root
+  // V1-3: the kid profiles the picker tiles render (two until PROF-1 b added a third for the
+  // archive specs). Both scoped to the root
   // household; idempotent by public_id. ⚠️ `onConflictDoNothing` means a re-seed CANNOT rename a row
   // that already exists: a live household keeps whatever names it entered, which is its own data and
   // not this seed's business (OSS-1 scrubbed the REPO, never the database). So these role names are a
@@ -224,6 +229,15 @@ export async function seed(db: NodePgDatabase<typeof schema>): Promise<void> {
       {
         publicId: SEED_PROFILE_2_PUBLIC_ID,
         name: SEED_PROFILE_2_NAME,
+        kind: 'kid',
+        householdId: household.id,
+        routineConfig: SEED_ATHLETE_TWO_ROUTINE,
+      },
+      {
+        // PROF-1 b: the ARCHIVE specs' own athlete. See `SEED_PROFILE_3_PUBLIC_ID`'s docblock for
+        // why archive cannot share a fixture the way rename can.
+        publicId: SEED_PROFILE_3_PUBLIC_ID,
+        name: SEED_PROFILE_3_NAME,
         kind: 'kid',
         householdId: household.id,
         routineConfig: SEED_ATHLETE_TWO_ROUTINE,

@@ -500,6 +500,37 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **🔴 Drizzle STRIPS the table qualifier from a `Column` interpolated into a `sql` chunk in a
+  single-table SELECT list — so a correlated subquery silently stops correlating.** → `PROF-1 b`
+  needed "does this profile have any live entries?" and wrote it inline:
+  `` sql`EXISTS (SELECT 1 FROM ${entries} WHERE ${entries.profileId} = ${profiles.id} AND …)` ``.
+  `.toSQL()` renders that as `EXISTS (SELECT 1 FROM "entries" WHERE "profile_id" = "id" AND
+"deleted_at" IS NULL)` — **unqualified**, so `"id"` binds to `entries.id`. The predicate became
+  _"does any live entry have `profile_id` equal to its own id"_, which in production (entry ids in
+  the thousands, profile ids single-digit) is almost always FALSE, and on a small fixture can be
+  TRUE for everyone. The feature it gated — an export control that states a reason when there is
+  nothing to export — would have been wrong for every athlete, and the published privacy notice had
+  already been written to promise it.
+  ⚠️ **Nothing available caught it.** The column's TYPE is right (it really is a boolean), so
+  typecheck is clean; `db:verify` had no assertion on the VALUE; and the inline form had already been
+  hand-copied to a second call site, which is how a subtle defect doubles before anyone looks.
+  → **Use `exists()` with a nested `select`**, which keeps qualifiers
+  (`"entries"."profile_id" = "profiles"."id"`), define it **once** in `packages/db`, and assert the
+  **value** with two rows in different states — here one profile with a live entry and one whose only
+  entry is soft-deleted, plus a mutation patch that breaks the correlation. **Generally: when a `sql`
+  template references a column from a table other than the query's FROM, dump `.toSQL()` before
+  believing it.** (`feat/prof-1b-archive-athlete`)
+
+- **A timestamp assertion that compares two `now()` calls passes by luck.** → The same chunk proved
+  `COALESCE(archived_at, now())` keeps the FIRST archive date by archiving, immediately re-archiving,
+  and comparing the two `Date`s. Run with the `COALESCE` removed it was **green in 2 of 3 runs**: the
+  replay lands ~0.3ms later and JS `Date` carries milliseconds, so two distinct `now()` values inside
+  one millisecond compare equal. Only a run that happened to cross a millisecond boundary went red —
+  and a mutation patch written against it would have been flaky, which is worse than absent.
+  → **Pin the stored value to a fixed, impossible-to-reproduce one first** (`UPDATE … SET archived_at
+= '2026-01-01T00:00:00Z'`), then replay and assert it is unchanged. A `now()` can never equal a date
+  in the past, so the assertion is sensitive on every run. (`feat/prof-1b-archive-athlete`)
+
 - **`CREATE EXTENSION` in a migration turns `db:verify` red on every PR afterwards.** → Every
   migration is replayed on **PGlite**, which ships no contrib extensions: `CREATE EXTENSION IF NOT
 EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_available_extensions`

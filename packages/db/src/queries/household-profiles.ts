@@ -2,6 +2,7 @@ import { and, asc, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { schema } from '../client';
+import { hasLiveEntries } from './has-live-entries';
 import type { HouseholdScope } from '../scope';
 import { inHousehold } from '../writers/ownership';
 
@@ -41,6 +42,23 @@ export function householdProfileRows(
       name: schema.profiles.name,
       kind: schema.profiles.kind,
       avatar: schema.profiles.avatar,
+      // PROF-1 b. ⚠️ **A COLUMN, not a conjunct** — the predicate below is the tenancy boundary and
+      // must not grow a second rule. One query returns live AND archived rows; the two DAL
+      // consumers filter (`listProfiles` drops archived for the picker, `listHouseholdAthletes`
+      // keeps both for Household settings). Two queries here would be the same SELECT twice with
+      // one differing conjunct, which is what the reuse rule forbids.
+      archivedAt: schema.profiles.archivedAt,
+      // PROF-1 b, maintainer decision N3: "surface some error in the UI if there is nothing to
+      // export". The settings page disables the export control with a stated reason when an athlete
+      // has no rows, so it needs this per athlete — and asking per row would be an N+1 on the one
+      // page that lists every athlete twice (live and archived).
+      //
+      // ⚠️ **The picker does not use this column, and that is the cheaper trade.** One EXISTS against
+      // `idx_entries_profile_date`'s leading column, for a household of under ten profiles, costs
+      // less than a second near-identical SELECT in this file would cost in drift — the picker's
+      // tenancy predicate and this one must never diverge, and the surest way to keep them identical
+      // is for there to be one of them.
+      hasEntries: hasLiveEntries(db),
     })
     .from(schema.profiles)
     .where(and(isNull(schema.profiles.deletedAt), inHousehold(args.scope)))

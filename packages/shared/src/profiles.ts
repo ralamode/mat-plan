@@ -102,3 +102,23 @@ export const renameAthleteSchema = z.object({
 });
 
 export type RenameAthleteInput = z.infer<typeof renameAthleteSchema>;
+
+/**
+ * The body of an athlete action that needs **only an id** — archive and restore both (PROF-1 b).
+ *
+ * 🔴 **ONE schema for both, deliberately.** They are the same body, and writing
+ * `archiveAthleteSchema` beside an identical `restoreAthleteSchema` is the duplication the
+ * maintainer's N4 rule names: a block that appears twice gets parameterized at the second copy. Here
+ * there is nothing to parameterize — the two bodies are identical — so there is one schema and the
+ * **authority** difference lives where it belongs, in the writers' parameter types (`OwnerScope` vs
+ * `HouseholdScope`). A second schema would imply the two bodies could diverge, which is precisely the
+ * drift a shared contract exists to prevent.
+ *
+ * ⚠️ No `.strict()`, for the reason `renameAthleteSchema` gives: `FormData` arrives with React's own
+ * fields on it.
+ */
+export const athleteActionSchema = z.object({
+  profileId: uuidSchema,
+});
+
+export type AthleteActionInput = z.infer<typeof athleteActionSchema>;

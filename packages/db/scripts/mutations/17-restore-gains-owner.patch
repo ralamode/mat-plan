@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 72a2488..bf845f0 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -164,5 +164,9 @@ export async function restoreProfile(
+   scope: HouseholdScope,
+   publicId: string,
+ ): Promise<ArchivedRow | null> {
+-  return writeArchivedAt(exec, isLiveProfile(publicId, scope) as SQL, sql`NULL`);
++  return writeArchivedAt(
++    exec,
++    and(isLiveProfile(publicId, scope), isOwnerOf(scope as OwnerScope)) as SQL,
++    sql`NULL`,
++  );
+ }

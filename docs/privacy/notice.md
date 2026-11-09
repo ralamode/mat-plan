@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-07. This is a beta.**
+**Last updated: 2026-11-08. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -201,12 +201,23 @@ named by an internal identifier, not by a person.
 activities, the daily readiness colour, the "how it felt" notes, and the per-athlete prescribed
 targets. The export covers your logged training; it is not yet a complete copy.
 
+**An archived athlete still exports.** Archiving hides an athlete from the picker; it does not hide
+or delete anything they logged. Their export is on the **Household settings** screen, beside their
+name. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty
+file — an empty zip looks exactly like a download that failed.
+
 **If you want everything, ask** and you will be sent a full copy — including what Clerk holds about
 your login: your email address, your name, your profile picture, your Google account identifier, and when
 you signed in. And **export before you delete anything** — once a profile is removed, its data can no
 longer be exported, even though it is still in the database.
 
 ## Deleting your data
+
+**Archiving an athlete is not deleting them.** It takes them off the picker so nobody taps their name
+by mistake, and that is all it does: everything they logged is kept, their page still opens for anyone
+**in your household** who has the link or who looks in Household settings, and their export still works. **The household
+owner archives an athlete; any member of the household can rename and restore one.** An archived
+athlete is kept in full until you restore them, or until you ask us to delete them.
 
 Ask, and your household is deleted: every profile, every logged session, every set, every weigh-in,
 every readiness note and your program — **permanently removed from the database**, not hidden. Your

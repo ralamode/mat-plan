@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { ProfileTile } from '@/components/profiles/profile-tile';
@@ -9,9 +11,16 @@ import {
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { requireSession } from '@/lib/dal/session';
 import { clerkIsConfigured } from '@/lib/clerk';
-import { NO_HOUSEHOLD_COPY, PICKER_COPY, PICKER_EMPTY_COPY, SIGN_OUT_COPY } from '@/lib/constants';
+import {
+  NO_HOUSEHOLD_COPY,
+  PICKER_COPY,
+  PICKER_EMPTY_COPY,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
+  SIGN_OUT_COPY,
+} from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
-import { listProfiles } from '@/lib/dal/profiles';
+import { listHouseholdAthletes, listProfiles } from '@/lib/dal/profiles';
 
 // Route-segment config must be a static inline literal (Next can't follow an
 // imported const), so 'nodejs' stays here. pg → Node runtime, not Edge.
@@ -46,9 +55,14 @@ export default async function ProfilePickerPage() {
   // household with no athletes yet", so without this the first lands on `PICKER_EMPTY_COPY` — which
   // tells the reader to change this deployment's seed data. `householdState()` is the discriminator
   // and returns NO scope, so the capability never leaves the DAL (`write-path.md` invariant 2).
-  const state = await householdState();
+  const { state } = await householdState();
   const noHousehold = state === HOUSEHOLD_STATE.none;
   const empty = !noHousehold && profiles.length === 0;
+  // PROF-1 b. The count, not the list: this page shows an archived athlete's EXISTENCE so the way in
+  // is findable, and nothing else — the athletes themselves live on `/settings` (criterion 8 keeps
+  // every archive control off the picker). `listProfiles` has already dropped them, so the subtraction
+  // is what tells us there are any.
+  const archivedCount = noHousehold ? 0 : (await listHouseholdAthletes()).length - profiles.length;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
@@ -89,6 +103,27 @@ export default async function ProfilePickerPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* PROF-1 b: the way into Household settings. ⚠️ **Below the tiles, never beside a name** —
+          criterion 8 keeps archive off this screen, and a kid opening the app to log should not meet
+          an administrative verb next to their own tile. A `<nav>` landmark with its own label,
+          because it is navigation rather than a setting, and a full-width row so the whole thing is
+          the target (NAV_LINK_CLASS's `w-fit` is for a one-word arrow link, not a row). */}
+      {noHousehold ? null : (
+        <nav aria-label="Household">
+          <Link
+            href={SETTINGS_PATH}
+            className="focus-visible:ring-ring hover:bg-accent flex min-h-11 flex-col justify-center rounded-lg border px-4 py-3 outline-none focus-visible:ring-3"
+          >
+            <span className="text-sm font-medium">{SETTINGS_COPY.navLink}</span>
+            {archivedCount > 0 ? (
+              <span className="text-muted-foreground text-sm">
+                {SETTINGS_COPY.archivedCount(archivedCount)}
+              </span>
+            ) : null}
+          </Link>
+        </nav>
       )}
 
       {/* `mt-auto`: the block sits at the BOTTOM of the page, below the thing the screen is for.

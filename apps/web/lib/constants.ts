@@ -63,6 +63,15 @@ export const athleteExportPath = (publicId: string) => `${athletePath(publicId)}
 export const athleteRoutinePath = (publicId: string) => `${athletePath(publicId)}/routine`;
 
 /**
+ * Household settings (PROF-1 b) — the one screen that lists archived athletes.
+ *
+ * A sibling of `/p`, not a child of it: it is household-scoped, not athlete-scoped, so a route
+ * segment named by a profile id would be the wrong shape (the same argument that put
+ * `profile-actions.ts` beside `[profileId]/actions.ts` rather than inside it).
+ */
+export const SETTINGS_PATH = '/settings';
+
+/**
  * The served privacy notice (PRIV-2) — `docs/privacy/notice.md`, compiled into `app/privacy/`.
  *
  * It lands HERE, beside `APP_HOME_PATH`, not in `lib/access-gate.ts`: that module is the one AUTH-1
@@ -772,6 +781,21 @@ export const NO_PROFILE_SAVE = 'No profile found to save against.';
 export const NO_ATHLETE_SAVE = 'No athlete found to save.';
 
 /**
+ * The in-household authority refusal (PROF-1 b) — a member tried an owner-only act.
+ *
+ * 🔴 **It joins the `NO_HOUSEHOLD_COPY`/`notYet` family — "this is not for you to do" — and NOT the
+ * `NO_PROFILE_*` family**, which is the 404-equivalence set that must stay byte-identical. ADR
+ * 0006:348 permits a distinct refusal for an id **inside the caller's own household**: the member can
+ * already see that athlete on `/settings`, so naming the reason leaks nothing, and answering "no
+ * athlete found" about an athlete they can see on screen would be a lie.
+ *
+ * ⚠️ Only reachable by a crafted request — the UI renders no Archive control for a member — which is
+ * why the DAL also emits a signal when it fires (`reportAuthorityRefusal`).
+ */
+export const OWNER_ONLY_ATHLETE =
+  'Only the person who set up this household can archive an athlete.';
+
+/**
  * The athlete form's copy (PROF-1 a-r; a-1's add form reuses it).
  *
  * `legend`/`heading` are deliberately absent: the edit screen's `<h1>` already names the athlete
@@ -794,6 +818,94 @@ export const ATHLETE_FORM_COPY = {
   /** The rename screen's way back to the athlete. */
   backTo: (name: string) => `← ${name}`,
 } as const;
+
+/**
+ * Household settings' copy (PROF-1 b).
+ *
+ * 🔴 **`archiveHelp` is PERMANENT and sits under the Athletes heading**, not in the Archived
+ * section's empty state where the plan first put it. The UX trust lens's finding: an explanation
+ * that lives in an empty state **disappears the moment anyone is archived**, i.e. exactly when a
+ * second person needs it — and it sat below the control it explains, under a different heading. A
+ * parent is being asked to take a kid off everyone's picker from a bare verb.
+ *
+ * `ownerOnly` takes the SAME slot for a member, because a member looks for the missing Archive where
+ * the athletes are, not under "Archived".
+ *
+ * ⚠️ **"The person who set up this household", never a name.** `household_members` stores
+ * `clerk_user_id` and `role` and no name or email (`schema.ts`), and the DAL reads no Clerk profile
+ * fields — so the app *cannot* say who the owner is. Copy implying it could would be a promise the
+ * data model cannot keep.
+ */
+export const SETTINGS_COPY = {
+  heading: 'Household settings',
+  athletes: 'Athletes',
+  archived: 'Archived',
+  archiveHelp:
+    'Archiving hides an athlete from the picker. Everything they logged is kept, and you can restore them below.',
+  ownerOnly: OWNER_ONLY_ATHLETE,
+  /** The Archived section when there is nothing in it. Short, because `archiveHelp` carries the meaning. */
+  archivedEmpty: 'None.',
+  /** The picker's way in. An arrow, so it reads as navigation rather than as a setting. */
+  navLink: 'Household settings ›',
+  archivedCount: (n: number) => `${n} archived`,
+  archive: 'Archive',
+  restore: 'Restore',
+  edit: 'Edit',
+  archiveFor: (name: string) => `Archive ${name}`,
+  restoreFor: (name: string) => `Restore ${name}`,
+  editFor: (name: string) => `Edit ${name}`,
+  /**
+   * The result line after an archive. 🔴 **It does NOT say "and still exports"**, which the plan's
+   * first draft did. `lib/dal/export.ts` writes a header-only check-ins file, and
+   * `docs/privacy/notice.md` already lists five things the app logs that the export omits. "Kept" is
+   * true; "still exports" is true only of the half that was ever exported.
+   */
+  archivedResult: (name: string) => `${name} archived. Everything they logged is kept.`,
+  restoredResult: (name: string) => `${name} is back.`,
+  /** Names what it undoes, so a screen-reader user hears which action this button reverses (A11Y-5). */
+  undoLabel: (name: string) => `Undo archiving ${name}`,
+  /** The day page's pointer back to the recovery, when the athlete it shows is archived. */
+  archivedNotice: (name: string) => `${name} is archived. Restore them in`,
+  /** The edit screen's pointer, since archive is not on that form. */
+  archiveElsewhere: 'To archive an athlete, use',
+} as const;
+
+/**
+ * The export control's label — **one definition, two surfaces** (PROF-1 b).
+ *
+ * 🔴 The day page already renders this exact artifact as "↓ Export CSV"
+ * (`app/p/[profileId]/page.tsx`) while the settings row was specified as "Download history" — two
+ * names for one file, which is also an SC 2.5.3 (Label in Name) problem: a voice-control user saying
+ * the visible label would miss an `aria-label` built from the other wording. And "history" claims
+ * more than the zip contains.
+ */
+export const EXPORT_CSV_LABEL = '↓ Export CSV';
+
+/**
+ * The Undo button's visible label, and the attribute the island finds it by (PROF-1 b).
+ *
+ * `UNDO_LABEL` was a literal in `undo-line.tsx` beside a dead `SETTINGS_COPY.undo` that nothing could
+ * reach, plus a third copy in `strength-form.tsx` — a reuse lens's find.
+ *
+ * `ANNOUNCE_AFTER_FOCUS_MS` is the gap between moving focus and changing the live region. A
+ * synchronous focus change makes VoiceOver speak the focused element and commonly suppresses a
+ * pending `polite` region, so the announcement has to land a beat later. 60ms is the approved
+ * prototype's own value, not a fresh guess.
+ */
+export const UNDO_LABEL = 'Undo';
+export const UNDO_BUTTON_ATTR = 'data-undo-button';
+export const ANNOUNCE_AFTER_FOCUS_MS = 60;
+
+/**
+ * Why the export control is disabled for an athlete who has logged nothing — **maintainer decision
+ * N3** _(2026-11-08)_: "we should probably surface some error in the UI if there is nothing to
+ * export."
+ *
+ * Without it, `lib/dal/export.ts` builds `buildZip([])`, an EOCD-only archive that iOS Files opens
+ * as nothing — indistinguishable from a download that failed. The settings page already counts each
+ * athlete's rows (`hasHistory`), so stating the reason costs a prop.
+ */
+export const NOTHING_TO_EXPORT = 'Nothing logged yet, so there is nothing to export.';
 
 /**
  * Typed-error copy shared by every amend path (V1-24 PR 1b).

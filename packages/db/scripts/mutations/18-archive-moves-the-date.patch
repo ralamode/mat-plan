@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 9f79051..0cc3fbb 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -135,7 +135,7 @@ export async function archiveProfile(
+   return writeArchivedAt(
+     exec,
+     and(isLiveProfile(publicId, owner), isOwnerOf(owner)) as SQL,
+-    sql`COALESCE(${schema.profiles.archivedAt}, now())`,
++    sql`now()`,
+   );
+ }
+ 

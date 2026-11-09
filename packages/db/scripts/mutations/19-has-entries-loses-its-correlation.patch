@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/has-live-entries.ts b/packages/db/src/queries/has-live-entries.ts
+index cb4e504..3705535 100644
+--- a/packages/db/src/queries/has-live-entries.ts
++++ b/packages/db/src/queries/has-live-entries.ts
+@@ -48,7 +48,7 @@ export function hasLiveEntries(db: NodePgDatabase<typeof schema>) {
+       .select({ one: sql`1` })
+       .from(schema.entries)
+       .where(
+-        and(eq(schema.entries.profileId, schema.profiles.id), isNull(schema.entries.deletedAt)),
++        and(eq(schema.entries.profileId, schema.entries.id), isNull(schema.entries.deletedAt)),
+       ),
+   ).mapWith(Boolean);
+ }

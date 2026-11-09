@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-07. This is a beta."
+            "text": "Last updated: 2026-11-08. This is a beta."
           }
         ]
       }
@@ -1679,6 +1679,37 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
+            "text": "An archived athlete still exports."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " Archiving hides an athlete from the picker; it does not hide\nor delete anything they logged. Their export is on the "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Household settings"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " screen, beside their\nname. ⚠️ If an athlete has logged nothing at all, the app says so rather than handing you an empty\nfile — an empty zip looks exactly like a download that failed."
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
             "text": "If you want everything, ask"
           }
         ]
@@ -1708,6 +1739,50 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       {
         "k": "text",
         "text": "Deleting your data"
+      }
+    ]
+  },
+  {
+    "k": "p",
+    "children": [
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "Archiving an athlete is not deleting them."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " It takes them off the picker so nobody taps their name\nby mistake, and that is all it does: everything they logged is kept, their page still opens for anyone\n"
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "in your household"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " who has the link or who looks in Household settings, and their export still works. "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "The household\nowner archives an athlete; any member of the household can rename and restore one."
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": " An archived\nathlete is kept in full until you restore them, or until you ask us to delete them."
       }
     ]
   },

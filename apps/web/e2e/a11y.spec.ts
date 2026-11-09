@@ -22,6 +22,7 @@ import {
   MIN_TAP_TARGET_PX,
   PRIVACY_PATH,
   SIGN_IN_COPY,
+  SETTINGS_PATH,
   SIGN_IN_PATH,
   THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
@@ -40,7 +41,7 @@ import {
   shownWeight,
   strengthSection,
 } from './steps';
-import { MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
+import { expectNoHorizontalOverflow, MOBILE_VIEWPORT, NARROW_VIEWPORT } from './contexts';
 
 /**
  * V1-12 — the a11y bar, made executable.
@@ -73,6 +74,10 @@ const ROUTES = [
   // PROF-1 a-r. The rename form is the first screen in the app whose only control WRITES a value a
   // person typed, so a label or focus defect here costs more than on a logging surface.
   { name: 'rename athlete', path: athleteEditPath(SEED_PROFILE_PUBLIC_ID) },
+  // PROF-1 b. Household settings is the app's only administrative screen and the only one that
+  // renders two lists of the same row shape, so an axe or heading-order defect here is the kind that
+  // would be fixed in one section and missed in the other.
+  { name: 'household settings', path: SETTINGS_PATH },
   // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
   // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
   // leaves with the harness when UI-3 picks a set.
@@ -297,22 +302,8 @@ test('the strength form meets the tap-target bar in its EXPANDED state', async (
 
 /**
  * Horizontal overflow, at the narrowest committed width.
- *
- * `expectTapTargets` measures control HEIGHT only, so a row that runs off the side of the phone
- * passes every other scan in this file. That is the exact failure mode a new control in the set row
- * introduces, and PR 4a adds two (the Measuring select, and the unit echo after the weight field).
+ * Now a shared helper — see `contexts.ts`.
  */
-async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
-  const overflow = await page.evaluate(() => {
-    const d = document.documentElement;
-    return { scrollWidth: d.scrollWidth, clientWidth: d.clientWidth };
-  });
-  expect(
-    overflow.scrollWidth,
-    `${label}: the page scrolls horizontally at ${NARROW_VIEWPORT.width}px ` +
-      `(scrollWidth ${overflow.scrollWidth} > clientWidth ${overflow.clientWidth})`,
-  ).toBeLessThanOrEqual(overflow.clientWidth);
-}
 
 test('the strength form does not overflow horizontally at 360px', async ({ page }) => {
   await page.setViewportSize(NARROW_VIEWPORT);

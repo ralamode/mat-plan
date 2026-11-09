@@ -4,6 +4,7 @@ import {
   householdScopeForRequest,
   type HouseholdScope,
   membershipHousehold,
+  ownerScope,
   schema,
   type Membership,
 } from '@mat-plan/db';
@@ -256,7 +257,7 @@ let schemaMissingReported = false;
 
 function shouldReportUnresolved(
   userId: string | null,
-  outcome: ScopeOutcome | ScopeMissOutcome,
+  outcome: ScopeOutcome | ScopeMissOutcome | typeof AUTHORITY_OUTCOME,
 ): boolean {
   // No principal collapses to once per process, which is correct rather than a compromise: there is
   // nothing to tell two anonymous callers apart by, and 1c-3b refuses them upstream anyway.
@@ -347,8 +348,85 @@ export type HouseholdState = (typeof HOUSEHOLD_STATE)[keyof typeof HOUSEHOLD_STA
  * price. It is also a pure projection of the resolver directly above it, which is the
  * `catalog.ts` / `household.ts` "resolver and its satellites together" shape § Design 2 argues for.
  */
-export async function householdState(): Promise<HouseholdState> {
-  return (await getHouseholdScope()) ? HOUSEHOLD_STATE.resolved : HOUSEHOLD_STATE.none;
+export async function householdState(): Promise<{
+  state: HouseholdState;
+  /**
+   * 🔴 **`canArchiveAthletes`, not `canManageAthletes` — one capability per boolean** (renamed on a
+   * security lens's finding, 2026-11-08). **Any** member may add, rename and restore; this gates
+   * **archive** and nothing else. The wider name invited a later author to hide any-member controls
+   * from members, or to reuse the boolean as the guard for a new owner-only act with no
+   * `OwnerScope` writer behind it.
+   *
+   * A BOOLEAN, never the role string and never the scope: a page may not name `getHouseholdScope`
+   * (`packages/db/src/scope.test.ts` fails the build on it) and the capability must not leave
+   * `lib/dal` (`write-path.md` invariant 2). It also composes for `COACH-1`, where "may archive" will
+   * not be "is the owner".
+   */
+  canArchiveAthletes: boolean;
+}> {
+  const scope = await getHouseholdScope();
+  if (!scope) return { state: HOUSEHOLD_STATE.none, canArchiveAthletes: false };
+  return { state: HOUSEHOLD_STATE.resolved, canArchiveAthletes: ownerScope(scope) !== null };
+}
+
+/** The one outcome this event reports, named so the tag and the cap key cannot drift apart. */
+const AUTHORITY_OUTCOME = 'owner_only';
+
+/** The authority-refused acts. One string per surface, so an alert can key on it. */
+export const AUTHORITY_ACTION = {
+  archiveProfile: 'archive_profile',
+} as const;
+
+type AuthorityAction = (typeof AUTHORITY_ACTION)[keyof typeof AUTHORITY_ACTION];
+
+/**
+ * **The in-household authority refusal, as a signal** (PROF-1 b; maintainer decision N2, 2026-11-08).
+ *
+ * 🔴 **Why this is worth an event when a 403 usually is not.** The UI renders **no** Archive control
+ * for a member, so this path is unreachable by using the app — it takes a crafted request. That
+ * makes it the clearest *"someone is probing an owner-only control"* signal this app will ever
+ * produce, and before this it produced none: `reportScopeMiss` covers CROSS-household misses only,
+ * and a member archiving inside their own household is not one.
+ *
+ * ## What it must not carry, and why each is a deliberate omission
+ *
+ * The same four constraints `ScopeMissEvent` carries, for the same reasons:
+ *
+ * - **No athlete name or id.** A name is personal data about a minor
+ *   (`docs/privacy/data-inventory.md` §3) and the id would say *which* child someone reached for.
+ *   The event answers "an owner-only act was refused", which needs neither.
+ * - **No household id and no Clerk id.** Either one turns a security signal into cross-tenant
+ *   linkage in a third party's store — the exact trade `ScopeMissEvent`'s docblock refuses.
+ * - **A fixed message string**, so Sentry groups these together instead of minting an issue per
+ *   athlete.
+ * - **Tags only**, which is what makes an alert rule possible without a context payload.
+ *
+ * ⚠️ **BOUNDED per principal, and the first version was not — with numbers.** The original docblock
+ * argued a cap "would only hide the burst that matters", since the path is unreachable by using the
+ * app. A security lens did the arithmetic: the mutation limiter allows **120 attempts / 5 min**, i.e.
+ * ~24/min per principal, so one hostile member produces ~34,500 events a day — past a 5k monthly
+ * quota in about three hours, and when the quota is gone `cross_household` is dropped too. That is
+ * the *same* failure `no_scope`'s cap exists to prevent, one precondition further along. And if
+ * Upstash is unconfigured or erroring, `checkMutationLimit` **fails open**, so there is no bound at
+ * all. So it reuses `shouldReportUnresolved`'s shape: once per principal per outcome, with the cap's
+ * own event so an operator sees the blackout rather than inferring it from silence.
+ *
+ * ⚠️ **The key is the Clerk id, which is NOT in the event.** It is used in memory, as a map key, and
+ * never serialised — the same thing `shouldReportUnresolved` does, and the reason a cap here does not
+ * trade the privacy property for the quota one. Runbook pointer: `docs/runbooks.md`, beside the
+ * scope-miss alert.
+ */
+export async function reportAuthorityRefusal(action: AuthorityAction): Promise<void> {
+  try {
+    if (!shouldReportUnresolved((await getCurrentUser())?.userId ?? null, AUTHORITY_OUTCOME))
+      return;
+    Sentry.captureMessage('athlete authority refused', {
+      level: 'warning',
+      tags: { authority_outcome: AUTHORITY_OUTCOME, authority_action: action },
+    });
+  } catch {
+    // Telemetry must never break a refusal. The caller's answer is already decided.
+  }
 }
 
 /**
