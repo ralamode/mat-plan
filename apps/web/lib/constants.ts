@@ -194,7 +194,9 @@ export const LANDING_COPY = {
  * (see `lib/clerk.ts`).
  *
  * `notYet` is the rest of the dark state. It leads with the state rather than an imperative (the
- * `PICKER_EMPTY_COPY.notYet` family) and says "isn't switched on yet" — a configuration fact, so the
+ * `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked` family — this comment used to cite
+ * `PICKER_EMPTY_COPY.notYet`, which PROF-1 a-1u deleted once adding an athlete became possible) and
+ * says "isn't switched on yet" — a configuration fact, so the
  * maintainer verifying a deploy can tell dark from broken — and asks the reader for nothing.
  * 🔴 **`codeStillWorks` and `gateCta` are DELETED at 1d, not reworded.** They pointed at `/gate`,
  * which was a real forward step while the access code was one of two requirements. After `1d` there
@@ -353,16 +355,16 @@ export const PICKER_EMPTY_COPY = {
    * with no entry point. The SETTING stays the subject, per this family's own rule.
    */
   next: 'When an athlete exists, their day starts with a weigh-in and strength, and the rest follows the routine saved for them.',
-  /** Leads with the STATE, not an imperative: "Add an athlete…" sends the reader hunting for a button
-   *  that does not exist. Same phrasing family as `BODYWEIGHT_COPY.duplicates` / `AMEND_COPY.locked`. */
-  notYet:
-    'Adding an athlete isn’t in the app yet — it takes a change to this deployment’s seed data.',
-  /** Names its destination, like `LANDING_COPY.sourceCta`: this is the screen's only control and the
-   *  context carries nothing else to disambiguate it. Same tab, so Back is the recovery path. */
-  setupCta: 'How athletes get added — on GitHub',
-  /** Composed with `GITHUB_REPO_URL` at the use site, exactly like `LANDING_COPY.sourceAnchor`.
-   *  `constants.test.ts` pins that README.md really has the heading this points at. */
-  setupAnchor: '#adding-an-athlete',
+  /**
+   * 🔴 **`notYet`, `setupCta` and `setupAnchor` are DELETED at PROF-1 a-1u, not reworded.** All three
+   * existed because adding an athlete was not in the app: `notYet` said so, and the other two sent
+   * the reader to the README to edit seed data. `a-1u` ships the control, so the sentence is false
+   * and the GitHub button is a detour away from the button that now works. The empty state's own
+   * recovery is the add tile it renders.
+   *
+   * ⚠️ **`SIGN_IN_COPY.notYet` is a DIFFERENT key with the same name and it stays.** It is about
+   * Google sign-in being dark, not about a missing control.
+   */
 } as const;
 
 /**
@@ -387,7 +389,8 @@ export const PICKER_EMPTY_COPY = {
  * wrong door rather than at an empty cupboard. _(UX panel F6, 2026-10-28.)_
  *
  * Statements of fact, never imperatives — the `PICKER_EMPTY_COPY` / `SIGN_IN_COPY` family, including
- * its `notYet` idiom for a control that is not here yet.
+ * **`SIGN_IN_COPY.notYet`**'s idiom for a capability that is not switched on. ⚠️ Named explicitly
+ * because the picker had a `notYet` of its own until PROF-1 a-1u, and "its" read as that one.
  */
 export const NO_HOUSEHOLD_COPY = {
   /**
@@ -489,6 +492,50 @@ export const THEME_COPY = {
  * point.
  */
 export const MIN_TAP_TARGET_PX = 44;
+
+/**
+ * The add-athlete tile on the picker (PROF-1 a-1u).
+ *
+ * `subhead` says who an athlete can be, because the first question a parent has on a first run is
+ * whether this app is only for their kids. "A child, or yourself" answers it in four words and is
+ * also the only place the adult case is named before the form.
+ */
+export const ADD_ATHLETE_COPY = {
+  heading: 'Add athlete',
+  subhead: 'A child, or yourself',
+  /** The `<h1>` of `/p/new`, and its static `metadata.title` (D8). */
+  pageHeading: 'Add an athlete',
+} as const;
+
+/**
+ * The link back to the athlete list (PROF-1 a-1u).
+ *
+ * A const on its **second** use, per AGENTS.md → "Constants, enums & shared values": the day page has
+ * said "← All athletes" since `a-g`, and `/p/new` is the second screen to need the same way out. The
+ * arrow is part of the string because it is part of the affordance — a bare "All athletes" reads as a
+ * heading on a screen that has no other navigation.
+ */
+export const ALL_ATHLETES_LINK = '← All athletes';
+
+/**
+ * The page shell every routed screen's `<main>` wears (PROF-1 a-1u).
+ *
+ * 🔴 **Extracted at the NINTH copy, which is the trigger, not a tidy-up.** It was written out
+ * verbatim eight times — `app/page.tsx`, `app/p/page.tsx`, `app/p/loading.tsx`,
+ * `app/p/[profileId]/page.tsx`, `.../edit/page.tsx`, `.../routine/page.tsx` and
+ * `app/settings/page.tsx` twice — and `a-1u` adds `/p/new`. AGENTS.md → "Constants, enums & shared
+ * values": a literal that carries meaning and must stay in sync across files is named once, and the
+ * second occurrence is the trigger. Eight was seven too many.
+ *
+ * ⚠️ **It is a BASE, so append rather than fork.** `app/page.tsx` (the landing) adds
+ * `md:justify-center` because it centres a short hero in the viewport; every other screen starts at
+ * the top. A screen needing a different max-width or padding is a design decision — raise it rather
+ * than writing a ninth literal.
+ *
+ * `flex-1` matters: the root layout is a flex column, so without it a short page's `<main>` collapses
+ * to its content height and the footer rides up under the fold.
+ */
+export const PAGE_SHELL_CLASS = 'mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12';
 
 /**
  * The shared text/number `<input>` styling — the single source for the app's form fields (the
@@ -838,11 +885,81 @@ export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} at
  */
 export const ATHLETE_FORM_COPY = {
   nameLabel: 'Name',
+  /**
+   * A data-minimisation hint, not a format rule (PROF-1 a-1u). The app needs enough to tell two
+   * athletes apart on a picker tile and nothing more, and this is the one place a person decides how
+   * much of a child's identity to type. Phrased as what is ENOUGH rather than what is allowed — a
+   * "requirements" register would read as a validation rule and invite a legal name.
+   */
+  nameHint: 'A first name or a nickname is enough.',
+  /**
+   * The add form's fieldset legend (PROF-1 a-1u).
+   *
+   * ⚠️ **"Child or adult?", not "Who is this?"** — a UX lens's finding, and it is about what a screen
+   * reader says: the legend is announced with EVERY radio, so a user heard "Who is this? Child…", and
+   * the answer to "who is this" is a **name**, which is the next field and outside this fieldset. The
+   * legend has to name the question the radios actually answer.
+   */
+  legend: 'Child or adult?',
+  /**
+   * The permanence, stated as a FACT with the recovery beside it (UX lens 3, trust).
+   *
+   * 🔴 **`kind` is set once and the app cannot change it** — a recorded decision _(maintainer,
+   * 2026-11-07, on a unanimous BLOCKING)_: one radio served both "I picked wrong" and "they turned
+   * 18", and the form could not tell those apart. So the screen says so BEFORE the choice, and names
+   * the way out, because a one-way door with no visible recovery is the hazard the panel flagged.
+   * ⚠️ It must not read as a warning — nothing has gone wrong, and a parent adding their first child
+   * should not meet an alarm.
+   */
+  kindPermanence: 'Set once — the app can’t change it afterwards.',
+  /**
+   * The recovery, moved OFF the permanence sentence and role-branched (UX lens, 2026-11-09).
+   *
+   * 🔴 **Two defects in the first version, both real.** It read "…If it's wrong, archive them in
+   * Household settings and add them again" as part of the permanence line, which (1) a **member**
+   * read two inches above the same page telling them only the owner can archive — a contradiction on
+   * one screen — and (2) presented the recovery as cheap. It is not: the archived athlete KEEPS its
+   * history, so adding again splits one person's record across two athletes. Saying so is the
+   * difference between a recovery and a reassurance.
+   */
+  kindRecoveryOwnerBefore: 'Added the wrong kind? Archive them in',
+  /**
+   * The member's lead-in, composed with `OWNER_ONLY_ATHLETE` (the shared const the edit screen also
+   * shows). ⚠️ **A lead-in, not a second copy of the refusal** — without it the member branch rendered
+   * a bare "Only the person who set up this household can archive an athlete." under an add form,
+   * which reads as orphaned: true, but not visibly an answer to anything on the screen.
+   */
+  kindRecoveryMemberBefore: 'Added the wrong kind?',
+  kindRecoveryOwnerAfter: 'and add them again — what they logged stays with the archived athlete.',
+  /**
+   * The per-option consequences (PROF-1 a-1u). **Parallel, and BOTH always render.**
+   *
+   * 🔴 **The first version hid the child's consequence at first run**, which a UX lens caught: with no
+   * household program the kid line was dropped entirely, so the screen read "Child" next to
+   * "Adult — logs their own training" — in front of the form's main audience, implying children do
+   * not log. Both options now always say what the athlete's training FOLLOWS, which is the only fact
+   * that separates them.
+   *
+   * ⚠️ `kidWithProgram` vs `kidFirstRun`: the household's program is the real difference, but a
+   * first-run household has none, so claiming one would be false. The first-run wording describes the
+   * same rule by what the parent will do instead.
+   */
+  kidWithProgram: 'trains on the household’s program',
+  kidFirstRun: 'follows the routine you save for them',
+  /** Never "no household program" — at first run there is none, which makes the negation confusing. */
+  adultConsequence: 'trains on their own',
+  /** The submit. Named for what it does, not "Save" — this screen CREATES. */
+  add: 'Add athlete',
+  /**
+   * The submit's pending label. ⚠️ **Not `SAVING_LABEL`** ("Saving…"): this screen adds, and the two
+   * labels on one button ("Add athlete" → "Saving…") describe different acts. `SAVING_LABEL` stays
+   * the rename form's, where it is correct.
+   */
+  adding: 'Adding…',
   /** The one submit. Named for what it saves, so it still reads correctly beside a 40-char name. */
   save: 'Save name',
   /** Shown in a `role="status"` region after a successful rename, before the page navigates back. */
   saved: 'Name saved.',
-  /** The kind, shown and not editable (criterion 9 asks the form to SHOW it). */
   /** The day page's link to this screen, and the spec that locates it. One definition. */
   renameLink: (name: string) => `→ Rename ${name}`,
   /** The rename screen's way back to the athlete. */

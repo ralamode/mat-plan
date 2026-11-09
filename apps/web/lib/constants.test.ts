@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { LOGGABLE_DIMENSIONS } from '@mat-plan/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -58,22 +55,6 @@ describe('missingQuantityMessage', () => {
       expect(msg).not.toMatch(/BW|band/);
       expect(msg).toMatch(/^Enter the .+\.$/);
     }
-  });
-});
-
-/**
- * ONB-0 — the first-run control's only destination. `pnpm verify` has NO markdown link check
- * (`format:check · lint · typecheck · test · db:verify · skills:check · actions:check · guards:test ·
- * audit:check`), and `skills:check` only validates paths cited by `.claude/skills/` — so without this,
- * the anchor the picker's empty state links to is completely unguarded.
- */
-describe('PICKER_EMPTY_COPY.setupAnchor', () => {
-  it('points at a heading that really exists in README.md', () => {
-    const readme = readFileSync(join(import.meta.dirname, '../../../README.md'), 'utf8');
-    // GitHub slugifies "## Adding an athlete" to "#adding-an-athlete"; derive the heading from the
-    // anchor rather than re-typing it, so the two cannot drift apart in a rename.
-    const heading = PICKER_EMPTY_COPY.setupAnchor.slice(1).replace(/-/g, ' ');
-    expect(readme.toLowerCase()).toContain(`## ${heading}`);
   });
 });
 

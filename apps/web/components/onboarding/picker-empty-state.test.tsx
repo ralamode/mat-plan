@@ -2,7 +2,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { GITHUB_REPO_URL, PICKER_EMPTY_COPY } from '@/lib/constants';
+import { PICKER_EMPTY_COPY } from '@/lib/constants';
 
 import { PickerEmptyState } from './picker-empty-state';
 
@@ -27,26 +27,24 @@ describe('PickerEmptyState', () => {
     expect(headings[0]?.textContent).toBe(PICKER_EMPTY_COPY.heading);
   });
 
-  it('explains what the app is, what happens next, and why there is no Add button', () => {
+  it('says what the app is in ONE paragraph — the add tile has to stay above the fold', () => {
     const { container } = render(<PickerEmptyState />);
-    // Three paragraphs, not one muted sentence: the reader needs all three statements, and the one
-    // that says adding an athlete is not in the app yet is what stops them hunting for a control.
-    expect(container.querySelectorAll('p')).toHaveLength(3);
-    for (const copy of [PICKER_EMPTY_COPY.what, PICKER_EMPTY_COPY.next, PICKER_EMPTY_COPY.notYet]) {
-      expect(container.textContent).toContain(copy);
-    }
+    // 🔴 **ONE paragraph since PROF-1 a-1u, down from three.** `notYet` went when adding became
+    // possible; `next` went because this screen's only way forward is the add tile `/p` renders
+    // below it, and two paragraphs pushed that tile to the fold at 360px. The count is asserted
+    // rather than the absence of a specific string, so adding a paragraph back fails here and has
+    // to argue against the measurement in the component's docblock.
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(container.textContent).toContain(PICKER_EMPTY_COPY.what);
   });
 
-  it('offers exactly ONE control, a real link to the README section, in the SAME tab', () => {
+  it("offers NO control of its own — the add tile is the screen's only one", () => {
     render(<PickerEmptyState />);
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(1);
-    const link = links[0]!;
-    // Composed from GITHUB_REPO_URL + the anchor, the `LANDING_COPY.sourceAnchor` idiom. The anchor is
-    // bound to the real README heading by `lib/constants.test.ts`.
-    expect(link.getAttribute('href')).toBe(`${GITHUB_REPO_URL}${PICKER_EMPTY_COPY.setupAnchor}`);
-    // Same tab on purpose: on a phone the back button is the only recovery path a reader will find,
-    // and that is also why no `rel="noopener"` is needed.
-    expect(link.hasAttribute('target')).toBe(false);
+    // 🔴 **The inverted assertion, not a deleted one.** This component shipped a GitHub button until
+    // `a-1u`; the test that pinned it is re-taken rather than removed, so a future author who adds a
+    // second control to this screen — beside the add tile `/p` already renders — fails here and has
+    // to argue for it. `queryAllByRole` because the expected answer is zero.
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

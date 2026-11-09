@@ -61,22 +61,22 @@ downloads the Postgres binary; create `apps/web/.env.local` from `apps/web/.env.
 
 ## Adding an athlete
 
-**There is no way to add an athlete from inside the app yet.** The profile picker says so, and links
-here. `packages/db/src/seed.ts` is still the only writer of the `profiles` table, so today an athlete
-arrives by changing that file and re-seeding:
+Use **+ Add athlete** at the bottom of the athlete list. It asks for a name and whether the athlete is
+a child or an adult, and opens their day page. A household holds up to 25 athletes.
 
-1. Edit the profile rows in `packages/db/src/seed.ts`. ⚠️ **The committed rows are the maintainer's own
-   fixtures** — two kids, one of them carrying this household's routine. Replace them with your own
-   athletes rather than seeding somebody else's family into your deployment.
-2. Re-run the seed (it is idempotent and inserts on conflict do nothing — so an existing row keeps its
-   name, and a renamed fixture only lands on a fresh database). See
-   [Local development](#local-development) for the local sandbox, and [docs/deploy.md](./docs/deploy.md)
-   for a deployed one.
-3. A new profile's `routine_config` stays **NULL**, which is how it asks for the neutral first-run
-   routine. Everything else is opt-in from that athlete's routine editor.
+Two things worth knowing before you add one:
 
-**`PROF-1`** ([backlog](./docs/plan.md)) replaces all of this with an "Add athlete" control on the
-picker, and deletes this section with it.
+- **Child or adult is set once and the app cannot change it afterwards.** The two differ in whether
+  the household's program is applied to their training day. The form says so above the choice, before
+  you make it.
+- **Picked wrong?** Archive the athlete in **Household settings** and add them again. ⚠️ Archiving is
+  not deleting — the archived athlete keeps their history and still exports, so the two records are
+  separate people as far as the log is concerned. Only the household's owner can archive, so the add
+  screen shows this recovery to owners and tells everyone else who to ask.
+
+A brand-new deployment still needs `pnpm --filter @mat-plan/db db:seed` once, which creates the
+household and the reference data — not the athletes. See [Local development](#local-development) for
+the local sandbox and [docs/deploy.md](./docs/deploy.md) for a deployed one.
 
 ## Docs
 

@@ -37,7 +37,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
         "children": [
           {
             "k": "text",
-            "text": "Last updated: 2026-11-08. This is a beta."
+            "text": "Last updated: 2026-11-09. This is a beta."
           }
         ]
       }
@@ -261,7 +261,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": " \"How it felt\"; the box where a movement can be typed by name;\nand, since the rename screen, an "
+        "text": " \"How it felt\"; the box where a movement can be typed by name;\nand, since the rename and add screens, an "
       },
       {
         "k": "strong",
@@ -274,7 +274,20 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ". Whatever goes in is stored exactly as typed.\nWorth knowing, because of who is usually typing. The first two also appear in your export; a name\ndoes not — the export is filed under an id, not a name."
+        "text": ". Whatever goes in is stored exactly as\ntyped — and a name is now typed when an athlete is "
+      },
+      {
+        "k": "strong",
+        "children": [
+          {
+            "k": "text",
+            "text": "created"
+          }
+        ]
+      },
+      {
+        "k": "text",
+        "text": ", not only when one is renamed, so it\nis the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal\nname, and does not ask for a birthdate.\nWorth knowing, because of who is usually typing. The first two also appear in your export; a name\ndoes not — the export is filed under an id, not a name."
       }
     ]
   },
@@ -292,7 +305,7 @@ export const NOTICE_BLOCKS: readonly Block[] = [
       },
       {
         "k": "text",
-        "text": ": a sign-in cookie, a cookie holding your timezone, your theme choice in the\nbrowser, and an identifier each device generates per logged item so the same entry is not saved twice."
+        "text": ": a sign-in cookie, a cookie holding your timezone, your theme choice in the\nbrowser, and an identifier each device generates per logged item — and now per athlete added — so the\nsame entry, or the same athlete, is not saved twice."
       }
     ]
   },

@@ -34,7 +34,7 @@ const NAME_INPUT_ID = 'athlete-name';
  * ## Controlled, not uncontrolled — a correctness fix, not a preference
  *
  * `name` is React state (D7, UX1 B1). **React 19 resets an uncontrolled field when a form action
- * settles — including on `{ ok: false }`** (`docs/features/write-path.md:341`), so an uncontrolled
+ * settles — including on `{ ok: false }`** (`write-path.md` → Traps, the uncontrolled-fields bullet), so an uncontrolled
  * input would EMPTY the name underneath its own "Enter a name." error, leaving the parent staring at
  * a blank field that says it is blank. `e2e/athletes.spec.ts` asserts the field keeps what was typed.
  *

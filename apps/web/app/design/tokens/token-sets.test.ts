@@ -199,6 +199,48 @@ describe.each(SCOPED_SETS.map((s) => [s.name, s] as const))('%s', (_name, set) =
       // SC 1.4.11: a focus indicator is a non-text contrast case (3:1). axe checks none of this.
       expect(pair('ring', 'background')).toBeGreaterThanOrEqual(AA_LARGE);
     });
+
+    /**
+     * PROF-1 a-1u — the add-athlete tile's **dashed border**, the only thing that marks it as an
+     * affordance rather than a gap in the list.
+     *
+     * 🔴 **The token is read out of the component's own source, not re-typed here.** A test that
+     * asserted `muted-foreground` clears 3:1 would be worthless twice over: that pair is already
+     * pinned to the stricter 4.5:1 bar in `TEXT` above, and it would stay green if the tile switched
+     * to the prototype's `foreground/28` (1.93:1 light, 2.35:1 dark) — which is exactly the
+     * regression worth catching. Reading the class means changing the component fails this test.
+     *
+     * ⚠️ **Nothing else measures this.** axe has no non-text-contrast rule, so neither the
+     * `/design/tokens` scan nor the route scans in `e2e/a11y.spec.ts` would notice.
+     *
+     * ⚠️ **An alpha token is rejected outright rather than measured**, because `contrast.ts`'s
+     * `over()` composites alpha in **linear light** while a browser composites in gamma-encoded sRGB
+     * (`docs/tech-debt.md`) — so a measured answer for a translucent border would not be the one a
+     * browser draws. An opaque token makes that model moot, which is why the tile uses one.
+     */
+    it('the add-athlete tile border clears the non-text bar, with the token taken from its source', () => {
+      const source = readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), '../../p/add-athlete-tile.tsx'),
+        'utf8',
+      );
+      const match =
+        /border-dashed[^"'`]*?\bborder-([a-z-]+(?:\/\d+)?)\b|\bborder-([a-z-]+(?:\/\d+)?)[^"'`]*?border-dashed/.exec(
+          source,
+        );
+      const token = match?.[1] ?? match?.[2];
+      expect(token, 'add-athlete-tile.tsx names no border token beside border-dashed').toBeTruthy();
+      expect(
+        token,
+        `a translucent border cannot be measured honestly — see this test's docblock`,
+      ).not.toContain('/');
+      const value = t[token as never];
+      expect(value, `${token} is not a palette token`).toBeTruthy();
+      const ratio = ratioOf(value, base, base)!;
+      expect(
+        ratio,
+        `${set.name}/${theme}: the add tile's border-${token} is ${ratio.toFixed(2)}:1`,
+      ).toBeGreaterThanOrEqual(AA_LARGE);
+    });
   });
 });
 

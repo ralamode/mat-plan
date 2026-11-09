@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { athletePath, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
+import { NAME_WRAP_CLASS, NAV_LINK_CLASS, PAGE_SHELL_CLASS, athletePath } from '@/lib/constants';
 import { requireSession } from '@/lib/dal/session';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { routineCatalogItems } from '@/lib/routine/catalog';
@@ -42,7 +42,7 @@ export default async function RoutineEditorPage({
   if (!profile) notFound();
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+    <main className={PAGE_SHELL_CLASS}>
       <header className="flex flex-col gap-2">
         {/* ⚠️ `NAV_LINK_CLASS` (so `min-h-11`) and `NAME_WRAP_CLASS` arrived at PROF-1 a-r. This page
             is UNLINKED since criterion 11, but it still renders and `e2e/a11y.spec.ts` still scans
