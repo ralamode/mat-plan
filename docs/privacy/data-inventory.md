@@ -32,11 +32,21 @@ only way a notice about minors' health data is worth anything.
 > first**: before `a-1u` every name in the database came from the seed file, so a deployment's
 > athletes were named by whoever edited `seed.ts`. The notice gains the add screen beside the rename
 > screen, and says plainly that a nickname is enough and that no birthdate is asked for.
-> ⚠️ **`profiles.birthdate` is still unwritten and stays on §1's trigger list.** `ID-1` owns it,
-> because the age policy derived from it is what makes it meaningful; `docs/plan.md` records the rule
-> ("No birthdates… explicitly reserved — never seeded, never written, no UI"). An add form is exactly
-> where a birthdate field would have been convenient to slip in, which is why this line says it was
-> considered and declined rather than leaving the absence unexplained.
+> ⚠️ **`profiles.birthdate` is still unwritten and stays on §1's trigger list.** An add form is
+> exactly where a birthdate field would be convenient to slip in, so the absence is recorded here
+> rather than left merely true. 🔴 **It is NOT an open question** — it was asked during `a-r` and
+> answered in [plan.md](../plan.md)'s `ID-1` row, keep-open item 5 (2026-11-07): the first write is a
+> **new category of personal data about a minor**, so the ordering is **ADR → age policy module →
+> first write**, and putting the field on this form would scatter the policy into a form.
+> **Two things make that a gate rather than a preference, and both are this file's business:**
+> [notice.md](./notice.md) publishes _"there is no age and no date of birth"_, which a first write
+> makes **false**; and a date of birth is what makes COPPA's under-13 tier knowable, so holding one
+> raises the regulatory floor the moment it exists — today with **zero readers**, since `kind`
+> answers the one behavioural question (does this profile read the household's program) and
+> supervision is answered by `household_members.role`.
+> ✅ **Nothing is lost by waiting.** A birthdate is **static, not a time series**, so capturing it
+> later reconstructs the athlete's age at every past date exactly — the gap costs no information, and
+> `ID-1` owes an entry-and-correction surface for it regardless.
 > ⚠️ **`MAX_HOUSEHOLD_ATHLETES` = 25** is now a user-visible limit rather than an internal one: a
 > household at the cap is told so. It is a quota, not personal data, and needs no notice sentence —
 > recorded here because the inventory is where "what the app will hold" is answered.
