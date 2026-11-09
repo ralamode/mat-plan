@@ -1,8 +1,16 @@
 import { and, sql, type SQL } from 'drizzle-orm';
 
+import { MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
+
 import { schema } from '../client';
 import type { HouseholdScope, OwnerScope } from '../scope';
-import { isLiveProfile, isOwnerOf } from './ownership';
+import {
+  countProfilesIn,
+  insertProfileOwnedBy,
+  isLiveProfile,
+  isOwnerOf,
+  profileByClientId,
+} from './ownership';
 import type { Executor } from './executor';
 
 /** What both archive writers return — the row's public id and the stored `archived_at`, or `null`. */
@@ -165,4 +173,60 @@ export async function restoreProfile(
   publicId: string,
 ): Promise<ArchivedRow | null> {
   return writeArchivedAt(exec, isLiveProfile(publicId, scope) as SQL, sql`NULL`);
+}
+
+/**
+ * What `createProfile` answers. `refused` and `full` are both "no row was created", but they are not
+ * the same event and the DAL maps them to different copy: `refused` is a key that belongs to another
+ * household (or to a soft-deleted row), `full` is this household's own quota.
+ */
+export type CreateProfileResult =
+  { ok: true; publicId: string } | { ok: false; reason: 'refused' | 'full' };
+
+/**
+ * Create one athlete in `scope` — **replay-first** (PROF-1 a-1, decision D2).
+ *
+ * `HouseholdScope`, not `OwnerScope`: **any member adds** (§ Role authority). Archive is the
+ * owner-only act; adding is not.
+ *
+ * ## The order, and why each step is where it is
+ *
+ * 1. **Look up the `client_id` inside the scope, BEFORE anything else.** A double submit, a replayed
+ *    pre-hydration POST and an offline flush all arrive as the same key, and all three must return
+ *    the FIRST row rather than mint a twin. Reading first also means a replay costs one indexed point
+ *    read and no write.
+ * 2. **The quota, after the replay check and before the insert.** That order is the whole subtlety:
+ *    a household at the cap replaying a key it already used must still get `ok`, because that request
+ *    creates nothing. Checking first would turn a retry into a refusal at exactly the moment the
+ *    parent's connection is flaky.
+ * 3. _(a-1d inserts the duplicate-name fold here.)_
+ * 4. **Insert, `ON CONFLICT (client_id) DO NOTHING`**, then **re-read through the same scoped
+ *    lookup**. The conflict path is reached when the key is already spent — by this household (a
+ *    race with step 1) or by another one, since `uq_profiles_client_id` is global and non-partial.
+ *    The re-read is what tells those apart: it returns a row only if the key is *ours*.
+ *
+ * 🔴 **Steps 1 and 4 are the same function, and that is the isolation boundary.** See
+ * `profileByClientId`'s docblock for what a lost `inHousehold` costs — it is A's `public_id` handed
+ * to B, which a row-count proof cannot see.
+ *
+ * ⚠️ **`refused` is the honest answer for a soft-deleted row too.** The key is spent and the index is
+ * non-partial, so a replay cannot resurrect it; saying so beats silently minting a second athlete
+ * under a key the parent believes they already used.
+ */
+export async function createProfile(
+  exec: Executor,
+  scope: HouseholdScope,
+  input: { name: string; kind: ProfileKind; clientId: string },
+): Promise<CreateProfileResult> {
+  const existing = await profileByClientId(exec, scope, input.clientId);
+  if (existing) return { ok: true, publicId: existing.publicId };
+
+  if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
+    return { ok: false, reason: 'full' };
+  }
+
+  await insertProfileOwnedBy(exec, scope, input);
+
+  const created = await profileByClientId(exec, scope, input.clientId);
+  return created ? { ok: true, publicId: created.publicId } : { ok: false, reason: 'refused' };
 }

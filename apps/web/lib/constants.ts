@@ -1,4 +1,5 @@
 import {
+  MAX_HOUSEHOLD_ATHLETES,
   isMassUnit,
   LOGGABLE_DIMENSION_NOUNS,
   type Unit,
@@ -70,6 +71,9 @@ export const athleteRoutinePath = (publicId: string) => `${athletePath(publicId)
  * `profile-actions.ts` beside `[profileId]/actions.ts` rather than inside it).
  */
 export const SETTINGS_PATH = '/settings';
+
+/** Where an athlete is added (PROF-1 a-1). A sibling of `/p`: the form is household-scoped. */
+export const ADD_ATHLETE_PATH = `${APP_HOME_PATH}/new`;
 
 /**
  * The served privacy notice (PRIV-2) — `docs/privacy/notice.md`, compiled into `app/privacy/`.
@@ -792,6 +796,26 @@ export const NO_ATHLETE_SAVE = 'No athlete found to save.';
  * ⚠️ Only reachable by a crafted request — the UI renders no Archive control for a member — which is
  * why the DAL also emits a signal when it fires (`reportAuthorityRefusal`).
  */
+/**
+ * The add refusal (PROF-1 a-1w).
+ *
+ * ⚠️ **Not `NO_ATHLETE_SAVE`'s wording.** "No athlete found to save." is false here — there is no
+ * athlete to find; one was being created. Cause-free, because the three causes a person can actually
+ * hit (a lapsed session, the rate limiter, a spent `client_id`) are indistinguishable to them and
+ * the remedy is the same: try again.
+ */
+export const NO_ATHLETE_ADD = 'Couldn’t add this athlete.';
+
+/**
+ * The quota refusal (PROF-1 a-1w; `MAX_HOUSEHOLD_ATHLETES` = 25).
+ *
+ * 🔴 **This one NAMES its cause, and need not be byte-identical to anything.** It is only reachable
+ * after the household scope resolved, so it tells the caller a fact about their own household —
+ * which they can already see on the picker. Saying "couldn't add" there would send a parent
+ * retrying a request that can never succeed.
+ */
+export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} athletes. Archive someone you no longer train before adding another.`;
+
 export const OWNER_ONLY_ATHLETE =
   'Only the person who set up this household can archive an athlete.';
 

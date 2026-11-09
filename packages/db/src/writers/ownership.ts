@@ -1,7 +1,7 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
-import { HOUSEHOLD_ROLE, type HouseholdRole } from '@mat-plan/shared';
+import { HOUSEHOLD_ROLE, type HouseholdRole, newId, type ProfileKind } from '@mat-plan/shared';
 import type { HouseholdScope, OwnerScope } from '../scope';
 import type { Executor } from './executor';
 
@@ -240,20 +240,6 @@ export function programBlockInHousehold(scope: HouseholdScope) {
 }
 
 /**
- * Insert a movement **owned by `scope`**, arbitrated by `uq_movements_household_slug`.
- *
- * ⚠️ **This performs the insert rather than returning the owner value, and that is the point.** A
- * `movementOwnerValues(scope)` helper returning `{ householdId }` would hand every caller the naked
- * tenant id via `.householdId` — without matching `scope.test.ts`'s `/[Ss]cope\.householdId/` regex,
- * so the guard behind ADR 0006 forward-1 would silently stop covering the one new way to defeat it.
- * Keeping the number inside this module means the capability rule still has a gate behind it.
- *
- * The `where:` predicate **repeats the partial index's own predicate, literally** — it must, or
- * Postgres cannot infer a partial index as the arbiter and the statement fails `42P10`
- * ([lessons.md](../../../../docs/lessons.md)). ⚠️ It goes in **`where:`**, never `targetWhere:`:
- * `onConflictDoNothing` reads `config.where` and **silently drops** `targetWhere`.
- */
-/**
  * AUTH-1 1b — bind a Clerk account to a household. **Ships dark: nothing reads the row until 1c.**
  *
  * 🔴 **This lives HERE, not in the `writers/household-members.ts` the plan proposed.** A scoped
@@ -280,6 +266,20 @@ export async function insertHouseholdMember(
   await exec.insert(schema.householdMembers).values({ ...row, householdId: scope.householdId });
 }
 
+/**
+ * Insert a movement **owned by `scope`**, arbitrated by `uq_movements_household_slug`.
+ *
+ * ⚠️ **This performs the insert rather than returning the owner value, and that is the point.** A
+ * `movementOwnerValues(scope)` helper returning `{ householdId }` would hand every caller the naked
+ * tenant id via `.householdId` — without matching `scope.test.ts`'s `/[Ss]cope\.householdId/` regex,
+ * so the guard behind ADR 0006 forward-1 would silently stop covering the one new way to defeat it.
+ * Keeping the number inside this module means the capability rule still has a gate behind it.
+ *
+ * The `where:` predicate **repeats the partial index's own predicate, literally** — it must, or
+ * Postgres cannot infer a partial index as the arbiter and the statement fails `42P10`
+ * ([lessons.md](../../../../docs/lessons.md)). ⚠️ It goes in **`where:`**, never `targetWhere:`:
+ * `onConflictDoNothing` reads `config.where` and **silently drops** `targetWhere`.
+ */
 export async function insertMovementOwnedBy(
   exec: Executor,
   scope: HouseholdScope,
@@ -292,4 +292,94 @@ export async function insertMovementOwnedBy(
       target: [schema.movements.householdId, schema.movements.slug],
       where: movementIsOwned(),
     });
+}
+
+/**
+ * Find a profile in `scope` by its device-generated `client_id` (PROF-1 a-1).
+ *
+ * 🔴 **THIS IS THE ENTIRE CROSS-HOUSEHOLD BOUNDARY FOR `createProfile`, and it is one function on
+ * purpose.** `uq_profiles_client_id` is **global and non-partial** (`schema.ts`; migration `0020`'s
+ * header calls that "the decision this file exists to carry"), so a caller-chosen key **will**
+ * collide across households by design. `createProfile` reads through here twice — once before the
+ * insert and once after it — and `inHousehold` is what stops the second household being handed the
+ * first one's row.
+ *
+ * ⚠️ **What a lost conjunct costs, stated because the plan's proof was blind to it.** Without
+ * `inHousehold`, household B replaying A's key gets back **A's `public_id`**, and the action then
+ * redirects B to `/p/<A's public_id>` — a cross-household identifier in the other household's URL
+ * bar. B gains no row, so a proof that only counts rows stays GREEN. `db:verify` therefore asserts
+ * the **returned value**, and mutation patch `20` removes this conjunct.
+ *
+ * 🔴 **The plan asked for TWO patches, one per read; one read makes that unnecessary — and is
+ * stronger.** The two steps share this predicate, so there is no way to scope one call and forget the
+ * other. Two copies would have been the duplication the maintainer's N4 rule names, and the second
+ * patch would have proved only that the copies were still identical.
+ *
+ * `deleted_at IS NULL` rides along because a soft-deleted row must not be revived by a replay: the
+ * key is spent (the index is non-partial), so the honest answer is `refused`, not resurrection.
+ */
+export async function profileByClientId(
+  exec: Executor,
+  scope: HouseholdScope,
+  clientId: string,
+): Promise<{ publicId: string } | null> {
+  const rows = await exec
+    .select({ publicId: schema.profiles.publicId })
+    .from(schema.profiles)
+    .where(
+      and(
+        eq(schema.profiles.clientId, clientId),
+        isNull(schema.profiles.deletedAt),
+        inHousehold(scope),
+      ),
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+/**
+ * How many athletes `scope` currently holds (PROF-1 a-1) — the quota's read half.
+ *
+ * ⚠️ **Archived rows COUNT.** Archive hides an athlete; it does not free their slot, and treating it
+ * as a delete would make the cap bypassable by archiving in a loop. Soft-deleted rows do not count:
+ * `deleted_at` is the real removal, and nothing in the app sets it on a profile yet.
+ */
+export async function countProfilesIn(exec: Executor, scope: HouseholdScope): Promise<number> {
+  const rows = await exec
+    .select({ id: schema.profiles.id })
+    .from(schema.profiles)
+    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
+
+  return rows.length;
+}
+
+/**
+ * Insert a profile **owned by `scope`** (PROF-1 a-1), arbitrated by `uq_profiles_client_id`.
+ *
+ * The `insertMovementOwnedBy` shape, for the reason that function gives: it performs the insert so
+ * `scope.householdId` never leaves this module, which is what keeps `scope.test.ts`'s `UNWRAPS_SCOPE`
+ * allowlist meaningful.
+ *
+ * ⚠️ **No `where:` on the conflict target, unlike the movement precedent.** That one repeats a
+ * PARTIAL index's predicate because Postgres cannot otherwise infer it as the arbiter.
+ * `uq_profiles_client_id` is non-partial, so a `where` here would be noise that reads as meaningful.
+ *
+ * 🔴 **The target is NAMED.** A bare `onConflictDoNothing()` swallows **every** unique violation —
+ * `profiles_public_id_unique` included — turning an unrelated failure into a silent no-op that the
+ * re-select reports as `refused` and a parent reads as "couldn't add this athlete".
+ *
+ * 🔴 **`public_id` is minted HERE, never supplied.** Taking it from the caller would let a crafted
+ * body choose an athlete's URL; minting inside the one module that already owns the tenant id keeps
+ * both server-side facts in one place.
+ */
+export async function insertProfileOwnedBy(
+  exec: Executor,
+  scope: HouseholdScope,
+  row: { name: string; kind: ProfileKind; clientId: string },
+): Promise<void> {
+  await exec
+    .insert(schema.profiles)
+    .values({ ...row, publicId: newId(), householdId: scope.householdId })
+    .onConflictDoNothing({ target: schema.profiles.clientId });
 }

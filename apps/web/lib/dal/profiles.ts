@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   archiveProfile,
+  createProfile,
   hasLiveEntries,
   householdProfileRows,
   isLiveProfile,
@@ -10,7 +11,12 @@ import {
   restoreProfile,
   schema,
 } from '@mat-plan/db';
-import { type ProfileKind, type RoutineConfig, uuidSchema } from '@mat-plan/shared';
+import {
+  type AddAthleteInput,
+  type ProfileKind,
+  type RoutineConfig,
+  uuidSchema,
+} from '@mat-plan/shared';
 
 import { cache } from 'react';
 
@@ -308,7 +314,15 @@ export async function renameAthlete(
  * a second caller can skip.
  */
 export type AthleteWriteResult =
-  { ok: true; id: string } | { ok: false; reason: 'not_found' | 'not_owner' };
+  | { ok: true; id: string }
+  /**
+   * ⚠️ **Widened at a-1w, not forked.** `createAthlete` adds `no_scope` (no household resolved) and
+   * `refused` / `full` (the create's own answers). An earlier plan draft called the first of these
+   * `no_household` in two rows and `no_scope` in a diagram — `no_household` was **retired at 1c-4**
+   * and does not come back. One envelope for every athlete write keeps the actions' mapping in one
+   * shape.
+   */
+  | { ok: false; reason: 'not_found' | 'not_owner' | 'no_scope' | 'refused' | 'full' };
 
 /**
  * Archive one athlete. **Owner only** — and the ORDER is the point.
@@ -363,4 +377,24 @@ export async function restoreAthlete(publicId: string): Promise<AthleteWriteResu
 
   const row = await restoreProfile(db, scope, publicId);
   return row ? { ok: true, id: row.publicId } : { ok: false, reason: 'not_found' };
+}
+
+/**
+ * Create one athlete in the request's household — **any member** (PROF-1 a-1w).
+ *
+ * No `getProfileByPublicId` here, unlike archive and restore: there is no id to resolve. The
+ * authorization decision is simply whether a scope resolves at all, which `scoped.test.ts` requires
+ * this function to make by awaiting `getHouseholdScope()`.
+ *
+ * ⚠️ **`no_scope` is NOT an error to show a person.** It means a signed-in account with no
+ * membership reached a mutation, which the UI never offers — so the action maps it to the same
+ * refusal an unauthenticated caller gets. `full` is the opposite: it is the household's own quota,
+ * only reachable after the scope resolved, and it gets copy that says so.
+ */
+export async function createAthlete(input: AddAthleteInput): Promise<AthleteWriteResult> {
+  const scope = await getHouseholdScope();
+  if (!scope) return { ok: false, reason: 'no_scope' };
+
+  const created = await createProfile(db, scope, input);
+  return created.ok ? { ok: true, id: created.publicId } : { ok: false, reason: created.reason };
 }

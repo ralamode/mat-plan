@@ -1,0 +1,11 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 7cf2a65..c3e4026 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -381,5 +381,5 @@ export async function insertProfileOwnedBy(
+   await exec
+     .insert(schema.profiles)
+     .values({ ...row, publicId: newId(), householdId: scope.householdId })
+-    .onConflictDoNothing({ target: schema.profiles.clientId });
++    .onConflictDoUpdate({ target: schema.profiles.clientId, set: { name: row.name } });
+ }

@@ -53,6 +53,7 @@ import {
   UNITS,
   UNIT_DIMENSIONS,
   WEEK_LENGTH_DAYS,
+  MAX_HOUSEHOLD_ATHLETES,
   HOUSEHOLD_ROLE,
   HOUSEHOLD_ROLES,
   E2E_SESSION_BYPASS_USER,
@@ -82,6 +83,7 @@ import {
 // cannot reach the constructor that takes a household id as an argument at all (module resolution
 // fails on a deep bare import). A script has no request to derive a scope from, so it NAMES one.
 import { householdScopeForScript } from '../src/writers/household-scope-script';
+import { profileByClientId } from '../src/writers/ownership';
 // TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
@@ -93,7 +95,12 @@ import {
   movementIsGlobal,
   ownedEntryIds,
 } from '../src/writers/ownership';
-import { archiveProfile, renameProfile, restoreProfile } from '../src/writers/profile';
+import {
+  archiveProfile,
+  createProfile,
+  renameProfile,
+  restoreProfile,
+} from '../src/writers/profile';
 import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
@@ -7615,6 +7622,167 @@ console.log(
       '(cast or not) while the same member RESTORES, the other household refuses both directions, ' +
       'an archived athlete still renames and still exports, and hasLiveEntries is CORRELATED — a ' +
       'live entry counts, a soft-deleted one does not',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-1w — createProfile: replay-first, scoped on BOTH reads, and capped.
+//
+// Ids `…04g0xx` are this block's range (#352's rule).
+//
+// 🔴 **THE ASSERTION THIS BLOCK EXISTS FOR IS THE RETURNED VALUE, NOT A ROW COUNT.**
+// `uq_profiles_client_id` is global and non-partial, so household B CAN replay a key A already used.
+// If the scoped read loses `inHousehold`, B gets back **A's `public_id`** — which the action then
+// redirects B to, putting a cross-household identifier in the other household's URL bar. **B still
+// gains no row**, so the obvious proof ("B's count is 0") stays GREEN on the leak. The plan shipped
+// with exactly that assertion and nothing else; a security lens found it before any code existed.
+{
+  const A_KEY = '019826b4-0000-7000-8000-00000004g001'.replace('g', 'e');
+  const countIn = async (hhId: number) =>
+    (
+      await asPg
+        .select({ id: schema.profiles.id })
+        .from(schema.profiles)
+        .where(and(eq(schema.profiles.householdId, hhId), isNull(schema.profiles.deletedAt)))
+    ).length;
+
+  const nameFor = async (publicId: string) =>
+    (
+      await asPg
+        .select({ name: schema.profiles.name })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.publicId, publicId))
+    )[0]?.name;
+
+  const aBefore = await countIn(households[0].id);
+  const bBefore = await countIn(verifyHh.id);
+
+  // (1) The happy path lands in A, and the id that comes back is A's row.
+  const created = await createProfile(asPg, A_SCOPE, {
+    name: 'A-1 Athlete',
+    kind: PROFILE_KIND.kid,
+    clientId: A_KEY,
+  });
+  assert.ok(created.ok, 'PROF-1 a-1w: an athlete is created');
+  const createdId = created.ok ? created.publicId : '';
+  assert.equal(
+    (
+      await asPg
+        .select({ hh: schema.profiles.householdId })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.publicId, createdId))
+    )[0]?.hh,
+    households[0].id,
+    'PROF-1 a-1w: …and the RETURNED public_id belongs to a row in the creating household',
+  );
+  assert.equal(
+    await countIn(households[0].id),
+    aBefore + 1,
+    'PROF-1 a-1w: exactly one row appeared',
+  );
+
+  // (2) Replay. The same key returns the SAME id and mints nothing — a double tap, a replayed
+  // pre-hydration POST and an offline flush all arrive this way.
+  const replayed = await createProfile(asPg, A_SCOPE, {
+    name: 'A-1 Athlete Again',
+    kind: PROFILE_KIND.adult,
+    clientId: A_KEY,
+  });
+  assert.deepEqual(
+    replayed,
+    { ok: true, publicId: createdId },
+    'PROF-1 a-1w: a REPLAY returns the first row, not a twin — and ignores the new name and kind',
+  );
+  assert.equal(await countIn(households[0].id), aBefore + 1, 'PROF-1 a-1w: …and still one row');
+
+  // (3) A replay still resolves after the athlete is ARCHIVED — archive is not a delete, and the
+  // key is not freed by it.
+  const owner = ownerScope(A_SCOPE);
+  assert.ok(owner, 'PROF-1 a-1w: A_SCOPE narrows (or the archive below proves nothing)');
+  await archiveProfile(asPg, owner, createdId);
+  assert.deepEqual(
+    await createProfile(asPg, A_SCOPE, {
+      name: 'A-1 Athlete',
+      kind: PROFILE_KIND.kid,
+      clientId: A_KEY,
+    }),
+    { ok: true, publicId: createdId },
+    'PROF-1 a-1w: a replay AFTER archiving still returns the same row',
+  );
+
+  // (4) 🔴 THE CROSS-HOUSEHOLD CASE. B replays A's key. Both halves are asserted, and the first is
+  // the one a row count cannot make.
+  const bResult = await createProfile(asPg, B_SCOPE, {
+    name: 'B Tries A’s Key',
+    kind: PROFILE_KIND.kid,
+    clientId: A_KEY,
+  });
+  assert.deepEqual(
+    bResult,
+    { ok: false, reason: 'refused' },
+    'PROF-1 a-1w: household B replaying A’s client_id is REFUSED — and is never handed A’s ' +
+      'public_id, which is the leak a row count cannot see',
+  );
+  assert.equal(await countIn(verifyHh.id), bBefore, 'PROF-1 a-1w: …and B gains no row either');
+  // 🔴 …and A's ROW IS UNTOUCHED. The conflict path is the one place B's request reaches A's row at
+  // all: `DO UPDATE SET name` — the obvious "touch it on replay" refactor — would let B **rewrite**
+  // A's athlete through it, with every scoped read still intact and the returned value still
+  // `refused`. Mutation patch `21` makes that edit and this is the assertion that catches it.
+  assert.equal(
+    await nameFor(createdId),
+    'A-1 Athlete',
+    'PROF-1 a-1w: …and A’s row is UNCHANGED — B’s replay cannot write through the conflict path',
+  );
+
+  // (5) The quota. Fill B to the cap, then one more.
+  const capKeys: string[] = [];
+  for (let i = await countIn(verifyHh.id); i < MAX_HOUSEHOLD_ATHLETES; i += 1) {
+    const key = `019826b4-0000-7000-8000-0000000${String(40000 + i).padStart(5, '0')}`;
+    capKeys.push(key);
+    const r = await createProfile(asPg, B_SCOPE, {
+      name: `Filler ${i}`,
+      kind: PROFILE_KIND.kid,
+      clientId: key,
+    });
+    assert.ok(r.ok, `PROF-1 a-1w: filling to the cap succeeds at ${i}`);
+  }
+  assert.equal(await countIn(verifyHh.id), MAX_HOUSEHOLD_ATHLETES, 'PROF-1 a-1w: B is at the cap');
+
+  const overflowKey = '019826b4-0000-7000-8000-000000049999';
+  assert.deepEqual(
+    await createProfile(asPg, B_SCOPE, {
+      name: 'One Too Many',
+      kind: PROFILE_KIND.kid,
+      clientId: overflowKey,
+    }),
+    { ok: false, reason: 'full' },
+    `PROF-1 a-1w: the ${MAX_HOUSEHOLD_ATHLETES + 1}th athlete is refused as FULL, not as refused`,
+  );
+  assert.equal(
+    await countIn(verifyHh.id),
+    MAX_HOUSEHOLD_ATHLETES,
+    'PROF-1 a-1w: …and no row appeared',
+  );
+
+  // 🔴 A REPLAY AT THE CAP STILL SUCCEEDS. The quota is checked after the replay lookup precisely so
+  // a retry on a flaky connection is not refused for creating nothing.
+  assert.deepEqual(
+    await createProfile(asPg, B_SCOPE, {
+      name: 'Filler 0',
+      kind: PROFILE_KIND.kid,
+      clientId: capKeys[0]!,
+    }),
+    { ok: true, publicId: (await profileByClientId(asPg, B_SCOPE, capKeys[0]!))!.publicId },
+    'PROF-1 a-1w: a REPLAY at the cap still returns its row — the quota gates creation, not retries',
+  );
+
+  await asPg.delete(schema.profiles).where(inArray(schema.profiles.clientId, [A_KEY, ...capKeys]));
+
+  console.log(
+    '✓ PROF-1 a-1w: createProfile is replay-first and scoped on BOTH reads — a replay returns the ' +
+      'first row (even once archived) and mints nothing, household B replaying A’s key is REFUSED ' +
+      'and is never handed A’s public_id, and the per-household cap refuses the ' +
+      `${MAX_HOUSEHOLD_ATHLETES + 1}th while still honouring a replay at the cap`,
   );
 }
 

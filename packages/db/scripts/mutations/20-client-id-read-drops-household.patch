@@ -1,0 +1,12 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 7cf2a65..09b0ab6 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -330,7 +330,6 @@ export async function profileByClientId(
+       and(
+         eq(schema.profiles.clientId, clientId),
+         isNull(schema.profiles.deletedAt),
+-        inHousehold(scope),
+       ),
+     )
+     .limit(1);
