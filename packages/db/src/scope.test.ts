@@ -510,20 +510,36 @@ describe('the scope constructors refuse an unresolved id', () => {
  * It matches **source text**, so it is a tripwire for the forms a DTO is actually written in, not a
  * proof of containment. Probed against six shapes:
  *
- * | Form                                    | Caught? |
- * | --------------------------------------- | ------- |
- * | `schema.profiles.clientId`              | ✅      |
- * | `eq(profiles.clientId, k)` (table import) | ✅      |
- * | `profiles['clientId']`                  | ❌      |
- * | `const { clientId } = schema.profiles`  | ❌      |
- * | a raw `sql` fragment naming `client_id` | ❌      |
- * | `schema.entries.clientId`               | ✅ not matched — the OTHER column, correctly ignored |
+ * | Form                                                 | Caught? |
+ * | ---------------------------------------------------- | ------- |
+ * | `schema.profiles.clientId`                           | ✅      |
+ * | `eq(profiles.clientId, k)` (table import)            | ✅      |
+ * | `schema.entries.clientId`                            | ✅ not matched — the OTHER column, correctly ignored |
+ * | `profiles['clientId']`                               | ❌      |
+ * | `const { clientId } = schema.profiles`               | ❌      |
+ * | `const p = schema.profiles; p.clientId`              | ❌      |
+ * | `alias(schema.profiles, 'p').clientId`               | ❌      |
+ * | `profiles` ⏎ `.clientId` (Prettier splits long chains) | ❌      |
+ * | `getTableColumns(schema.profiles)`                    | ❌      |
+ * | 🔴 **a whole-row `db.select().from(schema.profiles)` or `.returning()`** | ❌ |
+ * | a raw `sql` fragment naming `client_id`              | ❌      |
  *
- * The two misses that matter are bracket access and a destructured column; **the raw-SQL miss is
- * covered by a different rule** (AGENTS.md → the "don't" list forbids `sql.raw` and interpolated
- * SQL outright). So this guard stops the plausible accident — someone adding `clientId` to a select
- * list — and does not stop a determined author. That is the same bargain `scoped.test.ts` strikes
- * and says so about itself; the PR that added this must not claim more.
+ * 🔴 **The last two are the ones to understand.** A whole-row select **carries `client_id` without
+ * naming it**, and "just return the row" is the likeliest way a DTO leak actually happens — so this
+ * guard would not catch the most plausible version of the mistake it is named for. What catches that
+ * is a different rule, already enforced elsewhere: the DAL returns a **minimal DTO, never a raw row**
+ * (AGENTS.md → "Data Access Layer"), and every current `.from(schema.profiles)` select in `lib/dal`
+ * passes an explicit column list. The raw-SQL miss is likewise covered by AGENTS.md → the "don't"
+ * list, which forbids `sql.raw` and interpolated SQL outright.
+ *
+ * ⚠️ **Two more misses come from `code()` itself**, the shared comment-stripper: a mid-line `//`
+ * inside a string, and a string containing `/*`, each swallow the rest of a line or block. No file in
+ * the tree is affected today (raw-vs-stripped detection was compared across all sources and only the
+ * allowlisted files match either way), but the helper is not a parser.
+ *
+ * **So, stated plainly:** this guard stops the plausible *accident* — someone adding `clientId` to an
+ * explicit select list — and stops nothing a determined author does. That is the same bargain
+ * `scoped.test.ts` strikes and says so about itself, and the PR that added this must not claim more.
  */
 describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () => {
   /** `ownership.ts` is the read + the insert's conflict target; `verify.ts` is the proof. */
@@ -542,9 +558,15 @@ describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () =>
   );
 
   it('finds the sources at all (an empty glob would pass everything below)', () => {
-    expect(DB_SOURCES.length + WEB_SOURCES.length + SHARED_SOURCES.length).toBeGreaterThan(50);
-    // The export surface specifically: a glob that silently stopped matching `shared` would make
-    // the whole block vacuous for the one place aS8 cares most about.
+    // 🔴 **PER-GLOB floors, because the sum hid a dead glob.** The first version asserted only that
+    // the TOTAL exceeded 50 — and `DB_SOURCES` + `SHARED_SOURCES` alone are 72, so an empty
+    // `WEB_SOURCES` would have passed while `apps/web` went unscanned. That is where DTOs live.
+    expect(DB_SOURCES.length).toBeGreaterThan(20);
+    expect(WEB_SOURCES.length).toBeGreaterThan(100);
+    expect(SHARED_SOURCES.length).toBeGreaterThan(20);
+    // And each glob must still reach the specific surface it is here for: the DAL that builds the
+    // profile DTOs, and the CSV builder that writes the export.
+    expect(WEB_SOURCES).toContain('apps/web/lib/dal/profiles.ts');
     expect(SHARED_SOURCES).toContain('packages/shared/src/csv/strength-log.ts');
   });
 

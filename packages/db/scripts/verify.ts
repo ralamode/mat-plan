@@ -7634,7 +7634,8 @@ console.log(
 // gains no row**, so the obvious proof ("B's count is 0") stays GREEN on the leak. The plan shipped
 // with exactly that assertion and nothing else; a security lens found it before any code existed.
 {
-  // Ids `…0450xx` are THIS block's range — `4e0xx` belongs to b-s and `4f0xx` to b (#352's rule).
+  // Ids `…045xxx` are THIS block's range — `4e0xx` belongs to b-s and `4f0xx` to b (#352's rule).
+  // (`045xxx`, not `0450xx`: the fill keys are `451xx` and the overflow key `45999`.)
   // ⚠️ The first version wrote `…04g001` and `.replace('g','e')`'d it, which is not hex and resolved
   // byte-for-byte onto b-s's `BS_P`. A review lens caught it; the clever substitution is what hid it.
   const A_KEY = '019826b4-0000-7000-8000-000000045001';
@@ -7745,7 +7746,7 @@ console.log(
   const capKeys: string[] = [];
   const capIds = new Map<string, string>();
   for (let i = await countIn(verifyHh.id); i < MAX_HOUSEHOLD_ATHLETES; i += 1) {
-    // `451xx`, inside this block's `0450xx` range — `45000 + i` would collide with `A_KEY`.
+    // `451xx`, inside this block's `045xxx` range — `45000 + i` would collide with `A_KEY`.
     const key = `019826b4-0000-7000-8000-0000000${String(45100 + i).padStart(5, '0')}`;
     capKeys.push(key);
     const r = await createProfile(asPg, B_SCOPE, {
