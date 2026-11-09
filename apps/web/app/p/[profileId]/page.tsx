@@ -30,17 +30,18 @@ import { LIFE_ACTIVITY_KEYS } from '@/lib/life/life-activities';
 import {
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
-  athleteEditPath,
-  athleteExportPath,
-  athletePath,
   CLOSED_DAY_NOTICE,
-  NAME_WRAP_CLASS,
   EXPORT_CSV_LABEL,
+  NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
   NOTHING_TO_EXPORT,
+  PAGE_SHELL_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
+  athleteEditPath,
+  athleteExportPath,
+  athletePath,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
@@ -163,7 +164,7 @@ export default async function TodayPage({
   const strengthOnPage = routineBlocks.some((b) => b.kind === 'strength');
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+    <main className={PAGE_SHELL_CLASS}>
       {/* Reports the device tz → `tz` cookie so the RSC computes the local day (V1-6c). Renders nothing. */}
       <TimeZoneSync serverTimeZone={timeZone} />
       <header className="flex flex-col gap-2">

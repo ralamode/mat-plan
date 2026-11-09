@@ -1,5 +1,6 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID } from '@mat-plan/db';
 import {
+  CHOOSE_KIND_MESSAGE,
   PROFILE_KIND_LABELS,
   PROFILE_NAME_MAX,
   SEED_PROFILE_2_NAME,
@@ -9,6 +10,8 @@ import {
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  ADD_ATHLETE_COPY,
+  ADD_ATHLETE_PATH,
   APP_HOME_PATH,
   ATHLETE_FORM_COPY,
   athleteEditPath,
@@ -439,4 +442,191 @@ test('focus lands on Undo after archive, and on the restored row after restore',
     'restore must land on the restored row, not on <body> — the row exists in both sections under ' +
       'the same id, so a commit-order change is what would break it',
   ).toBe(`athlete-${SEED_PROFILE_3_PUBLIC_ID}`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-1u — ADDING an athlete, end to end.
+//
+// 🔴 **Every test here adds a UNIQUELY NAMED athlete and archives it in `afterEach`.** Under
+// `fullyParallel: true` with one shared database, a fixed name would collide with a retry of the
+// same test and with any sibling spec that selects by name. The name carries the worker index and a
+// timestamp, and `MAX_HOUSEHOLD_ATHLETES` is 25 — so leaving rows behind would eventually fill the
+// household and turn every later run red with `HOUSEHOLD_FULL`. Archiving does NOT free the slot
+// (that is the cap's whole point), so this cleanup keeps the picker clean but the budget is finite:
+// if this spec ever starts failing with the quota message, the seed database needs resetting.
+
+/** A name no other spec can match, and no retry of this one can collide with. */
+const uniqueName = (label: string, index: number) =>
+  `A1U ${label} ${index} ${Date.now().toString(36)}`;
+
+const added: string[] = [];
+
+async function addAthlete(
+  page: Page,
+  name: string,
+  kind: 'Child' | 'Adult' = 'Child',
+): Promise<void> {
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${kind}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  added.push(name);
+}
+
+test.afterEach(async ({ page }) => {
+  // Archive whatever this test created, so the picker does not accumulate fixtures. Best effort:
+  // a test that failed before the add leaves nothing to clean, and a missing row must not mask the
+  // real failure.
+  for (const name of added.splice(0)) {
+    try {
+      await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+      const control = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+      if (await control.count()) await control.click();
+    } catch {
+      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one.
+    }
+  }
+});
+
+test('the picker offers Add athlete, which creates one and lands on their day page', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('create', testInfo.workerIndex);
+
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  // The tile is the LAST item in the athlete list, not a control floating beside it.
+  const items = page.locator('main ul > li');
+  await expect(
+    items.last().getByRole('link', { name: new RegExp(ADD_ATHLETE_COPY.heading) }),
+  ).toBeVisible();
+
+  await items.last().getByRole('link').click();
+  await expect(
+    page.getByRole('heading', { name: ADD_ATHLETE_COPY.pageHeading, level: 1 }),
+  ).toBeVisible();
+
+  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  added.push(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+  // D6: the parent lands on the athlete they just created, where logging happens — and the `<h1>`
+  // being their name is the confirmation, since the add has no status line.
+  await expect(page.getByRole('heading', { name: new RegExp(name), level: 1 })).toBeVisible();
+  expect(page.url()).not.toContain(ADD_ATHLETE_PATH);
+
+  // …and they are on the picker afterwards, above the add tile.
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: new RegExp(name) })).toBeVisible();
+});
+
+test('nothing is pre-selected: submitting without a kind is a field error that KEEPS the name', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('nokind', testInfo.workerIndex);
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+
+  // 🔴 The decision under test: `kind` cannot be changed after the add, so nothing is pre-checked
+  // and the form refuses rather than guessing.
+  for (const radio of await page.getByRole('radio').all()) {
+    await expect(radio).not.toBeChecked();
+  }
+
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+  // The refusal is an alert, the typed name SURVIVES it (React 19 resets an uncontrolled field when
+  // an action settles — `docs/features/write-path.md:341`), and focus lands on the first radio so a
+  // screen-reader user is not left on `<body>` hunting for the control that is wrong.
+  //
+  // ⚠️ **Scoped to the FORM, not `page.getByRole('alert')`.** Next's App Router mounts its own route
+  // announcer as `<div role="alert" id="__next-route-announcer__">`, so the page-wide locator is
+  // ambiguous once a client navigation has happened — "strict mode violation: resolved to 2
+  // elements", the second one empty. The rename test above solves the same problem by pinning
+  // `NAME_ERROR_ID`; this form's ids come from `useId()`, so the form is the stable scope.
+  const formAlert = page.locator('main form').getByRole('alert');
+  await expect(formAlert).toContainText(CHOOSE_KIND_MESSAGE);
+  await expect(page.getByLabel(ATHLETE_FORM_COPY.nameLabel)).toHaveValue(name);
+  await expect(page.getByRole('radio').first()).toBeFocused();
+});
+
+test('a blank name is a field error, and the chosen kind survives it', async ({ page }) => {
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: /^Adult/ }).check();
+  // ⚠️ **Whitespace, not an empty field.** `required` stops a truly blank submit client-side, so the
+  // server's own refusal is never reached and there is no alert to assert — which is exactly how the
+  // first version of this test failed. A whitespace-only value is accepted by the browser and
+  // trimmed to empty by `athleteNameSchema`. The rename test above does the same thing for the same
+  // reason, and says so.
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill('   ');
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+  // Scoped to the form, for the route-announcer reason the previous test explains.
+  await expect(page.locator('main form').getByRole('alert')).toContainText(NAME_REQUIRED_MESSAGE);
+  // The radio is uncontrolled, so this asserts the browser's own form state survived the action —
+  // the mirror of the name test above, for the other field.
+  await expect(page.getByRole('radio', { name: /^Adult/ })).toBeChecked();
+});
+
+test('the Enter key in the name field submits once a kind is chosen', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('enter', testInfo.workerIndex);
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+
+  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  added.push(name);
+  // `enterKeyHint="go"` promises this. The kind fieldset sits ABOVE the name precisely so a parent
+  // who reaches for Go has already made the choice.
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).press('Enter');
+
+  await expect(page.getByRole('heading', { name: new RegExp(name), level: 1 })).toBeVisible();
+});
+
+test('the name field is bounded by the shared max, and the add screen fits 360px', async ({
+  page,
+}) => {
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+
+  await expect(page.getByLabel(ATHLETE_FORM_COPY.nameLabel)).toHaveAttribute(
+    'maxlength',
+    String(PROFILE_NAME_MAX),
+  );
+
+  // Both radio LABELS carry the 44px, not the inputs — `INPUT_CLASS` on a radio yields a 44px-tall,
+  // 13px-wide dot, so the tappable thing has to be the label. ⚠️ No count guard: a label that
+  // stopped rendering must fail here, not be skipped.
+  const labels = page.locator('fieldset label');
+  await expect(labels).toHaveCount(2);
+  for (const label of await labels.all()) {
+    const box = await label.boundingBox();
+    expect(box!.height, 'a kind label is below the tap bar').toBeGreaterThanOrEqual(
+      MIN_TAP_TARGET_PX,
+    );
+  }
+
+  const submit = await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).boundingBox();
+  expect(submit!.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+
+  // 🔴 The geometry the plan forbade `grid-cols-2` for: two fixed tracks need ≈384px against 328px
+  // usable here. `flex-wrap` + `min-w-32` stacks them instead of scrolling the page sideways.
+  await expectNoHorizontalOverflow(page, 'the add-athlete screen at 360px');
+});
+
+test('a long name added through the form does not overflow the picker at 360px', async ({
+  page,
+}, testInfo) => {
+  // The case `a-r` explicitly handed to a-1: a name at the limit, ORIGINATING in the app rather
+  // than in the seed, rendered on the surface that lists it beside an avatar.
+  const long = uniqueName('x', testInfo.workerIndex)
+    .padEnd(PROFILE_NAME_MAX, 'W')
+    .slice(0, PROFILE_NAME_MAX);
+  await addAthlete(page, long, 'Adult');
+  await expect(page.getByRole('heading', { name: new RegExp('W'), level: 1 })).toBeVisible();
+
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expectNoHorizontalOverflow(page, 'the picker with a max-length added name at 360px');
 });

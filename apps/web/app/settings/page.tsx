@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { AthleteList } from '@/app/settings/athlete-list';
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
-import { SETTINGS_COPY } from '@/lib/constants';
+import { PAGE_SHELL_CLASS, SETTINGS_COPY } from '@/lib/constants';
 import { HOUSEHOLD_STATE, householdState } from '@/lib/dal/household';
 import { listHouseholdAthletes } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
@@ -40,7 +40,7 @@ export default async function SettingsPage() {
   // there but has nobody in it.
   if (state === HOUSEHOLD_STATE.none) {
     return (
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+      <main className={PAGE_SHELL_CLASS}>
         <NoHouseholdState />
       </main>
     );
@@ -49,7 +49,7 @@ export default async function SettingsPage() {
   const athletes = await listHouseholdAthletes();
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+    <main className={PAGE_SHELL_CLASS}>
       <h1 className="text-3xl font-semibold tracking-tight">{SETTINGS_COPY.heading}</h1>
       <AthleteList athletes={athletes} canArchive={canArchiveAthletes} />
     </main>

@@ -6,12 +6,13 @@ import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
 
 import {
   ATHLETE_FORM_COPY,
-  athletePath,
   NAME_WRAP_CLASS,
   NAV_LINK_CLASS,
+  PAGE_SHELL_CLASS,
   QUIET_LINK_CLASS,
   SETTINGS_COPY,
   SETTINGS_PATH,
+  athletePath,
 } from '@/lib/constants';
 import { householdState } from '@/lib/dal/household';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
@@ -77,7 +78,7 @@ export default async function RenameAthletePage({
   const from = inAppReferrer((await searchParams).from, own);
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+    <main className={PAGE_SHELL_CLASS}>
       <header className="flex flex-col gap-2">
         {/* ⚠️ `min-h-11` (inside `NAV_LINK_CLASS`) is load-bearing and UNGUARDED by the a11y spec,
             which excludes <a> from its tap-target scan (the SC 2.5.8 inline-text exception). It is

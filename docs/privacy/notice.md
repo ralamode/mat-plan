@@ -1,6 +1,6 @@
 # Privacy notice — mat-plan
 
-**Last updated: 2026-11-08. This is a beta.**
+**Last updated: 2026-11-09. This is a beta.**
 
 mat-plan is a training log for young athletes. It records what a child did in a session — the
 movements, the sets and reps, the weight lifted, and their bodyweight when they weigh in. That is
@@ -36,12 +36,16 @@ Everything here is entered by you or by your athlete. Nothing is bought, importe
   including any prescribed loads written for a specific athlete.
 
 **Three text boxes have no filter.** "How it felt"; the box where a movement can be typed by name;
-and, since the rename screen, an **athlete's name**. Whatever goes in is stored exactly as typed.
+and, since the rename and add screens, an **athlete's name**. Whatever goes in is stored exactly as
+typed — and a name is now typed when an athlete is **created**, not only when one is renamed, so it
+is the first thing the app asks for. A first name or a nickname is enough; the app never needs a legal
+name, and does not ask for a birthdate.
 Worth knowing, because of who is usually typing. The first two also appear in your export; a name
 does not — the export is filed under an id, not a name.
 
 **Technical bits**: a sign-in cookie, a cookie holding your timezone, your theme choice in the
-browser, and an identifier each device generates per logged item so the same entry is not saved twice.
+browser, and an identifier each device generates per logged item — and now per athlete added — so the
+same entry, or the same athlete, is not saved twice.
 
 **What we never ask for**: no phone number, no address, no payment details, no location, and no date
 of birth. **This app never asks you to type an email address, and no athlete's record contains one.**

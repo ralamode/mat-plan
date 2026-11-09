@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
+
+import { AddAthleteTile } from './add-athlete-tile';
 import { ProfileTile } from '@/components/profiles/profile-tile';
 import {
   SIGN_OUT_CONSEQUENCE_ID,
@@ -13,6 +15,7 @@ import { requireSession } from '@/lib/dal/session';
 import { clerkIsConfigured } from '@/lib/clerk';
 import {
   NO_HOUSEHOLD_COPY,
+  PAGE_SHELL_CLASS,
   PICKER_COPY,
   PICKER_EMPTY_COPY,
   SETTINGS_COPY,
@@ -65,7 +68,7 @@ export default async function ProfilePickerPage() {
   const archivedCount = noHousehold ? 0 : (await listHouseholdAthletes()).length - profiles.length;
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
+    <main className={PAGE_SHELL_CLASS}>
       <header className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">
           {noHousehold ? NO_HOUSEHOLD_COPY.heading : PICKER_COPY.heading}
@@ -93,16 +96,29 @@ export default async function ProfilePickerPage() {
 
       {noHousehold ? (
         <NoHouseholdState />
-      ) : empty ? (
-        <PickerEmptyState />
       ) : (
-        <ul className="flex flex-col gap-3">
-          {profiles.map((profile) => (
-            <li key={profile.id}>
-              <ProfileTile profile={profile} />
+        /* 🔴 **PROF-1 a-1u: the `<ul>` now renders in BOTH resolved states**, with the empty state
+           ABOVE it rather than instead of it. Before this chunk the list was the non-empty branch
+           only, because there was nothing to put in it when there were no athletes — and the empty
+           state's job was to explain that adding one took a change to the deployment's seed data.
+           Now the add tile is the list's final `<li>` in every resolved state, so the one control a
+           first-run household needs is in the same place it will be forever, rather than moving once
+           they have an athlete. `PickerEmptyState` keeps the explanation and loses the detour. */
+        <>
+          {empty ? <PickerEmptyState /> : null}
+          <ul className="flex flex-col gap-3">
+            {profiles.map((profile) => (
+              <li key={profile.id}>
+                <ProfileTile profile={profile} />
+              </li>
+            ))}
+            {/* Last, always. A create affordance above the things it creates would put an
+                administrative act in front of a kid opening the app to log. */}
+            <li>
+              <AddAthleteTile />
             </li>
-          ))}
-        </ul>
+          </ul>
+        </>
       )}
 
       {/* PROF-1 b: the way into Household settings. ⚠️ **Below the tiles, never beside a name** —

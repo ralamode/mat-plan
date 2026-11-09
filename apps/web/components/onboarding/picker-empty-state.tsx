@@ -1,6 +1,4 @@
-import { GitHubMark } from '@/components/landing/github-mark';
-import { Button } from '@/components/ui/button';
-import { CTA_CLASS, GITHUB_REPO_URL, PICKER_EMPTY_COPY } from '@/lib/constants';
+import { PICKER_EMPTY_COPY } from '@/lib/constants';
 
 /**
  * The profile picker's explained empty state (ONB-0) — the screen a brand-new deployment opens on.
@@ -24,10 +22,12 @@ import { CTA_CLASS, GITHUB_REPO_URL, PICKER_EMPTY_COPY } from '@/lib/constants';
  *    0.24). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
  *    short follow-up line is muted. ⚠️ Never put `text-muted-foreground` on `bg-muted`/`bg-accent`/
  *    `bg-secondary` here: that pair measures 4.34:1, and `token-sets.test.ts` asserts no screen does it.
- *  - **`CTA_CLASS` is load-bearing**, not decoration: the button base is `whitespace-nowrap`, and this
- *    label is ~474px at 200% text size against a 296px column. See the const's own comment.
- *  - **Same tab** (no `target="_blank"`): on a phone the back button is the only recovery path a reader
- *    will find, and that is also why no `rel` is needed.
+ *  - 🔴 **No control of its own, as of PROF-1 a-1u.** This component used to end in a GitHub button
+ *    ("How athletes get added — on GitHub") because adding an athlete was not in the app. `a-1u`
+ *    ships it, so the button became a detour *away* from the button that now works, two taps from
+ *    the thing the reader wants. The add tile is rendered by `/p` as the list's final `<li>` and is
+ *    this screen's recovery; `CTA_CLASS`, `GITHUB_REPO_URL` and `GitHubMark` keep their landing-page
+ *    consumers and are only unused *here*.
  *
  * **Folder vs filename.** `components/onboarding/` because `docs/roadmap.md`'s pillar table assigns empty
  * states to **Onboarding & Access** (`ONB-*`) while `app/p/` and `lib/dal/profiles.ts` are Profiles &
@@ -43,13 +43,6 @@ export function PickerEmptyState() {
       <h2 className="text-lg font-medium">{PICKER_EMPTY_COPY.heading}</h2>
       <p>{PICKER_EMPTY_COPY.what}</p>
       <p>{PICKER_EMPTY_COPY.next}</p>
-      <p className="text-muted-foreground text-sm">{PICKER_EMPTY_COPY.notYet}</p>
-      <Button asChild variant="outline" size="lg" className={CTA_CLASS}>
-        <a href={`${GITHUB_REPO_URL}${PICKER_EMPTY_COPY.setupAnchor}`}>
-          <GitHubMark />
-          {PICKER_EMPTY_COPY.setupCta}
-        </a>
-      </Button>
     </section>
   );
 }

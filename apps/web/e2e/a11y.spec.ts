@@ -10,23 +10,24 @@ import {
 } from '@mat-plan/shared';
 
 import {
+  ADD_ATHLETE_PATH,
   AMEND_COPY,
   APP_HOME_PATH,
-  athleteEditPath,
-  athleteRoutinePath,
   BODYWEIGHT_COPY,
-  changeLabel,
-  STRENGTH_COPY,
-  STRENGTH_RECEIPT_ID_PREFIX,
   DEFAULT_TIME_ZONE,
   MIN_TAP_TARGET_PX,
+  PARTIAL_SETS_COPY,
   PRIVACY_PATH,
-  SIGN_IN_COPY,
   SETTINGS_PATH,
+  SIGN_IN_COPY,
   SIGN_IN_PATH,
+  STRENGTH_COPY,
+  STRENGTH_RECEIPT_ID_PREFIX,
   THEME_STORAGE_KEY,
   TOKEN_SETS_PATH,
-  PARTIAL_SETS_COPY,
+  athleteEditPath,
+  athleteRoutinePath,
+  changeLabel,
   quantityInputLabel,
 } from '../lib/constants';
 import { localDayIso } from '../lib/date';
@@ -78,6 +79,11 @@ const ROUTES = [
   // renders two lists of the same row shape, so an axe or heading-order defect here is the kind that
   // would be fixed in one section and missed in the other.
   { name: 'household settings', path: SETTINGS_PATH },
+  // PROF-1 a-1u. The add screen is the app's only RADIO GROUP and its only multi-field form, so it
+  // is the one place a fieldset/legend or grouping defect can exist at all. It also carries the one
+  // irreversible choice in the app, which is the worst place for a label a screen reader cannot
+  // associate with its control.
+  { name: 'add athlete', path: ADD_ATHLETE_PATH },
   // UI-4: the token-set preview. It is in the scan because it is where the four CANDIDATE palettes
   // get their contrast audit — a bad candidate reddens CI before a human spends a review on it. It
   // leaves with the harness when UI-3 picks a set.

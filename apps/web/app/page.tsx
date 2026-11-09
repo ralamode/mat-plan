@@ -4,7 +4,14 @@ import Link from 'next/link';
 import { GitHubMark } from '@/components/landing/github-mark';
 import { MatPlanMark } from '@/components/brand/mat-plan-mark';
 import { Button } from '@/components/ui/button';
-import { APP_NAME, CTA_CLASS, GITHUB_REPO_URL, LANDING_COPY, SIGN_IN_PATH } from '@/lib/constants';
+import {
+  APP_NAME,
+  CTA_CLASS,
+  GITHUB_REPO_URL,
+  LANDING_COPY,
+  PAGE_SHELL_CLASS,
+  SIGN_IN_PATH,
+} from '@/lib/constants';
 
 export const metadata: Metadata = {
   description: LANDING_COPY.lead,
@@ -26,7 +33,7 @@ export const metadata: Metadata = {
  */
 export default function LandingPage() {
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 md:justify-center">
+    <main className={`${PAGE_SHELL_CLASS} md:justify-center`}>
       <header className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <MatPlanMark className="size-8" />
