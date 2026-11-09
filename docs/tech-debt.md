@@ -15,6 +15,25 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
+
+- **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
+  athlete with none yields `buildZip([])`, which is a valid but **EOCD-only** archive — iOS Files
+  opens it and shows nothing, and the person cannot tell that from a download that failed. Nothing
+  says "there is nothing to export yet".
+- **Why it surfaces now:** pre-existing since `V1-13b`, but `PROF-1 b` puts a **per-row export
+  control** in Household settings beside the Archived list — exactly the athletes most likely to have
+  no history (a typo'd row, a test profile someone archived rather than deleted). The control makes a
+  dormant edge case reachable in one tap.
+- **Found by:** the UX trust lens on `PROF-1 b`'s plan (2026-11-08), reading `export.ts` rather than
+  the plan. Recorded there as `bB17`, deferred out of `b` deliberately: it is not `b`'s defect and
+  fixing it means deciding what the export route should _do_ (a 204, a one-row CSV with headers, or a
+  disabled control with a reason), which is a product call rather than a bug fix.
+- **The fix, when taken:** decide the empty case once in the export route, and state it in
+  [notice.md](./privacy/notice.md)'s "Getting your data out" section so the published promise matches.
+  The cheapest honest version is to render the control **disabled with a reason** when the athlete has
+  no months, which the settings page already knows.
+
 ### 🔴 PRIORITY — nothing measures how much JavaScript ships, and the CWV budget cannot be measured at all (added 2026-11-06)
 
 _(maintainer, 2026-11-06: **priority item**, may be picked up in its own thread.)_
