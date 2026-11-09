@@ -488,6 +488,53 @@ describe('the scope constructors refuse an unresolved id', () => {
 });
 
 /**
+ * **PROF-1 a-1w — `profiles.client_id` never leaves the seam.** The one mitigation that bounds the
+ * key's existence oracle, enforced rather than asserted in prose.
+ *
+ * 🔴 **Why this is a test and not a paragraph.** `uq_profiles_client_id` is **global and
+ * non-partial**, so a signed-in member submitting a well-formed key learns whether *some* household
+ * already holds it: a free key redirects, a spent one is refused. That residual is accepted
+ * (`prof-1-athletes.md` -> aS8) **on one condition** — the key is never observable, so the >=74 random
+ * bits of a v7 key make guessing infeasible. That condition is what the plan promised as a test and
+ * first shipped as prose. The first column added to a profile DTO "for the sync payload" would
+ * quietly turn an accepted residual into a live cross-household probe, and nothing else in this repo
+ * would notice.
+ *
+ * ⚠️ **It pins a SET, not an absence**, so a new reader fails here by name rather than by a count
+ * nobody re-derives. Both entries are reasoned: the seam reads the column and names it as the
+ * insert's conflict target, and `verify.ts` is the proof that it does. A third entry is a design
+ * question, not an edit to this list.
+ */
+describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () => {
+  /** `ownership.ts` is the read + the insert's conflict target; `verify.ts` is the proof. */
+  const MAY_NAME_CLIENT_ID = [
+    'packages/db/src/writers/ownership.ts',
+    'packages/db/scripts/verify.ts',
+  ];
+  const NAMES_CLIENT_ID = /\bprofiles\.clientId\b/;
+  const namers = [...DB_SOURCES, ...WEB_SOURCES].filter((f) =>
+    NAMES_CLIENT_ID.test(code(join(REPO, f))),
+  );
+
+  it('finds the sources at all (an empty glob would pass everything below)', () => {
+    expect(DB_SOURCES.length + WEB_SOURCES.length).toBeGreaterThan(50);
+  });
+
+  it('can see a reference, and does not confuse it with the entries column', () => {
+    expect(NAMES_CLIENT_ID.test('eq(schema.profiles.clientId, key)')).toBe(true);
+    expect(NAMES_CLIENT_ID.test('eq(schema.entries.clientId, key)')).toBe(false);
+  });
+
+  it('no file outside the seam names it', () => {
+    expect([...namers].sort()).toEqual([...MAY_NAME_CLIENT_ID].sort());
+  });
+
+  it('the allowlist carries no dead entry', () => {
+    expect(MAY_NAME_CLIENT_ID.filter((f) => !namers.includes(f))).toEqual([]);
+  });
+});
+
+/**
  * 🔴 **The COMPILE-TIME half of the authority, pinned where a runtime test cannot reach.**
  *
  * `OwnerScope`'s entire claim is that a writer requiring owner authority cannot be called with a

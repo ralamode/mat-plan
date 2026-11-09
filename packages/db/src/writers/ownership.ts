@@ -380,6 +380,18 @@ export async function insertProfileOwnedBy(
 ): Promise<void> {
   await exec
     .insert(schema.profiles)
-    .values({ ...row, publicId: newId(), householdId: scope.householdId })
+    // 🔴 **The three columns are ENUMERATED, never spread.** `{ ...row, … }` is safe only by two
+    // accidents: `addAthleteSchema` is a non-strict `z.object` (so unknown keys are stripped) and the
+    // two server-owned columns sit AFTER the spread (so a smuggled one is overwritten). Reverse that
+    // order, or widen `AddAthleteInput` — which `a-1d` plans to — and a column-named key such as
+    // `pinHash`, `birthdate`, `deletedAt` or `routineConfig` rides straight into the row.
+    // SECURITY.md → Input: whitelist mutable fields, no mass assignment.
+    .values({
+      name: row.name,
+      kind: row.kind,
+      clientId: row.clientId,
+      publicId: newId(),
+      householdId: scope.householdId,
+    })
     .onConflictDoNothing({ target: schema.profiles.clientId });
 }

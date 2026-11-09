@@ -15,6 +15,30 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
+
+- **What & why it's debt:** `createProfile` (`packages/db/src/writers/profile.ts`) reads
+  `countProfilesIn` and then inserts, on the plain `db` with no transaction and no lock. N concurrent
+  requests from one member all read `count < 25` before any commits, so they all insert and the
+  household lands above `MAX_HOUSEHOLD_ATHLETES`. The cap bounds the **steady state**, not a burst.
+- **Why the obvious bound is not one:** the constant's docblock originally said the burst "is bounded
+  by the limiter". It is not — `checkMutationLimit` **fails open** (`apps/web/lib/rate-limit.ts`), so
+  with Upstash unconfigured or erroring there is no limiter at all and the only ceiling is Neon's
+  connection count. The docblock's two halves contradicted each other and the sentence has been
+  corrected; this entry is the honest bound it now points at.
+- **What it is NOT:** not a tenancy or isolation defect. Every row lands in the caller's **own**
+  household under their own name, so nothing crosses a household boundary — `countProfilesIn` is
+  scoped and mutation patch `23` proves it. The cost is unbounded growth in a table with no in-app
+  delete, on the single Neon project every household shares.
+- **Why it surfaced:** a security lens on `PROF-1 a-1w` (#359), which also pointed out that the
+  accepted-debt record belongs here rather than in a constant's docblock.
+- **The fix, when taken:** wrap the create in `db.transaction` (`Executor` already admits a
+  `PgTransaction`) and take a `pg_advisory_xact_lock` keyed on the household inside `ownership.ts` —
+  the one module permitted to unwrap `scope.householdId`, so `scope.test.ts`'s `UNWRAPS_SCOPE`
+  allowlist stays accurate. Transaction-scoped locks are safe under PgBouncer transaction mode.
+  ⚠️ It changes the `Executor` contract on the write path, so it wants its own reviewed chunk rather
+  than a drive-by — which is why `a-1w` filed it instead of fixing it.
+
 ### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
 
 - **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in

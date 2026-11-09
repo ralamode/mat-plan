@@ -323,11 +323,13 @@ describe('archiveAthleteAction / restoreAthleteAction (PROF-1 b)', () => {
  * is the one refusal that NAMES its cause, and a bad hidden field.
  */
 describe('addAthleteAction (PROF-1 a-1w)', () => {
+  /** The hidden field's value, named once: two assertions below thread it and must not re-type it. */
+  const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
   const body = (over: Record<string, string> = {}) => {
     const f = new FormData();
     f.set('name', 'Added Athlete');
     f.set('kind', PROFILE_KIND.kid);
-    f.set('clientId', '019826b4-0000-7000-8000-0000000000c1');
+    f.set('clientId', CLIENT_ID);
     for (const [k, v] of Object.entries(over)) f.set(k, v);
     return f;
   };
@@ -341,7 +343,7 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     expect(createAthlete).toHaveBeenCalledWith({
       name: 'Added Athlete',
       kind: PROFILE_KIND.kid,
-      clientId: '019826b4-0000-7000-8000-0000000000c1',
+      clientId: CLIENT_ID,
     });
     expect(vi.mocked(revalidatePath).mock.calls.map(([p]) => p)).toEqual([
       APP_HOME_PATH,
@@ -373,7 +375,13 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     await expect(addAthleteAction(initial, body({ name: '  Added   Athlete  ' }))).rejects.toThrow(
       'NEXT_REDIRECT',
     );
-    expect(createAthlete).toHaveBeenCalledWith(expect.objectContaining({ name: 'Added Athlete' }));
+    // The WHOLE object, not `objectContaining` (lessons.md → Vitest): a partial matcher would pass
+    // while the action quietly threaded a wrong `kind` or a mangled `clientId` alongside the name.
+    expect(createAthlete).toHaveBeenCalledWith({
+      name: 'Added Athlete',
+      kind: PROFILE_KIND.kid,
+      clientId: CLIENT_ID,
+    });
   });
 
   it('a spent client_id is the generic refusal — it says nothing about the other household', async () => {

@@ -189,15 +189,26 @@ describe("createAthlete — all THREE of the create's queries carry the resolved
   });
 
   it("mints public_id server-side — a crafted body cannot choose an athlete's URL", async () => {
-    await createAthlete(ADD_INPUT);
-    const insert = queryMatching(recording, /^insert into "profiles"/i);
-    expect(insert.text).toMatch(/"public_id"/i);
-    // Every submitted value is in `ADD_INPUT`; the public id is the one bound value that is not.
-    const minted = insert.values.filter(
-      (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/.test(v) && v !== CLIENT_ID,
-    );
-    expect(minted).toHaveLength(1);
-    expect(minted[0]).not.toBe(CLIENT_ID);
+    // Every submitted value is in `ADD_INPUT`; the public id is the one bound value that is not,
+    // so filtering `CLIENT_ID` out is what makes "taken from the body" FAIL rather than pass.
+    const mintOnce = async () => {
+      recording.queries.length = 0;
+      await createAthlete(ADD_INPUT);
+      const insert = queryMatching(recording, /^insert into "profiles"/i);
+      expect(insert.text).toMatch(/"public_id"/i);
+      const minted = insert.values.filter(
+        (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/.test(v) && v !== CLIENT_ID,
+      );
+      // The message carries the bound values: this assertion was seen to fail once, unreproducibly,
+      // and a bare length mismatch says nothing about what it filtered over.
+      expect(minted, `bound values were ${JSON.stringify(insert.values)}`).toHaveLength(1);
+      return minted[0];
+    };
+
+    // ⚠️ TWO calls, because ONE cannot tell `newId()` from a hard-coded constant — and the first
+    // version of this test ended with `expect(minted[0]).not.toBe(CLIENT_ID)`, which the filter on
+    // the line above had already guaranteed. The same input twice must mint two DIFFERENT ids.
+    expect(await mintOnce()).not.toBe(await mintOnce());
   });
 
   it('names client_id as the conflict target — never a bare do-nothing', async () => {

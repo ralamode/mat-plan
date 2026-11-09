@@ -166,10 +166,17 @@ export const CHOOSE_KIND_MESSAGE = 'Choose Child or Adult.';
  *
  * ⚠️ **It is a count-then-insert, so a concurrent burst OVERSHOOTS it** — N requests that all read
  * `count < 25` before any commits all insert. Written down rather than locked: the rows are the
- * caller's own household, the burst is bounded by the limiter, and 25 is not a correctness boundary
- * the way a tenancy predicate is — it is a brake on unbounded growth. A `pg_advisory_xact_lock` per
- * household would close it and is the fix if this ever matters. **What it means for the claim above:
- * the cap bounds the steady state, not a single burst.**
+ * caller's own household, and 25 is not a correctness boundary the way a tenancy predicate is — it is
+ * a brake on unbounded growth. **What it means for the claim above: the cap bounds the steady state,
+ * not a single burst.** A `pg_advisory_xact_lock` per household inside `ownership.ts` (the one module
+ * that may unwrap `scope.householdId`) would close it; it is filed in
+ * [tech-debt.md](../../../docs/tech-debt.md) rather than fixed here, because it changes the
+ * `Executor` contract on the write path and that belongs in its own reviewed chunk.
+ *
+ * 🔴 **An earlier draft of this paragraph said the burst "is bounded by the limiter", which the
+ * paragraph above contradicts** — `checkMutationLimit` fails open, so with Upstash down there is no
+ * limiter to bound it and the only ceiling is Neon's connection count. A security lens caught the two
+ * halves of one docblock disagreeing. The honest statement is the one now above it.
  *
  * In `packages/shared` because three consumers must agree: the writer enforces it, the DAL maps the
  * refusal, and the copy says what the limit is.

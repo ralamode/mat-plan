@@ -83,7 +83,6 @@ import {
 // cannot reach the constructor that takes a household id as an argument at all (module resolution
 // fails on a deep bare import). A script has no request to derive a scope from, so it NAMES one.
 import { householdScopeForScript } from '../src/writers/household-scope-script';
-import { profileByClientId } from '../src/writers/ownership';
 // TEN-1 1d: the REAL find-or-create the app DAL delegates to. `apps/web/lib/dal/catalog.ts` is
 // `server-only` and imports the app's env, so the catalog verdict at the end of this file can only
 // run the code the app runs if that core lives here (write-path.md invariant 3).
@@ -7628,8 +7627,6 @@ console.log(
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // PROF-1 a-1w — createProfile: replay-first, scoped on BOTH reads, and capped.
 //
-// Ids `…04g0xx` are this block's range (#352's rule).
-//
 // 🔴 **THE ASSERTION THIS BLOCK EXISTS FOR IS THE RETURNED VALUE, NOT A ROW COUNT.**
 // `uq_profiles_client_id` is global and non-partial, so household B CAN replay a key A already used.
 // If the scoped read loses `inHousehold`, B gets back **A's `public_id`** — which the action then
@@ -7748,7 +7745,8 @@ console.log(
   const capKeys: string[] = [];
   const capIds = new Map<string, string>();
   for (let i = await countIn(verifyHh.id); i < MAX_HOUSEHOLD_ATHLETES; i += 1) {
-    const key = `019826b4-0000-7000-8000-0000000${String(40000 + i).padStart(5, '0')}`;
+    // `451xx`, inside this block's `0450xx` range — `45000 + i` would collide with `A_KEY`.
+    const key = `019826b4-0000-7000-8000-0000000${String(45100 + i).padStart(5, '0')}`;
     capKeys.push(key);
     const r = await createProfile(asPg, B_SCOPE, {
       name: `Filler ${i}`,
@@ -7765,10 +7763,13 @@ console.log(
   // bypassable by archiving in a loop, which is the exact bypass that docblock says is closed.
   const bOwner = ownerScope(B_SCOPE);
   assert.ok(bOwner, 'PROF-1 a-1w: B_SCOPE narrows (or the archive below proves nothing)');
-  const archivedFiller = await profileByClientId(asPg, B_SCOPE, capKeys[1]!);
-  assert.ok(archivedFiller, 'PROF-1 a-1w: the filler to archive exists');
+  // ⚠️ The id comes from the FILL LOOP's own return value, never from `profileByClientId` — that
+  // function is half the boundary under test here, so resolving the fixture through it would make
+  // the archive step agree with whatever it does. Same rule the replay assertion below states.
+  const archivedFillerId = capIds.get(capKeys[1]!);
+  assert.ok(archivedFillerId, 'PROF-1 a-1w: the filler to archive exists');
   assert.ok(
-    (await archiveProfile(asPg, bOwner, archivedFiller.publicId))?.archivedAt instanceof Date,
+    (await archiveProfile(asPg, bOwner, archivedFillerId))?.archivedAt instanceof Date,
     'PROF-1 a-1w: …and it really is archived',
   );
 
