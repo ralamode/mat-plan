@@ -71,6 +71,33 @@ leaks the raw **values**, not the field name. So `addAthleteSchema` authors its 
 `CHOOSE_KIND_MESSAGE`, and both the shared schema's test and the action's test assert that no stored
 value appears in anything a person reads.
 
-**22/22 mutations RED**, including the three new ones and two older patches that needed regenerating
-because this chunk's edits shifted their context — which the gate reported rather than silently
-passing.
+## The key is written, and a test keeps it from being read
+
+`profiles.client_id` gains its first writer here, so `data-inventory.md` records it as in use and the
+column leaves the list of dark columns §1's re-review trigger watches. The key is written and matched
+on and **never returned** — none of the create's three reads selects it.
+
+🔴 **That "never returned" is the one thing bounding an accepted residual, so it is a test and not a
+sentence.** Because the unique index is global, a member submitting a well-formed key learns whether
+_some_ household already holds it: a free key redirects, a spent one is refused. What makes that
+infeasible is a v7 key's ≥74 random bits — which holds only while the key never leaves the server.
+`scope.test.ts` now pins the set of files allowed to name `profiles.clientId`, so the first profile
+DTO column added "for the sync payload" fails by filename instead of quietly turning a bounded
+residual into a live cross-household probe. Two smaller mitigations are written down beside it: the
+key is never echoed, and a probe that **misses** creates a real athlete and spends one of the 25
+slots, so a full household stops answering the question at all.
+
+The insert also **enumerates its columns** rather than spreading the caller's row. That was safe only
+by two accidents — a non-strict schema, and the server-owned columns happening to sit after the
+spread — and `a-1d` is already planned to widen the input.
+
+**25/25 mutations RED.** Six are new (`20`–`25`), covering the lost conjunct on each scoped read, the
+`DO UPDATE` refactor, the cap's existence, the cap counting the wrong households, the replay-before-
+quota ordering, and archived rows keeping their slot. Three older patches needed regenerating because
+this chunk's edits shifted their context, and one `.expect` had to be re-pinned when a new assertion
+landed above the one it named — both reported by the gate rather than silently passed.
+
+⚠️ **One thing is filed rather than fixed:** the cap is a count-then-insert, so a concurrent burst
+walks past it, and the limiter cannot bound that because it fails open. The honest bound and the fix
+(a transaction plus a per-household advisory lock) are in `docs/tech-debt.md` — it changes the write
+path's executor contract, which wants its own chunk.
