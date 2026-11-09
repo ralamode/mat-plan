@@ -31,6 +31,13 @@ import { collapseWhitespace, foldName, hasControlChar } from './text';
 export const PROFILE_NAME_MAX = 40;
 
 /**
+ * The message a blank or unrenderable name gets. Here rather than inline in the schema because the
+ * e2e asserts it — and it re-typed the literal until a reuse lens pointed out that a test must use
+ * the same const as the app.
+ */
+export const NAME_REQUIRED_MESSAGE = 'Enter a name.';
+
+/**
  * An athlete's name, as the app accepts it.
  *
  * The transform order is the contract, because the STORED value is what comes out of it:
@@ -80,7 +87,7 @@ export const athleteNameSchema = z
     // Empty and folds-to-empty are distinct failures with the same answer: there is nothing here a
     // person would recognise as a name. One issue, then stop.
     if (v.length === 0 || foldName(v) === '') {
-      ctx.addIssue({ code: 'custom', message: 'Enter a name.' });
+      ctx.addIssue({ code: 'custom', message: NAME_REQUIRED_MESSAGE });
       return;
     }
     if (v.length > PROFILE_NAME_MAX) {

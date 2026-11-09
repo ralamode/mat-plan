@@ -8,12 +8,17 @@ import { useActionState, useEffect, useRef, useState } from 'react';
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { renameAthleteAction } from '@/app/p/profile-actions';
-import { ATHLETE_FORM_COPY, INPUT_CLASS, NAV_LINK_CLASS, SAVING_LABEL } from '@/lib/constants';
+import {
+  ATHLETE_FORM_COPY,
+  INPUT_CLASS,
+  NAME_ERROR_ID,
+  NAV_LINK_CLASS,
+  SAVING_LABEL,
+} from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE } from '../action-state';
 
 const NAME_INPUT_ID = 'athlete-name';
-const NAME_ERROR_ID = 'athlete-name-error';
 
 /**
  * The rename form (PROF-1 a-r). Colocated with its route, not in `components/` — islands live beside

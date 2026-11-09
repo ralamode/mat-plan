@@ -4,6 +4,7 @@ import {
   PROFILE_NAME_MAX,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_3_NAME,
+  NAME_REQUIRED_MESSAGE,
 } from '@mat-plan/shared';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -13,6 +14,7 @@ import {
   athleteEditPath,
   athletePath,
   MIN_TAP_TARGET_PX,
+  NAME_ERROR_ID,
   SETTINGS_COPY,
   SETTINGS_PATH,
 } from '../lib/constants';
@@ -165,8 +167,8 @@ test('a blank name is a field error that keeps what was typed', async ({ page })
   // broad locator is ambiguous the moment a client-side navigation has happened in the context —
   // "strict mode violation: resolved to 2 elements", with the second one empty. The test means the
   // message under the input, and `rename-form.tsx` already names it.
-  await expect(page.locator('#athlete-name-error')).toBeVisible();
-  await expect(page.locator('#athlete-name-error')).toHaveText('Enter a name.');
+  await expect(page.locator(`#${NAME_ERROR_ID}`)).toBeVisible();
+  await expect(page.locator(`#${NAME_ERROR_ID}`)).toHaveText(NAME_REQUIRED_MESSAGE);
   // 🔴 Still on the edit page, and 🔴 the field is NOT empty. React 19 resets an UNCONTROLLED field
   // when a form action settles — including on a refusal — which would leave a parent staring at an
   // empty box that says it is empty. This assertion is the whole reason the island is controlled.
@@ -205,8 +207,7 @@ test('a 40-character name does not overflow at 360px, on any surface that render
   await renameTo(page, LONG_ARCHIVE_NAME, SEED_THREE);
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: SETTINGS_COPY.archiveFor(LONG_ARCHIVE_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.archivedResult(LONG_ARCHIVE_NAME));
+  await archiveAthleteNamed(page, LONG_ARCHIVE_NAME);
   await expectNoHorizontalOverflow(
     page,
     `the Undo result line and the Archived row, with a ${PROFILE_NAME_MAX}-character name`,
@@ -220,8 +221,7 @@ test('a 40-character name does not overflow at 360px, on any surface that render
 
   // Restore, so the long name does not leave an athlete off the picker for a parallel spec…
   await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: SETTINGS_COPY.restoreFor(LONG_ARCHIVE_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.restoredResult(LONG_ARCHIVE_NAME));
+  await restoreAthleteNamed(page, LONG_ARCHIVE_NAME);
 
   // …and put the NAME back, which the first version forgot. The sibling archive specs locate their
   // controls by `SETTINGS_COPY.archiveFor(SEED_PROFILE_3_NAME)`, so leaving the padded name behind
@@ -298,6 +298,23 @@ test('the rename form is reachable and usable at the primary device width', asyn
 const resultLine = (page: Page) => page.locator('#athlete-result');
 
 /**
+ * Archive / restore the archive athlete, as one step each.
+ *
+ * The click-then-assert pair appeared **six times** across the specs below — the shape the
+ * maintainer's N4 rule names ("the same block of code 7 or more times verbatim"). `name` is a
+ * parameter because the long-name test drives the same athlete under a 40-character name.
+ */
+async function archiveAthleteNamed(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) }).click();
+  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.archivedResult(name));
+}
+
+async function restoreAthleteNamed(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: SETTINGS_COPY.restoreFor(name) }).click();
+  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.restoredResult(name));
+}
+
+/**
  * PROF-1 b — archive, Undo, and the DURABLE path once the Undo line is gone.
  *
  * 🔴 **The reload is the point of the second half.** Undo is a convenience with a short life: it is
@@ -348,8 +365,7 @@ test('archive leaves the picker, Undo brings them back, and Restore still works 
 test('an archived athlete’s day page links straight to the recovery', async ({ page }) => {
   await page.setViewportSize(MOBILE_VIEWPORT);
   await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('button', { name: SETTINGS_COPY.archiveFor(SEED_PROFILE_3_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.archivedResult(SEED_PROFILE_3_NAME));
+  await archiveAthleteNamed(page, SEED_PROFILE_3_NAME);
 
   await page.goto(athletePath(SEED_THREE), { waitUntil: 'networkidle' });
   const link = page.getByRole('link', { name: SETTINGS_COPY.heading, exact: true });
@@ -359,8 +375,7 @@ test('an archived athlete’s day page links straight to the recovery', async ({
   await expect(page).toHaveURL(SETTINGS_PATH);
 
   // Leave the seed as we found it, so test order cannot matter.
-  await page.getByRole('button', { name: SETTINGS_COPY.restoreFor(SEED_PROFILE_3_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.restoredResult(SEED_PROFILE_3_NAME));
+  await restoreAthleteNamed(page, SEED_PROFILE_3_NAME);
 });
 
 /**
@@ -376,8 +391,7 @@ test('Household settings does not overflow at 360px, in both sections', async ({
   await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
 
   // Archive one so both sections are populated for the same measurement.
-  await page.getByRole('button', { name: SETTINGS_COPY.archiveFor(SEED_PROFILE_3_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.archivedResult(SEED_PROFILE_3_NAME));
+  await archiveAthleteNamed(page, SEED_PROFILE_3_NAME);
 
   await expectNoHorizontalOverflow(page, 'Household settings, both sections populated');
 
@@ -396,6 +410,34 @@ test('Household settings does not overflow at 360px, in both sections', async ({
     }
   }
 
-  await page.getByRole('button', { name: SETTINGS_COPY.restoreFor(SEED_PROFILE_3_NAME) }).click();
-  await expect(resultLine(page)).toHaveText(SETTINGS_COPY.restoredResult(SEED_PROFILE_3_NAME));
+  await restoreAthleteNamed(page, SEED_PROFILE_3_NAME);
+});
+
+/**
+ * PROF-1 b — **where focus LANDS**, which nothing in CI checks and which the UX lens flagged as
+ * ordering-dependent.
+ *
+ * Archive moves focus to Undo (rendered from island state in the same commit as the result, so it is
+ * sound by construction). Restore moves it to the restored `<li>` — and that element has the same id
+ * in BOTH sections, so if the action result commits before the refreshed server list, focus could
+ * land on the row about to unmount and drop to `<body>`. Reading the code cannot settle that; driving
+ * it can.
+ */
+test('focus lands on Undo after archive, and on the restored row after restore', async ({
+  page,
+}) => {
+  await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
+
+  await archiveAthleteNamed(page, SEED_PROFILE_3_NAME);
+  await expect(
+    page.getByRole('button', { name: SETTINGS_COPY.undoLabel(SEED_PROFILE_3_NAME) }),
+  ).toBeFocused();
+
+  await restoreAthleteNamed(page, SEED_PROFILE_3_NAME);
+  const focusedId = await page.evaluate(() => document.activeElement?.id ?? '');
+  expect(
+    focusedId,
+    'restore must land on the restored row, not on <body> — the row exists in both sections under ' +
+      'the same id, so a commit-order change is what would break it',
+  ).toBe(`athlete-${SEED_PROFILE_3_PUBLIC_ID}`);
 });

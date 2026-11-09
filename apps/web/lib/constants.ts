@@ -893,6 +893,13 @@ export const EXPORT_CSV_LABEL = '↓ Export CSV';
  * prototype's own value, not a fresh guess.
  */
 export const UNDO_LABEL = 'Undo';
+
+/**
+ * The rename field's error id — module-private in `rename-form.tsx` until the e2e needed to scope an
+ * assertion to it (`getByRole('alert')` is ambiguous once Next's route announcer mounts). This is the
+ * moment it gained a second consumer, which is the trigger AGENTS.md names.
+ */
+export const NAME_ERROR_ID = 'athlete-name-error';
 export const UNDO_BUTTON_ATTR = 'data-undo-button';
 export const ANNOUNCE_AFTER_FOCUS_MS = 60;
 
