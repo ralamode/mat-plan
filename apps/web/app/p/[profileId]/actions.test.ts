@@ -226,18 +226,29 @@ type BindingBase = {
   readonly fn: ActionFn;
   readonly writers: readonly [Writer, ...Writer[]];
   /**
-   * Assert what a SUCCESSFUL call did, beyond `result.ok`. Optional, and defaulting to `ok` —
+   * Assert what a SUCCESSFUL call did, beyond `result.ok`. Optional; when absent the suite asserts
+   * `ok` itself (see the happy row) —
    * `addAthleteAction` needs it because its success is a `redirect`, which throws and therefore
    * returns no envelope to inspect.
    */
   readonly succeeded?: (result: ActionState) => void;
 };
 
-type Binding =
-  | (BindingBase & { readonly scopeMiss?: never })
-  | (BindingBase & { readonly scopeMiss: () => void });
+/**
+ * 🔴 **Keyed on the ACTION'S OWN SCOPE, so the compiler enforces what the guide claims.** The first
+ * version was a plain union (`{ scopeMiss?: never } | { scopeMiss: () => void }`), which TypeScript
+ * satisfies with the first arm for **any** entry — so a household action could omit `scopeMiss`
+ * while `write-path.md` invariant 13 said it was required. A review lens caught the gap between the
+ * type and the sentence. `MUTATING_ACTIONS` is `as const`, so each name's `scope` is known at the
+ * type level and the requirement can actually be expressed.
+ */
+type BindingFor<N extends MatrixActionName> = (typeof MUTATING_ACTIONS)[N] extends {
+  scope: typeof ACTION_SCOPE.household;
+}
+  ? BindingBase & { readonly scopeMiss: () => void }
+  : BindingBase & { readonly scopeMiss?: never };
 
-const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
+const ACTION_BINDINGS: { [N in MatrixActionName]: BindingFor<N> } = {
   logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
   logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
   logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
@@ -1910,7 +1921,13 @@ describe('every HOUSEHOLD-addressed Server Action — a scope miss answers like 
     async (name, action) => {
       vi.clearAllMocks();
       const res = await action(initial, VALID_BODY[name]!()).catch((e: Error) => e);
-      ACTION_BINDINGS[name as MatrixActionName].succeeded?.(res as ActionState);
+      // ⚠️ **The default is real, not documentation.** `succeeded?.(…)` alone meant a binding without
+      // one asserted NOTHING here — and `.catch` has already swallowed any throw, so the row would
+      // pass for an action that failed outright. Today's single entry defines `succeeded`; the next
+      // one that does not must still be held to `ok`.
+      const binding = ACTION_BINDINGS[name as MatrixActionName];
+      if (binding.succeeded) binding.succeeded(res as ActionState);
+      else expect(res, `${name}: a valid body must succeed`).toMatchObject({ ok: true });
     },
   );
 

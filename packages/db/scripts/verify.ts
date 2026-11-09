@@ -7637,7 +7637,10 @@ console.log(
 // gains no row**, so the obvious proof ("B's count is 0") stays GREEN on the leak. The plan shipped
 // with exactly that assertion and nothing else; a security lens found it before any code existed.
 {
-  const A_KEY = '019826b4-0000-7000-8000-00000004g001'.replace('g', 'e');
+  // Ids `…0450xx` are THIS block's range — `4e0xx` belongs to b-s and `4f0xx` to b (#352's rule).
+  // ⚠️ The first version wrote `…04g001` and `.replace('g','e')`'d it, which is not hex and resolved
+  // byte-for-byte onto b-s's `BS_P`. A review lens caught it; the clever substitution is what hid it.
+  const A_KEY = '019826b4-0000-7000-8000-000000045001';
   const countIn = async (hhId: number) =>
     (
       await asPg
@@ -7699,7 +7702,14 @@ console.log(
   // key is not freed by it.
   const owner = ownerScope(A_SCOPE);
   assert.ok(owner, 'PROF-1 a-1w: A_SCOPE narrows (or the archive below proves nothing)');
-  await archiveProfile(asPg, owner, createdId);
+  const archivedRow = await archiveProfile(asPg, owner, createdId);
+  // ⚠️ **Assert the archive LANDED.** `archiveProfile` returns `null` on 0 rows, so if its predicate
+  // ever refused here the replay assertion below would pass against an un-archived row and prove the
+  // claim it names for nothing.
+  assert.ok(
+    archivedRow?.archivedAt instanceof Date,
+    'PROF-1 a-1w: the athlete really is archived before the replay below',
+  );
   assert.deepEqual(
     await createProfile(asPg, A_SCOPE, {
       name: 'A-1 Athlete',
@@ -7736,6 +7746,7 @@ console.log(
 
   // (5) The quota. Fill B to the cap, then one more.
   const capKeys: string[] = [];
+  const capIds = new Map<string, string>();
   for (let i = await countIn(verifyHh.id); i < MAX_HOUSEHOLD_ATHLETES; i += 1) {
     const key = `019826b4-0000-7000-8000-0000000${String(40000 + i).padStart(5, '0')}`;
     capKeys.push(key);
@@ -7745,10 +7756,23 @@ console.log(
       clientId: key,
     });
     assert.ok(r.ok, `PROF-1 a-1w: filling to the cap succeeds at ${i}`);
+    capIds.set(key, r.publicId);
   }
   assert.equal(await countIn(verifyHh.id), MAX_HOUSEHOLD_ATHLETES, 'PROF-1 a-1w: B is at the cap');
 
-  const overflowKey = '019826b4-0000-7000-8000-000000049999';
+  // 🔴 **ARCHIVED ROWS HOLD THEIR SLOT**, which `countProfilesIn`'s docblock claims and nothing
+  // proved. Archive one of B's fillers and the 26th must STILL be refused — otherwise the cap is
+  // bypassable by archiving in a loop, which is the exact bypass that docblock says is closed.
+  const bOwner = ownerScope(B_SCOPE);
+  assert.ok(bOwner, 'PROF-1 a-1w: B_SCOPE narrows (or the archive below proves nothing)');
+  const archivedFiller = await profileByClientId(asPg, B_SCOPE, capKeys[1]!);
+  assert.ok(archivedFiller, 'PROF-1 a-1w: the filler to archive exists');
+  assert.ok(
+    (await archiveProfile(asPg, bOwner, archivedFiller.publicId))?.archivedAt instanceof Date,
+    'PROF-1 a-1w: …and it really is archived',
+  );
+
+  const overflowKey = '019826b4-0000-7000-8000-000000045999';
   assert.deepEqual(
     await createProfile(asPg, B_SCOPE, {
       name: 'One Too Many',
@@ -7756,7 +7780,8 @@ console.log(
       clientId: overflowKey,
     }),
     { ok: false, reason: 'full' },
-    `PROF-1 a-1w: the ${MAX_HOUSEHOLD_ATHLETES + 1}th athlete is refused as FULL, not as refused`,
+    `PROF-1 a-1w: the ${MAX_HOUSEHOLD_ATHLETES + 1}th athlete is refused as FULL even though one of ` +
+      'the 25 is ARCHIVED — archiving does not free a slot, or the cap is a loop away from useless',
   );
   assert.equal(
     await countIn(verifyHh.id),
@@ -7772,7 +7797,8 @@ console.log(
       kind: PROFILE_KIND.kid,
       clientId: capKeys[0]!,
     }),
-    { ok: true, publicId: (await profileByClientId(asPg, B_SCOPE, capKeys[0]!))!.publicId },
+    // ⚠️ The expected id is the one the FILL returned, not one recomputed with the code under test.
+    { ok: true, publicId: capIds.get(capKeys[0]!)! },
     'PROF-1 a-1w: a REPLAY at the cap still returns its row — the quota gates creation, not retries',
   );
 

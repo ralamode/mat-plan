@@ -796,6 +796,9 @@ export const NO_ATHLETE_SAVE = 'No athlete found to save.';
  * ⚠️ Only reachable by a crafted request — the UI renders no Archive control for a member — which is
  * why the DAL also emits a signal when it fires (`reportAuthorityRefusal`).
  */
+export const OWNER_ONLY_ATHLETE =
+  'Only the person who set up this household can archive an athlete.';
+
 /**
  * The add refusal (PROF-1 a-1w).
  *
@@ -813,11 +816,14 @@ export const NO_ATHLETE_ADD = 'Couldn’t add this athlete.';
  * after the household scope resolved, so it tells the caller a fact about their own household —
  * which they can already see on the picker. Saying "couldn't add" there would send a parent
  * retrying a request that can never succeed.
+ *
+ * ⚠️ **It must not suggest archiving.** The first version read "Archive someone you no longer train
+ * before adding another" — which **cannot work**: `countProfilesIn` counts archived rows on purpose,
+ * because a cap a loop of archives can walk past is not a cap. A security lens caught the copy
+ * contradicting the invariant asserted three files away, in the same PR. There is no in-app way to
+ * free a slot today, so the honest instruction is the ask channel the notice already names.
  */
-export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} athletes. Archive someone you no longer train before adding another.`;
-
-export const OWNER_ONLY_ATHLETE =
-  'Only the person who set up this household can archive an athlete.';
+export const HOUSEHOLD_FULL = `A household can hold ${MAX_HOUSEHOLD_ATHLETES} athletes. Write to us if you need more.`;
 
 /**
  * The athlete form's copy (PROF-1 a-r; a-1's add form reuses it).

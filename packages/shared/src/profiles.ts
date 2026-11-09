@@ -164,6 +164,13 @@ export const CHOOSE_KIND_MESSAGE = 'Choose Child or Adult.';
  * where a wrong row is permanent without the operator. Whichever chunk ships an in-app per-profile
  * delete (`A3` / `V1-9b`) changes that arithmetic and re-opens this number.
  *
+ * ⚠️ **It is a count-then-insert, so a concurrent burst OVERSHOOTS it** — N requests that all read
+ * `count < 25` before any commits all insert. Written down rather than locked: the rows are the
+ * caller's own household, the burst is bounded by the limiter, and 25 is not a correctness boundary
+ * the way a tenancy predicate is — it is a brake on unbounded growth. A `pg_advisory_xact_lock` per
+ * household would close it and is the fix if this ever matters. **What it means for the claim above:
+ * the cap bounds the steady state, not a single burst.**
+ *
  * In `packages/shared` because three consumers must agree: the writer enforces it, the DAL maps the
  * refusal, and the copy says what the limit is.
  */

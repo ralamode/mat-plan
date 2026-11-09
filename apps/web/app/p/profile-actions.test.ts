@@ -334,6 +334,15 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
 
   it('revalidates the picker and settings, then redirects to the new athlete', async () => {
     await expect(addAthleteAction(initial, body())).rejects.toThrow('NEXT_REDIRECT');
+    // 🔴 **What the DAL was called WITH, not merely that the action redirected.** The mock answers
+    // `ok` for any input, so without this an action that passed `formData.get('name')` raw instead
+    // of `parsed.data.name`, swapped two fields, or dropped `clientId` — killing idempotency —
+    // would redirect correctly and pass every other assertion in this PR.
+    expect(createAthlete).toHaveBeenCalledWith({
+      name: 'Added Athlete',
+      kind: PROFILE_KIND.kid,
+      clientId: '019826b4-0000-7000-8000-0000000000c1',
+    });
     expect(vi.mocked(revalidatePath).mock.calls.map(([p]) => p)).toEqual([
       APP_HOME_PATH,
       SETTINGS_PATH,
@@ -353,6 +362,18 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     expect(res).toEqual({ ok: false, error: HOUSEHOLD_FULL });
     expect(res.error).not.toBe(NO_ATHLETE_ADD);
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The PARSED value reaches the DAL, not the raw field. `athleteNameSchema` trims and collapses, so
+   * a name typed with stray spaces must arrive normalised — otherwise two athletes differ only by
+   * whitespace and a-1d's duplicate fold has nothing to fold.
+   */
+  it('passes the PARSED name, trimmed and collapsed, not the raw field', async () => {
+    await expect(addAthleteAction(initial, body({ name: '  Added   Athlete  ' }))).rejects.toThrow(
+      'NEXT_REDIRECT',
+    );
+    expect(createAthlete).toHaveBeenCalledWith(expect.objectContaining({ name: 'Added Athlete' }));
   });
 
   it('a spent client_id is the generic refusal — it says nothing about the other household', async () => {
