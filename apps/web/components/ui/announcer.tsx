@@ -25,6 +25,14 @@
  *    why `message` is `''` rather than the component being conditionally rendered.
  * 2. **`role="status"`, i.e. `aria-live="polite"`** — a save is not an interruption. A refusal the
  *    person must act on is `role="alert"`, which is a different element and not this one.
+ * 3. 🔴 **Never pass a class that HIDES it while empty** — `empty:hidden`, `hidden`,
+ *    `invisible`, or any `display:none`. That is rule 1 defeated by a different mechanism: a region
+ *    removed from the accessibility tree and then restored *with* its text is a region that mounts
+ *    with its text, and it is silent. ⚠️ Added 2026-11-08 because the component's first and only
+ *    consumer did exactly this (`edit/rename-form.tsx`, shipped at `PROF-1 a-r`) — the rule existed,
+ *    but only as prose about mounting, and `empty:hidden` did not look like mounting. If the empty
+ *    line must not take space, give it `min-h-*` or `h-0`, which keep the element in the tree.
+ *    `announcer.test.tsx` scans every consumer for this.
  */
 export function Announcer({
   message,
