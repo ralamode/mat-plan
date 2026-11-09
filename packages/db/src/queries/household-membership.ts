@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { HouseholdRole } from '@mat-plan/shared';
 
 import { schema } from '../client';
+import type { HouseholdRow } from '../types';
 import type { Executor } from '../writers/executor';
 
 /**
@@ -28,7 +29,10 @@ import type { Executor } from '../writers/executor';
  * index this lookup rides.
  */
 export type Membership = {
-  readonly householdId: number;
+  // From the ROW's type, not a hand-written `number` — so a change to the column's drizzle `mode` is
+  // a compile error here instead of a comment that went stale. `HouseholdScope.householdId` does the
+  // same thing with the same type; these two must not drift.
+  readonly householdId: HouseholdRow['id'];
   readonly role: HouseholdRole;
 };
 
@@ -45,8 +49,14 @@ export async function membershipHousehold(
       // household X beside a live `member` row in Y**. A second lookup keyed on `clerk_user_id` —
       // or one that forgot the `deleted_at` conjunct — would return the dead owner row and make a
       // member an owner. Reading the role in the query that already carries BOTH `deleted_at`
-      // conjuncts makes that unrepresentable, and leaves no TOCTOU window between the role read and
-      // the write it authorizes.
+      // conjuncts makes that unrepresentable.
+      //
+      // ⚠️ **The true property is narrower than "no TOCTOU window", which this comment claimed until
+      // 2026-11-08.** The id and the role come from ONE row, so they cannot disagree with each other.
+      // The role is still read once per request (the resolver is `cache()`d) and the write happens
+      // later in that request, so a window the length of the request does exist. It is immaterial at
+      // Beta 0 — one membership, no way to demote — and becomes real at `INVITE-1`, which is where a
+      // principal-keyed `EXISTS` re-check belongs.
       role: schema.householdMembers.role,
     })
     .from(schema.householdMembers)
