@@ -7426,6 +7426,23 @@ console.log(
         .where(eq(schema.profiles.publicId, publicId))
     )[0]?.archivedAt ?? null;
 
+  // 🔴 **B_P's entry is inserted BEFORE the archive, and that ordering is the whole point.** The
+  // first version asserted the export path with `Array.isArray(...)` on an athlete who had logged
+  // nothing — always true, and true even if someone folded `archived_at` into `isLiveProfile` and
+  // the query started returning `[]`. A confirmation reviewer called it the fifth vacuous test in
+  // this PR, and `write-path.md` invariant 10 had already been written to cite it as proof.
+  await asPg.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-00000004f0a1',
+    clientId: '019826b4-0000-7000-8000-00000004f0a2',
+    profileId: (await idOf(B_P))!,
+    activityDate: '2026-07-18',
+    kind: 'bodyweight',
+    unit: 'lb',
+    valueNum: '101',
+    activityTypeId: await activityTypeIdByKey('weigh_in'),
+    metricKey: SEED_METRIC_KEYS.bodyweight,
+  });
+
   const owner = ownerScope(A_SCOPE);
   assert.ok(
     owner,
@@ -7440,7 +7457,6 @@ console.log(
     'PROF-1 b: …and archived_at is a real timestamp, not null — the RETURNING proves the column was ' +
       'written rather than the row merely matched',
   );
-  const firstDate = await archivedAtOf(B_P);
 
   // (2) 🔴 REPLAY KEEPS THE FIRST DATE. One row matches either way, so the row count cannot tell a
   // replay from a first archive — only the date can. An offline flush or a double tap on the gym
@@ -7468,9 +7484,6 @@ console.log(
     PINNED,
     'PROF-1 b: …and COALESCE kept the EXISTING archived_at — a replay must not move the date',
   );
-  // `firstDate` proved the first archive wrote a timestamp at all; the pin above is what proves the
-  // replay did not move it.
-  void firstDate;
 
   // (3) 🔴 A MEMBER OF THE SAME HOUSEHOLD ARCHIVES NOTHING. The case the whole authority split is
   // for, and the one b-s could only model with a forgery. `A_MEMBER_SCOPE` is minted the same way
@@ -7513,10 +7526,12 @@ console.log(
     await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed'),
     'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
   );
-  const archivedMonths = await loggedMonths(asPg, { profilePublicId: B_P, scope: A_SCOPE });
-  assert.ok(
-    Array.isArray(archivedMonths),
-    'PROF-1 b: …and the export path still resolves an archived athlete (criterion 5)',
+  assert.deepEqual(
+    await loggedMonths(asPg, { profilePublicId: B_P, scope: A_SCOPE }),
+    [{ month: '2026-07' }],
+    'PROF-1 b: …and the export path still returns an ARCHIVED athlete’s months (criterion 5) — the ' +
+      'month this athlete logged, not merely "an array": fold archived_at into isLiveProfile and ' +
+      'this returns [] while an Array.isArray check would stay green',
   );
 
   // (6) RESTORE IS ANY-MEMBER (decision M1). The member who could not archive CAN restore, with no
@@ -7554,33 +7569,21 @@ console.log(
   // FALSE. Every archived athlete would have been told there was nothing to export, which is the
   // control the published notice promises. A type assertion cannot catch that — the column really is
   // a boolean — only two profiles in different entry states can.
-  await asPg.insert(schema.entries).values([
-    {
-      publicId: '019826b4-0000-7000-8000-00000004f0a1',
-      clientId: '019826b4-0000-7000-8000-00000004f0a2',
-      profileId: (await idOf(B_P))!,
-      activityDate: '2026-07-18',
-      kind: 'bodyweight',
-      unit: 'lb',
-      valueNum: '101',
-      activityTypeId: await activityTypeIdByKey('weigh_in'),
-      metricKey: SEED_METRIC_KEYS.bodyweight,
-    },
-    {
-      // B_OTHER's only entry is SOFT-DELETED, so it must NOT count — the `deleted_at` half of the
-      // predicate, which a correlation-only fix would have left unproved.
-      publicId: '019826b4-0000-7000-8000-00000004f0b1',
-      clientId: '019826b4-0000-7000-8000-00000004f0b2',
-      profileId: (await idOf(B_OTHER))!,
-      activityDate: '2026-07-18',
-      kind: 'bodyweight',
-      unit: 'lb',
-      valueNum: '102',
-      activityTypeId: await activityTypeIdByKey('weigh_in'),
-      metricKey: SEED_METRIC_KEYS.bodyweight,
-      deletedAt: new Date(),
-    },
-  ]);
+  // B_P's LIVE entry already exists (inserted before the archive, so step 5 could assert the export
+  // path on a real month). B_OTHER's only entry is SOFT-DELETED, so it must NOT count — the
+  // `deleted_at` half of the predicate, which a correlation-only fix would have left unproved.
+  await asPg.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-00000004f0b1',
+    clientId: '019826b4-0000-7000-8000-00000004f0b2',
+    profileId: (await idOf(B_OTHER))!,
+    activityDate: '2026-07-18',
+    kind: 'bodyweight',
+    unit: 'lb',
+    valueNum: '102',
+    activityTypeId: await activityTypeIdByKey('weigh_in'),
+    metricKey: SEED_METRIC_KEYS.bodyweight,
+    deletedAt: new Date(),
+  });
   const hasHistoryBy = Object.fromEntries(
     (await householdProfileRows(asPg, { scope: A_SCOPE })).map((r) => [r.publicId, r.hasEntries]),
   );

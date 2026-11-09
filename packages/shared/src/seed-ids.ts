@@ -9,7 +9,7 @@
 /** The root household ("Home"). */
 export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
 
-// The two kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
+// The the kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
 export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
 export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
 /**

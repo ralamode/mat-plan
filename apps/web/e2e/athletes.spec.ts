@@ -396,18 +396,17 @@ test('Household settings does not overflow at 360px, in both sections', async ({
   await expectNoHorizontalOverflow(page, 'Household settings, both sections populated');
 
   // Every control on the page still clears the tap bar at this width.
-  for (const name of [
-    SETTINGS_COPY.editFor(SEED_PROFILE_2_NAME),
-    SETTINGS_COPY.restoreFor(SEED_PROFILE_3_NAME),
-  ]) {
-    const control = page.getByRole(name.startsWith(SETTINGS_COPY.edit) ? 'link' : 'button', {
-      name,
-    });
-    if ((await control.count()) > 0) {
-      expect((await control.first().boundingBox())!.height).toBeGreaterThanOrEqual(
-        MIN_TAP_TARGET_PX,
-      );
-    }
+  // ⚠️ **No `if (count > 0)` guard, deliberately.** The first version skipped the measurement when a
+  // control was absent — so a copy change, a role change (`Button asChild` + `Link` renders a LINK,
+  // not a button) or a missing Restore row would have made this loop measure nothing and pass.
+  // Asserting visibility first turns a stale locator into a red test instead of a silent skip.
+  for (const [role, name] of [
+    ['link', SETTINGS_COPY.editFor(SEED_PROFILE_2_NAME)],
+    ['button', SETTINGS_COPY.restoreFor(SEED_PROFILE_3_NAME)],
+  ] as const) {
+    const control = page.getByRole(role, { name, exact: true });
+    await expect(control).toBeVisible();
+    expect((await control.boundingBox())!.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
   }
 
   await restoreAthleteNamed(page, SEED_PROFILE_3_NAME);
