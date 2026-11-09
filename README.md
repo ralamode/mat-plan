@@ -67,10 +67,12 @@ a child or an adult, and opens their day page. A household holds up to 25 athlet
 Two things worth knowing before you add one:
 
 - **Child or adult is set once and the app cannot change it afterwards.** The two differ in whether
-  the household's program is applied to their training day. If you pick wrong, archive them in
-  **Household settings** and add them again — the form says so before you choose.
-- **Archiving is not deleting.** An archived athlete keeps their history and still exports; they stop
-  appearing on the picker. Only the household's owner can archive.
+  the household's program is applied to their training day. The form says so above the choice, before
+  you make it.
+- **Picked wrong?** Archive the athlete in **Household settings** and add them again. ⚠️ Archiving is
+  not deleting — the archived athlete keeps their history and still exports, so the two records are
+  separate people as far as the log is concerned. Only the household's owner can archive, so the add
+  screen shows this recovery to owners and tells everyone else who to ask.
 
 A brand-new deployment still needs `pnpm --filter @mat-plan/db db:seed` once, which creates the
 household and the reference data — not the athletes. See [Local development](#local-development) for
