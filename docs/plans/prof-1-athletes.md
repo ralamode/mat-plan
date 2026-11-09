@@ -1474,3 +1474,28 @@ branch superseded by a decision recorded in the same document, and an export's c
 reachable by reading the plan alone; each needed someone to open the file the plan named. Two would
 have produced working code that passed every gate: an archive path a member could call, and a
 `/settings` row whose names shatter at 360px without moving `scrollWidth`.
+
+### Maintainer decisions, 2026-11-08 (on the four-lens round)
+
+| #   | Question                                                               | Decision                 | What it changes                                                                                                                                                                                                                                                                                                                                          |
+| --- | ---------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N1  | Approve the refreshed plan?                                            | **approved**             | `b` may be implemented against this document.                                                                                                                                                                                                                                                                                                            |
+| N2  | Emit a tag-only Sentry event when a member's archive is refused (bB9)? | **yes, as specified**    | `archiveAthlete` emits `authority_outcome: 'owner_only'` + `action: 'archive_profile'` and nothing else — no name, id or household id, the same constraints `ScopeMissEvent` carries. Runbook pointer beside the scope-miss alert.                                                                                                                       |
+| N3  | What happens when an athlete has nothing to export (bB17)?             | **surface it in the UI** | 🔴 **Moved OUT of tech-debt and INTO `b`.** The export control is **disabled with a visible reason** when the athlete has no logged months — the settings page already counts them, so it costs a prop. A disabled control plus a stated reason is the whole fix: no `204`, no header-only CSV, no silent EOCD-only zip that iOS Files opens as nothing. |
+| N4  | Keep chunk estimates?                                                  | **drop them**            | The line-count column comes off the chunk table. ⚠️ **Replaced by a reuse obligation, not by nothing:** the estimates were a proxy for "is this chunk too big", and the real risk they were standing in for is duplication. See below.                                                                                                                   |
+
+🔴 **N4's replacement, which is a standing rule and not a one-off** _(maintainer, 2026-11-08)_:
+**a block of code that appears more than once gets parameterized into one helper, at the second copy.**
+The trigger was a PR that nearly shipped the same block **seven or more times verbatim** where one
+function taking a single argument would have done — the shape `enterMutation` exists to have killed
+(`mutation-entry.ts:40-44`). AGENTS.md's "Constants, enums & shared values" rule already covers named
+_values_; this is about _logic_, and it is the kind of duplication a reviewer is least likely to flag
+because each copy looks fine on its own. For this plan it binds two places concretely:
+
+- **`b`'s two actions** (`archiveAthleteAction`, `restoreAthleteAction`) are near-identical — resolve,
+  narrow or not, write, revalidate three paths, return `{ ok, savedId }`. They share one helper that
+  takes the writer and the refusal, rather than being written twice and then copied a third time by
+  `V1-9b`.
+- **`/settings`'s two sections** (Athletes, Archived) are the same row shape with a different control
+  set. One row component with a `controls` prop, not two near-copies — which is also what keeps the
+  360px math from being fixed in one section and missed in the other.
