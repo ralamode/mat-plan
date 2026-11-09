@@ -157,10 +157,16 @@ export function RenameForm({
 
         {/* Mounted in BOTH states with `message=''` until there is one — a live region that mounts
             together with its text is never announced. VISIBLE, because without JavaScript this line
-            is the confirmation a sighted parent gets; with JavaScript the day page's `<h1>` is. */}
+            is the confirmation a sighted parent gets; with JavaScript the day page's `<h1>` is.
+            ⚠️ **No `empty:hidden`, and that is the point of this comment.** It was here until
+            2026-11-08, and `:empty` → `display:none` takes the region OUT of the accessibility tree
+            while it is silent — so when the text arrives the region re-enters *with* its text, which
+            is precisely the never-announced case the comment above describes. `announcer.tsx` rule 3
+            now states it. Reserving the line also removes the layout shift the hidden version caused
+            when the message appeared. */}
         <Announcer
           message={saved ? ATHLETE_FORM_COPY.saved : ''}
-          className="text-muted-foreground text-sm empty:hidden"
+          className="text-muted-foreground min-h-5 text-sm"
         />
 
         {/* The page-level refusal — no session, rate-limited, or no such athlete. Separate from the
