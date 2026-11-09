@@ -923,6 +923,13 @@ export const ATHLETE_FORM_COPY = {
    * difference between a recovery and a reassurance.
    */
   kindRecoveryOwnerBefore: 'Added the wrong kind? Archive them in',
+  /**
+   * The member's lead-in, composed with `OWNER_ONLY_ATHLETE` (the shared const the edit screen also
+   * shows). ⚠️ **A lead-in, not a second copy of the refusal** — without it the member branch rendered
+   * a bare "Only the person who set up this household can archive an athlete." under an add form,
+   * which reads as orphaned: true, but not visibly an answer to anything on the screen.
+   */
+  kindRecoveryMemberBefore: 'Added the wrong kind?',
   kindRecoveryOwnerAfter: 'and add them again — what they logged stays with the archived athlete.',
   /**
    * The per-option consequences (PROF-1 a-1u). **Parallel, and BOTH always render.**

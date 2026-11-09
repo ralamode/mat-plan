@@ -104,15 +104,24 @@ export function AddAthleteForm({
   useEffect(() => {
     // 🔴 **Focus the input that is WRONG — both of them, not just the radios.** `disabled={pending}`
     // blurs the submit button when it disables, so focus is on `<body>` by the time an alert renders:
-    // the next Tab would start at the top of the document, past the error. The first version of this
-    // effect handled only the kind case, so a name-only refusal dropped focus — which is the exact
-    // defect this comment claimed to prevent, and two lenses caught the gap independently.
+    // the next Tab would start at the top of the document, past the error. The first version handled
+    // only the kind case, so a name-only refusal dropped focus — the exact defect this comment
+    // claimed to prevent, caught independently by two lenses.
     //
     // Kind first when both are wrong: it is the choice a parent is likelier to have skipped, and it
-    // is the field above. Keyed on `state` identity, so a second refusal re-focuses.
-    if (kindInvalid) firstRadioRef.current?.focus();
-    else if (nameInvalid) nameRef.current?.focus();
-  }, [state, kindInvalid, nameInvalid]);
+    // is the field above.
+    //
+    // 🔴 **Read from `state.fieldErrors`, and depend on `state` ALONE.** Keying this on the derived
+    // `kindInvalid` meant that choosing a kind while BOTH fields were wrong flipped it false,
+    // re-ran the effect, and **stole focus to the name field mid-interaction** — so a keyboard user's
+    // first arrow key threw them out of the radio group they were comparing options in. A refusal is
+    // an event, not a condition: `state` is a fresh object per submit, so this runs once per
+    // *answer from the server* and never on a keystroke.
+    const kindWrong = (state.fieldErrors?.kind?.length ?? 0) > 0;
+    const nameWrong = (state.fieldErrors?.name?.length ?? 0) > 0;
+    if (kindWrong) firstRadioRef.current?.focus();
+    else if (nameWrong) nameRef.current?.focus();
+  }, [state]);
 
   /**
    * ⚠️ **44px belongs on the LABEL, not the input.** `INPUT_CLASS` is for the name field: on an

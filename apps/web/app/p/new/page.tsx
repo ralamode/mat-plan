@@ -120,7 +120,10 @@ export default async function AddAthletePage() {
             {ATHLETE_FORM_COPY.kindRecoveryOwnerAfter}
           </>
         ) : (
-          SETTINGS_COPY.ownerOnly
+          // A lead-in plus the shared refusal, so the line reads as an answer to the choice above
+          // rather than a standalone rule. `ownerOnly` is `OWNER_ONLY_ATHLETE`, which the edit screen
+          // shows too — one definition, two surfaces.
+          `${ATHLETE_FORM_COPY.kindRecoveryMemberBefore} ${SETTINGS_COPY.ownerOnly}`
         )}
       </p>
     </main>

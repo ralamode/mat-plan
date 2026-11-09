@@ -194,7 +194,48 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     expect(alerts).toHaveLength(2);
     const nameDescribedBy = nameField().getAttribute('aria-describedby') ?? '';
     const kindMessageId = alerts.find((a) => a.textContent?.includes('Child or Adult'))!.id;
+    const nameMessageId = alerts.find((a) => a.textContent?.includes('Enter a name'))!.id;
+    // BOTH directions. Asserting only that the name is not wired to the kind's message would pass
+    // with the name's own `aria-describedby` entry deleted — which is the louder defect of the two.
     expect(nameDescribedBy).not.toContain(kindMessageId);
+    expect(nameDescribedBy).toContain(nameMessageId);
+    expect(screen.getByRole('radiogroup').getAttribute('aria-describedby') ?? '').toContain(
+      kindMessageId,
+    );
+  });
+
+  /**
+   * 🔴 **Focus had NO unit coverage**, which a review found by replacing the whole effect with a
+   * no-op and watching all sixteen tests pass. Only e2e touched it, and only the single-field cases.
+   * The both-invalid case below is a defect this file would never have seen.
+   */
+  it('a refusal moves focus to the field that is wrong — kind first when both are', async () => {
+    renderForm();
+    await submitExpecting({ fieldErrors: { name: ['Enter a name.'] } });
+    expect(document.activeElement).toBe(nameField());
+
+    cleanup();
+    renderForm();
+    await submitExpecting({
+      fieldErrors: { kind: ['Choose Child or Adult.'], name: ['Enter a name.'] },
+    });
+    // The field above, and the one a parent is likelier to have skipped.
+    expect(document.activeElement).toBe(radios()[0]);
+  });
+
+  it('choosing a kind does NOT steal focus away from the radio group', async () => {
+    renderForm();
+    await submitExpecting({
+      fieldErrors: { kind: ['Choose Child or Adult.'], name: ['Enter a name.'] },
+    });
+    expect(document.activeElement).toBe(radios()[0]);
+
+    // 🔴 The bug this pins: the effect used to depend on the DERIVED `kindInvalid`, so picking a
+    // radio flipped it false, re-ran the effect, and focused the name — throwing a keyboard user out
+    // of the group on their first arrow key, while the name error was still showing. A refusal is an
+    // event, not a condition, so the effect depends on `state` alone.
+    fireEvent.click(radios()[1]!);
+    expect(document.activeElement).not.toBe(nameField());
   });
 
   it('name is CONTROLLED, and bounded by the shared max', () => {

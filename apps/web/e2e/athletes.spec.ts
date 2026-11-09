@@ -624,8 +624,9 @@ test('the name field is bounded by the shared max, and the add screen fits 360px
   const submit = await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).boundingBox();
   expect(submit!.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
 
-  // 🔴 The geometry the plan forbade `grid-cols-2` for: two fixed tracks need ≈384px against 328px
-  // usable here. `flex-wrap` + `min-w-32` stacks them instead of scrolling the page sideways.
+  // 🔴 The geometry: the options are ONE full-width column. A two-track layout needs ≈384px against
+  // 328px usable here, and the `flex-wrap` + `min-w-32` version this replaced never actually wrapped
+  // at 360px (264 < 328) — it just squeezed each option into a ~108px text column.
   await expectNoHorizontalOverflow(page, 'the add-athlete screen at 360px');
 });
 
