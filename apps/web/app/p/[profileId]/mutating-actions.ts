@@ -1,6 +1,6 @@
 import { keyBySelf } from '@mat-plan/shared';
 
-import { NO_ATHLETE_SAVE, NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
+import { NO_ATHLETE_ADD, NO_ATHLETE_SAVE, NO_PROFILE_LOG, NO_PROFILE_SAVE } from '@/lib/constants';
 
 /**
  * **The one source for "which Server Actions does this app expose, and what does each refuse with".**
@@ -116,6 +116,21 @@ export const MUTATING_ACTIONS = {
   archiveAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
   /** Restore, same addressing. Any member may call it, so it has no owner-only answer at all. */
   restoreAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
+
+  /**
+   * 🔴 **The first HOUSEHOLD-addressed action** (PROF-1 a-1w), and the entry
+   * `mutating-actions.test.ts`'s tripwire was waiting for.
+   *
+   * `scope: 'household'` because the body carries **no `profileId`** — there is nothing for the
+   * wrong-household matrix to make foreign. What replaces that proof is twofold: `db:verify` drives
+   * `createProfile`'s two scoped reads against a real two-household database (with mutation patch
+   * `20` showing the proof can fail), and at this tier the household matrix drives a **scope miss**
+   * instead, asserting the refusal is byte-identical to the unauthenticated one.
+   *
+   * `refusal: NO_ATHLETE_ADD`, not `NO_ATHLETE_SAVE` — nothing was being saved; a row was being
+   * created, and "No athlete found to save." would be false.
+   */
+  addAthleteAction: { refusal: NO_ATHLETE_ADD, scope: ACTION_SCOPE.household },
 } as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
 
 /** Every action this app exposes, in or out of the matrices. */

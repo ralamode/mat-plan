@@ -1,4 +1,9 @@
-import { E2E_SESSION_BYPASS_USER, PROFILE_KIND, PROFILE_NAME_MAX } from '@mat-plan/shared';
+import {
+  E2E_SESSION_BYPASS_USER,
+  PROFILE_KIND,
+  PROFILE_KINDS,
+  PROFILE_NAME_MAX,
+} from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -13,6 +18,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * revalidated.
  */
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+// Throws like Next's, so a redirect misplaced inside a try cannot pass silently.
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn(() => {
+    throw new Error('NEXT_REDIRECT');
+  }),
+  RedirectType: { replace: 'replace', push: 'push' },
+}));
 vi.mock('@/lib/dal/session', () => ({
   sessionUserOrNull: vi.fn(async () => ({ userId: PRINCIPAL })),
 }));
@@ -33,21 +45,27 @@ vi.mock('@/lib/dal/profiles', () => ({
   // PROF-1 b — the DISCRIMINATED result, because these two own the refusal order.
   archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
   restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
+  // PROF-1 a-1w.
+  createAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
 }));
 
 import { revalidatePath } from 'next/cache';
+import { redirect, RedirectType } from 'next/navigation';
 
 import {
   APP_HOME_PATH,
   athleteEditPath,
   athletePath,
   NO_ATHLETE_SAVE,
+  HOUSEHOLD_FULL,
+  NO_ATHLETE_ADD,
   OWNER_ONLY_ATHLETE,
   RATE_LIMITED,
   SETTINGS_PATH,
 } from '@/lib/constants';
 import {
   archiveAthlete,
+  createAthlete,
   getProfileByPublicId,
   renameAthlete,
   restoreAthlete,
@@ -55,7 +73,12 @@ import {
 import { checkMutationLimit } from '@/lib/rate-limit';
 
 import type { ActionState } from './[profileId]/action-state';
-import { archiveAthleteAction, renameAthleteAction, restoreAthleteAction } from './profile-actions';
+import {
+  addAthleteAction,
+  archiveAthleteAction,
+  renameAthleteAction,
+  restoreAthleteAction,
+} from './profile-actions';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -289,5 +312,110 @@ describe('archiveAthleteAction / restoreAthleteAction (PROF-1 b)', () => {
     const res = await archiveAthleteAction(initial, idForm(PROFILE_ID));
     expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
     expect(archiveAthlete).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * PROF-1 a-1w — `addAthleteAction`'s own behaviour, which the matrices cannot express.
+ *
+ * The household matrix in `[profileId]/actions.test.ts` covers unauth, rate-limit, the scope miss and
+ * the byte-identical refusal. What is left is this action's two distinctive answers: the quota, which
+ * is the one refusal that NAMES its cause, and a bad hidden field.
+ */
+describe('addAthleteAction (PROF-1 a-1w)', () => {
+  /** The hidden field's value, named once: two assertions below thread it and must not re-type it. */
+  const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
+  const body = (over: Record<string, string> = {}) => {
+    const f = new FormData();
+    f.set('name', 'Added Athlete');
+    f.set('kind', PROFILE_KIND.kid);
+    f.set('clientId', CLIENT_ID);
+    for (const [k, v] of Object.entries(over)) f.set(k, v);
+    return f;
+  };
+
+  it('revalidates the picker and settings, then redirects to the new athlete', async () => {
+    await expect(addAthleteAction(initial, body())).rejects.toThrow('NEXT_REDIRECT');
+    // 🔴 **What the DAL was called WITH, not merely that the action redirected.** The mock answers
+    // `ok` for any input, so without this an action that passed `formData.get('name')` raw instead
+    // of `parsed.data.name`, swapped two fields, or dropped `clientId` — killing idempotency —
+    // would redirect correctly and pass every other assertion in this PR.
+    expect(createAthlete).toHaveBeenCalledWith({
+      name: 'Added Athlete',
+      kind: PROFILE_KIND.kid,
+      clientId: CLIENT_ID,
+    });
+    expect(vi.mocked(revalidatePath).mock.calls.map(([p]) => p)).toEqual([
+      APP_HOME_PATH,
+      SETTINGS_PATH,
+    ]);
+    expect(redirect).toHaveBeenCalledWith(athletePath(PROFILE_ID), RedirectType.replace);
+  });
+
+  /**
+   * 🔴 **The one refusal that names its cause.** `full` is reachable only AFTER the household scope
+   * resolved, and it states a fact about the caller's own household that they can already see on the
+   * picker — so "couldn't add this athlete" would send a parent retrying a request that can never
+   * succeed.
+   */
+  it('a FULL household gets the quota message, not the generic refusal', async () => {
+    vi.mocked(createAthlete).mockResolvedValueOnce({ ok: false, reason: 'full' });
+    const res = await addAthleteAction(initial, body());
+    expect(res).toEqual({ ok: false, error: HOUSEHOLD_FULL });
+    expect(res.error).not.toBe(NO_ATHLETE_ADD);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The PARSED value reaches the DAL, not the raw field. `athleteNameSchema` trims and collapses, so
+   * a name typed with stray spaces must arrive normalised — otherwise two athletes differ only by
+   * whitespace and a-1d's duplicate fold has nothing to fold.
+   */
+  it('passes the PARSED name, trimmed and collapsed, not the raw field', async () => {
+    await expect(addAthleteAction(initial, body({ name: '  Added   Athlete  ' }))).rejects.toThrow(
+      'NEXT_REDIRECT',
+    );
+    // The WHOLE object, not `objectContaining` (lessons.md → Vitest): a partial matcher would pass
+    // while the action quietly threaded a wrong `kind` or a mangled `clientId` alongside the name.
+    expect(createAthlete).toHaveBeenCalledWith({
+      name: 'Added Athlete',
+      kind: PROFILE_KIND.kid,
+      clientId: CLIENT_ID,
+    });
+  });
+
+  it('a spent client_id is the generic refusal — it says nothing about the other household', async () => {
+    vi.mocked(createAthlete).mockResolvedValueOnce({ ok: false, reason: 'refused' });
+    expect(await addAthleteAction(initial, body())).toEqual({ ok: false, error: NO_ATHLETE_ADD });
+  });
+
+  it.each([
+    ['a blank name', { name: '   ' }, 'name'],
+    ['a kind that is not one', { kind: 'grown-up' }, 'kind'],
+  ])('%s is a FIELD error, and the DAL is never reached', async (_l, over, field) => {
+    const res = await addAthleteAction(initial, body(over));
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.[field]?.length).toBeGreaterThan(0);
+    expect(createAthlete).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⚠️ **A bad `clientId` is NOT a field error.** It is a hidden field the form mints itself, so
+   * there is nothing for a parent to correct and `fieldErrors` would render an invalid-but-
+   * unexplained form. It must also answer exactly as a spent key does.
+   */
+  it('a malformed clientId is the page-level refusal, never a field error', async () => {
+    const res = await addAthleteAction(initial, body({ clientId: 'not-a-uuid' }));
+    expect(res).toEqual({ ok: false, error: NO_ATHLETE_ADD });
+    expect(res.fieldErrors).toBeUndefined();
+    expect(createAthlete).not.toHaveBeenCalled();
+  });
+
+  /** The refusal copy must never print the stored value — a parent reads "Child", never `kid`. */
+  it('the kind refusal is in the person’s words, not the column’s', async () => {
+    const res = await addAthleteAction(initial, body({ kind: 'grown-up' }));
+    const message = res.fieldErrors?.kind?.[0] ?? '';
+    expect(message).toBe('Choose Child or Adult.');
+    for (const stored of PROFILE_KINDS) expect(message).not.toContain(stored);
   });
 });

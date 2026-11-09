@@ -28,9 +28,12 @@ vi.mock('./db', () => ({ db: recording.db }));
 const FIXTURE_PRINCIPAL = 'user_recordingDbFixturePrincipal';
 vi.mock('./session', () => ({ getCurrentUser: async () => ({ userId: FIXTURE_PRINCIPAL }) }));
 
+import { PROFILE_KIND } from '@mat-plan/shared';
+
 import { ONE_HOUSEHOLD_ID, queryMatching, whereOf } from './recording-db';
 
 import {
+  createAthlete,
   getProfileByPublicId,
   listProfiles,
   renameAthlete,
@@ -38,6 +41,9 @@ import {
 } from './profiles';
 
 const PROFILE = '019826b4-0000-7000-8000-000000000099';
+/** A device-generated key, distinct from `PROFILE` so "returned the public id" cannot pass by accident. */
+const CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
+const ADD_INPUT = { name: 'Ada', kind: PROFILE_KIND.kid, clientId: CLIENT_ID } as const;
 
 beforeEach(() => {
   recording.queries.length = 0;
@@ -148,8 +154,94 @@ describe('renameAthlete — the rename uses the SAME predicate as the read', () 
   });
 });
 
+/**
+ * PROF-1 a-1w — `createAthlete`, the first athlete write with **no id to resolve**.
+ *
+ * ⚠️ **What this tier can and cannot say.** `scoped.test.ts` already proves `createAthlete` resolves
+ * a scope at all (removing the `getHouseholdScope()` await makes it name `profiles.ts#createAthlete`
+ * — probed, not assumed). `db:verify`'s two-household block proves which ROWS come back, and
+ * mutation patches `20`–`23` prove each conjunct is load-bearing. What is left for this file is the
+ * mistake neither can see: a scope resolved and then used in only SOME of the four queries, or an
+ * INSERT that takes a tenant or a `public_id` from the caller.
+ */
+describe("createAthlete — all THREE of the create's queries carry the resolved household", () => {
+  it('the client_id read is scoped, and bound to the household the resolver found', async () => {
+    await createAthlete(ADD_INPUT);
+    const read = queryMatching(recording, /select "public_id" from "profiles"/i);
+    expect(whereOf(read)).toMatch(/"household_id" = \$\d/i);
+    expect(read.values).toContain(ONE_HOUSEHOLD_ID);
+  });
+
+  it('the quota count is scoped too — an unscoped count would be the GLOBAL athlete count', async () => {
+    await createAthlete(ADD_INPUT);
+    const count = queryMatching(recording, /select "id" from "profiles"/i);
+    expect(whereOf(count)).toMatch(/"household_id" = \$\d/i);
+    expect(count.values).toContain(ONE_HOUSEHOLD_ID);
+  });
+
+  it('the INSERT binds the RESOLVED household, which never arrives in the input', async () => {
+    await createAthlete(ADD_INPUT);
+    const insert = queryMatching(recording, /^insert into "profiles"/i);
+    expect(insert.text).toMatch(/"household_id"/i);
+    expect(insert.values).toContain(ONE_HOUSEHOLD_ID);
+    // The input has no household field at all; the only way the id is here is the resolver.
+    expect(Object.keys(ADD_INPUT)).not.toContain('householdId');
+  });
+
+  it("mints public_id server-side — a crafted body cannot choose an athlete's URL", async () => {
+    // Every submitted value is in `ADD_INPUT`; the public id is the one bound value that is not,
+    // so filtering `CLIENT_ID` out is what makes "taken from the body" FAIL rather than pass.
+    const mintOnce = async () => {
+      recording.queries.length = 0;
+      await createAthlete(ADD_INPUT);
+      const insert = queryMatching(recording, /^insert into "profiles"/i);
+      expect(insert.text).toMatch(/"public_id"/i);
+      const minted = insert.values.filter(
+        (v) => typeof v === 'string' && /^[0-9a-f-]{36}$/.test(v) && v !== CLIENT_ID,
+      );
+      // The message carries the bound values: this assertion was seen to fail once, unreproducibly,
+      // and a bare length mismatch says nothing about what it filtered over.
+      expect(minted, `bound values were ${JSON.stringify(insert.values)}`).toHaveLength(1);
+      return minted[0];
+    };
+
+    // ⚠️ TWO calls, because ONE cannot tell `newId()` from a hard-coded constant — and the first
+    // version of this test ended with `expect(minted[0]).not.toBe(CLIENT_ID)`, which the filter on
+    // the line above had already guaranteed. The same input twice must mint two DIFFERENT ids.
+    expect(await mintOnce()).not.toBe(await mintOnce());
+  });
+
+  it('names client_id as the conflict target — never a bare do-nothing', async () => {
+    await createAthlete(ADD_INPUT);
+    // A bare `onConflictDoNothing()` would swallow a `public_id` collision too, and the re-select
+    // would report it to a parent as "couldn’t add this athlete".
+    expect(queryMatching(recording, /^insert into "profiles"/i).text).toMatch(
+      /on conflict \("client_id"\) do nothing/i,
+    );
+  });
+
+  it('the client_id never comes back out — the caller is handed the public id', async () => {
+    const rec = (await import('./recording-db')).createRecordingDb((sql) =>
+      /from "household_members"/.test(sql)
+        ? [[ONE_HOUSEHOLD_ID, 'owner']]
+        : /select "public_id" from "profiles"/i.test(sql)
+          ? [[PROFILE]]
+          : [],
+    );
+    vi.doMock('./db', () => ({ db: rec.db }));
+    vi.resetModules();
+    const scoped = await import('./profiles');
+
+    // The replay path: the key is spent, so the existing row's public id is the answer.
+    await expect(scoped.createAthlete(ADD_INPUT)).resolves.toEqual({ ok: true, id: PROFILE });
+
+    vi.doUnmock('./db');
+    vi.resetModules();
+  });
+});
+
 describe('no household → dark, not leaky', () => {
-  it('every one of the FOUR emits no profiles query and answers empty', async () => {
+  it('every one of the FIVE emits no profiles query and answers empty', async () => {
     const dark = (await import('./recording-db')).createRecordingDb(() => []);
     vi.doMock('./db', () => ({ db: dark.db }));
     vi.resetModules();
@@ -163,6 +255,13 @@ describe('no household → dark, not leaky', () => {
     // PROF-1 a-r: a rename with no resolved household must not reach the database either. Without
     // this the new writer would be the one path in the file that fails OPEN of the scope check.
     await expect(scoped.renameAthlete(PROFILE, 'Renamed')).resolves.toBeNull();
+    // PROF-1 a-1w: the create has NO id to resolve, so the scope check is its only authorization
+    // decision — the one function in the file where failing open would insert a row owned by
+    // nobody. `scoped.test.ts` proves the resolve happens; this proves it REFUSES on a miss.
+    await expect(scoped.createAthlete(ADD_INPUT)).resolves.toEqual({
+      ok: false,
+      reason: 'no_scope',
+    });
 
     // The ONLY profiles read allowed with no scope is the miss-path probe (ADR 0006 obligation 3),
     // which is an existence check that returns void. Everything else must not have run.
@@ -171,6 +270,7 @@ describe('no household → dark, not leaky', () => {
       profileQueries.every((q) => /select [\s\S]*"public_id"[\s\S]* limit/i.test(q.text)),
     ).toBe(true);
     expect(dark.queries.some((q) => /^update "profiles"/i.test(q.text))).toBe(false);
+    expect(dark.queries.some((q) => /^insert into "profiles"/i.test(q.text))).toBe(false);
 
     vi.doUnmock('./db');
     vi.resetModules();

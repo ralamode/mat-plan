@@ -1,0 +1,21 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index ab5f128..786ec8f 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -218,13 +218,13 @@ export async function createProfile(
+   scope: HouseholdScope,
+   input: { name: string; kind: ProfileKind; clientId: string },
+ ): Promise<CreateProfileResult> {
+-  const existing = await profileByClientId(exec, scope, input.clientId);
+-  if (existing) return { ok: true, publicId: existing.publicId };
+-
+   if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
+     return { ok: false, reason: 'full' };
+   }
+ 
++  const existing = await profileByClientId(exec, scope, input.clientId);
++  if (existing) return { ok: true, publicId: existing.publicId };
++
+   await insertProfileOwnedBy(exec, scope, input);
+ 
+   const created = await profileByClientId(exec, scope, input.clientId);

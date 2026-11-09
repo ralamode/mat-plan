@@ -500,6 +500,33 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **`db:mutations` MUTATES the shared working tree, so running it concurrently with anything else in
+  the same worktree produces a screenful of failures that mean nothing.** → The runner `git apply`s
+  each patch, runs `db:verify`, and reverts in a `finally`. Two things ran it at once in one worktree —
+  `pnpm verify` in the session and a review subagent that had been _told_ to run it — and the gate
+  reported **16 of 25 patches "does not apply"**, pointing at `export-month.ts`, a file neither had
+  edited. `git status` was clean and `git diff` against `HEAD` was empty, because by then both had
+  finished reverting. A re-run on a quiet tree: **25/25 RED**. The same race hits `vitest`, which sees
+  a half-patched source and fails on a tautological predicate. → **Never ask a review subagent to run
+  `db:mutations`** (a review is read-only; the runner is not), and do not start `pnpm verify` while one
+  might be. ⚠️ **The failure mode is believable**, which is the danger: "patch does not apply" is
+  exactly what a real context shift looks like, so the instinct is to regenerate 16 patches. Check for
+  a concurrent runner BEFORE regenerating anything. (`PROF-1 a-1w`)
+
+- **A mutation patch's `.expect` silently stops describing its patch when an assertion is inserted
+  ABOVE the one it names — and the gate says so rather than passing.** → `PROF-1 a-1w`'s patch `22`
+  (the athlete cap never binds) pinned _"the 26th athlete is refused as FULL, not as refused"_. A
+  later review added an archived-slot assertion **earlier in the same block**, so with the patch
+  applied that one failed first and the runner reported `RED, but on the WRONG assertion` — naming
+  both the expected and the actual message. ⚠️ **The tempting fix is the wrong one:** truncating the
+  `.expect` to a prefix that matches whatever fails first makes the pin meaningless, which is the
+  vacuity `scripts/mutations/` exists to catch, pointed at itself. → Re-pin to the assertion that
+  **now** fails first, and only after reading whether it still proves what the patch is for (here it
+  proves more: the cap exists AND archived rows hold their slot). And **re-run `pnpm db:mutations`
+  after every edit to `verify.ts`**, not only after editing a patch — the gate's inputs are both
+  files, and `pnpm verify` runs it, so an unrelated-looking assertion insert is enough to redirect a
+  pin. (`PROF-1 a-1w`)
+
 - **🔴 Drizzle STRIPS the table qualifier from a `Column` interpolated into a `sql` chunk in a
   single-table SELECT list — so a correlated subquery silently stops correlating.** → `PROF-1 b`
   needed "does this profile have any live entries?" and wrote it inline:
@@ -623,6 +650,12 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
   script only protects the script; it does not protect the commit that follows it on the next line.
   ⚠️ Chaining with `&&` is not sufficient either when a formatter runs between the edit and the check:
   re-read the file, do not trust the exit code. (`docs/prof-1a-1-plan-refresh`)
+  ⚠️ **And the inverse costs a full cycle:** a scripted edit runs _no_ formatter, while
+  `pnpm verify` opens with `prettier --check .` over the whole tree — so a python- or `sed`-written
+  file fails the very first gate, after which nothing else runs. The pre-commit hook would have
+  formatted it, but `verify` comes first in the order of work. → End every scripted edit with
+  `npx prettier --write <the files it touched>`; it is cheaper than discovering it at the top of a
+  40-second gate twice. (`PROF-1 a-1w`)
 
 - **Generating a mutation patch swallowed the real source fix and then reverted it.** → The recipe
   for a new `scripts/mutations/*.patch` is: edit the source, `git diff > the.patch`, then

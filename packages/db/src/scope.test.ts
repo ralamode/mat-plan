@@ -488,6 +488,103 @@ describe('the scope constructors refuse an unresolved id', () => {
 });
 
 /**
+ * **PROF-1 a-1w — `profiles.client_id` never leaves the seam.** The one mitigation that bounds the
+ * key's existence oracle, enforced rather than asserted in prose.
+ *
+ * 🔴 **Why this is a test and not a paragraph.** `uq_profiles_client_id` is **global and
+ * non-partial**, so a signed-in member submitting a well-formed key learns whether *some* household
+ * already holds it: a free key redirects, a spent one is refused. That residual is accepted
+ * (`prof-1-athletes.md` -> aS8) **on one condition** — the key is never observable, so the >=74 random
+ * bits of a v7 key make guessing infeasible. That condition is what the plan promised as a test and
+ * first shipped as prose. The first column added to a profile DTO "for the sync payload" would
+ * quietly turn an accepted residual into a live cross-household probe, and nothing else in this repo
+ * would notice.
+ *
+ * ⚠️ **It pins a SET, not an absence**, so a new reader fails here by name rather than by a count
+ * nobody re-derives. Both entries are reasoned: the seam reads the column and names it as the
+ * insert's conflict target, and `verify.ts` is the proof that it does. A third entry is a design
+ * question, not an edit to this list.
+ *
+ * ## ⚠️ What it catches, stated plainly — probed, not assumed
+ *
+ * It matches **source text**, so it is a tripwire for the forms a DTO is actually written in, not a
+ * proof of containment. Probed against six shapes:
+ *
+ * | Form                                                 | Caught? |
+ * | ---------------------------------------------------- | ------- |
+ * | `schema.profiles.clientId`                           | ✅      |
+ * | `eq(profiles.clientId, k)` (table import)            | ✅      |
+ * | `schema.entries.clientId`                            | ✅ not matched — the OTHER column, correctly ignored |
+ * | `profiles['clientId']`                               | ❌      |
+ * | `const { clientId } = schema.profiles`               | ❌      |
+ * | `const p = schema.profiles; p.clientId`              | ❌      |
+ * | `alias(schema.profiles, 'p').clientId`               | ❌      |
+ * | `profiles` ⏎ `.clientId` (Prettier splits long chains) | ❌      |
+ * | `getTableColumns(schema.profiles)`                    | ❌      |
+ * | 🔴 **a whole-row `db.select().from(schema.profiles)` or `.returning()`** | ❌ |
+ * | a raw `sql` fragment naming `client_id`              | ❌      |
+ *
+ * 🔴 **The last two are the ones to understand.** A whole-row select **carries `client_id` without
+ * naming it**, and "just return the row" is the likeliest way a DTO leak actually happens — so this
+ * guard would not catch the most plausible version of the mistake it is named for. What catches that
+ * is a different rule, already enforced elsewhere: the DAL returns a **minimal DTO, never a raw row**
+ * (AGENTS.md → "Data Access Layer"), and every current `.from(schema.profiles)` select in `lib/dal`
+ * passes an explicit column list. The raw-SQL miss is likewise covered by AGENTS.md → the "don't"
+ * list, which forbids `sql.raw` and interpolated SQL outright.
+ *
+ * ⚠️ **Two more misses come from `code()` itself**, the shared comment-stripper: a mid-line `//`
+ * inside a string, and a string containing `/*`, each swallow the rest of a line or block. No file in
+ * the tree is affected today (raw-vs-stripped detection was compared across all sources and only the
+ * allowlisted files match either way), but the helper is not a parser.
+ *
+ * **So, stated plainly:** this guard stops the plausible *accident* — someone adding `clientId` to an
+ * explicit select list — and stops nothing a determined author does. That is the same bargain
+ * `scoped.test.ts` strikes and says so about itself, and the PR that added this must not claim more.
+ */
+describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () => {
+  /** `ownership.ts` is the read + the insert's conflict target; `verify.ts` is the proof. */
+  const MAY_NAME_CLIENT_ID = [
+    'packages/db/src/writers/ownership.ts',
+    'packages/db/scripts/verify.ts',
+  ];
+  const NAMES_CLIENT_ID = /\bprofiles\.clientId\b/;
+  // ⚠️ `packages/shared` is included EXPLICITLY. `DB_SOURCES` + `WEB_SOURCES` miss it, and that is
+  // where the CSV export builders live (`shared/src/csv/*`) — i.e. exactly one of the surfaces aS8's
+  // mitigation names ("no DTO, URL, export, log or Sentry context carries client_id"). A guard whose
+  // glob cannot see the export would have been a comfortable one.
+  const SHARED_SOURCES = sources('packages/shared/src/**/*.ts');
+  const namers = [...DB_SOURCES, ...WEB_SOURCES, ...SHARED_SOURCES].filter((f) =>
+    NAMES_CLIENT_ID.test(code(join(REPO, f))),
+  );
+
+  it('finds the sources at all (an empty glob would pass everything below)', () => {
+    // 🔴 **PER-GLOB floors, because the sum hid a dead glob.** The first version asserted only that
+    // the TOTAL exceeded 50 — and `DB_SOURCES` + `SHARED_SOURCES` alone are 72, so an empty
+    // `WEB_SOURCES` would have passed while `apps/web` went unscanned. That is where DTOs live.
+    expect(DB_SOURCES.length).toBeGreaterThan(20);
+    expect(WEB_SOURCES.length).toBeGreaterThan(100);
+    expect(SHARED_SOURCES.length).toBeGreaterThan(20);
+    // And each glob must still reach the specific surface it is here for: the DAL that builds the
+    // profile DTOs, and the CSV builder that writes the export.
+    expect(WEB_SOURCES).toContain('apps/web/lib/dal/profiles.ts');
+    expect(SHARED_SOURCES).toContain('packages/shared/src/csv/strength-log.ts');
+  });
+
+  it('can see a reference, and does not confuse it with the entries column', () => {
+    expect(NAMES_CLIENT_ID.test('eq(schema.profiles.clientId, key)')).toBe(true);
+    expect(NAMES_CLIENT_ID.test('eq(schema.entries.clientId, key)')).toBe(false);
+  });
+
+  it('no file outside the seam names it', () => {
+    expect([...namers].sort()).toEqual([...MAY_NAME_CLIENT_ID].sort());
+  });
+
+  it('the allowlist carries no dead entry', () => {
+    expect(MAY_NAME_CLIENT_ID.filter((f) => !namers.includes(f))).toEqual([]);
+  });
+});
+
+/**
  * 🔴 **The COMPILE-TIME half of the authority, pinned where a runtime test cannot reach.**
  *
  * `OwnerScope`'s entire claim is that a writer requiring owner authority cannot be called with a

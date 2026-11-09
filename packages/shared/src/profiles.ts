@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PROFILE_KINDS } from './enums';
 import { uuidSchema } from './id';
 import { collapseWhitespace, foldName, hasControlChar } from './text';
 
@@ -129,3 +130,75 @@ export const athleteActionSchema = z.object({
 });
 
 export type AthleteActionInput = z.infer<typeof athleteActionSchema>;
+
+/**
+ * The refusal when nothing is chosen, or when a crafted body sends a value that is not a kind
+ * (PROF-1 a-1).
+ *
+ * 🔴 **Authored here, and asserted here, because zod's default leaks the schema's vocabulary.**
+ * Probed on the pinned zod (4.6.7), `profileKindSchema` with no `message` emits
+ * `Invalid option: expected one of "kid"|"adult"` — the raw enum VALUES. ⚠️ **`kid` is exactly the
+ * word that must never reach a screen** _(maintainer, 2026-11-09)_: the column stores `kid` and every
+ * surface renders it as **"Child"** through `PROFILE_KIND_LABELS`. #349 already removed a `Kind`
+ * label from the rename screen on the same ground.
+ *
+ * So the message says what a person chooses between, in their words, and `profiles.test.ts` pins the
+ * string — the same way `athleteNameSchema`'s messages are authored at the schema rather than at the
+ * use site.
+ */
+export const CHOOSE_KIND_MESSAGE = 'Choose Child or Adult.';
+
+/**
+ * How many athletes one household may hold _(maintainer, 2026-11-09: **25**)_.
+ *
+ * 🔴 **A create with no in-app delete needs a quota, and the mutation limiter is not one.**
+ * `MUTATION_RATE_LIMIT` is 120 attempts / 5 min **per principal** and `checkMutationLimit`
+ * **fails open** when Upstash is unconfigured or erroring — so one invited member can mint ~34,500
+ * profiles a day, or an unbounded number with Redis down. The rows are not stolen data (the names are
+ * the caller's own); what makes them a problem is that **nothing in the app can remove one**
+ * (archive is owner-only and hides rather than deletes), and that `householdProfileRows` has no
+ * `LIMIT` and runs one `EXISTS` per row on the single Neon project every household shares.
+ *
+ * ⚠️ **Revisit condition, recorded beside the number because that is where it will be read**
+ * _(maintainer, 2026-11-09: "we can revisit if we ever surface a delete")_: 25 is sized for a world
+ * where a wrong row is permanent without the operator. Whichever chunk ships an in-app per-profile
+ * delete (`A3` / `V1-9b`) changes that arithmetic and re-opens this number.
+ *
+ * ⚠️ **It is a count-then-insert, so a concurrent burst OVERSHOOTS it** — N requests that all read
+ * `count < 25` before any commits all insert. Written down rather than locked: the rows are the
+ * caller's own household, and 25 is not a correctness boundary the way a tenancy predicate is — it is
+ * a brake on unbounded growth. **What it means for the claim above: the cap bounds the steady state,
+ * not a single burst.** A `pg_advisory_xact_lock` per household inside `ownership.ts` (the one module
+ * that may unwrap `scope.householdId`) would close it; it is filed in
+ * [tech-debt.md](../../../docs/tech-debt.md) rather than fixed here, because it changes the
+ * `Executor` contract on the write path and that belongs in its own reviewed chunk.
+ *
+ * 🔴 **An earlier draft of this paragraph said the burst "is bounded by the limiter", which the
+ * paragraph above contradicts** — `checkMutationLimit` fails open, so with Upstash down there is no
+ * limiter to bound it and the only ceiling is Neon's connection count. A security lens caught the two
+ * halves of one docblock disagreeing. The honest statement is the one now above it.
+ *
+ * In `packages/shared` because three consumers must agree: the writer enforces it, the DAL maps the
+ * refusal, and the copy says what the limit is.
+ */
+export const MAX_HOUSEHOLD_ATHLETES = 25;
+
+/**
+ * The add-an-athlete body (PROF-1 a-1).
+ *
+ * `clientId` is the device-generated idempotency key (D1/D2): the form mints one per mount, and the
+ * writer looks it up **inside the scope** before inserting, so a double submit returns the first
+ * row instead of a twin. ⚠️ It is **never rendered, exported or logged** — `uq_profiles_client_id` is
+ * global and non-partial, so a key that escaped would let another household probe for it.
+ *
+ * No `.strict()`, for the reason `renameAthleteSchema` gives: `FormData` arrives with React's own
+ * fields on it.
+ */
+export const addAthleteSchema = z.object({
+  name: athleteNameSchema,
+  // The VALUES come from the shared const (never a second enum); only the MESSAGE is authored here.
+  kind: z.enum(PROFILE_KINDS, { error: CHOOSE_KIND_MESSAGE }),
+  clientId: uuidSchema,
+});
+
+export type AddAthleteInput = z.infer<typeof addAthleteSchema>;

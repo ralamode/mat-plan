@@ -10,23 +10,29 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-**`CRUD-1`: `PROF-1` a-r shipped the first athlete WRITE — rename, at `/p/[id]/edit`** (2026-11-07).
-A new route, the app's first second Server Action module (`app/p/profile-actions.ts`), and the
-day-page link that used to reach the routine editor now reads "→ Edit {name}" — which is also how
-criterion 11 lands: **nothing in the app links to `/routine` any more.** Behind it: `a-0`'s migration
-`0020` (`profiles.client_id`, non-partial unique — the slot survives archive **and** soft delete —
-plus `profiles.archived_at`, still dark until `b`), and `a-g`'s kid-only program read.
+**`CRUD-1`: `PROF-1` a-1w shipped the athlete CREATE path, DARK — no screen reaches it yet**
+(2026-11-09). `createProfile` is replay-first (`client_id` → the existing `public_id`, so a double
+submit adds one athlete), capped at **25 per household**, and the first mutation whose scope carries
+**no `profileId`** — the household matrix harness grew a `household` slot for it. The whole risk here
+is isolation, because `uq_profiles_client_id` is **global and non-partial**: household B replaying A's
+key must be refused _and_ must never be handed A's `public_id`. Four mutation patches (`20`–`23`)
+attack that, and `a-1u`'s form is what makes it reachable.
+Behind it: `b` (#357) archive/restore + `/settings`; `a-r` (#350) the rename at `/p/[id]/edit`, which
+also took the last in-app link to `/routine`; `a-0`'s migration `0020`; `a-g`'s kid-only program read.
 🔴 **`kind` is NOT editable, by decision** _(maintainer, 2026-11-07, on a UX panel's unanimous
 BLOCKING)_: one radio served both "I added them as the wrong kind" and "they turned 18", and the form
 could not tell them apart. The radio stays on `a-1`'s **add** form, where there is no history to
 rewrite; the prerequisite for ever making it editable is the export ceasing to depend on today's
 `kind`, recorded in the plan's § Out-of-scope.
-⏳ **`b-s` is next and lands DARK** (2026-11-08): the scope carries `role` from the same membership
-row, `OwnerScope` makes owner authority a **type**, and `isOwnerOf` is its SQL half. Nothing reads it
-until `b`'s archive. The authority model landed first, in the spec rather than the plan: _anyone in the household records
-and corrects; the owner decides who belongs to it_, so archive is owner-only and **restore is
-any-member** (2026-11-06). Next: the `b-s` seam, `b` (archive/restore + `/settings`), then `a-1`
-(add) and `a-1d` (the duplicate warning).
+✅ **The authority model is shipped, not just specified** — _anyone in the household records and
+corrects; the owner decides who belongs to it_ (2026-11-06). `b-s` (#353) made it a **type**
+(`OwnerScope`) with `isOwnerOf` as its SQL half, and `b` (#357) spent it: archive is owner-only,
+**restore is any-member** so the Undo a member just saw works for the member who saw it. ⚠️ `isOwnerOf`
+emits `$1 = $2` over the scope's own role — two bind parameters, no column — so it proves the
+narrowing was not skipped, never that the role is genuine; six documents described it as a
+database-side check before #358 corrected them.
+⏳ **Next: `a-1u`** — the `/p/new` form, the dashed add tile and the first-run empty state, which is
+what finally calls `a-1w`. Then `a-1d` (the duplicate warning).
 
 🔴 **AUTH-1 is COMPLETE: the shared access code is gone, and a Clerk session with a household
 membership is the only way in (through 1d, 2026-11-05).**

@@ -2,20 +2,24 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { athleteActionSchema, renameAthleteSchema } from '@mat-plan/shared';
+import { addAthleteSchema, athleteActionSchema, renameAthleteSchema } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
+import { redirect, RedirectType } from 'next/navigation';
 
 import { enterMutation } from '@/app/p/mutation-entry';
 import {
   APP_HOME_PATH,
   athleteEditPath,
   athletePath,
+  HOUSEHOLD_FULL,
+  NO_ATHLETE_ADD,
   NO_ATHLETE_SAVE,
   OWNER_ONLY_ATHLETE,
   SETTINGS_PATH,
 } from '@/lib/constants';
 import {
   archiveAthlete,
+  createAthlete,
   getProfileByPublicId,
   renameAthlete,
   restoreAthlete,
@@ -224,5 +228,75 @@ export async function restoreAthleteAction(
     const entry = await enterMutation(NO_ATHLETE_SAVE);
     if (!entry.ok) return entry;
     return runAthleteStateAction(formData, restoreAthlete, null);
+  });
+}
+
+/**
+ * Server Action: add an athlete (PROF-1 a-1w). **The app's first HOUSEHOLD-scoped action.**
+ *
+ * 🔴 **It does NOT use `runAthleteStateAction`, and that is a reuse decision, not an oversight.**
+ * That helper exists for the two **id-only** actions: it parses a `profileId`, resolves it through
+ * the ownership seam, and returns a `savedId`. Add has no `profileId` to resolve, a three-field body,
+ * and ends in a `redirect` rather than an envelope — so sharing it would mean parameterising all
+ * three, which is how one helper becomes a thing with a mode flag. `enterMutation` is in this body
+ * for the same reason it is in theirs: **share the plumbing, never share the boundary.**
+ *
+ * ## Why there is no `profileId` to make foreign, and what replaces that proof
+ *
+ * Every mutating action before this one carries a `profileId`, which the wrong-household matrix makes
+ * foreign to prove isolation. This one carries none, so the isolation question moves entirely into
+ * `createProfile`'s two scoped reads — proved against a real database in `db:verify`, with mutation
+ * patch `20` showing the proof can fail. At this tier the matrix instead drives a **scope miss**: the
+ * household suite in `actions.test.ts` makes `createAthlete` answer `no_scope` and asserts the bytes
+ * match the unauthenticated refusal.
+ *
+ * ## The refusals, and which one names its cause
+ *
+ * `no_scope` and `refused` both become `NO_ATHLETE_ADD`, byte-identical to the unauth answer: the
+ * first means a signed-in account with no membership reached a mutation the UI never offers, and the
+ * second means the `client_id` is spent — neither is a fact about this caller's household that is
+ * useful or safe to confirm. **`full` is different**: it is only reachable *after* the scope
+ * resolved, it is a fact about the caller's own household that they can already see on the picker,
+ * and telling them "couldn't add" would have them retry a request that can never succeed.
+ *
+ * ⚠️ **`revalidatePath` must precede `redirect`** — `redirect()` throws, so nothing after it runs.
+ */
+export async function addAthleteAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  // Sentry: see the module docblock. `return await` is load-bearing.
+  return await Sentry.withServerActionInstrumentation('addAthleteAction', async () => {
+    const entry = await enterMutation(NO_ATHLETE_ADD);
+    if (!entry.ok) return entry;
+
+    const parsed = addAthleteSchema.safeParse({
+      name: formData.get('name'),
+      kind: formData.get('kind'),
+      clientId: formData.get('clientId'),
+    });
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      // A bad `clientId` is NOT a field error: it is a hidden field, so there is nothing for a
+      // parent to correct, and it must answer exactly as a spent key does. Only reachable from a
+      // crafted body — the form mints the id itself.
+      if (fieldErrors.clientId) return { ok: false, error: NO_ATHLETE_ADD };
+      return {
+        ok: false,
+        error: null,
+        fieldErrors: { name: fieldErrors.name, kind: fieldErrors.kind },
+      };
+    }
+
+    const created = await createAthlete(parsed.data);
+    if (!created.ok) {
+      return { ok: false, error: created.reason === 'full' ? HOUSEHOLD_FULL : NO_ATHLETE_ADD };
+    }
+
+    revalidatePath(APP_HOME_PATH);
+    revalidatePath(SETTINGS_PATH);
+    // D6: the parent lands on the athlete they just created, where logging happens. `replace` so
+    // Back returns to the picker rather than re-opening a filled form.
+    redirect(athletePath(created.id), RedirectType.replace);
   });
 }

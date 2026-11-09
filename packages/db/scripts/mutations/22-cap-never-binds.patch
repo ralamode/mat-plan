@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index ab5f128..22cba9c 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -221,7 +221,7 @@ export async function createProfile(
+   const existing = await profileByClientId(exec, scope, input.clientId);
+   if (existing) return { ok: true, publicId: existing.publicId };
+ 
+-  if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
++  if ((await countProfilesIn(exec, scope)) >= Number.MAX_SAFE_INTEGER) {
+     return { ok: false, reason: 'full' };
+   }
+ 

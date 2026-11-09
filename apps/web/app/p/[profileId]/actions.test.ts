@@ -1,4 +1,5 @@
 import {
+  PROFILE_KIND,
   ACTIVITY_TYPE_KEYS,
   BLANK_SET_MESSAGE,
   BODYWEIGHT_UNITS,
@@ -20,6 +21,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // HTTP routes — test the function, mock the DAL + cache). Real-DB coverage of the
 // same write path lives in the Playwright smoke E2E (the `e2e` CI job, V0-11).
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+/**
+ * 🔴 **`redirect` THROWS, exactly as Next's does, and that is not cosmetic.** A `vi.fn()` returning
+ * `undefined` lets an action fall off the end and return `undefined` — so a `redirect` accidentally
+ * placed inside a `try` would pass every test here while silently doing nothing in production. The
+ * sentinel also means a refusal row can assert "the action returned an envelope" and know the
+ * redirect did not fire.
+ */
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn(() => {
+    throw new Error('NEXT_REDIRECT');
+  }),
+  RedirectType: { replace: 'replace', push: 'push' },
+}));
 // All three writers now resolve the active-tz today (getActiveLocalDay → cookies()) to bound
 // the declared `day` ±1 (V1-6c). No `tz` cookie → DEFAULT_TIME_ZONE, so the harness's default
 // `day` (localDayIso(DEFAULT_TIME_ZONE)) lands within bound. File-wide, not per-suite.
@@ -66,6 +80,8 @@ vi.mock('@/lib/dal/profiles', () => ({
   // make the action read `result.ok` as `undefined` and refuse every call, which is a test that
   // passes for the wrong reason on the unauth rows and fails confusingly on the happy ones.
   archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
+  // PROF-1 a-1w — the household-addressed writer.
+  createAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
   restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
 }));
 
@@ -82,6 +98,7 @@ import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
 import {
   archiveAthlete,
+  createAthlete,
   getProfileByPublicId,
   renameAthlete,
   restoreAthlete,
@@ -92,6 +109,7 @@ import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE, RATE_LIMITED } from
 import { isoDayDiff, localDayIso } from '@/lib/date';
 import { DEFAULT_PRACTICE_MINUTES } from '@/lib/life/life-activities';
 import { revalidatePath } from 'next/cache';
+import { redirect, RedirectType } from 'next/navigation';
 
 /** The day the harness declares by default — the active-tz today under the pinned default tz,
  *  so the ±1 bound accepts it. `offsetDays` builds a stale/near day for the bound tests. */
@@ -121,6 +139,7 @@ import {
 // rate-limit, wrong-household and byte-identical-refusal suites exactly like the seven above. Its
 // own per-action behaviour lives beside it, in `app/p/profile-actions.test.ts` (WP-1's convention).
 import {
+  addAthleteAction,
   archiveAthleteAction,
   renameAthleteAction,
   restoreAthleteAction,
@@ -190,12 +209,46 @@ type ActionFn = (s: ActionState, f: FormData) => Promise<ActionState>;
  */
 type Writer = (...a: never[]) => unknown;
 
-type Binding = {
+/**
+ * What a matrix row needs to drive one action.
+ *
+ * 🔴 **`scopeMiss` is required for a HOUSEHOLD-addressed action and meaningless for a
+ * profile-addressed one** — which is why this is a discriminated union rather than two optional
+ * fields. A profile action is made to miss by mocking `getProfileByPublicId` to `null`, the one lever
+ * that works for every one of them. A household action has **no `profileId` to make foreign**, so the
+ * suite has to reach into its DAL function instead, and only the action's own author knows which one.
+ *
+ * WP-1's plan accepted both this and `succeeded` (R1, R7) and shipped neither, saying so: *"the suite
+ * is still owed, by `PROF-1` a-1."* Until now the only matrix rows reaching a household action would
+ * have been unauth and rate-limit — no wrong-owner proof at all, which AGENTS.md calls mandatory.
+ */
+type BindingBase = {
   readonly fn: ActionFn;
   readonly writers: readonly [Writer, ...Writer[]];
+  /**
+   * Assert what a SUCCESSFUL call did, beyond `result.ok`. Optional; when absent the suite asserts
+   * `ok` itself (see the happy row) —
+   * `addAthleteAction` needs it because its success is a `redirect`, which throws and therefore
+   * returns no envelope to inspect.
+   */
+  readonly succeeded?: (result: ActionState) => void;
 };
 
-const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
+/**
+ * 🔴 **Keyed on the ACTION'S OWN SCOPE, so the compiler enforces what the guide claims.** The first
+ * version was a plain union (`{ scopeMiss?: never } | { scopeMiss: () => void }`), which TypeScript
+ * satisfies with the first arm for **any** entry — so a household action could omit `scopeMiss`
+ * while `write-path.md` invariant 13 said it was required. A review lens caught the gap between the
+ * type and the sentence. `MUTATING_ACTIONS` is `as const`, so each name's `scope` is known at the
+ * type level and the requirement can actually be expressed.
+ */
+type BindingFor<N extends MatrixActionName> = (typeof MUTATING_ACTIONS)[N] extends {
+  scope: typeof ACTION_SCOPE.household;
+}
+  ? BindingBase & { readonly scopeMiss: () => void }
+  : BindingBase & { readonly scopeMiss?: never };
+
+const ACTION_BINDINGS: { [N in MatrixActionName]: BindingFor<N> } = {
   logBodyweightAction: { fn: logBodyweightAction, writers: [logBodyweight] },
   logCheckinsAction: { fn: logCheckinsAction, writers: [logCheckinEntries] },
   logStrengthSessionAction: { fn: logStrengthSessionAction, writers: [logStrengthSession] },
@@ -209,6 +262,21 @@ const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
   // ORDER (resolve → narrow → write), which is the thing a wrong-household row must not reach past.
   archiveAthleteAction: { fn: archiveAthleteAction, writers: [archiveAthlete] },
   restoreAthleteAction: { fn: restoreAthleteAction, writers: [restoreAthlete] },
+  addAthleteAction: {
+    fn: addAthleteAction,
+    writers: [createAthlete],
+    // The household equivalent of "make the id foreign": the DAL reports that no household resolved.
+    scopeMiss: () =>
+      vi.mocked(createAthlete).mockResolvedValueOnce({ ok: false, reason: 'no_scope' }),
+    // ⚠️ Success THROWS here (`redirect`), so there is no envelope. The thrown sentinel is the
+    // assertion — see the household suite for why the mock must throw rather than return undefined.
+    succeeded: () => {
+      expect(vi.mocked(redirect)).toHaveBeenCalledWith(
+        athletePath(PROFILE_ID),
+        RedirectType.replace,
+      );
+    },
+  },
 };
 
 /**
@@ -240,6 +308,38 @@ const actionsScoped = (scope: ActionScope): [string, ActionFn, string][] =>
   ]);
 
 const PROFILE_ACTIONS = actionsScoped(ACTION_SCOPE.profile);
+const HOUSEHOLD_ACTIONS = actionsScoped(ACTION_SCOPE.household);
+
+const NEW_CLIENT_ID = '019826b4-0000-7000-8000-0000000000c1';
+
+/**
+ * A body that reaches each action's ownership check, keyed by name.
+ *
+ * ⚠️ **Hoisted to module scope at a-1w**, because the HOUSEHOLD matrix needs the same thing the
+ * wrong-household one does and a second copy would be two lists to keep in step.
+ */
+const VALID_BODY: Record<string, () => FormData> = {
+  logBodyweightAction: () =>
+    form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
+  logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
+  logStrengthSessionAction: () =>
+    strengthForm({
+      profileId: PROFILE_ID,
+      movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
+    }),
+  logLifeActivitiesAction: () =>
+    lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
+  editStrengthSetAction: () =>
+    editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
+  editBodyweightAction: () => amendForm(),
+  editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
+  renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
+  archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
+  restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
+};
+
+VALID_BODY.addAthleteAction = () =>
+  form({ name: 'Added Athlete', kind: PROFILE_KIND.kid, clientId: NEW_CLIENT_ID });
 
 /**
  * Every writer any binding declares — **derived, never hand-listed**. The old array omitted
@@ -1664,27 +1764,6 @@ describe('editBodyweightAction — the three-way refusal branch', () => {
  * while looking identical in the report.
  */
 describe('every Server Action — wrong household → the same refusal as not-found (TEN-1)', () => {
-  /** A body that reaches the ownership check for each action, keyed by name. */
-  const VALID_BODY: Record<string, () => FormData> = {
-    logBodyweightAction: () =>
-      form({ profileId: PROFILE_ID, value: '180', unit: 'lb', clientId: newId() }),
-    logCheckinsAction: () => checkinForm({ profileId: PROFILE_ID, values: { [HABIT.key]: '1' } }),
-    logStrengthSessionAction: () =>
-      strengthForm({
-        profileId: PROFILE_ID,
-        movements: [{ movementName: 'Back squat', sets: [{ reps: '5', weight: '135' }] }],
-      }),
-    logLifeActivitiesAction: () =>
-      lifeForm({ activityKey: ACTIVITY_TYPE_KEYS.wrestling_practice, day: localDay() }),
-    editStrengthSetAction: () =>
-      editForm({ profileId: PROFILE_ID, setId: newId(), reps: '5', weight: '135' }),
-    editBodyweightAction: () => amendForm(),
-    editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
-    renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
-    archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
-    restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
-  };
-
   it('every action has a body that reaches the ownership check (no vacuous case)', async () => {
     // The guard on the guard: with the default mocks every one of these must SUCCEED, so a case that
     // refuses below is refusing for the reason this suite is about.
@@ -1809,5 +1888,80 @@ describe('the registry matches every Server Action module on disk (WP-1)', () =>
   it('no action name is exported by two modules', () => {
     const names = modules.flatMap((m) => exportedActionNames(m));
     expect(names.length).toBe(new Set(names).size);
+  });
+});
+
+/**
+ * 🔴 **The HOUSEHOLD matrix (PROF-1 a-1w) — the proof a household-addressed action has no other way
+ * to get.**
+ *
+ * Every other mutating action carries a `profileId`, and the wrong-household suite makes it foreign.
+ * `addAthleteAction` carries none: there is nothing to point at another household. So the isolation
+ * question lives in `createProfile`'s two scoped reads and is proved in `db:verify` against a real
+ * two-household database (mutation patch `20` shows that proof can fail). What belongs HERE is the
+ * tier above it: when the DAL reports that **no household resolved**, the action must answer exactly
+ * as it does to a stranger, write nothing, and navigate nowhere.
+ *
+ * WP-1's plan accepted this suite and the two binding fields it needs (R1, R7) and shipped neither —
+ * so until this file, the only matrix rows that could reach a household action were unauth and
+ * rate-limit, with **no wrong-owner row at all**.
+ */
+describe('every HOUSEHOLD-addressed Server Action — a scope miss answers like a stranger', () => {
+  /**
+   * ⚠️ **The floor, first.** `it.each([])` passes silently in vitest, so a suite whose rows come from
+   * a filtered registry can go green by matching nothing — which is precisely how this suite would
+   * have reported success on the day `addAthleteAction` was registered with the wrong scope.
+   */
+  it('drives at least one action (an empty matrix passes everything below)', () => {
+    expect(HOUSEHOLD_ACTIONS.length).toBeGreaterThan(0);
+  });
+
+  it.each(HOUSEHOLD_ACTIONS)(
+    '%s succeeds on the happy path, or its refusal case proves nothing',
+    async (name, action) => {
+      vi.clearAllMocks();
+      const res = await action(initial, VALID_BODY[name]!()).catch((e: Error) => e);
+      // ⚠️ **The default is real, not documentation.** `succeeded?.(…)` alone meant a binding without
+      // one asserted NOTHING here — and `.catch` has already swallowed any throw, so the row would
+      // pass for an action that failed outright. Today's single entry defines `succeeded`; the next
+      // one that does not must still be held to `ok`.
+      const binding = ACTION_BINDINGS[name as MatrixActionName];
+      if (binding.succeeded) binding.succeeded(res as ActionState);
+      else expect(res, `${name}: a valid body must succeed`).toMatchObject({ ok: true });
+    },
+  );
+
+  it.each(HOUSEHOLD_ACTIONS)(
+    '%s refuses a scope miss with the not-found bytes, and writes nothing',
+    async (name, action, refusal) => {
+      vi.clearAllMocks();
+      ACTION_BINDINGS[name as MatrixActionName].scopeMiss?.();
+      const res = await action(initial, VALID_BODY[name]!());
+
+      expect(res).toEqual({ ok: false, error: refusal });
+      // 🔴 Nothing navigated and nothing was revalidated — a refusal that redirected would put the
+      // caller on a page they have no business seeing, and one that revalidated would churn caches
+      // for a write that never happened.
+      expect(redirect).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it('the scope-miss refusal is byte-identical to the no-session one, for every action', async () => {
+    for (const [name, action, refusal] of HOUSEHOLD_ACTIONS) {
+      vi.clearAllMocks();
+      ACTION_BINDINGS[name as MatrixActionName].scopeMiss?.();
+      const missed = await action(initial, VALID_BODY[name]!());
+
+      vi.clearAllMocks();
+      vi.mocked(sessionUserOrNull).mockResolvedValueOnce(null);
+      const unauthed = await action(initial, VALID_BODY[name]!());
+
+      expect(
+        missed,
+        `${name}: a signed-in caller with no household and an unauthenticated one must be indistinguishable`,
+      ).toEqual(unauthed);
+      expect(unauthed).toEqual({ ok: false, error: refusal });
+    }
   });
 });

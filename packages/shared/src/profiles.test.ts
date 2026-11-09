@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { PROFILE_KIND_LABELS, PROFILE_KINDS } from './enums';
-import { athleteNameSchema, PROFILE_NAME_MAX, renameAthleteSchema } from './profiles';
+import { PROFILE_KIND, PROFILE_KIND_LABELS, PROFILE_KINDS } from './enums';
+import {
+  addAthleteSchema,
+  athleteNameSchema,
+  PROFILE_NAME_MAX,
+  renameAthleteSchema,
+} from './profiles';
 
 const PROFILE_ID = '019826b4-0000-7000-8000-0000000000a1';
 
@@ -122,5 +127,47 @@ describe('PROFILE_KIND_LABELS', () => {
   /** No extra keys: a label for a kind that cannot be stored is a surface nothing reaches. */
   it('has an entry per kind and no others', () => {
     expect(Object.keys(PROFILE_KIND_LABELS).sort()).toEqual([...PROFILE_KINDS].sort());
+  });
+});
+
+describe('addAthleteSchema (PROF-1 a-1)', () => {
+  const ok = {
+    name: 'Ada',
+    kind: PROFILE_KIND.kid,
+    clientId: '019826b4-0000-7000-8000-00000000f001',
+  };
+
+  it('accepts a name, a kind and a client id', () => {
+    expect(addAthleteSchema.safeParse(ok).success).toBe(true);
+  });
+
+  /**
+   * 🔴 **The message is pinned because zod's DEFAULT would leak the schema's vocabulary.**
+   * Probed on the pinned zod: `z.enum(PROFILE_KINDS)` with no message emits
+   * `Invalid option: expected one of "kid"|"adult"` — the raw values. **`kid` must never reach a
+   * screen** _(maintainer, 2026-11-09)_; every surface renders it as "Child". So this asserts the
+   * authored string, and the literal belongs on the assertion side exactly once.
+   */
+  it.each([
+    ['a value that is not a kind', { ...ok, kind: 'grown-up' }],
+    ['no kind at all', { name: ok.name, clientId: ok.clientId }],
+  ])('%s is refused in the PERSON’s words, never the column’s', (_label, body) => {
+    const parsed = addAthleteSchema.safeParse(body);
+    expect(parsed.success).toBe(false);
+    const message = parsed.success ? '' : (parsed.error.flatten().fieldErrors.kind?.[0] ?? '');
+    expect(message).toBe('Choose Child or Adult.');
+    // The guard on the guard: no stored value may appear in anything a person reads.
+    for (const stored of PROFILE_KINDS) expect(message).not.toContain(stored);
+  });
+
+  it('refuses a malformed client id — it is a hidden field, so there is nothing to correct', () => {
+    const parsed = addAthleteSchema.safeParse({ ...ok, clientId: 'not-a-uuid' });
+    expect(parsed.success).toBe(false);
+  });
+
+  /** The name rules are `athleteNameSchema`'s and are covered above; this proves add USES them. */
+  it('applies the shared name rules rather than its own', () => {
+    const parsed = addAthleteSchema.safeParse({ ...ok, name: '   ' });
+    expect(parsed.success).toBe(false);
   });
 });

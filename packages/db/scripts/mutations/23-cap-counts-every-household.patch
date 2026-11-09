@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 7cf2a65..5de66d4 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -349,7 +349,7 @@ export async function countProfilesIn(exec: Executor, scope: HouseholdScope): Pr
+   const rows = await exec
+     .select({ id: schema.profiles.id })
+     .from(schema.profiles)
+-    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
++    .where(and(isNull(schema.profiles.deletedAt)));
+ 
+   return rows.length;
+ }

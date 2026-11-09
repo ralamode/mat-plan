@@ -82,7 +82,7 @@ describe('the action registry is one kind of entry or the other', () => {
    * assertion is the tripwire: the first household action must edit this line, and whoever does
    * reads why.
    */
-  it('no household-addressed action exists until its matrix does', () => {
+  it('every household-addressed action is one the household matrix drives', () => {
     const household = Object.entries(MUTATING_ACTIONS)
       // ⚠️ `as string` is load-bearing, not laziness. Every entry is `profile` today, so TS narrows
       // `v.scope` to `'profile'` and flags the comparison as impossible (TS2367) — a COMPILE error in
@@ -90,6 +90,10 @@ describe('the action registry is one kind of entry or the other', () => {
       // keeps the failure a readable runtime assertion with the reason attached.
       .filter(([, v]) => 'scope' in v && (v.scope as string) === ACTION_SCOPE.household)
       .map(([k]) => k);
-    expect(household).toEqual([]);
+    // 🔴 **Edited at PROF-1 a-1w, not deleted.** The matrix this was waiting for now exists
+    // (`actions.test.ts` → "every HOUSEHOLD-addressed Server Action"), so the assertion flips from
+    // "there are none" to "these are the ones, and they are driven". A second household action must
+    // still edit this line, and whoever does reads why it is here.
+    expect(household).toEqual(['addAthleteAction']);
   });
 });
