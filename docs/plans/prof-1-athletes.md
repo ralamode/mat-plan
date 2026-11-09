@@ -1823,3 +1823,23 @@ exactly, so the gap loses no information. `ID-1` needs an entry-and-correction s
 regardless — athletes added after it ships, and typos — so the backfill is not extra work, it is work
 that row already owns. The privacy inventory records that it was considered and declined, so the
 absence is explained rather than merely true.
+
+### Shipit review on #360 — 2026-11-09, one fresh lens
+
+Required by the shipit bar: a reviewer that wrote none of the fixes, on the head being approved.
+**Verdict: ready to merge, no P0, no P1.** It verified by MUTATION rather than re-reading — deleting
+each fix and watching which test failed — which is how it found that focus had no unit coverage at
+all.
+
+| #   | Critique (short)                                                                                      | Verdict      | Resolution                                                                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sA1 | 🔴 With BOTH fields invalid, choosing a kind **stole focus to the name field**                        | **accepted** | The effect depended on the derived `kindInvalid`, which flips on a keystroke. A refusal is an **event, not a condition**: it reads `state.fieldErrors` and depends on `state` alone. A keyboard user was being thrown out of the radio group on their first arrow key |
+| sA2 | **Focus had no unit coverage** — a no-op effect passed all sixteen tests                              | **accepted** | Two tests, probed against both regressions: the no-op fails them, and the old derived-deps version fails exactly the focus-stealing one                                                                                                                               |
+| sA3 | The `OWN alert` test asserted only the negative, so deleting the name's own `aria-describedby` passed | **accepted** | Both directions, plus the group's wiring                                                                                                                                                                                                                              |
+| sA4 | The member branch rendered a bare refusal under the form, reading as orphaned                         | **accepted** | A lead-in composed with the shared `OWNER_ONLY_ATHLETE`, not a second copy of it                                                                                                                                                                                      |
+| sA5 | A stale e2e comment still described the `flex-wrap` + `min-w-32` layout                               | **accepted** | Reworded to the single column that shipped                                                                                                                                                                                                                            |
+| sA6 | The README's recovery claim was uncommitted in the worktree                                           | **accepted** | Already committed — the lens saw it mid-flight. It was drift I introduced reconciling the earlier round: the recovery moved to the page, so "the form says so" had stopped being true                                                                                 |
+
+⚠️ **Not fixed, and named so the absence is deliberate:** neither role branch of the recovery
+paragraph has a test. It is an async RSC, so it would have to be e2e, and the member path needs a
+second membership the seed does not create. `a-1d` touches this screen next and is the place for it.
