@@ -1739,3 +1739,28 @@ first name appears in four source-file attributions and a dozen docs; AGENTS.md 
 going-forward and states that a working-tree sweep is not a removal, so it is the maintainer's call.
 And `runbooks.md`'s preamble still says the app has "no delete path at any level — not for an entry",
 which entry soft-delete made false before this chunk.
+
+### Verification pass on the round-2 fixes — 2026-11-09, one fresh lens
+
+Required by the shipit bar: a correctness lens that wrote **none** of the fixes, reviewing
+`724df67..HEAD`. 🔴 **No P0, no P1.** It confirmed, against the code rather than the commit messages:
+the containment allowlist has no dead entry and both files are real namers; `mintOnce` clearing the
+shared query log is safe (the file-level `beforeEach` already does, and each test queries after its
+own call); a module-level constant `publicId` **would** fail the two-call assertion; patches `21`,
+`24` and `25` each apply and redden the assertion their `.expect` names **first**; `25` sharing
+`22`'s `.expect` is sound, because weakening the assertion to the no-archive case leaves `22` red and
+`25` green — which is the discrimination `25` exists for; and enumerating the insert's columns drops
+nothing, every other `profiles` column being nullable or defaulted.
+
+| #   | Critique (short)                                                                      | Verdict      | Resolution                                                                                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| vC1 | The containment guard's non-vacuity floor **passed with `apps/web` unscanned**        | **accepted** | 🔴 The floor summed three globs and `DB` + `SHARED` alone are 72, so an empty web glob cleared `> 50` while the tree holding every DTO went unread. Per-glob floors plus a named file per glob. **Probed:** killing the web glob fails four assertions                                                         |
+| vC2 | The "what it does not catch" table omitted a **whole-row select**, the likeliest leak | **accepted** | A whole-row `.select()`/`.returning()` carries `client_id` **without naming it**, and "just return the row" is how a DTO leak really happens. Added, with the aliased table, local alias, Prettier-split chain and `getTableColumns`. An inaccurate "does not catch" table invites the trust it has not earned |
+| vC3 | `code()`'s comment-stripping can hide a reference in two string forms                 | **accepted** | Stated in the docblock; no file in the tree is affected today, and the helper is shared and pre-existing. Documented, not rewritten                                                                                                                                                                            |
+| vC4 | The range comment says `451xx` is "inside `0450xx`", which is literally false         | **accepted** | The block's range is `045xxx`; both the header and the fill-loop comment say so                                                                                                                                                                                                                                |
+
+⚠️ **What the whole-row miss means for the claim, said plainly here as well as in the docblock:** this
+guard stops the plausible _accident_ of adding `clientId` to an explicit select list, and stops
+nothing a determined author does. The whole-row case is covered by a **different** rule already
+enforced — the DAL returns a minimal DTO, never a raw row (AGENTS.md → "Data Access Layer") — and
+every current select on `profiles` passes an explicit column list.
