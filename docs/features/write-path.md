@@ -552,6 +552,17 @@ flowchart LR
   another. The form re-asserts it in a layout effect. (`strength-form.tsx`'s Measuring/Unit selects
   are controlled the same bare way inside `<form action>`; their data rides a JSON field built from
   state, so the payload stays right, but the visible select may not after a rejection — unverified.)
+  🔴 **A RADIO is the same family, and `defaultChecked` is the fix — not a layout effect** (PROF-1
+  a-1u). React freezes a controlled radio's `defaultChecked` at mount, so a native `form.reset()`
+  returns it to unchecked no matter what `checked` renders. Probed three ways on the add-athlete form:
+  `checked={kind === v}` → **wiped**; `defaultChecked={kind === v}` driven by state → **survives**;
+  `checked` plus a `useEffect` that re-asserts `.checked` → survives, but pokes the DOM after React
+  has committed and paints a frame of unchecked radios. So: hold the value in state, render it as
+  `defaultChecked`, and keep `onChange`. ⚠️ **"Controlled" is not one property here** — React syncs a
+  text input's `value` attribute (so a controlled text field survives) and neither a select's
+  `defaultSelected` nor a radio's `defaultChecked`, which is why the three cases need three different
+  answers and why `a-1u` shipped the wrong one first. The e2e assertion that the radio survives a
+  name-only refusal is what caught it.
 
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the

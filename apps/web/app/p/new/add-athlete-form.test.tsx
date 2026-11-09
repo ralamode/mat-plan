@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { PROFILE_KIND, PROFILE_NAME_MAX } from '@mat-plan/shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The form imports a `'use server'` module, which cannot be evaluated under jsdom. Mocked here —
@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/app/p/profile-actions', () => ({ addAthleteAction: vi.fn() }));
 
 import { ATHLETE_FORM_COPY } from '@/lib/constants';
+
+import { addAthleteAction } from '@/app/p/profile-actions';
 
 import { AddAthleteForm } from './add-athlete-form';
 
@@ -26,11 +28,13 @@ const nameField = () => screen.getByLabelText(ATHLETE_FORM_COPY.nameLabel) as HT
  * COMPONENT TIER (RTL/jsdom). This file exists for the decisions a reader cannot verify anywhere
  * else: the ones the UX panel made about this screen, which live in markup rather than in logic.
  *
- * ⚠️ **What it cannot see**, stated so the coverage is not over-read: the refusal path needs
- * `useActionState` to return a state this test cannot inject (the action is mocked and never
- * invoked), so focus-on-refusal and the `role="alert"` are proved by `e2e/athletes.spec.ts` against
- * a real submit, not here. 200% text and the 360px geometry are a hand check — nothing in the suite
- * zooms.
+ * ⚠️ **An earlier version of this docblock claimed the refusal path "cannot be injected" here. That
+ * was false**, and it mattered: it excused the file from covering the one defect this chunk exists
+ * to have fixed. The mocked action can simply RESOLVE a refusal, and `submitExpecting` below drives
+ * it. A reviewer found the excuse before a reader did.
+ *
+ * **What it genuinely cannot see:** 200% text and the 360px geometry — nothing in the suite zooms,
+ * so those are a hand check plus `e2e`'s overflow assertions.
  */
 describe('AddAthleteForm (PROF-1 a-1u)', () => {
   it('pre-checks NOTHING — kind is set once and a default would be invisible state', () => {
@@ -51,15 +55,20 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('states the permanence, and names the way out, before the choice', () => {
+  it('states the permanence BEFORE the choice, and leaves the recovery to the page', () => {
     renderForm();
     const hint = screen.getByText(ATHLETE_FORM_COPY.kindPermanence);
     // Before, not after: a one-way door explained underneath the control is explained too late.
     expect(
       hint.compareDocumentPosition(radios()[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    // It must name the recovery, or it is a warning with no exit.
-    expect(ATHLETE_FORM_COPY.kindPermanence).toContain('archive');
+
+    // 🔴 **The recovery is NOT in this sentence, and this assertion is the INVERSE of what it was.**
+    // It read "…If it's wrong, archive them in Household settings and add them again" — which a
+    // MEMBER saw on a page that says two inches lower that only the owner can archive. The recovery
+    // is now role-branched on the page, so the form must not carry an unbranched copy of it.
+    expect(ATHLETE_FORM_COPY.kindPermanence).not.toMatch(/archiv/i);
+    expect(screen.queryByText(/archiv/i)).toBeNull();
   });
 
   it('the radio group carries the ARIA, not the individual radios', () => {
@@ -89,16 +98,22 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     renderForm(false);
     // A first-run household has no program, so "on the household's program" would be false. `a-g`'s
     // day page branches on the same boolean rather than claiming one exists.
-    expect(screen.queryByText(new RegExp(ATHLETE_FORM_COPY.kidConsequence))).toBeNull();
+    // Both options ALWAYS carry a consequence now; only the child's wording branches. The first
+    // version dropped the child line entirely at first run, leaving "Child" beside
+    // "Adult — logs their own training" in front of this form's main audience.
+    expect(screen.getByText(ATHLETE_FORM_COPY.kidFirstRun)).toBeTruthy();
+    expect(screen.queryByText(ATHLETE_FORM_COPY.kidWithProgram)).toBeNull();
     cleanup();
     renderForm(true);
-    expect(screen.getByText(new RegExp(ATHLETE_FORM_COPY.kidConsequence))).toBeTruthy();
+    expect(screen.getByText(ATHLETE_FORM_COPY.kidWithProgram)).toBeTruthy();
   });
 
   it('keeps the adult consequence in BOTH cases — it does not depend on a program', () => {
     for (const programs of [true, false]) {
       renderForm(programs);
-      expect(screen.getByText(new RegExp(ATHLETE_FORM_COPY.adultConsequence))).toBeTruthy();
+      // Exact strings, not `new RegExp(copy)`: the copy is data and a future edit adding a `.` or
+      // `(` would turn the pattern into a silently different matcher.
+      expect(screen.getByText(ATHLETE_FORM_COPY.adultConsequence)).toBeTruthy();
       cleanup();
     }
   });
@@ -112,27 +127,81 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     expect(hidden?.type).toBe('hidden');
   });
 
-  it('kind is CONTROLLED — a chosen radio is React state, not browser form state', () => {
+  /** Drive a real submit whose action RESOLVES the given refusal, then let React commit the settle. */
+  async function submitExpecting(refusal: {
+    error?: string | null;
+    fieldErrors?: { name?: string[]; kind?: string[] };
+  }) {
+    vi.mocked(addAthleteAction).mockResolvedValueOnce({
+      ok: false,
+      error: refusal.error ?? null,
+      ...(refusal.fieldErrors ? { fieldErrors: refusal.fieldErrors } : {}),
+    } as Awaited<ReturnType<typeof addAthleteAction>>);
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+  }
+
+  it('a NAME-only refusal leaves the chosen kind checked', async () => {
     renderForm();
-    const adult = radios()[1]!;
-    fireEvent.click(adult);
-    expect(adult.checked).toBe(true);
-    // 🔴 **Why this matters, and it is not a style point.** React 19 resets an UNCONTROLLED field
-    // when a form action settles, including on a refusal. Uncontrolled, a parent who chose Adult and
-    // left the name blank got the name error AND a silently cleared kind — then a second refusal
-    // about the kind if they did not notice. `e2e/athletes.spec.ts` caught it by asserting the radio
-    // survives a name-only refusal; this tier pins that the value is React's to begin with.
-    expect(adult).toHaveProperty('onchange');
+    fireEvent.click(radios()[1]!);
+    await submitExpecting({ fieldErrors: { name: ['Enter a name.'] } });
+
+    // 🔴 **This is the defect the chunk exists to have fixed, and the test that could not fail
+    // before.** React 19 resets fields in a `<form action>` when the action settles, including on a
+    // refusal — and it freezes a controlled radio's `defaultChecked` at mount, so `checked` alone is
+    // wiped. A parent who chose Adult and left the name blank got the name error AND a cleared kind,
+    // then a SECOND refusal about the kind if they did not notice.
+    //
+    // ⚠️ The version of this test it replaces asserted `expect(radio).toHaveProperty('onchange')`,
+    // which is true of every DOM input, and three clicks that pass for plain uncontrolled radios.
+    // Nothing in it would have failed if the fix were deleted. This one does.
+    expect(radios()[1]!.checked).toBe(true);
+    expect(radios()[0]!.checked).toBe(false);
+  });
+
+  it('…and the typed name survives a KIND-only refusal', async () => {
+    renderForm();
+    fireEvent.change(nameField(), { target: { value: 'Ada' } });
+    await submitExpecting({ fieldErrors: { kind: ['Choose Child or Adult.'] } });
+    expect(nameField().value).toBe('Ada');
+  });
+
+  it('a kind refusal marks the GROUP invalid, and choosing a kind clears it', async () => {
+    renderForm();
+    await submitExpecting({ fieldErrors: { kind: ['Choose Child or Adult.'] } });
+
+    const group = screen.getByRole('radiogroup');
+    expect(group.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
+
+    // The error clears the moment the parent fixes it. Derived purely from `state`, the alert and the
+    // red border would persist while they looked at a choice they had already made.
     fireEvent.click(radios()[0]!);
-    expect(radios()[0]!.checked).toBe(true);
-    expect(adult.checked).toBe(false);
+    expect(group.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('each field gets its OWN alert — one shared region cross-wired aria-describedby', async () => {
+    renderForm();
+    await submitExpecting({
+      fieldErrors: { kind: ['Choose Child or Adult.'], name: ['Enter a name.'] },
+    });
+
+    // The action returns BOTH when both are invalid (`profile-actions.ts`), which is why the first
+    // version's comment — "at most one field's errors per submit in practice" — was wrong. With one
+    // shared region, the name input's `aria-describedby` also pointed at the kind's message.
+    const alerts = screen.getAllByRole('alert');
+    expect(alerts).toHaveLength(2);
+    const nameDescribedBy = nameField().getAttribute('aria-describedby') ?? '';
+    const kindMessageId = alerts.find((a) => a.textContent?.includes('Child or Adult'))!.id;
+    expect(nameDescribedBy).not.toContain(kindMessageId);
   });
 
   it('name is CONTROLLED, and bounded by the shared max', () => {
     renderForm();
     fireEvent.change(nameField(), { target: { value: 'Ada' } });
     // React 19 resets an UNcontrolled field when a form action settles, including on `{ ok: false }`
-    // (`docs/features/write-path.md:341`) — so a kind-only refusal would empty a name the parent had
+    // (`write-path.md` → Traps, the uncontrolled-fields bullet) — so a kind-only refusal would empty a name the parent had
     // just typed. The rename form carries the same decision for the same reason.
     expect(nameField().value).toBe('Ada');
     expect(nameField().maxLength).toBe(PROFILE_NAME_MAX);

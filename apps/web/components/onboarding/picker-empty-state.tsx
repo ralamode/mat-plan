@@ -22,6 +22,16 @@ import { PICKER_EMPTY_COPY } from '@/lib/constants';
  *    0.24). Three paragraphs read once, cold, on a gym floor should not sit on the AA floor; only the
  *    short follow-up line is muted. ⚠️ Never put `text-muted-foreground` on `bg-muted`/`bg-accent`/
  *    `bg-secondary` here: that pair measures 4.34:1, and `token-sets.test.ts` asserts no screen does it.
+ *  - 🔴 **ONE paragraph, as of PROF-1 a-1u — `next` is dropped.** The plan said "`<h2>` → tile →
+ *    one paragraph" and the first implementation kept both paragraphs, which a UX lens then measured:
+ *    at 360px the header, `<h2>` and two paragraphs (~8 lines) put the add tile at roughly y=420-516
+ *    against ~560-600 usable — at the fold on a good day, below it at 200% text, on the one screen
+ *    whose only way forward is that tile. Dropping `next` lifts it by ~100px.
+ *    ⚠️ **`what` is the one that stays, and that is a judgement call**: `next` described what happens
+ *    once an athlete exists, which is now one tap away and discoverable by doing it, while `what`
+ *    sets the expectation that this is a logbook and does not write the plan — the thing a first-run
+ *    reader cannot discover by tapping. `next` was rewritten at a-r and is kept in
+ *    `PICKER_EMPTY_COPY` rather than deleted, so a later screen can use it.
  *  - 🔴 **No control of its own, as of PROF-1 a-1u.** This component used to end in a GitHub button
  *    ("How athletes get added — on GitHub") because adding an athlete was not in the app. `a-1u`
  *    ships it, so the button became a detour *away* from the button that now works, two taps from
@@ -42,7 +52,6 @@ export function PickerEmptyState() {
     <section className="flex max-w-prose flex-col gap-3">
       <h2 className="text-lg font-medium">{PICKER_EMPTY_COPY.heading}</h2>
       <p>{PICKER_EMPTY_COPY.what}</p>
-      <p>{PICKER_EMPTY_COPY.next}</p>
     </section>
   );
 }

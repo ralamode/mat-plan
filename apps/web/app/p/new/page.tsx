@@ -9,6 +9,7 @@ import { householdProgramsAnything } from '@/lib/dal/programming';
 import { requireSession } from '@/lib/dal/session';
 import {
   ADD_ATHLETE_COPY,
+  ATHLETE_FORM_COPY,
   ALL_ATHLETES_LINK,
   APP_HOME_PATH,
   NAV_LINK_CLASS,
@@ -19,6 +20,13 @@ import {
 } from '@/lib/constants';
 
 import { AddAthleteForm } from './add-athlete-form';
+
+// Route-segment config must be a static inline literal (Next cannot follow an imported const), so
+// 'nodejs' stays here — the same declaration, for the same reason, as the four sibling `/p` pages:
+// this body reaches the DAL, the DAL reaches `pg`, and `pg` is Node-only, not Edge. `runtime` is
+// per-segment and is NOT inherited from `/p`, so leaving it off would make this the one DAL-backed
+// page in the segment without it.
+export const runtime = 'nodejs';
 
 /**
  * A static title (PROF-1 D8), never the athlete's name — Next's route announcer reads it aloud on
@@ -47,10 +55,24 @@ export const metadata: Metadata = { title: ADD_ATHLETE_COPY.pageHeading };
  * discriminator and a BOOLEAN, which is all a page needs. The first draft of this file imported
  * `getHouseholdScope` and would have broken that guard.
  *
- * **`client_id` is minted HERE, once per render, and handed to the island.** Minting it inside the
+ * **`client_id` is minted HERE, once per request, and handed to the island.** Minting it inside the
  * client component would re-mint on every remount — a double submit after a remount would then create
  * two athletes instead of collapsing onto one. The server mints it, the hidden field carries it, and
  * `createProfile`'s replay-first lookup makes a resubmit idempotent.
+ *
+ * 🔴 **Once per REQUEST is the correct granularity, and it depends on this page being dynamic.**
+ * `requireSession()` → `getCurrentUser()` → Clerk's `auth()` reads request headers, which opts this
+ * segment out of static rendering. That matters more than it looks: a statically cached `/p/new`
+ * would hand **every visitor the same `client_id`**, and the second athlete anyone added would
+ * collapse onto the first by replay. Nothing in CI asserts that, so it is written down here —
+ * ⚠️ **do not add `revalidate`, `force-static`, or a `generateStaticParams` to this segment.**
+ *
+ * What each case then does, which is the test of whether per-request is right:
+ * a **double tap** reuses the key (one athlete); a **retry after a refusal** reuses it, because the
+ * RSC does not re-run when `useActionState` re-renders the island (so a name typo fixed and
+ * resubmitted still adds one); an **add that succeeded but whose redirect was interrupted** replays
+ * onto the existing row and lands on the athlete; and a **deliberate page reload** mints a new key,
+ * which is correct — that is a new intent, not a retry.
  */
 export default async function AddAthletePage() {
   await requireSession();
@@ -68,35 +90,39 @@ export default async function AddAthletePage() {
 
   return (
     <main className={PAGE_SHELL_CLASS}>
-      <header className="flex flex-col gap-1">
+      {/* 🔴 **The back link is ABOVE the form, in the header — the day page's placement.** It was
+          below the submit in the first version, which a UX lens measured at ~5 tab stops and ~y=700
+          on a phone: this is the one screen a person may want to leave WITHOUT committing, so the
+          exit cannot be past the irreversible choice. A single link needs no `<nav>` landmark. */}
+      <header className="flex flex-col gap-2">
+        <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
+          {ALL_ATHLETES_LINK}
+        </Link>
         <h1 className="text-3xl font-semibold tracking-tight">{ADD_ATHLETE_COPY.pageHeading}</h1>
       </header>
 
       <AddAthleteForm clientId={newId()} programsAnything={programsAnything} />
 
-      {/* The owner/member line the rename screen already carries, composed the same way. This is the
-          screen where the commitment is made, so it is where "this is undoable, and by whom" belongs
-          — not discovered afterwards on `/settings`. A member sees `ownerOnly` instead, because
-          sending them to a control they will be refused is worse than telling them now. */}
+      {/* 🔴 **The RECOVERY lives here, role-branched — it is not part of the permanence sentence.**
+          The form says "Set once — the app can't change it afterwards."; what to do about a wrong
+          choice depends on who is reading. An owner gets the real procedure INCLUDING its cost (the
+          archived athlete keeps its history, so adding again splits one person's record in two). A
+          member gets `ownerOnly`, because the first version told every member to "archive them in
+          Household settings" on a page that said two inches lower that they cannot — a contradiction
+          on one screen, found by a UX lens. */}
       <p className="text-muted-foreground max-w-prose text-sm">
         {canArchiveAthletes ? (
           <>
-            {SETTINGS_COPY.archiveElsewhere}{' '}
+            {ATHLETE_FORM_COPY.kindRecoveryOwnerBefore}{' '}
             <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
               {SETTINGS_COPY.heading}
-            </Link>
-            .
+            </Link>{' '}
+            {ATHLETE_FORM_COPY.kindRecoveryOwnerAfter}
           </>
         ) : (
           SETTINGS_COPY.ownerOnly
         )}
       </p>
-
-      <nav aria-label="Back">
-        <Link href={APP_HOME_PATH} className={NAV_LINK_CLASS}>
-          {ALL_ATHLETES_LINK}
-        </Link>
-      </nav>
     </main>
   );
 }

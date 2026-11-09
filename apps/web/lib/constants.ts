@@ -893,11 +893,14 @@ export const ATHLETE_FORM_COPY = {
    */
   nameHint: 'A first name or a nickname is enough.',
   /**
-   * The add form's fieldset legend (PROF-1 a-1u). Reserved for this chunk by the docblock above:
-   * the add screen's fieldset really does group two questions, so it needs a name that the rename
-   * screen's single field did not.
+   * The add form's fieldset legend (PROF-1 a-1u).
+   *
+   * ⚠️ **"Child or adult?", not "Who is this?"** — a UX lens's finding, and it is about what a screen
+   * reader says: the legend is announced with EVERY radio, so a user heard "Who is this? Child…", and
+   * the answer to "who is this" is a **name**, which is the next field and outside this fieldset. The
+   * legend has to name the question the radios actually answer.
    */
-  legend: 'Who is this?',
+  legend: 'Child or adult?',
   /**
    * The permanence, stated as a FACT with the recovery beside it (UX lens 3, trust).
    *
@@ -908,12 +911,36 @@ export const ATHLETE_FORM_COPY = {
    * ⚠️ It must not read as a warning — nothing has gone wrong, and a parent adding their first child
    * should not meet an alarm.
    */
-  kindPermanence:
-    'Set once — the app can’t change it afterwards. If it’s wrong, archive them in Household settings and add them again.',
-  /** Per-option consequence, beside its own radio rather than in a paragraph under both. */
-  kidConsequence: 'on the household’s program',
-  /** The adult option's consequence. Logs their own training; no household program is applied. */
-  adultConsequence: 'logs their own training',
+  kindPermanence: 'Set once — the app can’t change it afterwards.',
+  /**
+   * The recovery, moved OFF the permanence sentence and role-branched (UX lens, 2026-11-09).
+   *
+   * 🔴 **Two defects in the first version, both real.** It read "…If it's wrong, archive them in
+   * Household settings and add them again" as part of the permanence line, which (1) a **member**
+   * read two inches above the same page telling them only the owner can archive — a contradiction on
+   * one screen — and (2) presented the recovery as cheap. It is not: the archived athlete KEEPS its
+   * history, so adding again splits one person's record across two athletes. Saying so is the
+   * difference between a recovery and a reassurance.
+   */
+  kindRecoveryOwnerBefore: 'Added the wrong kind? Archive them in',
+  kindRecoveryOwnerAfter: 'and add them again — what they logged stays with the archived athlete.',
+  /**
+   * The per-option consequences (PROF-1 a-1u). **Parallel, and BOTH always render.**
+   *
+   * 🔴 **The first version hid the child's consequence at first run**, which a UX lens caught: with no
+   * household program the kid line was dropped entirely, so the screen read "Child" next to
+   * "Adult — logs their own training" — in front of the form's main audience, implying children do
+   * not log. Both options now always say what the athlete's training FOLLOWS, which is the only fact
+   * that separates them.
+   *
+   * ⚠️ `kidWithProgram` vs `kidFirstRun`: the household's program is the real difference, but a
+   * first-run household has none, so claiming one would be false. The first-run wording describes the
+   * same rule by what the parent will do instead.
+   */
+  kidWithProgram: 'trains on the household’s program',
+  kidFirstRun: 'follows the routine you save for them',
+  /** Never "no household program" — at first run there is none, which makes the negation confusing. */
+  adultConsequence: 'trains on their own',
   /** The submit. Named for what it does, not "Save" — this screen CREATES. */
   add: 'Add athlete',
   /**

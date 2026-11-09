@@ -27,15 +27,15 @@ describe('PickerEmptyState', () => {
     expect(headings[0]?.textContent).toBe(PICKER_EMPTY_COPY.heading);
   });
 
-  it('explains what the app is and what happens next — two statements, not three', () => {
+  it('says what the app is in ONE paragraph — the add tile has to stay above the fold', () => {
     const { container } = render(<PickerEmptyState />);
-    // 🔴 **TWO paragraphs since PROF-1 a-1u, not three.** The third said adding an athlete was not
-    // in the app yet and existed to stop the reader hunting for a control. `a-1u` ships the control,
-    // so the sentence is false and the hunt ends at the add tile `/p` renders below this.
-    expect(container.querySelectorAll('p')).toHaveLength(2);
-    for (const copy of [PICKER_EMPTY_COPY.what, PICKER_EMPTY_COPY.next]) {
-      expect(container.textContent).toContain(copy);
-    }
+    // 🔴 **ONE paragraph since PROF-1 a-1u, down from three.** `notYet` went when adding became
+    // possible; `next` went because this screen's only way forward is the add tile `/p` renders
+    // below it, and two paragraphs pushed that tile to the fold at 360px. The count is asserted
+    // rather than the absence of a specific string, so adding a paragraph back fails here and has
+    // to argue against the measurement in the component's docblock.
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(container.textContent).toContain(PICKER_EMPTY_COPY.what);
   });
 
   it("offers NO control of its own — the add tile is the screen's only one", () => {

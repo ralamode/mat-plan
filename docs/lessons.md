@@ -359,6 +359,23 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## React / forms
 
+- **A controlled radio is still wiped by React 19's form reset, and "make it controlled" is the
+  WRONG fix — `defaultChecked` is the right one.** → `PROF-1 a-1u`'s add form has a `kind` radio group
+  and a name field. A name-only refusal cleared the radio, so a parent who chose "Adult" and left the
+  name blank lost the choice they had just made — then earned a second refusal about the kind if they
+  did not notice. The repo already knew the family (`write-path.md` → Traps records that controlling a
+  `<select>` is not enough), but the obvious generalisation is wrong in a specific way: React keeps a
+  controlled **text** input's `value` attribute in sync, so a text field survives, and it freezes a
+  controlled **radio**'s `defaultChecked` at mount, so `form.reset()` returns it to unchecked whatever
+  `checked` renders. → **Hold the value in state and render it as `defaultChecked`, keeping
+  `onChange`.** Probed three ways: `checked` → wiped; `defaultChecked` → survives; `checked` plus a
+  `useEffect` re-assert → survives but pokes the DOM after commit and paints a frame of unchecked
+  radios. ⚠️ **The first fix shipped was the effect, and the e2e test stayed red through the
+  intermediate `checked`-only attempt** — which is what found the bug at all; a unit test asserting
+  `toHaveProperty('onchange')` had passed, because that property exists on every DOM input. If a test
+  for "this field survives a refusal" cannot be made to fail by deleting the fix, it is not testing
+  the fix. (`PROF-1 a-1u`)
+
 - **`aria-disabled` and `readOnly` do NOT stop a control from being submitted** — only real
   `disabled` (or omitting the `name`) does. A V1-5 check-in field rendered "already logged" as a
   still-`checked` checkbox with `aria-disabled` (chosen for keyboard/SR reachability); it kept

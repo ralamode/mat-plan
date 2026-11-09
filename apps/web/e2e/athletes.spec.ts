@@ -481,7 +481,15 @@ test.afterEach(async ({ page }) => {
     try {
       await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
       const control = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
-      if (await control.count()) await control.click();
+      if (await control.count()) {
+        await control.click();
+        // ⚠️ **Wait for the archive to land.** `click()` returns once the click is dispatched, so the
+        // next `goto` or the page teardown could abort the Server Action and leave the fixture on the
+        // picker for every later run. The Undo button is the signal the existing archive tests use.
+        await expect(
+          page.getByRole('button', { name: SETTINGS_COPY.undoLabel(name) }),
+        ).toBeVisible();
+      }
     } catch {
       // Swallowed on purpose — cleanup must never turn a green test red or hide a red one.
     }
@@ -536,7 +544,7 @@ test('nothing is pre-selected: submitting without a kind is a field error that K
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
 
   // The refusal is an alert, the typed name SURVIVES it (React 19 resets an uncontrolled field when
-  // an action settles — `docs/features/write-path.md:341`), and focus lands on the first radio so a
+  // an action settles — `write-path.md` → Traps, the uncontrolled-fields bullet), and focus lands on the first radio so a
   // screen-reader user is not left on `<body>` hunting for the control that is wrong.
   //
   // ⚠️ **Scoped to the FORM, not `page.getByRole('alert')`.** Next's App Router mounts its own route
@@ -563,8 +571,14 @@ test('a blank name is a field error, and the chosen kind survives it', async ({ 
 
   // Scoped to the form, for the route-announcer reason the previous test explains.
   await expect(page.locator('main form').getByRole('alert')).toContainText(NAME_REQUIRED_MESSAGE);
-  // The radio is uncontrolled, so this asserts the browser's own form state survived the action —
-  // the mirror of the name test above, for the other field.
+  // 🔴 Focus lands on the NAME, not on `<body>`. `disabled={pending}` blurs the submit button when it
+  // disables, so without an explicit focus the next Tab starts at the top of the document, past the
+  // error. The form's effect handled only the kind case until two lenses caught the gap.
+  await expect(page.getByLabel(ATHLETE_FORM_COPY.nameLabel)).toBeFocused();
+  // 🔴 **The kind must survive the settle, which only `defaultChecked` guarantees.** React 19 resets
+  // fields in a `<form action>` when the action settles and freezes a CONTROLLED radio's
+  // `defaultChecked` at mount, so `checked={...}` alone is wiped — this assertion stayed red through
+  // that wrong fix, which is how the defect was found. The mirror of the name test above.
   await expect(page.getByRole('radio', { name: /^Adult/ })).toBeChecked();
 });
 
@@ -624,7 +638,8 @@ test('a long name added through the form does not overflow the picker at 360px',
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
   await addAthlete(page, long, 'Adult');
-  await expect(page.getByRole('heading', { name: new RegExp('W'), level: 1 })).toBeVisible();
+  // The actual name, not `/W/` — matching a single padded character would pass on any heading.
+  await expect(page.getByRole('heading', { name: long, level: 1 })).toBeVisible();
 
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
