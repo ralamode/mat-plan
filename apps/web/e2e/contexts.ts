@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 // Relative imports only: the tsx-run screenshot scripts reach this through `capture.ts`.
 import { PICKER_COPY } from '../lib/constants';
@@ -30,3 +30,27 @@ export const NARROW_VIEWPORT = { width: 360, height: 780 };
 /** The picker's `<h1>` — what "landed on the app home" looks like. */
 export const pickerHeading = (page: Page) =>
   page.getByRole('heading', { name: PICKER_COPY.heading, exact: true, level: 1 });
+
+/**
+ * **The horizontal-overflow check, once** (PROF-1 b).
+ *
+ * 🔴 **It was written three times before this.** `a11y.spec.ts` had it as a private function,
+ * `athletes.spec.ts` had it inline inside a loop, and PROF-1 b was about to add a third — which is
+ * the maintainer's N4 rule exactly: a block that appears twice gets parameterized at the second copy.
+ *
+ * Why it exists at all: `expectTapTargets` measures control **height**, so a row that runs off the
+ * side of a phone passes every other scan in the suite. `scrollWidth > clientWidth` is the one
+ * measurement that catches it, and it is opt-in per test rather than part of the `ROUTES` loop
+ * because it needs a narrow viewport and a page in the state being measured.
+ */
+export async function expectNoHorizontalOverflow(page: Page, label: string): Promise<void> {
+  const overflow = await page.evaluate(() => {
+    const d = document.documentElement;
+    return { scrollWidth: d.scrollWidth, clientWidth: d.clientWidth };
+  });
+  expect(
+    overflow.scrollWidth,
+    `${label}: the page scrolls horizontally at ${NARROW_VIEWPORT.width}px ` +
+      `(scrollWidth ${overflow.scrollWidth} > clientWidth ${overflow.clientWidth})`,
+  ).toBeLessThanOrEqual(overflow.clientWidth);
+}

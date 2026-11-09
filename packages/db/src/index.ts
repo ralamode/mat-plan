@@ -26,6 +26,7 @@ export * from './queries/export-month';
 // The single-sourced profile-picker query (TEN-1 1b). Under ADR 0006's session-only addressing `/p`
 // is byte-identical for every household, so this query is the app front door's whole isolation
 // boundary — db:verify must run the DAL's own function, not a lookalike.
+export * from './queries/has-live-entries';
 export * from './queries/household-profiles';
 // AUTH-1 1c-4: the resolver's identity lookup. ⚠️ It returns INTERNAL household ids, and its own
 // docblock refused this export for exactly that reason — but `packages/db`'s `exports` map publishes
@@ -56,6 +57,7 @@ export {
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_2_NAME,
   SEED_FULL_ROUTINE,

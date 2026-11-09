@@ -9,9 +9,23 @@
 /** The root household ("Home"). */
 export const SEED_HOUSEHOLD_PUBLIC_ID = '019826b4-0000-7000-8000-000000000010';
 
-// The two kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
+// The the kid profiles under the root household (V1-3). SEED_PROFILE_PUBLIC_ID keeps the v0 id.
 export const SEED_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-000000000001';
 export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
+/**
+ * A THIRD athlete, seeded for `PROF-1 b` (2026-11-08) and owned by the **archive** specs.
+ *
+ * 🔴 **It exists because archive REMOVES an athlete from the picker, which no other fixture mutation
+ * does.** The rename specs can share Athlete Two safely — a rename APPENDS to the name and every
+ * sibling matches by substring. Archiving is different in kind: for the ~2s an archive test holds it,
+ * Athlete Two's day page is read-only and its tile is gone, so any spec asserting a form on that page
+ * fails. Observed: `a11y.spec.ts`'s weigh-in test went red with _"Athlete Two's yesterday should be
+ * empty before this test logs it"_, under `fullyParallel`, for exactly that reason.
+ *
+ * ⚠️ **So do not reach for this one for anything else.** A second spec depending on it would recreate
+ * the problem it was added to solve.
+ */
+export const SEED_PROFILE_3_PUBLIC_ID = '019826b4-0000-7000-8000-000000000003';
 
 /**
  * The two seeded profiles' display names — **role names, never a real first name** (AGENTS.md -> "No
@@ -25,6 +39,7 @@ export const SEED_PROFILE_2_PUBLIC_ID = '019826b4-0000-7000-8000-000000000002';
  */
 export const SEED_PROFILE_NAME = 'Athlete One';
 export const SEED_PROFILE_2_NAME = 'Athlete Two';
+export const SEED_PROFILE_3_NAME = 'Athlete Three';
 
 /**
  * AUTH-1 1c-3a — the synthetic principal the **test session bypass** returns, injected by

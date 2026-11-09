@@ -4,7 +4,16 @@ import { notFound } from 'next/navigation';
 
 import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
 
-import { ATHLETE_FORM_COPY, athletePath, NAME_WRAP_CLASS, NAV_LINK_CLASS } from '@/lib/constants';
+import {
+  ATHLETE_FORM_COPY,
+  athletePath,
+  NAME_WRAP_CLASS,
+  NAV_LINK_CLASS,
+  QUIET_LINK_CLASS,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
+} from '@/lib/constants';
+import { householdState } from '@/lib/dal/household';
 import { getProfileByPublicId } from '@/lib/dal/profiles';
 import { requireSession } from '@/lib/dal/session';
 
@@ -58,6 +67,8 @@ export default async function RenameAthletePage({
   await requireSession();
   const { profileId } = await params;
   const profile = await getProfileByPublicId(profileId);
+  // PROF-1 b: a BOOLEAN from the DAL, never the role and never the scope (write-path invariant 2).
+  const { canArchiveAthletes: canArchive } = await householdState();
   // Unknown, soft-deleted or another household's id — one answer for all three (ADR 0006: 404, never
   // 403, because the threat is a leaked id and a 403 would confirm the leak is live).
   if (!profile) notFound();
@@ -94,6 +105,25 @@ export default async function RenameAthletePage({
       </header>
 
       <RenameForm profileId={profile.id} name={profile.name} from={from} fallbackPath={own} />
+
+      {/* PROF-1 b: archive is not on this form, so the screen says where it IS rather than leaving a
+          parent to hunt. 🔴 **This is the ONE member-branched copy line in the feature** — a member
+          cannot archive, so telling them to go to a screen whose Archive button they will not see
+          would be the misdirection the day page's notice was corrected for. Restore is any-member, so
+          that notice has no branch; archive is owner-only, so this one does. */}
+      <p className="text-muted-foreground text-sm">
+        {canArchive ? (
+          <>
+            {SETTINGS_COPY.archiveElsewhere}{' '}
+            <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
+              {SETTINGS_COPY.heading}
+            </Link>
+            .
+          </>
+        ) : (
+          SETTINGS_COPY.ownerOnly
+        )}
+      </p>
     </main>
   );
 }
@@ -117,6 +147,10 @@ export default async function RenameAthletePage({
  * so it falls through like any other mismatch rather than needing its own branch.
  */
 function inAppReferrer(from: string | string[] | undefined, own: string): string | null {
-  const allowed = [own];
+  // PROF-1 b adds `SETTINGS_PATH`, which three comments in this file and `rename-form.tsx` already
+  // said it would — the island sends `?from=/settings`, and without the entry the allowlist fails
+  // CLOSED (safe: no open redirect) and silently sends the parent to the day page instead of back to
+  // the list they came from. A security lens found the code and its own comments disagreeing.
+  const allowed = [own, SETTINGS_PATH];
   return typeof from === 'string' && allowed.includes(from) ? from : null;
 }

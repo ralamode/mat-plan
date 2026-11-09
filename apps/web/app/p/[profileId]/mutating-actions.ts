@@ -100,6 +100,22 @@ export const MUTATING_ACTIONS = {
    * to make foreign.)
    */
   renameAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
+
+  /**
+   * PROF-1 b. `scope: 'profile'` for the same reason rename is: the body carries a `profileId`, so
+   * the wrong-household matrix can hand it a foreign one and assert the answer is byte-identical to
+   * the unauth refusal.
+   *
+   * 🔴 **`refusal: NO_ATHLETE_SAVE`, NOT `OWNER_ONLY_ATHLETE`.** The matrices drive the
+   * **cross-household** and **unauth** cases, and both of those must answer `NO_ATHLETE_SAVE` —
+   * `OWNER_ONLY_ATHLETE` is reachable only for an id **inside** the caller's own household, which no
+   * matrix row constructs (ADR 0006:348 permits the distinction precisely because the caller can
+   * already see that athlete). Putting the owner-only string here would make the byte-identical
+   * suite assert the wrong answer and quietly widen what a foreign id reveals.
+   */
+  archiveAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
+  /** Restore, same addressing. Any member may call it, so it has no owner-only answer at all. */
+  restoreAthleteAction: { refusal: NO_ATHLETE_SAVE, scope: ACTION_SCOPE.profile },
 } as const satisfies Record<string, MatrixEntry | ExcludedEntry>;
 
 /** Every action this app exposes, in or out of the matrices. */

@@ -61,6 +61,12 @@ vi.mock('@/lib/dal/profiles', () => ({
   updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
   // PROF-1 a-r. Default: the rename matched a live profile in this household.
   renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
+  // PROF-1 b. ⚠️ **The DISCRIMINATED result, not `{ id }`** — these two own the refusal ORDER, so
+  // their shape is `{ ok: true, id } | { ok: false, reason }`. A mock returning the old shape would
+  // make the action read `result.ok` as `undefined` and refuse every call, which is a test that
+  // passes for the wrong reason on the unauth rows and fails confusingly on the happy ones.
+  archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
+  restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
 }));
 
 import { CHECKIN_FIELDS, clientIdInputName, valueInputName } from '@/lib/checkins/checkin-fields';
@@ -74,7 +80,13 @@ import {
 } from '@/lib/dal/entries';
 import { sessionUserOrNull } from '@/lib/dal/session';
 import { checkMutationLimit } from '@/lib/rate-limit';
-import { getProfileByPublicId, renameAthlete, updateProfileRoutine } from '@/lib/dal/profiles';
+import {
+  archiveAthlete,
+  getProfileByPublicId,
+  renameAthlete,
+  restoreAthlete,
+  updateProfileRoutine,
+} from '@/lib/dal/profiles';
 import { ROUTINE_CATALOG } from '@/lib/routine/catalog';
 import { athletePath, athleteRoutinePath, DEFAULT_TIME_ZONE, RATE_LIMITED } from '@/lib/constants';
 import { isoDayDiff, localDayIso } from '@/lib/date';
@@ -108,7 +120,11 @@ import {
 // by the registry, not by this file's directory, so `renameAthleteAction` enters the unauth,
 // rate-limit, wrong-household and byte-identical-refusal suites exactly like the seven above. Its
 // own per-action behaviour lives beside it, in `app/p/profile-actions.test.ts` (WP-1's convention).
-import { renameAthleteAction } from '@/app/p/profile-actions';
+import {
+  archiveAthleteAction,
+  renameAthleteAction,
+  restoreAthleteAction,
+} from '@/app/p/profile-actions';
 import {
   ACTION_SCOPE,
   MUTATING_ACTIONS,
@@ -189,6 +205,10 @@ const ACTION_BINDINGS: Record<MatrixActionName, Binding> = {
   editBodyweightAction: { fn: editBodyweightAction, writers: [editBodyweight] },
   editRoutineAction: { fn: editRoutineAction, writers: [updateProfileRoutine] },
   renameAthleteAction: { fn: renameAthleteAction, writers: [renameAthlete] },
+  // PROF-1 b. The DAL functions, not the `packages/db` writers: `archiveAthlete` owns the refusal
+  // ORDER (resolve → narrow → write), which is the thing a wrong-household row must not reach past.
+  archiveAthleteAction: { fn: archiveAthleteAction, writers: [archiveAthlete] },
+  restoreAthleteAction: { fn: restoreAthleteAction, writers: [restoreAthlete] },
 };
 
 /**
@@ -1661,6 +1681,8 @@ describe('every Server Action — wrong household → the same refusal as not-fo
     editBodyweightAction: () => amendForm(),
     editRoutineAction: () => routineForm({ profileId: PROFILE_ID, order: [{ key: ROUTINE_K1 }] }),
     renameAthleteAction: () => form({ profileId: PROFILE_ID, name: 'Renamed Athlete' }),
+    archiveAthleteAction: () => form({ profileId: PROFILE_ID }),
+    restoreAthleteAction: () => form({ profileId: PROFILE_ID }),
   };
 
   it('every action has a body that reaches the ownership check (no vacuous case)', async () => {

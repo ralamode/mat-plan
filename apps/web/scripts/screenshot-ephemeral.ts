@@ -13,6 +13,7 @@ import {
   householdScopeForRequest,
   liveHouseholdIds,
   schema,
+  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_PUBLIC_ID,
   writeStrengthSession,
 } from '@mat-plan/db';
@@ -365,6 +366,11 @@ const STATES = {
   // PROF-1 a-g: an ADULT on the day page — no day-role label, "Not a programmed day" as the form
   // default, and the muted line explaining why the strength card is empty.
   'adult-athlete': seedAdultAthlete,
+  // PROF-1 b: an ARCHIVED athlete, so Household settings renders BOTH sections and the athlete's own
+  // day page renders its notice. The ONLY way to capture either: the seed produces no archived row,
+  // and the harness loads a route rather than driving a form, so without this a reviewer would be
+  // approving an empty Archived section.
+  'archived-athlete': seedArchivedAthlete,
   'already-logged': seedAlreadyLogged,
   // V1-6a: several calisthenics bouts today, so the "Calisthenics today" totals card renders.
   calisthenics: seedCalisthenics,
@@ -782,6 +788,26 @@ async function seedAlreadyLogged(dbUrl: string): Promise<void> {
  * in TWO bouts → grouped into ONE row: "20, 30 · 2 sets"; pull-ups once). Same row shape as
  * `logCheckinEntries`: kind NULL, value_num set, unit from the DB catalog row.
  */
+/**
+ * PROF-1 b — archive the third athlete (the one the archive specs own), so the two states that only
+ * exist after an archive can be captured.
+ *
+ * ⚠️ **It does NOT reproduce the Undo line**, which is island state after a successful action and has
+ * no server-rendered equivalent. The e2e covers that; a screenshot cannot.
+ */
+async function seedArchivedAthlete(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    await db
+      .update(schema.profiles)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_3_PUBLIC_ID));
+  } finally {
+    await pool.end();
+  }
+}
+
 async function seedCalisthenics(dbUrl: string): Promise<void> {
   const pool = createDbPool(dbUrl);
   const db = createDb(pool);

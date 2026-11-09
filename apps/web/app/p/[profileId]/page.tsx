@@ -35,7 +35,12 @@ import {
   athletePath,
   CLOSED_DAY_NOTICE,
   NAME_WRAP_CLASS,
+  EXPORT_CSV_LABEL,
   NAV_LINK_CLASS,
+  NOTHING_TO_EXPORT,
+  QUIET_LINK_CLASS,
+  SETTINGS_COPY,
+  SETTINGS_PATH,
 } from '@/lib/constants';
 import { BodyweightSection } from './bodyweight-section';
 import { CheckinForm } from './checkin-form';
@@ -90,7 +95,14 @@ export default async function TodayPage({
   // Two booleans, deliberately: `isToday` drives COPY, `isWritable` drives FORMS. Conflating them is
   // how yesterday would have lost its forms — the server accepts a write within ±1 day
   // (`resolveDeclaredDay`), and the UI must not be stricter than the endpoint it fronts.
-  const writable = isWritableDay(day, today);
+  // 🔴 **TWO reasons a day is read-only, and they must not be conflated.** The first version folded
+  // archive into `writable` and left the V1-15 notice gated on `!writable` — so an ARCHIVED athlete's
+  // page, on TODAY, rendered "New entries are closed for this day — it's more than a day ago" above
+  // the real reason. False, and it promised amend controls the archived page no longer offers. A UX
+  // lens caught it in the exact scenario the authority split exists for: the other adult opening the
+  // kid's page at practice.
+  const closedDay = !isWritableDay(day, today);
+  const writable = !closedDay && !profile.archived;
   const weekStart = localWeekStartIso(day);
   // V1-10: which day the PROGRAM says this is, from the same active-tz `day` the header renders — so
   // the card can't claim Monday while the header says Sunday. TOTAL since the youth daily A/B rotation
@@ -193,9 +205,18 @@ export default async function TodayPage({
         {/* V1-13b — the MVP's whole point: the CSV tree the Claude workflow consumes. A plain <a>,
             not a <Link>: this is a file download, and Next's client router would try to navigate to
             a zip. `download` names it, and `min-h-11` keeps it on the tap-target bar. */}
-        <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
-          ↓ Export CSV
-        </a>
+        {profile.hasHistory ? (
+          <a href={athleteExportPath(profileId)} download className={NAV_LINK_CLASS}>
+            {EXPORT_CSV_LABEL}
+          </a>
+        ) : (
+          // 🔴 **Maintainer decision N3 applies to BOTH surfaces.** The first version gated only the
+          // settings row, so the same athlete whose settings row said "nothing to export" still had a
+          // live link here — handing back the EOCD-only zip N3 exists to eliminate. The privacy and
+          // UX lenses found it independently, and the notice had already been written to claim "the
+          // app says so", which made it a false published sentence rather than a gap.
+          <p className={`${NAV_LINK_CLASS} flex items-center`}>{NOTHING_TO_EXPORT}</p>
+        )}
       </header>
 
       {/* V1-18: the logging surfaces render in this kid's OWN routine order (`profile.routine`, resolved by
@@ -211,9 +232,28 @@ export default async function TodayPage({
           window. The forms below are gated on the SAME `writable`, so what the athlete can reach and
           what `resolveDeclaredDay` accepts cannot drift. An unexplained absence reads as a bug —
           which is the finding that explains the 2026-09-28 incident. */}
-      {!writable ? (
+      {closedDay ? (
         <p className="border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm">
           {CLOSED_DAY_NOTICE}
+        </p>
+      ) : null}
+
+      {/* PROF-1 b. ⚠️ **ONE copy for every member, with no "ask the owner" branch** — restore is
+          any-member (decision M1), so sending a member off to find the owner would be sending them
+          away from a control one tap below. The plan carried that branch until a UX lens caught it.
+          🔴 **"Household settings" is a LINK.** Unlinked it is three taps from here (← All athletes →
+          Household settings › → Restore); linked it is two. The back link above calls itself "the
+          recovery path on a phone" and carries `min-h-11` for exactly this reason, and `a11y.spec.ts`
+          excludes <a> from its tap scan, so nothing in CI would notice. */}
+      {profile.archived ? (
+        <p
+          className={`border-input text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm ${NAME_WRAP_CLASS}`}
+        >
+          {SETTINGS_COPY.archivedNotice(profile.name)}{' '}
+          <Link href={SETTINGS_PATH} className={QUIET_LINK_CLASS}>
+            {SETTINGS_COPY.heading}
+          </Link>
+          .
         </p>
       ) : null}
 

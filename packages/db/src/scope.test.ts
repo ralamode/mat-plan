@@ -179,7 +179,7 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toBe(true);
   });
 
-  it('🔴 the OwnerScope brand is never cast on — narrowing is the only way in', () => {
+  it('🔴 no module NAMES OwnerScope in a type assertion (the brand is not cast on by name)', () => {
     // ⚠️ **`as OwnerScope` compiles with ONE word, not three.** `OwnerScope` is a SUBTYPE of
     // `HouseholdScope`, and TS allows `x as T` whenever either side is assignable to the other — so
     // `archiveProfile(db, scope as OwnerScope, id)` in the DAL typechecks. It fails CLOSED (the
@@ -389,15 +389,42 @@ describe('the scope seam is structurally contained (TEN-1 1b)', () => {
     ).toEqual([]);
   });
 
-  it('db:verify mints exactly two named scopes (the plan’s R5(1))', () => {
+  it('db:verify mints only NAMED scopes, each with a reason (the plan’s R5(1))', () => {
     // With ~22 mechanical call-site edits, a scope minted AT a call site makes an assertion pass for
-    // the wrong reason, invisibly. Two named constants mean a wrong scope is a wrong NAME.
+    // the wrong reason, invisibly. Named constants mean a wrong scope is a wrong NAME.
+    //
+    // 🔴 **This was a COUNT (`<= 2`) until PROF-1 b, and the count was the problem.** `b` needs a
+    // third scope — a legitimate household-A **member** — because the member path has to be proved
+    // against the real writer, not against the forged scope `b-s` used (a forgery is the right test
+    // for a forgery and the wrong one for "a member of this household gets 0 rows"). Under a bare
+    // count the only ways to get one were to raise the number, which says nothing, or to spread a
+    // forgery, which proves the wrong thing. A `Record<name, reason>` is the idiom this file already
+    // uses for `NAMES_ROLE` and `scoped.test.ts` uses for its unscoped allowlist: adding a scope is
+    // a visible, reviewed edit that must carry a justification.
+    const MINTED_SCOPES: Readonly<Record<string, string>> = {
+      A_SCOPE: 'household A, OWNER — the default actor for every positive assertion',
+      B_SCOPE: 'household B, OWNER — the other side of every cross-household refusal',
+      A_MEMBER_SCOPE:
+        'household A, MEMBER — PROF-1 b: a member of the SAME household must get 0 rows from ' +
+        'archiveProfile, which only a legitimately-minted member scope can prove (a forged one ' +
+        'proves the forgery case instead)',
+    };
+
     const verify = code(join(REPO, 'packages/db/scripts/verify.ts'));
+    // The declaration site, not the call site: `const NAME = householdScopeForScript(...)`.
+    const declared = [
+      ...verify.matchAll(/const\s+([A-Z_][A-Z0-9_]*)\s*=\s*householdScopeForScript\(/g),
+    ].map((m) => m[1]);
     const mints = verify.match(/householdScopeForScript\(/g) ?? [];
+
     expect(
       mints.length,
-      'verify.ts must use A_SCOPE / B_SCOPE, never an ad-hoc scope at a call site',
-    ).toBeLessThanOrEqual(2);
+      'every householdScopeForScript() in verify.ts must be a named const — never inline at a call site',
+    ).toBe(declared.length);
+    expect(
+      declared.sort(),
+      'a scope minted in verify.ts needs an entry in MINTED_SCOPES saying what it is FOR',
+    ).toEqual(Object.keys(MINTED_SCOPES).sort());
   });
 });
 

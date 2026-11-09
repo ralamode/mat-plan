@@ -30,6 +30,9 @@ vi.mock('@/lib/dal/profiles', () => ({
     firstDay: '2026-01-01',
   })),
   renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
+  // PROF-1 b — the DISCRIMINATED result, because these two own the refusal order.
+  archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
+  restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
 }));
 
 import { revalidatePath } from 'next/cache';
@@ -39,13 +42,20 @@ import {
   athleteEditPath,
   athletePath,
   NO_ATHLETE_SAVE,
+  OWNER_ONLY_ATHLETE,
   RATE_LIMITED,
+  SETTINGS_PATH,
 } from '@/lib/constants';
-import { getProfileByPublicId, renameAthlete } from '@/lib/dal/profiles';
+import {
+  archiveAthlete,
+  getProfileByPublicId,
+  renameAthlete,
+  restoreAthlete,
+} from '@/lib/dal/profiles';
 import { checkMutationLimit } from '@/lib/rate-limit';
 
 import type { ActionState } from './[profileId]/action-state';
-import { renameAthleteAction } from './profile-actions';
+import { archiveAthleteAction, renameAthleteAction, restoreAthleteAction } from './profile-actions';
 
 const PRINCIPAL = E2E_SESSION_BYPASS_USER;
 const PROFILE_ID = '019826b4-0000-7000-8000-000000000001';
@@ -184,5 +194,100 @@ describe('renameAthleteAction — the DAL refuses', () => {
     expect(res).toEqual({ ok: false, error: RATE_LIMITED });
     expect(getProfileByPublicId).not.toHaveBeenCalled();
     expect(renameAthlete).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * PROF-1 b — `archiveAthleteAction` / `restoreAthleteAction`, the per-action behaviour the registry
+ * matrices cannot express.
+ *
+ * The matrices in `[profileId]/actions.test.ts` already cover unauth, rate-limit, wrong-household and
+ * byte-identical-refusal for both. What is left, and what lives here:
+ *
+ * - the **`not_owner`** branch, which **no matrix row can construct**: it needs an id INSIDE the
+ *   caller's own household, and every matrix row makes the id foreign;
+ * - which three paths are revalidated;
+ * - that Undo's replay is a success rather than an error;
+ * - that the two actions answer a malformed id identically.
+ */
+describe('archiveAthleteAction / restoreAthleteAction (PROF-1 b)', () => {
+  const idForm = (profileId: string) => {
+    const f = new FormData();
+    f.set('profileId', profileId);
+    return f;
+  };
+
+  it('archives, and revalidates the picker, settings and the athlete’s day page', async () => {
+    const res = await archiveAthleteAction(initial, idForm(PROFILE_ID));
+    expect(res).toEqual({ ok: true, error: null, savedId: PROFILE_ID });
+    // The three surfaces an archive changes: the tiles the athlete leaves, the settings list they
+    // move within, and their own day page (the notice and the read-only gate).
+    expect(vi.mocked(revalidatePath).mock.calls.map(([p]) => p)).toEqual([
+      APP_HOME_PATH,
+      SETTINGS_PATH,
+      athletePath(PROFILE_ID),
+    ]);
+  });
+
+  /**
+   * 🔴 **The owner-only refusal, which only this tier can reach.** The UI renders no Archive control
+   * for a member, so in production this answer requires a crafted POST — which is exactly why it must
+   * be pinned rather than assumed, and why the DAL emits a signal when it fires.
+   */
+  it('a MEMBER gets the owner-only refusal, NOT the 404-shaped one', async () => {
+    vi.mocked(archiveAthlete).mockResolvedValueOnce({ ok: false, reason: 'not_owner' });
+    const res = await archiveAthleteAction(initial, idForm(PROFILE_ID));
+    expect(res).toEqual({ ok: false, error: OWNER_ONLY_ATHLETE });
+    // …and nothing was revalidated, because nothing changed.
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('a not_found from the DAL is the ordinary refusal, byte-identical to no-session', async () => {
+    vi.mocked(archiveAthlete).mockResolvedValueOnce({ ok: false, reason: 'not_found' });
+    expect(await archiveAthleteAction(initial, idForm(PROFILE_ID))).toEqual({
+      ok: false,
+      error: NO_ATHLETE_SAVE,
+    });
+  });
+
+  it('restores — the same shape, and it is what Undo calls', async () => {
+    const res = await restoreAthleteAction(initial, idForm(PROFILE_ID));
+    expect(res).toEqual({ ok: true, error: null, savedId: PROFILE_ID });
+  });
+
+  /**
+   * Undo may fire twice (a double tap, a replayed submit). The writer makes that a no-op rather than
+   * an error — `db:verify` asserts it at the SQL level — so the action must not turn the second one
+   * into a refusal the person has to interpret.
+   */
+  it('restoring twice calls the writer twice with the same id — no app-level short-circuit', async () => {
+    // ⚠️ **The first version asserted `.ok` twice against an unconditional mock** — a review lens
+    // called it vacuous and was right: it named idempotency and proved nothing the test above did
+    // not. What matters at THIS tier is that the action does not try to be clever and swallow the
+    // second call; idempotency itself is the writer's, proved by `db:verify` (`COALESCE`, and a
+    // restore over a live row).
+    vi.mocked(restoreAthlete).mockClear();
+    await restoreAthleteAction(initial, idForm(PROFILE_ID));
+    await restoreAthleteAction(initial, idForm(PROFILE_ID));
+    expect(restoreAthlete).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(restoreAthlete).mock.calls).toEqual([[PROFILE_ID], [PROFILE_ID]]);
+  });
+
+  it.each([
+    ['archive', archiveAthleteAction, archiveAthlete],
+    ['restore', restoreAthleteAction, restoreAthlete],
+  ])('%s refuses a malformed id WITHOUT touching the DAL', async (_label, action, write) => {
+    const res = await action(initial, idForm('not-a-uuid'));
+    // Not a field error: the id is a hidden field, so there is no input to mark invalid — and it must
+    // answer exactly as an unknown id does, or a malformed id becomes an oracle.
+    expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('an unknown athlete refuses before the DAL writer is reached', async () => {
+    vi.mocked(getProfileByPublicId).mockResolvedValueOnce(null);
+    const res = await archiveAthleteAction(initial, idForm(PROFILE_ID));
+    expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
+    expect(archiveAthlete).not.toHaveBeenCalled();
   });
 });

@@ -2,12 +2,25 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { renameAthleteSchema } from '@mat-plan/shared';
+import { athleteActionSchema, renameAthleteSchema } from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 
 import { enterMutation } from '@/app/p/mutation-entry';
-import { APP_HOME_PATH, athleteEditPath, athletePath, NO_ATHLETE_SAVE } from '@/lib/constants';
-import { getProfileByPublicId, renameAthlete } from '@/lib/dal/profiles';
+import {
+  APP_HOME_PATH,
+  athleteEditPath,
+  athletePath,
+  NO_ATHLETE_SAVE,
+  OWNER_ONLY_ATHLETE,
+  SETTINGS_PATH,
+} from '@/lib/constants';
+import {
+  archiveAthlete,
+  getProfileByPublicId,
+  renameAthlete,
+  restoreAthlete,
+  type AthleteWriteResult,
+} from '@/lib/dal/profiles';
 
 import type { ActionState } from '@/app/p/[profileId]/action-state';
 
@@ -93,5 +106,123 @@ export async function renameAthleteAction(
     revalidatePath(athletePath(saved.id));
     revalidatePath(athleteEditPath(saved.id));
     return { ok: true, error: null };
+  });
+}
+
+/**
+ * The shared body of the two **id-only** athlete actions — archive and restore (PROF-1 b).
+ *
+ * 🔴 **One helper, because the maintainer's N4 rule says so and because the alternative is visibly
+ * worse.** Written out twice, these two actions differ in exactly two tokens: which DAL function to
+ * call, and which refusal a `not_owner` maps to. Everything else — `enterMutation` first, the zod
+ * parse, the `profileId`-is-not-a-field-error branch, the three `revalidatePath` calls, the
+ * `{ ok, savedId }` envelope — is identical. And it would not have stopped at two: `V1-9b`'s delete
+ * and restore are the same shape again.
+ *
+ * ⚠️ **It is NOT exported.** A `'use server'` module registers every export as a callable action
+ * reference, so exporting this would publish an endpoint that takes a writer function. It is a plain
+ * local function, which is why `use-server-exports.test.ts` stays green.
+ *
+ * 🔴 **`enterMutation` is deliberately NOT in here, and that is the one thing this helper must not
+ * absorb.** The first version called it, and `app/pages-need-a-session.test.ts` went red: it scans
+ * each exported action's own body for the awaited call. That guard is right and the helper was
+ * wrong. A boundary check hidden one call deep is a boundary check a reader of the action cannot
+ * see, and the next author adding a third action here would copy a body that appears to check
+ * nothing. **Share the plumbing; never share the boundary.** So each action opens with its own
+ * `enterMutation` and hands the result in.
+ *
+ * `revalidatePath` covers the three surfaces an archive changes: the picker (the athlete leaves or
+ * rejoins the tiles), Household settings (they move between the two sections), and the athlete's own
+ * day page (the notice and the form-enable flag).
+ */
+async function runAthleteStateAction(
+  formData: FormData,
+  write: (publicId: string) => Promise<AthleteWriteResult>,
+  ownerOnlyMessage: string | null,
+): Promise<ActionState> {
+  const parsed = athleteActionSchema.safeParse({ profileId: formData.get('profileId') });
+  // A malformed id is the not-found refusal, not a field error: there is no input to correct, and it
+  // must answer exactly as an unknown or foreign id does or it becomes an oracle for "that one was
+  // at least shaped like a real athlete". Only reachable from a crafted body.
+  if (!parsed.success) return { ok: false, error: NO_ATHLETE_SAVE };
+
+  // 🔴 **The ownership seam, HERE as well as inside the DAL, and that is not redundancy.** Two
+  // reasons, both load-bearing:
+  //
+  // 1. It is what makes the action-level wrong-household matrix real. `actions.test.ts` makes a
+  //    `profileId` foreign by mocking exactly this function to `null` — the one lever that works for
+  //    every profile-addressed action — so an action that delegated the resolve would sail through
+  //    the matrix on a mocked DAL and the suite would prove nothing about it.
+  // 2. A foreign id is then refused before the DAL is called at all, so `expect(write).not
+  //    .toHaveBeenCalled()` has something to assert.
+  //
+  // It costs no query: `getProfileByPublicId` is `cache()`d per request, so the DAL's own resolve a
+  // moment later is the same call. ⚠️ That sentence was written before the `cache()` was there — a
+  // security lens caught it, and the fix was to wrap the function rather than soften the claim. The DAL still owns the ORDER (resolve → narrow → write) for every
+  // OTHER caller, which is `write-path.md` invariant 3 — a guard that exists only in the action is
+  // one a second caller can skip.
+  const profile = await getProfileByPublicId(parsed.data.profileId);
+  if (!profile) return { ok: false, error: NO_ATHLETE_SAVE };
+
+  const result = await write(parsed.data.profileId);
+  if (!result.ok) {
+    // The DAL owns the ORDER that makes this distinction possible — see `archiveAthlete`. Here we
+    // only map it, and `restoreAthlete` can never produce `not_owner`, which is why the caller
+    // passes `null` for it rather than a string nobody can reach.
+    if (result.reason === 'not_owner' && ownerOnlyMessage) {
+      return { ok: false, error: ownerOnlyMessage };
+    }
+    return { ok: false, error: NO_ATHLETE_SAVE };
+  }
+
+  revalidatePath(APP_HOME_PATH);
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath(athletePath(result.id));
+  return { ok: true, error: null, savedId: result.id };
+}
+
+/**
+ * Server Action: archive one athlete — **owner only** (PROF-1 b, acceptance criterion 8).
+ *
+ * The authority is not re-checked here; it is carried by `archiveAthlete`'s shape in the DAL, which
+ * resolves the id through the ownership seam, narrows to an `OwnerScope`, and only then calls a
+ * writer whose parameter type makes skipping the narrowing a compile error. A Server Action is a
+ * public POST, so none of that may depend on the UI having hidden the button.
+ *
+ * `OWNER_ONLY_ATHLETE` is reachable here and nowhere else in the app — the UI renders no Archive
+ * control for a member — which is why the DAL also emits a signal when it fires.
+ */
+export async function archiveAthleteAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  // Sentry: see the module docblock. `return await` is load-bearing.
+  return await Sentry.withServerActionInstrumentation('archiveAthleteAction', async () => {
+    // In THIS body, not in the shared helper — see its docblock. An unauthenticated flood must buy
+    // zero Redis and zero Postgres work, and the guard that proves it reads this function.
+    const entry = await enterMutation(NO_ATHLETE_SAVE);
+    if (!entry.ok) return entry;
+    return runAthleteStateAction(formData, archiveAthlete, OWNER_ONLY_ATHLETE);
+  });
+}
+
+/**
+ * Server Action: restore one athlete — **any member** (decision M1).
+ *
+ * `null` for the owner-only message, because `restoreAthlete` cannot return `not_owner`: there is no
+ * narrowing in its path. Passing the string anyway would put a refusal in the code that no input can
+ * reach, which reads as a guard and is not one.
+ *
+ * It is also what **Undo** calls. One writer, one action, one matrix row — so a lost Undo line costs
+ * a scroll to the Restore button rather than a capability.
+ */
+export async function restoreAthleteAction(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  return await Sentry.withServerActionInstrumentation('restoreAthleteAction', async () => {
+    const entry = await enterMutation(NO_ATHLETE_SAVE);
+    if (!entry.ok) return entry;
+    return runAthleteStateAction(formData, restoreAthlete, null);
   });
 }

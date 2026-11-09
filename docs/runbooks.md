@@ -1009,6 +1009,48 @@ be a cross-tenant linkage over minors' health data.
    correction has been run with `--apply`": a Clerk user id is a stable third-party account
    identifier for a named adult (`docs/privacy/data-inventory.md` § 1a) and this repo is public.
 
+## An owner-only athlete action was refused (the PROF-1 b alert)
+
+**What fired.** A Sentry event `athlete authority refused`, tagged
+`authority_outcome: owner_only`. A signed-in member of a household asked to **archive** an athlete
+in **their own** household, and the server refused because they are not the owner.
+
+🔴 **This is not a cross-household event, and that is why it has its own alert.** The scope-miss
+alert above covers an id reached from the wrong household. This one is _inside_ the caller's own
+household, so every tenancy predicate matched and `reportScopeMiss` is silent by design.
+
+| Filter | `message` is `athlete authority refused`                              |
+| ------ | --------------------------------------------------------------------- |
+| Tags   | `authority_outcome: owner_only` · `authority_action: archive_profile` |
+
+**What makes it interesting rather than noise:** the UI renders **no Archive control for a member**,
+so this path cannot be reached by using the app. Reaching it takes a crafted POST. One event is
+plausible as a stale tab (a member whose role changed mid-session, once `INVITE-1` can change roles);
+a burst from one account is someone probing an owner-only control.
+
+⚠️ **The event deliberately carries no athlete name, no athlete id, no household id and no Clerk
+id** — the same constraints as `ScopeMissEvent`, for the same reasons (minors' data; a public repo;
+cross-tenant linkage in a third party's store). So triage cannot answer "who" or "which athlete"
+from Sentry, by design. If you need to, the answer is in Postgres:
+
+```sql
+-- Which accounts are MEMBERS rather than owners, and so would get this refusal.
+SELECT household_id, role, created_at
+  FROM household_members
+ WHERE deleted_at IS NULL AND role <> 'owner'
+ ORDER BY created_at DESC;
+```
+
+**Remedies, in order of likelihood:**
+
+1. **It is the expected refusal** — a member tried, the server said no, the data is untouched. The
+   refusal IS the system working. Nothing to do.
+2. **The member should be an owner.** There is no in-app role change until `INVITE-1`; today that is
+   a data correction, and it is a **privileged** one — promoting an account to owner grants archive
+   over every athlete in the household. Treat it as such.
+3. **A burst from one account with no plausible explanation** → treat as probing. The data is safe
+   (the predicate matched 0 rows), so this is an investigation, not an incident.
+
    ⚠️ It should be unreachable: `uq_household_members_clerk_user` is partial-unique on
    `clerk_user_id` alone, so the second row cannot be inserted. If this alert fires, that constraint
    is missing or was dropped — check it before treating the rows. Do **not** "fix" the resolver by

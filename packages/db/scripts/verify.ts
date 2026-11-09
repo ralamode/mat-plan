@@ -93,7 +93,7 @@ import {
   movementIsGlobal,
   ownedEntryIds,
 } from '../src/writers/ownership';
-import { renameProfile } from '../src/writers/profile';
+import { archiveProfile, renameProfile, restoreProfile } from '../src/writers/profile';
 import { membershipHousehold } from '../src/queries/household-membership';
 import { updateStrengthSetById, writeStrengthSession } from '../src/writers/strength-session';
 // TEN-1 1d: the corrections registry itself, so the bulk household predicate is proved by running
@@ -103,6 +103,7 @@ import {
   SEED_FULL_ROUTINE,
   SEED_HOUSEHOLD_PUBLIC_ID,
   SEED_PROFILE_2_PUBLIC_ID,
+  SEED_PROFILE_3_PUBLIC_ID,
   SEED_PROFILE_NAME,
   SEED_PROFILE_PUBLIC_ID,
   seed,
@@ -307,20 +308,21 @@ assert.equal(units.length, UNIT_CODES.length, 'units seeded exactly once');
     'at least one length unit is seeded (GAP-3)',
   );
 }
-// V1-3: two kid profiles (Athlete One + Athlete Two), stable by public_id across re-seeds.
-assert.equal(profiles.length, 2, 'exactly two profiles after two seed runs');
+// V1-3: the kid profiles, stable by public_id across re-seeds. PROF-1 b added a THIRD, owned by the
+// archive e2e specs — see `SEED_PROFILE_3_PUBLIC_ID`'s docblock for why archive cannot share one.
+assert.equal(profiles.length, 3, 'exactly three profiles after two seed runs');
 const seededProfileIds = profiles.map((p) => p.publicId).sort();
 assert.deepEqual(
   seededProfileIds,
-  [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID].sort(),
-  'both seed profiles stable by public_id',
+  [SEED_PROFILE_PUBLIC_ID, SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID].sort(),
+  'every seed profile stable by public_id',
 );
 // The literal is deliberate and lives here exactly once (AGENTS.md -> constants: "a contract test that
 // pins the const's value"). This is the OSS-1 guard: it fails if anyone puts a real first name back into
 // SEED_PROFILE_NAME / SEED_PROFILE_2_NAME, which asserting against the consts could never catch.
 assert.deepEqual(
   profiles.map((p) => p.name).sort(),
-  ['Athlete One', 'Athlete Two'],
+  ['Athlete One', 'Athlete Three', 'Athlete Two'],
   'OSS-1: the seeded profile names are role names, not real first names',
 );
 assert.equal(households.length, 1, 'exactly one household after two seed runs');
@@ -425,9 +427,10 @@ for (const p of profiles) {
 }
 console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 
-// ── TEN-1 1b: THE TWO SCOPES. Every scoped call in this file passes one of exactly these two ──────
-// `householdScopeForScript` appears in this file EXACTLY TWICE, here and at B_SCOPE below, and
-// `packages/db/src/scope.test.ts` fails the build if that ever grows. The reason is the plan's R5: with
+// ── TEN-1 1b: THE NAMED SCOPES. Every scoped call in this file passes one of exactly these ───────
+// `householdScopeForScript` appears here, at B_SCOPE below, and at A_MEMBER_SCOPE below that —
+// `packages/db/src/scope.test.ts` fails the build on any mint that is not a named const WITH A
+// STATED REASON (it was a bare count of two until PROF-1 b). The reason is the plan's R5: with
 // ~22 mechanical call-site edits, one ad-hoc scope minted at a call site makes an assertion pass for
 // the wrong reason, and that is invisible in review. Two named constants mean a wrong scope is a
 // wrong NAME, which reads.
@@ -437,6 +440,18 @@ console.log('✓ profiles scoped to root household (household_id NOT NULL)');
 // messages say. B_SCOPE (the "Verify Programming HH") cannot be defined until that household is
 // inserted, ~3400 lines down, at the V1-10 programming fixture.
 const A_SCOPE = householdScopeForScript(households[0].id);
+
+// ── PROF-1 b: THE THIRD SCOPE — household A, as a MEMBER rather than the owner ───────────────────
+// 🔴 **A legitimately-minted member, which is the whole reason this exists.** `b-s` proved the owner
+// conjunct against a FORGED scope (`{ ...A_SCOPE, role: 'member' } as OwnerScope`), which is the
+// right test for a forgery and the WRONG one for "a member of this household cannot archive": a
+// forged scope is a cast nobody writes, while a member scope is what the resolver hands every
+// non-owner on every request. Proving the member path against a forgery would be proving the wrong
+// sentence, so `b` mints the real thing and `scope.test.ts`'s MINTED_SCOPES carries the reason.
+//
+// ⚠️ It is NOT narrowable: `ownerScope(A_MEMBER_SCOPE)` returns `null`, which is what makes it
+// impossible to pass to `archiveProfile` without a cast — the compile-time half, asserted below.
+const A_MEMBER_SCOPE = householdScopeForScript(households[0].id, HOUSEHOLD_ROLE.member);
 
 // ── TEN-1 chunk 1a: households.synthetic — the OBS-2 flag, shipped dark (migration 0014) ─────────
 // Deliberately NOT a bare `assert.equal(households[0].synthetic, false)`: that compares the column
@@ -7373,6 +7388,233 @@ console.log(
   console.log(
     '✓ PROF-1 b-s: the owner conjunct holds where the TYPE cannot — a forged OwnerScope carrying ' +
       'role=member matches 0 rows, and ownerScope() refuses to mint one without a cast',
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 b — archive and restore, through the REAL writers.
+//
+// Ids `…04f0xx` are this block's range (#352's rule: say which range is yours, because a-r and b-s
+// each reused another block's `public_id` and collided on the UNIQUE).
+//
+// 🔴 **What makes this block different from b-s's.** b-s proved the owner conjunct against a FORGED
+// scope and hand-built its SELECT. This one drives `archiveProfile` and `restoreProfile` themselves,
+// and the refusal it cares most about comes from a **legitimately-minted member of the same
+// household** (`A_MEMBER_SCOPE`) — the actor the resolver hands every non-owner on every request.
+// A forgery is a cast nobody writes; a member is Tuesday.
+{
+  const B_P = '019826b4-0000-7000-8000-00000004f001';
+  const B_OTHER = '019826b4-0000-7000-8000-00000004f002';
+  await db.insert(schema.profiles).values([
+    { publicId: B_P, name: 'B Athlete', kind: PROFILE_KIND.kid, householdId: households[0].id },
+    { publicId: B_OTHER, name: 'B Other', kind: PROFILE_KIND.kid, householdId: households[0].id },
+  ]);
+
+  const idOf = async (publicId: string) =>
+    (
+      await asPg
+        .select({ id: schema.profiles.id })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.publicId, publicId))
+    )[0]?.id;
+
+  const archivedAtOf = async (publicId: string) =>
+    (
+      await asPg
+        .select({ archivedAt: schema.profiles.archivedAt })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.publicId, publicId))
+    )[0]?.archivedAt ?? null;
+
+  // 🔴 **B_P's entry is inserted BEFORE the archive, and that ordering is the whole point.** The
+  // first version asserted the export path with `Array.isArray(...)` on an athlete who had logged
+  // nothing — always true, and true even if someone folded `archived_at` into `isLiveProfile` and
+  // the query started returning `[]`. A confirmation reviewer called it the fifth vacuous test in
+  // this PR, and `write-path.md` invariant 10 had already been written to cite it as proof.
+  await asPg.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-00000004f0a1',
+    clientId: '019826b4-0000-7000-8000-00000004f0a2',
+    profileId: (await idOf(B_P))!,
+    activityDate: '2026-07-18',
+    kind: 'bodyweight',
+    unit: 'lb',
+    valueNum: '101',
+    activityTypeId: await activityTypeIdByKey('weigh_in'),
+    metricKey: SEED_METRIC_KEYS.bodyweight,
+  });
+
+  const owner = ownerScope(A_SCOPE);
+  assert.ok(
+    owner,
+    'PROF-1 b: A_SCOPE is the owner, so it narrows (the baseline for everything below)',
+  );
+
+  // (1) The happy path: the owner archives, and the column carries a date.
+  const archived = await archiveProfile(asPg, owner, B_P);
+  assert.equal(archived?.publicId, B_P, 'PROF-1 b: the owner archives their own athlete');
+  assert.ok(
+    archived?.archivedAt instanceof Date,
+    'PROF-1 b: …and archived_at is a real timestamp, not null — the RETURNING proves the column was ' +
+      'written rather than the row merely matched',
+  );
+
+  // (2) 🔴 REPLAY KEEPS THE FIRST DATE. One row matches either way, so the row count cannot tell a
+  // replay from a first archive — only the date can. An offline flush or a double tap on the gym
+  // floor must not rewrite when an athlete stopped training.
+  // 🔴 **The stored date is PINNED to a fixed past value first, and that is the difference between a
+  // proof and a coin flip.** The first version archived, immediately re-archived, and compared the
+  // two `Date`s. A review lens ran it with `COALESCE` removed: **green in 2 of 3 runs**, because the
+  // replay lands ~0.3ms later and JS `Date` carries milliseconds — two distinct `now()` values inside
+  // one millisecond compare equal. Only a run that happened to cross a millisecond boundary went red.
+  // A fixed stored value cannot be reproduced by `now()`, so this is sensitive on every run, and
+  // mutation patch `18` holds it to that.
+  const PINNED = new Date('2026-01-01T00:00:00.000Z');
+  await asPg
+    .update(schema.profiles)
+    .set({ archivedAt: PINNED })
+    .where(eq(schema.profiles.publicId, B_P));
+  const replayed = await archiveProfile(asPg, owner, B_P);
+  assert.equal(
+    replayed?.publicId,
+    B_P,
+    'PROF-1 b: archiving an already-archived athlete still matches the row',
+  );
+  assert.deepEqual(
+    await archivedAtOf(B_P),
+    PINNED,
+    'PROF-1 b: …and COALESCE kept the EXISTING archived_at — a replay must not move the date',
+  );
+
+  // (3) 🔴 A MEMBER OF THE SAME HOUSEHOLD ARCHIVES NOTHING. The case the whole authority split is
+  // for, and the one b-s could only model with a forgery. `A_MEMBER_SCOPE` is minted the same way
+  // every real request's scope is; `ownerScope()` refuses it, so reaching the writer needs the cast
+  // below — and the predicate then matches 0 rows anyway.
+  assert.equal(
+    ownerScope(A_MEMBER_SCOPE),
+    null,
+    'PROF-1 b: a MEMBER scope does not narrow — the compile-time half of the authority',
+  );
+  assert.equal(
+    await archiveProfile(asPg, A_MEMBER_SCOPE as unknown as OwnerScope, B_OTHER),
+    null,
+    'PROF-1 b: a MEMBER of the SAME household archives 0 rows even when cast past ownerScope() — ' +
+      'the lost narrowing fails CLOSED',
+  );
+  assert.equal(
+    await archivedAtOf(B_OTHER),
+    null,
+    'PROF-1 b: …and the other athlete in that household is untouched, so the refusal was a no-op',
+  );
+
+  // (4) The other household's owner archives nothing either — the tenancy half, unchanged.
+  const bOwner = ownerScope(B_SCOPE);
+  assert.ok(
+    bOwner,
+    'PROF-1 b: B_SCOPE narrows too (or the next assertion passes for the wrong reason)',
+  );
+  assert.equal(
+    await archiveProfile(asPg, bOwner, B_P),
+    null,
+    "PROF-1 b: household B's OWNER cannot archive household A's athlete",
+  );
+
+  // (5) 🔴 AN ARCHIVED ATHLETE IS NOT HIDDEN FROM THE OWNERSHIP SEAM (criterion 5). `archived_at` is
+  // deliberately absent from `isLiveProfile`, so the row still resolves, still renames and still
+  // exports. If this goes red, someone folded archive into the ownership predicate and an archived
+  // athlete's history just became unreachable.
+  assert.ok(
+    await renameProfile(asPg, A_SCOPE, B_P, 'B Athlete Renamed'),
+    'PROF-1 b: an ARCHIVED athlete is still renameable — archive is not a lock',
+  );
+  assert.deepEqual(
+    await loggedMonths(asPg, { profilePublicId: B_P, scope: A_SCOPE }),
+    [{ month: '2026-07' }],
+    'PROF-1 b: …and the export path still returns an ARCHIVED athlete’s months (criterion 5) — the ' +
+      'month this athlete logged, not merely "an array": fold archived_at into isLiveProfile and ' +
+      'this returns [] while an Array.isArray check would stay green',
+  );
+
+  // (6) RESTORE IS ANY-MEMBER (decision M1). The member who could not archive CAN restore, with no
+  // cast and no narrowing — the signature is the permission.
+  const restored = await restoreProfile(asPg, A_MEMBER_SCOPE, B_P);
+  assert.equal(
+    restored?.publicId,
+    B_P,
+    'PROF-1 b: a MEMBER restores — the recovery action needs no owner',
+  );
+  assert.equal(
+    restored?.archivedAt,
+    null,
+    'PROF-1 b: …and archived_at is cleared, not merely matched',
+  );
+
+  // (7) Restoring a live athlete is a harmless no-op — the Undo path can fire twice.
+  assert.ok(
+    await restoreProfile(asPg, A_MEMBER_SCOPE, B_P),
+    'PROF-1 b: restoring an already-live athlete is a no-op, not an error (Undo may replay)',
+  );
+
+  // (8) …and cross-household restore still refuses.
+  assert.equal(
+    await restoreProfile(asPg, B_SCOPE, B_P),
+    null,
+    "PROF-1 b: household B cannot restore household A's athlete",
+  );
+
+  // (9) 🔴 **`hasLiveEntries` returns the RIGHT VALUE, per profile.** Decision N3's control hangs on
+  // it: `false` hides the export link and states a reason. The first version was an inline `sql`
+  // template whose `profiles.id` reference drizzle STRIPPED to a bare `"id"` — binding it to
+  // `entries.id` — so the predicate was "does any live entry have profile_id equal to its own id",
+  // which in production (entry ids in the thousands, profile ids single-digit) is almost always
+  // FALSE. Every archived athlete would have been told there was nothing to export, which is the
+  // control the published notice promises. A type assertion cannot catch that — the column really is
+  // a boolean — only two profiles in different entry states can.
+  // B_P's LIVE entry already exists (inserted before the archive, so step 5 could assert the export
+  // path on a real month). B_OTHER's only entry is SOFT-DELETED, so it must NOT count — the
+  // `deleted_at` half of the predicate, which a correlation-only fix would have left unproved.
+  await asPg.insert(schema.entries).values({
+    publicId: '019826b4-0000-7000-8000-00000004f0b1',
+    clientId: '019826b4-0000-7000-8000-00000004f0b2',
+    profileId: (await idOf(B_OTHER))!,
+    activityDate: '2026-07-18',
+    kind: 'bodyweight',
+    unit: 'lb',
+    valueNum: '102',
+    activityTypeId: await activityTypeIdByKey('weigh_in'),
+    metricKey: SEED_METRIC_KEYS.bodyweight,
+    deletedAt: new Date(),
+  });
+  const hasHistoryBy = Object.fromEntries(
+    (await householdProfileRows(asPg, { scope: A_SCOPE })).map((r) => [r.publicId, r.hasEntries]),
+  );
+  assert.equal(
+    hasHistoryBy[B_P],
+    true,
+    'PROF-1 b: an athlete with a LIVE entry has history — hasLiveEntries is correlated to THIS profile',
+  );
+  assert.equal(
+    hasHistoryBy[B_OTHER],
+    false,
+    'PROF-1 b: …and one whose only entry is SOFT-DELETED does not, so the export control states a ' +
+      'reason instead of handing back an empty zip (decision N3)',
+  );
+
+  await asPg
+    .delete(schema.entries)
+    .where(
+      inArray(schema.entries.publicId, [
+        '019826b4-0000-7000-8000-00000004f0a1',
+        '019826b4-0000-7000-8000-00000004f0b1',
+      ]),
+    );
+  await db.delete(schema.profiles).where(inArray(schema.profiles.publicId, [B_P, B_OTHER]));
+
+  console.log(
+    '✓ PROF-1 b: archive and restore through the real writers — the owner archives and a REPLAY ' +
+      'keeps the first date, a legitimately-minted MEMBER of the same household archives 0 rows ' +
+      '(cast or not) while the same member RESTORES, the other household refuses both directions, ' +
+      'an archived athlete still renames and still exports, and hasLiveEntries is CORRELATED — a ' +
+      'live entry counts, a soft-deleted one does not',
   );
 }
 

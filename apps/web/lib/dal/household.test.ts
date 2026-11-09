@@ -387,13 +387,35 @@ describe('reportScopeMiss — the miss-path event', () => {
  * wrong model from a red test.
  */
 describe('householdState — "does this request resolve a household", without handing out the scope', () => {
-  it('exactly one live membership → resolved', async () => {
+  it('exactly one live membership → resolved, and an OWNER may archive', async () => {
     state.memberships = [[11, HOUSEHOLD_ROLE.owner]];
-    await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.resolved);
+    await expect(householdState()).resolves.toStrictEqual({
+      state: HOUSEHOLD_STATE.resolved,
+      canArchiveAthletes: true,
+    });
   });
 
-  it('no live membership → none', async () => {
-    await expect(householdState()).resolves.toBe(HOUSEHOLD_STATE.none);
+  /**
+   * 🔴 **The case the name change is about (PROF-1 b).** `canArchiveAthletes` gates **archive** and
+   * nothing else — a member may add, rename and restore. The boolean was `canManageAthletes` until a
+   * security lens pointed out that the wider name invites a later author to hide any-member controls
+   * from members, or to reuse it as the guard for a new owner-only act with no `OwnerScope` writer
+   * behind it. Owner-true alone cannot distinguish "reads the role" from "returns true"; this is the
+   * row that can.
+   */
+  it('a MEMBER resolves a household but may NOT archive', async () => {
+    state.memberships = [[11, HOUSEHOLD_ROLE.member]];
+    await expect(householdState()).resolves.toStrictEqual({
+      state: HOUSEHOLD_STATE.resolved,
+      canArchiveAthletes: false,
+    });
+  });
+
+  it('no live membership → none, and the capability is false rather than absent', async () => {
+    await expect(householdState()).resolves.toStrictEqual({
+      state: HOUSEHOLD_STATE.none,
+      canArchiveAthletes: false,
+    });
   });
 
   it('two live memberships for one principal → THROWS; it must not degrade to "none"', async () => {
