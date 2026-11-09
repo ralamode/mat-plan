@@ -15,6 +15,47 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The contrast helper composites translucent colour in the wrong space, so a "measured" border ratio is not the one a browser draws (added 2026-11-09)
+
+- **What & why it's debt:** `apps/web/app/design/tokens/contrast.ts`'s `over()` blends alpha **in
+  linear light** — its own docblock says so, and `luminance()` takes linear sRGB. Browsers composite a
+  translucent border in **gamma-encoded** sRGB (and `color-mix(in oklch, …)` in OKLCH). For an opaque
+  token the two agree; for a translucent one they do not, and the error is not in a safe direction:
+  for a 28% foreground mix the helper reports ≈1.36 light / ≈6.03 dark where a browser draws ≈1.93 /
+  ≈2.35 — i.e. it would **pass** a dark border that fails SC 1.4.11.
+- **Why it surfaced:** `PROF-1 a-1`'s plan proposed a dashed add-tile border "at a measured ≥3:1
+  foreground mix". The measurement would have been taken with this helper. a-1 side-steps it by using
+  an **opaque** token, which makes the model moot — so this is recorded, not fixed, and nothing today
+  depends on the translucent answer except the pinned hairline figure below.
+- **Also affected:** `token-sets.test.ts`'s "hairlines miss SC 1.4.11 — 1.26:1 light, **2.69:1 dark**"
+  pins a dark figure computed this way. The assertion (`< 3`) is still correct; the number in its name
+  is not. ⚠️ Verify the arithmetic before editing it — the claim here is structural (read the two
+  docblocks), the specific ratios are a reviewer's calculation.
+- **The fix, when taken:** composite in gamma-encoded sRGB (or match whatever `color-mix` space the
+  token uses), and re-derive the pinned figures.
+
+### The day page has no static title, so every navigation onto it announces "mat-plan" (added 2026-11-09)
+
+- **What & why it's debt:** `app/p/[profileId]/page.tsx` exports no `metadata`, so `document.title`
+  stays the root layout's `APP_NAME`. Next's App Router announcer speaks the title **when it changes**
+  — so a client navigation onto an athlete's day page announces _"mat-plan"_, and focus is left on
+  `<body>`.
+- **What it already costs:** `PROF-1 a-r`'s rename confirmation. `rename-form.tsx` reasons that the
+  day page's `<h1>` (the new name) is the confirmation a screen-reader user gets on return; they do
+  not hear it. `a-1`'s add has the same shape — a server redirect onto the same page.
+- **The fix:** a static `metadata.title` such as "Today" — ⚠️ **never the athlete's name** (D8: a name
+  in a title leaks into browser history, tab lists and screen shares). One line, but it is a day-page
+  edit and belongs to whichever chunk next touches that file deliberately.
+
+### `--ring` is ~2.59:1 on the light background, under SC 1.4.11 for focus indicators (added 2026-11-09)
+
+- **What & why it's debt:** every `focus-visible:ring-ring` in the app. Pre-existing since the
+  scaffold; `token-sets.test.ts` asserts the 3:1 bar only for the **candidate** palettes, not the
+  shipped one. ⚠️ A reviewer's calculation, not a measured capture — verify before acting.
+- **Why it is not urgent:** focus is also carried by a 3px ring width and, on most controls, a border
+  change. It is a real SC 1.4.11 gap, not an unusable one.
+- **The fix:** belongs with `UI-3`'s palette choice, which is already re-deriving these tokens.
+
 ### An athlete with no logged months exports an empty zip, indistinguishable from a failed download (added 2026-11-08)
 
 - **What & why it's debt:** `apps/web/lib/dal/export.ts` builds one entry per month that has rows; an
