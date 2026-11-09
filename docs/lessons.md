@@ -611,6 +611,19 @@ EXISTS pg_stat_statements` raises _"extension … is not available"_ and `pg_ava
 
 ## Git / commits
 
+- **A commit message described a correction the file did not carry — because the edit asserted, failed,
+  and the commit ran anyway.** → A scripted edit anchored on an exact string; `prettier` had since
+  padded that string (a markdown table cell) so the anchor missed and the script raised. The commit
+  command was on the **next line**, not chained with `&&`, so the shell ran it regardless: the message
+  claimed a zod default message had been corrected while the document still carried the wrong claim.
+  This is the same shape as `PROF-1 b-s`'s review log recording two fixes that lived only inside a
+  mutation patch — **the record and the tree disagreeing, with every gate green**, since nothing
+  checks prose against prose. → **Verify the edit landed, then commit** — `grep` for the new text AND
+  for the absence of the old, as two separate assertions, before `git commit`. An `assert` inside a
+  script only protects the script; it does not protect the commit that follows it on the next line.
+  ⚠️ Chaining with `&&` is not sufficient either when a formatter runs between the edit and the check:
+  re-read the file, do not trust the exit code. (`docs/prof-1a-1-plan-refresh`)
+
 - **Generating a mutation patch swallowed the real source fix and then reverted it.** → The recipe
   for a new `scripts/mutations/*.patch` is: edit the source, `git diff > the.patch`, then
   `git checkout -- <file>` to put the source back. If that file **also holds uncommitted real edits**,

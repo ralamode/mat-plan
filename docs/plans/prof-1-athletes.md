@@ -1654,18 +1654,32 @@ This is already true — #349 removed a `Kind` label from the rename screen on e
 value and therefore needs a legend, a hint, an error and an accessible name for a radio group. All
 four must be written in the human register:
 
-| Surface                                    | Say                                  | Never                                                                   |
-| ------------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------- |
-| the fieldset's `<legend>`                  | "Who is this?"                       | "Kind"                                                                  |
-| the refusal when nothing is chosen         | "Choose Child or Adult."             | "Kind is required"                                                      |
-| each option's label and consequence        | "Child — on the household's program" | anything naming the column                                              |
-| the zod message for `kind ∉ PROFILE_KINDS` | the same "Choose Child or Adult."    | zod's default, which interpolates the FIELD NAME and would print `kind` |
+| Surface                                    | Say                                  | Never                                                       |
+| ------------------------------------------ | ------------------------------------ | ----------------------------------------------------------- |
+| the fieldset's `<legend>`                  | "Who is this?"                       | "Kind"                                                      |
+| the refusal when nothing is chosen         | "Choose Child or Adult."             | "Kind is required"                                          |
+| each option's label and consequence        | "Child — on the household's program" | anything naming the column                                  |
+| the zod message for `kind ∉ PROFILE_KINDS` | the same "Choose Child or Adult."    | zod's default, which prints the raw ENUM VALUES — see below |
 
-🔴 **The zod row is the one that bites silently:** an unparameterised `profileKindSchema` emits a
-default message built from the key, so a crafted body (or a future refactor that surfaces the raw
-field error) would put the schema's word on a parent's screen. Give `addAthleteSchema`'s `kind` an
-explicit message, and assert the string in the shared schema's test — the same way
-`athleteNameSchema`'s messages are authored at the schema rather than the use site.
+🔴 **The zod row bites silently, and it is a different leak than it first looked.** Probed on the
+pinned zod (4.6.7), `profileKindSchema` with no explicit message emits:
+
+```
+Invalid option: expected one of "kid"|"adult"
+```
+
+So it prints the **raw enum values**, not the field name. ⚠️ **`kid` is precisely the word this rule
+exists to keep off a screen** — the column stores `kid` and every surface renders it as **"Child"**
+through `PROFILE_KIND_LABELS`. A crafted body, or any later refactor that surfaces this field error
+instead of the page-level refusal, puts the schema's vocabulary in front of a parent.
+
+_(An earlier draft of this paragraph said zod interpolates the field name and would print `kind`.
+It does not. The probe is what settled it, and the real leak is the values — which matters more
+here, not less.)_
+
+Give `addAthleteSchema`'s `kind` an explicit message, and **assert that string** in the shared
+schema's test, the way `athleteNameSchema`'s messages are authored at the schema rather than at the
+use site.
 
 ### Needs a decision before `a-1w` is coded (2026-11-09)
 
