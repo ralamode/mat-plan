@@ -500,6 +500,19 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **`db:mutations` MUTATES the shared working tree, so running it concurrently with anything else in
+  the same worktree produces a screenful of failures that mean nothing.** → The runner `git apply`s
+  each patch, runs `db:verify`, and reverts in a `finally`. Two things ran it at once in one worktree —
+  `pnpm verify` in the session and a review subagent that had been _told_ to run it — and the gate
+  reported **16 of 25 patches "does not apply"**, pointing at `export-month.ts`, a file neither had
+  edited. `git status` was clean and `git diff` against `HEAD` was empty, because by then both had
+  finished reverting. A re-run on a quiet tree: **25/25 RED**. The same race hits `vitest`, which sees
+  a half-patched source and fails on a tautological predicate. → **Never ask a review subagent to run
+  `db:mutations`** (a review is read-only; the runner is not), and do not start `pnpm verify` while one
+  might be. ⚠️ **The failure mode is believable**, which is the danger: "patch does not apply" is
+  exactly what a real context shift looks like, so the instinct is to regenerate 16 patches. Check for
+  a concurrent runner BEFORE regenerating anything. (`PROF-1 a-1w`)
+
 - **A mutation patch's `.expect` silently stops describing its patch when an assertion is inserted
   ABOVE the one it names — and the gate says so rather than passing.** → `PROF-1 a-1w`'s patch `22`
   (the athlete cap never binds) pinned _"the 26th athlete is refused as FULL, not as refused"_. A

@@ -504,6 +504,26 @@ describe('the scope constructors refuse an unresolved id', () => {
  * nobody re-derives. Both entries are reasoned: the seam reads the column and names it as the
  * insert's conflict target, and `verify.ts` is the proof that it does. A third entry is a design
  * question, not an edit to this list.
+ *
+ * ## ⚠️ What it catches, stated plainly — probed, not assumed
+ *
+ * It matches **source text**, so it is a tripwire for the forms a DTO is actually written in, not a
+ * proof of containment. Probed against six shapes:
+ *
+ * | Form                                    | Caught? |
+ * | --------------------------------------- | ------- |
+ * | `schema.profiles.clientId`              | ✅      |
+ * | `eq(profiles.clientId, k)` (table import) | ✅      |
+ * | `profiles['clientId']`                  | ❌      |
+ * | `const { clientId } = schema.profiles`  | ❌      |
+ * | a raw `sql` fragment naming `client_id` | ❌      |
+ * | `schema.entries.clientId`               | ✅ not matched — the OTHER column, correctly ignored |
+ *
+ * The two misses that matter are bracket access and a destructured column; **the raw-SQL miss is
+ * covered by a different rule** (AGENTS.md → the "don't" list forbids `sql.raw` and interpolated
+ * SQL outright). So this guard stops the plausible accident — someone adding `clientId` to a select
+ * list — and does not stop a determined author. That is the same bargain `scoped.test.ts` strikes
+ * and says so about itself; the PR that added this must not claim more.
  */
 describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () => {
   /** `ownership.ts` is the read + the insert's conflict target; `verify.ts` is the proof. */
@@ -512,12 +532,20 @@ describe('profiles.client_id is named only inside its seam (PROF-1 a-1w)', () =>
     'packages/db/scripts/verify.ts',
   ];
   const NAMES_CLIENT_ID = /\bprofiles\.clientId\b/;
-  const namers = [...DB_SOURCES, ...WEB_SOURCES].filter((f) =>
+  // ⚠️ `packages/shared` is included EXPLICITLY. `DB_SOURCES` + `WEB_SOURCES` miss it, and that is
+  // where the CSV export builders live (`shared/src/csv/*`) — i.e. exactly one of the surfaces aS8's
+  // mitigation names ("no DTO, URL, export, log or Sentry context carries client_id"). A guard whose
+  // glob cannot see the export would have been a comfortable one.
+  const SHARED_SOURCES = sources('packages/shared/src/**/*.ts');
+  const namers = [...DB_SOURCES, ...WEB_SOURCES, ...SHARED_SOURCES].filter((f) =>
     NAMES_CLIENT_ID.test(code(join(REPO, f))),
   );
 
   it('finds the sources at all (an empty glob would pass everything below)', () => {
-    expect(DB_SOURCES.length + WEB_SOURCES.length).toBeGreaterThan(50);
+    expect(DB_SOURCES.length + WEB_SOURCES.length + SHARED_SOURCES.length).toBeGreaterThan(50);
+    // The export surface specifically: a glob that silently stopped matching `shared` would make
+    // the whole block vacuous for the one place aS8 cares most about.
+    expect(SHARED_SOURCES).toContain('packages/shared/src/csv/strength-log.ts');
   });
 
   it('can see a reference, and does not confuse it with the entries column', () => {
