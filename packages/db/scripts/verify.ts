@@ -8075,11 +8075,19 @@ console.log(
 
   await asPg.delete(schema.profiles).where(inArray(schema.profiles.clientId, capKeys2));
 
-  // ── 🔴 The ORDER, which nothing proved: oldest first, among several live matches ──────────────
+  // ── Several live matches: the warning names the FIRST Ada ─────────────────────────────────────
   // Two live cousins both named Ada is the DESIGNED case — "Add another" exists for it — so a third
-  // Ada must be warned about a STABLE one. Without `orderBy(asc(id))` the pick follows heap order,
-  // which moves after any UPDATE (archive and rename both rewrite rows), and "Open Ada" could point
-  // at a different cousin between two submits.
+  // Ada must be warned about a STABLE one, or "Open Ada" points at a different cousin between two
+  // submits.
+  //
+  // ⚠️ **This asserts the CONTRACT, and it does NOT prove `orderBy(asc(id))` is load-bearing.**
+  // Deleting that clause leaves this green: on PGlite the scan returns these rows in insertion
+  // order anyway, and an UPDATE between them did not reliably move the tuple far enough to flip it.
+  // 🔴 An earlier version of this comment claimed the clause was "probed by reversing the sort to
+  // `desc`" — that only shows the assertion READS the sort, never that the sort is needed, which is
+  // the same mistake twice over in this chunk. The clause stays because determinism should be a
+  // contract rather than a property of today's heap, and it is cheap; what does not stay is a claim
+  // that a test pins it.
   assert.deepEqual(
     (
       (await createProfile(asPg, A_SCOPE, {

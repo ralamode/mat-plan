@@ -517,6 +517,22 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
 
 ## Guards that pass while guarding nothing
 
+- **Reversing a sort proves the assertion READS the sort; it never proves the sort is needed.** →
+  `PROF-1 a-1d` added `orderBy(asc(id))` to a duplicate-name lookup so that, among two live cousins
+  both called Ada, a third is always warned about the same one. The assertion was "probed" by flipping
+  the clause to `desc` and watching it go red — which only shows the test is sensitive to the ORDER
+  it is given. A reviewer asked the right question: what happens if the clause is **deleted**? It
+  stays green, because a seq scan over rows inserted back to back returns them in insertion order
+  anyway. ⚠️ **An UPDATE between them does not reliably rescue it either** — MVCC moves the tuple in
+  a toy two-row table (probed: `SET name = name` flips `1,2` to `2,1`), but did not flip the real
+  fixture, whose table carries several indexes. → **The discriminating mutation for a sort is
+  DELETION, not reversal.** If deleting it leaves the suite green, the clause may still be worth
+  keeping — determinism as a contract rather than as a property of today's heap — but say that, and
+  do not claim a test pins it. ⚠️ This was the **third** proof-that-cannot-fail in one chunk, after
+  a `toHaveProperty('onchange')` assertion true of every DOM input and a jsdom "no submit fired"
+  assertion that jsdom can never falsify. The shared shape: the mutation chosen was the one the test
+  was already looking at. (`PROF-1 a-1d`)
+
 - **`db:mutations` MUTATES the shared working tree, so running it concurrently with anything else in
   the same worktree produces a screenful of failures that mean nothing.** → The runner `git apply`s
   each patch, runs `db:verify`, and reverts in a `finally`. Two things ran it at once in one worktree —

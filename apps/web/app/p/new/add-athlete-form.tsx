@@ -279,7 +279,16 @@ export function AddAthleteForm({
           `hidden` + `aria-hidden` + `tabIndex={-1}`: inert to sight, screen readers and Tab, while
           still being the default. */}
         {duplicate ? (
-          <button type="submit" hidden aria-hidden="true" tabIndex={-1}>
+          <button
+            type="submit"
+            hidden
+            aria-hidden="true"
+            tabIndex={-1}
+            // ⚠️ Disabled while either action is in flight, which the visible primary it replaces did
+            // too. A disabled default button blocks implicit submission outright, so Enter during the
+            // pending window cannot queue a second action behind the first.
+            disabled={pending || restorePending}
+          >
             {ATHLETE_FORM_COPY.add}
           </button>
         ) : null}

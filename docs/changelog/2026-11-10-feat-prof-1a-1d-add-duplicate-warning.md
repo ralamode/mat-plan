@@ -46,8 +46,7 @@ screen hides "Add another" when it is set. The UI never offers a button the endp
 The add screen tells a parent who picked the wrong kind to archive the athlete and add them again.
 They do, return, choose the **corrected** kind — and would be met with "Restore", which brings back
 the **wrong** kind, permanently. So the match carries its `kind`: when it agrees, Restore is primary;
-when it differs, neither is, and the callout says _"Ada was added as a Child. Restoring keeps that,
-and it can't be changed."_
+when it differs, neither is, and the callout says _"Ada is saved as Adult, and that can't be changed. You chose Child."_
 
 The copy also hedges. `foldName` is lossy by design — José/Jose, voiced kana, Devanagari vowel signs
 all fold equal — so the warning says **"looks like"**, never "already exists", and shows the stored
