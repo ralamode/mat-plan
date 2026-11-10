@@ -182,7 +182,6 @@ export async function restoreProfile(
  * the same event and the DAL maps them to different copy: `refused` is a key that belongs to another
  * household (or to a soft-deleted row), `full` is this household's own quota.
  */
-
 export type CreateProfileResult =
   | { ok: true; publicId: string }
   | { ok: false; reason: 'refused' | 'full' }

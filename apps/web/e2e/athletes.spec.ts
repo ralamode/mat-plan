@@ -1,7 +1,9 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID } from '@mat-plan/db';
 import {
   CHOOSE_KIND_MESSAGE,
+  PROFILE_KIND,
   PROFILE_KIND_LABELS,
+  type ProfileKind,
   PROFILE_NAME_MAX,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_3_NAME,
@@ -464,10 +466,13 @@ const added: string[] = [];
 async function addAthlete(
   page: Page,
   name: string,
-  kind: 'Child' | 'Adult' = 'Child',
+  // `ProfileKind`, not a `'Child' | 'Adult'` union: the radio's label IS `PROFILE_KIND_LABELS`, so a
+  // second spelling of it here is a second place to update when the wording changes. The twin helper
+  // in `scripts/screenshot-ephemeral.ts` reads the same constant.
+  kind: ProfileKind = PROFILE_KIND.kid,
 ): Promise<void> {
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: new RegExp(`^${kind}`) }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   added.push(name);
@@ -657,7 +662,7 @@ test('a long name added through the form does not overflow the picker at 360px',
   const long = uniqueName('x', testInfo.workerIndex)
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
-  await addAthlete(page, long, 'Adult');
+  await addAthlete(page, long, PROFILE_KIND.adult);
   // The actual name, not `/W/` — matching a single padded character would pass on any heading.
   await expect(page.getByRole('heading', { name: long, level: 1 })).toBeVisible();
 
@@ -677,7 +682,7 @@ test('a duplicate name warns instead of adding, and the warning takes focus', as
   page,
 }, testInfo) => {
   const name = uniqueName('dupe', testInfo.workerIndex);
-  await addAthlete(page, name, 'Child');
+  await addAthlete(page, name, PROFILE_KIND.kid);
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 
   // The same name again, with a FRESH clientId (a new page load mints one), must warn.
@@ -705,7 +710,7 @@ test('the warning keeps both fields, and "Add another" adds the second one', asy
   page,
 }, testInfo) => {
   const name = uniqueName('another', testInfo.workerIndex);
-  await addAthlete(page, name, 'Child');
+  await addAthlete(page, name, PROFILE_KIND.kid);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
@@ -730,7 +735,7 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   page,
 }, testInfo) => {
   const name = uniqueName('enterdupe', testInfo.workerIndex);
-  await addAthlete(page, name, 'Child');
+  await addAthlete(page, name, PROFILE_KIND.kid);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
@@ -765,7 +770,7 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
 
 test('editing the name past the match dismisses the warning', async ({ page }, testInfo) => {
   const name = uniqueName('stale', testInfo.workerIndex);
-  await addAthlete(page, name, 'Child');
+  await addAthlete(page, name, PROFILE_KIND.kid);
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
   await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
@@ -810,7 +815,7 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
   const long = uniqueName('w', testInfo.workerIndex)
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
-  await addAthlete(page, long, 'Child');
+  await addAthlete(page, long, PROFILE_KIND.kid);
 
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
