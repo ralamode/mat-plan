@@ -1,11 +1,20 @@
 'use client';
 
-import { PROFILE_KIND, PROFILE_NAME_MAX, type ProfileKind } from '@mat-plan/shared';
+import {
+  foldName,
+  PROFILE_KIND,
+  PROFILE_KIND_LABELS,
+  PROFILE_NAME_MAX,
+  type ProfileKind,
+} from '@mat-plan/shared';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
 
-import { addAthleteAction } from '@/app/p/profile-actions';
+import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
 import { Button } from '@/components/ui/button';
-import { ATHLETE_FORM_COPY, INPUT_CLASS } from '@/lib/constants';
+import { Callout } from '@/components/ui/callout';
+import { athletePath, ATHLETE_FORM_COPY, INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE } from '../[profileId]/action-state';
 
@@ -85,6 +94,17 @@ export function AddAthleteForm({
   const [kind, setKind] = useState<ProfileKind | null>(null);
   const firstRadioRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const calloutRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  /**
+   * Restore is a SECOND action, in a sibling `<form>` — a `<form>` cannot nest, and
+   * `restoreAthleteAction` returns `{ ok, savedId }` without redirecting, so the navigation is ours.
+   */
+  const [restoreState, restoreAction, restorePending] = useActionState(
+    restoreAthleteAction,
+    INITIAL_ACTION_STATE,
+  );
 
   const uid = useId();
   const nameId = `${uid}-name`;
@@ -92,6 +112,28 @@ export function AddAthleteForm({
   const kindHintId = `${uid}-kind-hint`;
   const kindErrorId = `${uid}-kind-error`;
   const nameErrorId = `${uid}-name-error`;
+  const duplicateMessageId = `${uid}-duplicate`;
+  const restoreFormId = `${uid}-restore`;
+
+  /**
+   * 🔴 **The callout is shown only while the typed name still FOLDS to what it was issued for.**
+   * `state` persists in `useActionState` until the next submit, so editing "Sam" to "Samuel" would
+   * otherwise leave a warning about Sam hanging over a field reading Samuel. This is also what makes
+   * the Enter key safe (see the submit button): a warning the parent can act on by pressing Return
+   * is always one that currently applies to what is in the field.
+   */
+  const duplicate =
+    state.duplicate && foldName(name) === state.duplicate.folded ? state.duplicate : null;
+
+  const matchKindLabel = duplicate ? PROFILE_KIND_LABELS[duplicate.match.kind] : '';
+  const chosenKindLabel = kind ? PROFILE_KIND_LABELS[kind] : '';
+  /**
+   * 🔴 **The archived twin's kind versus the one just chosen.** This screen's own recovery copy tells
+   * a parent who picked the wrong kind to archive and add again — so they come back, choose the
+   * CORRECTED kind, and meeting them with "Restore" as the primary would hand back the wrong kind,
+   * permanently. When the kinds differ neither choice is primary and the callout says why.
+   */
+  const kindsDiffer = Boolean(duplicate?.match.archived && kind && duplicate.match.kind !== kind);
 
   const nameErrors = state.fieldErrors?.name;
   const kindErrors = state.fieldErrors?.kind;
@@ -119,9 +161,21 @@ export function AddAthleteForm({
     // *answer from the server* and never on a keystroke.
     const kindWrong = (state.fieldErrors?.kind?.length ?? 0) > 0;
     const nameWrong = (state.fieldErrors?.name?.length ?? 0) > 0;
-    if (kindWrong) firstRadioRef.current?.focus();
+    // 🔴 **A duplicate is ANNOUNCED BY FOCUS**, which is also what scrolls it into view. On a 360x640
+    // phone the submit already sits near the fold before any callout exists, and `enterKeyHint="go"`
+    // invites a soft keyboard over the rest — so a parent could tap Add and see nothing change.
+    // `aria-describedby` would not help: it is read on focus, and `disabled={pending}` has already
+    // blurred the submit to `<body>`. No `role="alert"` on top of this; the two would double-announce.
+    if (state.duplicate) calloutRef.current?.focus();
+    else if (kindWrong) firstRadioRef.current?.focus();
     else if (nameWrong) nameRef.current?.focus();
   }, [state]);
+
+  useEffect(() => {
+    // Restore succeeded: open the athlete, the rename form's idiom. `replace` so Back does not
+    // return to a form that is now about somebody who exists.
+    if (restoreState.ok && restoreState.savedId) router.replace(athletePath(restoreState.savedId));
+  }, [restoreState, router]);
 
   /**
    * ⚠️ **44px belongs on the LABEL, not the input.** `INPUT_CLASS` is for the name field: on an
@@ -155,118 +209,244 @@ export function AddAthleteForm({
   ] as const;
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
-      {/* Server-minted and `readOnly`. A malformed or missing value is a PAGE-level refusal, never a
-          field error: there is nothing here for a person to correct. */}
-      <input type="hidden" name="clientId" value={clientId} readOnly />
+    <>
+      {/* 🔴 **A SIBLING form, not a nested one** — HTML forbids nesting, and the Restore button inside
+          the callout reaches it by `form={restoreFormId}`. `restoreAthleteAction` returns
+          `{ ok, savedId }` and does NOT redirect, so the navigation is the effect above. Rendered
+          only when there is an archived match to restore, so the add form is never shadowed by an
+          empty second form. */}
+      {duplicate?.match.archived ? (
+        <form id={restoreFormId} action={restoreAction} className="hidden">
+          <input type="hidden" name="profileId" value={duplicate.match.publicId} readOnly />
+        </form>
+      ) : null}
 
-      {/* 🔴 `role="radiogroup"` + `aria-invalid` on the FIELDSET, never on the radios. `aria-invalid`
+      <form action={formAction} className="flex flex-col gap-6">
+        {/* Server-minted and `readOnly`. A malformed or missing value is a PAGE-level refusal, never a
+          field error: there is nothing here for a person to correct. */}
+        <input type="hidden" name="clientId" value={clientId} readOnly />
+
+        {/* 🔴 `role="radiogroup"` + `aria-invalid` on the FIELDSET, never on the radios. `aria-invalid`
           is not a supported attribute of `role="radio"` — one radio is not individually valid or
           invalid, the group is. `jsx-a11y/role-supports-aria-props` caught that on the first draft.
           A `<fieldset>` carries no implicit radiogroup role, so it is declared to give the attribute
           something to attach to. */}
-      <fieldset
-        role="radiogroup"
-        aria-invalid={kindInvalid || undefined}
-        aria-describedby={`${kindHintId}${kindInvalid ? ` ${kindErrorId}` : ''}`}
-        className="flex flex-col gap-2"
-      >
-        <legend className="text-sm font-medium">{ATHLETE_FORM_COPY.legend}</legend>
+        <fieldset
+          role="radiogroup"
+          aria-invalid={kindInvalid || undefined}
+          aria-describedby={`${kindHintId}${kindInvalid ? ` ${kindErrorId}` : ''}`}
+          className="flex flex-col gap-2"
+        >
+          <legend className="text-sm font-medium">{ATHLETE_FORM_COPY.legend}</legend>
 
-        {/* The permanence, before the choice. `text-foreground`, not muted: it is the one sentence on
+          {/* The permanence, before the choice. `text-foreground`, not muted: it is the one sentence on
             this screen a parent must read, and the muted token sits on the AA floor at 4.74:1.
             ⚠️ The RECOVERY is not here — it is role-branched on the page, because only an owner can
             archive and a member read a contradiction two inches below. */}
-        <p id={kindHintId} className="max-w-prose text-sm">
-          {ATHLETE_FORM_COPY.kindPermanence}
-        </p>
+          <p id={kindHintId} className="max-w-prose text-sm">
+            {ATHLETE_FORM_COPY.kindPermanence}
+          </p>
 
-        <div className="flex flex-col gap-2">
-          {kindOptions.map((option, i) => (
-            <label key={option.value} className={kindLabelClass}>
-              <input
-                ref={i === 0 ? firstRadioRef : undefined}
-                type="radio"
-                name="kind"
-                value={option.value}
-                // `defaultChecked`, NOT `checked` — the docblock's table says why. State is still the
-                // source of truth; this is the attribute React keeps in sync for a radio.
-                defaultChecked={kind === option.value}
-                onChange={() => setKind(option.value)}
-                className="mt-1 size-4 shrink-0"
-              />
-              <span className="flex flex-col">
-                <span className="font-medium">{option.label}</span>
-                {/* The consequence on its OWN line, full-contrast, and present for BOTH options.
+          <div className="flex flex-col gap-2">
+            {kindOptions.map((option, i) => (
+              <label key={option.value} className={kindLabelClass}>
+                <input
+                  ref={i === 0 ? firstRadioRef : undefined}
+                  type="radio"
+                  name="kind"
+                  value={option.value}
+                  // `defaultChecked`, NOT `checked` — the docblock's table says why. State is still the
+                  // source of truth; this is the attribute React keeps in sync for a radio.
+                  defaultChecked={kind === option.value}
+                  onChange={() => setKind(option.value)}
+                  className="mt-1 size-4 shrink-0"
+                />
+                <span className="flex flex-col">
+                  <span className="font-medium">{option.label}</span>
+                  {/* The consequence on its OWN line, full-contrast, and present for BOTH options.
                     It is the only fact that separates them, so it is not muted fine print. */}
-                <span className="text-sm">{option.consequence}</span>
-              </span>
-            </label>
-          ))}
-        </div>
+                  <span className="text-sm">{option.consequence}</span>
+                </span>
+              </label>
+            ))}
+          </div>
 
-        {/* The kind error sits with the kind, not 250px below beside the name. Both alerts are
+          {/* The kind error sits with the kind, not 250px below beside the name. Both alerts are
             per-field: one shared region cross-wired each input's `aria-describedby` to the other
             field's message, so a screen-reader user on the name heard the kind error too. */}
-        {kindInvalid ? (
-          <p id={kindErrorId} role="alert" className="text-destructive text-sm">
-            {kindErrors!.join(' ')}
-          </p>
-        ) : null}
-      </fieldset>
+          {kindInvalid ? (
+            <p id={kindErrorId} role="alert" className="text-destructive text-sm">
+              {kindErrors!.join(' ')}
+            </p>
+          ) : null}
+        </fieldset>
 
-      <div className="flex flex-col gap-2">
-        <label htmlFor={nameId} className="text-sm font-medium">
-          {ATHLETE_FORM_COPY.nameLabel}
-        </label>
-        <p id={nameHintId} className="text-muted-foreground text-sm">
-          {ATHLETE_FORM_COPY.nameHint}
-        </p>
-        {/* The phone-keyboard attributes are the rename form's, for the reasons its comment gives:
+        <div className="flex flex-col gap-2">
+          <label htmlFor={nameId} className="text-sm font-medium">
+            {ATHLETE_FORM_COPY.nameLabel}
+          </label>
+          <p id={nameHintId} className="text-muted-foreground text-sm">
+            {ATHLETE_FORM_COPY.nameHint}
+          </p>
+          {/* The phone-keyboard attributes are the rename form's, for the reasons its comment gives:
             `autoCapitalize="words"` (a name is capitalised per word), `autoComplete="off"` (a name
             field is otherwise offered the DEVICE OWNER's name, wrong on a shared family phone),
             `spellCheck={false}` (every name is a misspelling to a dictionary), `enterKeyHint="go"`
             because the return key submits. `w-full` because `INPUT_CLASS` carries no width. */}
-        <input
-          ref={nameRef}
-          id={nameId}
-          name="name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={PROFILE_NAME_MAX}
-          autoCapitalize="words"
-          autoComplete="off"
-          spellCheck={false}
-          enterKeyHint="go"
-          required
-          aria-invalid={nameInvalid || undefined}
-          aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}`}
-          className={`${INPUT_CLASS} w-full`}
-        />
-        {nameInvalid ? (
-          <p id={nameErrorId} role="alert" className="text-destructive text-sm">
-            {nameErrors!.join(' ')}
-          </p>
+          <input
+            ref={nameRef}
+            id={nameId}
+            name="name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={PROFILE_NAME_MAX}
+            autoCapitalize="words"
+            autoComplete="off"
+            spellCheck={false}
+            enterKeyHint="go"
+            required
+            aria-invalid={nameInvalid || undefined}
+            aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}`}
+            className={`${INPUT_CLASS} w-full`}
+          />
+          {nameInvalid ? (
+            <p id={nameErrorId} role="alert" className="text-destructive text-sm">
+              {nameErrors!.join(' ')}
+            </p>
+          ) : null}
+        </div>
+
+        {duplicate ? (
+          <Callout
+            ref={calloutRef}
+            messageId={duplicateMessageId}
+            message={
+              <>
+                <span className={NAME_WRAP_CLASS}>
+                  {duplicate.match.archived
+                    ? ATHLETE_FORM_COPY.duplicateArchived(duplicate.match.name, matchKindLabel)
+                    : ATHLETE_FORM_COPY.duplicateLive(duplicate.match.name, matchKindLabel)}
+                </span>
+                {kindsDiffer ? (
+                  <>
+                    {' '}
+                    <span className={NAME_WRAP_CLASS}>
+                      {ATHLETE_FORM_COPY.duplicateArchivedOtherKind(
+                        duplicate.match.name,
+                        matchKindLabel,
+                      )}
+                    </span>
+                  </>
+                ) : null}
+                {!duplicate.match.archived ? (
+                  <>
+                    {' '}
+                    <span className={NAME_WRAP_CLASS}>
+                      {ATHLETE_FORM_COPY.duplicateDisambiguate(duplicate.match.name)}
+                    </span>
+                  </>
+                ) : null}
+              </>
+            }
+          >
+            {/* 🔴 Choices STACK full-width. `Button` is `whitespace-nowrap`, so "Add another " plus a
+              40-character name is ~364px against ~296px of callout at 360px — it overflows, and two
+              side-by-side buttons break above ~12 characters. `h-auto whitespace-normal text-left`
+              lets the label wrap instead. */}
+            {duplicate.match.archived ? (
+              <>
+                <Button
+                  type="submit"
+                  size="lg"
+                  variant={kindsDiffer ? 'outline' : 'default'}
+                  disabled={pending || restorePending}
+                  form={restoreFormId}
+                  className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                >
+                  {ATHLETE_FORM_COPY.restoreMatch(duplicate.match.name)}
+                </Button>
+                {/* The acknowledgement rides on the SUBMITTER, so it exists only on the request this
+                  click produced — a stale value is impossible by construction. */}
+                <Button
+                  type="submit"
+                  size="lg"
+                  variant="outline"
+                  name="acknowledgedDuplicate"
+                  value={duplicate.folded}
+                  disabled={pending || restorePending}
+                  className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                >
+                  {kindsDiffer
+                    ? ATHLETE_FORM_COPY.addNewInstead(
+                        name.trim() || duplicate.match.name,
+                        chosenKindLabel,
+                      )
+                    : ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
+                </Button>
+              </>
+            ) : (
+              <>
+                {/* "Open" is a LINK, and it needs an explicit `min-h-11`: `a11y.spec.ts`'s tap scan is
+                  `button, [role="button"], select, textarea, input`, so a bare `<a>` is never
+                  measured by CI. */}
+                <Link
+                  href={athletePath(duplicate.match.publicId)}
+                  className="border-input hover:bg-accent focus-visible:ring-ring flex min-h-11 w-full items-center justify-center rounded-lg border px-3 py-2.5 text-base font-medium outline-none focus-visible:ring-3"
+                >
+                  <span className={NAME_WRAP_CLASS}>
+                    {ATHLETE_FORM_COPY.openMatch(duplicate.match.name)}
+                  </span>
+                </Link>
+                {/* ⚠️ Hidden at the cap: `createProfile` checks duplicates BEFORE the quota so an
+                  archived twin stays restorable by a full household — which means this warning can
+                  reach one. Offering "Add another" there would be a button the endpoint rejects. */}
+                {duplicate.atCap ? null : (
+                  <Button
+                    type="submit"
+                    size="lg"
+                    variant="outline"
+                    name="acknowledgedDuplicate"
+                    value={duplicate.folded}
+                    disabled={pending || restorePending}
+                    className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                  >
+                    {ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
+                  </Button>
+                )}
+              </>
+            )}
+            {restoreState.error ? (
+              <p role="alert" className="text-destructive text-sm">
+                {ATHLETE_FORM_COPY.restoreFailed(duplicate.match.name)}
+              </p>
+            ) : null}
+          </Callout>
         ) : null}
-      </div>
 
-      <div className="flex flex-col gap-3">
-        {/* `w-fit`, as on the rename form: a full-width primary button reads as the end of a long
-            flow, and this is two questions. */}
-        <Button type="submit" size="lg" disabled={pending} className="w-fit text-base">
-          {pending ? ATHLETE_FORM_COPY.adding : ATHLETE_FORM_COPY.add}
-        </Button>
+        <div className="flex flex-col gap-3">
+          {/* `w-fit`, as on the rename form: a full-width primary button reads as the end of a long
+            flow, and this is two questions.
+            🔴 **Hidden while a duplicate is showing**, so the callout's choices are the only submit
+            buttons on the form. Two near-identical "add" buttons visible together is the state a
+            parent misreads, and leaving this one here would also make it the Enter-key default
+            while the callout sits above it. */}
+          {duplicate ? null : (
+            <Button type="submit" size="lg" disabled={pending} className="w-fit text-base">
+              {pending ? ATHLETE_FORM_COPY.adding : ATHLETE_FORM_COPY.add}
+            </Button>
+          )}
 
-        {/* The page-level refusal — no session, rate-limited, a spent `clientId`, or the household at
+          {/* The page-level refusal — no session, rate-limited, a spent `clientId`, or the household at
             its cap. Nothing in the form is wrong, so no `aria-invalid`; the way out is the page's
             "← All athletes" link, which is in the header ABOVE this form. */}
-        {state.error ? (
-          <p role="alert" className="text-destructive text-sm">
-            {state.error}
-          </p>
-        ) : null}
-      </div>
-    </form>
+          {state.error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {state.error}
+            </p>
+          ) : null}
+        </div>
+      </form>
+    </>
   );
 }

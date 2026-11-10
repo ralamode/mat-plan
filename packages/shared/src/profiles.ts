@@ -199,6 +199,29 @@ export const addAthleteSchema = z.object({
   // The VALUES come from the shared const (never a second enum); only the MESSAGE is authored here.
   kind: z.enum(PROFILE_KINDS, { error: CHOOSE_KIND_MESSAGE }),
   clientId: uuidSchema,
+  /**
+   * The FOLDED name the caller was warned about (PROF-1 a-1d), present only on a re-confirm.
+   *
+   * 🔴 **A folded NAME, never a boolean.** A boolean would let consent to "Ada" wave "Bea" through:
+   * the parent acknowledges a warning, edits the field, and the acknowledgement is still set. The
+   * server compares this to `foldName(parsed.name)`, so an acknowledgement only ever skips the check
+   * for the name it was actually shown for.
+   *
+   * ⚠️ **`.optional()` means `undefined`, and `formData.get()` returns `null`.** The action must read
+   * it as `?? undefined` — `z.string().optional().safeParse(null)` is **false** (probed), and a parse
+   * failure here would break every ORDINARY add while rendering nothing, since no visible field is
+   * named in the error.
+   *
+   * ⚠️ **Bounded.** NFKD can expand 40 characters into several hundred, and a crafted body can send
+   * anything. It is compared, never stored.
+   *
+   * ⚠️ **Not a protection.** A crafted body can always forge it; duplicates are advisory, not a
+   * boundary. Nothing should describe this field as a security control.
+   */
+  acknowledgedDuplicate: z
+    .string()
+    .max(PROFILE_NAME_MAX * 20)
+    .optional(),
 });
 
 export type AddAthleteInput = z.infer<typeof addAthleteSchema>;

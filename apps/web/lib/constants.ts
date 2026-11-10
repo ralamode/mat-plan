@@ -951,6 +951,36 @@ export const ATHLETE_FORM_COPY = {
   /** The submit. Named for what it does, not "Save" — this screen CREATES. */
   add: 'Add athlete',
   /**
+   * The duplicate warning (PROF-1 a-1d). ⚠️ **Hedged on purpose — "looks like", never "already
+   * exists".** `foldName` is lossy by design: it strips every combining mark, so voiced kana (が/か),
+   * Devanagari and Thai vowel signs, Persian ZWNJ variants and José/Jose all fold equal. Those are
+   * DIFFERENT names, and the copy must not tell a parent their child is already in the app when they
+   * are not. Showing the stored spelling beside what they typed is what makes a false positive
+   * obvious at a glance.
+   */
+  duplicateLive: (stored: string, kind: string) =>
+    `That looks like ${stored} (${kind}), who is already on your list.`,
+  duplicateArchived: (stored: string, kind: string) =>
+    `That looks like ${stored} (${kind}), who is in your archived athletes. Restoring brings back everything they logged.`,
+  /**
+   * 🔴 The kinds-differ case, which a UX lens found by reading this screen against its OWN recovery
+   * copy. `kindRecoveryOwnerAfter` tells a parent who picked the wrong kind to archive and add again
+   * — they do, come back, and would be offered **Restore**, which brings back the wrong kind
+   * permanently. So when the archived twin's kind differs from the one just chosen, say it plainly
+   * and give neither option primacy.
+   */
+  duplicateArchivedOtherKind: (stored: string, storedKind: string) =>
+    `${stored} was added as a ${storedKind}. Restoring keeps that, and it can't be changed.`,
+  /** Tiles show name + kind only, so two "Sam" Child tiles are indistinguishable. */
+  duplicateDisambiguate: (stored: string) =>
+    `Both will show as “${stored}”. Add an initial, like “${stored} B.”, to tell them apart.`,
+  addAnother: (name: string) => `Add another ${name}`,
+  openMatch: (name: string) => `Open ${name}`,
+  restoreMatch: (name: string) => `Restore ${name}`,
+  addNewInstead: (name: string, kind: string) => `Add a new ${name} (${kind}) instead`,
+  /** `restoreAthleteAction`'s own failure copy is "No athlete found to save.", nonsense here. */
+  restoreFailed: (name: string) => `Couldn’t restore ${name}. Try again.`,
+  /**
    * The submit's pending label. ⚠️ **Not `SAVING_LABEL`** ("Saving…"): this screen adds, and the two
    * labels on one button ("Add athlete" → "Saving…") describe different acts. `SAVING_LABEL` stays
    * the rename form's, where it is correct.

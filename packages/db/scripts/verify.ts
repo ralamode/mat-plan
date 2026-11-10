@@ -8,55 +8,56 @@ import {
   ACTIVITY_INPUT_SHAPES,
   ACTIVITY_METRIC_MAP,
   ACTIVITY_TYPE_SEED_ROWS,
-  activityTypeSeedRowSchema,
-  assertRollupAggregation,
   CALISTHENICS_METRIC_KEYS,
+  DAY_ROLES,
   DEFAULT_BODYWEIGHT_CONTEXT,
+  E2E_SESSION_BYPASS_USER,
+  ENTRY_KIND,
   ENTRY_STATUS,
-  foldAggregation,
+  HOUSEHOLD_ROLE,
+  HOUSEHOLD_ROLES,
+  MAX_HOUSEHOLD_ATHLETES,
   METRIC_AGGREGATION,
-  type MetricAggregation,
   METRIC_AGGREGATIONS,
   METRIC_DEFINITION_SEED_ROWS,
   METRIC_KEYS,
   METRIC_VALUE_TYPES,
-  metricDefinitionSeedRowSchema,
   MOVEMENT_PATTERNS,
   MOVEMENT_SEED_PUBLIC_IDS,
   MOVEMENT_SEED_ROWS,
-  movementSeedRowSchema,
-  movementSlug,
-  movementSlugMatchesName,
   PROFILE_KIND,
   PROFILE_NAME_MAX,
-  DAY_ROLES,
-  newId,
   PROGRAM_SEED,
-  type ProgramBlockSeedRow,
-  type RoutineConfig,
-  routineConfigSchema,
+  QUANTITY_SLOT,
+  QUANTITY_SLOT_ROWS,
   ROUTINE_VERSION,
-  SESSION_TYPES,
-  ENTRY_KIND,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_ACTIVITY_TYPE_SC_LIFT_PUBLIC_ID,
   SEED_ACTIVITY_TYPE_WEIGH_IN_PUBLIC_ID,
   SEED_METRIC_BODYWEIGHT_PUBLIC_ID,
   SEED_METRIC_KEYS,
   SEED_PUBLIC_ID_PREFIX,
-  uuidSchema,
-  QUANTITY_SLOT,
-  QUANTITY_SLOT_ROWS,
+  SESSION_TYPES,
+  UNITS,
   UNIT_CODES,
   UNIT_DIMENSION,
-  UNIT_DIMENSION_BY_CODE,
-  UNITS,
   UNIT_DIMENSIONS,
+  UNIT_DIMENSION_BY_CODE,
   WEEK_LENGTH_DAYS,
-  MAX_HOUSEHOLD_ATHLETES,
-  HOUSEHOLD_ROLE,
-  HOUSEHOLD_ROLES,
-  E2E_SESSION_BYPASS_USER,
+  activityTypeSeedRowSchema,
+  assertRollupAggregation,
+  foldAggregation,
+  foldName,
+  metricDefinitionSeedRowSchema,
+  movementSeedRowSchema,
+  movementSlug,
+  movementSlugMatchesName,
+  newId,
+  routineConfigSchema,
+  type MetricAggregation,
+  type ProgramBlockSeedRow,
+  type RoutineConfig,
+  uuidSchema,
 } from '@mat-plan/shared';
 import { and, eq, gte, inArray, isNull, lt, max, sql, sum } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -7811,6 +7812,206 @@ console.log(
       'first row (even once archived) and mints nothing, household B replaying A’s key is REFUSED ' +
       'and is never handed A’s public_id, and the per-household cap refuses the ' +
       `${MAX_HOUSEHOLD_ATHLETES + 1}th while still honouring a replay at the cap`,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-1d — the duplicate-name warning: advisory, scoped, archived-aware, and NULL-key-safe.
+//
+// Ids `…046xxx` are THIS block's range (#352's rule); `045xxx` belongs to a-1w.
+{
+  const D = (n: string) => `019826b4-0000-7000-8000-0000000460${n}`;
+  const nameOf = async (publicId: string) =>
+    (
+      await asPg
+        .select({ name: schema.profiles.name })
+        .from(schema.profiles)
+        .where(eq(schema.profiles.publicId, publicId))
+    )[0]?.name ?? null;
+
+  // ── A live twin warns, and the warning carries the STORED spelling and kind ────────────────────
+  const adaKey = D('01');
+  const ada = await createProfile(asPg, A_SCOPE, {
+    name: 'Ada',
+    kind: PROFILE_KIND.kid,
+    clientId: adaKey,
+  });
+  assert.ok(ada.ok, 'PROF-1 a-1d: the first Ada is created');
+
+  const dup = await createProfile(asPg, A_SCOPE, {
+    name: 'ada',
+    kind: PROFILE_KIND.kid,
+    clientId: D('02'),
+  });
+  assert.deepEqual(
+    dup,
+    {
+      ok: false,
+      reason: 'duplicate',
+      match: { publicId: ada.publicId, name: 'Ada', kind: PROFILE_KIND.kid, archived: false },
+      atCap: false,
+    },
+    'PROF-1 a-1d: a name that FOLDS equal warns, and returns the stored spelling, kind and id',
+  );
+
+  // ── 🔴 THE REGRESSION D2 EXISTS FOR: a replay of a SUCCESSFUL add is never "duplicate" ─────────
+  assert.deepEqual(
+    await createProfile(asPg, A_SCOPE, {
+      name: 'Ada',
+      kind: PROFILE_KIND.kid,
+      clientId: adaKey,
+    }),
+    { ok: true, publicId: ada.publicId },
+    'PROF-1 a-1d: a replay of a successful add returns ok with the SAME id, never duplicate — the ' +
+      'client_id lookup runs before the fold',
+  );
+
+  // ── 🔴 C2: a match whose client_id is NULL must still warn ─────────────────────────────────────
+  // Every athlete that predates a-1w has a NULL key — the seed writes none and 0020 backfilled
+  // nothing. Written with a bare `ne()` the exclusion drops these rows and the feature is DEAD for
+  // every household that exists, while every fixture built through createProfile still passes.
+  const legacyId = D('03');
+  await asPg.insert(schema.profiles).values({
+    publicId: legacyId,
+    name: 'Bea',
+    kind: PROFILE_KIND.kid,
+    householdId: households[0].id,
+  });
+  assert.equal(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'bea',
+        kind: PROFILE_KIND.kid,
+        clientId: D('04'),
+      })) as { reason?: string }
+    ).reason,
+    'duplicate',
+    'PROF-1 a-1d: a LEGACY athlete with a NULL client_id still warns — the exclusion is null-safe',
+  );
+
+  // ── The acknowledgement skips the check, but only for the name it was issued for ───────────────
+  assert.equal(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'ada',
+        kind: PROFILE_KIND.kid,
+        clientId: D('05'),
+        acknowledgedDuplicate: foldName('Bea'),
+      })) as { reason?: string }
+    ).reason,
+    'duplicate',
+    'PROF-1 a-1d: an acknowledgement for a DIFFERENT folded name does not wave this one through',
+  );
+
+  const acked = await createProfile(asPg, A_SCOPE, {
+    name: 'ada',
+    kind: PROFILE_KIND.kid,
+    clientId: D('06'),
+    acknowledgedDuplicate: foldName('ada'),
+  });
+  assert.ok(
+    acked.ok,
+    'PROF-1 a-1d: an acknowledgement matching the folded name really does insert the second Ada',
+  );
+
+  // ── Cross-household: B adding a name A holds must NOT warn (the oracle patch 26 attacks) ──────
+  assert.equal(
+    (
+      (await createProfile(asPg, B_SCOPE, {
+        name: 'Ada',
+        kind: PROFILE_KIND.kid,
+        clientId: D('07'),
+      })) as { reason?: string }
+    ).reason ?? 'ok',
+    'ok',
+    'PROF-1 a-1d: household B adding a name household A holds is NOT warned — the fold read is ' +
+      'scoped, and an unscoped one is a cross-household oracle on athlete names',
+  );
+
+  // ── An ARCHIVED twin warns, with archived: true, so the UI can offer Restore ───────────────────
+  const zoeKey = D('08');
+  const zoe = await createProfile(asPg, A_SCOPE, {
+    name: 'Zoë',
+    kind: PROFILE_KIND.adult,
+    clientId: zoeKey,
+  });
+  assert.ok(zoe.ok, 'PROF-1 a-1d: Zoë is created');
+  const aOwner = ownerScope(A_SCOPE);
+  assert.ok(aOwner, 'PROF-1 a-1d: A_SCOPE narrows (or the archive below proves nothing)');
+  await archiveProfile(asPg, aOwner, zoe.publicId);
+
+  assert.deepEqual(
+    await createProfile(asPg, A_SCOPE, {
+      name: 'zoe',
+      kind: PROFILE_KIND.adult,
+      clientId: D('09'),
+    }),
+    {
+      ok: false,
+      reason: 'duplicate',
+      match: { publicId: zoe.publicId, name: 'Zoë', kind: PROFILE_KIND.adult, archived: true },
+      atCap: false,
+    },
+    'PROF-1 a-1d: an ARCHIVED Zoë matches zoe and reports archived:true — otherwise Restore is ' +
+      'unreachable and the parent is told to add a second one',
+  );
+  assert.equal(
+    await nameOf(zoe.publicId),
+    'Zoë',
+    'PROF-1 a-1d: …and the match carries the STORED spelling, so Restore cannot relabel her',
+  );
+
+  // ── Live beats archived when both match ───────────────────────────────────────────────────────
+  const liveZoe = await createProfile(asPg, A_SCOPE, {
+    name: 'Zoe',
+    kind: PROFILE_KIND.adult,
+    clientId: D('0a'),
+    acknowledgedDuplicate: foldName('Zoe'),
+  });
+  assert.ok(liveZoe.ok, 'PROF-1 a-1d: a live Zoe is added alongside the archived Zoë');
+  assert.deepEqual(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'zoë',
+        kind: PROFILE_KIND.adult,
+        clientId: D('0b'),
+      })) as { match?: { publicId: string; archived: boolean } }
+    ).match,
+    { publicId: liveZoe.publicId, name: 'Zoe', kind: PROFILE_KIND.adult, archived: false },
+    'PROF-1 a-1d: with a live AND an archived match, the LIVE one wins — offering Restore for ' +
+      'somebody already on the picker is the worse answer',
+  );
+
+  // ── A soft-deleted twin does not warn ─────────────────────────────────────────────────────────
+  await asPg
+    .update(schema.profiles)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.profiles.publicId, legacyId));
+  assert.equal(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'Bea',
+        kind: PROFILE_KIND.kid,
+        clientId: D('0c'),
+      })) as { reason?: string }
+    ).reason ?? 'ok',
+    'ok',
+    'PROF-1 a-1d: a SOFT-DELETED twin does not warn — deleted is gone, unlike archived',
+  );
+
+  await asPg
+    .delete(schema.profiles)
+    .where(
+      inArray(schema.profiles.publicId, [ada.publicId, zoe.publicId, liveZoe.publicId, legacyId]),
+    );
+  await asPg
+    .delete(schema.profiles)
+    .where(inArray(schema.profiles.clientId, [D('06'), D('07'), D('0c')]));
+
+  console.log(
+    '✓ PROF-1 a-1d: the duplicate warning folds names, is scoped to the household, survives a ' +
+      'NULL client_id, reports archived matches so Restore is reachable, prefers a live match ' +
+      'over an archived one, and never answers duplicate to a replay of a successful add',
   );
 }
 

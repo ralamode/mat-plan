@@ -1,7 +1,13 @@
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
-import { HOUSEHOLD_ROLE, type HouseholdRole, newId, type ProfileKind } from '@mat-plan/shared';
+import {
+  foldName,
+  HOUSEHOLD_ROLE,
+  type HouseholdRole,
+  newId,
+  type ProfileKind,
+} from '@mat-plan/shared';
 import type { HouseholdScope, OwnerScope } from '../scope';
 import type { Executor } from './executor';
 
@@ -352,6 +358,69 @@ export async function countProfilesIn(exec: Executor, scope: HouseholdScope): Pr
     .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
 
   return rows.length;
+}
+
+/**
+ * Find a household athlete whose name FOLDS equal to `folded` (PROF-1 a-1d) — the duplicate warning's
+ * one read.
+ *
+ * Matches **live and archived**, never soft-deleted: an archived `Zoë` must still warn, because
+ * "add them again" is the wrong answer when Restore is the right one. A soft-deleted row is gone.
+ *
+ * 🔴 **The fold is compared in JS, here, and NOT in SQL.** `foldName` is NFKD + `\p{M}` + `\p{Cf}`
+ * stripping; Postgres has no equivalent, so `lower(name) = $1` would be a SECOND, weaker folding rule
+ * living in the query while the real one lives in `@mat-plan/shared`. A household holds at most
+ * `MAX_HOUSEHOLD_ATHLETES` rows behind an equality on `household_id`, so reading them and folding in
+ * memory costs nothing and keeps one definition.
+ *
+ * 🔴 **`excludeClientId` is NULL-SAFE, and that is not a style choice.** `profiles.client_id` is
+ * **nullable** (`schema.ts`), migration `0020` backfilled nothing, and the seed writes no key — so
+ * `client_id <> $1` is **NULL** for every pre-a-1w athlete and Postgres drops those rows. Written the
+ * natural way this function would have been blind to exactly the athletes every existing household
+ * already has, while every fixture built through `createProfile` (which always sets a key) passed.
+ * The exclusion is applied in JS for the same reason the fold is, and `db:mutations` patch `29`
+ * reverts it to the broken form.
+ *
+ * **Live beats archived** when both match: a live `Zoe` and an archived `Zoë` are both hits, and an
+ * unspecified pick would offer Restore for somebody who is already on the picker.
+ *
+ * ⚠️ **One row, and it is advisory.** `createProfile` turns this into a *warning*, never a refusal —
+ * see its docblock for what this feature does not promise.
+ */
+export async function findNameMatch(
+  exec: Executor,
+  scope: HouseholdScope,
+  folded: string,
+  options: { excludeClientId?: string; excludeProfileId?: string } = {},
+): Promise<{ publicId: string; name: string; kind: ProfileKind; archived: boolean } | null> {
+  const rows = await exec
+    .select({
+      publicId: schema.profiles.publicId,
+      name: schema.profiles.name,
+      kind: schema.profiles.kind,
+      clientId: schema.profiles.clientId,
+      archivedAt: schema.profiles.archivedAt,
+    })
+    .from(schema.profiles)
+    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
+
+  const matches = rows.filter(
+    (r) =>
+      foldName(r.name) === folded &&
+      // `!=` on purpose: a NULL `client_id` must NOT be excluded. See the docblock.
+      (options.excludeClientId === undefined || r.clientId !== options.excludeClientId) &&
+      (options.excludeProfileId === undefined || r.publicId !== options.excludeProfileId),
+  );
+  if (matches.length === 0) return null;
+
+  const live = matches.find((r) => r.archivedAt === null);
+  const chosen = live ?? matches[0]!;
+  return {
+    publicId: chosen.publicId,
+    name: chosen.name,
+    kind: chosen.kind as ProfileKind,
+    archived: chosen.archivedAt !== null,
+  };
 }
 
 /**
