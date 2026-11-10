@@ -1,21 +1,26 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index ab5f128..786ec8f 100644
+index 87f9a86..08a0515 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
-@@ -218,13 +218,13 @@ export async function createProfile(
-   scope: HouseholdScope,
-   input: { name: string; kind: ProfileKind; clientId: string },
+@@ -259,6 +259,10 @@ export async function createProfile(
+     acknowledgedDuplicate?: string;
+   },
  ): Promise<CreateProfileResult> {
--  const existing = await profileByClientId(exec, scope, input.clientId);
--  if (existing) return { ok: true, publicId: existing.publicId };
--
-   if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
-     return { ok: false, reason: 'full' };
++  if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
++    return { ok: false, reason: 'full' };
++  }
++
+   const existing = await profileByClientId(exec, scope, input.clientId);
+   if (existing) return { ok: true, publicId: existing.publicId };
+ 
+@@ -277,10 +281,6 @@ export async function createProfile(
+     }
    }
  
-+  const existing = await profileByClientId(exec, scope, input.clientId);
-+  if (existing) return { ok: true, publicId: existing.publicId };
-+
+-  if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
+-    return { ok: false, reason: 'full' };
+-  }
+-
    await insertProfileOwnedBy(exec, scope, input);
  
    const created = await profileByClientId(exec, scope, input.clientId);

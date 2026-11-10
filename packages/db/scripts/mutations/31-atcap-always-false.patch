@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 87f9a86..282cbc6 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -272,7 +272,7 @@ export async function createProfile(
+       excludeClientId: input.clientId,
+     });
+     if (match) {
+-      const atCap = (await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES;
++      const atCap = false;
+       return { ok: false, reason: 'duplicate', match, atCap };
+     }
+   }

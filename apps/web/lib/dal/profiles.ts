@@ -10,6 +10,7 @@ import {
   renameProfile,
   restoreProfile,
   schema,
+  type NameMatch,
 } from '@mat-plan/db';
 import {
   type AddAthleteInput,
@@ -380,6 +381,24 @@ export async function restoreAthlete(publicId: string): Promise<AthleteWriteResu
 }
 
 /**
+ * What `createAthlete` answers (PROF-1 a-1d).
+ *
+ * 🔴 **Its OWN type, not a widened `AthleteWriteResult`.** Adding a `duplicate` arm to the shared
+ * result would give **archive, restore and rename** a case none of them can ever produce, and every
+ * `switch` over them would grow a branch that is dead by construction. Add is the only athlete write
+ * that can answer "there is already one of these".
+ *
+ * `match.publicId` leaks nothing new, and that is **evidence rather than assertion**:
+ * `listHouseholdAthletes` already returns every archived athlete's name and `publicId` to every
+ * member of the household, and `/settings` renders them with no owner gate. The caller here is
+ * already inside that household.
+ */
+export type CreateAthleteResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: 'no_scope' | 'refused' | 'full' }
+  | { ok: false; reason: 'duplicate'; match: NameMatch; atCap: boolean };
+
+/**
  * Create one athlete in the request's household — **any member** (PROF-1 a-1w).
  *
  * No `getProfileByPublicId` here, unlike archive and restore: there is no id to resolve. The
@@ -391,10 +410,14 @@ export async function restoreAthlete(publicId: string): Promise<AthleteWriteResu
  * refusal an unauthenticated caller gets. `full` is the opposite: it is the household's own quota,
  * only reachable after the scope resolved, and it gets copy that says so.
  */
-export async function createAthlete(input: AddAthleteInput): Promise<AthleteWriteResult> {
+export async function createAthlete(input: AddAthleteInput): Promise<CreateAthleteResult> {
   const scope = await getHouseholdScope();
   if (!scope) return { ok: false, reason: 'no_scope' };
 
   const created = await createProfile(db, scope, input);
-  return created.ok ? { ok: true, id: created.publicId } : { ok: false, reason: created.reason };
+  if (created.ok) return { ok: true, id: created.publicId };
+  if (created.reason === 'duplicate') {
+    return { ok: false, reason: 'duplicate', match: created.match, atCap: created.atCap };
+  }
+  return { ok: false, reason: created.reason };
 }

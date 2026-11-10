@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index fe2b9d5..7eed823 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -404,7 +404,7 @@ export async function findNameMatch(
+       archivedAt: schema.profiles.archivedAt,
+     })
+     .from(schema.profiles)
+-    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)))
++    .where(and(isNull(schema.profiles.deletedAt)))
+     // ⚠️ **Ordered, because "live beats archived" is only half the rule.** Two live cousins both
+     // named Ada is the designed case, so without a stable order the third Ada is warned about an
+     // ARBITRARY one — and "Open Ada" could point at a different cousin between submits, since heap

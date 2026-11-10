@@ -951,6 +951,52 @@ export const ATHLETE_FORM_COPY = {
   /** The submit. Named for what it does, not "Save" — this screen CREATES. */
   add: 'Add athlete',
   /**
+   * The duplicate warning (PROF-1 a-1d). ⚠️ **Hedged on purpose — "looks like", never "already
+   * exists".** `foldName` is lossy by design: it strips every combining mark, so voiced kana (が/か),
+   * Devanagari and Thai vowel signs, Persian ZWNJ variants and José/Jose all fold equal. Those are
+   * DIFFERENT names, and the copy must not tell a parent their child is already in the app when they
+   * are not. Showing the stored spelling beside what they typed is what makes a false positive
+   * obvious at a glance.
+   */
+  duplicateLive: (stored: string, kind: string) =>
+    `That looks like ${stored} (${kind}), who is already on your list.`,
+  duplicateArchived: (stored: string, kind: string) =>
+    `That looks like ${stored} (${kind}), who is in your archived athletes.`,
+  /**
+   * 🔴 **Split out of `duplicateArchived`, and rendered only when the kinds AGREE.** A UX lens read
+   * the composed kinds-differ message and found it sold Restore in the sentence immediately before
+   * the sentence warning that Restore is permanent and wrong: "…Restoring brings back everything
+   * they logged. Ada is saved as Adult, and that can't be changed." The plan's C7 asks that neither
+   * option be given primacy, and a benefit stated first is primacy. When the kinds differ this is
+   * omitted, so the parent reads the constraint and chooses; when they agree it is the reason Restore
+   * is the better option and belongs.
+   */
+  duplicateArchivedRestoreNote: 'Restoring brings back everything they logged.',
+  /**
+   * 🔴 The kinds-differ case, which a UX lens found by reading this screen against its OWN recovery
+   * copy. `kindRecoveryOwnerAfter` tells a parent who picked the wrong kind to archive and add again
+   * — they do, come back, and would be offered **Restore**, which brings back the wrong kind
+   * permanently. So when the archived twin's kind differs from the one just chosen, say it plainly
+   * and give neither option primacy.
+   */
+  duplicateArchivedOtherKind: (stored: string, storedKind: string, chosenKind: string) =>
+    `${stored} is saved as ${storedKind}, and that can’t be changed. You chose ${chosenKind}.`,
+  /** Tiles show name + kind only, so two "Sam" Child tiles are indistinguishable. */
+  /**
+   * ⚠️ **Only true when the two names are spelled IDENTICALLY.** The fold is lossy, so a match can be
+   * `José` against a typed `Jose` — those render as two different tiles, and telling a parent "both
+   * will show as José" would be false in exactly the false-positive case the hedging exists for. The
+   * caller gates on an exact comparison.
+   */
+  duplicateDisambiguate: (stored: string) =>
+    `Both will show as “${stored}”. Add an initial, like “${stored} B.”, to tell them apart.`,
+  addAnother: (name: string) => `Add another ${name}`,
+  openMatch: (name: string) => `Open ${name}`,
+  restoreMatch: (name: string) => `Restore ${name}`,
+  addNewInstead: (name: string, kind: string) => `Add a new ${name} (${kind}) instead`,
+  /** `restoreAthleteAction`'s own failure copy is "No athlete found to save.", nonsense here. */
+  restoreFailed: (name: string) => `Couldn’t restore ${name}. Try again.`,
+  /**
    * The submit's pending label. ⚠️ **Not `SAVING_LABEL`** ("Saving…"): this screen adds, and the two
    * labels on one button ("Add athlete" → "Saving…") describe different acts. `SAVING_LABEL` stays
    * the rename form's, where it is correct.

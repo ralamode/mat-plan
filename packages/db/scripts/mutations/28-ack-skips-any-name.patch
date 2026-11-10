@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 87f9a86..389a672 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -264,7 +264,7 @@ export async function createProfile(
+ 
+   // Step 2 — the duplicate fold. `acknowledgedDuplicate` is the FOLDED name the caller was warned
+   // about, so an acknowledgement of "Ada" does not wave "Bea" through on stale consent.
+-  if (input.acknowledgedDuplicate !== foldName(input.name)) {
++  if (input.acknowledgedDuplicate === undefined) {
+     // ⚠️ `excludeClientId` is this caller's OWN key. A concurrent same-key twin that loses the race
+     // to step 1 but wins it to step 2 must not be told "duplicate" by the row its own twin just
+     // inserted — it falls through to steps 3-4 and returns that row's id.

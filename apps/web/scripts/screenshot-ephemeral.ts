@@ -24,10 +24,16 @@ import {
   E2E_SESSION_BYPASS_USER,
   ENTRY_STATUS,
   HOUSEHOLD_ROLE,
+  MAX_HOUSEHOLD_ATHLETES,
   METRIC_KEYS,
   newId,
+  PROFILE_KIND,
+  PROFILE_KIND_LABELS,
+  type ProfileKind,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
+  SEED_PROFILE_3_NAME,
+  SEED_PROFILE_NAME,
   UNIT_DIMENSION,
 } from '@mat-plan/shared';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -423,6 +429,21 @@ const STATES = {
   // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
   // settles, refusals included, which would empty the box under its own "Enter a name." error).
   'rename-rejected': null,
+  // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
+  // that the server answers with a match. Three states, because the callout is three different
+  // screens and the copy differs in each.
+  //
+  // `duplicate-live`: the seeded Athlete One, typed back exactly with the same kind — so it also
+  // renders the "Both will show as" disambiguation line, which needs an identical spelling AND an
+  // equal kind.
+  'duplicate-live': null,
+  // `duplicate-kinds-differ`: an ARCHIVED athlete met with the OTHER kind. The case this screen's own
+  // recovery copy creates ("archive them and add them again"), where Restore would hand back the
+  // wrong kind permanently — so neither choice is primary.
+  'duplicate-kinds-differ': seedArchivedAthlete,
+  // `duplicate-at-cap`: a FULL household still warned about a duplicate, with NO "Add another" (the
+  // endpoint would refuse it) and the cap sentence saying why the choice is missing.
+  'duplicate-at-cap': seedHouseholdAtCap,
 } as const;
 type StateName = keyof typeof STATES;
 
@@ -432,6 +453,22 @@ type StateName = keyof typeof STATES;
  * marks one attempt. A reviewer approving those needs to see them, so the capture performs the taps.
  * Runs per viewport against a fresh page → must be idempotent from a clean load.
  */
+/**
+ * PROF-1 a-1d — type a name the household already holds and submit, leaving the duplicate callout on
+ * screen. One helper for all three duplicate states: they differ only in the name and the kind, and
+ * a second copy of this would be the repetition rule's own example.
+ */
+const warnOnDuplicate = (name: string, kind: ProfileKind) => async (page: Page) => {
+  // `PROFILE_KIND_LABELS`, not a `'Child' | 'Adult'` union re-typed here: the radio's label IS that
+  // constant, so a copy would be a second place to update when the wording changes.
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
+  await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add, exact: true }).click();
+  // The callout's focus target. Waiting on IT rather than on the text means the capture cannot race
+  // the Server Action round trip.
+  await page.getByRole('group').waitFor();
+};
+
 /** V1-27 — scaffold the day and return the open card's reps/weight inputs. */
 async function scaffoldOpenCard(page: Page) {
   const strength = page.getByRole('region', { name: STRENGTH_COPY.heading, exact: true });
@@ -539,6 +576,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
     await page.getByRole('alert').waitFor();
   },
+  // PROF-1 a-1d — the warning only exists after a submit the server answers with a match, so the
+  // capture performs it. Each waits for the callout's own `role="group"`, which is the focus target
+  // the form moves to — so the screenshot is taken after the state has actually settled, not after a
+  // click was merely dispatched.
+  'duplicate-live': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
+  // The archived athlete is a Child (`seedArchivedAthlete` archives the third seeded profile), so
+  // choosing Adult is what makes the kinds differ.
+  'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, PROFILE_KIND.adult),
+  'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {
@@ -803,6 +849,51 @@ async function seedArchivedAthlete(dbUrl: string): Promise<void> {
       .update(schema.profiles)
       .set({ archivedAt: new Date() })
       .where(eq(schema.profiles.publicId, SEED_PROFILE_3_PUBLIC_ID));
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * PROF-1 a-1d — fill the household to `MAX_HOUSEHOLD_ATHLETES` so the duplicate warning renders in
+ * its at-cap form. Written through the schema rather than `createProfile`, because `createProfile`
+ * is the thing under test: it would refuse at 25 and the fixture could never reach the cap.
+ *
+ * ⚠️ `client_id` is left NULL, exactly as `db:seed` leaves it — which is also the population that
+ * broke the first version of this feature (a non-null-safe exclusion dropped every keyless row), so
+ * a capture against keyed fixtures only would hide that class of defect from a reviewer's eye too.
+ */
+async function seedHouseholdAtCap(dbUrl: string): Promise<void> {
+  const pool = createDbPool(dbUrl);
+  const db = createDb(pool);
+  try {
+    const [household] = await db
+      .select({ id: schema.profiles.householdId })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.publicId, SEED_PROFILE_PUBLIC_ID))
+      .limit(1);
+    // ⚠️ `profiles.household_id` is NULLABLE in the schema, so the selected value is
+    // `number | null` and the guard is two conditions, not one. A bare `!household` would typecheck
+    // and then insert 25 rows with a null household — invisible to the capture, which reads the
+    // seeded household, so the cap would never be reached and the state would silently be wrong.
+    if (!household?.id) throw new Error('seeded profile has no household — did db:seed run?');
+    const householdId = household.id;
+
+    const [{ count: live }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.householdId, householdId));
+
+    const toAdd = MAX_HOUSEHOLD_ATHLETES - Number(live);
+    if (toAdd <= 0) return;
+    await db.insert(schema.profiles).values(
+      Array.from({ length: toAdd }, (_, i) => ({
+        householdId,
+        publicId: newId(),
+        name: `Filler ${i + 1}`,
+        kind: PROFILE_KIND.kid,
+      })),
+    );
   } finally {
     await pool.end();
   }

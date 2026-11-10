@@ -1,11 +1,13 @@
 import { and, sql, type SQL } from 'drizzle-orm';
 
-import { MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
+import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
 
 import { schema } from '../client';
 import type { HouseholdScope, OwnerScope } from '../scope';
 import {
   countProfilesIn,
+  findNameMatch,
+  type NameMatch,
   insertProfileOwnedBy,
   isLiveProfile,
   isOwnerOf,
@@ -181,7 +183,18 @@ export async function restoreProfile(
  * household (or to a soft-deleted row), `full` is this household's own quota.
  */
 export type CreateProfileResult =
-  { ok: true; publicId: string } | { ok: false; reason: 'refused' | 'full' };
+  | { ok: true; publicId: string }
+  | { ok: false; reason: 'refused' | 'full' }
+  /**
+   * PROF-1 a-1d. **A warning, not a refusal** — the caller may resubmit with
+   * `acknowledgedDuplicate` and the add proceeds.
+   *
+   * 🔴 **`atCap` rides along because the UI must not offer a button the endpoint will reject.** The
+   * duplicate check runs BEFORE the quota (so an archived twin can be restored by a household that is
+   * full — restore needs no slot), which means a household at the cap sees the warning first. Without
+   * this flag the screen would offer "Add another", and that resubmit would die on `full`.
+   */
+  | { ok: false; reason: 'duplicate'; match: NameMatch; atCap: boolean };
 
 /**
  * Create one athlete in `scope` — **replay-first** (PROF-1 a-1, decision D2).
@@ -195,11 +208,18 @@ export type CreateProfileResult =
  *    pre-hydration POST and an offline flush all arrive as the same key, and all three must return
  *    the FIRST row rather than mint a twin. Reading first also means a replay costs one indexed point
  *    read and no write.
- * 2. **The quota, after the replay check and before the insert.** That order is the whole subtlety:
+ * 2. **The duplicate-name fold (a-1d), BEFORE the quota.** 🔴 **That order is deliberate and was
+ *    contested.** Quota-first reads more naturally, but an archived twin occupies a slot — so a full
+ *    household re-adding an archived `Zoë` would be told "write to us" instead of being offered
+ *    **Restore, which needs no slot at all.** Duplicate-first keeps the one recovery that works
+ *    reachable. The price is that the warning can appear to a household that is full, which is why
+ *    the result carries `atCap` and the screen hides "Add another" when it is set.
+ *    ⚠️ **Skipped entirely when the caller acknowledges**, and the acknowledgement is compared to
+ *    `foldName(name)` so consent to "Ada" cannot wave "Bea" through.
+ * 3. **The quota, after the replay check and before the insert.** That order is the whole subtlety:
  *    a household at the cap replaying a key it already used must still get `ok`, because that request
  *    creates nothing. Checking first would turn a retry into a refusal at exactly the moment the
  *    parent's connection is flaky.
- * 3. _(a-1d inserts the duplicate-name fold here.)_
  * 4. **Insert, `ON CONFLICT (client_id) DO NOTHING`**, then **re-read through the same scoped
  *    lookup**. The conflict path is reached when the key is already spent — by this household (a
  *    race with step 1) or by another one, since `uq_profiles_client_id` is global and non-partial.
@@ -212,14 +232,52 @@ export type CreateProfileResult =
  * ⚠️ **`refused` is the honest answer for a soft-deleted row too.** The key is spent and the index is
  * non-partial, so a replay cannot resurrect it; saying so beats silently minting a second athlete
  * under a key the parent believes they already used.
+ *
+ * ## ⚠️ What the duplicate warning does NOT promise
+ *
+ * **It is advisory and best-effort, not an invariant.** Two requests with DIFFERENT keys and the same
+ * name arriving together both pass step 2 and both insert — exactly the duplicate this feature exists
+ * to discourage. A unique index on a folded name is impossible, because "Add another" is a *feature*:
+ * two cousins really can both be Ada. The same count-then-insert race already applies to the quota
+ * (`docs/tech-debt.md`). Nothing here should be described as preventing duplicates; it warns about
+ * them.
  */
 export async function createProfile(
   exec: Executor,
   scope: HouseholdScope,
-  input: { name: string; kind: ProfileKind; clientId: string },
+  input: {
+    name: string;
+    kind: ProfileKind;
+    clientId: string;
+    /** The FOLDED name the caller was warned about, if they are re-confirming. */
+    acknowledgedDuplicate?: string;
+  },
 ): Promise<CreateProfileResult> {
   const existing = await profileByClientId(exec, scope, input.clientId);
   if (existing) return { ok: true, publicId: existing.publicId };
+
+  // Step 2 — the duplicate fold. `acknowledgedDuplicate` is the FOLDED name the caller was warned
+  // about, so an acknowledgement of "Ada" does not wave "Bea" through on stale consent.
+  if (input.acknowledgedDuplicate !== foldName(input.name)) {
+    // ⚠️ `excludeClientId` is this caller's OWN key. A concurrent same-key twin that loses the race
+    // to step 1 but wins it to step 2 must not be told "duplicate" by the row its own twin just
+    // inserted — it falls through to steps 3-4 and returns that row's id.
+    //
+    // 🔴 **THIS ARGUMENT HAS NO MUTATION PATCH, deliberately.** One was written and stayed GREEN:
+    // the replay lookup above returns at step 1, so the exclusion is never consulted sequentially,
+    // and the interleaving it actually guards — a twin inserting BETWEEN those two reads — cannot
+    // be staged in single-connection PGlite. It is real against a pooled Neon, so the argument
+    // stays; what does not ship is a patch that reddens nothing, since `db:mutations` exists to
+    // catch exactly that. ⚠️ The ORDERING is a different question and DOES have a patch (`30`):
+    // once a second athlete of the same name exists, the exclusion can no longer rescue a replay.
+    const match = await findNameMatch(exec, scope, foldName(input.name), {
+      excludeClientId: input.clientId,
+    });
+    if (match) {
+      const atCap = (await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES;
+      return { ok: false, reason: 'duplicate', match, atCap };
+    }
+  }
 
   if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
     return { ok: false, reason: 'full' };

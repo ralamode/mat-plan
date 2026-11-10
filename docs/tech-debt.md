@@ -15,6 +15,60 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
+
+- **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the
+  match is archived. Every tier below the browser covers it — `db:verify` proves the archived twin
+  matches, reports `archived: true`, carries the stored spelling and loses to a live match; mutation
+  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. ⚠️ **Those unit tests did not exist when this
+  entry was first written** — the claim was false for a day, and a review lens caught it; they were
+  written rather than the claim weakened. **What nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
+- **The observation, recorded so the next attempt does not repeat it:** after `archiveAthleteNamed`,
+  loading `/p/new` leaves the kind radios **resolvable but never actionable**. `page.url()` and
+  `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,
+  `evaluateAll`) hangs until the test times out — reproduced at a 30s budget and again at 90s.
+  Navigating via `/p` between the archive and the add screen did not clear it.
+- **What is ruled out is the rendering; the cause itself is unexplained.** The same state under jsdom
+  (an archived duplicate, `archived: true`) renders the Restore button in ~1s with no render loop, so
+  the form is not looping. ⚠️ An earlier version of this line asserted the defect was "the
+  interaction between the archive action's revalidation and a subsequent navigation under
+  Playwright". That was a **guess stated as a finding** — nothing here measured it. The suspicion is
+  worth keeping as a starting point (see the fix below), not as a conclusion.
+- **Why it is filed rather than skipped:** a `test.skip` would sit in the suite looking like coverage.
+  The e2e file carries a docblock naming exactly what is and is not proven instead.
+- **The fix, when taken:** instrument what the page is doing in that window (a `pageerror`/`console`
+  listener attached BEFORE the `goto`, or a trace) rather than guessing; suspect a pending RSC
+  revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
+  fresh context instead of continuing the archived session.
+
+### The add-athlete form cannot be submitted without hydration — Next refuses the request (added 2026-11-10)
+
+- **What & why it's debt:** `/p/new` renders server-side, but a submit made before the client runtime
+  is in place **never reaches the Server Action**. Measured: with the app's chunks blocked
+  (`page.route('**/_next/static/chunks/**', r => r.abort())`), the native POST reaches the server and
+  is answered `⨯ Error: Invalid Server Actions request.` — four times, once per attempt. No envelope
+  is produced, so nothing renders and the page simply sits there.
+- **Why this entry replaced a different one.** The first version of it said a `javaScriptEnabled: false`
+  context "cannot be driven", which was true but unhelpful: in such a context `page.url()` answers
+  while `locator.count()` returns 0 and `innerText()` 32 characters, because **Playwright's own
+  injected script cannot run there either**, so it cannot distinguish an empty page from a blind
+  harness. Blocking the chunks instead keeps the harness working and the page unhydrated, which is
+  what turned a dead end into the measurement above. ⚠️ **The cause is not established** — only that
+  the request is refused. Do not write one in here.
+- **What it cost, recorded because the rule earned it.** `a-1d` shipped a fix for the one refusal on
+  this form that depended on client state (the duplicate callout was gated on the React `name`
+  state): the envelope carried the parsed name and kind and the island seeded from them. The
+  measurement above **removed its justification** — an unhydrated submit produces no envelope to seed
+  from, and a submit captured _during_ hydration is replayed against an island that is already
+  mounted, where a `useState` initializer is inert. It was reverted rather than kept as defence
+  against a state that cannot occur.
+- **What this means for claims:** nothing in this repo tests an unhydrated path, and the one above
+  shows the form does not support one. `rename-form.tsx` reasons about a no-JS re-render from the
+  code, not from a test, and should be read that way.
+- **The fix, when taken:** decide whether progressive enhancement is wanted on this form at all. If
+  it is, the Server Action request has to be made to work unhydrated first — there is no point
+  restoring field state for a POST the framework rejects.
+
 ### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
 
 - **What & why it's debt:** `createProfile` (`packages/db/src/writers/profile.ts`) reads

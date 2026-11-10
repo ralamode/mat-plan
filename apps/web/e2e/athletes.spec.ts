@@ -1,7 +1,9 @@
 import { SEED_PROFILE_2_PUBLIC_ID, SEED_PROFILE_3_PUBLIC_ID } from '@mat-plan/db';
 import {
   CHOOSE_KIND_MESSAGE,
+  PROFILE_KIND,
   PROFILE_KIND_LABELS,
+  type ProfileKind,
   PROFILE_NAME_MAX,
   SEED_PROFILE_2_NAME,
   SEED_PROFILE_3_NAME,
@@ -464,34 +466,54 @@ const added: string[] = [];
 async function addAthlete(
   page: Page,
   name: string,
-  kind: 'Child' | 'Adult' = 'Child',
+  // `ProfileKind`, not a `'Child' | 'Adult'` union: the radio's label IS `PROFILE_KIND_LABELS`, so a
+  // second spelling of it here is a second place to update when the wording changes. The twin helper
+  // in `scripts/screenshot-ephemeral.ts` reads the same constant.
+  kind: ProfileKind = PROFILE_KIND.kid,
 ): Promise<void> {
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: new RegExp(`^${kind}`) }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   added.push(name);
 }
 
 test.afterEach(async ({ page }) => {
+  // ⚠️ **Its own budget.** a-1d's duplicate tests leave TWO athletes under one name, so cleanup can
+  // need two full round trips through a Server Action plus two page loads, which overran the 30s and
+  // failed a green test inside the hook. ⚠️ An earlier version of this comment said it "overran the
+  // test's own 30s": wrong mechanism. Playwright gives after-hooks their OWN slot
+  // (`worker/workerProcessEntry.js`, `afterHooksSlot`), so it was the hook's own 30s, and
+  // `test.setTimeout` here sets that slot — it extends the hook without shrinking the test.
+  test.setTimeout(90_000);
   // Archive whatever this test created, so the picker does not accumulate fixtures. Best effort:
   // a test that failed before the add leaves nothing to clean, and a missing row must not mask the
   // real failure.
   for (const name of added.splice(0)) {
     try {
       await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-      const control = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
-      if (await control.count()) {
-        await control.click();
-        // ⚠️ **Wait for the archive to land.** `click()` returns once the click is dispatched, so the
-        // next `goto` or the page teardown could abort the Server Action and leave the fixture on the
-        // picker for every later run. The Undo button is the signal the existing archive tests use.
-        await expect(
-          page.getByRole('button', { name: SETTINGS_COPY.undoLabel(name) }),
-        ).toBeVisible();
+      const archive = () => page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+
+      // 🔴 **A LOOP, because a-1d made two athletes under ONE name a real fixture.** This was
+      // `if (await control.count()) await control.click()`, and on the duplicate tests — the only
+      // ones that create two rows with the same name — `count()` was 2, so `click()` threw
+      // Playwright's strict-mode violation straight into the `catch` below. Neither athlete was
+      // archived, on every run and every retry, and the swallow meant this cleanup reported nothing
+      // while doing nothing. A cleanup that cannot fail out loud has to be correct by construction.
+      //
+      // ⚠️ **Counting the controls DOWN is the wait, and the first fix got this wrong.** It waited on
+      // the Undo button, which is already visible from the PREVIOUS archive — so the loop re-queried
+      // while the row was still detaching, `click()` retried the stale handle for the whole 30s
+      // action timeout, and the passes burned the hook's budget instead. `toHaveCount` polls, so it
+      // is both the "the Server Action landed" signal the Undo assertion used to be and the loop's
+      // own termination condition.
+      for (let remaining = await archive().count(); remaining > 0; remaining -= 1) {
+        await archive().first().click();
+        await expect(archive()).toHaveCount(remaining - 1, { timeout: 15_000 });
       }
     } catch {
-      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one.
+      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one. ⚠️ Which
+      // is exactly why the loop above must not depend on it: see the comment there.
     }
   }
 });
@@ -513,7 +535,7 @@ test('the picker offers Add athlete, which creates one and lands on their day pa
     page.getByRole('heading', { name: ADD_ATHLETE_COPY.pageHeading, level: 1 }),
   ).toBeVisible();
 
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   added.push(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
@@ -560,7 +582,7 @@ test('nothing is pre-selected: submitting without a kind is a field error that K
 
 test('a blank name is a field error, and the chosen kind survives it', async ({ page }) => {
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Adult/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
   // ⚠️ **Whitespace, not an empty field.** `required` stops a truly blank submit client-side, so the
   // server's own refusal is never reached and there is no alert to assert — which is exactly how the
   // first version of this test failed. A whitespace-only value is accepted by the browser and
@@ -579,7 +601,9 @@ test('a blank name is a field error, and the chosen kind survives it', async ({ 
   // fields in a `<form action>` when the action settles and freezes a CONTROLLED radio's
   // `defaultChecked` at mount, so `checked={...}` alone is wiped — this assertion stayed red through
   // that wrong fix, which is how the defect was found. The mirror of the name test above.
-  await expect(page.getByRole('radio', { name: /^Adult/ })).toBeChecked();
+  await expect(
+    page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }),
+  ).toBeChecked();
 });
 
 test('the Enter key in the name field submits once a kind is chosen', async ({
@@ -588,7 +612,7 @@ test('the Enter key in the name field submits once a kind is chosen', async ({
   const name = uniqueName('enter', testInfo.workerIndex);
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
 
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   added.push(name);
   // `enterKeyHint="go"` promises this. The kind fieldset sits ABOVE the name precisely so a parent
@@ -638,11 +662,174 @@ test('a long name added through the form does not overflow the picker at 360px',
   const long = uniqueName('x', testInfo.workerIndex)
     .padEnd(PROFILE_NAME_MAX, 'W')
     .slice(0, PROFILE_NAME_MAX);
-  await addAthlete(page, long, 'Adult');
+  await addAthlete(page, long, PROFILE_KIND.adult);
   // The actual name, not `/W/` — matching a single padded character would pass on any heading.
   await expect(page.getByRole('heading', { name: long, level: 1 })).toBeVisible();
 
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   await expectNoHorizontalOverflow(page, 'the picker with a max-length added name at 360px');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// PROF-1 a-1d — the duplicate-name warning on the add form.
+//
+// ⚠️ These drive the one state no static scan can reach: the callout only exists after a submit that
+// found a match, so `a11y.spec.ts`'s scan of `/p/new` never sees it (the token pair is covered by the
+// `/design/tokens` cell instead). Focus, the Enter key and the choices are e2e's alone.
+
+test('a duplicate name warns instead of adding, and the warning takes focus', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('dupe', testInfo.workerIndex);
+  await addAthlete(page, name, PROFILE_KIND.kid);
+  await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+
+  // The same name again, with a FRESH clientId (a new page load mints one), must warn.
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name.toLowerCase());
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+  // 🔴 Focus IS the announcement. `aria-describedby` is read on focus, and `disabled={pending}` has
+  // already blurred the submit to `<body>` — so without this move a parent taps Add and sees nothing.
+  const callout = page.locator('main').getByText(/looks like/);
+  await expect(callout).toBeVisible();
+  const focusedText = await page.evaluate(() => document.activeElement?.textContent ?? '');
+  expect(
+    focusedText,
+    'the callout takes focus, which both announces it and scrolls it in',
+  ).toContain('looks like');
+
+  // …and nothing was created: the picker still holds exactly one of them.
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(1);
+});
+
+test('the warning keeps both fields, and "Add another" adds the second one', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('another', testInfo.workerIndex);
+  await addAthlete(page, name, PROFILE_KIND.kid);
+
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+
+  // UX1 B1: both fields survive the settle. React 19 resets what it is not keeping in sync.
+  await expect(page.getByLabel(ATHLETE_FORM_COPY.nameLabel)).toHaveValue(name);
+  await expect(
+    page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }),
+  ).toBeChecked();
+
+  added.push(name);
+  await page.getByRole('button', { name: new RegExp(`Add another`) }).click();
+  await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(2);
+});
+
+test('🔴 Enter with the warning showing does NOT create the duplicate', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('enterdupe', testInfo.workerIndex);
+  await addAthlete(page, name, PROFILE_KIND.kid);
+
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 The primary submit is unmounted while the callout shows, so without the hidden submit
+  // SENTINEL the form's DEFAULT button becomes the callout's "Add another" — which carries the
+  // acknowledgement, so a parent tapping back into the field and pressing Go silently creates the
+  // second athlete. The sentinel is first in tree order and therefore wins that role instead. jsdom
+  // cannot prove any of it (it has no implicit submission), so the real key is driven here.
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).press('Enter');
+  // ⚠️ **Asserted on FOCUS, not on the URL.** Without the sentinel the acknowledging POST is still
+  // in flight while `toHaveURL` and `toBeVisible` both succeed, so a later count could read before
+  // the insert commits and the test would pass over a real defect. `press()` focuses the input
+  // first, so only the re-warn moves focus back to the callout.
+  await expect(page.getByRole('group')).toBeFocused();
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 And the radio path, which is why this is a sentinel and not a keydown handler on the name
+  // field: implicit submission fires from the focused radio too. A keyboard user switching kind in
+  // the kinds-differ case lands here, which is exactly when Enter is most likely.
+  await page
+    .getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) })
+    .press('Enter');
+  await expect(page.getByRole('group')).toBeFocused();
+
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(1);
+});
+
+test('editing the name past the match dismisses the warning', async ({ page }, testInfo) => {
+  const name = uniqueName('stale', testInfo.workerIndex);
+  await addAthlete(page, name, PROFILE_KIND.kid);
+
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 `state` persists until the next submit, so without the fold comparison the callout would hang
+  // over a field that no longer matches it — a warning about somebody the parent has stopped typing.
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(`${name} Jr`);
+  await expect(page.locator('main').getByText(/looks like/)).toHaveCount(0);
+  // …and the ordinary submit is back, so Enter cannot acknowledge a warning that is gone.
+  await expect(page.getByRole('button', { name: ATHLETE_FORM_COPY.add })).toBeVisible();
+});
+
+/**
+ * 🔴 **NOT COVERED END TO END: the archived match → Restore path.** A test for it was written and is
+ * NOT shipped, because it could not be made to pass for a reason that is not the feature's.
+ *
+ * What was observed, so the next attempt starts here rather than at the beginning: after
+ * `archiveAthleteNamed`, loading `/p/new` leaves the kind radios **resolvable but never actionable**
+ * — `page.url()` and `locator.count()` answer, while every call that EVALUATES page JS
+ * (`check`, `innerHTML`, `evaluateAll`) hangs until the test times out, at 30s and again at 90s.
+ * Routing via `/p` in between did not clear it.
+ *
+ * **The cause is unexplained; what is ruled out is the rendering.** The same state under jsdom — an
+ * archived duplicate with `archived: true` — produces the Restore button in ~1s with no loop
+ * (`add-athlete-form.test.tsx`), so the form is not looping. Which layer does hang is not diagnosed,
+ * and this docblock does not guess.
+ *
+ * **What IS covered, so the gap is bounded:** `db:verify` proves an archived twin matches, reports
+ * `archived: true`, yields the stored spelling, and loses to a live match; mutation patch `27` proves
+ * the archived arm is load-bearing; and the unit suite proves the Restore button renders, that the
+ * kinds-differ copy appears, and that neither branch offers "Add another" at the cap. What nothing
+ * proves is the *click* — that Restore posts and navigates.
+ *
+ * Tracked in `docs/tech-debt.md`.
+ */
+test('the callout fits 360px with a 40-character name, and its choices clear the tap bar', async ({
+  page,
+}, testInfo) => {
+  const long = uniqueName('w', testInfo.workerIndex)
+    .padEnd(PROFILE_NAME_MAX, 'W')
+    .slice(0, PROFILE_NAME_MAX);
+  await addAthlete(page, long, PROFILE_KIND.kid);
+
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(long);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 `Button` is `whitespace-nowrap`, so "Add another " + 40 characters is ~364px against ~296px of
+  // callout. `h-auto whitespace-normal` is what lets it wrap instead of pushing the page sideways.
+  await expectNoHorizontalOverflow(page, 'the add screen with a duplicate callout at 360px');
+
+  for (const control of await page.locator('main button, main a[href^="/p/"]').all()) {
+    const box = await control.boundingBox();
+    if (box) expect(box.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+  }
 });

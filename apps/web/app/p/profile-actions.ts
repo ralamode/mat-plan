@@ -2,7 +2,12 @@
 
 import * as Sentry from '@sentry/nextjs';
 
-import { addAthleteSchema, athleteActionSchema, renameAthleteSchema } from '@mat-plan/shared';
+import {
+  addAthleteSchema,
+  athleteActionSchema,
+  foldName,
+  renameAthleteSchema,
+} from '@mat-plan/shared';
 import { revalidatePath } from 'next/cache';
 import { redirect, RedirectType } from 'next/navigation';
 
@@ -274,13 +279,22 @@ export async function addAthleteAction(
       name: formData.get('name'),
       kind: formData.get('kind'),
       clientId: formData.get('clientId'),
+      // 🔴 `?? undefined`, and it is load-bearing. `formData.get()` returns **null** for an absent
+      // field — which is EVERY add that is not a re-confirm — and `z.string().optional()` rejects
+      // `null` (probed: `null` → false, `undefined` → true). Without this the ordinary path fails the
+      // parse and renders NOTHING, because no visible field is named in the error. The `notes`
+      // handling in `[profileId]/actions.ts` is the precedent.
+      acknowledgedDuplicate: formData.get('acknowledgedDuplicate') ?? undefined,
     });
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
       // A bad `clientId` is NOT a field error: it is a hidden field, so there is nothing for a
       // parent to correct, and it must answer exactly as a spent key does. Only reachable from a
       // crafted body — the form mints the id itself.
-      if (fieldErrors.clientId) return { ok: false, error: NO_ATHLETE_ADD };
+      // Neither hidden field is a thing a parent can correct, so both answer page-level.
+      if (fieldErrors.clientId || fieldErrors.acknowledgedDuplicate) {
+        return { ok: false, error: NO_ATHLETE_ADD };
+      }
       return {
         ok: false,
         error: null,
@@ -288,8 +302,28 @@ export async function addAthleteAction(
       };
     }
 
+    // 🔴 **`acknowledgedDuplicate` rides in the spread, and is compared SERVER-SIDE against the
+    // parsed (trimmed, collapsed) name.** The client sends a fold it computed; `createProfile`
+    // re-derives it with `foldName` from the name actually being saved
+    // (`packages/db/src/writers/profile.ts`, step 2), so an acknowledgement can only ever skip the
+    // check for the name it was shown for. A crafted body can still forge it: duplicates are
+    // advisory, not a boundary. (An earlier version restated the key after the spread, which
+    // assigned it to itself and read as though this line did the comparing.)
     const created = await createAthlete(parsed.data);
     if (!created.ok) {
+      if (created.reason === 'duplicate') {
+        // Not a `fieldError`: the name is not invalid, and `aria-invalid` on a correct value is a
+        // lie. The form renders a callout from this and offers the choices.
+        return {
+          ok: false,
+          error: null,
+          duplicate: {
+            match: created.match,
+            atCap: created.atCap,
+            folded: foldName(parsed.data.name),
+          },
+        };
+      }
       return { ok: false, error: created.reason === 'full' ? HOUSEHOLD_FULL : NO_ATHLETE_ADD };
     }
 

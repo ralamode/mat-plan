@@ -3,6 +3,7 @@ import {
   PROFILE_KIND,
   PROFILE_KINDS,
   PROFILE_NAME_MAX,
+  foldName,
 } from '@mat-plan/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -340,7 +341,10 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     // `ok` for any input, so without this an action that passed `formData.get('name')` raw instead
     // of `parsed.data.name`, swapped two fields, or dropped `clientId` — killing idempotency —
     // would redirect correctly and pass every other assertion in this PR.
-    expect(createAthlete).toHaveBeenCalledWith({
+    // ⚠️ `toMatchObject`, not `toHaveBeenCalledWith` (lessons.md → Vitest). The action now always
+    // passes `acknowledgedDuplicate`, so exact equality would quietly treat `undefined` as absent
+    // and stop distinguishing the two.
+    expect(vi.mocked(createAthlete).mock.calls[0]![0]).toMatchObject({
       name: 'Added Athlete',
       kind: PROFILE_KIND.kid,
       clientId: CLIENT_ID,
@@ -382,6 +386,60 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
       kind: PROFILE_KIND.kid,
       clientId: CLIENT_ID,
     });
+  });
+
+  /**
+   * PROF-1 a-1d — the duplicate branch.
+   *
+   * 🔴 **These exist because the `atCap` wiring had no test between the writer and the screen.**
+   * `db:verify` proves `createProfile` returns the flag and a form test proves the UI hides "Add
+   * another" when handed one — but nothing connected them, so flipping `atCap` to `false` in the
+   * DAL or here left **every tier green** while the screen offered a button the endpoint refuses.
+   */
+  it('maps a duplicate to a typed envelope carrying the match, atCap and the fold', async () => {
+    const match = {
+      publicId: 'p-match',
+      name: 'Added Athlete',
+      kind: PROFILE_KIND.kid,
+      archived: true,
+    };
+    vi.mocked(createAthlete).mockResolvedValueOnce({
+      ok: false,
+      reason: 'duplicate',
+      match,
+      atCap: true,
+    } as Awaited<ReturnType<typeof createAthlete>>);
+
+    const state = await addAthleteAction(initial, body());
+    // Not a `fieldError`: the name is not invalid, and `aria-invalid` on a correct value is a lie.
+    // 🔴 `toEqual`, not `toMatchObject`, on purpose: this pins the envelope's WHOLE shape, so a
+    // field added to it has to be a deliberate act. It earned that when `typed`/`chosenKind` were
+    // added for an unhydrated render and then removed again — see `docs/tech-debt.md`.
+    expect(state).toEqual({
+      ok: false,
+      error: null,
+      duplicate: { match, atCap: true, folded: foldName('Added Athlete') },
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('threads the acknowledgement through to the DAL', async () => {
+    const f = body();
+    f.set('acknowledgedDuplicate', foldName('Added Athlete'));
+    await expect(addAthleteAction(initial, f)).rejects.toThrow('NEXT_REDIRECT');
+    expect(vi.mocked(createAthlete).mock.calls[0]![0]).toMatchObject({
+      acknowledgedDuplicate: foldName('Added Athlete'),
+    });
+  });
+
+  it('an OVERSIZE acknowledgement is a page-level refusal, and never reaches the DAL', async () => {
+    // AGENTS.md makes "bad body → zod-reject" mandatory for every new field. NFKD can expand 40
+    // characters into hundreds, so the field is bounded — and a crafted body must not be told which
+    // hidden field it got wrong, so this answers with the generic refusal.
+    const f = body();
+    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_NAME_MAX * 20 + 1));
+    expect(await addAthleteAction(initial, f)).toEqual({ ok: false, error: NO_ATHLETE_ADD });
+    expect(createAthlete).not.toHaveBeenCalled();
   });
 
   it('a spent client_id is the generic refusal — it says nothing about the other household', async () => {

@@ -198,6 +198,35 @@ access token`, which reads like a permissions problem with the repo. The cause w
 
 ## E2E / Playwright
 
+- **A strict-mode violation inside a `try { … } catch {}` cleanup is invisible, and `count()` is the
+  thing that lures you into one.** → `athletes.spec.ts`'s `afterEach` archived fixtures with
+  `if (await control.count()) await control.click()`. Correct until `PROF-1 a-1d` made **two athletes
+  under one name** a real fixture: `count()` is then `2` and truthy, `click()` throws Playwright's
+  strict-mode violation, and the `catch` swallows it — so the cleanup archived **neither**, on every
+  run and every retry, while reporting nothing. **Symptom:** fixtures accumulating in a seeded
+  database with a green suite. **Fix:** a cleanup that cannot report its own failure must be correct
+  by construction — loop over `.first()`, never assume one match.
+- **Re-querying a locator straight after a Server Action click gives you a DETACHING element, and
+  `click()` then retries it for the whole action timeout.** → the first fix for the above looped and
+  waited on the Undo button, which is _already_ visible from the previous archive, so the wait was
+  satisfied instantly and the next pass clicked a row mid-removal. Three passes × a 30s action
+  timeout exhausted the hook. **Fix:** wait on the thing that actually changes —
+  `await expect(locator).toHaveCount(remaining - 1, { timeout: … })` is both the "the action landed"
+  signal and the loop's termination condition. ⚠️ And a hook doing real work needs its own budget:
+  `test.setTimeout()` **inside** the hook, or cleanup fails a test that passed.
+- **To test an UNHYDRATED page, block the chunks — never `javaScriptEnabled: false`.** → A
+  JS-disabled context cannot be driven at all, and it fails by **lying rather than erroring**:
+  `page.url()` answered `/p/new` while `locator.count()` returned `0` and `innerText()` a
+  32-character body, because both go through Playwright's injected script, which such a context
+  cannot execute either. You cannot tell "the page rendered nothing" from "the harness cannot see the
+  page", and an assertion written against it reads as a product bug. **Instead:**
+  `await page.route('**/_next/static/chunks/**', (r) => r.abort())` — the harness keeps working, the
+  page stays SSR-only, and the submit is a native POST. That swap turned a dead end into a
+  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST is
+  refused by Next (`Invalid Server Actions request`), which **withdrew the justification for a fix
+  that had already shipped in that PR** — it restored form state for a render that cannot happen.
+  [tech-debt.md](./tech-debt.md) has it. **The general shape: a cheap probe that could falsify your
+  own fix is worth running BEFORE you defend the fix in a docblock, not after.**
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
   `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script
@@ -516,6 +545,29 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   check that would have caught it at 2.
 
 ## Guards that pass while guarding nothing
+
+- **A focus assertion passes when focus was ALREADY there — so a "we move focus on failure" test must
+  move it away first.** → `PROF-1 a-1d` added a focus return for a failed Restore and a test asserting
+  the callout ends up focused. It passed with the fix **deleted**: the earlier add-submit had already
+  focused the callout, and jsdom does not move focus on a click, so the test re-asserted a state the
+  previous effect set. **Fix:** focus something else (the name field) immediately before the action,
+  assert that it took, and only then assert focus came back. **The general shape:** any assertion
+  about a state transition has to establish the _starting_ state, or it measures the end state twice.
+- **Reversing a sort proves the assertion READS the sort; it never proves the sort is needed.** →
+  `PROF-1 a-1d` added `orderBy(asc(id))` to a duplicate-name lookup so that, among two live cousins
+  both called Ada, a third is always warned about the same one. The assertion was "probed" by flipping
+  the clause to `desc` and watching it go red — which only shows the test is sensitive to the ORDER
+  it is given. A reviewer asked the right question: what happens if the clause is **deleted**? It
+  stays green, because a seq scan over rows inserted back to back returns them in insertion order
+  anyway. ⚠️ **An UPDATE between them does not reliably rescue it either** — MVCC moves the tuple in
+  a toy two-row table (probed: `SET name = name` flips `1,2` to `2,1`), but did not flip the real
+  fixture, whose table carries several indexes. → **The discriminating mutation for a sort is
+  DELETION, not reversal.** If deleting it leaves the suite green, the clause may still be worth
+  keeping — determinism as a contract rather than as a property of today's heap — but say that, and
+  do not claim a test pins it. ⚠️ This was the **third** proof-that-cannot-fail in one chunk, after
+  a `toHaveProperty('onchange')` assertion true of every DOM input and a jsdom "no submit fired"
+  assertion that jsdom can never falsify. The shared shape: the mutation chosen was the one the test
+  was already looking at. (`PROF-1 a-1d`)
 
 - **`db:mutations` MUTATES the shared working tree, so running it concurrently with anything else in
   the same worktree produces a screenful of failures that mean nothing.** → The runner `git apply`s

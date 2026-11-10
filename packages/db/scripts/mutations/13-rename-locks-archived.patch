@@ -1,14 +1,14 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index ab5f128..9850a77 100644
+index 4a97414..1482961 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
 @@ -1,4 +1,4 @@
 -import { and, sql, type SQL } from 'drizzle-orm';
 +import { and, isNull, sql, type SQL } from 'drizzle-orm';
  
- import { MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
+ import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
  
-@@ -71,7 +71,7 @@ export async function renameProfile(
+@@ -72,7 +72,7 @@ export async function renameProfile(
    const rows = await exec
      .update(schema.profiles)
      .set({ name, updatedAt: sql`now()` })
