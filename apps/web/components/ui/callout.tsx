@@ -38,10 +38,20 @@ export function Callout({
       ref={ref}
       id={id}
       tabIndex={-1}
+      // 🔴 **`role="group"` + `aria-labelledby`, or the focus move announces nothing.** A focused bare
+      // `<div tabindex=-1>` reads as unstructured text or as silence, depending on the screen reader.
+      // Naming the group from its own message means a user hears "That looks like Ada … group" and
+      // knows the buttons below belong to it. Still no `role="alert"` — focus already reads it, and
+      // the two together double-announce.
+      role="group"
+      aria-labelledby={messageId}
       // `scroll-mt-4` so focusing it does not jam it against the viewport edge; `outline-none`
       // because the focus here is a programmatic announcement, not keyboard navigation — the ring
       // would read as "you tabbed here".
-      className="border-input flex scroll-mt-4 flex-col gap-3 rounded-lg border p-4 outline-none"
+      // ⚠️ A focus RING, not `outline-none`. The move is programmatic, but a keyboard user who then
+      // presses Enter in the name field is refocused here — and for them the container really is
+      // where focus lives, so hiding it would lose the only cue.
+      className="border-input focus-visible:ring-ring flex scroll-mt-4 flex-col gap-3 rounded-lg border p-4 outline-none focus-visible:ring-3"
     >
       <div className="flex gap-2.5">
         <span aria-hidden="true" className="text-base leading-6">

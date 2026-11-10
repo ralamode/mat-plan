@@ -89,6 +89,7 @@ import { householdScopeForScript } from '../src/writers/household-scope-script';
 // run the code the app runs if that core lives here (write-path.md invariant 3).
 import { findOrCreateMovement } from '../src/writers/movement-catalog';
 import {
+  findNameMatch,
   insertHouseholdMember,
   isLiveProfile,
   isOwnerOf,
@@ -7913,6 +7914,98 @@ console.log(
     acked.ok,
     'PROF-1 a-1d: an acknowledgement matching the folded name really does insert the second Ada',
   );
+
+  // ── 🔴 THE ORDERING, which only a SECOND same-name athlete can discriminate ───────────────────
+  // With one Ada in the household, moving the fold above the replay lookup changes nothing — the
+  // exclusion removes the caller's own row, so the fold finds nothing either way. That is why the
+  // first attempt at a "fold before replay" patch stayed green. Once the acknowledged second Ada
+  // exists, a replay of the FIRST Ada's key has a match the exclusion cannot remove, so the order is
+  // the only thing keeping it an `ok`. This is also the real regression D2 names: a replay after a
+  // cousin of the same name was added.
+  assert.deepEqual(
+    await createProfile(asPg, A_SCOPE, {
+      name: 'Ada',
+      kind: PROFILE_KIND.kid,
+      clientId: adaKey,
+    }),
+    { ok: true, publicId: ada.publicId },
+    'PROF-1 a-1d: a replay still returns ok once a SECOND Ada exists — the replay lookup runs ' +
+      'before the fold, and here the exclusion cannot rescue it',
+  );
+
+  // ── 🔴 `atCap` — the flag the whole duplicate-before-quota decision rests on ───────────────────
+  // Nothing asserted it TRUE before this. Fill B to the cap, archive one, then add that name: the
+  // warning must still arrive (so Restore stays reachable for a full household, which is the entire
+  // reason the fold runs before the quota) AND it must say the household is full, so the screen can
+  // hide "Add another" rather than offering a button the endpoint answers `full` to.
+  /** This block's own live count — `countIn` above is scoped to the a-1w block. */
+  const liveIn = async (hhId: number) =>
+    (
+      await asPg
+        .select({ id: schema.profiles.id })
+        .from(schema.profiles)
+        .where(and(eq(schema.profiles.householdId, hhId), isNull(schema.profiles.deletedAt)))
+    ).length;
+
+  const capKeys2: string[] = [];
+  // ⚠️ The loop starts at the household's CURRENT count, so the first row it makes is not
+  // `Capfill 0` — capture whichever one it actually created first.
+  let firstFillName = '';
+  for (let i = await liveIn(verifyHh.id); i < MAX_HOUSEHOLD_ATHLETES; i += 1) {
+    const key = `019826b4-0000-7000-8000-0000000${String(46200 + i).padStart(5, '0')}`;
+    capKeys2.push(key);
+    const fillName = `Capfill ${i}`;
+    if (!firstFillName) firstFillName = fillName;
+    const r = await createProfile(asPg, B_SCOPE, {
+      name: fillName,
+      kind: PROFILE_KIND.kid,
+      clientId: key,
+    });
+    assert.ok(r.ok, `PROF-1 a-1d: filling B to the cap succeeds at ${i}`);
+  }
+  assert.ok(firstFillName, 'PROF-1 a-1d: the cap fill created at least one athlete to archive');
+  const bOwner2 = ownerScope(B_SCOPE);
+  assert.ok(bOwner2, 'PROF-1 a-1d: B_SCOPE narrows');
+  const archivedAtCap = await findNameMatch(asPg, B_SCOPE, foldName(firstFillName));
+  assert.ok(archivedAtCap, 'PROF-1 a-1d: the filler to archive exists');
+  await archiveProfile(asPg, bOwner2, archivedAtCap.publicId);
+
+  assert.deepEqual(
+    await createProfile(asPg, B_SCOPE, {
+      name: firstFillName,
+      kind: PROFILE_KIND.kid,
+      clientId: `019826b4-0000-7000-8000-000000046999`,
+    }),
+    {
+      ok: false,
+      reason: 'duplicate',
+      match: {
+        publicId: archivedAtCap.publicId,
+        name: firstFillName,
+        kind: PROFILE_KIND.kid,
+        archived: true,
+      },
+      atCap: true,
+    },
+    'PROF-1 a-1d: a FULL household still gets the duplicate warning for an archived twin, with ' +
+      'atCap TRUE — the fold runs before the quota precisely so Restore stays reachable, and the ' +
+      'flag is what stops the screen offering an Add the endpoint would refuse',
+  );
+
+  assert.equal(
+    (
+      (await createProfile(asPg, B_SCOPE, {
+        name: firstFillName,
+        kind: PROFILE_KIND.kid,
+        clientId: `019826b4-0000-7000-8000-000000046998`,
+        acknowledgedDuplicate: foldName(firstFillName),
+      })) as { reason?: string }
+    ).reason,
+    'full',
+    'PROF-1 a-1d: …and acknowledging it at the cap answers FULL — the quota still gates creation',
+  );
+
+  await asPg.delete(schema.profiles).where(inArray(schema.profiles.clientId, capKeys2));
 
   // ── Cross-household: B adding a name A holds must NOT warn (the oracle patch 26 attacks) ──────
   assert.equal(

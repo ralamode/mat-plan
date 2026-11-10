@@ -969,11 +969,19 @@ export const ATHLETE_FORM_COPY = {
    * permanently. So when the archived twin's kind differs from the one just chosen, say it plainly
    * and give neither option primacy.
    */
-  duplicateArchivedOtherKind: (stored: string, storedKind: string) =>
-    `${stored} was added as a ${storedKind}. Restoring keeps that, and it can't be changed.`,
+  duplicateArchivedOtherKind: (stored: string, storedKind: string, chosenKind: string) =>
+    `${stored} is saved as ${storedKind}, and that can’t be changed. You chose ${chosenKind}.`,
   /** Tiles show name + kind only, so two "Sam" Child tiles are indistinguishable. */
+  /**
+   * ⚠️ **Only true when the two names are spelled IDENTICALLY.** The fold is lossy, so a match can be
+   * `José` against a typed `Jose` — those render as two different tiles, and telling a parent "both
+   * will show as José" would be false in exactly the false-positive case the hedging exists for. The
+   * caller gates on an exact comparison.
+   */
   duplicateDisambiguate: (stored: string) =>
     `Both will show as “${stored}”. Add an initial, like “${stored} B.”, to tell them apart.`,
+  /** A quiet way back to the field the disambiguation advice is about. */
+  changeTheName: 'Change the name',
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,

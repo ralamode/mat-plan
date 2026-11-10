@@ -126,6 +126,19 @@ export function AddAthleteForm({
     state.duplicate && foldName(name) === state.duplicate.folded ? state.duplicate : null;
 
   const matchKindLabel = duplicate ? PROFILE_KIND_LABELS[duplicate.match.kind] : '';
+  /**
+   * 🔴 **"Both will show as X" is only TRUE when the two names are spelled identically.** The fold is
+   * lossy, so a live match can be `José` against a typed `Jose` — which render as two different
+   * tiles. Saying they will look the same would be false in exactly the false-positive case the
+   * hedged copy exists for, and would nudge a parent into disambiguating names that already differ.
+   * Kinds must agree too: a tile shows name AND kind, so a Child and an Adult are already distinct.
+   */
+  const showDisambiguation = Boolean(
+    duplicate &&
+    !duplicate.match.archived &&
+    name.trim() === duplicate.match.name &&
+    kind === duplicate.match.kind,
+  );
   const chosenKindLabel = kind ? PROFILE_KIND_LABELS[kind] : '';
   /**
    * 🔴 **The archived twin's kind versus the one just chosen.** This screen's own recovery copy tells
@@ -207,6 +220,33 @@ export function AddAthleteForm({
       consequence: ATHLETE_FORM_COPY.adultConsequence,
     },
   ] as const;
+
+  /**
+   * The callout's choices, as ONE element rather than three near-copies.
+   *
+   * 🔴 **Both review lenses found the same bug in the three-copy version**: the live branch guarded
+   * `atCap` and the archived branch did not, so a full household was offered "Add another" — a button
+   * `createProfile` answers `full` to. And the archived copy omitted `NAME_WRAP_CLASS`, so a
+   * 40-character name with no break opportunity pushed the page sideways at 360px. One definition
+   * makes both impossible to get wrong in one branch only.
+   *
+   * ⚠️ Returns `null` at the cap. Adding is the only thing the quota refuses — Restore needs no slot,
+   * which is why the duplicate check runs before the quota at all.
+   */
+  const addAnotherButton = (label: string) =>
+    duplicate && duplicate.atCap ? null : (
+      <Button
+        type="submit"
+        size="lg"
+        variant="outline"
+        name="acknowledgedDuplicate"
+        value={duplicate?.folded ?? ''}
+        disabled={pending || restorePending}
+        className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
+      >
+        <span className={NAME_WRAP_CLASS}>{label}</span>
+      </Button>
+    );
 
   return (
     <>
@@ -305,6 +345,19 @@ export function AddAthleteForm({
             autoComplete="off"
             spellCheck={false}
             enterKeyHint="go"
+            onKeyDown={(e) => {
+              // 🔴 **Enter must NOT acknowledge a duplicate.** The primary submit is unmounted while
+              // the callout shows, so by the HTML default-button rule the form's default becomes the
+              // callout's "Add another" — which carries the acknowledgement. A parent tapping back
+              // into the field and pressing Go would silently create the second athlete, and on an
+              // archived kinds-differ match Enter would pick the option the copy deliberately does
+              // not promote. Both review lenses traced this independently. Enter re-reads the
+              // warning instead of acting on it.
+              if (duplicate && e.key === 'Enter') {
+                e.preventDefault();
+                calloutRef.current?.focus();
+              }
+            }}
             required
             aria-invalid={nameInvalid || undefined}
             aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}`}
@@ -335,11 +388,12 @@ export function AddAthleteForm({
                       {ATHLETE_FORM_COPY.duplicateArchivedOtherKind(
                         duplicate.match.name,
                         matchKindLabel,
+                        chosenKindLabel,
                       )}
                     </span>
                   </>
                 ) : null}
-                {!duplicate.match.archived ? (
+                {showDisambiguation ? (
                   <>
                     {' '}
                     <span className={NAME_WRAP_CLASS}>
@@ -370,22 +424,14 @@ export function AddAthleteForm({
                 </Button>
                 {/* The acknowledgement rides on the SUBMITTER, so it exists only on the request this
                   click produced — a stale value is impossible by construction. */}
-                <Button
-                  type="submit"
-                  size="lg"
-                  variant="outline"
-                  name="acknowledgedDuplicate"
-                  value={duplicate.folded}
-                  disabled={pending || restorePending}
-                  className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
-                >
-                  {kindsDiffer
+                {addAnotherButton(
+                  kindsDiffer
                     ? ATHLETE_FORM_COPY.addNewInstead(
                         name.trim() || duplicate.match.name,
                         chosenKindLabel,
                       )
-                    : ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
-                </Button>
+                    : ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name),
+                )}
               </>
             ) : (
               <>
@@ -403,24 +449,12 @@ export function AddAthleteForm({
                 {/* ⚠️ Hidden at the cap: `createProfile` checks duplicates BEFORE the quota so an
                   archived twin stays restorable by a full household — which means this warning can
                   reach one. Offering "Add another" there would be a button the endpoint rejects. */}
-                {duplicate.atCap ? null : (
-                  <Button
-                    type="submit"
-                    size="lg"
-                    variant="outline"
-                    name="acknowledgedDuplicate"
-                    value={duplicate.folded}
-                    disabled={pending || restorePending}
-                    className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
-                  >
-                    <span className={NAME_WRAP_CLASS}>
-                      {ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
-                    </span>
-                  </Button>
+                {addAnotherButton(
+                  ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name),
                 )}
               </>
             )}
-            {restoreState.error ? (
+            {restoreState.error && duplicate.match.archived ? (
               <p role="alert" className="text-destructive text-sm">
                 {ATHLETE_FORM_COPY.restoreFailed(duplicate.match.name)}
               </p>

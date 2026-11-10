@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
 import {
@@ -391,7 +391,9 @@ export async function findNameMatch(
   exec: Executor,
   scope: HouseholdScope,
   folded: string,
-  options: { excludeClientId?: string; excludeProfileId?: string } = {},
+  // `excludeProfileId` belongs to `a-1d-ren` and arrives WITH its caller — an unused parameter
+  // is a promise nothing keeps, and nothing can test.
+  options: { excludeClientId?: string } = {},
 ): Promise<{ publicId: string; name: string; kind: ProfileKind; archived: boolean } | null> {
   const rows = await exec
     .select({
@@ -402,14 +404,18 @@ export async function findNameMatch(
       archivedAt: schema.profiles.archivedAt,
     })
     .from(schema.profiles)
-    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
+    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)))
+    // ⚠️ **Ordered, because "live beats archived" is only half the rule.** Two live cousins both
+    // named Ada is the designed case, so without a stable order the third Ada is warned about an
+    // ARBITRARY one — and "Open Ada" could point at a different cousin between submits, since heap
+    // order moves after any UPDATE (archive and rename both rewrite rows). Oldest first.
+    .orderBy(asc(schema.profiles.id));
 
   const matches = rows.filter(
     (r) =>
       foldName(r.name) === folded &&
       // `!=` on purpose: a NULL `client_id` must NOT be excluded. See the docblock.
-      (options.excludeClientId === undefined || r.clientId !== options.excludeClientId) &&
-      (options.excludeProfileId === undefined || r.publicId !== options.excludeProfileId),
+      (options.excludeClientId === undefined || r.clientId !== options.excludeClientId),
   );
   if (matches.length === 0) return null;
 
