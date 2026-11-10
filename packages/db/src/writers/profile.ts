@@ -44,6 +44,37 @@ type ArchivedRow = { publicId: string; archivedAt: Date | null };
  */
 
 /**
+ * What `renameProfile` answers. `refused` is the one answer for unknown / soft-deleted / another
+ * household (ADR 0006 → 404, never 403); `duplicate` is ADVISORY — the name is free to collide, and
+ * an acknowledgement waves it through.
+ */
+export type RenameProfileResult =
+  | { ok: true; publicId: string }
+  | { ok: false; reason: 'refused' }
+  | { ok: false; reason: 'duplicate'; match: NameMatch };
+
+/**
+ * The stored name of ONE live profile in `scope`, for the fold guard in `renameProfile`.
+ *
+ * ⚠️ **Scoped, and narrow on purpose.** It returns the name and nothing else: a caller handed a
+ * fuller row would be tempted to render it, and this value exists only to be folded. `scope` reaches
+ * the query through `isLiveProfile`, so `scope.householdId` keeps leaving only `ownership.ts`
+ * (`scope.test.ts`'s `UNWRAPS_SCOPE`).
+ */
+async function profileNameFor(
+  exec: Executor,
+  scope: HouseholdScope,
+  publicId: string,
+): Promise<{ name: string } | null> {
+  const rows = await exec
+    .select({ name: schema.profiles.name })
+    .from(schema.profiles)
+    .where(isLiveProfile(publicId, scope))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
  * Rename ONE live profile inside `scope`. Returns the row's `public_id`, or `null` when the id is
  * unknown, soft-deleted or belongs to another household — one answer for all three, which the action
  * maps to the single `NO_ATHLETE_SAVE` envelope (ADR 0006 → 404, never 403).
@@ -69,14 +100,40 @@ export async function renameProfile(
   scope: HouseholdScope,
   publicId: string,
   name: string,
-): Promise<{ publicId: string } | null> {
+  options: { acknowledgedDuplicate?: string } = {},
+): Promise<RenameProfileResult> {
+  // The CURRENT row, read first — the fold guard below needs the stored name, and `refused` must
+  // stay distinguishable from `duplicate`. One answer for unknown / soft-deleted / other household.
+  const current = await profileNameFor(exec, scope, publicId);
+  if (!current) return { ok: false, reason: 'refused' };
+
+  // 🔴 **A rename that does not change the FOLD creates no new collision, so there is nothing to
+  // warn about.** `ada` → `Ada`, `Jose` → `José`, a stray double space, or Save with nothing edited
+  // all land here. Without this guard the warning fires on exactly the edit this screen exists for.
+  //
+  // ⚠️ **It also replaces the `excludeProfileId` this plan carried for two chunks.** Excluding SELF
+  // is not enough: two live athletes sharing a name is the designed case (the add form's "Add
+  // another Ada" creates it, with consent), so a casing fix on Ada #1 would be warned about Ada #2 —
+  // a collision that already existed and that nobody is creating here. And the parameter is not
+  // merely redundant, it is unreachable: with the fold unchanged this returns before the lookup, and
+  // with the fold CHANGED the row's stored name folds to the OLD value and cannot match the new one.
+  // There is no third case, which is why `findNameMatch` needs no exclusion argument at all.
+  const folded = foldName(name);
+  if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
+    const match = await findNameMatch(exec, scope, folded);
+    // ⚠️ **No `atCap` here, unlike `createProfile`.** A rename creates nothing, so the quota is
+    // never consulted and a field that is always `false` would read as meaningful.
+    if (match) return { ok: false, reason: 'duplicate', match };
+  }
+
   const rows = await exec
     .update(schema.profiles)
     .set({ name, updatedAt: sql`now()` })
     .where(isLiveProfile(publicId, scope))
     .returning({ publicId: schema.profiles.publicId });
 
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ok: true, publicId: row.publicId } : { ok: false, reason: 'refused' };
 }
 
 /**
