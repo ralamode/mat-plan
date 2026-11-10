@@ -7933,6 +7933,74 @@ console.log(
       'before the fold, and here the exclusion cannot rescue it',
   );
 
+  // ── Cross-household: B adding a name A holds must NOT warn (the oracle patch 26 attacks) ──────
+  assert.equal(
+    (
+      (await createProfile(asPg, B_SCOPE, {
+        name: 'Ada',
+        kind: PROFILE_KIND.kid,
+        clientId: D('07'),
+      })) as { reason?: string }
+    ).reason ?? 'ok',
+    'ok',
+    'PROF-1 a-1d: household B adding a name household A holds is NOT warned — the fold read is ' +
+      'scoped, and an unscoped one is a cross-household oracle on athlete names',
+  );
+
+  // ── An ARCHIVED twin warns, with archived: true, so the UI can offer Restore ───────────────────
+  const zoeKey = D('08');
+  const zoe = await createProfile(asPg, A_SCOPE, {
+    name: 'Zoë',
+    kind: PROFILE_KIND.adult,
+    clientId: zoeKey,
+  });
+  assert.ok(zoe.ok, 'PROF-1 a-1d: Zoë is created');
+  const aOwner = ownerScope(A_SCOPE);
+  assert.ok(aOwner, 'PROF-1 a-1d: A_SCOPE narrows (or the archive below proves nothing)');
+  await archiveProfile(asPg, aOwner, zoe.publicId);
+
+  assert.deepEqual(
+    await createProfile(asPg, A_SCOPE, {
+      name: 'zoe',
+      kind: PROFILE_KIND.adult,
+      clientId: D('09'),
+    }),
+    {
+      ok: false,
+      reason: 'duplicate',
+      match: { publicId: zoe.publicId, name: 'Zoë', kind: PROFILE_KIND.adult, archived: true },
+      atCap: false,
+    },
+    'PROF-1 a-1d: an ARCHIVED Zoë matches zoe and reports archived:true — otherwise Restore is ' +
+      'unreachable and the parent is told to add a second one',
+  );
+  assert.equal(
+    await nameOf(zoe.publicId),
+    'Zoë',
+    'PROF-1 a-1d: …and the match carries the STORED spelling, so Restore cannot relabel her',
+  );
+
+  // ── Live beats archived when both match ───────────────────────────────────────────────────────
+  const liveZoe = await createProfile(asPg, A_SCOPE, {
+    name: 'Zoe',
+    kind: PROFILE_KIND.adult,
+    clientId: D('0a'),
+    acknowledgedDuplicate: foldName('Zoe'),
+  });
+  assert.ok(liveZoe.ok, 'PROF-1 a-1d: a live Zoe is added alongside the archived Zoë');
+  assert.deepEqual(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'zoë',
+        kind: PROFILE_KIND.adult,
+        clientId: D('0b'),
+      })) as { match?: { publicId: string; archived: boolean } }
+    ).match,
+    { publicId: liveZoe.publicId, name: 'Zoe', kind: PROFILE_KIND.adult, archived: false },
+    'PROF-1 a-1d: with a live AND an archived match, the LIVE one wins — offering Restore for ' +
+      'somebody already on the picker is the worse answer',
+  );
+
   // ── 🔴 `atCap` — the flag the whole duplicate-before-quota decision rests on ───────────────────
   // Nothing asserted it TRUE before this. Fill B to the cap, archive one, then add that name: the
   // warning must still arrive (so Restore stays reachable for a full household, which is the entire
@@ -8006,74 +8074,6 @@ console.log(
   );
 
   await asPg.delete(schema.profiles).where(inArray(schema.profiles.clientId, capKeys2));
-
-  // ── Cross-household: B adding a name A holds must NOT warn (the oracle patch 26 attacks) ──────
-  assert.equal(
-    (
-      (await createProfile(asPg, B_SCOPE, {
-        name: 'Ada',
-        kind: PROFILE_KIND.kid,
-        clientId: D('07'),
-      })) as { reason?: string }
-    ).reason ?? 'ok',
-    'ok',
-    'PROF-1 a-1d: household B adding a name household A holds is NOT warned — the fold read is ' +
-      'scoped, and an unscoped one is a cross-household oracle on athlete names',
-  );
-
-  // ── An ARCHIVED twin warns, with archived: true, so the UI can offer Restore ───────────────────
-  const zoeKey = D('08');
-  const zoe = await createProfile(asPg, A_SCOPE, {
-    name: 'Zoë',
-    kind: PROFILE_KIND.adult,
-    clientId: zoeKey,
-  });
-  assert.ok(zoe.ok, 'PROF-1 a-1d: Zoë is created');
-  const aOwner = ownerScope(A_SCOPE);
-  assert.ok(aOwner, 'PROF-1 a-1d: A_SCOPE narrows (or the archive below proves nothing)');
-  await archiveProfile(asPg, aOwner, zoe.publicId);
-
-  assert.deepEqual(
-    await createProfile(asPg, A_SCOPE, {
-      name: 'zoe',
-      kind: PROFILE_KIND.adult,
-      clientId: D('09'),
-    }),
-    {
-      ok: false,
-      reason: 'duplicate',
-      match: { publicId: zoe.publicId, name: 'Zoë', kind: PROFILE_KIND.adult, archived: true },
-      atCap: false,
-    },
-    'PROF-1 a-1d: an ARCHIVED Zoë matches zoe and reports archived:true — otherwise Restore is ' +
-      'unreachable and the parent is told to add a second one',
-  );
-  assert.equal(
-    await nameOf(zoe.publicId),
-    'Zoë',
-    'PROF-1 a-1d: …and the match carries the STORED spelling, so Restore cannot relabel her',
-  );
-
-  // ── Live beats archived when both match ───────────────────────────────────────────────────────
-  const liveZoe = await createProfile(asPg, A_SCOPE, {
-    name: 'Zoe',
-    kind: PROFILE_KIND.adult,
-    clientId: D('0a'),
-    acknowledgedDuplicate: foldName('Zoe'),
-  });
-  assert.ok(liveZoe.ok, 'PROF-1 a-1d: a live Zoe is added alongside the archived Zoë');
-  assert.deepEqual(
-    (
-      (await createProfile(asPg, A_SCOPE, {
-        name: 'zoë',
-        kind: PROFILE_KIND.adult,
-        clientId: D('0b'),
-      })) as { match?: { publicId: string; archived: boolean } }
-    ).match,
-    { publicId: liveZoe.publicId, name: 'Zoe', kind: PROFILE_KIND.adult, archived: false },
-    'PROF-1 a-1d: with a live AND an archived match, the LIVE one wins — offering Restore for ' +
-      'somebody already on the picker is the worse answer',
-  );
 
   // ── A soft-deleted twin does not warn ─────────────────────────────────────────────────────────
   await asPg

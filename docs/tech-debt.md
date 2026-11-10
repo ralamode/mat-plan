@@ -20,8 +20,9 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 - **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the
   match is archived. Every tier below the browser covers it — `db:verify` proves the archived twin
   matches, reports `archived: true`, carries the stored spelling and loses to a live match; mutation
-  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. **What
-  nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
+  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. ⚠️ **Those unit tests did not exist when this
+  entry was first written** — the claim was false for a day, and a review lens caught it; they were
+  written rather than the claim weakened. **What nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
 - **The observation, recorded so the next attempt does not repeat it:** after `archiveAthleteNamed`,
   loading `/p/new` leaves the kind radios **resolvable but never actionable**. `page.url()` and
   `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,

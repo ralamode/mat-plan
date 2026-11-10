@@ -1,0 +1,24 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 87f9a86..54153d1 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -259,9 +259,6 @@ export async function createProfile(
+     acknowledgedDuplicate?: string;
+   },
+ ): Promise<CreateProfileResult> {
+-  const existing = await profileByClientId(exec, scope, input.clientId);
+-  if (existing) return { ok: true, publicId: existing.publicId };
+-
+   // Step 2 — the duplicate fold. `acknowledgedDuplicate` is the FOLDED name the caller was warned
+   // about, so an acknowledgement of "Ada" does not wave "Bea" through on stale consent.
+   if (input.acknowledgedDuplicate !== foldName(input.name)) {
+@@ -277,6 +274,9 @@ export async function createProfile(
+     }
+   }
+ 
++  const existing = await profileByClientId(exec, scope, input.clientId);
++  if (existing) return { ok: true, publicId: existing.publicId };
++
+   if ((await countProfilesIn(exec, scope)) >= MAX_HOUSEHOLD_ATHLETES) {
+     return { ok: false, reason: 'full' };
+   }

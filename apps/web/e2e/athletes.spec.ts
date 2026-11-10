@@ -705,6 +705,30 @@ test('the warning keeps both fields, and "Add another" adds the second one', asy
   await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(2);
 });
 
+test('🔴 Enter with the warning showing does NOT create the duplicate', async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName('enterdupe', testInfo.workerIndex);
+  await addAthlete(page, name, 'Child');
+
+  await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
+  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
+  await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 The primary submit is unmounted while the callout shows, so the form's DEFAULT button becomes
+  // the callout's "Add another" — which carries the acknowledgement. Without the keydown guard, a
+  // parent tapping back into the field and pressing Go silently creates the second athlete. jsdom
+  // cannot prove this (it has no implicit submission), so the real key is driven here.
+  await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).press('Enter');
+  await expect(page).toHaveURL(new RegExp(ADD_ATHLETE_PATH.replace('/', '\\/')));
+  await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(1);
+});
+
 test('editing the name past the match dismisses the warning', async ({ page }, testInfo) => {
   const name = uniqueName('stale', testInfo.workerIndex);
   await addAthlete(page, name, 'Child');
@@ -738,8 +762,9 @@ test('editing the name past the match dismisses the warning', async ({ page }, t
  *
  * **What IS covered, so the gap is bounded:** `db:verify` proves an archived twin matches, reports
  * `archived: true`, yields the stored spelling, and loses to a live match; mutation patch `27` proves
- * the archived arm is load-bearing; and the unit suite proves the Restore button renders and that the
- * kinds-differ copy appears. What nothing proves is the *click* — that Restore posts and navigates.
+ * the archived arm is load-bearing; and the unit suite proves the Restore button renders, that the
+ * kinds-differ copy appears, and that neither branch offers "Add another" at the cap. What nothing
+ * proves is the *click* — that Restore posts and navigates.
  *
  * Tracked in `docs/tech-debt.md`.
  */

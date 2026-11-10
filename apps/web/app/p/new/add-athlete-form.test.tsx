@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { PROFILE_KIND, PROFILE_NAME_MAX } from '@mat-plan/shared';
+import { PROFILE_KIND, PROFILE_NAME_MAX, type ProfileKind } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -276,6 +276,113 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     // This screen CREATES. `ATHLETE_FORM_COPY.save` is the rename form's and stays there.
     expect(screen.getByRole('button').textContent).toBe(ATHLETE_FORM_COPY.add);
     expect(ATHLETE_FORM_COPY.add).not.toBe(ATHLETE_FORM_COPY.save);
+  });
+
+  /**
+   * PROF-1 a-1d — the duplicate callout.
+   *
+   * 🔴 **These exist because two documents claimed they already did.** The e2e docblock and
+   * `docs/tech-debt.md` both said "the unit suite proves the Restore button renders and that the
+   * kinds-differ copy appears" while this file contained nothing but two `vi.mock` lines. A review
+   * lens found it. Writing the tests was the fix; weakening the claim was not.
+   */
+  const duplicateState = (
+    over: Partial<{ archived: boolean; kind: ProfileKind; atCap: boolean }> = {},
+  ) =>
+    ({
+      ok: false,
+      error: null,
+      duplicate: {
+        match: {
+          publicId: 'p-match',
+          name: 'Ada',
+          kind: over.kind ?? PROFILE_KIND.kid,
+          archived: over.archived ?? false,
+        },
+        atCap: over.atCap ?? false,
+        folded: 'ada',
+      },
+    }) as Awaited<ReturnType<typeof addAthleteAction>>;
+
+  /** Choose a kind, type `Ada`, and submit into the given duplicate answer. */
+  async function warnWith(state: Awaited<ReturnType<typeof addAthleteAction>>, kindIndex = 0) {
+    renderForm();
+    fireEvent.click(radios()[kindIndex]!);
+    fireEvent.change(nameField(), { target: { value: 'Ada' } });
+    vi.mocked(addAthleteAction).mockResolvedValueOnce(state);
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+  }
+
+  it('a LIVE match offers Open and Add another, and takes focus', async () => {
+    await warnWith(duplicateState());
+    expect(screen.getByRole('link', { name: /Open Ada/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Add another Ada/ })).toBeTruthy();
+    // Focus IS the announcement — `aria-describedby` is read on focus, and the submit has blurred.
+    expect(document.activeElement?.getAttribute('role')).toBe('group');
+  });
+
+  it('an ARCHIVED match offers Restore, and never Open', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    expect(screen.getByRole('button', { name: /Restore Ada/ })).toBeTruthy();
+    // The archived day page is read-only, so "Open" would send them somewhere they cannot act.
+    expect(screen.queryByRole('link', { name: /Open Ada/ })).toBeNull();
+  });
+
+  it('an archived match whose KIND differs says so, and promotes neither choice', async () => {
+    // 🔴 The collision: this screen tells a parent who picked the wrong kind to archive and add
+    // again. They return with the corrected kind — and Restore would hand back the WRONG kind,
+    // permanently. Chosen = Child (index 0), archived match = Adult.
+    await warnWith(duplicateState({ archived: true, kind: PROFILE_KIND.adult }), 0);
+    expect(screen.getByText(/can’t be changed/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Add a new Ada \(Child\) instead/ })).toBeTruthy();
+  });
+
+  it('🔴 at the cap, NEITHER branch offers "Add another" — the endpoint would refuse it', async () => {
+    await warnWith(duplicateState({ atCap: true }));
+    expect(screen.queryByRole('button', { name: /Add another/ })).toBeNull();
+    cleanup();
+    // The archived branch had no guard at all until a review found it: one shared button now.
+    await warnWith(duplicateState({ archived: true, atCap: true }));
+    expect(screen.queryByRole('button', { name: /Add a new|Add another/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Restore Ada/ })).toBeTruthy();
+  });
+
+  it('the acknowledgement rides the SUBMITTER, so it cannot be stale', async () => {
+    await warnWith(duplicateState());
+    const add = screen.getByRole('button', { name: /Add another Ada/ }) as HTMLButtonElement;
+    expect(add.name).toBe('acknowledgedDuplicate');
+    expect(add.value).toBe('ada');
+  });
+
+  it('🔴 Enter in the name field does NOT acknowledge the warning', async () => {
+    await warnWith(duplicateState());
+    // ⚠️ **Asserted as `defaultPrevented`, NOT as "no submit fired".** jsdom does not implement
+    // implicit form submission from a keypress, so `expect(onSubmit).not.toHaveBeenCalled()` is
+    // true whether the guard exists or not — the first version of this test passed with the guard
+    // deleted. Cancelling the event IS the mechanism, and e2e drives the real key.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    nameField().dispatchEvent(enter);
+    // With the primary submit unmounted, the form's default button is the callout's "Add another",
+    // which carries the acknowledgement — so an un-cancelled Enter creates the second athlete.
+    expect(enter.defaultPrevented).toBe(true);
+    expect(document.activeElement?.getAttribute('role')).toBe('group');
+
+    // …and with no duplicate showing, Enter is left alone so the ordinary submit still works.
+    cleanup();
+    renderForm();
+    const plain = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    nameField().dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+  });
+
+  it('editing the name past the match dismisses the callout and restores the primary submit', async () => {
+    await warnWith(duplicateState());
+    expect(screen.queryByRole('group')).toBeTruthy();
+    fireEvent.change(nameField(), { target: { value: 'Bea' } });
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(screen.getByRole('button', { name: ATHLETE_FORM_COPY.add })).toBeTruthy();
   });
 
   it('renders no live region — success is a server redirect, so there is nothing to announce', () => {
