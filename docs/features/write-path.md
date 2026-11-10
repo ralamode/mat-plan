@@ -580,6 +580,22 @@ flowchart LR
   unique index on a folded name is impossible because "Add another" is a feature. Do not describe it
   as a constraint.
 
+  🔴 **(4) And the fourth one lives in the FORM, which this guide does not own** — recorded here
+  because it is the only place both halves are visible. The acknowledgement travels as a submit
+  button's `name`/`value`, so **which button is the form's default decides whether an unacknowledged
+  Enter silently acknowledges.** HTML activates the first submit button in **tree order** on every
+  implicit submission (Enter in a text field, Enter on a focused radio, a soft keyboard's Go, an IME
+  confirm) — and while the warning shows, the primary "Add" is unmounted, which promoted the
+  callout's "Add another" to default and created the second athlete from a stray Enter.
+  `add-athlete-form.tsx` therefore renders a **hidden submit sentinel first in the form**, carrying
+  the _unacknowledged_ label, so implicit submission re-warns instead. Two traps follow from it: a
+  **keydown handler is not a substitute** (it guards only the element it is attached to, and the
+  radio path slips past), and **jsdom cannot prove any of this** — it implements no implicit
+  submission, so "no submit fired" is vacuously true there. The unit test is structural (the
+  sentinel is first, and unacknowledged); the real key is driven in `e2e/athletes.spec.ts`.
+  ⚠️ If a later change re-introduces a visible submit above the sentinel, or makes the sentinel
+  conditional on something other than "a warning is showing", the Enter hazard returns silently.
+
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
   write failed, which prompts a duplicate submit.

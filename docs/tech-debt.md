@@ -28,9 +28,12 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,
   `evaluateAll`) hangs until the test times out — reproduced at a 30s budget and again at 90s.
   Navigating via `/p` between the archive and the add screen did not clear it.
-- **It is NOT the component.** The same state under jsdom (an archived duplicate, `archived: true`)
-  renders the Restore button in ~1s with no render loop. The defect is in the interaction between the
-  archive action's revalidation and a subsequent navigation under Playwright, not in the form.
+- **What is ruled out is the rendering; the cause itself is unexplained.** The same state under jsdom
+  (an archived duplicate, `archived: true`) renders the Restore button in ~1s with no render loop, so
+  the form is not looping. ⚠️ An earlier version of this line asserted the defect was "the
+  interaction between the archive action's revalidation and a subsequent navigation under
+  Playwright". That was a **guess stated as a finding** — nothing here measured it. The suspicion is
+  worth keeping as a starting point (see the fix below), not as a conclusion.
 - **Why it is filed rather than skipped:** a `test.skip` would sit in the suite looking like coverage.
   The e2e file carries a docblock naming exactly what is and is not proven instead.
 - **The fix, when taken:** instrument what the page is doing in that window (a `pageerror`/`console`

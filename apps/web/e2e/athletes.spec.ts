@@ -717,10 +717,11 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
 
-  // 🔴 The primary submit is unmounted while the callout shows, so the form's DEFAULT button becomes
-  // the callout's "Add another" — which carries the acknowledgement. Without the keydown guard, a
-  // parent tapping back into the field and pressing Go silently creates the second athlete. jsdom
-  // cannot prove this (it has no implicit submission), so the real key is driven here.
+  // 🔴 The primary submit is unmounted while the callout shows, so without the hidden submit
+  // SENTINEL the form's DEFAULT button becomes the callout's "Add another" — which carries the
+  // acknowledgement, so a parent tapping back into the field and pressing Go silently creates the
+  // second athlete. The sentinel is first in tree order and therefore wins that role instead. jsdom
+  // cannot prove any of it (it has no implicit submission), so the real key is driven here.
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).press('Enter');
   // ⚠️ **Asserted on FOCUS, not on the URL.** Without the sentinel the acknowledging POST is still
   // in flight while `toHaveURL` and `toBeVisible` both succeed, so a later count could read before
@@ -729,8 +730,9 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   await expect(page.getByRole('group')).toBeFocused();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
 
-  // 🔴 And the radio path — the case a per-element keydown guard missed. A keyboard user switching
-  // kind in the kinds-differ case lands here, which is exactly when Enter is most likely.
+  // 🔴 And the radio path, which is why this is a sentinel and not a keydown handler on the name
+  // field: implicit submission fires from the focused radio too. A keyboard user switching kind in
+  // the kinds-differ case lands here, which is exactly when Enter is most likely.
   await page.getByRole('radio', { name: /^Adult/ }).press('Enter');
   await expect(page.getByRole('group')).toBeFocused();
 
@@ -766,8 +768,10 @@ test('editing the name past the match dismisses the warning', async ({ page }, t
  * (`check`, `innerHTML`, `evaluateAll`) hangs until the test times out, at 30s and again at 90s.
  * Routing via `/p` in between did not clear it.
  *
- * **It is not the component.** Rendering the same state under jsdom — an archived duplicate with
- * `archived: true` — produces the Restore button in ~1s with no loop (`add-athlete-form.test.tsx`).
+ * **The cause is unexplained; what is ruled out is the rendering.** The same state under jsdom — an
+ * archived duplicate with `archived: true` — produces the Restore button in ~1s with no loop
+ * (`add-athlete-form.test.tsx`), so the form is not looping. Which layer does hang is not diagnosed,
+ * and this docblock does not guess.
  *
  * **What IS covered, so the gap is bounded:** `db:verify` proves an archived twin matches, reports
  * `archived: true`, yields the stored spelling, and loses to a live match; mutation patch `27` proves

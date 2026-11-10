@@ -16,8 +16,11 @@ import type { ReactNode, Ref } from 'react';
  * scrolls it into view; a live region on top of that would double-announce. The focus target carries
  * `role="group"` + `aria-labelledby`, so it announces as a named group rather than as silence.
  *
- * `ref` and `tabIndex` are forwarded so the caller can do exactly that. React 19 passes `ref` as an
- * ordinary prop, so no `forwardRef` wrapper is needed.
+ * `ref` is forwarded so the caller can do exactly that. React 19 passes `ref` as an ordinary prop,
+ * so no `forwardRef` wrapper is needed. `tabIndex={-1}` is **fixed here, not a prop** — focusability
+ * is not optional for a component whose announcement strategy is the focus move, so there is nothing
+ * for a caller to decide. (An earlier version of this docblock said `tabIndex` was forwarded. It
+ * never was.)
  */
 export function Callout({
   id,

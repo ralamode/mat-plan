@@ -54,7 +54,9 @@ spelling beside what was typed, making a false positive visible rather than asse
 
 ## What is proven, and one thing that is not
 
-`db:verify` covers seven cases including a **legacy athlete with a NULL `client_id`**, an archived
+`db:verify` covers **fourteen** behavioural cases (plus the arrange-time assertions that keep them
+honest — a proof that an archive happened is worthless if the archive silently did nothing). Among
+them: a **legacy athlete with a NULL `client_id`**, an archived
 `Zoë` matching `zoe`, a live match beating an archived one, and a replay of a successful add never
 being called a duplicate, plus a **full household still being warned about an archived twin** — the
 case the whole duplicate-before-quota ordering exists for, and the one nothing asserted until a review

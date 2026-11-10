@@ -304,10 +304,12 @@ export async function addAthleteAction(
 
     const created = await createAthlete({
       ...parsed.data,
-      // 🔴 **Compared SERVER-SIDE, against the parsed (trimmed, collapsed) name.** The client sends a
-      // fold it computed; this recomputes it from the name actually being saved, so an
-      // acknowledgement can only ever skip the check for the name it was shown for. A crafted body
-      // can still forge it — duplicates are advisory, not a boundary.
+      // 🔴 **Forwarded, then compared SERVER-SIDE against the parsed (trimmed, collapsed) name.**
+      // The client sends a fold it computed; `createProfile` re-derives it with `foldName` from the
+      // name actually being saved (`packages/db/src/writers/profile.ts`, step 2), so an
+      // acknowledgement can only ever skip the check for the name it was shown for. This line does
+      // not do the comparing — it hands the claim to the writer that does. A crafted body can still
+      // forge it: duplicates are advisory, not a boundary.
       acknowledgedDuplicate: parsed.data.acknowledgedDuplicate,
     });
     if (!created.ok) {
