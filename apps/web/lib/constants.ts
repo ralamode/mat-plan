@@ -980,8 +980,6 @@ export const ATHLETE_FORM_COPY = {
    */
   duplicateDisambiguate: (stored: string) =>
     `Both will show as “${stored}”. Add an initial, like “${stored} B.”, to tell them apart.`,
-  /** A quiet way back to the field the disambiguation advice is about. */
-  changeTheName: 'Change the name',
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,

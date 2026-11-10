@@ -722,8 +722,17 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   // parent tapping back into the field and pressing Go silently creates the second athlete. jsdom
   // cannot prove this (it has no implicit submission), so the real key is driven here.
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).press('Enter');
-  await expect(page).toHaveURL(new RegExp(ADD_ATHLETE_PATH.replace('/', '\\/')));
+  // ⚠️ **Asserted on FOCUS, not on the URL.** Without the sentinel the acknowledging POST is still
+  // in flight while `toHaveURL` and `toBeVisible` both succeed, so a later count could read before
+  // the insert commits and the test would pass over a real defect. `press()` focuses the input
+  // first, so only the re-warn moves focus back to the callout.
+  await expect(page.getByRole('group')).toBeFocused();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
+
+  // 🔴 And the radio path — the case a per-element keydown guard missed. A keyboard user switching
+  // kind in the kinds-differ case lands here, which is exactly when Enter is most likely.
+  await page.getByRole('radio', { name: /^Adult/ }).press('Enter');
+  await expect(page.getByRole('group')).toBeFocused();
 
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
   await expect(page.getByRole('link', { name: new RegExp(name) })).toHaveCount(1);

@@ -8075,6 +8075,24 @@ console.log(
 
   await asPg.delete(schema.profiles).where(inArray(schema.profiles.clientId, capKeys2));
 
+  // ── 🔴 The ORDER, which nothing proved: oldest first, among several live matches ──────────────
+  // Two live cousins both named Ada is the DESIGNED case — "Add another" exists for it — so a third
+  // Ada must be warned about a STABLE one. Without `orderBy(asc(id))` the pick follows heap order,
+  // which moves after any UPDATE (archive and rename both rewrite rows), and "Open Ada" could point
+  // at a different cousin between two submits.
+  assert.deepEqual(
+    (
+      (await createProfile(asPg, A_SCOPE, {
+        name: 'Ada',
+        kind: PROFILE_KIND.kid,
+        clientId: D('0d'),
+      })) as { match?: { publicId: string } }
+    ).match?.publicId,
+    ada.publicId,
+    'PROF-1 a-1d: with TWO live Adas, the warning names the FIRST one — the match is ordered by ' +
+      'id, not by whatever order the heap happens to return',
+  );
+
   // ── A soft-deleted twin does not warn ─────────────────────────────────────────────────────────
   await asPg
     .update(schema.profiles)

@@ -336,11 +336,16 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     // permanently. Chosen = Child (index 0), archived match = Adult.
     await warnWith(duplicateState({ archived: true, kind: PROFILE_KIND.adult }), 0);
     expect(screen.getByText(/can’t be changed/)).toBeTruthy();
+    // 🔴 The half that names the parent's OWN choice — without it, swapping the two kind arguments
+    // in the copy call would still pass, and that swap is the whole point of the sentence.
+    expect(screen.getByText(/You chose Child/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Add a new Ada \(Child\) instead/ })).toBeTruthy();
   });
 
   it('🔴 at the cap, NEITHER branch offers "Add another" — the endpoint would refuse it', async () => {
     await warnWith(duplicateState({ atCap: true }));
+    // A positive assertion FIRST: without it a callout that never rendered would pass the queryBy.
+    expect(screen.getByRole('link', { name: /Open Ada/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Add another/ })).toBeNull();
     cleanup();
     // The archived branch had no guard at all until a review found it: one shared button now.
@@ -356,25 +361,38 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     expect(add.value).toBe('ada');
   });
 
-  it('🔴 Enter in the name field does NOT acknowledge the warning', async () => {
+  it("🔴 the form's DEFAULT submit never carries the acknowledgement", async () => {
     await warnWith(duplicateState());
-    // ⚠️ **Asserted as `defaultPrevented`, NOT as "no submit fired".** jsdom does not implement
-    // implicit form submission from a keypress, so `expect(onSubmit).not.toHaveBeenCalled()` is
-    // true whether the guard exists or not — the first version of this test passed with the guard
-    // deleted. Cancelling the event IS the mechanism, and e2e drives the real key.
-    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
-    nameField().dispatchEvent(enter);
-    // With the primary submit unmounted, the form's default button is the callout's "Add another",
-    // which carries the acknowledgement — so an un-cancelled Enter creates the second athlete.
-    expect(enter.defaultPrevented).toBe(true);
-    expect(document.activeElement?.getAttribute('role')).toBe('group');
 
-    // …and with no duplicate showing, Enter is left alone so the ordinary submit still works.
-    cleanup();
+    // 🔴 **This is the real invariant, and the guard it replaces was too narrow.** The default
+    // button is the FIRST submit button in tree order, visible or not — so any implicit submission
+    // (Enter on the name field, Enter on a RADIO, a soft keyboard's Go, an IME confirm) activates
+    // it. The first version unmounted the primary submit, which promoted the callout's "Add
+    // another" into that role; a reviewer probed Enter on a focused radio in Chromium and it
+    // acknowledged. An `onKeyDown` guard on the name input could not cover the radio path.
+    const form = screen.getByRole('group').closest('form')!;
+    const submits = Array.from(
+      form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'),
+    ).filter((b) => b.form === form);
+    expect(submits.length).toBeGreaterThan(0);
+    expect(submits[0]!.name).not.toBe('acknowledgedDuplicate');
+
+    // …and it is inert to sight, screen readers and Tab, while still being the default.
+    expect(submits[0]!.hidden).toBe(true);
+    expect(submits[0]!.getAttribute('aria-hidden')).toBe('true');
+    expect(submits[0]!.tabIndex).toBe(-1);
+    // And the acknowledging buttons are still reachable — they are just not the DEFAULT.
+    expect(screen.getByRole('button', { name: /Add another Ada/ })).toBeTruthy();
+  });
+
+  it('…and with no duplicate showing there is no sentinel, just the visible primary', () => {
     renderForm();
-    const plain = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
-    nameField().dispatchEvent(plain);
-    expect(plain.defaultPrevented).toBe(false);
+    const submits = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('button[type="submit"]'),
+    );
+    expect(submits).toHaveLength(1);
+    expect(submits[0]!.hidden).toBe(false);
+    expect(submits[0]!.textContent).toBe(ATHLETE_FORM_COPY.add);
   });
 
   it('editing the name past the match dismisses the callout and restores the primary submit', async () => {

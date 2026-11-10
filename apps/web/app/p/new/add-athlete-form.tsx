@@ -266,6 +266,24 @@ export function AddAthleteForm({
           field error: there is nothing here for a person to correct. */}
         <input type="hidden" name="clientId" value={clientId} readOnly />
 
+        {/* 🔴 **The implicit-submission sentinel, and it must be FIRST IN TREE ORDER.** A form's
+          default button is the first submit button in document order — visible or not — and every
+          implicit submission activates it: Enter on the name field, Enter on a focused RADIO, a soft
+          keyboard's Go, an IME confirm. While the callout shows, the only other submits are its
+          choices, which carry `acknowledgedDuplicate`; without this, pressing Enter anywhere would
+          silently acknowledge the warning and create the second athlete.
+          ⚠️ **A per-element `onKeyDown` guard is not enough** — it covers the one element it is
+          attached to, and a reviewer probed Enter on a focused radio in Chromium slipping past it.
+          This absorbs every entry point at once: the re-post carries no acknowledgement, the server
+          answers `duplicate` again with no write, and the `[state]` effect re-focuses the callout.
+          `hidden` + `aria-hidden` + `tabIndex={-1}`: inert to sight, screen readers and Tab, while
+          still being the default. */}
+        {duplicate ? (
+          <button type="submit" hidden aria-hidden="true" tabIndex={-1}>
+            {ATHLETE_FORM_COPY.add}
+          </button>
+        ) : null}
+
         {/* 🔴 `role="radiogroup"` + `aria-invalid` on the FIELDSET, never on the radios. `aria-invalid`
           is not a supported attribute of `role="radio"` — one radio is not individually valid or
           invalid, the group is. `jsx-a11y/role-supports-aria-props` caught that on the first draft.
@@ -345,19 +363,6 @@ export function AddAthleteForm({
             autoComplete="off"
             spellCheck={false}
             enterKeyHint="go"
-            onKeyDown={(e) => {
-              // 🔴 **Enter must NOT acknowledge a duplicate.** The primary submit is unmounted while
-              // the callout shows, so by the HTML default-button rule the form's default becomes the
-              // callout's "Add another" — which carries the acknowledgement. A parent tapping back
-              // into the field and pressing Go would silently create the second athlete, and on an
-              // archived kinds-differ match Enter would pick the option the copy deliberately does
-              // not promote. Both review lenses traced this independently. Enter re-reads the
-              // warning instead of acting on it.
-              if (duplicate && e.key === 'Enter') {
-                e.preventDefault();
-                calloutRef.current?.focus();
-              }
-            }}
             required
             aria-invalid={nameInvalid || undefined}
             aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}`}
@@ -469,6 +474,10 @@ export function AddAthleteForm({
             buttons on the form. Two near-identical "add" buttons visible together is the state a
             parent misreads, and leaving this one here would also make it the Enter-key default
             while the callout sits above it. */}
+          {/* `w-fit`, as on the rename form: a full-width primary button reads as the end of a long
+            flow, and this is two questions. Hidden while the callout shows, so two near-identical
+            add buttons are never visible together — the DEFAULT-submit role is held by the sentinel
+            at the top of the form, not by this one. */}
           {duplicate ? null : (
             <Button type="submit" size="lg" disabled={pending} className="w-fit text-base">
               {pending ? ATHLETE_FORM_COPY.adding : ATHLETE_FORM_COPY.add}

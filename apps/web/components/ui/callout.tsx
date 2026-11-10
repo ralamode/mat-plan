@@ -13,7 +13,8 @@ import type { ReactNode, Ref } from 'react';
  *
  * ⚠️ **No `role="alert"`, by design.** This is not an error the parent made, and asserting it over
  * their typing is wrong. The add form moves FOCUS here instead, which both announces the message and
- * scrolls it into view; a live region on top of that would double-announce.
+ * scrolls it into view; a live region on top of that would double-announce. The focus target carries
+ * `role="group"` + `aria-labelledby`, so it announces as a named group rather than as silence.
  *
  * `ref` and `tabIndex` are forwarded so the caller can do exactly that. React 19 passes `ref` as an
  * ordinary prop, so no `forwardRef` wrapper is needed.
@@ -45,12 +46,12 @@ export function Callout({
       // the two together double-announce.
       role="group"
       aria-labelledby={messageId}
-      // `scroll-mt-4` so focusing it does not jam it against the viewport edge; `outline-none`
-      // because the focus here is a programmatic announcement, not keyboard navigation — the ring
-      // would read as "you tabbed here".
-      // ⚠️ A focus RING, not `outline-none`. The move is programmatic, but a keyboard user who then
-      // presses Enter in the name field is refocused here — and for them the container really is
-      // where focus lives, so hiding it would lose the only cue.
+      // `scroll-mt-4` so focusing it does not jam against the viewport edge.
+      // `outline-none` + `focus-visible:ring-3` is this repo's idiom (`INPUT_CLASS` is the same
+      // pair): the browser's default outline is suppressed and replaced by a ring that only shows
+      // for keyboard focus. ⚠️ The ring matters here even though the focus move is programmatic —
+      // the sentinel means an Enter press re-focuses this container, and for that user it really is
+      // where focus lives.
       className="border-input focus-visible:ring-ring flex scroll-mt-4 flex-col gap-3 rounded-lg border p-4 outline-none focus-visible:ring-3"
     >
       <div className="flex gap-2.5">

@@ -57,7 +57,10 @@ spelling beside what was typed, making a false positive visible rather than asse
 
 `db:verify` covers seven cases including a **legacy athlete with a NULL `client_id`**, an archived
 `Zoë` matching `zoe`, a live match beating an archived one, and a replay of a successful add never
-being called a duplicate. Four mutation patches (`26`–`29`) each redden a distinct assertion.
+being called a duplicate, plus a **full household still being warned about an archived twin** — the
+case the whole duplicate-before-quota ordering exists for, and the one nothing asserted until a review
+pointed out that `atCap` had never been checked `true`. **Six mutation patches (`26`–`31`)** each
+redden a distinct assertion.
 
 ⚠️ **The archived → Restore path has no end-to-end test.** Every tier below the browser covers it, but
 the click itself does not: after an archive, loading `/p/new` under Playwright leaves the radios
@@ -66,7 +69,14 @@ resolvable yet never actionable — only calls that evaluate page JS hang, at a 
 the evidence, and the e2e file carries a docblock naming exactly what is and is not proven, rather
 than a `test.skip` that would look like coverage.
 
-⚠️ **Two planned mutation patches were not shipped, because both stayed green.** Ordering and the
-`client_id` exclusion independently cover every interleaving a single-connection database can
-produce, so breaking either alone changes no answer. The interleaving the exclusion actually guards
-cannot be staged in PGlite. The line stays, documented; the patch that reddens nothing does not.
+⚠️ **One planned mutation patch is not shipped, because it stays green.** Dropping `excludeClientId`
+changes no observable answer: the replay lookup returns first, so the exclusion is never consulted
+sequentially, and the interleaving it guards — a twin inserting _between_ two reads — cannot be staged
+in single-connection PGlite. The line stays, documented at the call site; the patch that reddens
+nothing does not, because `db:mutations` exists to catch proofs that cannot fail.
+
+🔴 **The claim that the ORDERING patch was equally unshippable was half wrong, and a review caught
+it.** With one Ada the exclusion removes the caller's own row either way — which is what the first
+measurement saw. With a **second** athlete of the same name, a replay meets a match the exclusion
+cannot remove, and only the step order keeps it an `ok`. That is the real regression D2 names: a
+replay after a cousin of the same name was added. The assertion came first, then patch `30`.
