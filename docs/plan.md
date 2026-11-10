@@ -2071,6 +2071,18 @@ no filter"` → three, because a name became typeable), which is a real accuracy
   requires disclosing what is _not_ retained; a rename is the exercise of the rectification right,
   not an event needing a caveat. The retention answer lives in the inventory's §8.
 
+- **DX-13 — coverage as a post-merge measurement, and a sharper e2e budget.**
+  ([plan](./plans/dx-13-coverage-and-e2e-budget.md)) `@vitest/coverage-v8` + a `test:coverage`
+  script, published by `.github/workflows/metrics.yml` on `push: main` only — **no `pull_request`
+  trigger, so it cannot appear in a PR's checks even as a skipped row**, and **no thresholds**. Five
+  independent fail-loud assertions, because a number nobody measured must never render as a pass.
+  Rides with it: the Definition of Done's Speed budget gains the test for what **earns** an e2e
+  (behaviour unprovable below the browser), and three docs that would otherwise read as false or
+  wired are corrected — `SKILL.md`'s "there's no coverage tool", its inverse red flag, and
+  `AGENTS.md`'s unenforceable "No coverage drop on changed files".
+  **Acceptance:** coverage runs post-merge and gates nothing; an untested file inside `include`
+  reads 0%; every fail-loud condition probed red independently.
+
 - **DX-12 — `db:verify` as per-feature suites.** 📐 **PLANNED, PANELLED AND DEFERRED 2026-11-07**
   ([plan](./plans/dx-12-verify-suites.md)). `packages/db/scripts/verify.ts` is 7,213 lines and every
   DB-touching PR appends before its last line — 26 commits in six weeks. `docs/parallel-work.md`
