@@ -12,7 +12,7 @@ name: Metrics
 #
 # 🔴 WHY THE NUMBER CAN STILL GO RED. The one thing this must never do is publish
 # a figure it did not actually measure — "could not check" is not a pass, the same
-# rule `audit:check` follows. Five independent conditions fail the run (see the
+# rule `audit:check` follows. SIX independent conditions fail the run (see the
 # Assert step). A red run here blocks no merge, because the merge already happened.
 #
 # ⚠️ NOBODY HAS CONFIRMED A RED RUN REACHES A HUMAN. SEC-5b (docs/plan.md) is
@@ -89,9 +89,15 @@ jobs:
       # sees a full run (`allTestsRun`), so `test:coverage lib/` would silently
       # drop the honest denominator this whole design rests on.
       - name: Run coverage
+        # 🔴 `shell: bash` is LOAD-BEARING, not style. GitHub's default for a `run:` with no
+        # `shell:` is `bash -e {0}` — WITHOUT `-o pipefail`. The exit status of
+        # `vitest | tee` is then tee's, always 0, so a failing test run would not fail
+        # this step at all. The explicit form is `bash --noprofile --norc -eo pipefail {0}`
+        # (`claude-review.yml` uses it too). Found by a security lens on the first PR.
+        shell: bash
         run: pnpm --filter web test:coverage 2>&1 | tee coverage-run.log
 
-      # 🔴 FIVE INDEPENDENT ASSERTIONS, never a conjunction. The one they exist
+      # 🔴 SIX INDEPENDENT ASSERTIONS, never a conjunction. The one they exist
       # for is a mis-rooted include glob: that leaves the apps/web keys in place,
       # so a check written as "no apps/web AND no packages" would publish a green
       # number over a silently smaller denominator. Each is its own `exit 1`.
@@ -100,9 +106,11 @@ jobs:
           set -euo pipefail
           SUMMARY=apps/web/coverage/coverage-summary.json
 
-          # 1. The run itself. `pipefail` + tee means a failed vitest already
-          #    failed this job at the previous step; re-checked here so a later
-          #    edit that drops the pipe cannot make this silently advisory.
+          # 1. The run log exists at all. ⚠️ This proves LITTLE on its own — `tee`
+          #    creates the file before vitest writes a byte — and an earlier version of
+          #    this comment claimed it was backed by `pipefail`, which the previous step
+          #    did not set. It does now (`shell: bash`), so a failed test run fails there;
+          #    this line only catches the pipeline vanishing entirely.
           test -f coverage-run.log || { echo "::error::no run log"; exit 1; }
 
           # 2. The summary exists and is non-empty.
@@ -130,6 +138,16 @@ jobs:
             echo "::error::a file was excluded from coverage at exit 0 — see the run log"
             exit 1
           fi
+
+          # 6. The text-summary block the Publish step greps for is actually present.
+          #    `sed` with no match exits 0, so a reporter rename in a future vitest bump
+          #    would publish an EMPTY code fence over a green run — the number is asserted
+          #    above but never shown. Checking the header here keeps the published output
+          #    from going quietly blank.
+          grep -q "Coverage summary" coverage-run.log || {
+            echo "::error::no text-summary block in the run log — the published summary would be empty"
+            exit 1
+          }
 
       - name: Publish the summary
         run: |

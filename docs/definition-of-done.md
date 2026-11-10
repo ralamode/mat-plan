@@ -54,21 +54,19 @@ the **Playwright** smoke against a real **CI Postgres service** (migrated + seed
 on `pre-push`.
 
 **Speed budget (enforced by review).** Unit / integration / component tests are **fast — sub-second,
-usually milliseconds** (the whole Vitest suite runs in well under a second). **E2E is the _only_ tier
-allowed to take multiple seconds**, so keep it **minimal and very selective — a handful of critical
-wiring smokes, nothing more.** Never reach for an E2E to cover what a fast integration/unit test can:
+usually milliseconds**. **E2E is the _only_ tier allowed to take multiple seconds**, so keep it
+**minimal and very selective — a handful of critical wiring smokes, nothing more.** 🔴 **The test for
+whether one is earned: can the behaviour be proven below the browser?** If it can, it belongs lower —
 push correctness (idempotency, zod, ownership, edge cases) down to the fast tiers and let E2E prove
-only that the pieces are wired together. A test that _needs_ seconds outside E2E is a design smell —
-rewrite the coverage, don't accept the slowness.
-
-🔴 **The test for whether an E2E is earned: can the behaviour be proven below the browser?** If it
-can, it belongs lower. Only these cannot — real navigation and redirects; **native or implicit form
-submission** (jsdom implements none, which is why `PROF-1 a-1d`'s hidden submit sentinel could only
-be proven here); actual overflow or tap-target geometry at a width; focus moving across a real
-document; a Server Action round trip end to end. Everything else goes in a colocated `*.test.tsx`,
-the action's own boundary tests, or `db:verify`, where it runs in milliseconds and fails more
-precisely. **Prefer extending an existing spec's flow to adding a `test()`.** _(DX-13, 2026-11-10;
-baseline at the time: `playwright test --list` → 87 tests in 13 files.)_
+only that the pieces are wired together. Only these cannot be proven lower: real navigation and
+redirects; **native or implicit form submission** (jsdom implements none, which is why `PROF-1
+a-1d`'s hidden submit sentinel could only be proven end to end); actual overflow or tap-target
+geometry at a width; focus moving across a real document; a Server Action round trip. Everything else
+goes in a colocated `*.test.tsx`, the action's own boundary tests, or `db:verify`, where it runs in
+milliseconds and fails more precisely. **Prefer extending an existing spec's flow to adding a
+`test()`.** A test that _needs_ seconds outside E2E is a design smell — rewrite the coverage, don't
+accept the slowness. _(The earned-ness test is DX-13, 2026-11-10; baseline then: `playwright test
+--list` → 87 tests in 13 files.)_
 
 - **Unit:** zod schemas, CSV re-aggregation, progression engine, pure utils. Live: `lib/date.test.ts`
   and `lib/access-gate.test.ts` (token derivation + the `safeInternalPath` open-redirect guard).

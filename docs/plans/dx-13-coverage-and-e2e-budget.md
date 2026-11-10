@@ -31,13 +31,16 @@ and a PR-level delta — are rejected in § Alternatives so a later PR argues wi
 - Coverage runs **post-merge only**, in a workflow that never triggers on `pull_request`, so it
   cannot appear in a PR's check list **even as a skipped row**.
 - `pnpm verify`, the hooks, and CI's `quality` / `e2e` jobs are unchanged in behaviour and duration.
-- **Fail-loud — five independent conditions, any one of which goes red**, written as five separate
+- **Fail-loud — six independent conditions, any one of which goes red**, written as six separate
   assertions in the step so they map one-to-one:
-  1. the test run exits non-zero;
+  1. the test run exits non-zero — ⚠️ which requires an explicit `shell: bash` on that step, since
+     GitHub's default is `bash -e` **without** `pipefail`, so `vitest | tee` would otherwise exit 0;
   2. `coverage-summary.json` is missing **or empty**;
   3. the summary has no `apps/web/` key;
   4. the summary has no `packages/` key;
-  5. the run log contains `Excluding it from coverage`.
+  5. the run log contains `Excluding it from coverage`;
+  6. the run log has no `Coverage summary` block — `sed` with no match exits 0, so the published
+     fence would otherwise go silently empty on a green run.
      🔴 **"Either workspace missing", not "both".** The first draft of this bullet said red only when the
      summary named _no_ `apps/web/` **and** _no_ `packages/` file — which cannot catch the case it was
      added for: a mis-rooted `../../packages/*/src/**` leaves the `apps/web` keys present, so the number

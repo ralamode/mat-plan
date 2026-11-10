@@ -38,9 +38,18 @@ else is listed: an exclusion that can never match reads as a decision while doin
 
 ## "Could not measure" is never reported as a pass
 
-Five independent assertions fail the run, each probed by breaking it on purpose: the test run exits
+Six independent assertions fail the run, each probed by breaking it on purpose: the test run exits
 non-zero; `coverage-summary.json` is missing or empty; the summary names no `apps/web/` file; it
-names no `packages/` file; or the log contains `Excluding it from coverage`.
+names no `packages/` file; the log contains `Excluding it from coverage`; or the log has no
+`Coverage summary` block at all (`sed` with no match exits 0, so the published fence would go
+silently empty).
+
+🔴 **The first of those needed an explicit `shell: bash`, and a review found it missing.** GitHub's
+default shell for a `run:` with no `shell:` is `bash -e` — **without** `pipefail` — so
+`vitest | tee` exits with `tee`'s status, always 0. Probed: a test file that **passes** while leaking
+an unhandled rejection makes vitest exit non-zero, and the step was green anyway. The other five
+conditions cannot catch that case, because `reportOnFailure` only suppresses the report when a test
+actually _failed_. A comment claiming `pipefail` protection was there before the mechanism was.
 
 🔴 **The fourth exists because of the third, and an earlier draft would have missed it.** That draft
 required "no `apps/web/` **and** no `packages/`" — a conjunction. The case it was written for is a
