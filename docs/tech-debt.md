@@ -41,6 +41,25 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
   fresh context instead of continuing the archived session.
 
+### A JS-disabled page cannot be driven by the Playwright harness, so no-JS paths are unprovable (added 2026-11-10)
+
+- **What & why it's debt:** `PROF-1 a-1d` carries a fix whose only scenario is a render with no
+  client state — a JS-less submit, or one made before hydration. A test for it was written and is
+  **not shipped**, because a `javaScriptEnabled: false` context cannot be driven here.
+- **The measurement, so the next attempt starts past it:** in such a context `page.url()` answers
+  correctly (`/p/new`), while `locator.count()` returns **0** and `locator.innerText()` returns a
+  **32-character** body. Both of those go through Playwright's injected script, which the context
+  cannot execute — so the harness **cannot distinguish "the page rendered nothing" from "the harness
+  cannot see the page"**. ⚠️ Recorded as a measurement, not a cause: which of the two it is was not
+  established, and the earlier habit of writing a confident cause into this file is what the same PR
+  had to withdraw elsewhere.
+- **What it means for claims:** nothing in this repo tests a no-JS path, so no document may say one
+  is covered. `rename-form.tsx` reasons about a no-JS re-render from the code, not from a test, and
+  should be read that way too.
+- **The fix, when taken:** drive the page out of the browser instead — a `fetch` of the rendered HTML
+  with the harness session header, asserting on the markup — or render the island through the RSC
+  payload. Both avoid needing page JS at all. Until then, a no-JS behaviour is argued, never claimed.
+
 ### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
 
 - **What & why it's debt:** `createProfile` (`packages/db/src/writers/profile.ts`) reads

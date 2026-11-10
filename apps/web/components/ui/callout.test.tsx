@@ -44,7 +44,9 @@ describe('Callout', () => {
     render(<Callout message="That looks like Ada." />);
 
     // A deliberate absence, and the kind of decision a later "make it louder" edit would quietly
-    // reverse. `design.md` and the component's own docblock both record the reasoning.
+    // reverse. The reasoning is recorded in this component's own docblock and in the plan's C6 row
+    // (`docs/plans/prof-1-athletes.md`). ⚠️ An earlier version of this comment cited `docs/design.md`
+    // too; that file records the border-contrast measurement and nothing about announcement.
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('group').getAttribute('aria-live')).toBeNull();
   });

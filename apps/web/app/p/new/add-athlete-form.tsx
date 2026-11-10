@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  collapseWhitespace,
   foldName,
   PROFILE_KIND,
   PROFILE_KIND_LABELS,
@@ -14,7 +15,13 @@ import { useActionState, useEffect, useId, useRef, useState } from 'react';
 import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
-import { athletePath, ATHLETE_FORM_COPY, INPUT_CLASS, NAME_WRAP_CLASS } from '@/lib/constants';
+import {
+  athletePath,
+  ATHLETE_FORM_COPY,
+  HOUSEHOLD_FULL,
+  INPUT_CLASS,
+  NAME_WRAP_CLASS,
+} from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE } from '../[profileId]/action-state';
 
@@ -89,9 +96,28 @@ export function AddAthleteForm({
   programsAnything: boolean;
 }) {
   const [state, formAction, pending] = useActionState(addAthleteAction, INITIAL_ACTION_STATE);
-  const [name, setName] = useState('');
+  /**
+   * **Seeded from the envelope, so this form's duplicate answer no longer depends on client state.**
+   * A `useState` initializer runs on MOUNT alone, so after an ordinary JS submit it is a no-op — the
+   * island never unmounted — and the stale-callout rule below is untouched. Where it does something
+   * is a render that mounts fresh with an answer already in `state`: without the name, the callout is
+   * discarded by its own fold gate (`foldName('') !== folded`), and without the kind "Add another"
+   * would come back refused for a missing radio. Every OTHER refusal on this form renders from
+   * `state` alone; the duplicate was the one that did not.
+   *
+   * ⚠️ **UNPROVEN, and deliberately so rather than quietly.** The scenario is a JS-less or
+   * pre-hydration submit, and this harness cannot drive one: in a `javaScriptEnabled: false` context
+   * `page.url()` answers while `locator.count()` returns 0 and `innerText()` 32 characters — both of
+   * those need Playwright's injected script, which such a context cannot run, so it cannot tell "the
+   * page rendered nothing" from "the harness cannot see the page". A test was written and is NOT
+   * shipped; `docs/tech-debt.md` records the measurement so the next attempt starts there. What IS
+   * tested is the data: `profile-actions.test.ts` pins the whole envelope shape, including these two
+   * fields. The same reasoning the plan already sanctions for `excludeClientId` — keep the code the
+   * argument justifies, ship no proof that cannot fail.
+   */
+  const [name, setName] = useState(state.duplicate?.typed ?? '');
   /** `null`, not a default — nothing is pre-checked. Drives `defaultChecked`; see the docblock. */
-  const [kind, setKind] = useState<ProfileKind | null>(null);
+  const [kind, setKind] = useState<ProfileKind | null>(state.duplicate?.chosenKind ?? null);
   const firstRadioRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const calloutRef = useRef<HTMLDivElement>(null);
@@ -146,7 +172,12 @@ export function AddAthleteForm({
   const showDisambiguation = Boolean(
     duplicate &&
     !duplicate.match.archived &&
-    name.trim() === duplicate.match.name &&
+    // ⚠️ **`collapseWhitespace`, not `trim()` alone.** `athleteNameSchema` stores the name COLLAPSED
+    // as well as trimmed, so a typed "Ada  B" (two spaces) against a stored "Ada B" is the same
+    // record and really would render two identical tiles — while a bare `trim()` reads them as
+    // different spellings and drops advice that is true. Same helper the schema uses, so the two
+    // cannot drift.
+    collapseWhitespace(name.trim()) === duplicate.match.name &&
     kind === duplicate.match.kind,
   );
   const chosenKindLabel = kind ? PROFILE_KIND_LABELS[kind] : '';
@@ -198,6 +229,12 @@ export function AddAthleteForm({
     // Restore succeeded: open the athlete, the rename form's idiom. `replace` so Back does not
     // return to a form that is now about somebody who exists.
     if (restoreState.ok && restoreState.savedId) router.replace(athletePath(restoreState.savedId));
+    // 🔴 **And the FAILURE path, which dropped focus to `<body>`.** `disabled={restorePending}`
+    // blurs the Restore button the moment it is clicked — the same mechanism this file documents for
+    // the primary submit — so when the action answers `{ ok: false }` the `role="alert"` is heard but
+    // the keyboard position is gone, and the next Tab starts above the page header. Returning focus
+    // to the callout puts the user back beside the choices, including the Restore they can retry.
+    else if (restoreState.error) calloutRef.current?.focus();
   }, [restoreState, router]);
 
   /**
@@ -311,7 +348,13 @@ export function AddAthleteForm({
         <fieldset
           role="radiogroup"
           aria-invalid={kindInvalid || undefined}
-          aria-describedby={`${kindHintId}${kindInvalid ? ` ${kindErrorId}` : ''}`}
+          // Appended only in the KINDS-DIFFER case, where the message is about this control: it
+          // reads "…saved as Adult … You chose Child", and switching the radio rewrites both the
+          // sentence and the buttons with no announcement of its own. When the kinds agree the
+          // message is about the name, so adding it here would repeat it on the wrong control.
+          aria-describedby={`${kindHintId}${kindInvalid ? ` ${kindErrorId}` : ''}${
+            duplicate && kindsDiffer ? ` ${duplicateMessageId}` : ''
+          }`}
           className="flex flex-col gap-2"
         >
           <legend className="text-sm font-medium">{ATHLETE_FORM_COPY.legend}</legend>
@@ -384,7 +427,17 @@ export function AddAthleteForm({
             enterKeyHint="go"
             required
             aria-invalid={nameInvalid || undefined}
-            aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}`}
+            // 🔴 **The duplicate message is appended here, not merely rendered below.** A screen
+            // reader announces the callout once, on the programmatic focus move; a parent who then
+            // Shift+Tabs back into this field to change the spelling — which is exactly what the
+            // disambiguation advice asks them to do — would otherwise hear only the hint and nothing
+            // about the warning they are responding to. ⚠️ The plan accepted this at C6 and it was
+            // NOT shipped: `duplicateMessageId` existed and reached only the Callout, while the
+            // plan, the component's docblock and `callout.test.tsx` all described a wiring no
+            // element had. Found by a third review pass.
+            aria-describedby={`${nameHintId}${nameInvalid ? ` ${nameErrorId}` : ''}${
+              duplicate ? ` ${duplicateMessageId}` : ''
+            }`}
             className={`${INPUT_CLASS} w-full`}
           />
           {nameInvalid ? (
@@ -405,6 +458,12 @@ export function AddAthleteForm({
                     ? ATHLETE_FORM_COPY.duplicateArchived(duplicate.match.name, matchKindLabel)
                     : ATHLETE_FORM_COPY.duplicateLive(duplicate.match.name, matchKindLabel)}
                 </span>
+                {/* The Restore benefit, only when the kinds AGREE — see the copy's docblock. With
+                  them differing it would recommend Restore in the sentence before the one saying
+                  Restore is permanent and wrong. */}
+                {duplicate.match.archived && !kindsDiffer ? (
+                  <> {ATHLETE_FORM_COPY.duplicateArchivedRestoreNote}</>
+                ) : null}
                 {kindsDiffer ? (
                   <>
                     {' '}
@@ -425,6 +484,13 @@ export function AddAthleteForm({
                     </span>
                   </>
                 ) : null}
+                {/* 🔴 **At the cap, say why the choice is missing.** `addAnotherButton` returns
+                  `null` when `atCap`, and without this the parent of two genuinely different Adas
+                  reads "…who is already on your list", sees one button, and is given no reason and
+                  no route. The action answers this path with `error: null` — it is a duplicate
+                  envelope, not a refusal — so `HOUSEHOLD_FULL` never rendered anywhere. Reusing that
+                  constant keeps one sentence for the cap across the whole app. */}
+                {duplicate.atCap ? <> {HOUSEHOLD_FULL}</> : null}
               </>
             }
           >
@@ -465,7 +531,7 @@ export function AddAthleteForm({
                   measured by CI. */}
                 <Link
                   href={athletePath(duplicate.match.publicId)}
-                  className="border-input hover:bg-accent focus-visible:ring-ring flex min-h-11 w-full items-center justify-center rounded-lg border px-3 py-2.5 text-base font-medium outline-none focus-visible:ring-3"
+                  className="border-input hover:bg-accent focus-visible:ring-ring flex min-h-11 w-full items-center rounded-lg border px-3 py-2.5 text-left text-base font-medium outline-none focus-visible:ring-3"
                 >
                   <span className={NAME_WRAP_CLASS}>
                     {ATHLETE_FORM_COPY.openMatch(duplicate.match.name)}

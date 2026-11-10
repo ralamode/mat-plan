@@ -302,16 +302,14 @@ export async function addAthleteAction(
       };
     }
 
-    const created = await createAthlete({
-      ...parsed.data,
-      // 🔴 **Forwarded, then compared SERVER-SIDE against the parsed (trimmed, collapsed) name.**
-      // The client sends a fold it computed; `createProfile` re-derives it with `foldName` from the
-      // name actually being saved (`packages/db/src/writers/profile.ts`, step 2), so an
-      // acknowledgement can only ever skip the check for the name it was shown for. This line does
-      // not do the comparing — it hands the claim to the writer that does. A crafted body can still
-      // forge it: duplicates are advisory, not a boundary.
-      acknowledgedDuplicate: parsed.data.acknowledgedDuplicate,
-    });
+    // 🔴 **`acknowledgedDuplicate` rides in the spread, and is compared SERVER-SIDE against the
+    // parsed (trimmed, collapsed) name.** The client sends a fold it computed; `createProfile`
+    // re-derives it with `foldName` from the name actually being saved
+    // (`packages/db/src/writers/profile.ts`, step 2), so an acknowledgement can only ever skip the
+    // check for the name it was shown for. A crafted body can still forge it: duplicates are
+    // advisory, not a boundary. (An earlier version restated the key after the spread, which
+    // assigned it to itself and read as though this line did the comparing.)
+    const created = await createAthlete(parsed.data);
     if (!created.ok) {
       if (created.reason === 'duplicate') {
         // Not a `fieldError`: the name is not invalid, and `aria-invalid` on a correct value is a
@@ -323,6 +321,11 @@ export async function addAthleteAction(
             match: created.match,
             atCap: created.atCap,
             folded: foldName(parsed.data.name),
+            // The PARSED name and kind, so a render with no client state can rebuild the form —
+            // see the envelope's docblock. `parsed.data.name`, never the raw field: it folds to
+            // `folded` by construction, so the callout cannot be discarded by its own gate.
+            typed: parsed.data.name,
+            chosenKind: parsed.data.kind,
           },
         };
       }

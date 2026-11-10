@@ -961,7 +961,17 @@ export const ATHLETE_FORM_COPY = {
   duplicateLive: (stored: string, kind: string) =>
     `That looks like ${stored} (${kind}), who is already on your list.`,
   duplicateArchived: (stored: string, kind: string) =>
-    `That looks like ${stored} (${kind}), who is in your archived athletes. Restoring brings back everything they logged.`,
+    `That looks like ${stored} (${kind}), who is in your archived athletes.`,
+  /**
+   * 🔴 **Split out of `duplicateArchived`, and rendered only when the kinds AGREE.** A UX lens read
+   * the composed kinds-differ message and found it sold Restore in the sentence immediately before
+   * the sentence warning that Restore is permanent and wrong: "…Restoring brings back everything
+   * they logged. Ada is saved as Adult, and that can't be changed." The plan's C7 asks that neither
+   * option be given primacy, and a benefit stated first is primacy. When the kinds differ this is
+   * omitted, so the parent reads the constraint and chooses; when they agree it is the reason Restore
+   * is the better option and belongs.
+   */
+  duplicateArchivedRestoreNote: 'Restoring brings back everything they logged.',
   /**
    * 🔴 The kinds-differ case, which a UX lens found by reading this screen against its OWN recovery
    * copy. `kindRecoveryOwnerAfter` tells a parent who picked the wrong kind to archive and add again

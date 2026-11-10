@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { PROFILE_KIND, PROFILE_NAME_MAX, type ProfileKind } from '@mat-plan/shared';
+import { foldName, PROFILE_KIND, PROFILE_NAME_MAX, type ProfileKind } from '@mat-plan/shared';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +19,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { athletePath, ATHLETE_FORM_COPY } from '@/lib/constants';
+import { athletePath, ATHLETE_FORM_COPY, HOUSEHOLD_FULL } from '@/lib/constants';
 
 import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
 
@@ -287,7 +287,14 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
    * lens found it. Writing the tests was the fix; weakening the claim was not.
    */
   const duplicateState = (
-    over: Partial<{ archived: boolean; kind: ProfileKind; atCap: boolean }> = {},
+    over: Partial<{
+      archived: boolean;
+      kind: ProfileKind;
+      atCap: boolean;
+      storedName: string;
+      typed: string;
+      chosenKind: ProfileKind;
+    }> = {},
   ) =>
     ({
       ok: false,
@@ -295,12 +302,21 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
       duplicate: {
         match: {
           publicId: 'p-match',
-          name: 'Ada',
+          name: over.storedName ?? 'Ada',
           kind: over.kind ?? PROFILE_KIND.kid,
           archived: over.archived ?? false,
         },
         atCap: over.atCap ?? false,
-        folded: 'ada',
+        // 🔴 Derived with the REAL `foldName`, not the literal `'ada'` this used to hard-code. The
+        // form only shows a callout while `foldName(typed) === folded`, so a hand-written fold is a
+        // fixture that can disagree with the function the component calls — and a case using any
+        // other name would then render nothing and assert nothing.
+        folded: foldName(over.typed ?? 'Ada'),
+        // Carried so a render with NO client state can rebuild the form. Irrelevant to the jsdom
+        // tests below — the island is already mounted there — but the shape has to be whole or the
+        // fixture would drift from the envelope it stands in for.
+        typed: over.typed ?? 'Ada',
+        chosenKind: over.chosenKind ?? PROFILE_KIND.kid,
       },
     }) as Awaited<ReturnType<typeof addAthleteAction>>;
 
@@ -340,6 +356,142 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     // in the copy call would still pass, and that swap is the whole point of the sentence.
     expect(screen.getByText(/You chose Child/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Add a new Ada \(Child\) instead/ })).toBeTruthy();
+  });
+
+  /**
+   * 🔴 **The warning has to be TIED to the field, not merely rendered near it.** The plan accepted
+   * this at C6 and it was not shipped: `duplicateMessageId` reached the Callout and nothing else,
+   * while the plan, the component docblock and `callout.test.tsx` all described a wiring no element
+   * had. A screen-reader user hears the callout once, on the focus move; the moment they Shift+Tab
+   * back to the field to change the spelling — which is what the disambiguation advice asks of them
+   * — the association is the only thing that still speaks.
+   */
+  it('ties the warning to the NAME field via aria-describedby, and lets go when it clears', async () => {
+    await warnWith(duplicateState());
+
+    const messageId = screen.getByRole('group').getAttribute('aria-labelledby');
+    expect(messageId).toBeTruthy();
+    expect(nameField().getAttribute('aria-describedby')).toContain(messageId);
+    // The hint must survive alongside it — appended, not replaced.
+    expect(nameField().getAttribute('aria-describedby')!.split(' ').length).toBeGreaterThan(1);
+
+    // Editing past the match dismisses the callout, so the association must go with it rather than
+    // pointing `aria-describedby` at an id no longer in the document.
+    fireEvent.change(nameField(), { target: { value: 'Bea' } });
+    expect(nameField().getAttribute('aria-describedby')).not.toContain(messageId);
+    expect(document.getElementById(messageId!)).toBeNull();
+  });
+
+  it('ties it to the RADIOGROUP too, but only when the kinds differ', async () => {
+    // Kinds agree: the message is about the name, so repeating it on the kind control would be noise.
+    await warnWith(duplicateState({ archived: true }));
+    const sameKindMessageId = screen.getByRole('group').getAttribute('aria-labelledby');
+    expect(screen.getByRole('radiogroup').getAttribute('aria-describedby')).not.toContain(
+      sameKindMessageId,
+    );
+    cleanup();
+
+    // Kinds differ: the message reads "…saved as Adult … You chose Child" — it IS about this
+    // control, and switching the radio rewrites the sentence with no announcement of its own.
+    await warnWith(duplicateState({ archived: true, kind: PROFILE_KIND.adult }), 0);
+    const messageId = screen.getByRole('group').getAttribute('aria-labelledby');
+    expect(screen.getByRole('radiogroup').getAttribute('aria-describedby')).toContain(messageId);
+  });
+
+  /**
+   * 🔴 A failed Restore dropped keyboard focus to `<body>`. `disabled={restorePending}` blurs the
+   * button the moment it is clicked — the same mechanism this form documents for its primary submit
+   * — so the `role="alert"` was heard while the keyboard position was gone, and the next Tab started
+   * above the page header.
+   */
+  it('returns focus to the callout when a Restore FAILS', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    const restore = screen.getByRole('button', { name: /Restore Ada/ });
+
+    // ⚠️ `mockResolvedValue`, NOT `…Once`: the click on a `type="submit"` button already dispatches
+    // one submit, so a single-shot mock is spent before the explicit dispatch below and the second
+    // call resolves `undefined` — which is how the second version of this test failed.
+    vi.mocked(restoreAthleteAction).mockResolvedValue({
+      ok: false,
+      error: 'nope',
+    } as Awaited<ReturnType<typeof restoreAthleteAction>>);
+    fireEvent.click(restore);
+    // 🔴 **Move focus OFF the callout first, or this proof cannot fail.** The add-submit already
+    // focused the group, and jsdom does not move focus on a click, so the naive version of this test
+    // passed with the fix deleted — it was re-asserting focus the previous effect had set. In a real
+    // browser `disabled={restorePending}` blurs the clicked button to `<body>`; the name field
+    // stands in for "focus is anywhere but the group", and the assertion is that it comes BACK.
+    nameField().focus();
+    expect(document.activeElement).toBe(nameField());
+
+    await act(async () => {
+      // ⚠️ **NOT `restore.closest('form')`.** The button sits inside the add form but belongs to the
+      // hidden sibling via `form={restoreFormId}`, so `closest` finds the wrong one — and submitting
+      // the add form with no mocked answer sets its state to `undefined`, which is how the first
+      // version of this test failed.
+      fireEvent.submit(document.getElementById(restore.getAttribute('form')!)!);
+    });
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(document.activeElement?.getAttribute('role')).toBe('group');
+
+    // ⚠️ **Reset it here.** This file has no `beforeEach` and the config sets no `clearMocks`, so a
+    // persistent `mockResolvedValue` would hand a stale failure to every later test that touches
+    // Restore — including the wiring test below.
+    vi.mocked(restoreAthleteAction).mockReset();
+  });
+
+  /**
+   * 🔴 At the cap the choice simply vanished. `addAnotherButton` returns `null`, and the action
+   * answers this path with `error: null` — it is a duplicate envelope, not a refusal — so
+   * `HOUSEHOLD_FULL` rendered nowhere. A parent of two genuinely different Adas saw one button and
+   * was given no reason and no route.
+   */
+  it('at the cap, the message SAYS why there is no "Add another"', async () => {
+    await warnWith(duplicateState({ atCap: true }));
+    expect(screen.getByRole('group').textContent).toContain(HOUSEHOLD_FULL);
+    cleanup();
+    // Not at the cap: the reason must not appear, or it reads as a limit they have hit.
+    await warnWith(duplicateState());
+    expect(screen.getByRole('group').textContent).not.toContain(HOUSEHOLD_FULL);
+  });
+
+  /**
+   * 🔴 The composed kinds-differ message sold Restore in the sentence before the one warning that
+   * Restore is permanent and wrong. The plan's C7 asks that neither option be given primacy, and a
+   * benefit stated first is primacy.
+   */
+  it('omits the "Restoring brings back everything" line when the kinds DIFFER', async () => {
+    await warnWith(duplicateState({ archived: true, kind: PROFILE_KIND.adult }), 0);
+    expect(screen.getByRole('group').textContent).not.toContain(
+      ATHLETE_FORM_COPY.duplicateArchivedRestoreNote,
+    );
+    cleanup();
+    // …and keeps it when they agree, where it is the reason Restore is the better choice.
+    await warnWith(duplicateState({ archived: true }));
+    expect(screen.getByRole('group').textContent).toContain(
+      ATHLETE_FORM_COPY.duplicateArchivedRestoreNote,
+    );
+  });
+
+  /**
+   * ⚠️ `athleteNameSchema` stores the name COLLAPSED as well as trimmed, so a typed "Ada  B" and a
+   * stored "Ada B" are the same record and really would render two identical tiles. A bare `trim()`
+   * read them as different spellings and dropped advice that is true.
+   */
+  it('the disambiguation advice survives interior double spaces, which the schema collapses', async () => {
+    renderForm();
+    fireEvent.click(radios()[0]!);
+    fireEvent.change(nameField(), { target: { value: 'Ada  B' } });
+    // The server stores — and echoes — the COLLAPSED name, so its fold matches the double-spaced
+    // text in the field and the callout really does appear. The advice is what went missing.
+    vi.mocked(addAthleteAction).mockResolvedValueOnce(
+      duplicateState({ storedName: 'Ada B', typed: 'Ada B' }),
+    );
+    await act(async () => {
+      fireEvent.submit(screen.getByRole('button').closest('form')!);
+    });
+    expect(screen.getByText(/Both will show as/)).toBeTruthy();
   });
 
   it('🔴 at the cap, NEITHER branch offers "Add another" — the endpoint would refuse it', async () => {

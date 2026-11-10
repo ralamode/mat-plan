@@ -474,24 +474,38 @@ async function addAthlete(
 }
 
 test.afterEach(async ({ page }) => {
+  // ⚠️ **Its own budget.** a-1d's duplicate tests leave TWO athletes under one name, so cleanup can
+  // need two full round trips through a Server Action plus two page loads — which overran the test's
+  // own 30s and failed a green test inside the hook. The work is real; the deadline was wrong.
+  test.setTimeout(90_000);
   // Archive whatever this test created, so the picker does not accumulate fixtures. Best effort:
   // a test that failed before the add leaves nothing to clean, and a missing row must not mask the
   // real failure.
   for (const name of added.splice(0)) {
     try {
       await page.goto(SETTINGS_PATH, { waitUntil: 'networkidle' });
-      const control = page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
-      if (await control.count()) {
-        await control.click();
-        // ⚠️ **Wait for the archive to land.** `click()` returns once the click is dispatched, so the
-        // next `goto` or the page teardown could abort the Server Action and leave the fixture on the
-        // picker for every later run. The Undo button is the signal the existing archive tests use.
-        await expect(
-          page.getByRole('button', { name: SETTINGS_COPY.undoLabel(name) }),
-        ).toBeVisible();
+      const archive = () => page.getByRole('button', { name: SETTINGS_COPY.archiveFor(name) });
+
+      // 🔴 **A LOOP, because a-1d made two athletes under ONE name a real fixture.** This was
+      // `if (await control.count()) await control.click()`, and on the duplicate tests — the only
+      // ones that create two rows with the same name — `count()` was 2, so `click()` threw
+      // Playwright's strict-mode violation straight into the `catch` below. Neither athlete was
+      // archived, on every run and every retry, and the swallow meant this cleanup reported nothing
+      // while doing nothing. A cleanup that cannot fail out loud has to be correct by construction.
+      //
+      // ⚠️ **Counting the controls DOWN is the wait, and the first fix got this wrong.** It waited on
+      // the Undo button, which is already visible from the PREVIOUS archive — so the loop re-queried
+      // while the row was still detaching, `click()` retried the stale handle for the whole 30s
+      // action timeout, and the passes burned the hook's budget instead. `toHaveCount` polls, so it
+      // is both the "the Server Action landed" signal the Undo assertion used to be and the loop's
+      // own termination condition.
+      for (let remaining = await archive().count(); remaining > 0; remaining -= 1) {
+        await archive().first().click();
+        await expect(archive()).toHaveCount(remaining - 1, { timeout: 15_000 });
       }
     } catch {
-      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one.
+      // Swallowed on purpose — cleanup must never turn a green test red or hide a red one. ⚠️ Which
+      // is exactly why the loop above must not depend on it: see the comment there.
     }
   }
 });
