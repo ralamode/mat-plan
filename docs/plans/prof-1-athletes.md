@@ -754,15 +754,189 @@ sequenceDiagram
 - **What a screen reader hears after the add.** The success is a server redirect, and ⚠️ the day page sets **no static title**, so Next's route announcer says _"mat-plan"_. Focus is left on `<body>`. This is pre-existing (it already makes a-r's rename confirmation inaudible) and is **not** a-1's to fix — recorded in [tech-debt](../tech-debt.md) with the one-line remedy (a static `metadata.title` on the day page, never the name).
 - **The real first-run screen** (`/p` with zero athletes) is unreachable in e2e, which shares a seeded database. `--state no-profiles` screenshots are the only eyes on it.
 
-### PR a-1d — `feat/prof-1a-1d-duplicate-warning`
+### PR a-1d-add — `feat/prof-1a-1d-add-duplicate-warning`
 
-| Path                                                           | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/db/src/writers/profile.ts`                           | EDIT   | D2 step 2 in `createProfile`; `findNameMatch(exec, scope, folded, { exclude?, clientId })` (live **and** archived, not deleted), which **excludes any row whose `client_id` is the caller's own key** — so a concurrent same-key request that loses the race to step 1 but wins it to step 2 is not answered "duplicate" by the row its twin just inserted; it falls through to steps 3–4 and returns `{ ok, id }`. `updateProfileIdentity`'s caller path runs it excluding the athlete itself. |
-| `packages/db/scripts/verify.ts`                                | EDIT   | Appended: a replay of a **successful** add whose name now matches returns `ok` with the same id, not `duplicate` (correctness B1's regression); **insert a row, then run step 2 with the same `client_id` and the same name → no match** (the concurrent case); an archived `Zoë` matches `zoe`; rename to one's own name does not warn.                                                                                                                                                        |
-| `apps/web/lib/dal/profiles.ts`, `profile-actions.ts` (+ tests) | EDIT   | Thread `acknowledgedDuplicate` and the `duplicate` result.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `apps/web/app/p/[profileId]/edit/athlete-form.tsx`             | EDIT   | The warning callout and its choices (D7), including **Restore {name}** for an archived match.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `apps/web/e2e/athletes.spec.ts`                                | EDIT   | The warning keeps both fields filled (UX1 B1), "Add another" adds, "Restore" restores.                                                                                                                                                                                                                                                                                                                                                                                                          |
+🔴 **`a-1d` is SPLIT by surface** _(maintainer, 2026-11-09)_: the warning on the **add** form first,
+the same check on **rename** second. Two screens and >400 lines as one PR, and the `a-1w`/`a-1u`
+dark-then-UI split does **not** transfer here — a writer that starts answering `duplicate` before a
+form can render it would turn a parent's second "Ada" into the generic "Couldn't add this athlete.",
+which is **worse than today's silent success**. Shipping it dark would need a temporary
+always-acknowledge flag, i.e. a seam built only to be removed. Splitting by surface keeps each PR
+end-to-end and shippable.
+
+⚠️ **These rows were rewritten 2026-11-09 against the shipped tree.** The originals predate the
+`a-1w`/`a-1u` split and named `app/p/[profileId]/edit/athlete-form.tsx` (never existed — the add form
+is `app/p/new/add-athlete-form.tsx` and the rename form is `edit/rename-form.tsx`) and
+`updateProfileIdentity` (shipped as `renameProfile`). The `AUTH-1 1c` gate below is **cleared**;
+AUTH-1 completed at `1d`.
+
+| Path                                                | Change | What & why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/ownership.ts`              | EDIT   | `findNameMatch(exec, scope, folded, { excludeClientId?, excludeProfileId? })` — a **scoped** read beside `profileByClientId`, so `scope.householdId` keeps leaving this one module (`scope.test.ts`'s `UNWRAPS_SCOPE`). Matches **live AND archived**, never soft-deleted. Returns `{ publicId, name, kind, archived }` — the stored spelling, because the UI must show what is actually saved, and 🔴 **`kind`, which is load-bearing** (see B1 below). ⚠️ **`foldName` has NO SQL equivalent** (NFKD, `\p{M}`, `\p{Cf}`), so this selects the household's non-deleted rows and compares `foldName(row.name) === folded` **in JS, inside this module** — stated so nobody writes `lower(name) = $1` and forks the folding rule. A household holds ≤25 rows, so the scan is free. **Orders live before archived** (`archived_at IS NULL` first), because a live `Zoe` and an archived `Zoë` both match and an unspecified pick makes the UI offer Restore for someone who is already there. |
+| `packages/db/src/writers/profile.ts`                | EDIT   | **D2's duplicate step**, skipped when the acknowledgement matches. 🔴 **Position is contested and resolved below (C3)** — the shipped docblock at `profile.ts:198-202` already says the quota is step 2 and a-1d's fold is step 3, which the first draft of this row contradicted. Result gains `{ ok: false, reason: 'duplicate', match, atCap }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `packages/shared/src/profiles.ts`                   | EDIT   | 🔴 **`acknowledgedDuplicate: z.string().max(…).optional()`, and the ACTION must pass `?? undefined`** — see C1: `formData.get()` returns **`null`** when a field is absent, and `z.string().optional()` **rejects `null`**. Carries the **folded name**, not a boolean, so acknowledging "Ada" and editing to "Bea" re-runs the check. Capped in length because NFKD can expand 40 characters into hundreds.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `apps/web/lib/dal/profiles.ts`                      | EDIT   | 🔴 **`createAthlete` gets its OWN result type.** Widening `AthleteWriteResult` would give archive, restore and rename a `duplicate` arm none of them can produce. `match.publicId` leaks nothing new — **evidence, not assertion**: `listHouseholdAthletes` already returns every archived name and `publicId` to every member, and `settings/page.tsx` has no owner gate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/app/p/profile-actions.ts` (+ tests)       | EDIT   | Threads the acknowledgement with `?? undefined`, and compares **server-side**: `parsed.data.acknowledgedDuplicate === foldName(parsed.data.name)` on the **parsed, collapsed** name — never a client-sent fold. ⚠️ **A crafted body can forge it, and that is fine**: duplicates are advisory, not a boundary. Do not describe the acknowledgement as protection anywhere. An unexpected `fieldErrors.acknowledgedDuplicate` returns `NO_ATHLETE_ADD`, as `clientId` already does. `ActionState` needs a deliberate extension for `match`.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/components/ui/callout.tsx` (+ test)       | NEW    | A presentation **shell**: the ⚠ mark, a message slot, an actions slot (`children`), a forwarded `ref` and `tabIndex`. It encodes none of Add/Open/Restore, so `a-1d-ren`'s Save anyway/Cancel drops in without a mode flag. `border` is 1.26:1 light — the mark and the words carry the meaning, the border is decoration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/web/app/design/tokens/inventory.tsx`          | EDIT   | Render it so axe scans both themes. ⚠️ **The cell is static, so axe sees only contrast** — focus, announcement and Enter are e2e's alone.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `apps/web/app/p/new/add-athlete-form.tsx`           | EDIT   | See § "The callout, as two panels reshaped it" — the first draft of this row carried six UX defects and three correctness traps, so the detail is prose, not a cell.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `packages/db/scripts/verify.ts`                     | EDIT   | Its own id range. Cases in § below; 🔴 **including the ones the first draft omitted**, without which patch `26` has nothing to redden.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `packages/db/scripts/mutations/`                    | NEW    | `26`–`31`, listed in § below with the assertion each must redden FIRST.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `apps/web/e2e/athletes.spec.ts`                     | EDIT   | Warning keeps both fields filled; "Add another" adds; archived offers Restore and restoring opens them; **kinds-differ** case; Enter on a duplicate warns rather than adds; focus lands on the callout; NARROW with a **40-character** name.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `docs/features/write-path.md`                       | EDIT   | 🔴 **Omitted from the first draft — `guides:check` would have failed the PR.** It owns `lib/dal/`, `writers/` and `profile-actions.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `docs/privacy/data-inventory.md`, `docs/changelog/` | EDIT   | §4 gains a line: a parent adding an athlete can now learn an **archived** one of that name exists and see its stored spelling and kind. Same household, no new column, no new processor. Plus the fragment `status:check` requires.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+#### The callout, as two panels reshaped it (2026-11-09)
+
+Two pre-implementation lenses, both on the plan. 🔴 **Two BLOCKING findings, each verified by probe
+before being accepted**, and each would have shipped a broken feature with green tests.
+
+##### C1 · BLOCKING — `z.string().optional()` rejects `null`, and that is what an absent field is
+
+`formData.get('acknowledgedDuplicate')` returns **`null`** on every add that is not a re-confirm, and
+`z.string().optional().safeParse(null)` is **`false`** (probed). The parse would fail on a field the
+parent has never heard of; the action's refusal branch returns `fieldErrors` for `name` and `kind`
+only, so **nothing would render** — a dead Add button with no message. → Read it as
+`formData.get(…) ?? undefined`, the `actions.ts` `notes` precedent, and boundary-test an add whose
+body omits the field entirely.
+
+##### C2 · BLOCKING — `client_id` is NULLABLE, so the natural exclusion erases every existing athlete
+
+`excludeClientId` written as `ne(clientId, key)` compiles to `client_id <> $1`, which is **NULL** for
+every row whose key is NULL — and Postgres drops those. `profiles.client_id` is nullable
+(`schema.ts:222`), migration `0020` backfills nothing, and **the seed sets no key at all**. So a parent
+adding "Ada" beside a seeded "Ada" would never be warned: the feature would be **dead in every
+household that exists today**.
+
+🔴 **And it would have shipped green.** Every fixture this plan listed is created through
+`createProfile`, which always sets a key — so every planned case passes while the feature does
+nothing. That is the "tests that cannot fail" bar one level deeper: the tests pass _and_ exercise the
+wrong population. → Write the exclusion **null-safely** (`IS DISTINCT FROM`, or
+`or(isNull(clientId), ne(clientId, key))`, or in JS), add a verify case whose existing match is a
+**direct insert with `client_id` NULL** and must warn, and add a patch that reverts it to bare `ne()`.
+
+##### C3 · The step order contradicted the shipped docblock, and "Add another" was a dead end
+
+`profile.ts:198-202` already says the quota is step 2 and a-1d's fold is step 3; the first draft of the
+row said the opposite, and D2 omits the cap entirely. Worse, with duplicate-before-cap a household at
+25 gets the callout and then "Add another" dies on `HOUSEHOLD_FULL` — **the UI offering a button the
+endpoint is guaranteed to reject.** Cap-first has the opposite flaw: an archived twin occupies a slot,
+so re-adding her at the cap would answer "Write to us" instead of **Restore, which needs no slot.**
+
+→ **Keep duplicate-before-cap** (it is what makes Restore reachable at the cap), and have the
+`duplicate` result also carry **`atCap`**, from one `countProfilesIn` on that branch only. Below the
+cap: "Add another" is offered. At the cap: only Open or Restore, with the full-household copy. **D2 is
+rewritten as five steps and `profile.ts`'s docblock fixed in the same PR.**
+
+##### C4 · The acknowledgement — where the two panels CONTRADICTED each other, and how it resolves
+
+- **UX said:** make "Add another" `type="button"` + `requestSubmit()`, so the Enter key cannot
+  acknowledge a duplicate the parent has not deliberately confirmed.
+- **Correctness said:** `requestSubmit()` submits the DOM from _before_ the re-render, so the
+  acknowledgement is missing and the parent **loops** on the same warning. Carry it on the
+  **submitter** instead — `<button type="submit" name="acknowledgedDuplicate" value={fold}>` — which
+  React 19 includes in `FormData`, making a stale acknowledgement impossible by construction.
+
+**Resolution: the submitter wins, and the Enter hazard dissolves on its own.** There is **one** submit
+button; while a duplicate is showing it relabels to "Add another {name}" and carries the
+`name`/`value` pair. Enter therefore fires the button the parent is looking at, carrying the
+acknowledgement for the fold **currently** displayed — and because the callout is hidden the moment
+`foldName(name)` stops matching the fold it was issued for (C5), the dangerous case UX was defending
+against (Enter acknowledging a warning that no longer applies to what is typed) **cannot arise**. No
+`requestSubmit`, no stale state, no second submit button to capture the Enter key.
+
+##### C5 · The callout must disappear when the typed name moves on
+
+`state` persists in `useActionState` until the next submit, so editing "Sam" to "Samuel" leaves a
+callout about Sam above a field reading Samuel. Render it only while
+`foldName(name) === state.duplicate.folded` — `foldName` is in `@mat-plan/shared` and client-safe.
+This is the client half of the folded-acknowledgement rule, and the precondition C4 leans on.
+
+##### C6 · Nothing would have announced it, and it lands at the fold
+
+`aria-describedby` is read on focus, so it announces nothing after a submit, and `disabled={pending}`
+has already blurred the submit to `<body>`. On a 360×640 phone the submit is at ~y=590 **before** any
+callout exists, and the soft keyboard — which `enterKeyHint="go"` invites — hides the rest. ⚠️ Less
+acute at 390×844, where a-1u's published capture puts the submit at ~y=511; the fix is for the small
+phone. → The same `[state]`-only effect **focuses the callout** (`tabIndex={-1}`, `scroll-mt-4`),
+which is both the announcement and the scroll. **No `role="alert"`** — focus already reads it, and both
+together double-announce. The message `<p id>` is the first child and is what the name input's
+`aria-describedby` points at; pointing it at the whole callout would concatenate the button labels.
+
+##### C7 · 🔴 The archived match collides with advice this app already gives, and `kind` is the collision
+
+`ATHLETE_FORM_COPY.kindRecoveryOwnerAfter` — **on this very screen** — tells a parent who chose the
+wrong kind to archive the athlete and _"add them again"_. They do exactly that, return, type "Ada" with
+the corrected kind, and the first draft offered **"Restore Ada"** as the primary — which brings back the
+**wrong kind**, permanently. The screen would walk them into the one mistake it had just taught them to
+escape. → `match.kind` is returned and named in the message, and the branch splits:
+
+- **kinds agree:** Restore primary — _"Ada (Child) is in your archived athletes. Restoring brings back
+  everything they logged."_ — then "Add a new Ada instead".
+- **kinds differ:** neither is primary. _"Ada was added as a Child. Restoring keeps that, and it can't
+  be changed."_ with **"Add a new Ada (Adult)"** at equal weight. **Its own e2e**, because it is the
+  case a real parent reaches by following our own advice.
+
+**"Open {name}" is correctly absent** for an archived match (that day page is read-only).
+
+##### C8 · Geometry, and the link CI cannot measure
+
+`Button` is `whitespace-nowrap` (`button.tsx:20`), so "Add another " + a 40-character name is ~364px
+against the callout's ~296px inner width at 360px, and two side-by-side buttons break above ~12
+characters. → Choices **stack full-width**, `h-auto whitespace-normal py-2 text-left`, `{name}` wears
+`NAME_WRAP_CLASS`. ⚠️ **"Open {name}" is a `<Link>` and needs an explicit `min-h-11`** —
+`a11y.spec.ts`'s tap scan is `button, [role="button"], select, textarea, input`, so a bare `<a>` is
+**never measured**.
+
+##### C9 · Restore from the add form, which was undefined
+
+A `<form>` cannot nest; `restoreAthleteAction` returns `{ ok, savedId }` and does **not** redirect; its
+failure copy is `NO_ATHLETE_SAVE` ("No athlete found to save."), nonsense on an add screen. → A second
+`useActionState` and a **sibling** `<form>`, `router.replace(athletePath(savedId))` on success (the
+rename form's idiom), both actions' controls disabled while either is pending, add-screen failure copy,
+and ⚠️ **a boundary test that Restore works AT THE CAP** — archived rows count toward the cap, so
+Restore is the one path still open to a full household and the one a naive cap guard would break.
+
+##### C10 · What this feature does NOT promise, said out loud
+
+- **Two different keys, same name, arriving together** both pass the check and both insert — exactly
+  the duplicate this exists to prevent. A unique index on a folded name is impossible (because "Add
+  another" is a _feature_), and the cap already accepts the same count-then-insert race. **The warning
+  is advisory and best-effort, not an invariant.** The plan says so rather than implying otherwise.
+- **The same race already bites the cap** (pre-existing, a-1w): at 24 athletes, a twin's row is counted
+  and the second request answers `full` for an add that succeeded. → `docs/tech-debt.md`, not fixed here.
+- **`foldName` is lossy by design**: voiced kana, Devanagari and Thai vowel signs, Persian ZWNJ
+  variants, and José/Jose all fold equal. → the copy **hedges** — _"looks like"_, never _"already
+  exists"_ — shows the **stored spelling beside what was typed**, and the lossiness is recorded in the
+  callout's docblock.
+- **A live match also needs disambiguation advice**, since tiles show name + kind only: _"Both will
+  show as 'Sam'. Add an initial, like 'Sam B.', to tell them apart."_ Order for a live match (U10):
+  message → **"Open {name}"** primary → "Add another {name}" secondary.
+
+##### C11 · The proofs, including the three the first draft could not have reddened
+
+| Patch                              | Breaks                                                 | Must redden FIRST                                                                                                                                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `26-name-match-drops-household`    | the household conjunct                                 | 🔴 **a case the first draft never listed** — household B adding a name household A holds must **not** warn. Without it this patch leaves `db:verify` green and the gate reports it did not do its job                                                                                                           |
+| `27-name-match-ignores-archived`   | the archived arm                                       | an archived `Zoë` matches `zoe` — otherwise Restore is unreachable                                                                                                                                                                                                                                              |
+| `28-ack-skips-any-name`            | the fold comparison                                    | an acknowledgement for a **different** folded name does not skip the check                                                                                                                                                                                                                                      |
+| `29-exclusion-is-not-null-safe`    | `IS DISTINCT FROM` → bare `ne()`                       | the C2 case: an existing match with `client_id` **NULL** still warns                                                                                                                                                                                                                                            |
+| `30-duplicate-before-replay`       | moves the fold above the replay lookup                 | the B1 regression — a replay of a **successful** add whose name now matches returns `ok`, not `duplicate`                                                                                                                                                                                                       |
+| `31-exclusion-dropped-at-the-call` | drops `excludeClientId` where `createProfile` calls it | the concurrency case — ⚠️ **the planned proof could not fail**, because it called `findNameMatch` directly and so tested the parameter, not the call site. Needs a harness that inserts the twin between the replay select and the fold (a Proxy over `asPg`), since single-connection PGlite cannot interleave |
+
+Positive cases the first draft also missed: an **acknowledged** add below the cap really inserts (catches a
+variant comparing the ack to the _unfolded_ name); replays of an acknowledged key still return `ok`; a
+**soft-deleted** twin does not warn.
+
+### PR a-1d-ren — `feat/prof-1a-1d-rename-duplicate-warning`
+
+Follows `a-1d-add` and reuses its writer and callout. The delta is the **exclusion** and the choices.
+
+| Path                                              | Change | What & why                                                                                                                                                                                              |
+| ------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/db/src/writers/profile.ts`              | EDIT   | `renameProfile` runs `findNameMatch` with `excludeProfileId` set to the athlete being renamed — 🔴 **renaming Ada to "Ada" must not warn about Ada** _(UX1 S8, UX3 4; closes the old open question 2)_. |
+| `apps/web/app/p/[profileId]/edit/rename-form.tsx` | EDIT   | The same callout, with **"Save anyway" / "Cancel"** rather than Add/Open/Restore — there is nothing to create here, so the choices are proceed or back out.                                             |
+| `packages/db/scripts/verify.ts`, `mutations/`     | EDIT   | Renaming to one's **own** name does not warn (and a patch that drops the exclusion reddens exactly that).                                                                                               |
 
 ## Gated on AUTH-1 1c — what to re-verify
 
@@ -1843,3 +2017,29 @@ all.
 ⚠️ **Not fixed, and named so the absence is deliberate:** neither role branch of the recovery
 paragraph has a test. It is an async RSC, so it would have to be e2e, and the member path needs a
 second membership the seed does not create. `a-1d` touches this screen next and is the place for it.
+
+### Pre-implementation panel on `a-1d-add` — 2026-11-09, two lenses
+
+Run **before any implementation code** (AGENTS.md → UI PR rules). UX (all three sub-lenses) and
+correctness, both on the refreshed plan. 🔴 **Two BLOCKING findings, each verified by probe before
+being accepted, and each would have shipped a broken feature with green tests.**
+
+| #   | Lens        | Critique (short)                                                                                                     | Verdict      | Resolution                                                                                                                                                                                                                                                                                                                  |
+| --- | ----------- | -------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | correctness | 🔴 **BLOCKING** — `z.string().optional()` rejects `null`, which is what `formData.get()` returns for an absent field | **accepted** | Probed: `null` → false, `undefined` → true. Every ordinary add would have failed the parse and rendered **nothing**. `?? undefined` in the action, plus a boundary test for a body omitting the field                                                                                                                       |
+| C2  | correctness | 🔴 **BLOCKING** — `client_id` is NULLABLE, so `ne(clientId, key)` drops every seeded and legacy athlete              | **accepted** | Verified: `schema.ts:222` has no `.notNull()`, `0020` backfills nothing, the seed sets no key. The warning would have been **dead in every existing household** — and green, because every planned fixture goes through `createProfile`, which always sets a key. Null-safe exclusion, a NULL-key fixture, and patch `29`   |
+| C3  | correctness | The step order contradicted the shipped docblock, and "Add another" was a dead end at the cap                        | **accepted** | Duplicate-before-cap kept (it is what makes Restore reachable at the cap); the result carries `atCap`; D2 becomes five steps and `profile.ts`'s docblock is fixed in the same PR                                                                                                                                            |
+| C4  | **both**    | ⚠️ **The two lenses CONTRADICTED each other** on the acknowledgement mechanism                                       | **resolved** | UX wanted `type="button"` + `requestSubmit()` to stop Enter acknowledging; correctness showed `requestSubmit()` submits the pre-render DOM and **loops** the parent. The **submitter** (`name`/`value` on one submit button) wins, and the Enter hazard dissolves because C5 hides the callout once the typed name moves on |
+| C5  | both        | The callout would go stale over an edited name                                                                       | **accepted** | Rendered only while `foldName(name)` matches the fold it was issued for — also the precondition C4 relies on                                                                                                                                                                                                                |
+| C6  | UX          | Nothing announces the warning, and it lands at the fold on a 360×640 phone                                           | **accepted** | The `[state]` effect focuses the callout; no `role="alert"` (focus already reads it). ⚠️ Noted that it is less acute at 390×844, so the fix is for the small phone                                                                                                                                                          |
+| C7  | UX          | 🔴 **The archived match contradicts advice this screen already gives** — `kind` is the collision                     | **accepted** | The single best finding of the round. The recovery copy says "archive and add them again"; the parent returns and would be offered Restore, which brings back the **wrong kind permanently**. `match.kind` returned, the branch split, its own e2e                                                                          |
+| C8  | UX          | `Button` is `whitespace-nowrap`; a 40-character name overflows, and a `<Link>` escapes the tap scan                  | **accepted** | Stacked full-width, `whitespace-normal`, `NAME_WRAP_CLASS`, explicit `min-h-11` on the link                                                                                                                                                                                                                                 |
+| C9  | UX          | The Restore mechanism was undefined and its failure copy wrong for this screen                                       | **accepted** | Sibling form, second `useActionState`, `router.replace`, add-screen copy, and a boundary test that Restore works **at the cap**                                                                                                                                                                                             |
+| C10 | correctness | The plan never said what the feature does **not** promise                                                            | **accepted** | Said out loud: two different keys with the same name still both insert; the same race already bites the cap (→ tech-debt); `foldName` is lossy, so the copy hedges and shows the stored spelling                                                                                                                            |
+| C11 | correctness | Patch `26` had **no assertion to redden**, and the B1 regression had no patch at all                                 | **accepted** | Six patches with the assertion each must redden first, plus the positive cases the draft omitted. ⚠️ The concurrency proof **could not fail** as planned — it called `findNameMatch` directly, testing the parameter rather than the call site                                                                              |
+| C12 | correctness | No `docs/features/write-path.md` row — `guides:check` would have failed the PR                                       | **accepted** | Added, with the changelog fragment                                                                                                                                                                                                                                                                                          |
+
+**Roadmap alignment (2026-11-09):** advances `PROF-1` a-1d (CRUD-1 step 2b); `a-1d-ren` follows.
+Checked against the private roadmap — **nothing there bears on athlete-name duplicates**; its
+"Duplicate" entries are about _programs_ (`CLONE-1`). Recorded so the absence of a note is a result
+rather than an omission.
