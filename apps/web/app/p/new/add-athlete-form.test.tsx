@@ -19,9 +19,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { ATHLETE_FORM_COPY } from '@/lib/constants';
+import { athletePath, ATHLETE_FORM_COPY } from '@/lib/constants';
 
-import { addAthleteAction } from '@/app/p/profile-actions';
+import { addAthleteAction, restoreAthleteAction } from '@/app/p/profile-actions';
 
 import { AddAthleteForm } from './add-athlete-form';
 
@@ -352,6 +352,136 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
     await warnWith(duplicateState({ archived: true, atCap: true }));
     expect(screen.queryByRole('button', { name: /Add a new|Add another/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Restore Ada/ })).toBeTruthy();
+  });
+
+  /**
+   * 🔴 **`showDisambiguation` had no test at any tier** — the whole gate could be replaced with
+   * `false` and all 26 tests passed. Found by probing rather than reading, which is how the other
+   * three empty proofs in this chunk surfaced too.
+   *
+   * Its four conjuncts each exist for a reason, so each gets a case: the advice is only TRUE when
+   * the two athletes would be indistinguishable on a tile, and a tile shows name **and** kind.
+   */
+  it('the "both will show as" advice appears only when the tiles really would be identical', async () => {
+    // Exact spelling, same kind, live → the one case where the advice is true.
+    await warnWith(duplicateState());
+    fireEvent.change(nameField(), { target: { value: 'Ada' } });
+    expect(screen.getByText(/Both will show as/)).toBeTruthy();
+  });
+
+  it('…and NOT when the fold matched but the spellings differ', async () => {
+    // 🔴 The false-positive case the hedging exists for: `foldName` is lossy, so a typed "Jose"
+    // matches a stored "José" — which render as two DIFFERENT tiles. Telling a parent they will look
+    // the same would be false, and would nudge them into disambiguating names that already differ.
+    await warnWith(duplicateState());
+    fireEvent.change(nameField(), { target: { value: 'ada' } });
+    expect(screen.queryByText(/Both will show as/)).toBeNull();
+  });
+
+  it('…and NOT when the kinds differ, because a tile shows the kind too', async () => {
+    await warnWith(duplicateState({ kind: PROFILE_KIND.adult }), 0);
+    fireEvent.change(nameField(), { target: { value: 'Ada' } });
+    expect(screen.queryByText(/Both will show as/)).toBeNull();
+  });
+
+  it('…and NOT for an archived match, who is not on the picker at all', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    fireEvent.change(nameField(), { target: { value: 'Ada' } });
+    expect(screen.queryByText(/Both will show as/)).toBeNull();
+  });
+
+  /**
+   * 🔴 **The Restore WIRING had no test at any tier.** `routerReplace` was declared in this file's
+   * mock and never asserted; `restoreAthleteAction` was mocked and never invoked. Dropping
+   * `form={restoreFormId}` makes the button submit the ADD form instead — so Restore silently does
+   * nothing — and everything stayed green. The tech-debt note said "nothing proves the click",
+   * which was only half true: the cheap jsdom half was unproven too.
+   */
+  it('Restore is wired to the sibling form, carrying the match id', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    const restore = screen.getByRole('button', { name: /Restore Ada/ }) as HTMLButtonElement;
+
+    // A `<form>` cannot nest, so the button reaches its own form by `form=`. Without this attribute
+    // it belongs to the add form and posts the wrong action.
+    const owner = restore.getAttribute('form');
+    expect(owner).toBeTruthy();
+    const restoreForm = document.getElementById(owner!) as HTMLFormElement;
+    expect(restoreForm?.tagName).toBe('FORM');
+    const profileId = restoreForm.querySelector<HTMLInputElement>('input[name="profileId"]');
+    expect(profileId?.value).toBe('p-match');
+    // …and it is NOT the add form, which would post the add action with no acknowledgement.
+    expect(restoreForm).not.toBe(screen.getByRole('group').closest('form'));
+  });
+
+  it('a successful Restore opens the athlete rather than adding a second', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    vi.mocked(restoreAthleteAction).mockResolvedValue({
+      ok: true,
+      error: null,
+      savedId: 'p-match',
+    } as Awaited<ReturnType<typeof restoreAthleteAction>>);
+    const restore = screen.getByRole('button', { name: /Restore Ada/ });
+    await act(async () => {
+      fireEvent.click(restore);
+      fireEvent.submit(document.getElementById(restore.getAttribute('form')!) as HTMLFormElement);
+    });
+    // `restoreAthleteAction` returns an envelope and does NOT redirect, so the navigation is ours.
+    expect(routerReplace).toHaveBeenCalledWith(athletePath('p-match'));
+  });
+
+  it('a FAILED Restore says so in add-screen words, not "No athlete found to save."', async () => {
+    await warnWith(duplicateState({ archived: true }));
+    // `mockResolvedValue`, not `…Once`: the click may itself submit in jsdom, so a one-shot mock
+    // would be consumed by the click and the explicit submit would get the default.
+    vi.mocked(restoreAthleteAction).mockResolvedValue({
+      ok: false,
+      error: 'nope',
+    } as Awaited<ReturnType<typeof restoreAthleteAction>>);
+    const restore = screen.getByRole('button', { name: /Restore Ada/ });
+    // ⚠️ CLICK, not a bare form submit: the click is what records which athlete the attempt was
+    // for, so the failure message cannot later surface over a DIFFERENT archived callout.
+    await act(async () => {
+      fireEvent.click(restore);
+      fireEvent.submit(document.getElementById(restore.getAttribute('form')!) as HTMLFormElement);
+    });
+    expect(screen.getByText(ATHLETE_FORM_COPY.restoreFailed('Ada'))).toBeTruthy();
+    expect(routerReplace).not.toHaveBeenCalled();
+  });
+
+  it('a failed Restore for one athlete does NOT show its error over a DIFFERENT one', async () => {
+    // 🔴 The cross-callout case. `restoreState` persists in `useActionState`, so scoping the error
+    // to "an archived match" was not enough: a failure for Ada then read "Couldn't restore Bea"
+    // above Bea's callout, about an attempt nobody made. The error is keyed to the match the click
+    // was for.
+    await warnWith(duplicateState({ archived: true }));
+    vi.mocked(restoreAthleteAction).mockResolvedValue({
+      ok: false,
+      error: 'nope',
+    } as Awaited<ReturnType<typeof restoreAthleteAction>>);
+    const restore = screen.getByRole('button', { name: /Restore Ada/ });
+    await act(async () => {
+      fireEvent.click(restore);
+      fireEvent.submit(document.getElementById(restore.getAttribute('form')!) as HTMLFormElement);
+    });
+    expect(screen.getByText(ATHLETE_FORM_COPY.restoreFailed('Ada'))).toBeTruthy();
+
+    // Now a warning about somebody else, without ever pressing Restore for them.
+    vi.mocked(addAthleteAction).mockResolvedValueOnce({
+      ok: false,
+      error: null,
+      duplicate: {
+        match: { publicId: 'p-other', name: 'Bea', kind: PROFILE_KIND.kid, archived: true },
+        atCap: false,
+        folded: 'bea',
+      },
+    } as Awaited<ReturnType<typeof addAthleteAction>>);
+    fireEvent.change(nameField(), { target: { value: 'Bea' } });
+    await act(async () => {
+      fireEvent.submit(screen.getAllByRole('button')[0]!.closest('form')!);
+    });
+
+    expect(screen.getByRole('button', { name: /Restore Bea/ })).toBeTruthy();
+    expect(screen.queryByText(ATHLETE_FORM_COPY.restoreFailed('Bea'))).toBeNull();
   });
 
   it('the acknowledgement rides the SUBMITTER, so it cannot be stale', async () => {

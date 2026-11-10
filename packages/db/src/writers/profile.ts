@@ -268,6 +268,14 @@ export async function createProfile(
     // ⚠️ `excludeClientId` is this caller's OWN key. A concurrent same-key twin that loses the race
     // to step 1 but wins it to step 2 must not be told "duplicate" by the row its own twin just
     // inserted — it falls through to steps 3-4 and returns that row's id.
+    //
+    // 🔴 **THIS ARGUMENT HAS NO MUTATION PATCH, deliberately.** One was written and stayed GREEN:
+    // the replay lookup above returns at step 1, so the exclusion is never consulted sequentially,
+    // and the interleaving it actually guards — a twin inserting BETWEEN those two reads — cannot
+    // be staged in single-connection PGlite. It is real against a pooled Neon, so the argument
+    // stays; what does not ship is a patch that reddens nothing, since `db:mutations` exists to
+    // catch exactly that. ⚠️ The ORDERING is a different question and DOES have a patch (`30`):
+    // once a second athlete of the same name exists, the exclusion can no longer rescue a replay.
     const match = await findNameMatch(exec, scope, foldName(input.name), {
       excludeClientId: input.clientId,
     });

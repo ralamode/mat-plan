@@ -95,6 +95,16 @@ export function AddAthleteForm({
   const firstRadioRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const calloutRef = useRef<HTMLDivElement>(null);
+  /**
+   * Which athlete the last Restore was attempted for. ⚠️ **Scoping the error to "an archived match"
+   * was not enough** — `restoreState` persists in `useActionState`, so a failure for Zoë then showed
+   * "Couldn't restore Bea" over a DIFFERENT archived callout, about an attempt never made.
+   *
+   * 🔴 **STATE, not a ref**, and lint caught the first version reading a ref during render. A ref
+   * does not re-render, so the error could render against a stale id — the exact class of bug this
+   * value exists to prevent.
+   */
+  const [restoreAttemptedFor, setRestoreAttemptedFor] = useState<string | null>(null);
   const router = useRouter();
 
   /**
@@ -430,6 +440,7 @@ export function AddAthleteForm({
                   variant={kindsDiffer ? 'outline' : 'default'}
                   disabled={pending || restorePending}
                   form={restoreFormId}
+                  onClick={() => setRestoreAttemptedFor(duplicate.match.publicId)}
                   className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
                 >
                   <span className={NAME_WRAP_CLASS}>
@@ -468,7 +479,7 @@ export function AddAthleteForm({
                 )}
               </>
             )}
-            {restoreState.error && duplicate.match.archived ? (
+            {restoreState.error && restoreAttemptedFor === duplicate.match.publicId ? (
               <p role="alert" className="text-destructive text-sm">
                 {ATHLETE_FORM_COPY.restoreFailed(duplicate.match.name)}
               </p>
