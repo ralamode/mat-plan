@@ -6,7 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // The form imports a `'use server'` module, which cannot be evaluated under jsdom. Mocked here —
 // this file is about what the FORM does; the action's own boundary tests live in
 // `profile-actions.test.ts` and the household matrix in `[profileId]/actions.test.ts`.
-vi.mock('@/app/p/profile-actions', () => ({ addAthleteAction: vi.fn() }));
+vi.mock('@/app/p/profile-actions', () => ({
+  addAthleteAction: vi.fn(),
+  restoreAthleteAction: vi.fn(),
+}));
+
+// The form calls `useRouter()` to open an athlete after a Restore (PROF-1 a-1d). jsdom mounts no
+// app router, so without this every test in the file dies at render with "invariant expected app
+// router to be mounted" — a missing test seam, not a defect in the component.
+const routerReplace = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: routerReplace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
+}));
 
 import { ATHLETE_FORM_COPY } from '@/lib/constants';
 

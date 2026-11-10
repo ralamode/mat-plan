@@ -362,9 +362,11 @@ export function AddAthleteForm({
                   variant={kindsDiffer ? 'outline' : 'default'}
                   disabled={pending || restorePending}
                   form={restoreFormId}
-                  className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                  className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
                 >
-                  {ATHLETE_FORM_COPY.restoreMatch(duplicate.match.name)}
+                  <span className={NAME_WRAP_CLASS}>
+                    {ATHLETE_FORM_COPY.restoreMatch(duplicate.match.name)}
+                  </span>
                 </Button>
                 {/* The acknowledgement rides on the SUBMITTER, so it exists only on the request this
                   click produced — a stale value is impossible by construction. */}
@@ -375,7 +377,7 @@ export function AddAthleteForm({
                   name="acknowledgedDuplicate"
                   value={duplicate.folded}
                   disabled={pending || restorePending}
-                  className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                  className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
                 >
                   {kindsDiffer
                     ? ATHLETE_FORM_COPY.addNewInstead(
@@ -409,9 +411,11 @@ export function AddAthleteForm({
                     name="acknowledgedDuplicate"
                     value={duplicate.folded}
                     disabled={pending || restorePending}
-                    className="h-auto w-full py-2.5 text-left text-base whitespace-normal"
+                    className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
                   >
-                    {ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
+                    <span className={NAME_WRAP_CLASS}>
+                      {ATHLETE_FORM_COPY.addAnother(name.trim() || duplicate.match.name)}
+                    </span>
                   </Button>
                 )}
               </>

@@ -212,11 +212,17 @@ criterion 3 broken. The sequence now lives in **one** writer, `createProfile` in
 
 1. **Look up by `client_id` inside the scope** (`profileByClientId(exec, scope, clientId)`, built on
    `inHousehold`). Found and not deleted → `{ ok: true, id }`, **before any duplicate logic**.
-2. _(from a-1d)_ Unless `acknowledgedDuplicate` equals `foldName(name)`, look for a household name that
-   folds equal (live **and** archived, not deleted) → `{ ok: false, reason: 'duplicate', match }`.
-3. `insertProfileOwnedBy(exec, scope, row)` → `ON CONFLICT (client_id) DO NOTHING`.
-4. Re-select by `client_id` **and** `inHousehold(scope)` **and** `deleted_at IS NULL` → `{ ok: true, id }`;
+2. _(a-1d)_ Unless `acknowledgedDuplicate` equals `foldName(name)`, look for a household name that
+   folds equal (live **and** archived, not deleted) → `{ ok: false, reason: 'duplicate', match, atCap }`.
+3. **The quota.** ⚠️ **After the fold, not before** — an archived twin occupies a slot, so a full
+   household re-adding her must still be offered **Restore**, which needs none. The price is that the
+   warning can reach a full household, which is what `atCap` is for.
+4. `insertProfileOwnedBy(exec, scope, row)` → `ON CONFLICT (client_id) DO NOTHING`.
+5. Re-select by `client_id` **and** `inHousehold(scope)` **and** `deleted_at IS NULL` → `{ ok: true, id }`;
    no row (the key is another household's, or the row was deleted) → `{ ok: false, reason: 'refused' }`.
+
+⚠️ **Five steps since a-1d, and the quota was always here** — the pre-a-1d text listed four and
+omitted it, while `profile.ts`'s own docblock described it. Both now say the same thing.
 
 A concurrent double-submit both pass step 1, one inserts, the other's step 3 is a no-op and step 4
 returns the same id. The DAL wraps it and has a unit test asserting step 1's query is emitted **before**
@@ -2043,3 +2049,29 @@ being accepted, and each would have shipped a broken feature with green tests.**
 Checked against the private roadmap — **nothing there bears on athlete-name duplicates**; its
 "Duplicate" entries are about _programs_ (`CLONE-1`). Recorded so the absence of a note is a result
 rather than an omission.
+
+### 🔴 The proof that could not fail — `a-1d-add`, 2026-11-10
+
+The plan asked for two patches that this chunk did **not** ship, because both stayed **GREEN** when
+built. Recorded rather than quietly dropped, since the plan promised them.
+
+| Planned patch                                             | What happened | Why                                                                                                         |
+| --------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| move the fold ABOVE the replay lookup (the B1 regression) | green         | `excludeClientId` self-excludes the replaying row, so the fold finds nothing and the add still returns `ok` |
+| drop `excludeClientId` at the call site                   | green         | the replay lookup returns at step 1, so the exclusion is never consulted on a replay                        |
+
+**They are green for the same reason:** the ordering and the exclusion **independently** cover every
+interleaving a single-connection database can produce. Each is individually sufficient for the
+sequential cases, so breaking either one alone changes no observable answer.
+
+The case `excludeClientId` actually guards — **a twin inserting between step 1 and step 2** — cannot
+be staged in PGlite, which runs one connection; the planned Proxy harness would have had to intercept
+a chained Drizzle builder at the one await between two reads. It is a real hazard against a pooled
+Neon, so **the line stays and is documented at the call site**. What does not ship is a patch that
+reddens nothing: `db:mutations` exists to catch proofs that cannot fail, and adding one to it would be
+the exact inversion of its purpose.
+
+⚠️ **Consequence for D2's rationale, stated plainly:** "replay first, then duplicates" is correct, but
+it is **not** what protects a replay from being called a duplicate — the exclusion is, and with the
+exclusion present the order is free. The ordering earns its place for a different reason (the cap, see
+step 3), and the plan previously credited it with both.

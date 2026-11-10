@@ -564,6 +564,22 @@ flowchart LR
   answers and why `a-1u` shipped the wrong one first. The e2e assertion that the radio survives a
   name-only refusal is what caught it.
 
+- **⚠️ A duplicate-name warning is ADVISORY, and the write path says so (PROF-1 a-1d).**
+  `createProfile` folds the name (`foldName`, NFKD + `\p{M}` + `\p{Cf}`) and answers
+  `{ reason: 'duplicate', match, atCap }` **before** the quota — deliberately, because an archived
+  twin occupies a slot and a full household must still be offered **Restore**, which needs none.
+  Three things about it are load-bearing and easy to undo by accident:
+  **(1) the fold is compared in JS inside `ownership.ts`**, never as `lower(name) = $1`, or the
+  folding rule forks into a weaker SQL copy;
+  **(2) the `client_id` exclusion is NULL-SAFE** — `profiles.client_id` is nullable and the seed
+  writes none, so a bare `ne()` drops every pre-`a-1w` athlete and the warning dies for every
+  household that exists, while fixtures built through `createProfile` keep passing;
+  **(3) the acknowledgement is a FOLDED NAME, compared server-side to `foldName(parsed.name)`** — a
+  boolean would let consent to "Ada" wave "Bea" through.
+  🔴 **It prevents nothing.** Two requests with different keys and the same name both insert; a
+  unique index on a folded name is impossible because "Add another" is a feature. Do not describe it
+  as a constraint.
+
 - **`revalidatePath` is not optional.** Per-user data is dynamic and must never be cached across
   users; forgetting the revalidate after a mutation shows the athlete stale data and looks like the
   write failed, which prompts a duplicate submit.

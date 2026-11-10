@@ -1,14 +1,14 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index ab5f128..9850a77 100644
+index 87f9a86..0165965 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
 @@ -1,4 +1,4 @@
 -import { and, sql, type SQL } from 'drizzle-orm';
 +import { and, isNull, sql, type SQL } from 'drizzle-orm';
  
- import { MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
+ import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
  
-@@ -71,7 +71,7 @@ export async function renameProfile(
+@@ -72,7 +72,7 @@ export async function renameProfile(
    const rows = await exec
      .update(schema.profiles)
      .set({ name, updatedAt: sql`now()` })
@@ -17,3 +17,20 @@ index ab5f128..9850a77 100644
      .returning({ publicId: schema.profiles.publicId });
  
    return rows[0] ?? null;
+@@ -268,6 +268,16 @@ export async function createProfile(
+     // ⚠️ `excludeClientId` is this caller's OWN key. A concurrent same-key twin that loses the race
+     // to step 1 but wins it to step 2 must not be told "duplicate" by the row its own twin just
+     // inserted — it falls through to steps 3-4 and returns that row's id.
++    //
++    // 🔴 **THIS LINE HAS NO MUTATION PATCH, deliberately, and here is why.** Two patches were
++    // written for it and **both stayed GREEN**: moving the fold above the replay lookup, and
++    // dropping this argument. Each is green for the same reason — the ordering and the exclusion
++    // *independently* cover every interleaving a single-connection database can produce. On a
++    // replay, step 1 returns before the fold is reached, so the exclusion is never consulted; with
++    // the fold moved first, the exclusion catches the row instead. The case this argument actually
++    // guards — a twin inserting BETWEEN step 1 and step 2 — cannot be staged in PGlite, which runs
++    // one connection. It is real against a pooled Neon, so the line stays; what does not stay is a
++    // patch that reddens nothing. See the plan's § "the proof that could not fail".
+     const match = await findNameMatch(exec, scope, foldName(input.name), {
+       excludeClientId: input.clientId,
+     });

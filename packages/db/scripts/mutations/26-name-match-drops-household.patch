@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/ownership.ts b/packages/db/src/writers/ownership.ts
+index 7b26866..17c43f7 100644
+--- a/packages/db/src/writers/ownership.ts
++++ b/packages/db/src/writers/ownership.ts
+@@ -402,7 +402,7 @@ export async function findNameMatch(
+       archivedAt: schema.profiles.archivedAt,
+     })
+     .from(schema.profiles)
+-    .where(and(isNull(schema.profiles.deletedAt), inHousehold(scope)));
++    .where(and(isNull(schema.profiles.deletedAt)));
+ 
+   const matches = rows.filter(
+     (r) =>

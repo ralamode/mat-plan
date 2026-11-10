@@ -24,6 +24,17 @@ only way a notice about minors' health data is worth anything.
 > new processor, no new retention, and the created row sits inside the existing export and deletion
 > paths ([runbooks](../runbooks.md) → "Delete a household and everyone in it", step 12, which deletes
 > `profiles` by `household_id`).
+> 🔴 **§4 re-read 2026-11-10** for `PROF-1` **a-1d** ([plan](../plans/prof-1-athletes.md)): the
+> duplicate warning is a **new reader surface for an ARCHIVED athlete's name**. A member adding a new
+> athlete can now learn that an archived one of that name exists, and see its **stored spelling and
+> kind**. ⚠️ **No new column, no new processor, no new retention, and no widening of who can read
+> what**: `listHouseholdAthletes` already returns every archived name and `public_id` to every member,
+> and `/settings` renders them with no owner gate — so the caller could already see this by opening
+> that page. What changes is that the app now volunteers it in response to typing a name, which is
+> worth recording because the trigger is new even though the audience is not.
+> ⚠️ **The fold is lossy**, so the warning can name an athlete whose name merely folds equal (José/Jose,
+> voiced kana, Devanagari vowel signs). The copy hedges — "looks like", never "already exists" — and
+> shows the stored spelling, so a false positive is visible rather than asserted.
 > 🔴 **§3 re-read 2026-11-09** for `PROF-1` **a-1u** ([plan](../plans/prof-1-athletes.md)): the add
 > form at `/p/new` means an athlete's **name is CREATED in the app**, not only edited — `a-r` made
 > `profiles.name` UI-editable, `a-1u` makes it UI-originated. **No new column, no new processor, no

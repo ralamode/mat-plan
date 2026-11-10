@@ -1,5 +1,6 @@
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -205,6 +206,21 @@ export function SurfacesCell() {
           this to the shipped screen — `p/page.tsx`'s `<h1>` is that block's label there. */}
       <p className="text-muted-foreground text-xs uppercase">No household</p>
       <NoHouseholdState />
+      {/* PROF-1 a-1d. 🔴 **Here because NO ROUTE renders a callout in its warning state**: the add
+          screen only shows one after a submit that found a duplicate, and `e2e/a11y.spec.ts` scans
+          `/p/new` as it first loads. Without this cell the token pair inside it is never scanned in
+          either theme, which is exactly how `PickerEmptyState` came to be in this file.
+          ⚠️ **axe sees CONTRAST here and nothing else** — the focus move, the announcement and the
+          Enter-key behaviour are static-invisible and belong to `e2e/athletes.spec.ts`. */}
+      <p className="text-muted-foreground text-xs uppercase">Callout</p>
+      <Callout
+        message="That looks like Ada (Child), who is already on your list."
+        messageId="inventory-callout-message"
+      >
+        <Button variant="outline" className="h-auto w-full py-2.5 text-left whitespace-normal">
+          Open Ada
+        </Button>
+      </Callout>
       <div className="flex flex-col gap-2" aria-hidden>
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/3" />

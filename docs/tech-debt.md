@@ -15,6 +15,28 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
 
 ## Open
 
+### The archived-match → Restore path has no end-to-end test, because Playwright hangs on `/p/new` after an archive (added 2026-11-10)
+
+- **What & why it's debt:** `PROF-1 a-1d` added a duplicate warning that offers **Restore** when the
+  match is archived. Every tier below the browser covers it — `db:verify` proves the archived twin
+  matches, reports `archived: true`, carries the stored spelling and loses to a live match; mutation
+  patch `27` proves that arm is load-bearing; the unit suite proves the Restore button renders. **What
+  nothing proves is the click**: that Restore posts `restoreAthleteAction` and navigates to the athlete.
+- **The observation, recorded so the next attempt does not repeat it:** after `archiveAthleteNamed`,
+  loading `/p/new` leaves the kind radios **resolvable but never actionable**. `page.url()` and
+  `locator.count()` answer normally; every call that evaluates page JS (`check`, `innerHTML`,
+  `evaluateAll`) hangs until the test times out — reproduced at a 30s budget and again at 90s.
+  Navigating via `/p` between the archive and the add screen did not clear it.
+- **It is NOT the component.** The same state under jsdom (an archived duplicate, `archived: true`)
+  renders the Restore button in ~1s with no render loop. The defect is in the interaction between the
+  archive action's revalidation and a subsequent navigation under Playwright, not in the form.
+- **Why it is filed rather than skipped:** a `test.skip` would sit in the suite looking like coverage.
+  The e2e file carries a docblock naming exactly what is and is not proven instead.
+- **The fix, when taken:** instrument what the page is doing in that window (a `pageerror`/`console`
+  listener attached BEFORE the `goto`, or a trace) rather than guessing; suspect a pending RSC
+  revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
+  fresh context instead of continuing the archived session.
+
 ### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
 
 - **What & why it's debt:** `createProfile` (`packages/db/src/writers/profile.ts`) reads
