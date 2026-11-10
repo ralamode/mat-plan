@@ -475,8 +475,11 @@ async function addAthlete(
 
 test.afterEach(async ({ page }) => {
   // ⚠️ **Its own budget.** a-1d's duplicate tests leave TWO athletes under one name, so cleanup can
-  // need two full round trips through a Server Action plus two page loads — which overran the test's
-  // own 30s and failed a green test inside the hook. The work is real; the deadline was wrong.
+  // need two full round trips through a Server Action plus two page loads, which overran the 30s and
+  // failed a green test inside the hook. ⚠️ An earlier version of this comment said it "overran the
+  // test's own 30s": wrong mechanism. Playwright gives after-hooks their OWN slot
+  // (`worker/workerProcessEntry.js`, `afterHooksSlot`), so it was the hook's own 30s, and
+  // `test.setTimeout` here sets that slot — it extends the hook without shrinking the test.
   test.setTimeout(90_000);
   // Archive whatever this test created, so the picker does not accumulate fixtures. Best effort:
   // a test that failed before the add leaves nothing to clean, and a missing row must not mask the

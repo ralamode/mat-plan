@@ -33,18 +33,6 @@ export type ActionState = {
     atCap: boolean;
     /** The folded name this warning was issued for. */
     folded: string;
-    /**
-     * **What the parent typed and the kind they chose, so a render with no client state can rebuild
-     * the form.** Without these, an island that mounts fresh with this answer already in `state` has
-     * `name === ''`, so `foldName(name) !== folded` and the callout is discarded — the parent would
-     * see an empty form and no message. Every other refusal on this form renders from `state` alone;
-     * this was the one that did not. `name` is the PARSED value (trimmed, collapsed), so it folds to
-     * `folded` by construction. ⚠️ The scenario (a JS-less or pre-hydration submit) is **not
-     * demonstrated** — see `add-athlete-form.tsx` for why the harness cannot drive it, and
-     * `docs/tech-debt.md` for the measurement.
-     */
-    typed: string;
-    chosenKind: ProfileKind;
   };
 };
 

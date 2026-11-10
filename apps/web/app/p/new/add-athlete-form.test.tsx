@@ -292,8 +292,8 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
       kind: ProfileKind;
       atCap: boolean;
       storedName: string;
+      /** Only feeds `folded` below — the server's fold is derived from the name it parsed. */
       typed: string;
-      chosenKind: ProfileKind;
     }> = {},
   ) =>
     ({
@@ -312,11 +312,6 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
         // fixture that can disagree with the function the component calls — and a case using any
         // other name would then render nothing and assert nothing.
         folded: foldName(over.typed ?? 'Ada'),
-        // Carried so a render with NO client state can rebuild the form. Irrelevant to the jsdom
-        // tests below — the island is already mounted there — but the shape has to be whole or the
-        // fixture would drift from the envelope it stands in for.
-        typed: over.typed ?? 'Ada',
-        chosenKind: over.chosenKind ?? PROFILE_KIND.kid,
       },
     }) as Awaited<ReturnType<typeof addAthleteAction>>;
 

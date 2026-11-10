@@ -96,28 +96,9 @@ export function AddAthleteForm({
   programsAnything: boolean;
 }) {
   const [state, formAction, pending] = useActionState(addAthleteAction, INITIAL_ACTION_STATE);
-  /**
-   * **Seeded from the envelope, so this form's duplicate answer no longer depends on client state.**
-   * A `useState` initializer runs on MOUNT alone, so after an ordinary JS submit it is a no-op — the
-   * island never unmounted — and the stale-callout rule below is untouched. Where it does something
-   * is a render that mounts fresh with an answer already in `state`: without the name, the callout is
-   * discarded by its own fold gate (`foldName('') !== folded`), and without the kind "Add another"
-   * would come back refused for a missing radio. Every OTHER refusal on this form renders from
-   * `state` alone; the duplicate was the one that did not.
-   *
-   * ⚠️ **UNPROVEN, and deliberately so rather than quietly.** The scenario is a JS-less or
-   * pre-hydration submit, and this harness cannot drive one: in a `javaScriptEnabled: false` context
-   * `page.url()` answers while `locator.count()` returns 0 and `innerText()` 32 characters — both of
-   * those need Playwright's injected script, which such a context cannot run, so it cannot tell "the
-   * page rendered nothing" from "the harness cannot see the page". A test was written and is NOT
-   * shipped; `docs/tech-debt.md` records the measurement so the next attempt starts there. What IS
-   * tested is the data: `profile-actions.test.ts` pins the whole envelope shape, including these two
-   * fields. The same reasoning the plan already sanctions for `excludeClientId` — keep the code the
-   * argument justifies, ship no proof that cannot fail.
-   */
-  const [name, setName] = useState(state.duplicate?.typed ?? '');
+  const [name, setName] = useState('');
   /** `null`, not a default — nothing is pre-checked. Drives `defaultChecked`; see the docblock. */
-  const [kind, setKind] = useState<ProfileKind | null>(state.duplicate?.chosenKind ?? null);
+  const [kind, setKind] = useState<ProfileKind | null>(null);
   const firstRadioRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const calloutRef = useRef<HTMLDivElement>(null);

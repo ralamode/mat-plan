@@ -214,13 +214,19 @@ access token`, which reads like a permissions problem with the repo. The cause w
   `await expect(locator).toHaveCount(remaining - 1, { timeout: … })` is both the "the action landed"
   signal and the loop's termination condition. ⚠️ And a hook doing real work needs its own budget:
   `test.setTimeout()` **inside** the hook, or cleanup fails a test that passed.
-- **A `javaScriptEnabled: false` context cannot be driven at all — and it fails by LYING, not by
-  erroring.** → `page.url()` answered `/p/new` while `locator.count()` returned `0` and
-  `innerText()` a 32-character body, because both go through Playwright's injected script, which such
-  a context cannot execute. So you cannot tell "the page rendered nothing" from "the harness cannot
-  see the page", and an assertion written against it reads as a product bug. **Fix:** test a no-JS
-  render outside the browser (fetch the HTML with the harness session header). Filed in
-  [tech-debt.md](./tech-debt.md); no document in this repo may claim a no-JS path is covered.
+- **To test an UNHYDRATED page, block the chunks — never `javaScriptEnabled: false`.** → A
+  JS-disabled context cannot be driven at all, and it fails by **lying rather than erroring**:
+  `page.url()` answered `/p/new` while `locator.count()` returned `0` and `innerText()` a
+  32-character body, because both go through Playwright's injected script, which such a context
+  cannot execute either. You cannot tell "the page rendered nothing" from "the harness cannot see the
+  page", and an assertion written against it reads as a product bug. **Instead:**
+  `await page.route('**/_next/static/chunks/**', (r) => r.abort())` — the harness keeps working, the
+  page stays SSR-only, and the submit is a native POST. That swap turned a dead end into a
+  measurement in one run. ⚠️ **And the measurement was worth having:** `/p/new`'s unhydrated POST is
+  refused by Next (`Invalid Server Actions request`), which **withdrew the justification for a fix
+  that had already shipped in that PR** — it restored form state for a render that cannot happen.
+  [tech-debt.md](./tech-debt.md) has it. **The general shape: a cheap probe that could falsify your
+  own fix is worth running BEFORE you defend the fix in a docblock, not after.**
 - **`screenshot:ephemeral` REUSES `.next`, so a capture taken after a UI edit can silently show the
   OLD screen.** → `apps/web/scripts/screenshot-ephemeral.ts:942` only runs `next build` when
   `.next/BUILD_ID` is **absent**; `--build` forces it. The symptom is the worst kind: the script

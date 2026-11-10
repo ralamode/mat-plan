@@ -41,24 +41,33 @@ Related: [lessons.md](./lessons.md) (failures → fixes, so a known trap costs o
   revalidation that never settles `networkidle`. If it proves environmental, drive Restore from a
   fresh context instead of continuing the archived session.
 
-### A JS-disabled page cannot be driven by the Playwright harness, so no-JS paths are unprovable (added 2026-11-10)
+### The add-athlete form cannot be submitted without hydration — Next refuses the request (added 2026-11-10)
 
-- **What & why it's debt:** `PROF-1 a-1d` carries a fix whose only scenario is a render with no
-  client state — a JS-less submit, or one made before hydration. A test for it was written and is
-  **not shipped**, because a `javaScriptEnabled: false` context cannot be driven here.
-- **The measurement, so the next attempt starts past it:** in such a context `page.url()` answers
-  correctly (`/p/new`), while `locator.count()` returns **0** and `locator.innerText()` returns a
-  **32-character** body. Both of those go through Playwright's injected script, which the context
-  cannot execute — so the harness **cannot distinguish "the page rendered nothing" from "the harness
-  cannot see the page"**. ⚠️ Recorded as a measurement, not a cause: which of the two it is was not
-  established, and the earlier habit of writing a confident cause into this file is what the same PR
-  had to withdraw elsewhere.
-- **What it means for claims:** nothing in this repo tests a no-JS path, so no document may say one
-  is covered. `rename-form.tsx` reasons about a no-JS re-render from the code, not from a test, and
-  should be read that way too.
-- **The fix, when taken:** drive the page out of the browser instead — a `fetch` of the rendered HTML
-  with the harness session header, asserting on the markup — or render the island through the RSC
-  payload. Both avoid needing page JS at all. Until then, a no-JS behaviour is argued, never claimed.
+- **What & why it's debt:** `/p/new` renders server-side, but a submit made before the client runtime
+  is in place **never reaches the Server Action**. Measured: with the app's chunks blocked
+  (`page.route('**/_next/static/chunks/**', r => r.abort())`), the native POST reaches the server and
+  is answered `⨯ Error: Invalid Server Actions request.` — four times, once per attempt. No envelope
+  is produced, so nothing renders and the page simply sits there.
+- **Why this entry replaced a different one.** The first version of it said a `javaScriptEnabled: false`
+  context "cannot be driven", which was true but unhelpful: in such a context `page.url()` answers
+  while `locator.count()` returns 0 and `innerText()` 32 characters, because **Playwright's own
+  injected script cannot run there either**, so it cannot distinguish an empty page from a blind
+  harness. Blocking the chunks instead keeps the harness working and the page unhydrated, which is
+  what turned a dead end into the measurement above. ⚠️ **The cause is not established** — only that
+  the request is refused. Do not write one in here.
+- **What it cost, recorded because the rule earned it.** `a-1d` shipped a fix for the one refusal on
+  this form that depended on client state (the duplicate callout was gated on the React `name`
+  state): the envelope carried the parsed name and kind and the island seeded from them. The
+  measurement above **removed its justification** — an unhydrated submit produces no envelope to seed
+  from, and a submit captured _during_ hydration is replayed against an island that is already
+  mounted, where a `useState` initializer is inert. It was reverted rather than kept as defence
+  against a state that cannot occur.
+- **What this means for claims:** nothing in this repo tests an unhydrated path, and the one above
+  shows the form does not support one. `rename-form.tsx` reasons about a no-JS re-render from the
+  code, not from a test, and should be read that way.
+- **The fix, when taken:** decide whether progressive enhancement is wanted on this form at all. If
+  it is, the Server Action request has to be made to work unhydrated first — there is no point
+  restoring field state for a POST the framework rejects.
 
 ### The athlete cap is a count-then-insert, so one burst walks past it and the limiter cannot bound it (added 2026-11-09)
 

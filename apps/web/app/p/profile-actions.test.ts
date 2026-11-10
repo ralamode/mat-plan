@@ -396,7 +396,7 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
    * another" when handed one — but nothing connected them, so flipping `atCap` to `false` in the
    * DAL or here left **every tier green** while the screen offered a button the endpoint refuses.
    */
-  it('maps a duplicate to a typed envelope carrying the match, atCap, fold and what was typed', async () => {
+  it('maps a duplicate to a typed envelope carrying the match, atCap and the fold', async () => {
     const match = {
       publicId: 'p-match',
       name: 'Added Athlete',
@@ -413,21 +413,12 @@ describe('addAthleteAction (PROF-1 a-1w)', () => {
     const state = await addAthleteAction(initial, body());
     // Not a `fieldError`: the name is not invalid, and `aria-invalid` on a correct value is a lie.
     // 🔴 `toEqual`, not `toMatchObject`, on purpose: this pins the envelope's WHOLE shape, so a
-    // field added without a thought about the no-JS render turns it red. It did exactly that when
-    // `typed`/`chosenKind` were introduced.
+    // field added to it has to be a deliberate act. It earned that when `typed`/`chosenKind` were
+    // added for an unhydrated render and then removed again — see `docs/tech-debt.md`.
     expect(state).toEqual({
       ok: false,
       error: null,
-      duplicate: {
-        match,
-        atCap: true,
-        folded: foldName('Added Athlete'),
-        // The PARSED name and kind, which is what lets a render with no client state rebuild the
-        // form. `typed` folds to `folded` by construction, so the callout's own fold gate cannot
-        // discard the warning it was issued for.
-        typed: 'Added Athlete',
-        chosenKind: PROFILE_KIND.kid,
-      },
+      duplicate: { match, atCap: true, folded: foldName('Added Athlete') },
     });
     expect(redirect).not.toHaveBeenCalled();
   });

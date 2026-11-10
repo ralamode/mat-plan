@@ -321,11 +321,6 @@ export async function addAthleteAction(
             match: created.match,
             atCap: created.atCap,
             folded: foldName(parsed.data.name),
-            // The PARSED name and kind, so a render with no client state can rebuild the form —
-            // see the envelope's docblock. `parsed.data.name`, never the raw field: it folds to
-            // `folded` by construction, so the callout cannot be discarded by its own gate.
-            typed: parsed.data.name,
-            chosenKind: parsed.data.kind,
           },
         };
       }
