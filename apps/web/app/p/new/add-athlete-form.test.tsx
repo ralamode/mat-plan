@@ -447,9 +447,13 @@ describe('AddAthleteForm (PROF-1 a-1u)', () => {
    * `HOUSEHOLD_FULL` rendered nowhere. A parent of two genuinely different Adas saw one button and
    * was given no reason and no route.
    */
-  it('at the cap, the message SAYS why there is no "Add another"', async () => {
+  it('at the cap, the message SAYS why there is no "Add another" — and drops advice about adding', async () => {
     await warnWith(duplicateState({ atCap: true }));
     expect(screen.getByRole('group').textContent).toContain(HOUSEHOLD_FULL);
+    // 🔴 **And the disambiguation advice goes.** "Add an initial … to tell them apart" is
+    // instructions for an add the quota refuses, and the two sentences landed in one paragraph.
+    // Found by reading the captured screenshot, not the code.
+    expect(screen.getByRole('group').textContent).not.toMatch(/Add an initial/);
     cleanup();
     // Not at the cap: the reason must not appear, or it reads as a limit they have hit.
     await warnWith(duplicateState());

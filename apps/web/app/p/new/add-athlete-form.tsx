@@ -172,6 +172,13 @@ export function AddAthleteForm({
   const showDisambiguation = Boolean(
     duplicate &&
     !duplicate.match.archived &&
+    // 🔴 **Never at the cap.** The advice is "add an initial so you can tell the two apart" — which is
+    // instructions for an add the quota refuses. Caught by LOOKING at the capture: the at-cap screen
+    // read "Add an initial, like "Athlete One B.", to tell them apart. A household can hold 25
+    // athletes." in one paragraph, telling a parent how to do the thing the next sentence says they
+    // cannot. Both halves were separately correct; the combination was not, which is why the three
+    // callout states are captured rather than reasoned about.
+    !duplicate.atCap &&
     // ⚠️ **`collapseWhitespace`, not `trim()` alone.** `athleteNameSchema` stores the name COLLAPSED
     // as well as trimmed, so a typed "Ada  B" (two spaces) against a stored "Ada B" is the same
     // record and really would render two identical tiles — while a bare `trim()` reads them as
