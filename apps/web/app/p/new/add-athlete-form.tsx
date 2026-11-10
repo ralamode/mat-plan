@@ -26,6 +26,18 @@ import {
 import { INITIAL_ACTION_STATE } from '../[profileId]/action-state';
 
 /**
+ * The callout's choices. `Button` is `whitespace-nowrap` by default, so "Add another " plus a
+ * 40-character name is ~364px against ~296px of callout at 360px — it overflows, and two of them side
+ * by side break above ~12 characters. `h-auto whitespace-normal text-left` lets the label wrap
+ * instead, and `min-w-0` stops an unbreakable token pushing the page sideways.
+ *
+ * One constant because it was written twice in this file, which is the second-copy trigger — and the
+ * two have to stay identical: the e2e measures `scrollWidth` at 360px on the LIVE branch only, so a
+ * drift in the archived branch's copy would go unmeasured.
+ */
+const CHOICE_BUTTON_CLASS = 'h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal';
+
+/**
  * The add-athlete form (PROF-1 a-1u) — the client island of `/p/new`.
  *
  * Colocated with its route (PROF-1 D9), and **not** a parametrised `AthleteForm` shared with the
@@ -277,7 +289,7 @@ export function AddAthleteForm({
         name="acknowledgedDuplicate"
         value={duplicate?.folded ?? ''}
         disabled={pending || restorePending}
-        className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
+        className={CHOICE_BUTTON_CLASS}
       >
         <span className={NAME_WRAP_CLASS}>{label}</span>
       </Button>
@@ -495,7 +507,7 @@ export function AddAthleteForm({
                   disabled={pending || restorePending}
                   form={restoreFormId}
                   onClick={() => setRestoreAttemptedFor(duplicate.match.publicId)}
-                  className="h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal"
+                  className={CHOICE_BUTTON_CLASS}
                 >
                   <span className={NAME_WRAP_CLASS}>
                     {ATHLETE_FORM_COPY.restoreMatch(duplicate.match.name)}
@@ -542,12 +554,6 @@ export function AddAthleteForm({
         ) : null}
 
         <div className="flex flex-col gap-3">
-          {/* `w-fit`, as on the rename form: a full-width primary button reads as the end of a long
-            flow, and this is two questions.
-            🔴 **Hidden while a duplicate is showing**, so the callout's choices are the only submit
-            buttons on the form. Two near-identical "add" buttons visible together is the state a
-            parent misreads, and leaving this one here would also make it the Enter-key default
-            while the callout sits above it. */}
           {/* `w-fit`, as on the rename form: a full-width primary button reads as the end of a long
             flow, and this is two questions. Hidden while the callout shows, so two near-identical
             add buttons are never visible together — the DEFAULT-submit role is held by the sentinel

@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { INPUT_CLASS } from '@/lib/constants';
+import { PROFILE_KIND_LABELS } from '@mat-plan/shared';
+
+import { ATHLETE_FORM_COPY, INPUT_CLASS } from '@/lib/constants';
 
 import type { TokenSet } from './token-sets';
 
@@ -214,11 +216,13 @@ export function SurfacesCell() {
           Enter-key behaviour are static-invisible and belong to `e2e/athletes.spec.ts`. */}
       <p className="text-muted-foreground text-xs uppercase">Callout</p>
       <Callout
-        message="That looks like Ada (Child), who is already on your list."
+        // The real copy, called — not re-typed. A cell showing a sentence the app no longer says
+        // scans the wrong contrast pair and quietly stops representing the screen it stands for.
+        message={ATHLETE_FORM_COPY.duplicateLive('Ada', PROFILE_KIND_LABELS.kid)}
         messageId="inventory-callout-message"
       >
         <Button variant="outline" className="h-auto w-full py-2.5 text-left whitespace-normal">
-          Open Ada
+          {ATHLETE_FORM_COPY.openMatch('Ada')}
         </Button>
       </Callout>
       <div className="flex flex-col gap-2" aria-hidden>

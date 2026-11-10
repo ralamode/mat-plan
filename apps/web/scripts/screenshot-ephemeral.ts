@@ -28,6 +28,8 @@ import {
   METRIC_KEYS,
   newId,
   PROFILE_KIND,
+  PROFILE_KIND_LABELS,
+  type ProfileKind,
   SEED_ACTIVITY_TYPE_KEYS,
   SEED_METRIC_KEYS,
   SEED_PROFILE_3_NAME,
@@ -456,8 +458,10 @@ type StateName = keyof typeof STATES;
  * screen. One helper for all three duplicate states: they differ only in the name and the kind, and
  * a second copy of this would be the repetition rule's own example.
  */
-const warnOnDuplicate = (name: string, kind: 'Child' | 'Adult') => async (page: Page) => {
-  await page.getByRole('radio', { name: new RegExp(`^${kind}`) }).check();
+const warnOnDuplicate = (name: string, kind: ProfileKind) => async (page: Page) => {
+  // `PROFILE_KIND_LABELS`, not a `'Child' | 'Adult'` union re-typed here: the radio's label IS that
+  // constant, so a copy would be a second place to update when the wording changes.
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS[kind]}`) }).check();
   await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add, exact: true }).click();
   // The callout's focus target. Waiting on IT rather than on the text means the capture cannot race
@@ -576,11 +580,11 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   // capture performs it. Each waits for the callout's own `role="group"`, which is the focus target
   // the form moves to — so the screenshot is taken after the state has actually settled, not after a
   // click was merely dispatched.
-  'duplicate-live': warnOnDuplicate(SEED_PROFILE_NAME, 'Child'),
+  'duplicate-live': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   // The archived athlete is a Child (`seedArchivedAthlete` archives the third seeded profile), so
   // choosing Adult is what makes the kinds differ.
-  'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, 'Adult'),
-  'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, 'Child'),
+  'duplicate-kinds-differ': warnOnDuplicate(SEED_PROFILE_3_NAME, PROFILE_KIND.adult),
+  'duplicate-at-cap': warnOnDuplicate(SEED_PROFILE_NAME, PROFILE_KIND.kid),
   'bodyweight-closed': gotoDaysAgo(CLOSED_DAY_WITH_WEIGHT),
   'bodyweight-closed-empty': gotoDaysAgo(CLOSED_DAY_EMPTY),
   'bodyweight-rejected': async (page) => {

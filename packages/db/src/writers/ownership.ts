@@ -361,6 +361,23 @@ export async function countProfilesIn(exec: Executor, scope: HouseholdScope): Pr
 }
 
 /**
+ * What a duplicate-name lookup hands back: the PUBLIC id (never an internal one), the STORED
+ * spelling — so a warning cannot relabel the athlete it found — the kind, and whether the match is
+ * archived, which is what decides between "Open" and "Restore".
+ *
+ * 🔴 **Defined ONCE, here, beside the query that produces it.** It was hand-typed in three places —
+ * this function's return, `profile.ts`'s `NameMatch`, and the app's action envelope — and the three
+ * could drift in silence: structural assignment from a variable tolerates extra properties, so a
+ * field added to one flows through `created.match` into the envelope with no compile error.
+ */
+export type NameMatch = {
+  publicId: string;
+  name: string;
+  kind: ProfileKind;
+  archived: boolean;
+};
+
+/**
  * Find a household athlete whose name FOLDS equal to `folded` (PROF-1 a-1d) — the duplicate warning's
  * one read.
  *
@@ -394,7 +411,7 @@ export async function findNameMatch(
   // `excludeProfileId` belongs to `a-1d-ren` and arrives WITH its caller — an unused parameter
   // is a promise nothing keeps, and nothing can test.
   options: { excludeClientId?: string } = {},
-): Promise<{ publicId: string; name: string; kind: ProfileKind; archived: boolean } | null> {
+): Promise<NameMatch | null> {
   const rows = await exec
     .select({
       publicId: schema.profiles.publicId,

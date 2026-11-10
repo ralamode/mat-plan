@@ -530,7 +530,7 @@ test('the picker offers Add athlete, which creates one and lands on their day pa
     page.getByRole('heading', { name: ADD_ATHLETE_COPY.pageHeading, level: 1 }),
   ).toBeVisible();
 
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   added.push(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
@@ -577,7 +577,7 @@ test('nothing is pre-selected: submitting without a kind is a field error that K
 
 test('a blank name is a field error, and the chosen kind survives it', async ({ page }) => {
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Adult/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
   // ⚠️ **Whitespace, not an empty field.** `required` stops a truly blank submit client-side, so the
   // server's own refusal is never reached and there is no alert to assert — which is exactly how the
   // first version of this test failed. A whitespace-only value is accepted by the browser and
@@ -596,7 +596,9 @@ test('a blank name is a field error, and the chosen kind survives it', async ({ 
   // fields in a `<form action>` when the action settles and freezes a CONTROLLED radio's
   // `defaultChecked` at mount, so `checked={...}` alone is wiped — this assertion stayed red through
   // that wrong fix, which is how the defect was found. The mirror of the name test above.
-  await expect(page.getByRole('radio', { name: /^Adult/ })).toBeChecked();
+  await expect(
+    page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }),
+  ).toBeChecked();
 });
 
 test('the Enter key in the name field submits once a kind is chosen', async ({
@@ -605,7 +607,7 @@ test('the Enter key in the name field submits once a kind is chosen', async ({
   const name = uniqueName('enter', testInfo.workerIndex);
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
 
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   added.push(name);
   // `enterKeyHint="go"` promises this. The kind fieldset sits ABOVE the name precisely so a parent
@@ -680,7 +682,7 @@ test('a duplicate name warns instead of adding, and the warning takes focus', as
 
   // The same name again, with a FRESH clientId (a new page load mints one), must warn.
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name.toLowerCase());
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
 
@@ -706,13 +708,15 @@ test('the warning keeps both fields, and "Add another" adds the second one', asy
   await addAthlete(page, name, 'Child');
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Adult/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
 
   // UX1 B1: both fields survive the settle. React 19 resets what it is not keeping in sync.
   await expect(page.getByLabel(ATHLETE_FORM_COPY.nameLabel)).toHaveValue(name);
-  await expect(page.getByRole('radio', { name: /^Adult/ })).toBeChecked();
+  await expect(
+    page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) }),
+  ).toBeChecked();
 
   added.push(name);
   await page.getByRole('button', { name: new RegExp(`Add another`) }).click();
@@ -729,7 +733,7 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   await addAthlete(page, name, 'Child');
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
@@ -750,7 +754,9 @@ test('🔴 Enter with the warning showing does NOT create the duplicate', async 
   // 🔴 And the radio path, which is why this is a sentinel and not a keydown handler on the name
   // field: implicit submission fires from the focused radio too. A keyboard user switching kind in
   // the kinds-differ case lands here, which is exactly when Enter is most likely.
-  await page.getByRole('radio', { name: /^Adult/ }).press('Enter');
+  await page
+    .getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.adult}`) })
+    .press('Enter');
   await expect(page.getByRole('group')).toBeFocused();
 
   await page.goto(APP_HOME_PATH, { waitUntil: 'networkidle' });
@@ -762,7 +768,7 @@ test('editing the name past the match dismisses the warning', async ({ page }, t
   await addAthlete(page, name, 'Child');
 
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(name);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();
@@ -808,7 +814,7 @@ test('the callout fits 360px with a 40-character name, and its choices clear the
 
   await page.setViewportSize(NARROW_VIEWPORT);
   await page.goto(ADD_ATHLETE_PATH, { waitUntil: 'networkidle' });
-  await page.getByRole('radio', { name: /^Child/ }).check();
+  await page.getByRole('radio', { name: new RegExp(`^${PROFILE_KIND_LABELS.kid}`) }).check();
   await page.getByLabel(ATHLETE_FORM_COPY.nameLabel).fill(long);
   await page.getByRole('button', { name: ATHLETE_FORM_COPY.add }).click();
   await expect(page.locator('main').getByText(/looks like/)).toBeVisible();

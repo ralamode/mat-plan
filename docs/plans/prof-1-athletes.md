@@ -325,7 +325,12 @@ to save.'` for unauth, foreign and unknown alike (PUX-8: "athlete", never "profi
   any `try`:
   `apps/web/node_modules/next/dist/docs/01-app/03-api-reference/04-functions/redirect.md:29-31`, `:51`;
   Next 16.4.1). History `[/p, /p/new]` becomes `[/p, /p/<id>]`, so Back is `/p` (IXD-10). Sentry never
-  sees `NEXT_REDIRECT`; a no-JS submit gets a 303 (`:215`). Before redirecting it calls
+  sees `NEXT_REDIRECT`. ⚠️ **This row also said "a no-JS submit gets a 303 (`:215`)" — struck at
+  a-1d.** That was read from the Next docs, not from this app, and it is contradicted by a
+  measurement: with the app's chunks blocked, `/p/new`'s unhydrated POST is answered
+  `Invalid Server Actions request`, so the submit never reaches the action and there is no redirect
+  to be a 303. See [tech-debt.md](../tech-debt.md) → "The add-athlete form cannot be submitted
+  without hydration". The cause is not established; only that the request is refused. Before redirecting it calls
   `revalidatePath(APP_HOME_PATH)` and `revalidatePath(SETTINGS_PATH)` (the new tile and the settings
   list). **Because add redirects instead of returning `{ ok: true }`, its WP-1 binding carries the
   optional `succeeded(result, mocks)` predicate WP-1 adds (default `result.ok`)**: it asserts

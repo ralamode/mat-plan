@@ -1,4 +1,4 @@
-import type { ProfileKind } from '@mat-plan/shared';
+import type { NameMatch } from '@mat-plan/db';
 
 /**
  * The typed result envelope every Server Action in this route returns, plus its initial value for
@@ -28,7 +28,10 @@ export type ActionState = {
    * changed underneath it.
    */
   duplicate?: {
-    match: { publicId: string; name: string; kind: ProfileKind; archived: boolean };
+    // The writer's own type, imported — not a fourth hand-typed copy. A type-only import is erased,
+    // so nothing from `@mat-plan/db` reaches the client bundle this module is part of (precedent:
+    // `lib/entries/adherence.ts`, `lib/programming/program-day.ts`).
+    match: NameMatch;
     /** The household is at `MAX_HOUSEHOLD_ATHLETES`, so "Add another" would be refused — hide it. */
     atCap: boolean;
     /** The folded name this warning was issued for. */
