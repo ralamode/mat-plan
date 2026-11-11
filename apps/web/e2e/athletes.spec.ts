@@ -182,6 +182,65 @@ test('a blank name is a field error that keeps what was typed', async ({ page })
   await expect(nameField(page)).toHaveAttribute('aria-invalid', 'true');
 });
 
+/**
+ * PROF-1 a-1d-ren — the two things only a real browser can prove about the rename warning.
+ *
+ * ⚠️ **`renameTo` is deliberately NOT used to reach the warning.** It waits for the URL to leave
+ * `/edit`, which is exactly what a warning prevents, so it would hang for the full timeout. These
+ * drive the submit directly and assert on the callout.
+ *
+ * ⚠️ **Nothing here saves a colliding name**, so the `afterEach` reset is never handed one — it
+ * reads the stored value back and finds `Athlete Two` untouched.
+ */
+test('Enter on a duplicate warning re-warns instead of saving the collision', async ({ page }) => {
+  await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
+  await nameField(page).fill(SEED_PROFILE_3_NAME);
+  await saveButton(page).click();
+  await expect(page.getByRole('group')).toContainText(/Another athlete looks like/);
+
+  // 🔴 THE CASE THE SENTINEL EXISTS FOR, and the only tier that can prove it: jsdom implements no
+  // implicit submission at all. While the callout shows, the primary Save is unmounted — so without
+  // a hidden submit first in the form, "Save anyway" would be the form's DEFAULT button and this
+  // keypress would silently rename Athlete Two onto Athlete Three's name.
+  await nameField(page).press('Enter');
+
+  // ⚠️ **Asserted on FOCUS, not the URL.** The re-warning POST is still in flight while a URL
+  // assertion would already pass, so a later read could race it. `press()` focuses the input first,
+  // so focus returning to the callout is the proof that the server answered `duplicate` again.
+  await expect(page.getByRole('group')).toBeFocused();
+
+  // …and the name is genuinely unchanged, read back rather than inferred.
+  await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
+  await expect(nameField(page)).toHaveValue(SEED_PROFILE_2_NAME);
+});
+
+test('the rename callout fits 360px with a 40-character name', async ({ page }) => {
+  // Give Athlete Three a 40-character name to collide WITH, so the callout renders the longest
+  // name the schema allows rather than the 13-character seed value.
+  await renameTo(page, LONG_NAME, SEED_THREE);
+  try {
+    await page.setViewportSize(NARROW_VIEWPORT);
+    await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
+    await nameField(page).fill(LONG_NAME);
+    await saveButton(page).click();
+    await expect(page.getByRole('group')).toBeVisible();
+
+    // The measurement `expectTapTargets` cannot make: an unbreakable 40-character token inside the
+    // callout's message would push the page sideways and pass every other a11y scan in the suite.
+    await expectNoHorizontalOverflow(page, 'the rename duplicate callout');
+
+    // The one choice is still tappable at that width.
+    const saveAnyway = page.getByRole('button', { name: ATHLETE_FORM_COPY.saveAnyway });
+    const box = await saveAnyway.boundingBox();
+    expect(box, 'the "Save anyway" choice is rendered').not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+  } finally {
+    // Athlete Three is outside the `afterEach` reset, so this chunk puts it back itself.
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await renameTo(page, SEED_PROFILE_3_NAME, SEED_THREE);
+  }
+});
+
 test('a 40-character name does not overflow at 360px, on any surface that renders it', async ({
   page,
 }) => {
