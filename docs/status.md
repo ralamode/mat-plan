@@ -15,7 +15,9 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 6a shipped as U0, the shared sheet** (#364). Every remaining CRUD-1 step — 3, 4, 5, E and **6b
 (`PICK-1`)** — queues behind **`V1-22` chunk 2**, which they share `strength-form.tsx` with. Chunk
 2's plan was panelled on 2026-11-11 (six lenses, four blocking defects in a plan whose
-review-response log had read "not yet run") and its implementation waits on one escalated question.
+review-response log had read "not yet run"), both escalated questions were ruled on, and the chunk
+**shipped the same day**: the prescription is frozen at log time, so editing a program no longer
+rewrites exported history. That unblocks CRUD-1 steps 3, 4, 5, E and 6b.
 
 Behind that, the write path it builds on:
 

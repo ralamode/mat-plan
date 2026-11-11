@@ -272,6 +272,28 @@ flowchart LR
   DAL -->|"revalidatePath('/p/'+id)"| TODAY
 ```
 
+## 2f. The `prescribed` column — frozen at log time, live only as a fallback (V1-22 chunk 2)
+
+```mermaid
+flowchart TD
+  L[log a strength set<br/>day role asserted] --> R[programDayRows<br/>BEFORE the transaction]
+  R --> M["liveMatchesByKey()<br/>packages/shared/src/csv/prescribed.ts"]
+  M --> F["freeze onto<br/>entries.prescribed_snapshot"]
+  X[export a month] --> Q{snapshot IS NULL?}
+  Q -- no --> U[use the frozen string<br/>including '']
+  Q -- yes --> V[read today's program] --> M
+  style M fill:#fde68a,stroke:#b45309
+  style U fill:#bbf7d0,stroke:#15803d
+```
+
+🔴 **The highlighted node is one function with two callers, and that is the point.** Both paths must
+answer "what was prescribed" identically; while the composer was private to a `server-only` async
+function, `packages/db` could not call it and the agreement could only be asserted by a test.
+
+⚠️ **`''` is an answer, not a missing value** — it is what an `open()` prescription renders, and 11 of
+the 13 seeded are open. Only `IS NULL` takes the fallback branch. NULL means "logged before chunk 2,
+or logged with no day role"; everything else freezes, so chunk 4's edits cannot rewrite history.
+
 ## 2d. Program read path — today's weekday → the kid's prescribed movements (V1-10)
 
 The programming tables (§4) surface on Today as a **read-only** card. The calendar date comes from the

@@ -239,8 +239,15 @@ and complete; this is the one thing it cannot reach.
    Guarding the latter two separately would be two copies, and `db:verify` drives the query rather
    than the DAL, so the copies would go unproven.
    ⚠️ **THE CONSEQUENCE TO UNDERSTAND BEFORE `a-r` SHIPS: flipping a kid to adult empties
-   `prescribed` in every PAST month of their export, and flipping back restores it.** Nothing is
-   snapshotted. ⚠️ **The justification this invariant shipped with is half-false** _(2026-11-07)_: "a program a
+   `prescribed` in every PAST month of their export, and flipping back restores it.**
+   🔴 **Half-retired by V1-22 chunk 2** _(2026-11-11)_: an entry logged with an asserted day role now
+   carries a FROZEN `prescribed_snapshot`, so flipping `kind` cannot touch it — the reversible
+   emptying above applies only to rows still reading the live program, i.e. logged before chunk 2 or
+   with no day role. ⚠️ **Chunk 3's backfill makes the remaining ones permanent**, writing `''` for
+   unmatched rows (spec R1, upheld 2026-11-11), so **the backfill must run before `kind` ever becomes
+   editable** — after it, an athlete who was already adult has an empty history for good. That
+   ordering, and the fact that chunk 3 is what satisfies the prerequisite named below, are the two
+   things to carry forward. ⚠️ **The justification this invariant shipped with is half-false** _(2026-11-07)_: "a program a
    non-child should not have been reading is not retroactively theirs" holds for the household's
    adult and **not** for a kid who ages out, whose `prescribed` cells were legitimately theirs when
    logged — and ageing out is the realistic trigger. `kind` was therefore made **not editable** in
@@ -287,11 +294,18 @@ and complete; this is the one thing it cannot reach.
   `ProgramDayDTO` at the boundary for the same reason. Widening either is a product decision, not a
   plumbing one.
 
-- **V1-13's `prescribed` reads TODAY's program, not the program as it was.** There is no
-  `entries.prescription_id` (GAP-1 P1-2 unbuilt), so the export matches back by `(day_role, movement)`
-  — a key `schema.ts` documents as **non-unique** ("a movement may legitimately appear twice in a day
-  — warm-up + working"). An ambiguous match emits **empty**, never an arbitrary pick. ⚠️ **V1-22
-  breaks this**: an edited load would retroactively rewrite exported history.
+- **`prescribed` is FROZEN at log time — V1-22 chunk 2 closed the trap this bullet used to
+  describe.** `entries.prescribed_snapshot` carries the rendering, and the export falls back to the
+  live program only where it `IS NULL`. ⚠️ **NULL means "logged before chunk 2, or logged with no day
+  role"** — nothing else; everything logged with an asserted day role freezes, including a movement
+  the day does not program (`''`), because a NULL row re-reads today's program at every export and
+  chunk 4's first edit would rewrite it.
+  **Still true, and now decided in one place:** the match key is **non-unique** — a movement may
+  legitimately appear twice in a day, warm-up + working — and an ambiguous match renders **empty**,
+  never an arbitrary pick. The rule lives once, in `packages/shared/src/csv/prescribed.ts`'s
+  `liveMatchesByKey`, which the writer and the export both call; it keys on `movement_id` rather than
+  the slug it used to, because a slug is only a proxy for the row the entry's `movement_id` names and
+  `MOV-1`'s rename breaks the proxy.
 
 - **V1-22 widened by GAP-3.** A movement's **load-slot set** (`vest`/`ankle`/`wrist`) is something a
   coach declares, and that authoring surface lands here — it is what keeps the child table invisible on
