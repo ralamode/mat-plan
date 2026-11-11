@@ -66,6 +66,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 
 import { type Database, schema } from '../src/client';
 import { bodyweightMonthRows, loggedMonths, strengthMonthRows } from '../src/queries/export-month';
+import { prescribedSnapshotsFor } from '../src/writers/prescribed-snapshot';
 import { householdProfileRows } from '../src/queries/household-profiles';
 import { liveHouseholdIds } from '../src/queries/household-scope';
 // TEN-2c: the ONE definition of "a movement is referenced", shared with `runbooks.md` pre-flight (d),
@@ -4705,7 +4706,11 @@ console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 // the renderer test proves `''` in isolation, and by acceptance 11 the export's fallback emits the
 // same bytes, so even the browser cannot see it. This block is the only thing that can.
 //
-// ⚠️ **A DEDICATED block on an otherwise-unprogrammed role.** The obvious fixture, `verify_test_block`,
+// ⚠️ **A DEDICATED block, and it is the NEWEST one programming `skill` — not the only one.**
+// `verify_newest_other_role_block` already programs `skill` in this household, so this fixture wins
+// by seed order plus `programDayRows`' newest-block rule, which is the very hazard described below
+// reproduced inside the fixture written to avoid it. Asserted rather than assumed, just below.
+// The obvious fixture, `verify_test_block`,
 // is unreachable through the writer: `verify_newer_block` supersedes it for the same
 // (profile, role, scope) triple and `programDayRows` takes the newest. Chasing that by switching the
 // expectation to the newer block's values would silently drop the only writer-path proof of the
@@ -4888,6 +4893,8 @@ assert.equal(
 
 // Replay: `onConflictDoNothing` on client_id means the FIRST snapshot stands. A future "let a
 // corrected day_role through on replay" edit would rewrite frozen history with nothing going red.
+// ⚠️ Scoped to THIS block. Keyed on the movement alone it would rewrite every household's target
+// for that movement, and a later fixture would inherit the value with no clue why.
 await db
   .update(schema.prescriptionTargets)
   .set({ reps: 'rewritten-after-the-fact' })
@@ -4897,9 +4904,31 @@ await db
       db
         .select({ id: schema.prescriptions.id })
         .from(schema.prescriptions)
-        .where(eq(schema.prescriptions.movementId, snapMovB.id)),
+        .innerJoin(schema.programBlocks, eq(schema.programBlocks.id, schema.prescriptions.blockId))
+        .where(
+          and(
+            eq(schema.prescriptions.movementId, snapMovB.id),
+            eq(schema.programBlocks.slug, 'verify_snapshot_block'),
+          ),
+        ),
     ),
   );
+// 🔴 **Prove the UPDATE actually bit**, or the replay assertion below holds for the wrong reason:
+// a fixture reshaped so the target row moves would make "the original stands" vacuously true. This
+// is the probe discipline (`docs/lessons.md`) applied to a fixture — red, green and DID-NOT-RUN are
+// three outcomes, not two.
+assert.equal(
+  (
+    await prescribedSnapshotsFor(asPg, {
+      profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+      scope: B_SCOPE,
+      dayRole: 'skill',
+      movementIds: [snapMovB.id],
+    })
+  ).get(snapMovB.id),
+  '3xrewritten-after-the-fact @ 65',
+  'V1-22 chunk 2: the fixture UPDATE really changed what the program now says',
+);
 await writeStrengthSession(asPg, snapArgs);
 const [replayed] = await db
   .select({ snap: schema.entries.prescribedSnapshot })
@@ -4910,6 +4939,36 @@ assert.equal(
   '3x4, last AMRAP @ 65',
   'V1-22 chunk 2: a replay keeps the ORIGINAL snapshot — the program changing underneath must not rewrite it',
 );
+
+// 🔴 **The READ side, through the query the export actually ships.** Everything above proves the
+// WRITE. Nothing read the column through `strengthMonthRows`, so `coalesce(…, '')` or
+// `nullif(…, '')` on that select — one word — would survive every gate: the pure tests run on
+// hand-built rows, `db:verify` read the column by direct `select`, and the e2e exports under an
+// unchanged program where frozen and live bytes coincide. This is the read-side twin of the write
+// mutant that mutation 34 catches.
+const snapExportRows = await strengthMonthRows(asPg, {
+  profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  month: '2026-03',
+  scope: B_SCOPE,
+});
+// Keyed on (date, movement): the query returns no `client_id`, and the same movement appears on
+// both days — 03-02 with a day role asserted (frozen `''`) and 03-03 without one (NULL).
+const snapByDay = new Map(
+  snapExportRows
+    .filter((r) => r.movementId === snapMovA.id)
+    .map((r) => [r.date, r.prescribedSnapshot] as const),
+);
+assert.equal(
+  snapByDay.get('2026-03-02'),
+  '',
+  "V1-22 chunk 2: the EXPORT query returns '' as '' — a coalesce here would hide every open() row",
+);
+assert.equal(
+  snapByDay.get('2026-03-03'),
+  null,
+  'V1-22 chunk 2: the EXPORT query returns NULL as NULL — a nullif here would re-derive every row',
+);
+
 console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
 
 // --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
