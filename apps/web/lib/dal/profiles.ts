@@ -272,6 +272,9 @@ export async function updateProfileRoutine(
   return row ? { id: row.id } : null;
 }
 
+/** The writer's answer, re-exported so the action names one type rather than restating its arms. */
+export type RenameAthleteResult = RenameProfileResult;
+
 /**
  * Rename one athlete (PROF-1 a-r).
  *
@@ -280,7 +283,7 @@ export async function updateProfileRoutine(
  * invariant 3 asks for ("a guard that exists only in the DAL is a guard no proof covers", and the
  * converse: a guard that exists only in the action is one a second caller can skip). `renameProfile`
  * rides `isLiveProfile(publicId, scope)`, so an unknown, soft-deleted or foreign id updates 0 rows
- * and comes back `null`.
+ * and comes back as the `refused` arm — one answer for all three (ADR 0006 → 404, never 403).
  *
  * The `name` is already trimmed, whitespace-collapsed and length-checked by `renameAthleteSchema`
  * (`@mat-plan/shared`) BEFORE it arrives — this layer stores what it is given, the
@@ -293,13 +296,10 @@ export async function updateProfileRoutine(
  * make the warning unreachable from the action. A no-scope read is `refused`, the same answer the
  * writer gives for an unknown id — ADR 0006's 404-never-403.
  *
- * ⚠️ **The pre-a-1d-ren note, kept because the reasoning still holds for the success arm:** The action needs the public id to revalidate
- * two paths and nothing else; handing back a DTO would invite a caller to render a name this
- * function did not read back from the database.
+ * ⚠️ **The pre-a-1d-ren note, kept because it still holds for the success arm:** the action needs
+ * the public id to revalidate two paths and nothing else; handing back a DTO would invite a caller
+ * to render a name this function did not read back from the database.
  */
-/** The writer's answer, re-exported so the action names one type rather than restating its arms. */
-export type RenameAthleteResult = RenameProfileResult;
-
 export async function renameAthlete(
   publicId: string,
   name: string,

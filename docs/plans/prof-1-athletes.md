@@ -976,12 +976,18 @@ alters nothing.
 the "fix my own name" cases: `ada → Ada`, `Jose → José`, a stray double space, and Save with nothing
 edited. None creates a new collision.
 
-**And it retires the parameter, with no third case:**
+**And it retires the parameter, with no third case _sequentially_:**
 
 |                    | self in the match set?                                                         |
 | ------------------ | ------------------------------------------------------------------------------ |
 | fold **unchanged** | we skip entirely — self is never consulted                                     |
 | fold **changed**   | self's stored name folds to the OLD value, so it **cannot** match the new fold |
+
+⚠️ **Under CONCURRENCY the match can be self, and the first version of this section said otherwise.**
+Two renames of the same row to the same new name: the second's lookup finds that row after the first
+commits, now stored under the new name and folding to it. The parent is told somebody else holds the
+name, about themselves, while the save landed. Advisory copy wrong, not corruption — and an exclusion
+would not have helped, since the write had already happened. Found by a correctness lens on the PR.
 
 So `findNameMatch` needs no `excludeProfileId` here. That is one fewer argument to get null-wrong —
 and `a-1d-add` nearly shipped a null-handling bug on precisely that kind of exclusion (dA12 / the

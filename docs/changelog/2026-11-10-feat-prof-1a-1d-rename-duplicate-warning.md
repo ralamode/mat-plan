@@ -31,10 +31,12 @@ to fix the capitalisation and excluding _self_ does not help, because **Ada #2 m
 parent is warned about a collision that already existed, that they already agreed to, while changing
 nothing.
 
-**And the guard retires `excludeProfileId` entirely, with no third case:** when the fold is unchanged
-the check never runs, and when it changes, the row's stored name folds to the _old_ value and cannot
-match the new one. That is one fewer argument to get null-wrong — and `a-1d-add` nearly shipped a
-null-handling bug on exactly that kind of exclusion.
+**And the guard retires `excludeProfileId` entirely, with no third case _sequentially_:** when the
+fold is unchanged the check never runs, and when it changes, the row's stored name folds to the _old_
+value and cannot match the new one. ⚠️ Under **concurrency** it can — two renames of the same row to
+the same new name, where the second's lookup finds the row after the first commits and reports it as
+somebody else. The stored name is right either way, so that is advisory copy being wrong rather than
+corruption, and excluding self would not have helped: the write had already landed.
 
 A mutation patch proves it: dropping the guard makes a casing fix on one of two same-named athletes
 warn about the other.

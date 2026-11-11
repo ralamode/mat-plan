@@ -586,8 +586,12 @@ flowchart LR
   and was the plan's first answer:** two live athletes sharing a name is the _designed_ case, so a
   parent fixing `ada` → `Ada` on Ada #1 would be warned about **Ada #2** — a collision that already
   existed and that this edit does not create. The fold guard also makes an exclusion parameter
-  unreachable, which is why `findNameMatch` has none: with the fold unchanged the lookup never runs,
-  and with it changed the row's stored name folds to the OLD value and cannot match. ⚠️ The rename
+  unreachable **sequentially**, which is why `findNameMatch` has none: with the fold unchanged the
+  lookup never runs, and with it changed the row's stored name folds to the OLD value and cannot
+  match. ⚠️ **Under concurrency the match CAN be self** — two renames of the same row to the same new
+  name, where the second's lookup finds the row after the first commits. The stored name is correct
+  either way (the rename is idempotent on the fold), so that is advisory copy being wrong rather than
+  corruption, and an exclusion parameter would not have helped: the write had already landed. ⚠️ The rename
   envelope carries **no `atCap`** — a rename creates nothing, so the quota is never consulted and the
   field would always be `false`; it is optional in `ActionState` for exactly that reason.
 
