@@ -1,0 +1,15 @@
+diff --git a/packages/db/src/writers/strength-session.ts b/packages/db/src/writers/strength-session.ts
+index 2b614e8..e2412eb 100644
+--- a/packages/db/src/writers/strength-session.ts
++++ b/packages/db/src/writers/strength-session.ts
+@@ -199,9 +199,7 @@ async function writeSessionStrengthEntry(
+       // the column for every one of them, storing NULL where `''` was owed. NULL then sends the row
+       // back to the live fallback at every export, which is the whole defect this chunk exists to
+       // close. `db:verify` has a case that stores `''` and reads it back, with a committed mutation.
+-      ...(args.prescribedSnapshot !== undefined
+-        ? { prescribedSnapshot: args.prescribedSnapshot }
+-        : {}),
++      ...(args.prescribedSnapshot ? { prescribedSnapshot: args.prescribedSnapshot } : {}),
+       supersetId: args.supersetId ?? null,
+       supersetOrder: args.supersetOrder ?? null,
+     })
