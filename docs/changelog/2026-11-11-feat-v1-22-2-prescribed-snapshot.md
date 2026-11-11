@@ -48,6 +48,13 @@ protection, and it was the one with no test.
 ## What the panel's rulings removed
 
 The identity was dropped from the wire (plan D1), so the match is on the internal `movement_id` the
-writer already holds. No UI file changes, no wire schema change, no scaffold widening — and the
-`prescribed` bytes are unchanged, which the export's determinism test proves rather than this
-paragraph asserting.
+writer already holds. No UI file changes, no wire schema change, no scaffold widening.
+
+⚠️ **On the `prescribed` bytes being unchanged, stated accurately.** An earlier draft credited the
+export's determinism test; that test compares two exports under the SAME code and could never
+witness a difference between branches. The real argument is narrower: the fallback key moved from
+`movements.slug` to `movement_id`, and the two can only disagree where a household-owned movement
+row is shadowed by a global one sharing its slug. Production has **zero** household-owned movements
+(census 2026-10-13, `docs/plan.md`) and the catalog seed has not changed since — a dated zero, which
+`plan.md` itself says is not an invariant. The condition that would end it is the seed adding a slug
+a household already owns.
