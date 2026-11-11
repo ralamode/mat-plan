@@ -89,6 +89,45 @@ sequenceDiagram
   UI-->>Kid: updated Today view
 ```
 
+## 2g. Resolving a movement — the id decides, ids before inserts (PICK-1 PR 2)
+
+```mermaid
+flowchart TD
+  S["submitted movements[]<br/>each: movementPublicId? + movementName"] --> P1
+  subgraph DB["packages/db · resolveSessionMovements — OUTSIDE the transaction"]
+    P1{"phase 1:<br/>every movementPublicId"} -->|resolves global-or-own| OK[row: id + name]
+    P1 -->|any miss| NO["throw MovementNotAvailableError<br/>'Movement not available'"]
+    OK --> P2["phase 2: findOrCreateMovement<br/>for the TYPED names only — INSERTS"]
+  end
+  P2 --> B["ResolvedSessionMovement[]<br/>built FIELD BY FIELD<br/>movementName = the DATABASE's"]
+  B --> W
+  subgraph TX["writeStrengthSession · db.transaction"]
+    W[isLiveProfile — the profile seam] --> RC{"assertMovementsAreAvailable<br/>global-or-own, re-checked HERE"}
+    RC -->|any not available| RB["throw → ROLLBACK<br/>nothing commits"]
+    RC -->|all available| I[insert session → entries → sets]
+  end
+  style P1 fill:#fde68a,stroke:#b45309
+  style RC fill:#fecaca,stroke:#b91c1c
+  style NO fill:#fecaca,stroke:#b91c1c
+  style RB fill:#fecaca,stroke:#b91c1c
+```
+
+🔴 **Phase 1 before phase 2, because phase 2 is the only phase that writes.** A body refused for a
+bad id therefore commits nothing — not even a typed sibling's catalog row in the same submission.
+Swapped, the refusal still happens, just after a movement nothing can remove has landed with no
+session to explain it (`37-typed-before-ids.patch`).
+
+🔴 **The red node is the seam; phase 1 is a pre-check.** `resolveSessionMovements` reads outside the
+transaction, so between it and the write a movement can be soft-deleted or — once `MOV-1`/`C4m`
+exist — repointed. The in-transaction re-check is what the rollback protects, exactly as the profile
+resolve beside it already is, and it guards the typed path too because `writeStrengthSession` takes
+`movementId: number` from its caller (`38-drop-in-tx-recheck.patch`).
+
+⚠️ **`movementName` on the id path is the DATABASE's**, which is why the resolved movement is built
+field by field rather than by spread: `entries.movement_name` is a CSV column, and a spread would let
+the client set it while the id decided the row. The two refusals — unknown id, another household's id
+— are **byte-identical** and interpolate neither id nor name.
+
 ## 2c. Batch write path — logging a day's check-ins (V1-5)
 
 The first **batch multi-row** write and the first writer to insert `kind = NULL` (unblocked by

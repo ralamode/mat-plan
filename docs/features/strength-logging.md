@@ -215,6 +215,33 @@ all derived from the one unit, so none can disagree with it:
    status means the writer omits the column and Postgres applies its own default. One default, in one
    place. Adding `.default()` anywhere here forks it and changes every stored row.
 
+9. 🔴 **The MOVEMENT id decides which row an entry references; `movementName` is a label**
+   (`PICK-1` PR 2). `sessionMovementSchema` carries an optional `movementPublicId`: present ⇒ the
+   movement is resolved by public id in `packages/db` and the writer receives `movements.name` **from
+   the row**; absent ⇒ today's typed path (`findOrCreateMovement`) runs, which is what the picker's
+   "use as typed" becomes. The full rule, the two phases and the in-transaction re-check live in
+   [write-path.md](./write-path.md) invariant 14 — this guide owns only what it means for the form
+   and the schema:
+
+   - **The typed-name rules apply ONLY to a typed name.** `movementName` keeps a label shape
+     (`movementLabelSchema`: trim, non-empty, `MOVEMENT_NAME_MAX`); the comma/line-break guard and the
+     at-least-one-letter rule live in `typedMovementNameIssues` and are applied by the session
+     `superRefine`'s check (7) **only where there is no `movementPublicId`**. 🔴 **An id-resolved
+     movement is never refused for its own name** — that name is whatever the catalog row holds, and
+     the household cannot fix it until `MOV-1`. Refusing it would make a row unusable by its owner.
+   - **The path is `['movements', i, 'movementName']`.** The action's `Movement N: <message>` mapping
+     keys on a numeric `path[1]`, so a check that reported at `['movements', i]` would silently turn
+     every one of these messages into something unlocatable.
+   - **The field is OPTIONAL on the wire and `actions.ts` is not edited.** It rides inside
+     `parsed.data.movements`, which the action forwards wholesale. ⚠️ **zod strips unknown keys**, so
+     a field missing from the schema vanishes silently and every picked movement falls back to the
+     typed path with every gate green — which is why `actions.test.ts` asserts the DAL received the
+     **value**, with `toMatchObject` on the whole argument rather than `objectContaining` (a key that
+     is simply absent satisfies the latter).
+   - ⚠️ **Two deliberate copy/behaviour changes.** An emoji- or digit-only typed name is now refused,
+     and `MOVEMENT_NAME_MESSAGES.missing` reads **"Choose a movement."** — after PR 4 the field is a
+     button that opens a picker, so "enter" names an interaction the screen no longer offers.
+
 5b. **The strength section is the day's record; the form is an island inside it (V1-24 3a-ii).**
 
 - **One renderer, two placements.** `StrengthSessionReceipt` renders a session in the section and in
