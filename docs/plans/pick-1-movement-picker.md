@@ -141,44 +141,48 @@ export's live fallback keys the same way (`liveMatchesByKey`, `packages/shared/s
 
 ### Invariant 7 is already satisfied — PR 2 owes nothing, PR 3 records it closed
 
-PICK-1's movement-picker guide invariant 7 (**PR 3**, "File-by-file → PR 3") reads _"after C4r renames
-a row, chunk 2's slug match must compare ids"_. Chunk 2 shipped keyed on `movement_id` on **both**
-sides, so there is no slug match to switch and a rename cannot move the key. PR 3 writes the
-invariant **closed** — _"the prescribed match compares `movement_id` on both the writer and the
-export side, and a rename cannot move it"_ — rather than as an obligation on a later PR.
-`mov-1-rename-movement.md` carried the reciprocal note and is amended in the same PR as this block.
+The movement-picker guide's invariant 7 (**PR 3**) reads _"after C4r renames a row, chunk 2's slug
+match must compare ids"_. There is no slug match to switch: chunk 2 keys on `movement_id` on the
+writer and the export side alike, and a rename cannot move an id. PR 3 writes the invariant **closed**
+— _"the prescribed match compares `movement_id` on both sides, and a rename cannot move it"_ — and
+**retires the two code comments #367 left saying otherwise** (`packages/shared/src/csv/prescribed.ts`
+and `packages/db/src/queries/program-day.ts` both say a PICK-1 invariant "schedules a later PR to
+replace" the slug proxy). `mov-1-rename-movement.md` carried the reciprocal note and is discharged in
+the same PR as this block.
 
 ### The gate, replaced
 
 - **V1-22 chunk 2 is merged** (#367). It threads no field through the form and touches no UI file.
-- 🔴 **What PR 2 must not break: the snapshot is computed BEFORE the transaction.**
-  `writeStrengthSession` calls `prescribedSnapshotsFor` at its top, outside `db.transaction`, reading
-  `args.movements.map((m) => m.movementId)` (`writers/strength-session.ts:318-327`). Decision 2 moves
-  resolution into `packages/db` but keeps it **pre-transaction** — `resolveSessionMovements` runs in
-  the DAL and hands `writeStrengthSession` a `ResolvedSessionMovement[]` that already carries
-  `movementId`. **A PR 2 that resolved movements _inside_ the transaction instead would silently stop
-  freezing snapshots for every session**: the pre-transaction call would see no ids, and nothing would
-  go red that is not written to catch it. The in-transaction global-or-own re-check Decision 2 adds is
-  a second check, never a relocation of the first.
-- **The case (c) assertion, restated.** Case (c) already writes "A's own id and a global id". It also
-  asserts that the **id path still freezes a snapshot**: the global card names a movement the asserted
-  day's program **does** prescribe, and its `prescribed_snapshot` equals the rendered prescription; a
-  second card naming a movement that day does **not** prescribe freezes `''`. That proves what B1
-  wanted — the id path and the program still agree on which row is which — against the mechanism that
-  shipped rather than against a field.
+- **The snapshot is computed between resolution and the write**, outside the transaction:
+  `writeStrengthSession` calls `prescribedSnapshotsFor` at its top from
+  `args.movements.map((m) => m.movementId)` (`writers/strength-session.ts:318-327`). Decision 2 keeps
+  resolution **pre-transaction**, so PR 2 changes nothing here and owes nothing.
+  ⚠️ **The item that does relocate resolution is `TEN-2b-1`, not PR 2** — its row needs
+  `writeStrengthSession` to take movement **names** instead of resolved ids (`docs/plan.md`), which
+  moves the snapshot read with it. That row now carries the note; it appears here so a reader of this
+  gate knows which item the coupling belongs to.
+  _(An earlier draft of this bullet claimed such a move would "silently" stop freezing with nothing
+  going red. Both halves were false: `movementId` is required on `ResolvedSessionMovement`, so the move
+  is a contract change `tsc` refuses, and `db:verify`'s chunk-2 writer block goes red —
+  probed 2026-11-11 by setting `movementIds: []`, which failed at `verify.ts:4830`,
+  "the WRITER stores an open() prescription as `''`, not NULL".)_
+- **Case (c), restated.** It already writes "A's own id and a global id"; it also asserts the **id path
+  still freezes** — the global card names a movement the asserted day's program _does_ prescribe and
+  its `prescribed_snapshot` equals the rendered prescription, while a card the day does _not_ prescribe
+  freezes `''`. That is what B1 wanted, against the mechanism that shipped rather than against a field.
 
 ### One bounded consequence PR 2 creates, to record rather than build for
 
-The id path lets a client submit a movement **public id**, and `resolveMovementByPublicId`
-deliberately accepts a household row whose slug a global row shadows (Decision 2, correctness S3).
-The snapshot match is `movement_id`, so if a prescription names the **global** row while the
-submitted id names the **household** row, the match misses and the entry freezes `''` — where the
-typed path resolves global-first and matches. Bounded three ways: production holds **zero**
-household-owned movements (census 2026-10-13, `docs/privacy/data-inventory.md`); PR 4's list
-**excludes** a household row whose slug a global row holds (`db:verify` (b)), so the picker cannot
-offer one; and the CSV's `movement` column is unaffected, since a shadowing slug is by definition the
-same string. It is reachable only by a crafted id. `movement-picker.md` records it beside invariant 6
-(a dead id throws until C4m); no code is added for it.
+`resolveMovementByPublicId` deliberately accepts a household row whose slug a global row shadows
+(Decision 2, correctness S3). The snapshot match is `movement_id`, so a prescription naming the
+**global** row misses when the submitted id names the **household** row, and the entry freezes `''`
+where the typed path's global-first resolution matches. Bounded by the dated zero census
+(2026-10-13, `docs/privacy/data-inventory.md`), by PR 4's list excluding such a row (`db:verify` (b)),
+and by the CSV `movement` column being unaffected — a shadowing slug is the same string. Two paths
+reach it: a crafted id, or a catalog seed landing _after_ a pick (`CAT-2` runs `db:seed` on merge;
+`MOV-1` names the same window). **PR 2 records it in `write-path.md`**, which it already edits and
+which owns `writers/`; PR 3 moves it into `movement-picker.md` beside invariant 6. No code is added
+for it.
 
 ## Design decisions (each with what was rejected)
 
@@ -208,7 +212,8 @@ resolved **by public id** and `movementName` is a **label only**: the writer rec
   the form no longer has a text box to enter into. Tests asserting the old string change with it.
 - **Rejected: xor (`movementPublicId` xor `movementName`).** It costs the error label above; "the id
   decides" gives the same safety, pinned by a test.
-- **Rejected: building `ResolvedSessionMovement` by spread** _(security S1)_. Today's DAL does
+- **Rejected: building `ResolvedSessionMovement` by spread** _(security S1)_. ⚠️ **Superseded 2026-11-11 — see [§ Amendment](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11).**
+  _(Only the `prescriptionId` half; the field-by-field build and its mapped type stand.)_ Today's DAL does
   `{ ...m, movementId }` (`entries.ts:499-502`), which would now carry `movementPublicId` and the
   client label into the writer's argument. The resolver builds each resolved movement **field by
   field**: `{ clientId, unit, sets, status, supersetClientId, supersetOrder, prescriptionId, movementId,
@@ -390,7 +395,7 @@ load modes in the same update (strength-logging invariant 4b). Reps and weights 
 
 - `MovementOptionDTO` has no `load`/`reps`/`sets`, pinned by `@ts-expect-error` (strength-logging
   invariant 1).
-- A pick that changes the movement clears `scaffolded` and chunk 2's `prescriptionId` (its "rename
+- ⚠️ **Superseded 2026-11-11 — see [§ Amendment](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11).** A pick that changes the movement clears `scaffolded` and chunk 2's `prescriptionId` (its "rename
   clears it" rule, `v1-22-2-renderer-and-writer.md:210-215`, now in the pick handler). Re-picking the
   same movement is a no-op.
 - "Use as typed" sets `movementName` to the trimmed text, clears `movementPublicId` and every
@@ -677,7 +682,7 @@ compare ids (Gates).
   id-logged entry carries the global slug (security S2 — through the real path; the separate
   name-vs-id CSV block is dropped as tautological, scope N5).
 - **Mutations:** the three PR 2 patches each make their named assertion go red (`db:mutations`). With the in-tx re-check in place, `NN-resolver-ignores-household` still throws the same message, so it goes red only through (a)'s "zero new `movements` rows"; (a)'s typed sibling is therefore a name that slugs to **no** global row, and its `.expect` says so.
-- **`db:verify` (c) also** writes an id-path scaffolded card carrying a `prescriptionId` and asserts its `prescribedSnapshot` is written (correctness round 2, B1).
+- ⚠️ **Superseded 2026-11-11 — see [§ Amendment](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11).** **`db:verify` (c) also** writes an id-path scaffolded card carrying a `prescriptionId` and asserts its `prescribedSnapshot` is written (correctness round 2, B1).
 - **`entries.test.ts`** (recording DB): the resolver stub returns `null` for the id, and the
   find-or-create stub **would** insert if reached — so a wrong order emits an `INSERT INTO movements`
   before the throw; the test asserts no `INSERT` and no `BEGIN` is emitted. And an id-only session emits
@@ -707,7 +712,7 @@ compare ids (Gates).
 
 **PR 4 (mounted)**:
 
-- `strength-form.test.tsx`: the `onSubmit` guard test **first** (focus to the right card's button, the
+- ⚠️ **Superseded 2026-11-11 — see [§ Amendment](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11).** _(the `prescriptionId` clause only.)_ `strength-form.test.tsx`: the `onSubmit` guard test **first** (focus to the right card's button, the
   action not called); a pick on a blank card leaves every set blank (17); a pick on a scaffolded card
   clears `scaffolded`/`prescriptionId`; re-pick of the same id is a no-op; "use as typed" serializes no
   `movementPublicId`; "Add movement" appends only on pick; the Save line appears for a created card and
@@ -740,7 +745,7 @@ compare ids (Gates).
 
 ## Gates, and what to re-verify
 
-- **V1-22 chunk 2 merged** before PR 2. Re-read: `sessionMovementSchema` (adds `prescriptionId`),
+- ⚠️ **Superseded 2026-11-11 — see [§ Amendment](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11).** **V1-22 chunk 2 merged** before PR 2. Re-read: `sessionMovementSchema` (adds `prescriptionId`),
   `MovementVals` and the `movementsJson` spread, `onName`'s clear list, and `matchPrescribedSnapshot`,
   which compares `movementSlug(movement.movementName)` to the prescription's slug
   (`v1-22-2-renderer-and-writer.md:279-290`). That stays correct because the resolver hands the writer
@@ -908,11 +913,11 @@ a decision, recorded above.
 
 ### Engineering panel (round 2, correctness re-review)
 
-| #   | Lens        | Critique (short)                                                                   | Verdict      | Resolution                                                                                                             |
-| --- | ----------- | ---------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| B1  | Correctness | The field-by-field build drops chunk 2's `prescriptionId`; the snapshot goes inert | **Accepted** | Added to the list; the builder's return type makes a missing key a compile error; `db:verify` (c) asserts the snapshot |
-| S1  | Correctness | "3+ letters" leaves `ups` unstripped; three vector rows contradict the rule        | **Accepted** | "2+ letters"; added the `push up` row                                                                                  |
-| S2  | Correctness | The in-tx re-check has no mutation patch                                           | **Accepted** | `NN-drop-in-tx-recheck`; the resolver patch's `.expect` names (a)'s zero-new-rows assertion                            |
-| N   | Correctness | PR 4's hard-coded `07` will collide with PR 2's patches                            | **Accepted** | `NN` throughout                                                                                                        |
+| #   | Lens        | Critique (short)                                                                                                            | Verdict      | Resolution                                                                                                             |
+| --- | ----------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| B1  | Correctness | The field-by-field build drops chunk 2's `prescriptionId`; the snapshot goes inert — **moot, see § Amendment (2026-11-11)** | **Accepted** | Added to the list; the builder's return type makes a missing key a compile error; `db:verify` (c) asserts the snapshot |
+| S1  | Correctness | "3+ letters" leaves `ups` unstripped; three vector rows contradict the rule                                                 | **Accepted** | "2+ letters"; added the `push up` row                                                                                  |
+| S2  | Correctness | The in-tx re-check has no mutation patch                                                                                    | **Accepted** | `NN-drop-in-tx-recheck`; the resolver patch's `.expect` names (a)'s zero-new-rows assertion                            |
+| N   | Correctness | PR 4's hard-coded `07` will collide with PR 2's patches                                                                     | **Accepted** | `NN` throughout                                                                                                        |
 
 Every round-1 blocker was confirmed resolved.

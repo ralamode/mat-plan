@@ -113,10 +113,11 @@ _(Corrected by the gate run: the earlier text read as three parallel lanes.)_
   PROG-1's V1-22 chunk 2 (both edit `program-day.ts` and `programming.md`).
 - **Lane B — Logging, delete:** step 3, then 4 → 5. **Step 3 is not free:** B0 edits
   `writers/strength-session.ts`, as V1-22 chunk 2 does, so it goes after chunk 2.
-- **Lane C — Logging, strength surface:** E (V1-24 2 → 3b; 3a ✅), 6a, 6b, then step 7 (MOV-1, which
-  also waits on lane A's step 2). E, 6b and step 3 serialize with V1-22 chunk 2 on the strength-form
-  files and `strength-logging.md`; 6b, B1-2 and V1-24 2 take turns on `lib/dal/entries.ts`. Step 6a
-  (U0) is the one free step.
+- **Lane C — Logging, strength surface:** E (V1-24 2 → 3b; 3a ✅), 6a ✅, 6b, then step 7 (MOV-1, which
+  also waits on lane A's step 2). ⚠️ _Corrected 2026-11-11:_ E, 6b and step 3 serialized with V1-22
+  chunk 2 on **`writers/strength-session.ts`, `program-day.ts` and `verify.ts`** — not "the
+  strength-form files": D1 means chunk 2 touched no UI file. Chunk 2 has merged (#367), so that
+  serialization is spent; 6b, B1-2 and V1-24 2 still take turns on `lib/dal/entries.ts`.
 - **Start now, before AUTH-1 1c:** step 6a, and every plan's panel. Step 0 slots
   between AUTH-1 1b and 1c, never beside them. Step 3 follows V1-22 chunk 2 and takes the next
   migration number at merge.

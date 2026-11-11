@@ -673,7 +673,7 @@ order, not merge order.
 | V1-17     | logged entries in performed order ([plan](./plans/v1-17-performed-order.md))                                                    | ✅     |
 | V1-18     | per-kid routine builder ([eng plan](./plans/v1-18-eng-plan.md))                                                                 | ✅     |
 | V1-19     | "start today's program" scaffolds the form — **structure only** (#125) ([plan](./plans/v1-19-start-todays-program.md))          | ✅     |
-| V1-22     | program editor — [plan](./plans/v1-22-program-editor.md) (#127/#129); building in chunks, 1 of n merged (#232)                  | 🟡     |
+| V1-22     | program editor — [plan](./plans/v1-22-program-editor.md) (#127/#129); building in chunks, **2 of 6 merged** (#232, #367)        | 🟡     |
 | GAP-1     | close the CSV recording gaps (P0-1/P0-2 · P1-1a/b/c)                                                                            | ✅     |
 | GAP-3     | **typed measurements** — CI gates (#133/#135/#138) · `units.dimension` (#137) · migration `0011` (#139) · the typed form (#141) | ✅     |
 | YDP       | youth daily A/B program seeded, replacing Kids S&C Foundation (#151)                                                            | ✅     |

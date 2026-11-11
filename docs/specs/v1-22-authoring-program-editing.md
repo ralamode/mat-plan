@@ -128,8 +128,11 @@ Rules the contract carries:
   The list comes from `prescription_targets → profiles` **within the already-authorized block** — not a
   new household hop, so TEN-1 is not a prerequisite. `listProfiles()` returns every profile in the
   database and must not be used here.
-- **`movementSlug` is the machine key; `movementName` is display only.** The CSV keys `prescribed` by
-  slug (`csv/columns.ts`), and a name with a comma breaks that column.
+- **`movementSlug` is the machine key; `movementName` is display only.** ⚠️ _Corrected 2026-11-11
+  (chunk 2, D1):_ the slug is the machine key of the CSV's **`movement`** column (`csv/columns.ts`), and
+  a name with a comma breaks that column — but `prescribed` is **no longer keyed by slug**. It reads the
+  frozen `entries.prescribed_snapshot`, and its live fallback matches on **`movement_id`**
+  (`packages/shared/src/csv/prescribed.ts`).
 - **No authored load crosses into the athlete's log form.** `ScaffoldRow` has no `load` field by
   construction; this DTO is for the _editor_, and the two must never be merged.
 - **The envelope is `ActionState`** (`app/p/[profileId]/action-state.ts`) and the stale message is
@@ -243,7 +246,8 @@ Only the three nothing else records; every other mitigation is an acceptance cri
   [write-path.md](../features/write-path.md) — the owning guides for `lib/dal/` and the set fields
 - [plans/v1-22-program-editor.md](../plans/v1-22-program-editor.md) — A1–A4, and **W1**–**W4**
 - [plans/v1-30b-form-stops-inviting.md](../plans/v1-30b-form-stops-inviting.md) — owns the field labels
-- `apps/web/lib/dal/export.ts` — `prescribed` is reconstructed live; the match key is non-unique
+- `apps/web/lib/dal/export.ts` — ⚠️ _as of chunk 2 (#367)_ `prescribed` reads the frozen snapshot and
+  only **falls back** to a live read where it `IS NULL`; the fallback's match key is non-unique
 - `apps/web/lib/programming/program-day.ts` — `formatPrescription` is a **second, UI** renderer
   (`"4 sets × 3"`); do not reuse it for the snapshot. `toProgramDay` **collapses** the reps precedence
   (`r.reps ?? r.targetReps`), so it is **not** reusable on the edit path — reusing it writes one

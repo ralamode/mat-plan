@@ -66,17 +66,30 @@ and this plan recommends answering it by pulling a minimal merge (**MOV-1c**) in
    `apps/web/lib/entries/entry-label.ts:63-64`). The strength writer stores the **as-typed** text per
    entry (`packages/db/src/writers/strength-session.ts:181,354`). This is the column's only reader in
    `apps/web` and `packages/db/src` (grep, 2026-10-23).
-6. **Program rows read `movements.name` live** (`packages/db/src/queries/program-day.ts:98`).
+6. **Program rows read `movements.name` live** (`packages/db/src/queries/program-day.ts:115`).
    ⚠️ **Re-stated 2026-11-11, after V1-22 chunk 2 (#367)** — the previous wording ("the export's
    `prescribed` match keys on the **live** slug on both sides", `export.ts:124,159`) described code
    that no longer exists. What is true now: `prescribed` reads the **frozen**
    `entries.prescribed_snapshot` first and falls back to the live program only where that column
-   `IS NULL` (`apps/web/lib/csv/prescribed-snapshot.ts`), and the fallback match keys on
-   **`movement_id`**, not on a slug (`liveMatchesByKey`, `packages/shared/src/csv/prescribed.ts`).
-   `prescribed_snapshot` still holds `sets x reps @ load` and **no movement name** (column at
-   `schema.ts:205-218`). **The conclusion is unchanged and now stronger:** no rename or merge can
-   alter `prescribed` — a frozen row is never re-resolved at all, and an id key is rename-proof by
-   construction rather than by the `slug === movementSlug(name)` identity D2 preserves.
+   `IS NULL` (`resolvePrescribed`, `apps/web/lib/csv/prescribed-snapshot.ts:36-38`), and the fallback
+   match keys on **`movement_id`** — the ENTRY's (`packages/db/src/queries/export-month.ts:74`)
+   against the prescription's — not on a slug (`liveMatchesByKey`,
+   `packages/shared/src/csv/prescribed.ts`). `prescribed_snapshot` still holds `sets x reps @ load`
+   and **no movement name** (column at `schema.ts:313`).
+   🔴 **Split the conclusion; the old single sentence is no longer true of both acts.**
+   - **A rename cannot alter `prescribed`,** and that is now stronger than it was: a frozen row is
+     never re-resolved at all, and an id key is rename-proof by construction rather than by the
+     `slug === movementSlug(name)` identity D2 preserves.
+   - **A MERGE can,** for every row whose snapshot is still NULL — which is all of production's
+     history until chunk 3's backfill ships. MOV-1c's sketch moves the entry itself
+     (`UPDATE entries SET movement_id = target`, § MOV-1c), and the live fallback keys on exactly
+     that column, so a row that missed the map under the source id can match under the target's.
+     Worked case: an entry logged 2026-10 on household row H ("Bulgarian Split Squats") whose day's
+     program prescribes catalog row G renders `''` today; after merging H→G it renders G's
+     prescription. **The bytes change.** (Under the pre-#367 slug key it changed too, so the old
+     wording was accurate only because it was scoped to the COLUMN, which holds no name.) So
+     **MOV-1c's confirm sheet must name the `prescribed` effect** alongside the `movement` one
+     (spec U18), and MOV-1c is cheaper after chunk 3 than before it.
 7. **The three-part lift** (`schema.ts:538-542`) is the condition for setting `movements.deleted_at`.
    A rename sets no `deleted_at`.
 8. **Name validation lives inside the log schema today.** `sessionMovementSchema.movementName` is trimmed,
@@ -244,12 +257,12 @@ how that row gets fixed. The bound only caps the payload.
 
 ### D6 — The new name on the day page: its own PR, scoped to the entry's household
 
-| Surface                                             | After a rename                                                                                                                                        |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PICK-1's picker, program rows (`program-day.ts:98`) | the new name, because both read `movements.name` live                                                                                                 |
-| The CSV `movement` column                           | D1                                                                                                                                                    |
-| The CSV `prescribed` column                         | unchanged — a frozen row is never re-resolved, the live fallback keys on `movement_id`, and the snapshot holds no name (fact 6, re-stated 2026-11-11) |
-| **The day page's logged strength rows**             | **the old typo, unless the read changes** (fact 5)                                                                                                    |
+| Surface                                             | After a rename                                                                                                                                                                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| PICK-1's picker, program rows (`program-day.ts:98`) | the new name, because both read `movements.name` live                                                                                                                                                  |
+| The CSV `movement` column                           | D1                                                                                                                                                                                                     |
+| The CSV `prescribed` column                         | unchanged **by a rename** — a frozen row is never re-resolved, the live fallback keys on `movement_id`, and the snapshot holds no name. ⚠️ A **merge** is different; see fact 6 (re-stated 2026-11-11) |
+| **The day page's logged strength rows**             | **the old typo, unless the read changes** (fact 5)                                                                                                                                                     |
 
 **MOV-1a2 changes one read.** `listEntriesForDay` adds
 `leftJoin(schema.movements, and(eq(schema.entries.movementId, schema.movements.id), movementInHousehold(scope)))`
