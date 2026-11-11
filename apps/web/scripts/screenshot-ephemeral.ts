@@ -429,6 +429,10 @@ const STATES = {
   // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
   // settles, refusals included, which would empty the box under its own "Enter a name." error).
   'rename-rejected': null,
+  // U0 — the shared sheet, OPEN. Not reachable by route: it exists only after a tap, and a closed
+  // cell shows two buttons and nothing of the component under review.
+  'sheet-open': null,
+  'sheet-dialog-open': null,
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
@@ -586,6 +590,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
     // The callout's focus target — waiting on it means the capture cannot race the round trip.
     await page.getByRole('group').waitFor();
+  },
+  'sheet-open': async (page) => {
+    await page.getByRole('button', { name: 'Open sheet' }).first().click();
+    await page.getByRole('dialog').waitFor();
+  },
+  /** The capped confirm variant — a different layout, so it needs its own capture. */
+  'sheet-dialog-open': async (page) => {
+    await page.getByRole('button', { name: 'Open dialog' }).first().click();
+    await page.getByRole('dialog').waitFor();
   },
   'rename-rejected': async (page) => {
     await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill('   ');
@@ -1220,6 +1233,8 @@ async function runEphemeral(
       timeZone,
       colorScheme,
       interact: INTERACTIONS[state],
+      // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver.
+      viewportOnly: state.startsWith('sheet-'),
     });
   } finally {
     if (server) await stopChildProcess(server);
@@ -1229,8 +1244,28 @@ async function runEphemeral(
   }
 }
 
+/**
+ * Every flag this script accepts. ⚠️ **An unknown flag has to be fatal**, because the parser below
+ * treats whatever it does not recognise as positional — so `--only sheet-open` silently became the
+ * ROUTE `sheet-open`, which 404s, and the run still printed `✓ mobile/tablet/desktop` for three
+ * screenshots of Next's not-found page. A capture that reports success while showing a 404 is worse
+ * than a crash: it gets published into a PR as evidence of a UI that was never rendered.
+ * _(maintainer, 2026-11-11)_
+ */
+const KNOWN_FLAGS = new Set(['--state', '--tz', '--theme', '--build', '--use-live-db']);
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  // A bare `--` is pnpm's argument separator and reaches us verbatim; it is not a flag.
+  const unknown = argv.filter(
+    (a) => a !== '--' && a.startsWith('--') && !KNOWN_FLAGS.has(a.split('=')[0]!),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `unknown flag(s): ${unknown.join(', ')}. known flags: ${[...KNOWN_FLAGS].join(', ')}\n` +
+        'A route is passed as a POSITIONAL, e.g. `screenshot:ephemeral --state sheet-open /design/tokens`.',
+    );
+  }
   const stateFlagIdx = argv.indexOf('--state');
   const rawState = stateFlagIdx >= 0 ? argv[stateFlagIdx + 1] : 'empty';
   if (!rawState || !(rawState in STATES)) {

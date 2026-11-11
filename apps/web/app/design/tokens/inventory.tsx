@@ -1,6 +1,7 @@
 import { NoHouseholdState } from '@/components/onboarding/no-household-state';
 import { PickerEmptyState } from '@/components/onboarding/picker-empty-state';
 import { Callout } from '@/components/ui/callout';
+import { SheetDemo } from './sheet-demo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -188,7 +189,7 @@ export function FieldsCell({ setId }: { setId: string }) {
  * overflow measurement below. It needs no props and declares no `id`, so four copies are safe.
  * ⚠️ When UI-3 deletes this harness, that coverage goes with it.
  */
-export function SurfacesCell() {
+export function SurfacesCell({ setId }: { setId?: string }) {
   return (
     <div className="flex flex-col gap-3">
       <Card>
@@ -225,6 +226,19 @@ export function SurfacesCell() {
           {ATHLETE_FORM_COPY.openMatch('Ada')}
         </Button>
       </Callout>
+      {/* U0, the shared sheet. 🔴 **The only mounted sheet in the app until `PICK-1` (step 6b)**,
+          which is why it is here at all: the keyboard geometry and the back gesture are
+          browser-only, so without a real route they would ship unprovable.
+          ⚠️ `setId` is forwarded to the PORTAL — `Dialog.Portal` mounts under `document.body`,
+          outside this cell's `[data-tokens]`, so without it all four cells would render the control
+          palette and the page would audit the candidates zero times.
+          Both variants, because they are different layouts: full screen on a phone vs the capped
+          confirm `spec:1121` keeps small. */}
+      <p className="text-muted-foreground text-xs uppercase">Sheet</p>
+      <div className="flex flex-col gap-2">
+        <SheetDemo tokens={setId} />
+        <SheetDemo tokens={setId} variant="dialog" />
+      </div>
       <div className="flex flex-col gap-2" aria-hidden>
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/3" />

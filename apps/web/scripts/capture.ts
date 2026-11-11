@@ -55,6 +55,13 @@ export async function captureScreenshot(opts: {
    */
   timeZone?: string;
   /**
+   * 🔴 **Capture the VIEWPORT, not the whole page.** Default is `fullPage`, which is right for a
+   * scrolling screen and useless for a modal: a `position: fixed` overlay sits in the first
+   * screenful of a capture that can run to 24,000px, so the thing under review is a sliver. Set for
+   * the open-sheet states.
+   */
+  viewportOnly?: boolean;
+  /**
    * Optional post-navigation interaction, run before the shot. Some states only exist AFTER a tap —
    * GAP-1 P1-1c's "Skipped checked" collapses the set rows, and a set marked sub-failure — and a
    * reviewer approving a UI change needs to see those, not just the pristine load. Runs once per
@@ -115,7 +122,7 @@ export async function captureScreenshot(opts: {
       await page.goto(opts.route, { waitUntil: 'networkidle' });
       if (opts.interact) await opts.interact(page);
       const path = `.screenshots/${name}-${vp.suffix}.png`;
-      await page.screenshot({ path, fullPage: true });
+      await page.screenshot({ path, fullPage: !opts.viewportOnly });
       paths.push(path);
       console.log(`✓ ${vp.suffix} (${vp.width}px): ${path}`);
       await context.close();
