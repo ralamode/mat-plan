@@ -32,8 +32,15 @@ export type ActionState = {
     // so nothing from `@mat-plan/db` reaches the client bundle this module is part of (precedent:
     // `lib/entries/adherence.ts`, `lib/programming/program-day.ts`).
     match: NameMatch;
-    /** The household is at `MAX_HOUSEHOLD_ATHLETES`, so "Add another" would be refused — hide it. */
-    atCap: boolean;
+    /**
+     * The household is at `MAX_HOUSEHOLD_ATHLETES`, so "Add another" would be refused — hide it.
+     *
+     * ⚠️ **OPTIONAL because it is ADD-only** (PROF-1 a-1d-ren). A rename creates nothing, so the
+     * quota is never consulted on that path and a required field would force the rename action to
+     * send a value that is always `false` — a number that looks like an answer to a question nobody
+     * asked. Absent means "the cap does not apply here", which is different from `false`.
+     */
+    atCap?: boolean;
     /** The folded name this warning was issued for. */
     folded: string;
   };

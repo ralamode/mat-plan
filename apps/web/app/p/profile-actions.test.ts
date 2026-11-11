@@ -42,7 +42,7 @@ vi.mock('@/lib/dal/profiles', () => ({
     routine: { version: 1, order: [] },
     firstDay: '2026-01-01',
   })),
-  renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
+  renameAthlete: vi.fn(async () => ({ ok: true, publicId: PROFILE_ID })),
   // PROF-1 b — the DISCRIMINATED result, because these two own the refusal order.
   archiveAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
   restoreAthlete: vi.fn(async () => ({ ok: true, id: PROFILE_ID })),
@@ -124,7 +124,7 @@ describe('renameAthleteAction — boundary (bad body → zod-reject, nothing wri
       form({ profileId: PROFILE_ID, name: 'Ada\nMae' }),
     );
     expect(res.ok).toBe(true);
-    expect(renameAthlete).toHaveBeenCalledWith(PROFILE_ID, 'Ada Mae');
+    expect(vi.mocked(renameAthlete).mock.calls[0]!.slice(0, 2)).toEqual([PROFILE_ID, 'Ada Mae']);
   });
 
   it('refuses a missing name field (no `name` in the body at all)', async () => {
@@ -158,7 +158,7 @@ describe('renameAthleteAction — happy path', () => {
     expect(res).toEqual({ ok: true, error: null });
     // 🔴 The name reaching the DAL is the SCHEMA's output, not the raw field: whitespace-collapsed,
     // so the stored name matches what `foldName` will compare and what a-1d's warning will quote.
-    expect(renameAthlete).toHaveBeenCalledWith(PROFILE_ID, 'Ada Mae');
+    expect(vi.mocked(renameAthlete).mock.calls[0]!.slice(0, 2)).toEqual([PROFILE_ID, 'Ada Mae']);
     // The ownership seam ran first, on the id from the body.
     expect(getProfileByPublicId).toHaveBeenCalledWith(PROFILE_ID);
 
@@ -173,7 +173,7 @@ describe('renameAthleteAction — happy path', () => {
    */
   it('revalidates using the id the DAL returned', async () => {
     const OTHER = '019826b4-0000-7000-8000-0000000000ff';
-    vi.mocked(renameAthlete).mockResolvedValueOnce({ id: OTHER });
+    vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: true, publicId: OTHER });
     await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
     const paths = vi.mocked(revalidatePath).mock.calls.map(([p]) => p);
     expect(paths).toContain(athletePath(OTHER));
@@ -182,18 +182,58 @@ describe('renameAthleteAction — happy path', () => {
   /** An accent is stored as typed — folding is for comparison only, never for storage. */
   it('stores a name with combining marks as typed', async () => {
     await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Zoë' }));
-    expect(renameAthlete).toHaveBeenCalledWith(PROFILE_ID, 'Zoë');
+    expect(vi.mocked(renameAthlete).mock.calls[0]!.slice(0, 2)).toEqual([PROFILE_ID, 'Zoë']);
+  });
+});
+
+describe('renameAthleteAction — the duplicate warning (PROF-1 a-1d-ren)', () => {
+  const match = {
+    publicId: 'p-match',
+    name: 'Ada',
+    kind: PROFILE_KIND.kid,
+    archived: false,
+  };
+
+  it('maps a duplicate to the envelope, with NO atCap — a rename creates nothing', async () => {
+    vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: false, reason: 'duplicate', match });
+    const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
+    // 🔴 `toEqual`, so the absence of `atCap` is pinned rather than merely untested. The add form's
+    // envelope carries it because an archived twin occupies a slot in a full household; a rename
+    // consults no quota, so a value there would always be `false` and read as meaningful.
+    expect(res).toEqual({
+      ok: false,
+      error: null,
+      duplicate: { match, folded: foldName('Ada') },
+    });
+    // A warning is not a write: nothing may be revalidated.
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it('threads the acknowledgement to the DAL, re-derived from the PARSED name', async () => {
+    const f = form({ profileId: PROFILE_ID, name: '  Ada  ' });
+    f.set('acknowledgedDuplicate', foldName('Ada'));
+    await renameAthleteAction(initial, f);
+    expect(vi.mocked(renameAthlete).mock.calls[0]![2]).toMatchObject({
+      acknowledgedDuplicate: foldName('Ada'),
+    });
+  });
+
+  it('an OVERSIZE acknowledgement is a page-level refusal, and never reaches the DAL', async () => {
+    const f = form({ profileId: PROFILE_ID, name: 'Ada' });
+    f.set('acknowledgedDuplicate', 'x'.repeat(PROFILE_NAME_MAX * 20 + 1));
+    expect(await renameAthleteAction(initial, f)).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
+    expect(renameAthlete).not.toHaveBeenCalled();
   });
 });
 
 describe('renameAthleteAction — the DAL refuses', () => {
   /**
-   * `renameAthlete` returns `null` when the UPDATE matched 0 rows — the id raced a soft delete
+   * `renameAthlete` answers `refused` when the UPDATE matched 0 rows — the id raced a soft delete
    * between the read and the write. The read passing and the write refusing is a real interleaving,
    * not a redundant branch, and it must answer with the same bytes as every other refusal.
    */
   it('maps a 0-row UPDATE to the same refusal, with no revalidation', async () => {
-    vi.mocked(renameAthlete).mockResolvedValueOnce(null);
+    vi.mocked(renameAthlete).mockResolvedValueOnce({ ok: false, reason: 'refused' });
     const res = await renameAthleteAction(initial, form({ profileId: PROFILE_ID, name: 'Ada' }));
     expect(res).toEqual({ ok: false, error: NO_ATHLETE_SAVE });
     // A refusal must not even confirm which path exists.
