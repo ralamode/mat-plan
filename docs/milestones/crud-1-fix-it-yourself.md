@@ -229,12 +229,12 @@ dedicated lenses its subject required — named in its log) and, where a person 
 three UX lenses — then a reconcile and, where a blocker reshaped the plan, a light round-2 re-review.
 Each plan's own `## Review-response log` is the record; this is the index.
 
-| Plan                                          | Panels      | Round 2 | Outcome that moved this milestone                                                           |
-| --------------------------------------------- | ----------- | ------- | ------------------------------------------------------------------------------------------- |
-| [WP-1](../plans/wp-1-shard-actions.md)        | per its log | yes     | Household-scoped binding; per-feature action modules (the seams table)                      |
-| [PROF-1](../plans/prof-1-athletes.md)         | per its log | yes     | Order a-0 → a-g → a-r → b → a-1 → a-1d; `foldName`, `programBlockInHousehold`               |
-| [V1-9b](../plans/v1-9b-delete-and-restore.md) | per its log | —       | `N` gates nothing until PRIV-3's purge; B1-3 waits on V1-24 3b; LifeButton lost write fixed |
-| [PICK-1](../plans/pick-1-movement-picker.md)  | per its log | yes     | Resolver in `packages/db` with an in-tx re-check; `prescriptionId` carried; fold rule fixed |
-| [MOV-1](../plans/mov-1-rename-movement.md)    | per its log | yes     | Rename split a/a2/b; merge sketched as c                                                    |
+| Plan                                          | Panels      | Round 2 | Outcome that moved this milestone                                                                                                                                                                       |
+| --------------------------------------------- | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [WP-1](../plans/wp-1-shard-actions.md)        | per its log | yes     | Household-scoped binding; per-feature action modules (the seams table)                                                                                                                                  |
+| [PROF-1](../plans/prof-1-athletes.md)         | per its log | yes     | Order a-0 → a-g → a-r → b → a-1 → a-1d; `foldName`, `programBlockInHousehold`                                                                                                                           |
+| [V1-9b](../plans/v1-9b-delete-and-restore.md) | per its log | —       | `N` gates nothing until PRIV-3's purge; B1-3 waits on V1-24 3b; LifeButton lost write fixed                                                                                                             |
+| [PICK-1](../plans/pick-1-movement-picker.md)  | per its log | yes     | Resolver in `packages/db` with an in-tx re-check; fold rule fixed. ⚠️ The "`prescriptionId` carried" outcome is **void** — V1-22 chunk 2 D1 dropped that field, per the plan's § Amendment (2026-11-11) |
+| [MOV-1](../plans/mov-1-rename-movement.md)    | per its log | yes     | Rename split a/a2/b; merge sketched as c                                                                                                                                                                |
 
 The shared seams these settled are in the spec → "Seams the plans settled (2026-10-23)".

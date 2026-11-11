@@ -19,9 +19,13 @@
 > imports; U0's sheet owns the phone back gesture.
 >
 > Measured against the worktree at `8769c1b` (no `apps/`/`packages/` diff from `origin/main@27847ca`).
-> ⚠️ **V1-22 chunk 2 and PROF-1 have not merged** — every `strength-form.tsx` / `strength-session.ts` /
-> `text.ts` line cited below must be re-read on the SHA each PR starts from (see
-> [Gates](#gates-and-what-to-re-verify)).
+> ⚠️ Every `strength-form.tsx` / `strength-session.ts` / `text.ts` line cited below must be re-read on
+> the SHA each PR starts from (see [Gates](#gates-and-what-to-re-verify)).
+>
+> 🔴 **Read [§ Amendment (2026-11-11)](#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11)
+> first.** V1-22 chunk 2 and PROF-1 have both merged, and chunk 2 shipped **without** the prescription
+> identity on the wire. Six passages below — in Decisions 1 and 6, the Test plan, the Gates and the
+> review log — were written against a field that does not exist; the amendment names each one.
 
 ## Goal
 
@@ -105,6 +109,76 @@ flowchart LR
   P4 --> D2[D2 · editor Add uses it]
   AU[AUTH-1 1c] -. page.tsx, serial .- P4
 ```
+
+## 🔴 Amendment — the prescription identity never reaches the wire (2026-11-11)
+
+**This block is the contract wherever it differs from anything below it.** It uses the idiom
+[`v1-22-2-renderer-and-writer.md`](./v1-22-2-renderer-and-writer.md) § Decisions uses: each
+superseded passage is **named**, not silently rewritten, so a reader who lands on the old text knows
+it is old. Sites are named by section and quoted phrase rather than by line, because this block
+moves every line below it.
+
+V1-22 chunk 2 shipped (#367) with its **D1** ruling applied: the prescription identity is **dropped
+from the log form's submit payload** — no `prescriptionId`, no `prescriptionPublicId`, no field under
+any name. (`CLONE-1`'s `prescriptionPublicId` is a different wire — the program **editor**'s — and is
+untouched by this; `clone-1-save-as-copy.md:155` stands.) The
+snapshot is computed server-side from `(the asserted day role, the resolved movement_id)`:
+`prescribedSnapshotsFor` (`packages/db/src/writers/prescribed-snapshot.ts`) matches the writer's
+already-resolved `movement_id` inside the rows `programDayRows` returns for that role, and the
+export's live fallback keys the same way (`liveMatchesByKey`, `packages/shared/src/csv/prescribed.ts`).
+`matchPrescribedSnapshot` does not exist; it was never written.
+
+### Superseded by this amendment
+
+| Passage                                                                                                                                               | Status                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Decision 1**, the field-by-field list `{ clientId, …, prescriptionId, movementId, movementName }` and the two sentences naming chunk 2 as its owner | **corrected** — the list is the same minus `prescriptionId`. The exhaustive mapped-type return **stays**: `status`, `supersetClientId` and `supersetOrder` are still optional, so a dropped key is still silent for them                                                                  |
+| **Decision 6**, "A pick that changes the movement clears `scaffolded` and chunk 2's `prescriptionId` (its 'rename clears it' rule …)"                 | **replaced** — a pick clears `scaffolded`, and nothing else on this account. No client state holds a prescription identity, so there is nothing to clear and chunk 2's "rename clears it" rule has no client half left                                                                    |
+| **Test plan → PR 2**, "`db:verify` (c) **also** writes an id-path scaffolded card carrying a `prescriptionId` and asserts its `prescribedSnapshot` …" | **replaced** — see "The case (c) assertion, restated" below. The thing worth proving changed with the mechanism, and it is still worth proving                                                                                                                                            |
+| **Test plan → PR 4**, "a pick on a scaffolded card clears `scaffolded`/`prescriptionId`"                                                              | **corrected** — "clears `scaffolded`"                                                                                                                                                                                                                                                     |
+| **Gates**, the whole "**V1-22 chunk 2 merged** before PR 2. Re-read: `sessionMovementSchema` (adds `prescriptionId`) …" bullet                        | **replaced** — see "The gate, replaced" below. Every name in its re-read list is a name that does not exist                                                                                                                                                                               |
+| **Review-response log → engineering round 2, B1** ("the field-by-field build drops chunk 2's `prescriptionId`; the snapshot goes inert")              | **moot, not unaddressed.** There is no wire field to drop. And the field the snapshot now depends on, `movementId`, is **required** on `ResolvedSessionMovement` (`packages/db/src/writers/strength-session.ts:66-79`), so omitting it is a compile error with or without the mapped type |
+
+### Invariant 7 is already satisfied — PR 2 owes nothing, PR 3 records it closed
+
+PICK-1's movement-picker guide invariant 7 (**PR 3**, "File-by-file → PR 3") reads _"after C4r renames
+a row, chunk 2's slug match must compare ids"_. Chunk 2 shipped keyed on `movement_id` on **both**
+sides, so there is no slug match to switch and a rename cannot move the key. PR 3 writes the
+invariant **closed** — _"the prescribed match compares `movement_id` on both the writer and the
+export side, and a rename cannot move it"_ — rather than as an obligation on a later PR.
+`mov-1-rename-movement.md` carried the reciprocal note and is amended in the same PR as this block.
+
+### The gate, replaced
+
+- **V1-22 chunk 2 is merged** (#367). It threads no field through the form and touches no UI file.
+- 🔴 **What PR 2 must not break: the snapshot is computed BEFORE the transaction.**
+  `writeStrengthSession` calls `prescribedSnapshotsFor` at its top, outside `db.transaction`, reading
+  `args.movements.map((m) => m.movementId)` (`writers/strength-session.ts:318-327`). Decision 2 moves
+  resolution into `packages/db` but keeps it **pre-transaction** — `resolveSessionMovements` runs in
+  the DAL and hands `writeStrengthSession` a `ResolvedSessionMovement[]` that already carries
+  `movementId`. **A PR 2 that resolved movements _inside_ the transaction instead would silently stop
+  freezing snapshots for every session**: the pre-transaction call would see no ids, and nothing would
+  go red that is not written to catch it. The in-transaction global-or-own re-check Decision 2 adds is
+  a second check, never a relocation of the first.
+- **The case (c) assertion, restated.** Case (c) already writes "A's own id and a global id". It also
+  asserts that the **id path still freezes a snapshot**: the global card names a movement the asserted
+  day's program **does** prescribe, and its `prescribed_snapshot` equals the rendered prescription; a
+  second card naming a movement that day does **not** prescribe freezes `''`. That proves what B1
+  wanted — the id path and the program still agree on which row is which — against the mechanism that
+  shipped rather than against a field.
+
+### One bounded consequence PR 2 creates, to record rather than build for
+
+The id path lets a client submit a movement **public id**, and `resolveMovementByPublicId`
+deliberately accepts a household row whose slug a global row shadows (Decision 2, correctness S3).
+The snapshot match is `movement_id`, so if a prescription names the **global** row while the
+submitted id names the **household** row, the match misses and the entry freezes `''` — where the
+typed path resolves global-first and matches. Bounded three ways: production holds **zero**
+household-owned movements (census 2026-10-13, `docs/privacy/data-inventory.md`); PR 4's list
+**excludes** a household row whose slug a global row holds (`db:verify` (b)), so the picker cannot
+offer one; and the CSV's `movement` column is unaffected, since a shadowing slug is by definition the
+same string. It is reachable only by a crafted id. `movement-picker.md` records it beside invariant 6
+(a dead id throws until C4m); no code is added for it.
 
 ## Design decisions (each with what was rejected)
 

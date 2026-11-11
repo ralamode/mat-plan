@@ -79,7 +79,8 @@ milestone; both are recorded (D-3, D-5).
 - **READ-2a.** Today and the snapshot writer call `programDayRows` nowhere. Today renders one program card per
   **due** assignment, in `(active_from, id)` order, each named, and a rest day names each program's days
   (criteria 30, 43, proved on fixtures with fewer than seven weekdays). The snapshot writer matches
-  `prescriptionId` only inside the blocks of the periods covering the session's date.
+  **the entry's `movement_id`** (V1-22 chunk 2 D1, #367 — never a submitted prescription id) only
+  inside the blocks of the periods covering the session's date.
 - **READ-2b.** The export's live fallback is date-aware: a date before the athlete's first period resolves
   exactly as today's export does. For the seeded household **every export byte is unchanged**, proved by the
   pin tests below, and the census shows zero rows in the "changes" buckets.
@@ -390,10 +391,16 @@ export async function getTodayPrograms(
   workout?", one option per due program reading "{program} · {workout}", **defaulting to the first due
   program**. Each option's value carries the `blockPublicId` and the role, so two programs with the same role
   are distinct options. The choice drives which program scaffolds the form and the form's role default. It
-  is not sent to the server as a new field: a submitted `prescriptionId` already names its block, and the
-  snapshot writer matches inside the candidate set. Rendered only with two or more due, which is unreachable
-  until D4c or CLONE-1; it is typed and unit-tested now so the scaffold question is not left to whoever ships
-  the second block.
+  is not sent to the server as a new field — ⚠️ **but the reason given here is gone, and the gap is
+  real** _(amended 2026-11-11)_. The struck reason was _"a submitted `prescriptionId` already names its
+  block, and the snapshot writer matches inside the candidate set"_; chunk 2's **D1** dropped the
+  prescription identity from the log form's payload entirely, so nothing the form submits names a block.
+  Once READ-2a widens the writer's candidate set to the covered periods (below), two due programs put
+  **both** blocks' prescriptions in that set, and a movement prescribed by both is ambiguous under
+  `liveMatchesByKey` → the entry freezes `''` **permanently**, whichever workout the athlete picked. See § "The snapshot writer (READ-2a)" for the question this
+  raises; it is for the maintainer, not for whoever implements READ-2a. Rendered only with two or more
+  due, which is unreachable until D4c or CLONE-1; it is typed and unit-tested now so the scaffold
+  question is not left to whoever ships the second block.
 - **One day-role rule** (UX lens 3 S5). `dayRoleForPage(today)`: the selected (default: first) due program's
   role when `state = 'due'`, otherwise `null`. The date-line badge and the form's default both read it, so they
   cannot disagree. A `null` default already means "Not a programmed day" (`strength-section.tsx:40`), so no
@@ -414,14 +421,37 @@ export async function getTodayPrograms(
 
 ### The snapshot writer (READ-2a)
 
-V1-22 chunk 2's `prescribedSnapshotsFor`, in **`packages/db/src/writers/prescribed-snapshot.ts`**
-(`v1-22-2-renderer-and-writer.md:441`), calls `programDayRows(exec, { profilePublicId, dayRole })` and matches the
-submitted `prescriptionId` against those rows. ⚠️ **This is the coupling the spec's D4 row does not mention.** If
-Today shows block B (assigned) while the writer reads block C (the newest), the form submits B's prescription
-id, the writer finds no match, and the snapshot stays **NULL** for ever. READ-2a therefore changes the writer's
-candidate set to `candidateBlocks(rows, sessionDate)`'s `covered` periods, the set Today reads, so "both paths
-consume the same rows" (that plan's by-construction argument) still holds. That is why Today and the writer
-ship in **one** PR (2a), and the export, which can lag safely, in another (2b).
+V1-22 chunk 2's `prescribedSnapshotsFor`, in **`packages/db/src/writers/prescribed-snapshot.ts`**, calls
+`programDayRows(db, { profilePublicId, dayRole, scope })` and matches **the entry's resolved `movement_id`**
+against those rows (chunk 2 **D1**, #367).
+
+⚠️ **This is the coupling the spec's D4 row does not mention, and chunk 2 as shipped sharpened it**
+_(re-stated 2026-11-11; the paragraph here described a submitted prescription id and a NULL outcome, and
+both are wrong)_. `programDayRows` resolves the **newest** live block that programs the role
+(`id DESC LIMIT 1`, `packages/db/src/queries/program-day.ts:71-102`), and chunk 2's rule 2 says a session
+with an asserted day role **always freezes** — never NULL. So if Today shows block B (assigned) while the
+writer reads block C (the newest):
+
+- C prescribes that movement too → **C's numbers are frozen onto a session logged against B's plan**,
+  permanently, and nothing distinguishes the row from a correct one. The old text's NULL would at least
+  have been visible.
+- C does not prescribe it → **`''` frozen permanently**, not the NULL that would have re-resolved later.
+
+READ-2a's fix is unchanged and now load-bearing rather than tidy: change the writer's candidate set to
+`candidateBlocks(rows, sessionDate)`'s `covered` periods, the set Today reads, so "both paths consume the
+same rows" (that plan's by-construction argument) still holds. That is why Today and the writer ship in
+**one** PR (2a), and the export, which can lag safely, in another (2b).
+
+🔴 **Open, and for the maintainer — what two due programs freeze.** Once the candidate set is the covered
+periods rather than one block, two due programs that both prescribe a movement on the same role make it
+**ambiguous**, and `liveMatchesByKey` renders ambiguity as `''` by design (a wrong plan is worse than no
+plan). The athlete's "Which workout?" choice would resolve it, but under D1 that choice reaches no server
+field. Three answers, none of them free: **(a)** accept `''` for that overlap and say so in the guide;
+**(b)** send the chosen `blockPublicId` and narrow the candidate set with it, which re-opens a wire field
+D1 closed and makes a client value decide what gets frozen; **(c)** keep one block per role per date as an
+invariant and refuse the overlap when authoring. Unreachable until D4c or CLONE-1 makes two due programs
+possible, so it gates nothing today — but it must be answered **before** READ-2a ships, because what it
+decides is written permanently.
 
 ### The export: exactly which bytes can change (READ-2b)
 

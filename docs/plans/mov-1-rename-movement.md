@@ -66,10 +66,17 @@ and this plan recommends answering it by pulling a minimal merge (**MOV-1c**) in
    `apps/web/lib/entries/entry-label.ts:63-64`). The strength writer stores the **as-typed** text per
    entry (`packages/db/src/writers/strength-session.ts:181,354`). This is the column's only reader in
    `apps/web` and `packages/db/src` (grep, 2026-10-23).
-6. **Program rows read `movements.name` live** (`packages/db/src/queries/program-day.ts:98`). The
-   export's `prescribed` match keys on the **live** slug on both sides (`apps/web/lib/dal/export.ts:124,159`).
-   `entries.prescribed_snapshot` holds `sets x reps @ load` and **no movement name**
-   (`export.ts:126-130`; column at `schema.ts:205-218`), so no rename or merge can alter it.
+6. **Program rows read `movements.name` live** (`packages/db/src/queries/program-day.ts:98`).
+   ⚠️ **Re-stated 2026-11-11, after V1-22 chunk 2 (#367)** — the previous wording ("the export's
+   `prescribed` match keys on the **live** slug on both sides", `export.ts:124,159`) described code
+   that no longer exists. What is true now: `prescribed` reads the **frozen**
+   `entries.prescribed_snapshot` first and falls back to the live program only where that column
+   `IS NULL` (`apps/web/lib/csv/prescribed-snapshot.ts`), and the fallback match keys on
+   **`movement_id`**, not on a slug (`liveMatchesByKey`, `packages/shared/src/csv/prescribed.ts`).
+   `prescribed_snapshot` still holds `sets x reps @ load` and **no movement name** (column at
+   `schema.ts:205-218`). **The conclusion is unchanged and now stronger:** no rename or merge can
+   alter `prescribed` — a frozen row is never re-resolved at all, and an id key is rename-proof by
+   construction rather than by the `slug === movementSlug(name)` identity D2 preserves.
 7. **The three-part lift** (`schema.ts:538-542`) is the condition for setting `movements.deleted_at`.
    A rename sets no `deleted_at`.
 8. **Name validation lives inside the log schema today.** `sessionMovementSchema.movementName` is trimmed,
@@ -124,17 +131,23 @@ The slug is the resolver's identity for typed text (fact 3). If it stayed frozen
 - typing the **corrected** name in "use what I typed" would derive a new slug, miss the renamed row and
   **mint a second household row**, which is the duplicate the rename was supposed to remove;
 - typing the **old typo** would resolve to the renamed row silently, forever;
-- `slug === movementSlug(name)` would fail on a live row for the first time. PICK-1's chunk-2
-  reconcile relies on it (next paragraph).
+- `slug === movementSlug(name)` would fail on a live row for the first time. The resolver's typed
+  path relies on it; so did PICK-1's chunk-2 note, until that note was discharged (next paragraph).
 
-**PICK-1's chunk-2 note, reconciled.** PICK-1's plan says _"C4r breaks the second half — a rename
-changes `name`, not `slug` — so C4r's plan must switch that comparison to the movement id"_
-(`pick-1-movement-picker.md:629-630`). The comparison is V1-22 chunk 2's `matchPrescribedSnapshot`,
-which compares `movementSlug(movement.movementName)` with the prescription's slug. **Under D2 a rename
-changes both, so `movementSlug(name) === slug` still holds for every household row** (`db:verify` case 1
-asserts it), and that slug comparison stays correct after MOV-1 with no change. **Only if Open question 1
-lands on the frozen-slug fallback** does the invariant break. MOV-1b would then switch that comparison
-to the movement id, as PICK-1 says. Both outcomes are recorded in the movement-picker guide.
+**PICK-1's chunk-2 note is DISCHARGED, not reconciled** _(amended 2026-11-11, after V1-22 chunk 2
+shipped as #367)_. PICK-1's plan said _"C4r breaks the second half — a rename changes `name`, not
+`slug` — so C4r's plan must switch that comparison to the movement id"_, and the paragraph that stood
+here answered it by arguing that D2 keeps `movementSlug(name) === slug` true, so the slug comparison
+survives. **Both halves are moot.** Chunk 2's **D1** dropped the prescription identity from the wire
+and keyed the match on **`movement_id`** on the writer and the export side alike
+(`packages/db/src/writers/prescribed-snapshot.ts`, `packages/shared/src/csv/prescribed.ts`); the
+`matchPrescribedSnapshot` the note names was never written. So **MOV-1b switches nothing**, under
+either outcome of Open question 1, and PICK-1's invariant 7 is already satisfied — see
+[`pick-1-movement-picker.md` § Amendment (2026-11-11)](./pick-1-movement-picker.md#-amendment--the-prescription-identity-never-reaches-the-wire-2026-11-11),
+which carries the matching entry. **D2 itself is untouched:** its other three reasons — the corrected
+name minting a second row, the old typo resolving for ever, and the identity failing on a live row —
+are about the **resolver**, which is still keyed by slug, and they are the whole case for D2 on their
+own.
 
 ### D3 — Collisions use the picker's equality, and are refused rather than resolved
 
@@ -231,12 +244,12 @@ how that row gets fixed. The bound only caps the payload.
 
 ### D6 — The new name on the day page: its own PR, scoped to the entry's household
 
-| Surface                                             | After a rename                                                                                                       |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| PICK-1's picker, program rows (`program-day.ts:98`) | the new name, because both read `movements.name` live                                                                |
-| The CSV `movement` column                           | D1                                                                                                                   |
-| The CSV `prescribed` column                         | unchanged. Both sides of the match read the live slug (`export.ts:124,159`), and the snapshot holds no name (fact 6) |
-| **The day page's logged strength rows**             | **the old typo, unless the read changes** (fact 5)                                                                   |
+| Surface                                             | After a rename                                                                                                                                        |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PICK-1's picker, program rows (`program-day.ts:98`) | the new name, because both read `movements.name` live                                                                                                 |
+| The CSV `movement` column                           | D1                                                                                                                                                    |
+| The CSV `prescribed` column                         | unchanged — a frozen row is never re-resolved, the live fallback keys on `movement_id`, and the snapshot holds no name (fact 6, re-stated 2026-11-11) |
+| **The day page's logged strength rows**             | **the old typo, unless the read changes** (fact 5)                                                                                                    |
 
 **MOV-1a2 changes one read.** `listEntriesForDay` adds
 `leftJoin(schema.movements, and(eq(schema.entries.movementId, schema.movements.id), movementInHousehold(scope)))`
@@ -659,8 +672,10 @@ any edit. "The LLM never authors loads" is untouched: no load, no model.
      plan with both panels.
    - **(b) Relabel by rename only; merge stays later.** The fixtures get copy (b). Most real typos in
      those fixtures stay unfixable until C4m.
-   - **(c) No relabel.** The slug is frozen (D2's fallback), so exports keep the logged name, the
-     resolver duplicates, and MOV-1b switches PICK-1's chunk-2 comparison to ids (D2).
+   - **(c) No relabel.** The slug is frozen (D2's fallback), so exports keep the logged name and the
+     resolver duplicates. ⚠️ The clause that followed — "and MOV-1b switches PICK-1's chunk-2
+     comparison to ids" — is **struck (2026-11-11)**: chunk 2 shipped keyed on `movement_id`, so this
+     option costs MOV-1b nothing there (D2).
 2. **(Privacy lens)** Does `notice.md` need a sentence saying a rename does not erase what was typed?
    The inventory edit ships regardless.
 3. **(Security lens)** ADR 0006's scope-miss event (`0006:332-337`) is emitted for profile ids only
