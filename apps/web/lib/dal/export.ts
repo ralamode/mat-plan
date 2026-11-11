@@ -22,6 +22,11 @@ import {
   liveMatchesByKey,
 } from '@mat-plan/shared/csv';
 
+import {
+  prescribedKey,
+  resolvePrescribed,
+  rolesNeedingLiveMatch,
+} from '../programming/prescribed-snapshot';
 import { db } from './db';
 import { getHouseholdScope } from './household';
 import { getProfileByPublicId } from './profiles';
@@ -147,7 +152,7 @@ async function liveMatchesFor(
     // path agree" could only ever have been asserted by a test, and the test the plan specified was
     // unimplementable. Now it is one function with two callers.
     for (const [movementId, text] of liveMatchesByKey(rows)) {
-      byKey.set(`${role}:${movementId}`, text);
+      byKey.set(prescribedKey(role, movementId), text);
     }
   }
   return byKey;
@@ -174,18 +179,10 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
     // `coalesce(…,'') = ''`: `''` is a REAL frozen value (an `open()` prescription, 11 of the 13
     // seeded) and must NOT be re-derived from today's program, or every such row goes on moving
     // under the reader exactly as it did before this chunk.
-    const roles = new Set(
-      strengthRows
-        .filter((r) => r.prescribedSnapshot === null)
-        .map((r) => r.dayRole)
-        .filter((r): r is string => r !== null),
-    );
+    const roles = rolesNeedingLiveMatch(strengthRows);
     const live = roles.size > 0 ? await liveMatchesFor(profilePublicId, roles, scope) : null;
     for (const row of strengthRows) {
-      // `??`, never `||`. `||` would send every frozen `''` back to the live program — the single
-      // most dangerous line in this chunk, and the one a "simplification" reaches for first.
-      row.prescribed =
-        row.prescribedSnapshot ?? live?.get(`${row.dayRole}:${row.movementId}`) ?? '';
+      row.prescribed = resolvePrescribed(row, live);
     }
 
     const bodyweightRows: BodyweightRow[] = (

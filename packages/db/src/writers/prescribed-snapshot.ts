@@ -79,9 +79,11 @@ export async function prescribedSnapshotsFor(
     // program" and `null` is "ambiguous"; both render `''`, which is exactly what the legacy
     // fallback emits for them — so the frozen value equals what the live path said at this moment.
     //
-    // ⚠️ `text ?? ''`, NEVER `text || ''`. They differ on the DOMINANT shape: an `open()`
-    // prescription renders `''`, 11 of the 13 seeded, and `||` would be indistinguishable from the
-    // no-match case here while quietly collapsing them. The distinction is the point of the column.
+    // ⚠️ `??` here is style, not safety — the fallback IS `''`, so `||` behaves identically at this
+    // site, and a probe proved it by mutating the line and watching nothing go red. The expression
+    // where the two genuinely differ is the EXPORT's `resolvePrescribed`, which is why that one
+    // lives in a pure module with a test of its own rather than inline in a `server-only` async
+    // function where nothing could reach it.
     out.set(movementId, text ?? '');
   }
   return out;
