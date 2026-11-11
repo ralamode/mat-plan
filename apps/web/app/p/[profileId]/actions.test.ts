@@ -74,7 +74,7 @@ vi.mock('@/lib/dal/profiles', () => ({
   // Default: the routine was persisted. The not-found test overrides to null.
   updateProfileRoutine: vi.fn(async () => ({ id: PROFILE_ID })),
   // PROF-1 a-r. Default: the rename matched a live profile in this household.
-  renameAthlete: vi.fn(async () => ({ id: PROFILE_ID })),
+  renameAthlete: vi.fn(async () => ({ ok: true, publicId: PROFILE_ID })),
   // PROF-1 b. ⚠️ **The DISCRIMINATED result, not `{ id }`** — these two own the refusal ORDER, so
   // their shape is `{ ok: true, id } | { ok: false, reason }`. A mock returning the old shape would
   // make the action read `result.ok` as `undefined` and refuse every call, which is a test that
