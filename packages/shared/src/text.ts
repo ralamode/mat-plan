@@ -36,6 +36,16 @@ const LINE_BREAK_PATTERN = /[\r\n]/;
 const CONTROL_PATTERN = /\p{Cc}/u;
 const COMMA_OR_LINE_BREAK_PATTERN = /[,\r\n]/;
 
+/**
+ * Any Unicode LETTER. PICK-1's typed-name rule (`movementNameSchema`) is "at least one of these",
+ * which is what separates a movement name a person meant from `🙂`, `123` or `---`.
+ *
+ * ⚠️ **`\p{L}`, not `[a-z]`** — the catalog is English today and the rule must not be. It is also
+ * deliberately NOT `\p{Alphabetic}`: that includes `\p{Nl}` (letter-numbers like `Ⅷ`) and combining
+ * marks, and `foldName` already strips marks, so a mark-only name would pass here and fold to `''`.
+ */
+const LETTER_PATTERN = /\p{L}/u;
+
 /** True when `value` contains a CR or LF — which would split one record into two on export. */
 export function hasLineBreak(value: string): boolean {
   return LINE_BREAK_PATTERN.test(value);
@@ -70,6 +80,18 @@ export function collapseWhitespace(value: string): string {
  */
 export function hasCommaOrLineBreak(value: string): boolean {
   return COMMA_OR_LINE_BREAK_PATTERN.test(value);
+}
+
+/**
+ * True when `value` contains at least one letter — PICK-1's typed-movement-name rule.
+ *
+ * Beside {@link hasCommaOrLineBreak} because the two are the pair a **typed** movement name must
+ * pass, and neither applies to a name the DATABASE supplied (an id-resolved movement is never
+ * refused for its own label — PICK-1 Decision 1, correctness S1). `MOV-1`'s rename and `V1-22` A4's
+ * authored movement names import the same predicate through `movementNameSchema`.
+ */
+export function hasALetter(value: string): boolean {
+  return LETTER_PATTERN.test(value);
 }
 
 /**

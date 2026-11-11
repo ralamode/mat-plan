@@ -4,6 +4,7 @@ import {
   findAmendableBodyweight,
   insertBodyweightEntry,
   isLiveProfile,
+  resolveSessionMovements,
   schema,
   updateBodyweightEntryById,
   updateStrengthSetById,
@@ -29,7 +30,6 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import {
   assertMetricKeyExists,
-  findOrCreateMovementId,
   getActivityTypeByKey,
   getActivityTypeIdByKey,
   getMetricDefinition,
@@ -481,26 +481,26 @@ export async function logStrengthSession(
 ): Promise<{ sessionId: string }> {
   // TEN-1 1c: the scope rides into the write core, whose in-transaction profile resolve is the
   // actual seam (`writeStrengthSession`). Resolved BEFORE the catalog work so a request with no
-  // household does none of it — and, since TEN-2b, so `findOrCreateMovementId` below can be handed it.
+  // household does none of it, and so the resolver below can be handed it.
   //
-  // ⚠️ The residual, stated honestly: find-or-create still runs BEFORE `writeStrengthSession`'s
-  // transaction, so a session the household seam then REFUSES has already committed its
-  // caller-supplied catalog text. TEN-2b defuses the cross-tenant half — the committed row now lands
-  // in the caller's OWN namespace (`household_id = scope`), where the household-deletion procedure
-  // removes it — so what survives a refusal is garbage, not a leak. Moving the call inside the
-  // transaction is `TEN-2b-1`; `entries.test.ts` pins the current order deliberately.
+  // ⚠️ The residual, stated honestly: movement resolution still runs BEFORE `writeStrengthSession`'s
+  // transaction, so a session the household seam then REFUSES may already have committed a typed
+  // name's catalog row. TEN-2b defused the cross-tenant half — the committed row lands in the
+  // caller's OWN namespace (`household_id = scope`), where the household-deletion procedure removes
+  // it — so what survives a refusal is garbage, not a leak. PICK-1 PR 2 narrowed it further: a body
+  // whose movement ID is refused now commits NOTHING, because `resolveSessionMovements` resolves
+  // every id before it creates any typed name. What remains is a typed name in a session the
+  // PROFILE seam then refuses. Moving the whole thing inside the transaction is `TEN-2b-1`, which
+  // must carry the V1-22 chunk-2 snapshot read with it (see that row); `entries.test.ts` pins the
+  // current order deliberately.
   const scope = await getHouseholdScope();
   if (!scope) throw new Error('Profile not found');
 
   const activityTypeId = await getActivityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.scLift);
-  // Resolve each movement's id up front (find-or-create is idempotent by slug → safe outside the tx,
-  // and independent → resolved in PARALLEL so a 12-movement session isn't 12 serial round trips).
-  const movements = await Promise.all(
-    args.movements.map(async (m) => ({
-      ...m,
-      movementId: await findOrCreateMovementId(scope, m.movementName),
-    })),
-  );
+  // PICK-1 PR 2: ids before inserts, in `packages/db` so `db:verify` runs this exact function rather
+  // than a lookalike (write-path invariant 3) — which is the only way the cross-household refusal is
+  // PROVED. This DAL is now a pass-through: it holds no resolution logic of its own.
+  const movements = await resolveSessionMovements(db, scope, args.movements);
 
   return writeStrengthSession(db, {
     profilePublicId: args.profilePublicId,

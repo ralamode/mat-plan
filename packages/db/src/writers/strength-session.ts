@@ -8,15 +8,16 @@ import {
   UNIT_DIMENSION,
   UNIT_DIMENSION_BY_CODE,
 } from '@mat-plan/shared';
-import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import type { Schema } from '../client';
 import { schema } from '../client';
 import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
+import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
-import { isLiveProfile, ownedEntryIds } from './ownership';
+import { isLiveProfile, movementInHousehold, movementIsGlobal, ownedEntryIds } from './ownership';
 
 /**
  * The strength-session write core (V1-8-2), single-sourced HERE in `packages/db` — NOT in the
@@ -298,6 +299,48 @@ async function writeSessionStrengthEntry(
  * mechanism that makes a sweep this wide safe (the plan's §Design 1). `db:verify`'s TEN-1 write
  * matrix proves the refusal in both directions and asserts the rollback left no session row.
  */
+/**
+ * 🔴 **THE movement-namespace seam** (PICK-1 PR 2, security B1) — every `movement_id` about to be
+ * written is a global (curated) row or one of THIS household's own, re-checked **inside the
+ * transaction**, after the profile resolve and before the first insert.
+ *
+ * ## Why this exists when `resolveSessionMovements` already checked
+ *
+ * That check is a **pre-check outside the transaction** — the TOCTOU window. Between its read and
+ * this write a movement can be soft-deleted, and once `MOV-1`/`C4m` exist it can be repointed. The
+ * seam has to be the thing inside the transaction that the rollback protects, exactly as
+ * `isLiveProfile` above already is (strength-logging guide, "the in-transaction profile resolve").
+ *
+ * ⚠️ **It guards the typed path too, not just PICK-1's ids.** `findOrCreateMovement` is global-first
+ * and can only ever author into the caller's own namespace, so it cannot return a foreign row today
+ * — but this writer takes `movementId: number` from its caller, and `db:verify` case (d) calls it
+ * directly with another household's internal id to prove the seam holds for anything that gets here.
+ * `NN-drop-in-tx-recheck.patch` removes this function's body and that case goes red.
+ *
+ * One `count(*)` over the DISTINCT ids, compared to how many there were: cheaper than N reads, and a
+ * count mismatch cannot tell which id was bad — which is the same non-oracle property
+ * {@link MOVEMENT_NOT_AVAILABLE} has, for the same reason.
+ */
+async function assertMovementsAreAvailable(
+  exec: Executor,
+  scope: HouseholdScope,
+  movements: readonly ResolvedSessionMovement[],
+): Promise<void> {
+  const movementIds = [...new Set(movements.map((m) => m.movementId))];
+  if (movementIds.length === 0) return;
+  const [row] = await exec
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.movements)
+    .where(
+      and(
+        inArray(schema.movements.id, movementIds),
+        isNull(schema.movements.deletedAt),
+        or(movementIsGlobal(), movementInHousehold(scope)),
+      ),
+    );
+  if ((row?.count ?? 0) !== movementIds.length) throw new MovementNotAvailableError();
+}
+
 export async function writeStrengthSession(
   db: NodePgDatabase<Schema>,
   args: {
@@ -333,6 +376,8 @@ export async function writeStrengthSession(
       .where(isLiveProfile(args.profilePublicId, args.scope))
       .limit(1);
     if (!profile) throw new Error('Profile not found');
+
+    await assertMovementsAreAvailable(tx, args.scope, args.movements);
 
     const session = await insertStrengthSessionRow(tx, {
       profileId: profile.id,
