@@ -1217,13 +1217,13 @@ or updates its backlog row in `docs/plan.md` (scope S6). Listed once here.
 
 ### READ-2b
 
-| Path                                                             | Change | What & why                                                                                               |
-| ---------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| `apps/web/lib/dal/export.ts`                                     | EDIT   | `prescribedFor` (`:113-135`) per row date through `candidateBlocks`; history kinds keep `programDayRows` |
-| `apps/web/lib/programming/prescribed-snapshot.ts` (+ `.test.ts`) | EDIT   | `liveMatchKey(blockSet, role, slug)`; the byte pins, cases (a)–(d) and the before-first property         |
-| `docs/csv-export-contract.md`                                    | EDIT   | `prescribed`'s fallback: "the blocks assigned on that date; before the first assignment, as before"      |
-| `docs/runbooks.md`                                               | EDIT   | The read-only census (aggregates only)                                                                   |
-| `docs/features/programming.md`                                   | EDIT   | `guides:check`                                                                                           |
+| Path                                                     | Change | What & why                                                                                                                                               |
+| -------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/lib/dal/export.ts`                             | EDIT   | `prescribedFor` (`:113-135`) per row date through `candidateBlocks`; history kinds keep `programDayRows`                                                 |
+| `apps/web/lib/csv/prescribed-snapshot.ts` (+ `.test.ts`) | EDIT   | `liveMatchesByKey (V1-22 chunk 2 D1: keyed on `movement_id`, not the slug this row assumed)`; the byte pins, cases (a)–(d) and the before-first property |
+| `docs/csv-export-contract.md`                            | EDIT   | `prescribed`'s fallback: "the blocks assigned on that date; before the first assignment, as before"                                                      |
+| `docs/runbooks.md`                                       | EDIT   | The read-only census (aggregates only)                                                                                                                   |
+| `docs/features/programming.md`                           | EDIT   | `guides:check`                                                                                                                                           |
 
 ### 1a-db (ASSIGN-1's, unconditional; D-11)
 

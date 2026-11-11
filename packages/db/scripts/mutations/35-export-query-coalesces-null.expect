@@ -1,0 +1,1 @@
+V1-22 chunk 2: the EXPORT query returns NULL as NULL — a coalesce(…, '') here would make every never-snapshotted row look frozen

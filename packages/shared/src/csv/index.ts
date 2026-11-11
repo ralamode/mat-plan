@@ -12,6 +12,7 @@ export * from './bodyweight';
 export * from './checkins';
 export * from './columns';
 export * from './load';
+export * from './prescribed';
 export * from './row';
 export * from './strength-log';
 export * from './value';

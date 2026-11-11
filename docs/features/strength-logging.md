@@ -23,6 +23,24 @@ owns:
 
 **Read this before changing the log form, the set schema, or the strength writer.**
 
+## The prescription is frozen when the set is logged (V1-22 chunk 2)
+
+`writeStrengthSession` reads the athlete's program **before it opens the transaction** and freezes
+the rendered prescription onto each entry's `prescribed_snapshot`. The export reads that value and
+falls back to the live program only where it `IS NULL`.
+
+🔴 **Two one-word guards carry the whole chunk, and both are the opposite of what a tidy-up reaches
+for.** The insert spreads on `!== undefined`, and the export resolves with `??`, never `||`. An
+`open()` prescription renders `''` — 11 of the 13 seeded — so either truthiness check silently
+collapses the dominant shape and sends those rows back to today's program, where chunk 4's first
+edit rewrites them. `db:verify` stores `''` through the real writer and reads it back, and committed
+mutation `34` proves that proof can fail.
+
+⚠️ **A session logged as "Not a programmed day" takes no snapshot at all**, because the legacy
+fallback keys on `sessions.day_role` and emits `''` for the whole session — snapshotting it would
+make the two paths disagree on a shape the form produces in one tap. Everything else with an
+asserted day role freezes, including a movement the day does not program.
+
 ## What this is
 
 A kid on a gym floor logs a strength session: some movements, each with some sets, each set a number

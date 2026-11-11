@@ -570,6 +570,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   capture, when it cannot tell what it was asked for_ — and **look at the image** before publishing
   one, which is what actually caught this.
 
+- **A mutation probe reported GREEN because the mutant did not COMPILE.** → Probing `??` by
+  replacing it with `||` produced `a || b ?? c`, which is a **SyntaxError** in JS — mixing the two
+  needs parentheses. The module never parsed, vitest printed no `Tests N failed` line, and the probe
+  script's `grep` for that line concluded "nothing caught it". The assertion was fine; the probe was
+  broken, and it was the second false GREEN from a probe script in one session (the first: a
+  `git checkout` that reverted to a commit predating the fix being mutated). → **A probe script must
+  distinguish three outcomes, not two:** red (caught), green (gap), and _did not run_ — assert the
+  mutation produced a diff AND that the suite actually executed. A probe that cannot fail is the same
+  defect as a test that cannot fail, one level up.
+
 ## Guards that pass while guarding nothing
 
 - **A focus assertion passes when focus was ALREADY there — so a "we move focus on failure" test must

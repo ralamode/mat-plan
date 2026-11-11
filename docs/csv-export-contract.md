@@ -203,6 +203,13 @@ is the silent break the golden file cannot catch.
 4. **The `~`/range loads Ray authored in V1-10's program seed map to `prescribed`, not `load`** — so the
    export's `prescribed` is built from `prescription.sets`/`target_reps`/`prescription_target.load`,
    while `load` comes from what was logged.
+   ⚠️ **Since V1-22 chunk 2 that describes the FALLBACK, not the primary path.** The value is frozen
+   onto the entry when the set is logged and reconstructed from the live program only where no
+   snapshot exists. The authority for the `SETSxREPS [@ load]` shape is `formatPrescribedForExport`
+   in `packages/shared/src/csv/prescribed.ts`, pinned by `prescribed.test.ts` — the same idiom this
+   document already uses for `CSV_UNIT_SUFFIX`. **No byte shape changed**, so there is no Contract
+   changes entry; the per-kid `prescription_targets.reps` override has beaten `target_reps` since
+   V1-13b and now does so in one named function.
 
 ## Source-message truncations to confirm
 

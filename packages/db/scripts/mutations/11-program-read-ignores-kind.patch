@@ -1,5 +1,5 @@
 diff --git a/packages/db/src/queries/program-day.ts b/packages/db/src/queries/program-day.ts
-index 3574117..0c28a7b 100644
+index a79e447..507746f 100644
 --- a/packages/db/src/queries/program-day.ts
 +++ b/packages/db/src/queries/program-day.ts
 @@ -1,4 +1,4 @@
@@ -8,9 +8,9 @@ index 3574117..0c28a7b 100644
  import { and, asc, desc, eq, isNull } from 'drizzle-orm';
  import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
  
-@@ -90,7 +90,6 @@ export function programDayRows(
-         // feeds all three readers — the day card, the scaffold/prefill via `getProgramDay`, and the
-         // export's `prescribedFor`. Guarding the latter two separately would be two copies, and
+@@ -94,7 +94,6 @@ export function programDayRows(
+         // concerns, not display ones** — what they decide is recorded, not merely shown.
+         // Guarding the latter consumers separately would be copies, and
          // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
 -        eq(schema.profiles.kind, PROGRAM_READ_KIND),
          isNull(schema.programBlocks.deletedAt),

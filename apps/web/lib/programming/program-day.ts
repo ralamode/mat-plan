@@ -1,4 +1,5 @@
 import type { ProgramDayRow } from '@mat-plan/db';
+import { effectiveReps } from '@mat-plan/shared/csv';
 
 /**
  * The pure row → DTO shaping for the "Today's program" card (V1-10 slice 2), split out of the
@@ -45,7 +46,10 @@ export function toProgramDay(rows: readonly ProgramDayRow[]): ProgramDayDTO[] {
     idx: r.idx,
     movementName: r.movementName,
     sets: r.sets,
-    targetReps: r.reps ?? r.targetReps,
+    // V1-22 chunk 2 (A13): the per-kid override beats the shared target. The PRECEDENCE is shared
+    // with the CSV renderer so the day card and the exported `prescribed` cannot disagree about what
+    // was asked; the empty is not, because this DTO is null-checked and the CSV concatenates.
+    targetReps: effectiveReps(r),
     load: r.load,
     isBodyweight: r.movementIsBodyweight,
     unitDefault: r.movementUnitDefault,

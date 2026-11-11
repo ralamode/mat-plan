@@ -87,8 +87,12 @@ export function programDayRows(
         // this subquery joined, so the kind conjunct narrows THAT row: an adult resolves no
         // `blockId`, the query returns `[]`, and that is the same "nothing programmed" shape the DAL
         // already handles. ⚠️ **Guarded HERE, not in the page or the DAL**, because this one query
-        // feeds all three readers — the day card, the scaffold/prefill via `getProgramDay`, and the
-        // export's `prescribedFor`. Guarding the latter two separately would be two copies, and
+        // feeds FOUR consumers — the day card, the scaffold/prefill via `getProgramDay`, the
+        // export's live fallback (`liveMatchesFor`), and, since V1-22 chunk 2,
+        // `prescribedSnapshotsFor`, which FREEZES this query's answer onto the entry permanently.
+        // 🔴 **So the `id DESC LIMIT 1` block rule and the kind conjunct are now write-path
+        // concerns, not display ones** — what they decide is recorded, not merely shown.
+        // Guarding the latter consumers separately would be copies, and
         // `db:verify` drives the query rather than the DAL, so the copies would go unproven.
         eq(schema.profiles.kind, PROGRAM_READ_KIND),
         isNull(schema.programBlocks.deletedAt),
@@ -113,6 +117,18 @@ export function programDayRows(
         // the SLUG (`movements.name` is a display string — "Front Squat" — and would never match).
         // Selected here rather than converted at the call site so both sides read one column.
         movementSlug: schema.movements.slug,
+        // V1-22 chunk 2 (D1): the prescription's OWN movement FK, which is the key the frozen
+        // `prescribed` snapshot and the export's live fallback both match on. The writer already
+        // holds the entry's resolved `movement_id`, so matching id-to-id skips the slug proxy —
+        // and a slug proxy is exactly what `MOV-1`'s rename breaks and what `PICK-1`'s invariant 7
+        // schedules a later PR to replace. No join: `prescriptions` is already the FROM table.
+        //
+        // The join is on this column, so it is equally `movements.id`; selected from `prescriptions`
+        // because that is the table this query is FROM.
+        //
+        // ⚠️ An IDENTITY, not a magnitude. `toProgramDay` must not map it into `ProgramDayDTO` —
+        // the boundary that keeps an authored load off the log form is the same boundary here.
+        movementId: schema.prescriptions.movementId,
         // V1-26 PR-A: the movement's own DECLARATION, so the log form can seed the unit the catalog
         // says this movement is measured in and can notice a bodyweight chip tapped on a loaded lift.
         // Both live on `movements`, which is already inner-joined — no new join, two more columns.

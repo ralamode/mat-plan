@@ -63,3 +63,5 @@ export {
   SEED_FULL_ROUTINE,
   SEED_ATHLETE_TWO_ROUTINE,
 } from './seed';
+
+export type { StrengthMonthRow } from './queries/export-month';

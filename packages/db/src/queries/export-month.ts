@@ -45,6 +45,12 @@ export function monthRange(month: string): { from: string; to: string } {
  * simpler and cheaper. `deleted_at IS NULL` at every level: a soft-deleted parent must not drag live
  * children into the export (`ON DELETE CASCADE` is hard-delete only).
  */
+/**
+ * One flat (entry × set × quantity) row. Derived, not hand-typed — the `ProgramDayRow` precedent —
+ * so a nullability change in the select cannot leave a consumer claiming a shape this no longer has.
+ */
+export type StrengthMonthRow = Awaited<ReturnType<typeof strengthMonthRows>>[number];
+
 export function strengthMonthRows(
   db: NodePgDatabase<typeof schema>,
   args: {
@@ -63,6 +69,13 @@ export function strengthMonthRows(
         entryStatus: schema.entries.status,
         notes: schema.entries.notes,
         movementSlug: schema.movements.slug,
+        // V1-22 chunk 2 (D1): the key the live `prescribed` fallback matches on. The slug it used
+        // to key on is a proxy for this id, and a proxy `MOV-1`'s rename breaks.
+        movementId: schema.entries.movementId,
+        // V1-22 chunk 2: the FROZEN prescription. `IS NULL` means "never snapshotted"; `''` is a
+        // real rendered value (an `open()` prescription). Selected raw — no `coalesce`, which would
+        // destroy the distinction the column exists for.
+        prescribedSnapshot: schema.entries.prescribedSnapshot,
         dayRole: schema.sessions.dayRole,
         sessionType: schema.sessions.sessionType,
         sessionId: schema.sessions.id,

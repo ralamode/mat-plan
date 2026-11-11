@@ -15,6 +15,7 @@ import type { Schema } from '../client';
 import { schema } from '../client';
 import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
+import { prescribedSnapshotsFor } from './prescribed-snapshot';
 import { isLiveProfile, ownedEntryIds } from './ownership';
 
 /**
@@ -167,6 +168,12 @@ async function writeSessionStrengthEntry(
     status?: MovementStatus;
     supersetId?: number | null;
     supersetOrder?: number | null;
+    /**
+     * V1-22 chunk 2: what was prescribed, frozen. `undefined` → column omitted → NULL ("logged
+     * before chunk 2, or with no day role"); `''` is a REAL value (an `open()` prescription) and
+     * must reach the column as `''`.
+     */
+    prescribedSnapshot?: string;
   },
 ): Promise<{ id: number; publicId: string; created: boolean }> {
   const [entry] = await exec
@@ -187,6 +194,14 @@ async function writeSessionStrengthEntry(
       // That keeps the `done` path byte-identical (one default, in the DB, not forked into the writer)
       // and means every pre-existing caller writes exactly the row it wrote before.
       ...(args.status !== undefined ? { status: args.status } : {}),
+      // ⚠️ `!== undefined`, never a truthiness check. `''` is the DOMINANT rendered shape (an
+      // `open()` prescription — 11 of the 13 seeded), and `args.prescribedSnapshot ? …` would omit
+      // the column for every one of them, storing NULL where `''` was owed. NULL then sends the row
+      // back to the live fallback at every export, which is the whole defect this chunk exists to
+      // close. `db:verify` has a case that stores `''` and reads it back, with a committed mutation.
+      ...(args.prescribedSnapshot !== undefined
+        ? { prescribedSnapshot: args.prescribedSnapshot }
+        : {}),
       supersetId: args.supersetId ?? null,
       supersetOrder: args.supersetOrder ?? null,
     })
@@ -300,6 +315,17 @@ export async function writeStrengthSession(
     movements: readonly ResolvedSessionMovement[];
   },
 ): Promise<{ sessionId: string }> {
+  // V1-22 chunk 2: what the program asked, read at server-receipt time and frozen onto each entry.
+  // ⚠️ OUTSIDE the transaction on purpose — see `prescribedSnapshotsFor`'s docblock. It is scoped by
+  // the same `(profilePublicId, scope)` pair the in-transaction profile resolve uses, so a foreign
+  // scope returns no rows here and the transaction then refuses the write anyway.
+  const prescribed = await prescribedSnapshotsFor(db, {
+    profilePublicId: args.profilePublicId,
+    scope: args.scope,
+    dayRole: args.dayRole,
+    movementIds: args.movements.map((m) => m.movementId),
+  });
+
   return db.transaction(async (tx) => {
     const [profile] = await tx
       .select({ id: schema.profiles.id })
@@ -358,6 +384,9 @@ export async function writeStrengthSession(
         clientId: m.clientId,
         sets: m.sets,
         status: m.status,
+        // `.get` returns undefined when no day role was asserted (rule 1) — the column is then
+        // omitted and the row keeps the live fallback, which is what it had before this chunk.
+        prescribedSnapshot: prescribed.get(m.movementId),
         supersetId,
         supersetOrder: m.supersetOrder ?? null,
       });

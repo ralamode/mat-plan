@@ -992,6 +992,20 @@ and nothing else changes.
 
 _Both answered. The contract for implementation is § Decisions._
 
+## Amendment — as shipped, 2026-11-11
+
+Two paths in the file table below are not where the code landed, and the reason is worth keeping:
+
+| Planned                                                | Shipped                                                  | Why                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/lib/programming/prescribed-snapshot.ts`      | `apps/web/lib/csv/prescribed-snapshot.ts`                | `programming.md` owns `lib/programming/` **by prefix**, so a file there that `write-path.md` also lists by exact path is owned TWICE — and `guides:check` is per-guide, so every later touch would have had to edit both guides or fail CI. It is an export-path concern in any case. |
+| `apps/web/lib/prescribed-snapshot-containment.test.ts` | `apps/web/test/prescribed-snapshot-is-contained.test.ts` | Beside the repo's other `*-is-contained` scans.                                                                                                                                                                                                                                       |
+
+**A second panel ran at implementation time** — correctness, DB-safety, reuse, architecture and
+privacy — and found **eight P1s**, including two defects every gate was blind to: the read side
+could ship inert, and the `''`/NULL distinction was proven on the write side only. The findings and
+their fixes are in PR #367's description; the two that changed this contract are recorded above.
+
 ## Review-response log (adversarial panel)
 
 **Round 1 — 2026-11-11.** Six lenses, run before any implementation code: the five standing
