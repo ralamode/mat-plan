@@ -429,6 +429,10 @@ const STATES = {
   // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
   // settles, refusals included, which would empty the box under its own "Enter a name." error).
   'rename-rejected': null,
+  // U0 — the shared sheet, OPEN. Not reachable by route: it exists only after a tap, and a closed
+  // cell shows two buttons and nothing of the component under review.
+  'sheet-open': null,
+  'sheet-dialog-open': null,
   // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
   // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
   'rename-duplicate': null,
@@ -586,6 +590,15 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
     await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
     // The callout's focus target — waiting on it means the capture cannot race the round trip.
     await page.getByRole('group').waitFor();
+  },
+  'sheet-open': async (page) => {
+    await page.getByRole('button', { name: 'Open sheet' }).first().click();
+    await page.getByRole('dialog').waitFor();
+  },
+  /** The capped confirm variant — a different layout, so it needs its own capture. */
+  'sheet-dialog-open': async (page) => {
+    await page.getByRole('button', { name: 'Open dialog' }).first().click();
+    await page.getByRole('dialog').waitFor();
   },
   'rename-rejected': async (page) => {
     await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill('   ');
@@ -1220,6 +1233,8 @@ async function runEphemeral(
       timeZone,
       colorScheme,
       interact: INTERACTIONS[state],
+      // A modal is a fixed overlay: a full-page shot buries it in a 24,000px sliver.
+      viewportOnly: state.startsWith('sheet-'),
     });
   } finally {
     if (server) await stopChildProcess(server);
