@@ -234,8 +234,11 @@ and complete; this is the one thing it cannot reach.
    `programDayRows`' block subquery, which `isLiveProfile` has already pinned to this profile's row.
    An adult resolves no `blockId` and the query returns `[]` — the same "nothing programmed" shape
    the DAL and page already handle.
-   **Guarded in the QUERY, not the page or the DAL**, because that one query feeds all three readers:
-   the day card, the scaffold/prefill through `getProgramDay`, and the export's `prescribedFor`.
+   **Guarded in the QUERY, not the page or the DAL**, because that one query feeds FOUR consumers:
+   the day card, the scaffold/prefill through `getProgramDay`, the export's live fallback, and —
+   since V1-22 chunk 2 — `prescribedSnapshotsFor`, which **freezes** this query's answer onto the
+   entry. 🔴 **Invariant 3's `id DESC LIMIT 1` rule and this kind conjunct are therefore write-path
+   concerns now**: what they decide is recorded permanently, not merely displayed.
    Guarding the latter two separately would be two copies, and `db:verify` drives the query rather
    than the DAL, so the copies would go unproven.
    ⚠️ **THE CONSEQUENCE TO UNDERSTAND BEFORE `a-r` SHIPS: flipping a kid to adult empties
