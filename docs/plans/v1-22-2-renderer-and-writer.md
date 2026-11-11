@@ -607,7 +607,7 @@ and the `MovementVals` declaration (`:77-102`) — both append-style, so a merge
 | Risk                                                                                                                                                                     | Mitigation                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`\|\|` instead of `??`.** Typechecks, lints clean, and silently re-enables the rewrite the milestone exists to prevent — on the dominant shape (11 of 13 render `''`). | The `''` + non-empty-live unit case, which fails under `\|\|`. Plus the rule restated in `write-path.md` and in the `schema.ts:189-197` docblock it already carries.                                                                                                                                                                                        |
-| **`prescriptionId` omitted from the zod schema** → stripped → the feature is inert and every gate stays green (GAP-1 P0-1, verbatim).                                    | The `actions.test.ts` **value** assertion, plus the e2e, plus the schema round-trip test.                                                                                                                                                                                                                                                                   |
+| **`prescriptionId` omitted from the zod schema** → stripped → the feature is inert and every gate stays green (GAP-1 P0-1, verbatim).                                    | The `actions.test.ts` **value** assertion plus the schema round-trip test. ⚠️ The e2e this row used to cite is removed by A6 — it could not fail on a stripped field.                                                                                                                                                                                       |
 | **A stale scaffold freezes the wrong prescription** — the athlete scaffolds Day A, switches the day-role select to B, submits.                                           | The day-role scope is inherited from `programDayRows`, so the id matches nothing → NULL → fallback. `db:verify` case 4.                                                                                                                                                                                                                                     |
 | **A renamed card freezes the old movement's prescription.**                                                                                                              | `onName` clears it client-side; the slug guard refuses it server-side. `db:verify` case 5 and a form test.                                                                                                                                                                                                                                                  |
 | **A crafted body pairs any prescription id with any movement, in any household.**                                                                                        | Three inherited guards (household, day role, movement slug), none newly written. `db:verify` cases 3–5.                                                                                                                                                                                                                                                     |
@@ -749,9 +749,11 @@ true-until-chunk-4.
 
 ### A3 · A `db:verify` case that writes and reads back `''`, plus a committed mutation (db-safety **BLOCKING**, correctness **BLOCKING**)
 
-**11 of 13 live prescriptions render `''`** — the `open()` shape is the dominant one, and no planned
-case persisted it. Every one of these mutants stayed green under the whole suite:
-`if (!rendered) return undefined`, `if (snapshot) map.set(…)`, `...(snapshot ? {…} : {})`.
+**11 of 13 live prescriptions render `''`** (`programming.md`'s seed: 11 `open()`, 2 `fixed()`) —
+the dominant shape, and no planned case persists it. ⚠️ **Stated as analysis, not as a run:** none of
+this code exists yet, so each of these mutants _would survive the planned suite_ rather than _did_:
+`if (!rendered) return undefined`, `if (snapshot) map.set(…)`, `...(snapshot ? {…} : {})`. The
+implementing PR runs them.
 
 Each stores NULL for every `open()` entry, and by acceptance 11 the fallback then emits identical
 bytes — so the e2e cannot see it either. This is the write-side twin of the `||` trap this plan calls
@@ -789,7 +791,9 @@ The five-file allowlist omits `apps/web/lib/programming/prescribed-snapshot.ts`,
 code names — so the gate fails on day one, or gets widened at implementation time by nobody. Chunk 3's
 backfill correction would widen it again. Assert instead: (i) nothing under `apps/web/app/` or
 `apps/web/components/` names the column — the acceptance-12 property that matters — and (ii) exactly
-two **column references**. Build it on `source-scan.ts`'s shared helpers rather than a third
+two **column references** under `packages/db/src`. ⚠️ Chunk 3's correction adds a third by design, the
+same bump A11 makes for the writer count; say so where the count is written, or the next author
+quietly raises the number. Build it on `source-scan.ts`'s shared helpers rather than a third
 hand-rolled `readdirSync` walker.
 
 ### A8 · The typecheck premise is false, and it props up two rationales (four lenses, verified)
@@ -814,12 +818,15 @@ Re-derive all of them before implementation. Chunk 1's plan PR recorded this exa
   month… **Nothing is snapshotted**") is half-retired by this chunk and must be rewritten here, along
   with the `:290` trap.
 
-### A10 · The divergence table gains the class it misses, and an instruction for chunk 3 (correctness)
+### A10 · The divergence table gains the class it misses (correctness)
 
 "The live program no longer answers for `(profile, role)`" — block superseded, movement retired,
-prescription or target soft-deleted, `kind` flipped. 🔴 **For this class chunk 3's backfill would
-freeze `''` as an aged-out athlete's entire history, permanently.** Say so where chunk 3's author
-will read it: NULL rows in that class must not be backfilled from today's program.
+prescription or target soft-deleted, `kind` flipped. The table claimed exhaustiveness and is what
+chunk 3's author reads, so the class is added.
+
+⚠️ **What this amendment does NOT do is tell chunk 3 how to treat those rows.** An earlier draft of
+this section instructed the backfill to leave them NULL — which **reverses a decision the spec
+already recorded**, and the panel has no standing to do that. See open question 2.
 
 ### A11 · Acceptance 12 is amended rather than left to be argued (architecture)
 
@@ -829,14 +836,18 @@ design", so chunk 3 appends instead of relitigating.
 
 ### A12 · `db:mutations` is named (db-safety)
 
-The plan never mentions it, yet edits three files that committed patches target, including a hunk at
-exactly the line where the new call is inserted. State that the gate is re-run and which patches were
-checked or regenerated.
+The plan never mentions it, yet **five** of its EDIT files are patch targets:
+`writers/strength-session.ts` (patch 03 — whose hunk is at exactly the line where the new call is
+inserted), `queries/program-day.ts` (03, 11), `queries/export-month.ts` (03), `lib/dal/entries.ts`
+(03) and `scripts/verify.ts` (02). State that the gate is re-run and which patches were checked or
+regenerated.
 
 ### A13 · The per-kid reps precedence stops being defined twice (reuse)
 
-`toProgramDay` keeps its own `r.reps ?? r.targetReps` while the plan says the collapse "lives HERE,
-so the two consumers cannot drift". One `effectiveReps` helper, both callers.
+`toProgramDay` keeps its own `r.reps ?? r.targetReps`. ⚠️ **Not a contradiction in the plan** — its
+"two consumers" are the writer and the backfill, and it acknowledges `toProgramDay`'s separate copy
+deliberately. This is a plain DRY suggestion: one `effectiveReps` helper, so a flipped precedence
+cannot make the card and the CSV disagree about what was asked.
 
 ### A14 · `dayRole` is narrowed by the schema, not cast (db-safety, correctness, architecture)
 
@@ -856,9 +867,9 @@ green.
 correct and matches the idempotency rule; say "first receipt; a replay under the same `client_id`
 keeps the original".
 
-## 🔴 Open question for the maintainer — the one thing the panel cannot settle
+## 🔴 Open questions for the maintainer — the two things the panel cannot settle
 
-**Does the `prescriptionId` wire field earn its seven layers today?**
+### 1 · Does the `prescriptionId` wire field earn its seven layers today?
 
 With A2's fallback in place, the identity only changes an outcome when **one day holds two
 prescriptions for the same movement** — warm-up sets and working sets of the same lift. The frozen
@@ -880,11 +891,35 @@ switch the slug guard to. Cost: when such a pair is authored, both rows freeze `
 **Keep it:** the frozen CSV distinguishes warm-up from working. Cost: the plumbing, and a deliberate
 divergence from the fallback in exactly that case — which is what the divergence table exists to
 reconcile. If kept, it is renamed **`prescriptionPublicId`** end to end: `prescriptionId` already
-means the internal bigint FK in `packages/db` (`prescriptionTargets.prescriptionId`), PICK-1 uses
+means the internal bigint FK in `packages/db` (`prescriptionTargets.prescriptionId`), PICK-1 PR 2 plans
 `movementPublicId` on the same wire schema, and the plan's "one name, no mapping" is false — the
 rename already happens in `toProgramDay`.
 
-_No implementation code is written until this is answered._
+### 2 · Does the aged-out-athlete case change the backfill rule the spec already settled?
+
+The correctness lens found a class the divergence table missed — "the live program no longer answers
+for `(profile, role)`" (block superseded, movement retired, prescription soft-deleted, `kind`
+flipped) — and observed that for those rows **chunk 3's backfill freezes `''` as the athlete's entire
+history, permanently.**
+
+🔴 **The panel's first draft answered it, and should not have.** It wrote "NULL rows in that class
+must not be backfilled", which reverses spec **R1** — a pushback that was raised and **rejected**,
+with the reasoning recorded: _"NULL leaves exactly the at-risk rows unprotected… `''` makes NULL mean
+one thing — never backfilled."_ That is a decision of record, so the panel escalates instead.
+
+Two further facts the maintainer should have before ruling:
+
+- **Chunk 3 may not be able to tell the classes apart.** "The live program no longer answers" and
+  "never programmed" both return `[]` from `programDayRows`, so an instruction keyed on the
+  difference collapses to "unmatched → NULL" — which is precisely what R1 proposed.
+- **A2 reduces the blast radius.** Every row logged _after_ chunk 2 is frozen, so this only governs
+  rows that predate it.
+
+**The question:** keep R1's `''`-for-unmatched everywhere, or carve out this one class? If R1 stands
+unchanged, the Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3` stays as written
+and nothing else changes.
+
+_No implementation code is written until both are answered._
 
 ## Review-response log (adversarial panel)
 
@@ -924,14 +959,17 @@ rendered output is unchanged). Every lens read the plan against the code it name
 | C8  | Correctness  | Outside-the-tx read is sound on the semantic ground                               | _no change_     | reason corrected in A8              |
 | U3  | UX           | Rendering is byte-identical; no a11y or 360px movement                            | _no change_     | confirmed by reading every consumer |
 
-**Nothing was rejected.** One critique (S4) is a product decision rather than an engineering one and
-is escalated rather than ruled on here.
+**Nothing was rejected, and two critiques are escalated rather than ruled on.** S4 is a product
+decision about what the CSV should say. C6b would reverse spec R1, a pushback already raised and
+declined with its reasoning on the record — the panel has no standing to overturn that, and an
+earlier draft of A10 did so silently, which the fresh review caught.
 
 **On the three places this plan asked reviewers to look first:**
 
 - **The divergence table** claimed exhaustiveness and was not exhaustive — C6. Everything else four
   lenses tried against it (skipped movement, duplicate hand-added card, same-slug rename, role
-  switch, crafted body, superseded block) agreed or degraded correctly.
+  switch, crafted body, superseded block) agreed or degraded correctly **at export time** — C6's class is about the
+  _permanence_ chunk 3's backfill gives them, not about disagreement today.
 - **The outside-the-transaction read** is sound, and two lenses said so independently — but for a
   reason the plan did not give. Under READ COMMITTED a single statement sees one snapshot, so moving
   it inside buys nothing; the stated type-degradation reason was false.

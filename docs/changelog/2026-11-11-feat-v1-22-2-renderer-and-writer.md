@@ -30,9 +30,19 @@ own code. A defect four readers find separately is not a matter of taste.
   card and every day-role flip — with no signal. The writer now freezes whenever a day role is
   asserted, and NULL comes to mean only "logged before chunk 2".
 
-## One question is escalated rather than answered
+## Two questions are escalated rather than answered
 
-Whether the prescription identity earns its place on the wire at all. It changes an outcome only
+**Whether the prescription identity earns its place on the wire at all.** It changes an outcome only
 when one day holds two prescriptions for the same movement — warm-up and working sets of the same
 lift. None exist today; the schema permits them; the export's own docblock anticipates them. That is
 a decision about what the CSV should say, so the panel records both costings and leaves it.
+
+**Whether an aged-out athlete's history changes the backfill rule.** For the class the divergence
+table was missing, chunk 3 would freeze `''` as that athlete's entire history, permanently.
+
+🔴 **The panel's first draft simply overruled this, and a fresh review caught it.** It instructed
+chunk 3 to leave those rows NULL — reversing spec **R1**, a pushback already raised and **declined**
+with its reasoning recorded (_"`''` makes NULL mean one thing — never backfilled"_). A panel has no
+standing to overturn a decision of record, and the amendment said "accepted" where it should have
+said "escalated". Both are corrected; the question goes to the maintainer with the two facts that
+bear on it.
