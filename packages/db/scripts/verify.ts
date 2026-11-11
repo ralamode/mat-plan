@@ -4697,6 +4697,221 @@ const emptyNotNull = (
 assert.equal(emptyNotNull, 0, "V1-22 chunk 1: an '' snapshot must not satisfy IS NULL");
 console.log("✓ V1-22 chunk 1: '' and NULL are distinct stored values");
 
+// ── V1-22 chunk 2: the WRITER freezes the prescription, through writeStrengthSession ───────────────
+// 🔴 Chunk 1 proved `''` round-trips through a DIRECT insert. That left the thing acceptance 10
+// actually depends on unproven: that the WRITER stores `''` as `''`. Three one-word mutants —
+// `if (!rendered)`, `if (snapshot) map.set(…)`, `...(snapshot ? {…} : {})` — each store NULL for
+// every `open()` prescription, which is 11 of the 13 seeded, and every other gate stays green:
+// the renderer test proves `''` in isolation, and by acceptance 11 the export's fallback emits the
+// same bytes, so even the browser cannot see it. This block is the only thing that can.
+//
+// ⚠️ **A DEDICATED block on an otherwise-unprogrammed role.** The obvious fixture, `verify_test_block`,
+// is unreachable through the writer: `verify_newer_block` supersedes it for the same
+// (profile, role, scope) triple and `programDayRows` takes the newest. Chasing that by switching the
+// expectation to the newer block's values would silently drop the only writer-path proof of the
+// per-kid reps precedence AND of a comma inside a rendered string.
+const SNAP2_PROFILE_PUBLIC_ID = '019826b4-0000-7000-8000-0000000000e5';
+await db.insert(schema.profiles).values({
+  publicId: SNAP2_PROFILE_PUBLIC_ID,
+  name: 'Verify Snapshot Kid',
+  kind: 'kid',
+  householdId: verifyHh.id,
+});
+const [snapMovA, snapMovB, snapMovC, snapMovD] = await db
+  .select({ id: schema.movements.id, slug: schema.movements.slug, name: schema.movements.name })
+  .from(schema.movements)
+  .orderBy(schema.movements.id)
+  .limit(4);
+await seedProgram(asPg, [
+  {
+    householdPublicId: VERIFY_HH_PUBLIC_ID,
+    slug: 'verify_snapshot_block',
+    name: 'Verify Snapshot Block',
+    notes: null,
+    prescriptions: [
+      // (a) an OPEN prescription — no sets, no target reps, no load. Renders `''`. The dominant shape.
+      {
+        dayRole: 'skill',
+        movementSlug: snapMovA.slug,
+        idx: 0,
+        sets: null,
+        targetReps: null,
+        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: null, reps: null }],
+      },
+      // (b) a FIXED prescription whose rendering carries a comma AND a per-kid reps override, so one
+      // case proves the precedence and the comma together.
+      {
+        dayRole: 'skill',
+        movementSlug: snapMovB.slug,
+        idx: 1,
+        sets: 3,
+        targetReps: 'ignored-by-the-override',
+        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '65', reps: '4, last AMRAP' }],
+      },
+      // (c) the SAME movement twice in one day — warm-up + working. Ambiguous by design.
+      {
+        dayRole: 'skill',
+        movementSlug: snapMovC.slug,
+        idx: 2,
+        sets: 2,
+        targetReps: '5',
+        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '45', reps: null }],
+      },
+      {
+        dayRole: 'skill',
+        movementSlug: snapMovC.slug,
+        idx: 3,
+        sets: 3,
+        targetReps: '8',
+        targets: [{ profilePublicId: SNAP2_PROFILE_PUBLIC_ID, load: '95', reps: null }],
+      },
+    ],
+  },
+]);
+
+const snapCid = (n: number) => `019826b4-0000-7000-8000-0000000019${String(n).padStart(2, '0')}`;
+const snapArgs = {
+  profilePublicId: SNAP2_PROFILE_PUBLIC_ID,
+  scope: B_SCOPE,
+  day: '2026-03-02',
+  sessionType: SESSION_TYPES[0],
+  sessionClientId: snapCid(1),
+  activityTypeId: scLiftActivityId,
+  dayRole: 'skill',
+  movements: [
+    {
+      movementName: snapMovA.name,
+      unit: 'lb',
+      movementId: snapMovA.id,
+      clientId: snapCid(2),
+      sets: [{ reps: 5, weight: 50 }],
+    },
+    {
+      movementName: snapMovB.name,
+      unit: 'lb',
+      movementId: snapMovB.id,
+      clientId: snapCid(3),
+      sets: [{ reps: 4, weight: 50 }],
+    },
+    {
+      movementName: snapMovC.name,
+      unit: 'lb',
+      movementId: snapMovC.id,
+      clientId: snapCid(4),
+      sets: [{ reps: 5, weight: 50 }],
+    },
+    // (d) logged but NOT in this day's program — a hand-typed movement, the commonest shape of all.
+    {
+      movementName: snapMovD.name,
+      unit: 'lb',
+      movementId: snapMovD.id,
+      clientId: snapCid(5),
+      sets: [{ reps: 6, weight: 50 }],
+    },
+  ],
+} as const;
+await writeStrengthSession(asPg, snapArgs);
+
+const snapByClientId = new Map(
+  (
+    await db
+      .select({ clientId: schema.entries.clientId, snap: schema.entries.prescribedSnapshot })
+      .from(schema.entries)
+      .where(inArray(schema.entries.clientId, [snapCid(2), snapCid(3), snapCid(4), snapCid(5)]))
+  ).map((r) => [r.clientId, r.snap] as const),
+);
+
+// 🔴 THE case the panel called blocking. An `open()` prescription must reach the column as `''`.
+assert.equal(
+  snapByClientId.get(snapCid(2)),
+  '',
+  "V1-22 chunk 2: the WRITER stores an open() prescription as '', not NULL",
+);
+const snapEmptyIsNotNull = (
+  (
+    await db.execute(
+      sql`select count(*)::int as count from entries
+           where client_id = ${snapCid(2)} and prescribed_snapshot is null`,
+    )
+  ).rows as unknown as { count: number }[]
+)[0].count;
+assert.equal(
+  snapEmptyIsNotNull,
+  0,
+  "V1-22 chunk 2: a writer-stored '' must not satisfy IS NULL — or the row re-reads the live program forever",
+);
+
+assert.equal(
+  snapByClientId.get(snapCid(3)),
+  '3x4, last AMRAP @ 65',
+  'V1-22 chunk 2: the per-kid reps override beats target_reps, and a comma survives the column',
+);
+assert.equal(
+  snapByClientId.get(snapCid(4)),
+  '',
+  "V1-22 chunk 2: a movement programmed TWICE in one day freezes '' — never an arbitrary pick",
+);
+// A2: freeze-always. Leaving NULL here would send this row back to the live program at every
+// export, so chunk 4's first edit would rewrite it — for every hand-typed movement there is.
+assert.equal(
+  snapByClientId.get(snapCid(5)),
+  '',
+  "V1-22 chunk 2: a movement this day does not program freezes '', not NULL",
+);
+
+// Rule 1: no asserted day role → no snapshot at all, because the legacy fallback emits '' for the
+// whole session and snapshotting it would make the two paths disagree on a one-tap shape.
+await writeStrengthSession(asPg, {
+  ...snapArgs,
+  day: '2026-03-03',
+  sessionClientId: snapCid(10),
+  dayRole: undefined,
+  movements: [
+    {
+      movementName: snapMovA.name,
+      unit: 'lb',
+      movementId: snapMovA.id,
+      clientId: snapCid(11),
+      sets: [{ reps: 5, weight: 50 }],
+    },
+  ],
+});
+const [snapNoRole] = await db
+  .select({ snap: schema.entries.prescribedSnapshot })
+  .from(schema.entries)
+  .where(eq(schema.entries.clientId, snapCid(11)));
+assert.equal(
+  snapNoRole.snap,
+  null,
+  'V1-22 chunk 2: a session with no asserted day role takes no snapshot (NULL, the live fallback)',
+);
+
+// Replay: `onConflictDoNothing` on client_id means the FIRST snapshot stands. A future "let a
+// corrected day_role through on replay" edit would rewrite frozen history with nothing going red.
+await db
+  .update(schema.prescriptionTargets)
+  .set({ reps: 'rewritten-after-the-fact' })
+  .where(
+    inArray(
+      schema.prescriptionTargets.prescriptionId,
+      db
+        .select({ id: schema.prescriptions.id })
+        .from(schema.prescriptions)
+        .where(eq(schema.prescriptions.movementId, snapMovB.id)),
+    ),
+  );
+await writeStrengthSession(asPg, snapArgs);
+const [replayed] = await db
+  .select({ snap: schema.entries.prescribedSnapshot })
+  .from(schema.entries)
+  .where(eq(schema.entries.clientId, snapCid(3)));
+assert.equal(
+  replayed.snap,
+  '3x4, last AMRAP @ 65',
+  'V1-22 chunk 2: a replay keeps the ORIGINAL snapshot — the program changing underneath must not rewrite it',
+);
+console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');
+
 // --- a comma survives the column (the CSV quotes it; `prescribed` is in csv/row.ts's QUOTABLE) ----
 await insertSnapshot('movement', SNAP_COMMA);
 console.log('✓ V1-22 chunk 1: a comma-bearing prescription stores verbatim');
