@@ -204,11 +204,11 @@ access token`, which reads like a permissions problem with the repo. The cause w
   saved the CDN download and left the Ubuntu-mirror call in place, on every job. It failed four runs
   in a row on `Temporary failure resolving 'archive.ubuntu.com'` — a class of runner flakiness
   refiled across years (actions/runner-images #675, #7048 and #10785 each closed once the mirror
-  recovered; #14823 is open), not one outage. → **Drop
-  `--with-deps`:** the runner image preinstalls Google Chrome, Edge and ChromeDriver, so all 21 of
-  Chromium's shared libraries — and the Latin text stack, and `xvfb` — are already there; the same
-  log shows apt adding only Japanese, Chinese, Thai, Cyrillic and unifont font packages this app
-  never renders. ⚠️ **Read the WHOLE apt block before claiming a no-op:** a first pass through this
+  recovered; #14823, open, is the slow-mirror variant of the same host), and the fifth failure was
+  the post-merge run that left `main` red. → **Drop `--with-deps`:** all 21 of Chromium's shared
+  libraries are already present because the image preinstalls Chrome, whose `Depends` covers them;
+  `xvfb` and the emoji font are in the image's own package list. What apt adds is CJK, Thai and
+  Cyrillic fonts this app never renders, plus two pan-Unicode fallbacks. ⚠️ **Read the WHOLE apt block before claiming a no-op:** a first pass through this
   log was truncated at 25 lines and concluded "installs nothing", which the `9 newly installed`
   line four rows further down contradicts. The general rule: **a cache in front of a step proves nothing about
   the step — read what the cached path actually contains**, and if a step has two halves with
