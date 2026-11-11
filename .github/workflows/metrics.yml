@@ -1,0 +1,164 @@
+name: Metrics
+
+# Unit-test coverage, measured and published. DX-13
+# (docs/plans/dx-13-coverage-and-e2e-budget.md).
+#
+# DELIBERATELY NOT A PULL-REQUEST CHECK — and, unlike CodeQL, not even a skipped
+# row: this workflow has no `pull_request` trigger at all, so it cannot appear in
+# a PR's check list in any state. That is the point. AGENTS.md ("Local hooks vs CI
+# merge-gates") lists the checks that DO block a merge; coverage is not one of
+# them, no per-PR delta is computed, and nothing here may be cited as a per-PR
+# safety gate. A reviewer judges a diff by reading it (.claude/skills/review-pr).
+#
+# 🔴 WHY THE NUMBER CAN STILL GO RED. The one thing this must never do is publish
+# a figure it did not actually measure — "could not check" is not a pass, the same
+# rule `audit:check` follows. SIX independent conditions fail the run (see the
+# Assert step). A red run here blocks no merge, because the merge already happened.
+#
+# ⚠️ NOBODY HAS CONFIRMED A RED RUN REACHES A HUMAN. SEC-5b (docs/plan.md) is
+# gated on exactly that question and owns the answer; this workflow inherits it
+# rather than assuming one. Do not cite the fail-loud as a control until SEC-5b
+# closes.
+#
+# Triggers:
+#   push to main      — every PR is squashed into one commit, so this sees 100% of
+#                       merged code, just after the merge.
+#   workflow_dispatch — re-run by hand. ⚠️ Only resolvable once this file is ON
+#                       main: GitHub registers dispatchable workflows from the
+#                       default branch, so `gh workflow run metrics.yml --ref <pr>`
+#                       404s before merge. The first real run is post-merge.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Keyed on the ref so a hand dispatch on a branch cannot cancel or queue behind a
+# main run (codeql.yml's shape). `cancel-in-progress: true` because a coverage
+# number for a commit main has already moved past is worthless — the next run
+# measures the new tip. (SEC-5b wants the opposite for its own case; it decides
+# separately rather than inheriting this.)
+concurrency:
+  group: metrics-${{ github.ref }}
+  cancel-in-progress: true
+
+# Writes a job summary and nothing else. No artifact, no comment, no token that
+# could post or push.
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    name: coverage (post-merge, non-gating)
+    runs-on: ubuntu-latest
+    env:
+      # pnpm 11 defaults verify-deps-before-run to `install`, which would silently
+      # `pnpm install` (no --frozen-lockfile) before the explicit Install below.
+      # Same reason as ci.yml. docs/lessons.md → pnpm.
+      pnpm_config_verify_deps_before_run: 'false'
+    steps:
+      # The four setup steps below duplicate migrate.yml's, deliberately — see
+      # migrate-preview.yml's comment on the same block for the ruling: there is no
+      # `.github/actions/`, a local composite would FAIL `pnpm actions:check`
+      # (check-action-pins.mjs does not scan a local action's own `uses:` lines),
+      # and the only de-dup shapes are a matrix or a `workflow_call`, both new
+      # patterns. Duplicating is the right call at ~4h/wk — do not "tidy" it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes; don't leave a credential in .git/config.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # `text-summary` prints to STDOUT, so the run is teed to capture it; the
+      # `json-summary` reporter writes coverage/coverage-summary.json, which the
+      # next step asserts against. `--coverage` is what loads the provider at all
+      # (coverage.enabled is false by default), so `quality`'s plain `pnpm test`
+      # never pays for this.
+      #
+      # ⚠️ NO PATH FILTER, ever. Untested files only enter the report when vitest
+      # sees a full run (`allTestsRun`), so `test:coverage lib/` would silently
+      # drop the honest denominator this whole design rests on.
+      - name: Run coverage
+        # 🔴 `shell: bash` is LOAD-BEARING, not style. GitHub's default for a `run:` with no
+        # `shell:` is `bash -e {0}` — WITHOUT `-o pipefail`. The exit status of
+        # `vitest | tee` is then tee's, always 0, so a failing test run would not fail
+        # this step at all. The explicit form is `bash --noprofile --norc -eo pipefail {0}`
+        # (`claude-review.yml` uses it too). Found by a security lens on the first PR.
+        shell: bash
+        run: pnpm --filter web test:coverage 2>&1 | tee coverage-run.log
+
+      # 🔴 SIX INDEPENDENT ASSERTIONS, never a conjunction. The one they exist
+      # for is a mis-rooted include glob: that leaves the apps/web keys in place,
+      # so a check written as "no apps/web AND no packages" would publish a green
+      # number over a silently smaller denominator. Each is its own `exit 1`.
+      - name: Assert the number was actually measured
+        run: |
+          set -euo pipefail
+          SUMMARY=apps/web/coverage/coverage-summary.json
+
+          # 1. The run log exists at all. ⚠️ This proves LITTLE on its own — `tee`
+          #    creates the file before vitest writes a byte — and an earlier version of
+          #    this comment claimed it was backed by `pipefail`, which the previous step
+          #    did not set. It does now (`shell: bash`), so a failed test run fails there;
+          #    this line only catches the pipeline vanishing entirely.
+          test -f coverage-run.log || { echo "::error::no run log"; exit 1; }
+
+          # 2. The summary exists and is non-empty.
+          test -s "$SUMMARY" || { echo "::error::$SUMMARY missing or empty"; exit 1; }
+
+          # 3 & 4. BOTH workspaces are represented — either one missing is a
+          #    mis-rooted glob, not a smaller repo.
+          # ⚠️ `readFileSync`, NOT `require()`: a path that does not start with "./" is
+          #    treated as a MODULE NAME, so `require("apps/web/...")` throws
+          #    MODULE_NOT_FOUND and this assertion would fail every run instead of
+          #    measuring anything. Caught by actually running the probe below.
+          node -e '
+            const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const keys = Object.keys(s).filter((k) => k !== "total");
+            const web = keys.filter((k) => k.includes("/apps/web/")).length;
+            const pkg = keys.filter((k) => k.includes("/packages/")).length;
+            if (!web) { console.error("::error::no apps/web file in the summary"); process.exit(1); }
+            if (!pkg) { console.error("::error::no packages/ file in the summary — mis-rooted include glob?"); process.exit(1); }
+            console.log(`measured ${keys.length} files (${web} apps/web, ${pkg} packages)`);
+          ' "$SUMMARY"
+
+          # 5. v8 logs and SKIPS a file whose AST it cannot parse, at exit 0 — a
+          #    quietly smaller denominator on a green run.
+          if grep -q "Excluding it from coverage" coverage-run.log; then
+            echo "::error::a file was excluded from coverage at exit 0 — see the run log"
+            exit 1
+          fi
+
+          # 6. The text-summary block the Publish step greps for is actually present.
+          #    `sed` with no match exits 0, so a reporter rename in a future vitest bump
+          #    would publish an EMPTY code fence over a green run — the number is asserted
+          #    above but never shown. Checking the header here keeps the published output
+          #    from going quietly blank.
+          grep -q "Coverage summary" coverage-run.log || {
+            echo "::error::no text-summary block in the run log — the published summary would be empty"
+            exit 1
+          }
+
+      - name: Publish the summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## Unit coverage — \`main\` @ \`${GITHUB_SHA:0:7}\`"
+            echo
+            echo "Measured post-merge. **This gates nothing** and no per-PR delta is computed —"
+            echo "see AGENTS.md → \"Local hooks vs CI merge-gates\"."
+            echo
+            echo '```'
+            sed -n '/Coverage summary/,/^=\{10,\}$/p' coverage-run.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -315,12 +315,17 @@ a guide at `docs/features/<slug>.md`. Today: strength logging, the write path, p
   The audit never reports **could not check, not retryable** as a pass; the rule is in
   [SECURITY.md](./.github/SECURITY.md) → Supply chain ([plan](./docs/plans/sec-5-verify-in-ci.md)).
   **`@claude review` is NOT a gate** (one advisory comment; `.github/workflows/claude-review.yml`).
+  **Coverage is NOT a gate**, nor a PR check at all: `metrics.yml` measures it post-merge on `main`
+  and **no per-PR delta is computed** ([DX-13](./docs/plans/dx-13-coverage-and-e2e-budget.md)); a red
+  run there means it could not be _measured_, never that it is too low.
   **CodeQL is NOT a PR check** (push to `main`, weekly, on demand; findings in Security → Code
   scanning), so a green PR says nothing about it.
   ⚠️ **The Neon-branch apply — a prod-shaped migration rehearsal on PRs — is NOT wired**
   ([tech-debt](./docs/tech-debt.md) → "last unwired CI gate"). Never cite an unwired gate as a safety
   argument.
-- **`e2e` (Playwright smoke):** runs on every PR, **not yet required** (soaks until PR 28). It
+- **`e2e` (Playwright smoke):** what earns one is the Speed budget in
+  [definition-of-done.md](./docs/definition-of-done.md). Runs on every PR, **not yet required**
+  (soaks until PR 28). It
   **auto-skips the smoke, still reporting success, when every changed file is provably inert** (docs,
   root markdown, `.claude/`, GitHub templates, images; default-to-run). Override with the
   **`ci-skip-e2e` label, then push** — sparingly, a red `e2e` usually means a real bug — or an admin
@@ -392,7 +397,7 @@ Every mutating endpoint / Server Action (verified by TESTS, not review):
   7 typed error envelope + structured logs (correlation id) + Sentry; rate-limit expensive ops.
 Tests ship in the SAME PR: unit (logic) + integration (endpoint/DAL) against an ephemeral PG
   (Actions service container, migrated). MANDATORY boundary tests: unauth→reject, wrong-owner→forbid,
-  bad body→zod-reject; /api/sync replay→one effect+identical response. No coverage drop on changed files.
+  bad body→zod-reject; /api/sync replay→one effect+identical response.
 Contract: request/response change ⇒ update shared zod schema (types via z.infer) same PR. Additive by
   default; breaking ⇒ BREAKING CHANGE footer + /api/vN + Deprecation/Sunset headers.
 Testing gotchas: Server Actions aren't HTTP routes — test as plain async fns (mock Clerk auth() +

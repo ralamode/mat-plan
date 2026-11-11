@@ -41,6 +41,69 @@ export default defineConfig({
     env: {
       DATABASE_URL: 'postgres://user:pass@localhost:5432/mat_plan_test',
     },
+
+    /**
+     * DX-13 — coverage is a MEASUREMENT, published post-merge by `.github/workflows/metrics.yml`.
+     * It gates nothing: AGENTS.md → "Local hooks vs CI merge-gates" is the one list of what blocks a
+     * merge, and this is not on it.
+     *
+     * 🔴 **There is deliberately no `thresholds` key.** Its absence is the design — a threshold is a
+     * gate by another name, and the maintainer asked for a non-gating number (2026-11-10). Adding one
+     * is a decision to argue with `docs/plans/dx-13-coverage-and-e2e-budget.md` about, not a tidy-up.
+     *
+     * ⚠️ **`enabled` stays false** (the default), so the provider is only loaded by an explicit
+     * `--coverage` — CI's `quality` job runs plain `pnpm test` and never pays for it.
+     */
+    coverage: {
+      provider: 'v8',
+      /**
+       * 🔴 **`include` IS the honest denominator.** Since vitest 4 there is no `all` option: listing a
+       * file here counts it whether or not a test touches it. Without an explicit list, coverage
+       * counts only files that already have tests — so adding an untested module makes the number go
+       * UP, which flatters exactly when it should not.
+       *
+       * ⚠️ **Every glob is extension-qualified**, as `test.include` above is. A bare `app/**` sweeps
+       * in `globals.css`, `token-sets.css` and `favicon.ico`; each then either reports as 100% (a
+       * 0-statement file) or is dropped with an "Excluding it from coverage" log line and exit 0 — a
+       * wrong denominator on a green run.
+       *
+       * ⚠️ The `packages/*` entry is OUTSIDE this config's root, which is why `allowExternal` below
+       * is not optional: vitest drops out-of-root files without it.
+       */
+      include: [
+        'app/**/*.{ts,tsx}',
+        'components/**/*.{ts,tsx}',
+        'lib/**/*.{ts,tsx}',
+        'proxy.ts',
+        'instrumentation.ts',
+        'sentry.*.config.ts',
+        '../../packages/*/src/**/*.ts',
+      ],
+      allowExternal: true,
+      /**
+       * Both entries are load-bearing; nothing else is listed, because an exclusion that can never
+       * match reads as a decision while doing nothing.
+       *
+       * `recording-db.ts` is **test-support code living in a production directory** — its own
+       * docblock says "TEST SUPPORT ONLY; nothing in the app imports it". `lib/**` would otherwise
+       * count a file the app never executes and the tests exercise thoroughly, inflating the number
+       * by precisely the amount an honest denominator exists to prevent.
+       */
+      exclude: ['**/*.test.{ts,tsx}', 'lib/dal/recording-db.ts'],
+      /**
+       * `text-summary` → stdout, which `metrics.yml` tees into the job summary.
+       * `json-summary` → `coverage/coverage-summary.json`, which that workflow asserts against.
+       * ⚠️ Not the default list (`text`, `html`, `clover`, `json`): it writes no `coverage-summary.json`
+       * at all, so the workflow's fail-loud check would fire on every run.
+       */
+      reporter: ['text-summary', 'json-summary'],
+      /** A failed run must not publish a number. */
+      reportOnFailure: false,
+      // ⚠️ **The two `scripts/` trees are outside `include` on purpose, and the asymmetry is worth
+      // knowing about:** `test.include` above deliberately RUNS the test files under
+      // `packages/*/scripts/` (see its comment for why). Those tests still execute; only the
+      // percentage ignores them.
+    },
   },
   resolve: {
     alias: {
