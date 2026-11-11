@@ -113,6 +113,18 @@ export function programDayRows(
         // the SLUG (`movements.name` is a display string — "Front Squat" — and would never match).
         // Selected here rather than converted at the call site so both sides read one column.
         movementSlug: schema.movements.slug,
+        // V1-22 chunk 2 (D1): the prescription's OWN movement FK, which is the key the frozen
+        // `prescribed` snapshot and the export's live fallback both match on. The writer already
+        // holds the entry's resolved `movement_id`, so matching id-to-id skips the slug proxy —
+        // and a slug proxy is exactly what `MOV-1`'s rename breaks and what `PICK-1`'s invariant 7
+        // schedules a later PR to replace. No join: `prescriptions` is already the FROM table.
+        //
+        // The join is on this column, so it is equally `movements.id`; selected from `prescriptions`
+        // because that is the table this query is FROM.
+        //
+        // ⚠️ An IDENTITY, not a magnitude. `toProgramDay` must not map it into `ProgramDayDTO` —
+        // the boundary that keeps an authored load off the log form is the same boundary here.
+        movementId: schema.prescriptions.movementId,
         // V1-26 PR-A: the movement's own DECLARATION, so the log form can seed the unit the catalog
         // says this movement is measured in and can notice a bodyweight chip tapped on a loaded lift.
         // Both live on `movements`, which is already inner-joined — no new join, two more columns.

@@ -63,6 +63,13 @@ export function strengthMonthRows(
         entryStatus: schema.entries.status,
         notes: schema.entries.notes,
         movementSlug: schema.movements.slug,
+        // V1-22 chunk 2 (D1): the key the live `prescribed` fallback matches on. The slug it used
+        // to key on is a proxy for this id, and a proxy `MOV-1`'s rename breaks.
+        movementId: schema.entries.movementId,
+        // V1-22 chunk 2: the FROZEN prescription. `IS NULL` means "never snapshotted"; `''` is a
+        // real rendered value (an `open()` prescription). Selected raw — no `coalesce`, which would
+        // destroy the distinction the column exists for.
+        prescribedSnapshot: schema.entries.prescribedSnapshot,
         dayRole: schema.sessions.dayRole,
         sessionType: schema.sessions.sessionType,
         sessionId: schema.sessions.id,

@@ -19,6 +19,7 @@ import {
   type StrengthLogRow,
   strengthLogPath,
   type ZipEntry,
+  liveMatchesByKey,
 } from '@mat-plan/shared/csv';
 
 import { db } from './db';
@@ -41,9 +42,28 @@ import { getProfileByPublicId } from './profiles';
  * layer allowed to hold it ambiently (invariant 8), and this module is that layer.
  */
 
+/**
+ * A folded row plus the two values the `prescribed` resolution needs and the CSV does NOT emit.
+ *
+ * ⚠️ They are kept OFF `StrengthLogRow`, which is the byte contract for the file: a resolution input
+ * is not a column, and widening the contract type to carry one is how a column appears by accident.
+ */
+type FoldedStrengthRow = StrengthLogRow & {
+  /** `null` = never snapshotted; `''` = a real frozen rendering. The distinction is load-bearing. */
+  prescribedSnapshot: string | null;
+  /**
+   * Nullable because `entries.movement_id` is — the tagged union lets an entry name a metric
+   * instead. This query inner-joins `movements`, so a strength row always has one; typed honestly
+   * rather than asserted, and a null simply misses the live map and falls through to `''`.
+   */
+  movementId: number | null;
+};
+
 /** Fold the flat (entry × set × quantity) join into one row per movement. */
-function foldStrengthRows(rows: Awaited<ReturnType<typeof strengthMonthRows>>): StrengthLogRow[] {
-  const byEntry = new Map<number, StrengthLogRow>();
+function foldStrengthRows(
+  rows: Awaited<ReturnType<typeof strengthMonthRows>>,
+): FoldedStrengthRow[] {
+  const byEntry = new Map<number, FoldedStrengthRow>();
   // Set identity is the SET ROW, not its index — a partial skip leaves gaps in `idx`.
   const setsByEntry = new Map<number, Map<number, StrengthLogRow['sets'][number]>>();
 
@@ -54,6 +74,8 @@ function foldStrengthRows(rows: Awaited<ReturnType<typeof strengthMonthRows>>): 
         dayRole: r.dayRole,
         sessionType: r.sessionType,
         movementSlug: r.movementSlug,
+        movementId: r.movementId,
+        prescribedSnapshot: r.prescribedSnapshot,
         status: r.entryStatus,
         sets: [],
         prescribed: '',
@@ -110,25 +132,22 @@ type ExportQuantityMutable = StrengthLogRow['sets'][number]['quantities'][number
  * seed-immutable; **V1-22 breaks it**, and that is recorded on the V1-22 row as a blocker it must
  * solve.
  */
-async function prescribedFor(
+async function liveMatchesFor(
   profilePublicId: string,
   dayRoles: ReadonlySet<string>,
   scope: HouseholdScope,
 ) {
-  const byKey = new Map<string, string | null>(); // `${dayRole}:${slug}` → text, or null if ambiguous
+  // `${dayRole}:${movementId}` → text, or null if that day programs the movement twice.
+  const byKey = new Map<string, string | null>();
   for (const role of dayRoles) {
     if (!(DAY_ROLES as readonly string[]).includes(role)) continue;
     const rows = await programDayRows(db, { profilePublicId, dayRole: role as DayRole, scope });
-    const seen = new Map<string, number>();
-    for (const p of rows) {
-      const key = `${role}:${p.movementSlug}`;
-      seen.set(key, (seen.get(key) ?? 0) + 1);
-      // `sets x reps [@ load]` — the plan as one human string, per the contract.
-      const reps = p.reps ?? p.targetReps ?? '';
-      const text = [p.sets ? `${p.sets}x${reps}` : reps, p.load ? `@ ${p.load}` : '']
-        .filter(Boolean)
-        .join(' ');
-      byKey.set(key, seen.get(key)! > 1 ? null : text);
+    // 🔴 The SAME function the log-time writer calls. The rendering and the ambiguity rule used to
+    // live inline here, where `packages/db` could not reach them — so "the frozen path and the live
+    // path agree" could only ever have been asserted by a test, and the test the plan specified was
+    // unimplementable. Now it is one function with two callers.
+    for (const [movementId, text] of liveMatchesByKey(rows)) {
+      byKey.set(`${role}:${movementId}`, text);
     }
   }
   return byKey;
@@ -151,13 +170,22 @@ export async function buildExportEntries(profilePublicId: string): Promise<ZipEn
       await strengthMonthRows(db, { profilePublicId, month, scope }),
     );
 
+    // 🔴 Only the rows with NO snapshot need the live program read. `IS NULL`, never
+    // `coalesce(…,'') = ''`: `''` is a REAL frozen value (an `open()` prescription, 11 of the 13
+    // seeded) and must NOT be re-derived from today's program, or every such row goes on moving
+    // under the reader exactly as it did before this chunk.
     const roles = new Set(
-      strengthRows.map((r) => r.dayRole).filter((r): r is string => r !== null),
+      strengthRows
+        .filter((r) => r.prescribedSnapshot === null)
+        .map((r) => r.dayRole)
+        .filter((r): r is string => r !== null),
     );
-    const prescribed = await prescribedFor(profilePublicId, roles, scope);
+    const live = roles.size > 0 ? await liveMatchesFor(profilePublicId, roles, scope) : null;
     for (const row of strengthRows) {
-      const key = `${row.dayRole}:${row.movementSlug}`;
-      row.prescribed = prescribed.get(key) ?? '';
+      // `??`, never `||`. `||` would send every frozen `''` back to the live program — the single
+      // most dangerous line in this chunk, and the one a "simplification" reaches for first.
+      row.prescribed =
+        row.prescribedSnapshot ?? live?.get(`${row.dayRole}:${row.movementId}`) ?? '';
     }
 
     const bodyweightRows: BodyweightRow[] = (
