@@ -61,9 +61,11 @@ export const sessionMovementSchema = z.object({
   // `typedMovementNameIssues` and are applied by check (7) in the session `superRefine` **only to a
   // movement without `movementPublicId`**: PICK-1 correctness S1 — an id-resolved movement must never
   // be refused for a name the DATABASE supplied and the household cannot yet fix (`MOV-1` is what
-  // makes it fixable). The comma rule itself is unchanged and still a CSV-contract guard (GAP-1 P2-2):
-  // the name is persisted verbatim in `movements.name` and `entries.movement_name`, both joined raw
-  // into the export.
+  // makes it fixable). The comma rule itself is unchanged and still a CSV-contract guard (GAP-1 P2-2)
+  // — ⚠️ though what it guards is the **slug** derived from this text, which is the export's
+  // `movement` column, and `csvRow` **throws** on a comma there rather than shifting the row.
+  // `entries.movement_name` is not exported; the claim that it was is corrected in
+  // `typedMovementNameIssues`' docblock, which now holds the full trace.
   movementName: movementLabelSchema,
   // Every unit the form's Measuring picker offers (V1-30; the chain test in units.test.ts).
   unit: loggableUnitSchema,

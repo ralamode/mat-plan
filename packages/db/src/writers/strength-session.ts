@@ -17,7 +17,7 @@ import type { Executor } from './executor';
 import type { HouseholdScope } from '../scope';
 import { MovementNotAvailableError } from './movement-catalog';
 import { prescribedSnapshotsFor } from './prescribed-snapshot';
-import { isLiveProfile, movementInHousehold, movementIsGlobal, ownedEntryIds } from './ownership';
+import { isLiveProfile, movementIsAvailableTo, ownedEntryIds } from './ownership';
 
 /**
  * The strength-session write core (V1-8-2), single-sourced HERE in `packages/db` — NOT in the
@@ -319,7 +319,12 @@ async function writeSessionStrengthEntry(
  *
  * One `count(*)` over the DISTINCT ids, compared to how many there were: cheaper than N reads, and a
  * count mismatch cannot tell which id was bad — which is the same non-oracle property
- * {@link MOVEMENT_NOT_AVAILABLE} has, for the same reason.
+ * {@link MOVEMENT_NOT_AVAILABLE} has, for the same reason. The ids are deduplicated, and
+ * `movements.id` is the primary key, so each contributes at most one row: the count can equal the
+ * length only when every id is available.
+ *
+ * 🔴 **The predicate is `movementIsAvailableTo(scope)`, the SAME expression the pre-check uses**, so
+ * widening either side is one edit that reddens both proofs. Read its docblock before changing this.
  */
 async function assertMovementsAreAvailable(
   exec: Executor,
@@ -331,13 +336,7 @@ async function assertMovementsAreAvailable(
   const [row] = await exec
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.movements)
-    .where(
-      and(
-        inArray(schema.movements.id, movementIds),
-        isNull(schema.movements.deletedAt),
-        or(movementIsGlobal(), movementInHousehold(scope)),
-      ),
-    );
+    .where(and(inArray(schema.movements.id, movementIds), movementIsAvailableTo(scope)));
   if ((row?.count ?? 0) !== movementIds.length) throw new MovementNotAvailableError();
 }
 

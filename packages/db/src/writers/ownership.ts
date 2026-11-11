@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { schema } from '../client';
 import {
@@ -198,7 +198,7 @@ export function ownedEntryIds(exec: Executor, profilePublicId: string, scope: Ho
  * ([TEN-2a's plan](../../../../docs/plans/ten-2a-household-movements.md)):
  * `household_id IS NULL` is a **value** — reference data owned by no household, the 35 curated seed
  * rows — and `household_id = <scope>` is one household's own free text. So it needs a namespace
- * predicate pair as well as a household conjunct, and the four helpers below are not
+ * predicate pair as well as a household conjunct, and the five helpers below are not
  * interchangeable with `inHousehold` / `isLiveProfile` above.
  *
  * **Naming convention, stated so a third table does not invent a third one:** an **unprefixed**
@@ -226,6 +226,42 @@ export function movementIsOwned() {
 /** `movements.household_id = <scope>` — THIS household's namespace. */
 export function movementInHousehold(scope: HouseholdScope) {
   return eq(schema.movements.householdId, scope.householdId);
+}
+
+/**
+ * 🔴 **THE movement-availability predicate: live ∧ (global ∨ this household's own).** The composite,
+ * not the leaves — "may this household use this movement at all".
+ *
+ * **Composed once, here, for exactly the reason `isLiveProfile` is** (see that function): two call
+ * sites must answer **identically** or one of them scopes weaker, and they are the two sides of one
+ * seam — `resolveMovementByPublicId`'s pre-check outside the transaction and
+ * `assertMovementsAreAvailable`'s re-check inside it (`writers/movement-catalog.ts`,
+ * `writers/strength-session.ts`).
+ *
+ * ⚠️ **The cost of hand-composing it at each site was concrete, not theoretical.** PICK-1 PR 2
+ * shipped it that way first, and `36-availability-ignores-household.patch`'s first draft widened
+ * only the **resolver's** copy — so nothing in the repo could have caught the **in-transaction**
+ * copy being widened instead, which is the dangerous direction, since the pre-check is the one a
+ * reader assumes is sufficient. Pointed at this helper, one patch reddens `db:verify` (a) and (d)
+ * together.
+ *
+ * ⚠️ **Sharing the expression does not collapse the defence into one.** What makes the re-check a
+ * seam is *when* it runs — inside the transaction the rollback protects, after the profile resolve.
+ * A TOCTOU window is closed by timing, never by duplication.
+ *
+ * It reads no `scope.householdId` itself (it delegates to {@link movementInHousehold}), so it adds
+ * nothing to `packages/db/src/scope.test.ts`'s one-module rule.
+ *
+ * ⚠️ `findOrCreateMovement`'s own slug lookups deliberately do NOT use this: they query the two
+ * namespaces **separately and in order**, because global-first is a resolution ORDER and not a
+ * membership test — collapsing them into one `or(...)` would let a household row win a slug a
+ * curated row holds, which is the hazard that function exists to prevent.
+ */
+export function movementIsAvailableTo(scope: HouseholdScope) {
+  return and(
+    isNull(schema.movements.deletedAt),
+    or(movementIsGlobal(), movementInHousehold(scope)),
+  );
 }
 
 /**

@@ -1,10 +1,15 @@
 import { movementSlug, newId, type SessionMovementInput } from '@mat-plan/shared';
-import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, type SQL } from 'drizzle-orm';
 
 import { schema } from '../client';
 import type { HouseholdScope } from '../scope';
 import type { Executor } from './executor';
-import { insertMovementOwnedBy, movementInHousehold, movementIsGlobal } from './ownership';
+import {
+  insertMovementOwnedBy,
+  movementInHousehold,
+  movementIsAvailableTo,
+  movementIsGlobal,
+} from './ownership';
 import type { ResolvedSessionMovement } from './strength-session';
 
 /**
@@ -166,8 +171,11 @@ export class MovementNotAvailableError extends Error {
  * in `write-path.md`: the frozen `prescribed` snapshot keys on `movement_id` (V1-22 chunk 2 D1), so
  * an entry on the household row misses a prescription naming the global one and freezes `''`.
  *
- * Both predicates come from `writers/ownership.ts` — the sanctioned ones, never a local copy, for
- * the reason invariant 2 gives about a security predicate drifting between call sites.
+ * 🔴 **The predicate is `movementIsAvailableTo(scope)` from `writers/ownership.ts`, composed there
+ * and not here** — live ∧ (global ∨ own), the same expression `writeStrengthSession`'s
+ * in-transaction re-check uses. The two sides of this seam must answer identically or one of them
+ * scopes weaker; that helper's docblock has the reason and what a hand-composed copy at each site
+ * cost (a mutation patch that could only redden one of them).
  */
 export async function resolveMovementByPublicId(
   exec: Executor,
@@ -181,13 +189,7 @@ export async function resolveMovementByPublicId(
       slug: schema.movements.slug,
     })
     .from(schema.movements)
-    .where(
-      and(
-        eq(schema.movements.publicId, publicId),
-        isNull(schema.movements.deletedAt),
-        or(movementIsGlobal(), movementInHousehold(scope)),
-      ),
-    )
+    .where(and(eq(schema.movements.publicId, publicId), movementIsAvailableTo(scope)))
     .limit(1);
   return row ?? null;
 }

@@ -89,14 +89,26 @@ export const movementLabelSchema = z
  *
  * A third typed-name rule added here therefore reaches both. Returns `[]` for an acceptable name.
  *
- * ⚠️ The comma rule is a CSV-contract guard, not an ergonomic one: `movements.name` and
- * `entries.movement_name` are both joined raw into the export, so a comma shifts every later field
- * in the row (`packages/shared/src/text.ts`). `"` stays legal — `30" Box Jump` is real data.
+ * ⚠️ **The comma rule guards the SLUG, and the consequence is a failed export, not a shifted row.**
+ * `movementSlug(name)` keeps commas (it only collapses whitespace and lower-cases), and the slug is
+ * what the CSV's `movement` column prints (`packages/db/src/queries/export-month.ts` →
+ * `csvMovement`). `movement` is not in `csvRow`'s quotable set, so `quoteIfNeeded`
+ * (`packages/shared/src/csv/row.ts`) **throws** on a comma there — one bad name would fail the whole
+ * month's export for that household. ⚠️ `entries.movement_name` is **not exported at all**, which an
+ * earlier version of this note and of `sessionMovementSchema`'s claimed; the export query selects
+ * only the slug. `"` stays legal — `30" Box Jump` is real data.
+ *
+ * 🔴 **`noLetter` is skipped for an EMPTY value, deliberately.** `movementLabelSchema`'s `min(1)`
+ * already owns "there is no name here" with its own message, and in zod a `.min()` failure does
+ * **not** abort the outer object's refinements — so without this guard a blank card produced
+ * *"Choose a movement."* **and** *"…needs at least one letter."*, two faults for one mis-tap, on the
+ * single most common error a spare card on a gym floor produces. Probed, and the schema test asserts
+ * the blank case `toEqual` exactly one message so the double cannot come back.
  */
 export function typedMovementNameIssues(value: string): readonly string[] {
   const issues: string[] = [];
   if (hasCommaOrLineBreak(value)) issues.push(MOVEMENT_NAME_MESSAGES.commaOrLineBreak);
-  if (!hasALetter(value)) issues.push(MOVEMENT_NAME_MESSAGES.noLetter);
+  if (value.length > 0 && !hasALetter(value)) issues.push(MOVEMENT_NAME_MESSAGES.noLetter);
   return issues;
 }
 
