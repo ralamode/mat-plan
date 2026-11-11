@@ -933,18 +933,109 @@ test.describe('U0 — the sheet, open', () => {
   });
 
   /**
+   * 🔴 **The geometry, and the ONLY tier that can see it.** `--sheet-vvh` is written from
+   * `window.visualViewport`, which jsdom does not have — so the component shipped with this hook
+   * reading a null ref and never running, the sheet silently sized to the LAYOUT viewport (the
+   * defect A2 exists to prevent) and every unit test still green. An empty value here means the
+   * effect did not run; a value means it did.
+   */
+  test('anchors itself to the visual viewport, at both widths', async ({ page }) => {
+    for (const viewport of [NARROW_VIEWPORT, { width: 820, height: 1180 }]) {
+      await page.setViewportSize(viewport);
+      const dialog = await openSheet(page);
+      const vvh = await dialog.evaluate((d) => d.style.getPropertyValue('--sheet-vvh'));
+      expect(vvh, `--sheet-vvh is set at ${viewport.width}px`).not.toBe('');
+      // Sanity: it is the visual viewport's height, not an arbitrary string.
+      const expected = await page.evaluate(() => `${window.visualViewport?.height}px`);
+      expect(vvh).toBe(expected);
+    }
+  });
+
+  /**
+   * 🔴 **Above 1040px the dialog variant drifted right** — `inset-0` leaves `right: 0` set, so a
+   * width plus `left: 1/2` plus `margin-inline: auto` is over-constrained with AUTO margins, and
+   * CSS solves the margins inside the 50%→100% band instead of ignoring `right`. Centring is a
+   * thing only a laid-out browser can measure.
+   */
+  test('the dialog variant stays centred on a wide viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1360, height: 900 });
+    await page.goto(TOKEN_SETS_PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Open dialog' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    const box = (await dialog.boundingBox())!;
+    const centre = box.x + box.width / 2;
+    expect(Math.abs(centre - 1360 / 2), 'the dialog is centred').toBeLessThanOrEqual(1);
+  });
+
+  /**
    * 🔴 The case an unconditional `history.back()` on close gets wrong: a route link inside the sheet
    * pushes a SECOND entry over ours, so popping on close would bounce the parent back with the sheet
    * shut — the tap appears to do nothing.
+   *
+   * ⚠️ **Both links are exercised, because the two restore paths are different mechanisms and each
+   * is invisible to the other's test.** A same-route link keeps the component mounted, so only the
+   * `popstate` listener can reopen the sheet; a cross-route link unmounts it, so only the mount-time
+   * read of `history.state` can. The first version of this test used the same-route link alone and
+   * claimed to prove "back restores the sheet" — but Next preserved the component's state across
+   * that navigation, so the sheet never closed and the assertion held with the entire restore
+   * mechanism deleted.
    */
-  test('a link inside it navigates, and back from there restores the sheet', async ({ page }) => {
-    await openSheet(page);
-    await page.getByRole('link', { name: 'Go somewhere else' }).click();
+  /**
+   * ⚠️ **A same-route link does NOT close the sheet, and the first version of this test claimed it
+   * did.** It navigated with a same-route link, pressed back and asserted the sheet was visible —
+   * which held with the entire restore mechanism deleted, because Next preserves the component's
+   * state across a same-route navigation and the sheet never closed in the first place. What is
+   * actually worth pinning here is the opposite: that the `popstate` landing back on the sheet's own
+   * entry does NOT spuriously close it.
+   */
+  test('a same-route link leaves the sheet open, and back onto its own entry keeps it open', async ({
+    page,
+  }) => {
+    const dialog = await openSheet(page);
+    await dialog.getByRole('link', { name: 'Go somewhere else (same route)' }).click();
     await expect(page).toHaveURL(/from=sheet/);
+    // Nothing unmounted, so nothing had to be restored.
+    await expect(page.getByRole('dialog')).toBeVisible();
 
     await page.goBack();
-    // The entry survived, so the sheet comes back — the Android convention, and the proof that the
-    // close path left the stack alone.
     await expect(page.getByRole('dialog')).toBeVisible();
+
+    // One more press spends the sheet's own entry and closes it.
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  /**
+   * 🔴 **The cross-route case, which is the ONLY one that exercises the restore** — and A10's real
+   * consumer (ASSIGN-1's "Create a program", criterion 36). Leaving the route unmounts the sheet, so
+   * no `popstate` listener survives to hear the back press; the mount-time read of `history.state`
+   * is the whole mechanism, and it was specified but not implemented.
+   */
+  test('a cross-route link unmounts the sheet, and back from there restores it', async ({
+    page,
+  }) => {
+    const dialog = await openSheet(page);
+    await dialog.getByRole('link', { name: 'Go somewhere else (another route)' }).click();
+    await expect(page).toHaveURL(/\/privacy/);
+    // Genuinely gone, or "it came back" proves nothing.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await page.goBack();
+    // The entry survived the close path AND the remount read it — the Android convention.
+    await expect(page.getByRole('dialog')).toBeVisible();
+  });
+
+  /**
+   * 🔴 **A reload must NOT reopen it.** `history.state` outlives the document, so the restore is
+   * gated on a per-document token: without it a refresh resurrects a modal the user never opened in
+   * that document, emptied of whatever had been typed into it. This test is how that was found —
+   * the second visit to the same URL came back with the sheet open and the trigger unclickable
+   * behind it.
+   */
+  test('a reload does not resurrect it', async ({ page }) => {
+    await openSheet(page);
+    await page.reload({ waitUntil: 'networkidle' });
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

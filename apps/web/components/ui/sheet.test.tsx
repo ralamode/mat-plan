@@ -271,6 +271,25 @@ describe('Sheet — the keyboard geometry', () => {
     expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('190px');
     expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
   });
+
+  /**
+   * 🔴 **Asserts the CLASS, not the pixel, and that is deliberate.** jsdom resolves neither
+   * `env(safe-area-inset-top)` nor a breakpoint, so the rendered inset is unobservable here. The
+   * defect is not a wrong value: it is `cn` running `tailwind-merge` (`lib/utils.ts:5`) and
+   * silently DROPPING the base `pt-…` because a compact `py-2` conflicts with it — leaving the
+   * title under the status bar on a notched phone in landscape, the one device compact exists for.
+   * A dropped class is visible in the class string, so that is what this watches.
+   */
+  it('keeps the safe-area top inset under compact, which tailwind-merge would drop', () => {
+    const vv = withVisualViewport(190);
+    render(<Harness />);
+    openAndCapture();
+    act(() => {
+      vv.dispatchEvent(new Event('resize'));
+    });
+    const header = dialog().querySelector('.border-b');
+    expect(header?.className).toContain('safe-area-inset-top');
+  });
 });
 
 describe('Sheet — the back gesture', () => {
@@ -279,7 +298,9 @@ describe('Sheet — the back gesture', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
     render(<Harness />);
     openAndCapture();
-    expect(push).toHaveBeenCalledWith({ sheet: expect.any(String) }, '');
+    // The entry carries the sheet's id AND the token of the document that wrote it — see the
+    // "previous document" test for what the second field is load-bearing for.
+    expect(push).toHaveBeenCalledWith({ sheet: 'test-sheet', doc: expect.any(String) }, '');
 
     await closeVia(() => fireEvent.click(headerClose()));
     expect(back).toHaveBeenCalledTimes(1);
@@ -330,15 +351,40 @@ describe('Sheet — the back gesture', () => {
    * (criterion 36) with a back press that did nothing.
    */
   it('restores itself on MOUNT when the landed-on entry is its own', () => {
-    // Stands in for the browser having navigated away and come back onto the sheet's entry.
-    window.history.replaceState({ sheet: 'test-sheet' }, '');
+    // 🔴 **The entry is written by the component, not hand-rolled.** It carries a per-document
+    // token as well as the id, so a literal `{ sheet: 'test-sheet' }` would not match — and a test
+    // that hand-rolls the shape stops testing the shape. Opening once and remounting is also the
+    // faithful sequence: a cross-route link unmounts this component while the entry stays put.
+    const { unmount } = render(<Harness />);
+    openAndCapture();
+    const entry = window.history.state;
+    expect(entry?.sheet).toBe('test-sheet');
+
+    unmount();
+    window.history.replaceState(entry, ''); // the browser is still sitting on that entry
     render(<Harness />);
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('does NOT restore on mount for another sheet’s entry', () => {
+    const { unmount } = render(<Harness />);
+    openAndCapture();
+    const entry = window.history.state;
+    unmount();
     // Ids are the history keys; a stale entry from a different sheet must not open this one.
-    window.history.replaceState({ sheet: 'some-other-sheet' }, '');
+    window.history.replaceState({ ...entry, sheet: 'some-other-sheet' }, '');
+    render(<Harness />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  /**
+   * 🔴 **The reload, which the e2e found and the id alone could not distinguish.** `history.state`
+   * outlives the document, so a restore keyed on the id reopened the sheet after a refresh — a
+   * modal sitting there in a document the user never opened it in, emptied of whatever had been
+   * typed. The entry records which document wrote it; a new document has a new token.
+   */
+  it('does NOT restore from an entry written by a previous document', () => {
+    window.history.replaceState({ sheet: 'test-sheet', doc: 'a-previous-document' }, '');
     render(<Harness />);
     expect(screen.queryByRole('dialog')).toBeNull();
   });

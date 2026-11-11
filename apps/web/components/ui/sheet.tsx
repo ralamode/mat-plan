@@ -97,6 +97,21 @@ export type SheetProps = {
  */
 let openSheets = 0;
 
+/**
+ * 🔴 **Which DOCUMENT wrote the history entry — the discriminator the restore needs, and the e2e
+ * found it missing.** `history.state` survives a reload, so a mount-time restore keyed on the sheet
+ * id alone reopens a sheet in a document the user never opened it in: refresh the page and a modal
+ * is sitting there, emptied of whatever had been typed into it. The first version did exactly that,
+ * and the e2e caught it by visiting the same URL twice — the second visit came back with the sheet
+ * already open and the trigger unclickable behind it.
+ *
+ * A module constant is per document load by construction, which is precisely the line we want:
+ * Next's App Router navigates client-side, so a cross-route link and the back press after it stay in
+ * ONE document and the token matches (A10's case restores); a reload, or a return from a foreign
+ * origin, is a NEW document with a new token, so the stale entry is correctly ignored.
+ */
+const DOCUMENT_TOKEN = Math.random().toString(36).slice(2);
+
 /** Below this, `visualViewport.height` means there is no room for both pinned bars. */
 const COMPACT_VIEWPORT_HEIGHT = 480;
 
@@ -184,6 +199,12 @@ function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
 function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
+  /** One definition of "the top entry is mine", so the four call sites below cannot drift apart. */
+  const isOurEntry = () => {
+    const state = window.history.state;
+    return state?.sheet === id && state?.doc === DOCUMENT_TOKEN;
+  };
+
   /**
    * 🔴 **The cross-route restore, which the same-route listener below cannot do.** A link inside the
    * sheet that leaves the route unmounts this component, so there is no listener left to hear the
@@ -201,7 +222,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
-    if (!open && window.history.state?.sheet === id) onOpenChange(true);
+    if (!open && isOurEntry()) onOpenChange(true);
   }, [open, id, onOpenChange]);
 
   /**
@@ -216,7 +237,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
    */
   useEffect(() => {
     const sync = () => {
-      const isOurs = window.history.state?.sheet === id;
+      const isOurs = isOurEntry();
       if (isOurs && !open) onOpenChange(true);
       else if (!isOurs && open) onOpenChange(false);
     };
@@ -226,7 +247,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
 
   useEffect(() => {
     if (!open) return;
-    if (window.history.state?.sheet !== id) window.history.pushState({ sheet: id }, '');
+    if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
   }, [open, id]);
 
   /**
@@ -245,7 +266,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
   useEffect(() => {
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
-    if (closed && window.history.state?.sheet === id) window.history.back();
+    if (closed && isOurEntry()) window.history.back();
   }, [open, id]);
 }
 
