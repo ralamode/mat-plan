@@ -714,6 +714,67 @@ leaves those strings in place; chunk 3's backfill is idempotent over them.
 
 ## Amendments from the panel (2026-11-11)
 
+## 🔴 Decisions — maintainer, 2026-11-11
+
+Both escalated questions are ruled on. **This section is the contract where it differs from anything
+below it**; sections it supersedes are named, not silently left to contradict it.
+
+### D1 · The prescription identity is DROPPED from the wire
+
+> _"Drop it."_ — maintainer, 2026-11-11
+
+**What the writer does instead.** `programDayRows` gains one column — `prescriptions.movement_id`,
+no join — and the match is `(day role already fixed by the query) × movement_id`, using the internal
+id the writer has already resolved (`ResolvedSessionMovement.movementId`). Two rows for the same
+movement in one day are ambiguous and render `''`, exactly as the export's live path does today.
+
+**Why `movement_id` rather than the slug the plan drafted.** A slug compare is a proxy for "the row
+the entry's `movement_id` names", and `PICK-1` invariant 7 already schedules a later PR to replace it
+(`MOV-1` makes a rename change a slug). The id is in hand, so the proxy is skipped. ⚠️ **For the
+writer and the export to be the same function (A1), the export's live map keys on `movement_id`
+too** — `strengthMonthRows` returns the entry's. Expected byte-identical today, because
+`findOrCreateMovement` resolves **global-first**, so a hand-typed name lands on the same global row
+the prescription names; the implementing PR proves it with the existing export determinism test
+rather than asserting it.
+
+**Superseded by this decision:**
+
+| Section                                                                                                                                                                                                           | Status                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| § "The prescription identity on the submit payload" (the seven-layer table)                                                                                                                                       | **deleted**                                                                                                                                                      |
+| § "Why the name stays `prescriptionId`" and A6x's `prescriptionPublicId` rename                                                                                                                                   | **moot** — no wire field exists to name                                                                                                                          |
+| `matchPrescribedSnapshot`'s `prescriptionId` parameter and its id branch                                                                                                                                          | **replaced** by the `movement_id` match                                                                                                                          |
+| File table rows: `lib/programming/program-day.ts` (DTO field), `strength-form-scaffold.ts`, `strength-form.tsx`, `packages/shared/src/strength-session.ts`, `lib/dal/entries.ts`, and A5's `strength-section.tsx` | **deleted** — with their five test-file rows                                                                                                                     |
+| A15 (the DAL→writer hop test)                                                                                                                                                                                     | **moot** — nothing new crosses that hop                                                                                                                          |
+| The `ScaffoldRow` widening, its `@ts-expect-error` guard, and acceptance 12's crack question                                                                                                                      | **moot**                                                                                                                                                         |
+| The zod strip-mode risk row and its `actions.test.ts` value assertion                                                                                                                                             | **moot** — no field to strip                                                                                                                                     |
+| § Open question 1 of the original plan (does this owe a UX panel and screenshots?)                                                                                                                                | **answered: no.** No UI file changes, so there is nothing to panel and nothing to screenshot                                                                     |
+| `db:verify` cases 4 and 5 (the id-only cases)                                                                                                                                                                     | **replaced** — case 4 becomes "day role asserted, movement not in that day's program → `''`"; case 5 becomes "two prescriptions, same movement, same day → `''`" |
+
+**What survives unchanged:** A1 (the hoist), A2 (freeze whenever a day role is asserted), A3 (the
+`''` proof and its mutation), A4 (the unreachable fixture), A7, A8, A9, A10's divergence-table row,
+A11, A12, A13, A14, A16.
+
+**Consequence worth stating plainly:** when a day holds warm-up _and_ working sets of the same lift,
+both freeze `''`. None exist today, the schema permits them, and chunk 6's FK is where
+disambiguation belongs.
+
+### D2 · Spec R1 stands — the backfill writes `''` for unmatched rows
+
+> _"Keep R1 as written."_ — maintainer, 2026-11-11
+
+Chunk 3 writes `''` for ambiguous **and** unmatched rows, as `spec:280` (A8) and R1's recorded
+rejection already required. The Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3`
+stands as written, and the panel's contrary instruction is withdrawn.
+
+⚠️ **The aged-out-athlete consequence is recorded rather than acted on.** `programming.md`
+invariant 8 says flipping a kid to adult empties `prescribed` in every past month **and flipping
+back restores it**; a backfilled `''` makes that permanent for those rows. It is latent, not live —
+`kind` is **not editable** by decision (`PROF-1` a-r) — and the invariant already names the
+prerequisite for ever making it editable: _"the export stop depending on today's `kind`."_ **That
+belongs on the editable-`kind` work, not here**, and chunk 3 should not be asked to distinguish a
+class it cannot see: "the program no longer answers" and "never programmed" both return no rows.
+
 Six lenses ran against the plan as merged by #239. **Four blocking-class findings and sixteen
 amendments.** The convergence is the signal worth recording: four lenses independently caught the
 same false premise, three independently arrived at the same structural fix, and two each found the
@@ -867,7 +928,9 @@ green.
 correct and matches the idempotency rule; say "first receipt; a replay under the same `client_id`
 keeps the original".
 
-## 🔴 Open questions for the maintainer — the two things the panel cannot settle
+## ✅ Open questions — both answered 2026-11-11 (see § Decisions)
+
+_Kept for the reasoning that was put to the maintainer; the rulings are D1 and D2._
 
 ### 1 · Does the `prescriptionId` wire field earn its seven layers today?
 
@@ -919,7 +982,7 @@ Two further facts the maintainer should have before ruling:
 unchanged, the Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3` stays as written
 and nothing else changes.
 
-_No implementation code is written until both are answered._
+_Both answered. The contract for implementation is § Decisions._
 
 ## Review-response log (adversarial panel)
 
@@ -959,10 +1022,12 @@ rendered output is unchanged). Every lens read the plan against the code it name
 | C8  | Correctness  | Outside-the-tx read is sound on the semantic ground                               | _no change_     | reason corrected in A8              |
 | U3  | UX           | Rendering is byte-identical; no a11y or 360px movement                            | _no change_     | confirmed by reading every consumer |
 
-**Nothing was rejected, and two critiques are escalated rather than ruled on.** S4 is a product
-decision about what the CSV should say. C6b would reverse spec R1, a pushback already raised and
-declined with its reasoning on the record — the panel has no standing to overturn that, and an
-earlier draft of A10 did so silently, which the fresh review caught.
+**Two critiques were escalated rather than ruled on by the panel, and both are now decided.** S4 was
+a product decision about what the CSV should say — **accepted** (D1). C6b would have reversed spec
+R1, a pushback already raised and declined with its reasoning on the record; the panel had no
+standing to overturn it, and an earlier draft of A10 did so silently, which the fresh review caught.
+**Rejected** (D2), with the aged-out consequence recorded against the editable-`kind` prerequisite
+instead.
 
 **On the three places this plan asked reviewers to look first:**
 

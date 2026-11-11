@@ -30,15 +30,20 @@ own code. A defect four readers find separately is not a matter of taste.
   card and every day-role flip — with no signal. The writer now freezes whenever a day role is
   asserted, and NULL comes to mean only "logged before chunk 2".
 
-## Two questions are escalated rather than answered
+## Two questions were escalated, and both are now decided
 
-**Whether the prescription identity earns its place on the wire at all.** It changes an outcome only
-when one day holds two prescriptions for the same movement — warm-up and working sets of the same
-lift. None exist today; the schema permits them; the export's own docblock anticipates them. That is
-a decision about what the CSV should say, so the panel records both costings and leaves it.
+**Whether the prescription identity earns its place on the wire — dropped** _(maintainer,
+2026-11-11)_. It changed an outcome only when one day holds two prescriptions for the same movement
+— warm-up and working sets of the same lift — and none exist. The writer matches on the internal
+`movement_id` it has already resolved, which is also what `PICK-1`'s invariant 7 schedules a later
+PR to switch the drafted slug compare to. **The PR now touches no UI file at all**, which answers the
+plan's own open question about owing a UX panel: it does not.
 
-**Whether an aged-out athlete's history changes the backfill rule.** For the class the divergence
-table was missing, chunk 3 would freeze `''` as that athlete's entire history, permanently.
+**Whether an aged-out athlete's history changes the backfill rule — it does not** _(maintainer,
+2026-11-11)_. Spec R1 stands: chunk 3 writes `''` for ambiguous and unmatched rows. The consequence
+— that a backfilled `''` makes permanent a loss which is reversible today — is recorded against the
+prerequisite `programming.md` invariant 8 already names for ever making `kind` editable, which is
+where it belongs. It is latent, not live: `kind` is not editable by decision.
 
 🔴 **The panel's first draft simply overruled this, and a fresh review caught it.** It instructed
 chunk 3 to leave those rows NULL — reversing spec **R1**, a pushback already raised and **declined**
