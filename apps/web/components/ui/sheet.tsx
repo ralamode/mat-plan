@@ -1,7 +1,7 @@
 'use client';
 
 import { Dialog } from 'radix-ui';
-import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -125,13 +125,22 @@ const FOOTER_CLASS =
  *
  * Set on the CONTENT element rather than `:root`, so a style recalc on every scroll frame stays
  * inside the portal subtree.
+ *
+ * 🔴 **It takes the NODE, not a ref, and that is the whole bug it was shipped with.** A `useRef`
+ * version read `ref.current === null` and never ran: `Dialog.Portal` renders `null` on its first
+ * commit (`react-portal@1.2.1` mounts after a layout effect sets its container), so Content arrives
+ * in a SECOND commit — by which time an effect keyed on `[open, ref]` has already fired and will not
+ * fire again, because a ref object's identity never changes. The custom properties were therefore
+ * never written on any real open, the sheet silently fell back to the LAYOUT viewport (exactly the
+ * defect A2 exists to fix) and `compact` could never flip, making A8's branch dead code. A callback
+ * ref through `useState` re-renders when the node arrives, so the node itself is a dependency.
+ * `e2e/a11y.spec.ts` now asserts the property is non-empty, which is the only tier that can.
  */
-function useVisualViewport(open: boolean, el: RefObject<HTMLElement | null>): boolean {
+function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
   const [compact, setCompact] = useState(false);
 
   useEffect(() => {
     const vv = typeof window === 'undefined' ? null : window.visualViewport;
-    const node = el.current;
     if (!open || !vv || !node) return;
 
     const write = () => {
@@ -151,7 +160,7 @@ function useVisualViewport(open: boolean, el: RefObject<HTMLElement | null>): bo
       vv.removeEventListener('resize', write);
       vv.removeEventListener('scroll', write);
     };
-  }, [open, el]);
+  }, [open, node]);
 
   // A closed sheet has no geometry; reset so the next open starts from the pinned layout.
   return open && compact;
@@ -174,11 +183,27 @@ function useVisualViewport(open: boolean, el: RefObject<HTMLElement | null>): bo
  * landed-on entry LACKS `__NA` (`:61-72`) — which Next's own entry does not. An earlier plan called
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
-function useBackGesture(
-  open: boolean,
-  id: string,
-  onOpenChange: (open: boolean) => void,
-): { closeWithoutHistory: () => void } {
+function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
+  /**
+   * 🔴 **The cross-route restore, which the same-route listener below cannot do.** A link inside the
+   * sheet that leaves the route unmounts this component, so there is no listener left to hear the
+   * back press — the page is built fresh from `open = false` while `history.state` still says the
+   * sheet was open. A10 specified this and the first implementation did not have it, leaving
+   * ASSIGN-1's real case (criterion 36, "Create a program") with a dead back press.
+   *
+   * ⚠️ **Both halves are needed, which is why the first draft's single check kept being wrong in one
+   * direction or the other.** Same-route navigation keeps the tree mounted → only the `popstate`
+   * listener fires. Cross-route navigation remounts → only this runs. The one-shot flag keeps a
+   * consumer-driven close from being undone: without it, closing would re-run this on the next
+   * render and reopen the sheet.
+   */
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    if (!open && window.history.state?.sheet === id) onOpenChange(true);
+  }, [open, id, onOpenChange]);
+
   /**
    * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
    * way only the e2e could show. It checked the history state on MOUNT, which never fires: Next
@@ -204,12 +229,24 @@ function useBackGesture(
     if (window.history.state?.sheet !== id) window.history.pushState({ sheet: id }, '');
   }, [open, id]);
 
-  const closeWithoutHistory = useCallback(() => {
-    // Only our own entry. A close caused by a route change leaves the stack alone — see the docblock.
-    if (window.history.state?.sheet === id) window.history.back();
-  }, [id]);
-
-  return { closeWithoutHistory };
+  /**
+   * 🔴 **The pop is keyed on the open→closed TRANSITION, not on `onOpenChange`.** It lived in the
+   * `Dialog.Root` handler, which meant it only ran for closes Radix itself initiated (the ✕, Escape,
+   * an outside tap). Every real consumer closes the other way — `setOpen(false)` from its own
+   * handler, the way this sheet's own footer button does — and that path pushed an entry and never
+   * popped it. The visible damage was not the dead back press but the one after: the next sheet
+   * pushed on top of the stranded entry, so closing THAT one popped back onto the first and
+   * **reopened a sheet the user had already dismissed.**
+   *
+   * The `state.sheet === id` guard makes the two close paths that must NOT pop self-evident: a
+   * `popstate` close has already left our entry, and a navigation close has a route entry on top.
+   */
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const closed = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (closed && window.history.state?.sheet === id) window.history.back();
+  }, [open, id]);
 }
 
 /**
@@ -243,10 +280,12 @@ export function Sheet({
   status,
   dataTokens,
 }: SheetProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
+  // 🔴 A callback ref, NOT `useRef` — `useVisualViewport`'s docblock has the reason, and it is the
+  // difference between the keyboard geometry running and silently doing nothing.
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
 
-  const compact = useVisualViewport(open, contentRef);
-  const { closeWithoutHistory } = useBackGesture(open, id, onOpenChange);
+  const compact = useVisualViewport(open, content);
+  useBackGesture(open, id, onOpenChange);
 
   useEffect(() => {
     if (!open) return;
@@ -262,18 +301,10 @@ export function Sheet({
     };
   }, [open]);
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (!next) closeWithoutHistory();
-      onOpenChange(next);
-    },
-    [closeWithoutHistory, onOpenChange],
-  );
-
   const isDialog = variant === 'dialog';
 
   return (
-    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         {/* ALWAYS rendered — it carries the scroll lock. See note 1 in the module docblock. */}
         <Dialog.Overlay
@@ -284,7 +315,7 @@ export function Sheet({
           )}
         />
         <Dialog.Content
-          ref={contentRef}
+          ref={setContent}
           data-tokens={dataTokens}
           aria-describedby={undefined}
           // A confirm loses nothing to a mis-tap; a sheet full of unsaved toggles loses everything,
@@ -309,19 +340,30 @@ export function Sheet({
             // replaces the card it was on). `focus()` on a detached node is a SILENT no-op, which
             // would leave a screen-reader user at the top of the document.
             const fallback = document.querySelector('main');
-            if (fallback instanceof HTMLElement) fallback.focus();
+            if (!(fallback instanceof HTMLElement)) return;
+            // 🔴 **The `tabIndex` is set here, not assumed.** `focus()` on an element that is not
+            // focusable is another silent no-op, and NO `<main>` in `apps/web/app/**` carries a
+            // `tabIndex` — so this fallback did nothing in the real app while its unit test passed,
+            // because the test harness had added one. `-1` keeps it out of the tab order.
+            if (!fallback.hasAttribute('tabindex')) fallback.tabIndex = -1;
+            fallback.focus();
           }}
           className={cn(
             // `inset-0` is the fallback floor — note 4.
             'bg-background fixed inset-0 z-50 flex flex-col',
             'focus-visible:outline-none',
+            // 🔴 **`right-auto` and no `mx-auto`.** `inset-0` leaves `right: 0` set, so a box with a
+            // width, `left: 1/2` AND `margin-inline: auto` is over-constrained with AUTO margins —
+            // CSS then solves the margins inside the 50%→100% band instead of ignoring `right`, so
+            // the dialog drifted right by (viewport − 1040)/4: ~40px at 1200px, ~85px at 1360px.
+            // Releasing `right` makes `left: 50%` + `-translate-x-1/2` the only centring mechanism.
             isDialog
-              ? 'top-[calc(var(--sheet-vvt,0px)+16px)] bottom-auto left-1/2 mx-auto h-auto max-h-[calc(var(--sheet-vvh,100dvh)-32px)] w-[520px] max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-xl border'
+              ? 'top-[calc(var(--sheet-vvt,0px)+16px)] right-auto bottom-auto left-1/2 h-auto max-h-[calc(var(--sheet-vvh,100dvh)-32px)] w-[520px] max-w-[calc(100vw-32px)] -translate-x-1/2 rounded-xl border'
               : cn(
                   'top-[var(--sheet-vvt,0px)] h-[var(--sheet-vvh,100dvh)]',
                   // From 600px the SHEET variant becomes the same capped dialog — and it anchors to
                   // the visual viewport here too, or the pinned footer lands under an iPad keyboard.
-                  'min-[600px]:top-[calc(var(--sheet-vvt,0px)+16px)] min-[600px]:bottom-auto min-[600px]:left-1/2 min-[600px]:h-auto min-[600px]:max-h-[calc(var(--sheet-vvh,100dvh)-32px)] min-[600px]:w-[520px] min-[600px]:max-w-[calc(100vw-32px)] min-[600px]:-translate-x-1/2 min-[600px]:rounded-xl min-[600px]:border',
+                  'min-[600px]:top-[calc(var(--sheet-vvt,0px)+16px)] min-[600px]:right-auto min-[600px]:bottom-auto min-[600px]:left-1/2 min-[600px]:h-auto min-[600px]:max-h-[calc(var(--sheet-vvh,100dvh)-32px)] min-[600px]:w-[520px] min-[600px]:max-w-[calc(100vw-32px)] min-[600px]:-translate-x-1/2 min-[600px]:rounded-xl min-[600px]:border',
                 ),
           )}
         >
@@ -331,10 +373,16 @@ export function Sheet({
               there is nowhere to put them. ASSIGN-1's draft unpinned the header instead, which is
               wrong for the picker: its search box must stay at the visual-viewport top while typing.
               See `u0-sheet-primitive.md` A8, which settles the rule both plans specified differently. */}
+          {/* ⚠️ **`pt-…` is re-stated under compact, not left to the base class.** `cn` runs
+              `tailwind-merge` (`lib/utils.ts:5`), so a compact `py-2` is a CONFLICT with the base
+              `pt-[max(1rem,env(safe-area-inset-top))]` and wins — dropping the notch inset and
+              tucking the title under the status bar on exactly the device the compact rule is for
+              (a phone in landscape with the keyboard up). Tightening the top inset is intentional;
+              losing it is not. */}
           <div
             className={cn(
               'flex shrink-0 flex-col border-b p-4 pt-[max(1rem,env(safe-area-inset-top))]',
-              compact ? 'gap-2 py-2' : 'gap-3',
+              compact ? 'gap-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2' : 'gap-3',
             )}
           >
             <div className="flex items-start gap-2">

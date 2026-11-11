@@ -42,7 +42,12 @@ export function SheetDemo({ tokens, variant }: { tokens?: string; variant?: Shee
         {label}
       </Button>
       <Sheet
-        id={variant === 'dialog' ? 'inventory-dialog' : 'inventory-sheet'}
+        // 🔴 **Unique per CELL, not per variant.** The page renders this once per candidate palette,
+        // so keying the id on the variant alone gave every palette's sheet the same name. Pressing
+        // back then matched all of them at once and reopened each — and a stale entry written by one
+        // cell would reopen a different cell's sheet on the next visit. `id` is the history key; it
+        // has to be as unique as the instance (`u0-sheet-primitive.md`, A10).
+        id={`${tokens ?? 'control'}-${variant ?? 'sheet'}`}
         open={open}
         onOpenChange={setOpen}
         title={variant === 'dialog' ? 'Clear Tuesday?' : 'Pick a movement'}
@@ -71,11 +76,24 @@ export function SheetDemo({ tokens, variant }: { tokens?: string; variant?: Shee
         >
           Toggle the status message
         </Button>
-        {/* A route link, so the e2e can leave the sheet by navigation and press back from the
-            destination. That is the case an unconditional `history.back()` on close gets wrong. */}
+        {/* 🔴 **TWO links, because the two halves of A10 run on different mechanisms and each one
+            is invisible to the other's test.** A same-route link keeps this component mounted, so
+            only the `popstate` listener can reopen; a cross-route link unmounts it, so only the
+            mount-time restore can. The first version shipped the same-route link alone and called
+            the result "link, then back restores the sheet" — a vacuous assertion, because Next
+            preserved the component's state and the sheet never actually closed. */}
         <p className="mt-3 text-sm">
           <Link href="/design/tokens?from=sheet" className="underline">
-            Go somewhere else
+            Go somewhere else (same route)
+          </Link>
+        </p>
+        <p className="mt-1 text-sm">
+          {/* `/privacy` only because it is the cheapest real route to leave to and come back from —
+              static, no household query, no profile in the path. Nothing about the destination
+              matters; that it is a DIFFERENT route segment, so this component unmounts, is the
+              whole point. (`/design` is not a route — it would 404 and prove nothing.) */}
+          <Link href="/privacy" className="underline">
+            Go somewhere else (another route)
           </Link>
         </p>
         {/* Long enough to scroll, so "only the middle scrolls" is observable rather than asserted. */}

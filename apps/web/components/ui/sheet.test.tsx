@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Sheet } from './sheet';
 
 afterEach(() => {
+  // The geometry tests install a stub; leave it behind and an unrelated test inherits a viewport.
+  Reflect.deleteProperty(window, 'visualViewport');
   cleanup();
   window.history.replaceState(null, '');
 });
@@ -24,16 +26,20 @@ function Harness({
   footer,
   status,
   withLink,
+  consumerClose,
 }: {
   variant?: 'sheet' | 'dialog';
   footer?: React.ReactNode;
   status?: string;
   withLink?: boolean;
+  consumerClose?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  // Bare `<main>` on purpose — see the detached-trigger test. No `<main>` in the app has a
+  // `tabIndex`, so a harness that adds one hides a fallback that does nothing.
   return (
-    <main tabIndex={-1}>
+    <main>
       <button ref={trigger} type="button" onClick={() => setOpen(true)}>
         Open
       </button>
@@ -44,7 +50,17 @@ function Harness({
         title="Pick a movement"
         returnFocusTo={trigger}
         variant={variant}
-        footer={footer}
+        footer={
+          consumerClose ? (
+            // 🔴 The shape EVERY real consumer uses: its own state setter, never Radix's
+            // `onOpenChange`. `sheet-demo.tsx`'s own footer does exactly this.
+            <button type="button" onClick={() => setOpen(false)}>
+              Use as typed
+            </button>
+          ) : (
+            footer
+          )
+        }
         status={status}
       >
         <p>Body</p>
@@ -169,8 +185,13 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
 
     function Detached() {
       const [open, setOpen] = useState(true);
+      // 🔴 **A BARE `<main>`, no `tabIndex`** — and that is the point of this harness. The first
+      // version wrote `<main tabIndex={-1}>`, which no `<main>` in `apps/web/app/**` actually has,
+      // so the test asserted focus landing on an element the real app leaves unfocusable. It passed
+      // while the fallback was a silent no-op in production. Keep this bare: it is what proves the
+      // component makes its own target focusable.
       return (
-        <main tabIndex={-1}>
+        <main>
           <Sheet
             id="detached"
             open={open}
@@ -187,6 +208,7 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
     await closeVia(() => fireEvent.click(headerClose()));
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement?.tagName).toBe('MAIN');
+    expect((document.activeElement as HTMLElement).tabIndex).toBe(-1);
   });
 });
 
@@ -206,6 +228,48 @@ describe('Sheet — criterion 46, the live region', () => {
     openAndCapture();
     // A live region that mounts together with its text is never announced — `announcer.tsx` rule 1.
     expect(screen.getByRole('status').textContent).toBe('');
+  });
+});
+
+/**
+ * 🔴 **This tier can prove the properties are WRITTEN; only the e2e can prove they are right.**
+ * jsdom has no visual viewport, but a stub is enough for the defect that shipped: the effect read a
+ * ref that was still `null`, because `Dialog.Portal` mounts Content in a second commit, so nothing
+ * was ever written and the sheet fell back to the layout viewport — the exact thing A2 exists to
+ * prevent. A stub cannot catch a wrong `calc()`; it catches the hook not running at all, which is
+ * what happened. The real geometry is `e2e/a11y.spec.ts`.
+ */
+describe('Sheet — the keyboard geometry', () => {
+  function withVisualViewport(height: number, offsetTop = 0) {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop });
+    Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
+    return vv;
+  }
+
+  it('writes the visual viewport onto the content element on open', () => {
+    withVisualViewport(640, 12);
+    render(<Harness />);
+    openAndCapture();
+    expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('640px');
+    expect(dialog().style.getPropertyValue('--sheet-vvt')).toBe('12px');
+  });
+
+  it('re-writes them when the keyboard opens, and flips to the compact layout', () => {
+    const vv = withVisualViewport(640);
+    render(<Harness footer={<button type="button">Use as typed</button>} />);
+    openAndCapture();
+    // Pinned: the footer is a sibling of the scrolling body, not inside it.
+    const body = dialog().querySelector('.overflow-y-auto')!;
+    expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(false);
+
+    // 844×390 landscape with the keyboard up: ~190px of visual viewport. Two pinned bars would
+    // leave about 30px of list, so under COMPACT_VIEWPORT_HEIGHT the footer scrolls with the body.
+    act(() => {
+      Object.assign(vv, { height: 190 });
+      vv.dispatchEvent(new Event('resize'));
+    });
+    expect(dialog().style.getPropertyValue('--sheet-vvh')).toBe('190px');
+    expect(body.contains(screen.getByRole('button', { name: 'Use as typed' }))).toBe(true);
   });
 });
 
@@ -241,6 +305,45 @@ describe('Sheet — the back gesture', () => {
   });
 
   /**
+   * 🔴 **The path every real consumer takes, and the one that shipped broken.** The pop used to live
+   * in the `Dialog.Root` handler, so it only ran for closes Radix initiated (✕, Escape, outside
+   * tap). A consumer closing through its own `setOpen(false)` — the shape of every call site,
+   * including this sheet's own demo footer — pushed an entry and never popped it. The next sheet
+   * then stacked on the orphan, so dismissing THAT one popped back onto the first and reopened a
+   * sheet the user had already closed.
+   */
+  it('pops the entry when the CONSUMER closes it, not only when Radix does', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    render(<Harness consumerClose />);
+    openAndCapture();
+    await closeVia(() => fireEvent.click(screen.getByRole('button', { name: 'Use as typed' })));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(back).toHaveBeenCalledTimes(1);
+    back.mockRestore();
+  });
+
+  /**
+   * 🔴 **The cross-route half of A10.** A link that leaves the route unmounts the component, so no
+   * `popstate` listener survives to hear the back press: the page is rebuilt from `open = false`
+   * while the entry still says the sheet was open. Reading history on mount is the only thing that
+   * can restore it, and the first implementation did not have it — leaving ASSIGN-1's real case
+   * (criterion 36) with a back press that did nothing.
+   */
+  it('restores itself on MOUNT when the landed-on entry is its own', () => {
+    // Stands in for the browser having navigated away and come back onto the sheet's entry.
+    window.history.replaceState({ sheet: 'test-sheet' }, '');
+    render(<Harness />);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('does NOT restore on mount for another sheet’s entry', () => {
+    // Ids are the history keys; a stale entry from a different sheet must not open this one.
+    window.history.replaceState({ sheet: 'some-other-sheet' }, '');
+    render(<Harness />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  /**
    * 🔴 The navigation case. A sheet may hold a route link (ASSIGN-1's "Create a program",
    * criterion 36): the link pushes a SECOND entry on top of ours, so an unconditional
    * `history.back()` would pop THAT one and bounce the parent back with the sheet shut.
@@ -258,22 +361,52 @@ describe('Sheet — the back gesture', () => {
 });
 
 describe('Sheet — the dialog variant', () => {
-  it('closes on an outside tap, which the sheet variant refuses', () => {
-    const onDialog = vi.fn();
+  /**
+   * ⚠️ **The first version of this test rendered the dialog and asserted it existed** — it passed
+   * identically with A9 deleted, with `variant` ignored, and with the two branches swapped. The
+   * asymmetry IS the behaviour, so both variants have to be driven and the two results compared.
+   *
+   * `pointerdown` on `document.body`: Radix's `DismissableLayer` listens on the document and treats
+   * a target the layer does not contain as outside. The portal mounts *into* body, so body itself is
+   * outside the content — which is what a tap on the scrim is.
+   *
+   * ⚠️ **Two timing details, both read from the pinned source rather than guessed.** The
+   * `pointerdown` listener is attached inside a `setTimeout(0)`
+   * (`react-dismissable-layer@1.2.1`), so a press fired straight after render hits nothing; and a
+   * primary-button press can be deferred to the following `click`, so both are dispatched.
+   */
+  async function tapOutside(variant: 'sheet' | 'dialog') {
+    const onOpenChange = vi.fn();
     render(
       <Sheet
-        id="confirm"
+        id={`tap-${variant}`}
         open
-        onOpenChange={onDialog}
+        onOpenChange={onOpenChange}
         title="Clear Tuesday?"
         returnFocusTo={createRef()}
-        variant="dialog"
+        variant={variant}
       >
         <p>Every live entry is removed.</p>
       </Sheet>,
     );
-    // A confirm loses nothing to a mis-tap, so dismissal is allowed; a sheet of unsaved toggles
-    // loses everything with no undo, so it is not.
-    expect(screen.getByRole('dialog')).toBeTruthy();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      fireEvent.pointerDown(document.body);
+      fireEvent.click(document.body);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    return onOpenChange;
+  }
+
+  it('the dialog variant closes on an outside tap — a confirm loses nothing to a mis-tap', async () => {
+    expect(await tapOutside('dialog')).toHaveBeenCalledWith(false);
+  });
+
+  it('the sheet variant REFUSES an outside tap — unsaved toggles with no undo', async () => {
+    // M12 chose full screen on phones so there is "no backdrop to mis-tap"; above 600px the same
+    // sheet shows ~300px of scrim on a tablet, so the intent has to be re-applied by hand.
+    expect(await tapOutside('sheet')).not.toHaveBeenCalled();
   });
 });
