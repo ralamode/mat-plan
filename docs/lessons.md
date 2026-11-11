@@ -544,6 +544,16 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   itself, not just the prop name — `grep -c programNote` returning 3 (signature, type, render) is the
   check that would have caught it at 2.
 
+- **Three screenshots reported `✓` and all three showed a 404.** → `screenshot:ephemeral` takes
+  `--state`, and the route as a POSITIONAL. An unrecognised flag was not rejected: the parser treats
+  anything it does not know as positional, so `--only sheet-open` became the route `sheet-open`,
+  which 404s — and the capture of Next's not-found page was reported as a success for mobile, tablet
+  and desktop. A published 404 is a false claim in a PR, so this is an accuracy problem, not a
+  convenience one. → **The script now rejects an unknown flag** (`KNOWN_FLAGS`, and a bare `--` is
+  pnpm's separator, not a flag). The general rule it belongs to: _a capture harness must fail, not
+  capture, when it cannot tell what it was asked for_ — and **look at the image** before publishing
+  one, which is what actually caught this.
+
 ## Guards that pass while guarding nothing
 
 - **A focus assertion passes when focus was ALREADY there — so a "we move focus on failure" test must

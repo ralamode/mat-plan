@@ -1244,8 +1244,28 @@ async function runEphemeral(
   }
 }
 
+/**
+ * Every flag this script accepts. ⚠️ **An unknown flag has to be fatal**, because the parser below
+ * treats whatever it does not recognise as positional — so `--only sheet-open` silently became the
+ * ROUTE `sheet-open`, which 404s, and the run still printed `✓ mobile/tablet/desktop` for three
+ * screenshots of Next's not-found page. A capture that reports success while showing a 404 is worse
+ * than a crash: it gets published into a PR as evidence of a UI that was never rendered.
+ * _(maintainer, 2026-11-11)_
+ */
+const KNOWN_FLAGS = new Set(['--state', '--tz', '--theme', '--build', '--use-live-db']);
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+  // A bare `--` is pnpm's argument separator and reaches us verbatim; it is not a flag.
+  const unknown = argv.filter(
+    (a) => a !== '--' && a.startsWith('--') && !KNOWN_FLAGS.has(a.split('=')[0]!),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `unknown flag(s): ${unknown.join(', ')}. known flags: ${[...KNOWN_FLAGS].join(', ')}\n` +
+        'A route is passed as a POSITIONAL, e.g. `screenshot:ephemeral --state sheet-open /design/tokens`.',
+    );
+  }
   const stateFlagIdx = argv.indexOf('--state');
   const rawState = stateFlagIdx >= 0 ? argv[stateFlagIdx + 1] : 'empty';
   if (!rawState || !(rawState in STATES)) {

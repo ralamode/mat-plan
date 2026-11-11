@@ -136,9 +136,31 @@ hold a **route link** ("Create a program", criterion 36): base → sheet pushes 
 "did nothing"; skipping it strands `S` under `R`, so the first back press from the new page is a
 **dead press**, which on a phone reads as the app being stuck.
 
-**The rule:** `history.back()` only when `window.history.state?.sheet === id`. And on mount, if
-`history.state?.sheet === id`, the sheet opens — so back from the destination **restores** it, the
-Android convention.
+**The rule:** `history.back()` only when the top entry is this sheet's. And on mount, if it is, the
+sheet opens — so back from the destination **restores** it, the Android convention.
+
+🔴 **Amended after implementation (2026-11-11), because the first version of this rule was wrong in
+three ways that only running it could show.** The amendments are in the review-response log below;
+the rule as it now stands:
+
+1. **The pop is keyed on the open→closed TRANSITION, not on Radix's `onOpenChange`.** The handler
+   only fires for closes Radix initiates (✕, Escape, outside tap). Every real consumer closes through
+   its own state setter, and that path pushed an entry and never popped it — so the sheet _after_
+   stacked on the orphan, and dismissing it popped back onto the first and reopened a sheet the user
+   had already closed.
+2. **BOTH restore directions exist, because they are different mechanisms and each is invisible to
+   the other's test.** A same-route link keeps the component mounted → only a `popstate` listener can
+   act. A cross-route link unmounts it → only a mount-time read of `history.state` can, and nothing
+   is listening when the press happens. The first implementation had only the listener, leaving
+   criterion 36's actual case with a dead press.
+3. **An entry is only restorable by the document that wrote it.** `history.state` outlives the
+   document, so the id alone resurrected the sheet after a refresh — a modal in a document the user
+   never opened it in, emptied of what had been typed. The entry carries a per-document token;
+   Next's client-side routing keeps a cross-route round trip inside one document, so A10's case still
+   restores while a reload does not.
+
+**`id` is therefore the history key and must be unique per INSTANCE, not per variant** — the demo
+keyed it on the variant, so every palette's sheet shared a name and one back press matched them all.
 
 ⚠️ **The plan's "unverified on Next 16.4" is now verified by source:** `app-router.js` patches
 `pushState` to copy `__NA` into foreign state (`:98-100`), and `handlePopState` reloads only when the
@@ -214,3 +236,35 @@ to PICK-1 PR 4 before UI-3 lands, or it vanishes with the harness.
 
 Nothing was rejected: every critique either cited a spec line this contract contradicted, or a
 behaviour verified in the pinned dependency source.
+
+## Review-response log — correctness review (2026-11-11, post-implementation)
+
+A single correctness lens, run on the pushed branch. **Every finding was real**, which is the part
+worth recording: the implementation was green on `verify`, 1616 unit tests, 33/33 DB mutations and a
+94-test `e2e:local` run, and all six P1s describe behaviour that was _documented in this plan and
+inert in the code_. Two of them had tests that passed while asserting nothing.
+
+| #   | Critique (short)                                                          | Verdict      | Resolution                                                                            |
+| --- | ------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------- |
+| R1  | The keyboard geometry never runs — the effect reads a null ref            | **accepted** | Callback ref via `useState`; A2's properties now written. Unit + e2e assertions added |
+| R2  | A consumer-driven close strands its history entry                         | **accepted** | Pop keyed on the open→closed transition; A10 point 1                                  |
+| R3  | Four demo cells share one history `id`                                    | **accepted** | `id` is per cell; A10's closing note                                                  |
+| R4  | A10's mount-time restore was specified, not implemented                   | **accepted** | Implemented; A10 point 2                                                              |
+| R5  | The `main` focus fallback is a no-op — no app `<main>` is focusable       | **accepted** | The component sets `tabIndex` itself; the harness is bare so it cannot hide it again  |
+| R6  | The outside-tap test asserts nothing about A9                             | **accepted** | Both variants driven and compared; it failed with the branches swapped before passing |
+| R7  | The dialog variant drifts right above 1040px (`mx-auto` + `inset-0`)      | **accepted** | `right-auto`, no `mx-auto`; e2e measures the centre at 1360px                         |
+| R8  | `cn` **is** `tailwind-merge`, so compact's `py-2` drops the safe-area top | **accepted** | Re-stated `pt-…` under compact; a test watches for the dropped class                  |
+
+**Two further defects were found by running the result, not by the review:**
+
+- **A reload resurrected the sheet** (A10 point 3). The geometry e2e visits one URL twice; the second
+  visit arrived with the sheet already open and the trigger unclickable behind it.
+- **The "link, then back restores the sheet" e2e was vacuous.** The link was same-route, so Next
+  preserved the component's state and the sheet never closed — the assertion held with the whole
+  restore mechanism deleted. Same-route now pins the opposite property (landing back on its own entry
+  must not spuriously close it) and a cross-route link carries the restore.
+
+**Every assertion added in this round was probed by reverting the behaviour it protects** — nine at
+the unit tier, five in the browser. One probe round reported a false GREEN because the probe script's
+`git checkout` reverted to a commit that predated the fix it was mutating; the mutation was verified
+to produce a diff before the result was believed. _(maintainer, 2026-11-11)_

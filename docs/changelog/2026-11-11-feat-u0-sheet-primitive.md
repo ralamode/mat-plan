@@ -56,10 +56,43 @@ hunting for the wrong API.
   navigation it could never match the entry it wrote. The id is caller-supplied and stable now
   (`'movement-picker'`, `'clear-day-confirm'`), which also stops two sheets colliding.
 
-And the reopening itself was wrong twice: a mount-only check never fires, because Next keeps the tree
-mounted across a same-route navigation. One always-on `popstate` listener syncs both ways — back onto
-our entry reopens, back off it closes. Without it, returning from a link inside the sheet left the
-parent on an unchanged-looking page needing a second back press, which on a phone reads as stuck.
+And the reopening itself took four attempts to get right, which is recorded here because each wrong
+version looked finished. A mount-only check never fires on a **same-route** navigation, because Next
+keeps the tree mounted; an always-on `popstate` listener never fires on a **cross-route** one,
+because the component has been unmounted and there is nothing left listening. Both are present now —
+and the entry records which **document** wrote it, so a reload does not resurrect a modal in a page
+the user never opened it in.
+
+## Six more defects a correctness review found after all of that
+
+Every one was behaviour this PR's own contract documented and the code did not do, on a branch green
+across `verify`, 1624 unit tests, 33/33 DB mutations and the Playwright smoke.
+
+- 🔴 **The keyboard geometry never ran.** The hook read a ref that was still `null`: `Dialog.Portal`
+  mounts Content in a second commit, and an effect keyed on a ref object never re-runs, because the
+  object's identity does not change. So the custom properties were written on no real open, the
+  sheet sized itself to the **layout** viewport — the exact defect the panel raised it to fix, with
+  the pinned footer under the iOS keyboard — and the compact rule could never fire. A callback ref
+  makes the node a dependency.
+- 🔴 **A close by the consumer stranded its history entry.** The pop lived in Radix's `onOpenChange`,
+  which only fires for closes Radix itself starts. Every real call site closes through its own state
+  setter. The damage showed on the _next_ sheet: it stacked on the orphan, so dismissing it popped
+  back onto the first and **reopened a sheet the user had already closed**.
+- **The focus fallback was a no-op in the app.** `focus()` on a non-focusable element does nothing,
+  and no `<main>` under `app/**` has a `tabIndex` — the unit test passed only because its harness
+  added one. The component makes its own target focusable; the harness is bare so it cannot hide
+  this again.
+- **The capped dialog drifted right above 1040px.** `inset-0` leaves `right: 0` set, so a width plus
+  `left: 1/2` plus `margin-inline: auto` is over-constrained with _auto_ margins, and CSS solves the
+  margins inside the 50%→100% band instead of ignoring `right`.
+- **The compact header lost its safe-area inset**, because `cn` runs `tailwind-merge` and a compact
+  `py-2` conflicts with the base `pt-[max(1rem,env(safe-area-inset-top))]` and wins — tucking the
+  title under the status bar on exactly the device compact exists for.
+- **Two tests asserted nothing.** The outside-tap test rendered a dialog and checked it existed,
+  which passed with the variant rule deleted or its branches swapped; and "a link, then back,
+  restores the sheet" used a same-route link, so the sheet never closed and the assertion held with
+  the whole restore mechanism removed. Both are replaced, and **every assertion added in this round
+  was probed by reverting the behaviour it protects** — nine at the unit tier, five in a browser.
 
 ## Where it is proved
 
