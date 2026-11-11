@@ -78,10 +78,30 @@ describe('RenameForm — the duplicate warning (PROF-1 a-1d-ren)', () => {
   });
 
   it('names the routes out, including what going back preserves', async () => {
-    await submitWith(duplicateState());
+    // The ARCHIVED case, where no disambiguation line renders — so the routes sentence carries both
+    // halves. `initialName` is this athlete's own name ("Ada"), which is what going back preserves.
+    await submitWith(duplicateState({ archived: true }));
+    const text = screen.getByRole('group').textContent ?? '';
     // One button is only not-a-dead-end if the alternatives are stated.
-    expect(screen.getByRole('group').textContent).toContain('Ada keeps their name');
+    expect(text).toContain('Change the name');
+    expect(text).toContain('Ada keeps their name');
     expect(screen.getByRole('button', { name: ATHLETE_FORM_COPY.saveAnyway })).toBeTruthy();
+  });
+
+  /**
+   * 🔴 Found by reading the captured screenshot, not by a test. The disambiguation line ends
+   * "…to tell them apart", and the routes sentence used to open "To tell them apart, change the
+   * name" — the phrase twice in adjacent sentences, re-advising what had just been advised.
+   */
+  it('does not re-advise changing the name when the disambiguation line already did', async () => {
+    // Exact spelling + equal kind → the advice renders, so the routes sentence drops its half.
+    await submitWith(duplicateState());
+    const text = screen.getByRole('group').textContent ?? '';
+    expect(text).toContain('to tell them apart');
+    expect(text).toContain('Ada keeps their name');
+    expect(text).not.toContain('Change the name');
+    // …and the phrase appears exactly once.
+    expect(text.match(/tell them apart/g)).toHaveLength(1);
   });
 
   it('offers exactly ONE choice, and never Restore or Open', async () => {

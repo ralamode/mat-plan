@@ -1025,12 +1025,20 @@ export const ATHLETE_FORM_COPY = {
    * 360px, and the callout's own sentence already supplies the object. */
   saveAnyway: 'Save anyway',
   /**
-   * The routes OUT, named with what they preserve. The back route means something reassuring here
+   * The routes OUT, named with what they PRESERVE. The back route means something reassuring here
    * that it did not on add — the athlete keeps the name they already have — so the sentence says so
    * rather than just pointing at a link.
+   *
+   * 🔴 **Two variants, because the disambiguation line already says how to change the name.** When
+   * it renders, it ends "…add an initial, like “Ada B.”, to tell them apart" — and the first version
+   * of this sentence then opened "To tell them apart, change the name", repeating the phrase in
+   * adjacent sentences and re-advising what was just advised. Caught by LOOKING at the capture, not
+   * by a test; the same way the add form's at-cap contradiction surfaced.
    */
-  renameDuplicateRoutes: (stored: string) =>
-    `To tell them apart, change the name. Or go back and ${stored} keeps their name.`,
+  renameDuplicateRoutes: (stored: string, alreadyAdvised: boolean) =>
+    alreadyAdvised
+      ? `Or go back — ${stored} keeps their name.`
+      : `Change the name, or go back — ${stored} keeps their name.`,
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,

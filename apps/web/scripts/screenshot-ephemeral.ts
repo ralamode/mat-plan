@@ -429,6 +429,9 @@ const STATES = {
   // reason the island is controlled at all (React 19 resets an uncontrolled field when an action
   // settles, refusals included, which would empty the box under its own "Enter a name." error).
   'rename-rejected': null,
+  // PROF-1 a-1d-ren — the duplicate warning on RENAME. Not reachable by route: it exists only after
+  // a submit the server answers with a match, so the capture drives the form (see INTERACTIONS).
+  'rename-duplicate': null,
   // PROF-1 a-1d — the duplicate-name WARNING, which no route renders: it exists only after a submit
   // that the server answers with a match. Three states, because the callout is three different
   // screens and the copy differs in each.
@@ -571,6 +574,19 @@ const INTERACTIONS: Partial<Record<StateName, (page: Page) => Promise<void>>> = 
   },
   // PROF-1 a-r. Whitespace-only rather than empty: `required` stops a blank submit in the browser, so
   // an empty field would never reach the server's refusal — which is the state being captured.
+  /**
+   * PROF-1 a-1d-ren — type a name ANOTHER seeded athlete already holds and submit, leaving the
+   * callout on screen. ⚠️ Athlete Three's name, not this athlete's own: renaming to a fold-equal
+   * name is precisely the case the guard skips, so it would capture an ordinary save.
+   */
+  'rename-duplicate': async (page) => {
+    await page
+      .getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true })
+      .fill(SEED_PROFILE_3_NAME);
+    await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();
+    // The callout's focus target — waiting on it means the capture cannot race the round trip.
+    await page.getByRole('group').waitFor();
+  },
   'rename-rejected': async (page) => {
     await page.getByRole('textbox', { name: ATHLETE_FORM_COPY.nameLabel, exact: true }).fill('   ');
     await page.getByRole('button', { name: ATHLETE_FORM_COPY.save, exact: true }).click();

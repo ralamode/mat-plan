@@ -270,7 +270,7 @@ export function RenameForm({
                   back leaves this athlete's name exactly as it is — which is the reassuring fact a
                   parent needs and which the add form had no equivalent of. */}
               <span className={NAME_WRAP_CLASS}>
-                {ATHLETE_FORM_COPY.renameDuplicateRoutes(initialName)}
+                {ATHLETE_FORM_COPY.renameDuplicateRoutes(initialName, showDisambiguation)}
               </span>
             </>
           }
