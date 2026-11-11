@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { prescribedKey, resolvePrescribed, rolesNeedingLiveMatch } from './prescribed-snapshot';
+import { resolvePrescribed, rolesNeedingLiveMatch } from './prescribed-snapshot';
 
 const row = (over = {}) => ({
   prescribedSnapshot: null as string | null,
@@ -9,11 +9,11 @@ const row = (over = {}) => ({
   ...over,
 });
 
-const live = (entries: [string, string | null][]) => new Map(entries);
+const live = (entries: [number, string | null][]) => new Map([['strength_a', new Map(entries)]]);
 
 describe('resolvePrescribed — the frozen value wins', () => {
   it('uses the snapshot and never consults the live program', () => {
-    const map = live([[prescribedKey('strength_a', 7), '9xnewer @ 999']]);
+    const map = live([[7, '9xnewer @ 999']]);
     expect(resolvePrescribed(row({ prescribedSnapshot: '3x10 @ 45' }), map)).toBe('3x10 @ 45');
   });
 
@@ -25,17 +25,17 @@ describe('resolvePrescribed — the frozen value wins', () => {
    * it silently rewrites history.
    */
   it('keeps a frozen empty string frozen, rather than re-deriving it', () => {
-    const map = live([[prescribedKey('strength_a', 7), '3x10 @ 45']]);
+    const map = live([[7, '3x10 @ 45']]);
     expect(resolvePrescribed(row({ prescribedSnapshot: '' }), map)).toBe('');
   });
 
   it('falls back to the live match only when the snapshot is NULL', () => {
-    const map = live([[prescribedKey('strength_a', 7), '3x10 @ 45']]);
+    const map = live([[7, '3x10 @ 45']]);
     expect(resolvePrescribed(row(), map)).toBe('3x10 @ 45');
   });
 
   it("emits '' when the live match is ambiguous", () => {
-    const map = live([[prescribedKey('strength_a', 7), null]]);
+    const map = live([[7, null]]);
     expect(resolvePrescribed(row(), map)).toBe('');
   });
 

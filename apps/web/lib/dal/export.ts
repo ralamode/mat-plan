@@ -7,7 +7,7 @@ import {
   programDayRows,
   strengthMonthRows,
 } from '@mat-plan/db';
-import { type DayRole, DAY_ROLES } from '@mat-plan/shared';
+import { dayRoleSchema } from '@mat-plan/shared';
 import {
   bodyweightPath,
   type BodyweightRow,
@@ -22,11 +22,7 @@ import {
   liveMatchesByKey,
 } from '@mat-plan/shared/csv';
 
-import {
-  prescribedKey,
-  resolvePrescribed,
-  rolesNeedingLiveMatch,
-} from '../programming/prescribed-snapshot';
+import { resolvePrescribed, rolesNeedingLiveMatch } from '../csv/prescribed-snapshot';
 import { db } from './db';
 import { getHouseholdScope } from './household';
 import { getProfileByPublicId } from './profiles';
@@ -123,39 +119,36 @@ function foldStrengthRows(
 type ExportQuantityMutable = StrengthLogRow['sets'][number]['quantities'][number];
 
 /**
- * Reconstruct the `prescribed` column.
+ * The FALLBACK half of the `prescribed` column: today's program, for rows that were never
+ * snapshotted (V1-22 chunk 2).
  *
- * There is **no `entries.prescription_id`** (GAP-1 P1-2 is unbuilt), so the plan is matched back by
- * `(day_role, movement)` at export time rather than stored at log time.
- *
- * ⚠️ **That key is documented NON-UNIQUE** — `schema.ts`: *"a movement may legitimately appear twice
- * in a day — warm-up + working — so the key is NOT movement_id."* On an ambiguous match this emits
- * **empty**, never an arbitrary pick: the column's entire purpose is being *not* reconciled with
- * actuals, so a wrong plan is worse than no plan.
- *
- * ⚠️ **It reads TODAY's program, not the program as it was.** Safe while prescriptions are
- * seed-immutable; **V1-22 breaks it**, and that is recorded on the V1-22 row as a blocker it must
- * solve.
+ * ⚠️ **This used to be the whole story and no longer is.** The value is frozen onto the entry at log
+ * time; this runs only where `prescribed_snapshot IS NULL`, which after chunk 3's backfill means
+ * almost nowhere. The rule — including the non-unique key and the empty-on-ambiguous behaviour —
+ * lives in `packages/shared/src/csv/prescribed.ts`, which the log-time writer calls too, so the two
+ * paths cannot answer differently. See `docs/features/write-path.md`.
  */
 async function liveMatchesFor(
   profilePublicId: string,
   dayRoles: ReadonlySet<string>,
   scope: HouseholdScope,
 ) {
-  // `${dayRole}:${movementId}` → text, or null if that day programs the movement twice.
-  const byKey = new Map<string, string | null>();
+  // day role → (movement id → text, or null if that day programs the movement twice). Nested, so
+  // the shared composer's output is consumed as-is rather than re-keyed into a string nobody needs.
+  const byRole = new Map<string, ReadonlyMap<number, string | null>>();
   for (const role of dayRoles) {
-    if (!(DAY_ROLES as readonly string[]).includes(role)) continue;
-    const rows = await programDayRows(db, { profilePublicId, dayRole: role as DayRole, scope });
+    // ⚠️ The SAME narrowing the writer uses (`dayRoleSchema.safeParse`), not `.includes` + a cast.
+    // These are the one pair of functions that must agree about what a day role is.
+    const parsed = dayRoleSchema.safeParse(role);
+    if (!parsed.success) continue;
+    const rows = await programDayRows(db, { profilePublicId, dayRole: parsed.data, scope });
     // 🔴 The SAME function the log-time writer calls. The rendering and the ambiguity rule used to
     // live inline here, where `packages/db` could not reach them — so "the frozen path and the live
     // path agree" could only ever have been asserted by a test, and the test the plan specified was
     // unimplementable. Now it is one function with two callers.
-    for (const [movementId, text] of liveMatchesByKey(rows)) {
-      byKey.set(prescribedKey(role, movementId), text);
-    }
+    byRole.set(role, liveMatchesByKey(rows));
   }
-  return byKey;
+  return byRole;
 }
 
 /** Every CSV file for one athlete, as zip entries. */

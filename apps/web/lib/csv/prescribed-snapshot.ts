@@ -1,3 +1,5 @@
+import type { StrengthMonthRow } from '@mat-plan/db';
+
 /**
  * Resolving the `prescribed` CSV cell: frozen value first, live program only as a fallback
  * (V1-22 chunk 2).
@@ -9,18 +11,15 @@
  * nothing could tell the two apart until this function existed.
  */
 
-/** One folded export row, reduced to what the resolution actually reads. */
-export type PrescribedResolutionRow = {
-  /** `null` = never snapshotted. `''` = a real frozen rendering of an open prescription. */
-  prescribedSnapshot: string | null;
-  dayRole: string | null;
-  movementId: number | null;
-};
-
-/** The live map's key. One definition, so its writer and its reader cannot drift. */
-export function prescribedKey(dayRole: string | null, movementId: number | null): string {
-  return `${dayRole}:${movementId}`;
-}
+/**
+ * What the resolution reads off a folded export row — DERIVED from the query, so the nullability
+ * tracks the schema instead of being re-asserted here. (`prescribedSnapshot`: `null` = never
+ * snapshotted, `''` = a real frozen rendering of an open prescription.)
+ */
+export type PrescribedResolutionRow = Pick<
+  StrengthMonthRow,
+  'prescribedSnapshot' | 'dayRole' | 'movementId'
+>;
 
 /**
  * 🔴 **`??`, never `||`.** They differ on exactly the dominant shape: an `open()` prescription
@@ -32,9 +31,11 @@ export function prescribedKey(dayRole: string | null, movementId: number | null)
  */
 export function resolvePrescribed(
   row: PrescribedResolutionRow,
-  live: ReadonlyMap<string, string | null> | null,
+  live: ReadonlyMap<string, ReadonlyMap<number, string | null>> | null,
 ): string {
-  return row.prescribedSnapshot ?? live?.get(prescribedKey(row.dayRole, row.movementId)) ?? '';
+  if (row.prescribedSnapshot !== null) return row.prescribedSnapshot;
+  if (row.dayRole === null || row.movementId === null) return '';
+  return live?.get(row.dayRole)?.get(row.movementId) ?? '';
 }
 
 /**
