@@ -13,7 +13,11 @@ import {
   UNIT_CODES,
   UNIT_DIMENSION_BY_CODE,
   LOGGABLE_UNITS,
+  MOVEMENT_NAME_MAX,
+  MOVEMENT_NAME_MESSAGES,
+  movementNameSchema,
   numberTooHighMessage,
+  typedMovementNameIssues,
   UNIT_LABELS,
   quantityCeiling,
 } from '@mat-plan/shared';
@@ -418,4 +422,185 @@ describe('logStrengthSessionSchema — the per-unit ceiling (V1-30b-ii)', () => 
   });
 
   // The completeness guard lives in `packages/shared/src/units.test.ts`, beside the map.
+});
+
+describe('logStrengthSessionSchema — the movement name, typed vs picked (PICK-1 PR 2)', () => {
+  /** One movement, with whatever name/id the case is about. */
+  const named = (extra: Record<string, unknown>) =>
+    base({
+      movements: [
+        {
+          movementName: 'Back squat',
+          unit: 'lb',
+          clientId: newId(),
+          sets: [{ reps: 5, weight: 135 }],
+          ...extra,
+        },
+      ],
+    });
+
+  /** Every message the parse produced, flattened — the path is asserted separately where it matters. */
+  const messagesOf = (body: unknown): string[] => {
+    const res = logStrengthSessionSchema.safeParse(body);
+    return res.success ? [] : res.error.issues.map((i) => i.message);
+  };
+
+  // ⚠️ The CONTRACT test that pins the const's value, exactly once (AGENTS.md → constants): the
+  // literal belongs on the assertion side here, or the test is tautological. Everything else below
+  // asserts through MOVEMENT_NAME_MESSAGES / MOVEMENT_NAME_MAX.
+  it('pins MOVEMENT_NAME_MAX at 100 — the number the inline .max(100) used to carry', () => {
+    expect(MOVEMENT_NAME_MAX).toBe(100);
+  });
+
+  it('accepts a plain typed name', () => {
+    expect(logStrengthSessionSchema.safeParse(named({})).success).toBe(true);
+  });
+
+  it('accepts a movementPublicId and keeps it — the strip-mode trap', () => {
+    const id = newId();
+    const res = logStrengthSessionSchema.safeParse(named({ movementPublicId: id }));
+    expect(res.success).toBe(true);
+    // 🔴 zod strips unknown keys, so a field that is not IN the schema vanishes silently and the
+    // writer would fall back to the typed path with every id-picked movement. Assert the VALUE, not
+    // just success: `toMatchObject` on an absent key passes.
+    if (res.success) expect(res.data.movements[0]?.movementPublicId).toBe(id);
+  });
+
+  it('refuses a movementPublicId that is not a UUID', () => {
+    expect(logStrengthSessionSchema.safeParse(named({ movementPublicId: 'x' })).success).toBe(
+      false,
+    );
+  });
+
+  describe('a TYPED name earns the typed-name rules', () => {
+    it('refuses a comma — the CSV-contract guard (GAP-1 P2-2)', () => {
+      expect(messagesOf(named({ movementName: 'Bench, close grip' }))).toContain(
+        MOVEMENT_NAME_MESSAGES.commaOrLineBreak,
+      );
+    });
+
+    it('refuses a line break', () => {
+      expect(messagesOf(named({ movementName: 'Bench\npress' }))).toContain(
+        MOVEMENT_NAME_MESSAGES.commaOrLineBreak,
+      );
+    });
+
+    it.each(['🙂', '123', '---', '   .   '])('refuses %j — no letter', (name) => {
+      expect(messagesOf(named({ movementName: name }))).toContain(MOVEMENT_NAME_MESSAGES.noLetter);
+    });
+
+    it('accepts a non-Latin name — the rule is \\p{L}, not [a-z]', () => {
+      expect(
+        logStrengthSessionSchema.safeParse(named({ movementName: 'приседания' })).success,
+      ).toBe(true);
+    });
+
+    it('accepts a digit-bearing name with a letter, and a straight quote', () => {
+      expect(
+        logStrengthSessionSchema.safeParse(named({ movementName: '30" Box Jump' })).success,
+      ).toBe(true);
+    });
+
+    it('reports BOTH rules for a name that breaks both — one message per fault', () => {
+      const msgs = messagesOf(named({ movementName: '1,2' }));
+      expect(msgs).toContain(MOVEMENT_NAME_MESSAGES.commaOrLineBreak);
+      expect(msgs).toContain(MOVEMENT_NAME_MESSAGES.noLetter);
+    });
+
+    it('reports at [movements, i, movementName] — the path the action maps to "<name>: <message>"', () => {
+      const res = logStrengthSessionSchema.safeParse(named({ movementName: 'a,b' }));
+      expect(res.success).toBe(false);
+      if (!res.success) {
+        expect(res.error.issues.some((i) => i.path.join('.') === 'movements.0.movementName')).toBe(
+          true,
+        );
+      }
+    });
+  });
+
+  describe('an ID-RESOLVED movement does NOT (correctness S1)', () => {
+    // 🔴 The whole point of Decision 1. `movementName` on the id path is `movements.name` read from
+    // the row — a label. Refusing it here would refuse a row the household cannot edit until MOV-1.
+    it.each([
+      ['a comma', 'Bench, close grip'],
+      ['a line break', 'Bench\npress'],
+      ['no letter', '🙂'],
+    ])('accepts a label with %s when movementPublicId is present', (_why, movementName) => {
+      expect(
+        logStrengthSessionSchema.safeParse(named({ movementPublicId: newId(), movementName }))
+          .success,
+      ).toBe(true);
+    });
+  });
+
+  describe('the LABEL shape applies either way', () => {
+    it.each([[undefined], [newId()]])(
+      'refuses a blank name with movementPublicId = %j',
+      (movementPublicId) => {
+        const body = named(
+          movementPublicId === undefined
+            ? { movementName: '  ' }
+            : { movementPublicId, movementName: '  ' },
+        );
+        expect(messagesOf(body)).toContain(MOVEMENT_NAME_MESSAGES.missing);
+      },
+    );
+
+    it('refuses an over-long name, and says so once', () => {
+      const long = 'a'.repeat(MOVEMENT_NAME_MAX + 1);
+      const msgs = messagesOf(named({ movementName: long }));
+      expect(msgs).toContain(MOVEMENT_NAME_MESSAGES.tooLong);
+      // One fault, one message: the typed-name rules run in the session superRefine, which zod skips
+      // when the object shape already failed — so a long name does not also collect `noLetter`
+      // (it has letters) or a duplicate `tooLong`.
+      expect(msgs.filter((m) => m === MOVEMENT_NAME_MESSAGES.tooLong)).toHaveLength(1);
+    });
+
+    it('accepts exactly MOVEMENT_NAME_MAX characters', () => {
+      expect(
+        logStrengthSessionSchema.safeParse(named({ movementName: 'a'.repeat(MOVEMENT_NAME_MAX) }))
+          .success,
+      ).toBe(true);
+    });
+  });
+});
+
+describe('movementNameSchema — the standalone typed-name schema (MOV-1 / V1-22 A4 import it)', () => {
+  // It is NOT what the session uses (that path needs its own issue paths), so its agreement with
+  // `typedMovementNameIssues` is what keeps the two from drifting.
+  it.each([
+    ['a,b', MOVEMENT_NAME_MESSAGES.commaOrLineBreak],
+    ['🙂', MOVEMENT_NAME_MESSAGES.noLetter],
+    ['  ', MOVEMENT_NAME_MESSAGES.missing],
+    ['a'.repeat(MOVEMENT_NAME_MAX + 1), MOVEMENT_NAME_MESSAGES.tooLong],
+  ])('refuses %j with the named message', (name, message) => {
+    const res = movementNameSchema.safeParse(name);
+    expect(res.success).toBe(false);
+    if (!res.success) expect(res.error.issues.map((i) => i.message)).toContain(message);
+  });
+
+  it('accepts a real movement name, trimmed', () => {
+    expect(movementNameSchema.parse('  Back Squat  ')).toBe('Back Squat');
+  });
+
+  it('agrees with typedMovementNameIssues on every vector — one rule set, two consumers', () => {
+    for (const name of ['Back Squat', 'a,b', '🙂', '1,2', '30" Box Jump', 'приседания']) {
+      const viaSchema = movementNameSchema.safeParse(name);
+      const viaFn = typedMovementNameIssues(name);
+      // The schema adds the label-shape rules on top, so compare only the typed-name messages.
+      const schemaTyped = viaSchema.success
+        ? []
+        : viaSchema.error.issues
+            .map((i) => i.message)
+            .filter((m) =>
+              (
+                [
+                  MOVEMENT_NAME_MESSAGES.commaOrLineBreak,
+                  MOVEMENT_NAME_MESSAGES.noLetter,
+                ] as string[]
+              ).includes(m),
+            );
+      expect(schemaTyped.sort()).toEqual([...viaFn].sort());
+    }
+  });
 });

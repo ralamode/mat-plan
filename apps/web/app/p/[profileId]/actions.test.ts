@@ -531,6 +531,9 @@ function strengthForm(opts: {
   dayRole?: string;
   movements?: Array<{
     movementName?: string;
+    // PICK-1 PR 2: omitted unless a test sets it, so every existing case keeps exercising the typed
+    // path — which is also what proves the field is genuinely optional on the wire.
+    movementPublicId?: string;
     unit?: string;
     clientId?: string;
     status?: string;
@@ -557,6 +560,7 @@ function strengthForm(opts: {
           // Omitted unless the test sets it, so every existing case still exercises the
           // status-absent path that must default to `done` (GAP-1 P1-1a).
           ...(m.status !== undefined ? { status: m.status } : {}),
+          ...(m.movementPublicId !== undefined ? { movementPublicId: m.movementPublicId } : {}),
           sets: m.sets,
         })),
       ),
@@ -621,6 +625,97 @@ describe('logStrengthSessionAction — boundary (bad body → zod-reject)', () =
     expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
       movements: [{ unit: 'lb' }, { unit: 'kg' }, { unit: 'sec' }, { unit: 'm' }],
     });
+  });
+
+  // ── PICK-1 PR 2: the movement public id reaches the DAL, and the id decides ──────────────────
+  //
+  // ⚠️ `actions.ts` is NOT edited by PR 2 — the field rides inside `parsed.data.movements`, which the
+  // action forwards wholesale. That is exactly why these tests exist: zod's default is STRIP mode, so
+  // a field absent from the schema vanishes silently here and every picked movement would quietly
+  // fall back to the typed path, with every gate green. Assert the VALUE.
+  it('hands movementPublicId to the DAL with its value (the strip-mode trap)', async () => {
+    const movementPublicId = newId();
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementPublicId, sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    // `toMatchObject` on the whole argument, not `objectContaining`: a key that is simply ABSENT
+    // satisfies the latter, which is the shape of the bug this test is for.
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
+      movements: [{ movementPublicId }],
+    });
+  });
+
+  it('forwards BOTH an id and a different label — the id decides, in packages/db', async () => {
+    const movementPublicId = newId();
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          { movementPublicId, movementName: 'Bench', sets: [{ reps: '5', weight: '135' }] },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    // The action is a pass-through for both; `resolveSessionMovements` is what replaces the label
+    // with the database's name, and `db:verify` case (c) proves THAT against a real row.
+    expect(vi.mocked(logStrengthSession).mock.calls[0]![0]).toMatchObject({
+      movements: [{ movementPublicId, movementName: 'Bench' }],
+    });
+  });
+
+  it('rejects a movementPublicId that is not a UUID without touching the DAL', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementPublicId: 'not-a-uuid', sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    expect(res.fieldErrors?.movements).toBeTruthy();
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a comma', 'Bench, close grip'],
+    ['no letter', '123'],
+  ])('refuses a TYPED name with %s, naming the movement', async (_why, movementName) => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [{ movementName, sets: [{ reps: '5', weight: '135' }] }],
+      }),
+    );
+    expect(res.ok).toBe(false);
+    // The path `['movements', 0, 'movementName']` is what makes this read "<name>: <message>" rather
+    // than an unlocatable bare string — the mapping keys on a numeric `path[1]`.
+    expect(res.fieldErrors?.movements?.some((m) => m.startsWith(`${movementName}: `))).toBe(true);
+    expect(logStrengthSession).not.toHaveBeenCalled();
+  });
+
+  it('ACCEPTS the same label when an id is present (correctness S1)', async () => {
+    const res = await logStrengthSessionAction(
+      initial,
+      strengthForm({
+        profileId: PROFILE_ID,
+        movements: [
+          {
+            movementPublicId: newId(),
+            movementName: 'Bench, close grip',
+            sets: [{ reps: '5', weight: '135' }],
+          },
+        ],
+      }),
+    );
+    expect(res.ok).toBe(true);
+    expect(logStrengthSession).toHaveBeenCalled();
   });
 
   it('rejects a unit no form offers (count) without touching the DAL', async () => {
