@@ -860,3 +860,91 @@ test.describe('public routes', () => {
     });
   }
 });
+
+/**
+ * U0 — the shared sheet, scanned OPEN.
+ *
+ * 🔴 **The cold `ROUTES` loop never opens it**, so without this the only modal surface in the app
+ * would be audited exclusively in its closed state, which renders nothing.
+ *
+ * ⚠️ **This coverage is on borrowed time.** `app/design/tokens/page.tsx` says the UI-3 PR that picks
+ * a token set deletes that directory — and this is the only mounted sheet until `PICK-1` PR 4 adds
+ * the open picker. **UI-3 must not land before PICK-1 PR 4**, or the back gesture and the geometry
+ * stop being proven by anything. `docs/roadmap.md` carries the ordering.
+ */
+test.describe('U0 — the sheet, open', () => {
+  const openSheet = async (page: Page) => {
+    await page.goto(TOKEN_SETS_PATH, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'Open sheet' }).first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    return page.getByRole('dialog');
+  };
+
+  test('passes axe and keeps its targets tappable at 360px', async ({ page }) => {
+    await page.setViewportSize(NARROW_VIEWPORT);
+    const dialog = await openSheet(page);
+
+    await expectNoAxeViolations(page, 'sheet (open)');
+
+    // 🔴 **Measured on the DIALOG, not the document.** `expectNoHorizontalOverflow` compares
+    // `documentElement.scrollWidth` to its `clientWidth`, and a `position: fixed` box contributes
+    // nothing to that — `RemoveScroll` also sets `body { overflow: hidden }` while the sheet is
+    // open. An overflowing sheet would sail through the helper every other screen uses.
+    const overflows = await dialog.evaluate((d) => d.scrollWidth > d.clientWidth);
+    expect(overflows, 'the open sheet must not scroll sideways at 360px').toBe(false);
+
+    for (const name of ['Close', 'Use as typed', 'Toggle the status message']) {
+      const box = await dialog.getByRole('button', { name }).first().boundingBox();
+      expect(box, `"${name}" is rendered`).not.toBeNull();
+      expect(box!.height, `"${name}" clears the tap bar`).toBeGreaterThanOrEqual(MIN_TAP_TARGET_PX);
+    }
+  });
+
+  test('announces a change from inside itself — a page-level region would be aria-hidden', async ({
+    page,
+  }) => {
+    const dialog = await openSheet(page);
+    const status = dialog.getByRole('status');
+    await expect(status).toHaveText('');
+    await dialog.getByRole('button', { name: 'Toggle the status message' }).click();
+    // Criterion 46: the region has to be a DESCENDANT, because Radix `aria-hidden`s every sibling
+    // of the portal while the sheet is open.
+    await expect(status).toHaveText('3 matches');
+  });
+
+  test('the portaled surface carries the cell’s palette', async ({ page }) => {
+    await page.goto(TOKEN_SETS_PATH, { waitUntil: 'networkidle' });
+    // `Dialog.Portal` mounts under `document.body`, outside every `[data-tokens]` cell — so without
+    // forwarding, all four cells would demonstrate the CONTROL palette and this page would audit the
+    // candidates zero times.
+    await page.getByRole('button', { name: 'Open sheet' }).nth(1).click();
+    await expect(page.locator('[role=dialog][data-tokens]')).toHaveCount(1);
+  });
+
+  /**
+   * 🔴 The back gesture, and the only tier that can prove it. jsdom has no browser history chrome.
+   */
+  test('the system back button closes it, and a second press leaves the page', async ({ page }) => {
+    await openSheet(page);
+    await page.goBack();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // Still on the same page — the first press spent the sheet's own entry, not the page's.
+    expect(new URL(page.url()).pathname).toBe(TOKEN_SETS_PATH);
+  });
+
+  /**
+   * 🔴 The case an unconditional `history.back()` on close gets wrong: a route link inside the sheet
+   * pushes a SECOND entry over ours, so popping on close would bounce the parent back with the sheet
+   * shut — the tap appears to do nothing.
+   */
+  test('a link inside it navigates, and back from there restores the sheet', async ({ page }) => {
+    await openSheet(page);
+    await page.getByRole('link', { name: 'Go somewhere else' }).click();
+    await expect(page).toHaveURL(/from=sheet/);
+
+    await page.goBack();
+    // The entry survived, so the sheet comes back — the Android convention, and the proof that the
+    // close path left the stack alone.
+    await expect(page.getByRole('dialog')).toBeVisible();
+  });
+});

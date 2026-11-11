@@ -315,7 +315,7 @@ export default async function TokenSetsPage() {
           {TOKEN_SETS.map((set) => (
             <li key={set.id}>
               <SetCell set={set}>
-                <SurfacesCell />
+                <SurfacesCell setId={set.tokens ? set.id : undefined} />
               </SetCell>
             </li>
           ))}

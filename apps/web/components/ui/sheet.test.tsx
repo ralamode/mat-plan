@@ -38,6 +38,7 @@ function Harness({
         Open
       </button>
       <Sheet
+        id="test-sheet"
         open={open}
         onOpenChange={setOpen}
         title="Pick a movement"
@@ -170,7 +171,13 @@ describe('Sheet — focus return, which Radix does NOT do for us', () => {
       const [open, setOpen] = useState(true);
       return (
         <main tabIndex={-1}>
-          <Sheet open={open} onOpenChange={setOpen} title="T" returnFocusTo={detached}>
+          <Sheet
+            id="detached"
+            open={open}
+            onOpenChange={setOpen}
+            title="T"
+            returnFocusTo={detached}
+          >
             <p>Body</p>
           </Sheet>
         </main>
@@ -220,8 +227,14 @@ describe('Sheet — the back gesture', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
     render(<Harness />);
     openAndCapture();
-    // The entry was popped FOR us. Calling `back()` again would leave the page.
-    await closeVia(() => window.dispatchEvent(new PopStateEvent('popstate', { state: null })));
+    // ⚠️ **The history state must actually MOVE first.** A bare `dispatchEvent` leaves
+    // `window.history.state` reading `{sheet: …}`, so the component correctly concludes it is still
+    // on its own entry and stays open — the test would then be asserting against a back press that
+    // never happened. `replaceState` stands in for the browser having popped to another entry.
+    await closeVia(() => {
+      window.history.replaceState({ other: true }, '');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: { other: true } }));
+    });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(back).not.toHaveBeenCalled();
     back.mockRestore();
@@ -249,6 +262,7 @@ describe('Sheet — the dialog variant', () => {
     const onDialog = vi.fn();
     render(
       <Sheet
+        id="confirm"
         open
         onOpenChange={onDialog}
         title="Clear Tuesday?"

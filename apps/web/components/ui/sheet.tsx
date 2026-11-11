@@ -1,15 +1,7 @@
 'use client';
 
 import { Dialog } from 'radix-ui';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -58,6 +50,15 @@ import { cn } from '@/lib/utils';
 export type SheetVariant = 'sheet' | 'dialog';
 
 export type SheetProps = {
+  /**
+   * A STABLE name for this sheet — `'movement-picker'`, `'clear-day-confirm'`.
+   *
+   * 🔴 **It is persisted in `history.state`, so `useId()` cannot do this job**, and the first draft
+   * tried: a generated id is regenerated on every mount, so after a navigation it never matches the
+   * entry it wrote and the sheet cannot come back. The e2e caught it. Being caller-supplied is also
+   * better design — a consumer always has a natural name, and two sheets then cannot collide.
+   */
+  id: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The accessible name. Rendered as the `h2` that `aria-labelledby` points at. */
@@ -178,20 +179,30 @@ function useBackGesture(
   id: string,
   onOpenChange: (open: boolean) => void,
 ): { closeWithoutHistory: () => void } {
+  /**
+   * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
+   * way only the e2e could show. It checked the history state on MOUNT, which never fires: Next
+   * keeps the tree mounted across a same-route navigation, so returning from a link inside the sheet
+   * ran no effect at all and the sheet stayed shut. The entry was there the whole time (verified:
+   * `history.state` reads `{sheet: '…', __NA: true, …}` after the back) — nothing was listening.
+   *
+   * Back ONTO our entry reopens; back OFF it closes. The listener cannot be scoped to `open`, or the
+   * reopening half can never run.
+   */
+  useEffect(() => {
+    const sync = () => {
+      const isOurs = window.history.state?.sheet === id;
+      if (isOurs && !open) onOpenChange(true);
+      else if (!isOurs && open) onOpenChange(false);
+    };
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, [open, id, onOpenChange]);
+
   useEffect(() => {
     if (!open) return;
     if (window.history.state?.sheet !== id) window.history.pushState({ sheet: id }, '');
-
-    // 🔴 **Calls the consumer's `onOpenChange` DIRECTLY, not the Sheet's wrapper** — and that is
-    // what makes a `closingViaHistory` flag unnecessary. The entry has already been popped by the
-    // browser, so the close must not pop again; routing through the wrapper would reach
-    // `closeWithoutHistory` and do exactly that. ⚠️ An earlier draft carried such a flag; a probe
-    // showed removing it changed nothing, because this line never reaches the wrapper. Dead guards read
-    // as protection, so it is gone rather than kept "just in case".
-    const onPop = () => onOpenChange(false);
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, [open, id, onOpenChange]);
+  }, [open, id]);
 
   const closeWithoutHistory = useCallback(() => {
     // Only our own entry. A close caused by a route change leaves the stack alone — see the docblock.
@@ -220,6 +231,7 @@ function FooterFallback() {
 }
 
 export function Sheet({
+  id,
   open,
   onOpenChange,
   title,
@@ -231,7 +243,6 @@ export function Sheet({
   status,
   dataTokens,
 }: SheetProps) {
-  const id = useId();
   const contentRef = useRef<HTMLDivElement>(null);
 
   const compact = useVisualViewport(open, contentRef);
