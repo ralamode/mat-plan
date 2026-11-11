@@ -10,7 +10,16 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-**`CRUD-1`: `PROF-1` a-1w shipped the athlete CREATE path, DARK — no screen reaches it yet**
+**`CRUD-1` step 2 is CLOSED, and the milestone now waits on `PROG-1`.** `PROF-1` finished with
+`a-1u`'s picker form (#360), the duplicate-name warning on add (#361) and on rename (#363); **step
+6a shipped as U0, the shared sheet** (#364). Every remaining CRUD-1 step — 3, 4, 5, E and **6b
+(`PICK-1`)** — queues behind **`V1-22` chunk 2**, which they share `strength-form.tsx` with. Chunk
+2's plan was panelled on 2026-11-11 (six lenses, four blocking defects in a plan whose
+review-response log had read "not yet run") and its implementation waits on one escalated question.
+
+Behind that, the write path it builds on:
+
+**`PROF-1` a-1w shipped the athlete CREATE path, DARK — no screen reached it yet**
 (2026-11-09). `createProfile` is replay-first (`client_id` → the existing `public_id`, so a double
 submit adds one athlete), capped at **25 per household**, and the first mutation whose scope carries
 **no `profileId`** — the household matrix harness grew a `household` slot for it. The whole risk here

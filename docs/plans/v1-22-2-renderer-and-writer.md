@@ -607,7 +607,7 @@ and the `MovementVals` declaration (`:77-102`) — both append-style, so a merge
 | Risk                                                                                                                                                                     | Mitigation                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`\|\|` instead of `??`.** Typechecks, lints clean, and silently re-enables the rewrite the milestone exists to prevent — on the dominant shape (11 of 13 render `''`). | The `''` + non-empty-live unit case, which fails under `\|\|`. Plus the rule restated in `write-path.md` and in the `schema.ts:189-197` docblock it already carries.                                                                                                                                                                                        |
-| **`prescriptionId` omitted from the zod schema** → stripped → the feature is inert and every gate stays green (GAP-1 P0-1, verbatim).                                    | The `actions.test.ts` **value** assertion, plus the e2e, plus the schema round-trip test.                                                                                                                                                                                                                                                                   |
+| **`prescriptionId` omitted from the zod schema** → stripped → the feature is inert and every gate stays green (GAP-1 P0-1, verbatim).                                    | The `actions.test.ts` **value** assertion plus the schema round-trip test. ⚠️ The e2e this row used to cite is removed by A6 — it could not fail on a stripped field.                                                                                                                                                                                       |
 | **A stale scaffold freezes the wrong prescription** — the athlete scaffolds Day A, switches the day-role select to B, submits.                                           | The day-role scope is inherited from `programDayRows`, so the id matches nothing → NULL → fallback. `db:verify` case 4.                                                                                                                                                                                                                                     |
 | **A renamed card freezes the old movement's prescription.**                                                                                                              | `onName` clears it client-side; the slug guard refuses it server-side. `db:verify` case 5 and a form test.                                                                                                                                                                                                                                                  |
 | **A crafted body pairs any prescription id with any movement, in any household.**                                                                                        | Three inherited guards (household, day role, movement slug), none newly written. `db:verify` cases 3–5.                                                                                                                                                                                                                                                     |
@@ -712,18 +712,341 @@ leaves those strings in place; chunk 3's backfill is idempotent over them.
    chunk 4 (`spec:165`) so two parallel lanes cannot write the same heading. If the lanes are
    serialised, folding it into §2d is smaller.
 
+## Amendments from the panel (2026-11-11)
+
+## 🔴 Decisions — maintainer, 2026-11-11
+
+Both escalated questions are ruled on. **This section is the contract where it differs from anything
+below it**; sections it supersedes are named, not silently left to contradict it.
+
+### D1 · The prescription identity is DROPPED from the wire
+
+> _"Drop it."_ — maintainer, 2026-11-11
+
+**What the writer does instead.** `programDayRows` gains one column — `prescriptions.movement_id`,
+no join — and the match is `(day role already fixed by the query) × movement_id`, using the internal
+id the writer has already resolved (`ResolvedSessionMovement.movementId`). Two rows for the same
+movement in one day are ambiguous and render `''`, exactly as the export's live path does today.
+
+**Why `movement_id` rather than the slug the plan drafted.** A slug compare is a proxy for "the row
+the entry's `movement_id` names", and `PICK-1` invariant 7 already schedules a later PR to replace it
+(`MOV-1` makes a rename change a slug). The id is in hand, so the proxy is skipped. ⚠️ **For the
+writer and the export to be the same function (A1), the export's live map keys on `movement_id`
+too** — `strengthMonthRows` returns the entry's. Expected byte-identical today, because
+`findOrCreateMovement` resolves **global-first**, so a hand-typed name lands on the same global row
+the prescription names; the implementing PR proves it with the existing export determinism test
+rather than asserting it.
+
+**Superseded by this decision:**
+
+| Section                                                                                                                                                                                                           | Status                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| § "The prescription identity on the submit payload" (the seven-layer table)                                                                                                                                       | **deleted**                                                                                                                                                      |
+| § "Why the name stays `prescriptionId`" and A6x's `prescriptionPublicId` rename                                                                                                                                   | **moot** — no wire field exists to name                                                                                                                          |
+| `matchPrescribedSnapshot`'s `prescriptionId` parameter and its id branch                                                                                                                                          | **replaced** by the `movement_id` match                                                                                                                          |
+| File table rows: `lib/programming/program-day.ts` (DTO field), `strength-form-scaffold.ts`, `strength-form.tsx`, `packages/shared/src/strength-session.ts`, `lib/dal/entries.ts`, and A5's `strength-section.tsx` | **deleted** — with their five test-file rows                                                                                                                     |
+| A15 (the DAL→writer hop test)                                                                                                                                                                                     | **moot** — nothing new crosses that hop                                                                                                                          |
+| The `ScaffoldRow` widening, its `@ts-expect-error` guard, and acceptance 12's crack question                                                                                                                      | **moot**                                                                                                                                                         |
+| The zod strip-mode risk row and its `actions.test.ts` value assertion                                                                                                                                             | **moot** — no field to strip                                                                                                                                     |
+| § Open question 1 of the original plan (does this owe a UX panel and screenshots?)                                                                                                                                | **answered: no.** No UI file changes, so there is nothing to panel and nothing to screenshot                                                                     |
+| `db:verify` cases 4 and 5 (the id-only cases)                                                                                                                                                                     | **replaced** — case 4 becomes "day role asserted, movement not in that day's program → `''`"; case 5 becomes "two prescriptions, same movement, same day → `''`" |
+
+**What survives unchanged:** A1 (the hoist), A2 (freeze whenever a day role is asserted), A3 (the
+`''` proof and its mutation), A4 (the unreachable fixture), A7, A8, A9, A10's divergence-table row,
+A11, A12, A13, A14, A16.
+
+**Consequence worth stating plainly:** when a day holds warm-up _and_ working sets of the same lift,
+both freeze `''`. None exist today, the schema permits them, and chunk 6's FK is where
+disambiguation belongs.
+
+### D2 · Spec R1 stands — the backfill writes `''` for unmatched rows
+
+> _"Keep R1 as written."_ — maintainer, 2026-11-11
+
+Chunk 3 writes `''` for ambiguous **and** unmatched rows, as `spec:280` (A8) and R1's recorded
+rejection already required. The Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3`
+stands as written, and the panel's contrary instruction is withdrawn.
+
+🔴 **The ordering constraint this creates, which is the actionable half:** an athlete who is
+**already adult when chunk 3's backfill runs** has their prescribed history frozen `''` permanently;
+one who is a child at that moment is protected forever, because their rows freeze real strings. So
+**chunk 3's backfill must run before `kind` ever becomes editable.** That is guaranteed today and
+costs nothing to honour — but it is the kind of ordering that is obvious now and invisible in six
+months. Note also that chunk 3 is what _unblocks_ editable `kind`: after chunks 2 and 3 no row
+consults today's `kind`, which is the prerequisite `programming.md` invariant 8 names.
+
+⚠️ **The aged-out-athlete consequence is recorded rather than acted on.** `programming.md`
+invariant 8 says flipping a kid to adult empties `prescribed` in every past month **and flipping
+back restores it**; a backfilled `''` makes that permanent for those rows. It is latent, not live —
+`kind` is **not editable** by decision (`PROF-1` a-r) — and the invariant already names the
+prerequisite for ever making it editable: _"the export stop depending on today's `kind`."_ **That
+belongs on the editable-`kind` work, not here**, and chunk 3 should not be asked to distinguish a
+class it cannot see: "the program no longer answers" and "never programmed" both return no rows.
+
+Six lenses ran against the plan as merged by #239. **Four blocking-class findings and sixteen
+amendments.** The convergence is the signal worth recording: four lenses independently caught the
+same false premise, three independently arrived at the same structural fix, and two each found the
+missing file, the unprovable `''`, the unfalsifiable e2e and the self-contradicting allowlist.
+
+### A1 · The live-match composer is hoisted into `packages/shared`, and that is the central change (scope, UX, reuse — independently)
+
+`prescribedFor`'s inner loop — the `${dayRole}:${slug}` key, the `seen > 1 → null` ambiguity rule and
+the render — becomes a **pure, exported** helper beside the renderer. The writer and the export then
+run the _same function_, which is what acceptance 11 actually asks for.
+
+🔴 **Without this the plan's headline proof cannot exist.** The row-grain test was specified as "one
+fixture through both composers", but `prescribedFor` is unexported, `async`, and `server-only` in
+`apps/web` — `packages/db` cannot import it. The test as written is unimplementable, or it compares
+`formatPrescribedForExport` to itself. Hoisting turns acceptance 11 from an assertion into a
+structural fact, and gives the ambiguity rule its **first** unit test — nothing exercises it today.
+
+### A2 · The writer freezes whenever a day role is asserted; NULL comes to mean only "logged before chunk 2" (UX **BLOCKING**, correctness)
+
+The plan left NULL when the prescription did not resolve. A NULL row re-runs the **live** fallback at
+every export — so once chunk 4 makes prescriptions mutable, every such row's `prescribed` cell
+changes between two exports of the same month, with no signal anywhere.
+
+That is not an edge: it is every hand-typed movement, every card whose name was touched (`onName`
+fires per keystroke and clears the id even when the text still slugs identically), and every
+day-role flip — one tap. The parent feeding the CSV to their workflow sees Monday move from
+`3x10 per side` to `3x12 per side` and has no way to know it did.
+
+**The rule:** resolve the exact prescription first; otherwise fall back to the live match over the
+_same_ rows with the _same_ ambiguity rule; `''` on ambiguity. Acceptance 8 then holds for every row
+logged after this PR, and the plan's "degrades to today's behaviour" defence becomes true instead of
+true-until-chunk-4.
+
+### A3 · A `db:verify` case that writes and reads back `''`, plus a committed mutation (db-safety **BLOCKING**, correctness **BLOCKING**)
+
+**11 of 13 live prescriptions render `''`** (`programming.md`'s seed: 11 `open()`, 2 `fixed()`) —
+the dominant shape, and no planned case persists it. ⚠️ **Stated as analysis, not as a run:** none of
+this code exists yet, so each of these mutants _would survive the planned suite_ rather than _did_:
+`if (!rendered) return undefined`, `if (snapshot) map.set(…)`, `...(snapshot ? {…} : {})`. The
+implementing PR runs them.
+
+Each stores NULL for every `open()` entry, and by acceptance 11 the fallback then emits identical
+bytes — so the e2e cannot see it either. This is the write-side twin of the `||` trap this plan calls
+"the single most dangerous line in the chunk", and it had no pin. Add the readback case
+(`prescribed_snapshot = ''` **and** `count(*) WHERE … IS NULL = 0`) and commit the truthiness mutant
+so the proof is demonstrably capable of failing.
+
+### A4 · `db:verify` case 2's fixture is unreachable through the writer (correctness)
+
+`verify_test_block` is superseded by `verify_newer_block` for the same `(profile, role, scope)`
+triple, and `programDayRows` takes the newest block — so a submit carrying that prescription id finds
+no row and yields NULL, never `'3x4, last AMRAP @ 65'`. ⚠️ **The hazard is the obvious fix:**
+switching the expectation to `9xnewer @ 999` silently drops the only writer-path proof of the per-kid
+`reps` precedence _and_ of a comma inside the rendered string. Seed a dedicated block on an
+otherwise-unprogrammed role instead.
+
+### A5 · The file table gains `strength-section.tsx` (architecture, correctness)
+
+`ProgramDayDTO` is narrowed to `ScaffoldRow` by an explicit destructure at `strength-section.tsx:103`.
+It was not in the table — so the identity would have been plumbed through seven layers and dropped at
+the eighth. The `@ts-expect-error` containment assertion belongs at this boundary too, not only on
+`ScaffoldRow`.
+
+### A6 · No new e2e spec (scope, correctness)
+
+`prescribed-snapshot.spec.ts` asserts bytes the live fallback already produces on `main`: it stays
+green with the column deleted, the field stripped by zod, or the writer inert — the plan says so
+itself. The DoD's Speed budget asks whether the behaviour can be proven below the browser; it can
+(`db:verify` case 1 drives the shipped writer). The first e2e that _can_ fail is chunk 4's
+edit-then-re-export.
+
+### A7 · The containment scan becomes two assertions with no hand-maintained allowlist (reuse, architecture, correctness)
+
+The five-file allowlist omits `apps/web/lib/programming/prescribed-snapshot.ts`, which the plan's own
+code names — so the gate fails on day one, or gets widened at implementation time by nobody. Chunk 3's
+backfill correction would widen it again. Assert instead: (i) nothing under `apps/web/app/` or
+`apps/web/components/` names the column — the acceptance-12 property that matters — and (ii) exactly
+two **column references** under `packages/db/src`. ⚠️ Chunk 3's correction adds a third by design, the
+same bump A11 makes for the writer count; say so where the count is written, or the next author
+quietly raises the number. Build it on `source-scan.ts`'s shared helpers rather than a third
+hand-rolled `readdirSync` walker.
+
+### A8 · The typecheck premise is false, and it props up two rationales (four lenses, verified)
+
+The plan says "there is no `packages/db/tsconfig.json`" (`:549`). It exists; root `package.json`
+runs `pnpm --filter @mat-plan/db typecheck`; `strength-session.ts:243-249` records it. The
+outside-the-transaction decision is still right — a point-in-time read is what acceptance 9 asks for,
+and READ COMMITTED snapshots per statement, so "inside" buys nothing — but it must rest on that,
+not on a type-degradation scare that is not real.
+
+⚠️ **Every `path:line` in this plan is stale** and several are destined for docblocks and guides.
+Re-derive all of them before implementation. Chunk 1's plan PR recorded this exact trap.
+
+### A9 · Guide bookkeeping (architecture, correctness)
+
+- `packages/db/src/queries/export-month.ts` **is** owned, by `write-path.md` — the plan's
+  "unowned" claim is false, and inherited from chunk 1's plan.
+- `packages/shared/src/csv/prescribed.ts` — one renderer, three callers, two packages, a
+  byte-permanence invariant living _between_ files — would be owned by **no guide**, and the checker
+  passes a new unowned file silently. Add it to `write-path.md`'s `owns:`.
+- `programming.md` invariant 8 ("flipping a kid to adult empties `prescribed` in every PAST
+  month… **Nothing is snapshotted**") is half-retired by this chunk and must be rewritten here, along
+  with the `:290` trap.
+
+### A10 · The divergence table gains the class it misses (correctness)
+
+"The live program no longer answers for `(profile, role)`" — block superseded, movement retired,
+prescription or target soft-deleted, `kind` flipped. The table claimed exhaustiveness and is what
+chunk 3's author reads, so the class is added.
+
+⚠️ **What this amendment does NOT do is tell chunk 3 how to treat those rows.** An earlier draft of
+this section instructed the backfill to leave them NULL — which **reverses a decision the spec
+already recorded**, and the panel has no standing to do that. See open question 2.
+
+### A11 · Acceptance 12 is amended rather than left to be argued (architecture)
+
+"Exactly one writer" is contradicted by chunk 3's backfill correction one PR later — a second writer
+**by design**. Amend to "one log-time writer; the one-time backfill correction is the second, by
+design", so chunk 3 appends instead of relitigating.
+
+### A12 · `db:mutations` is named (db-safety)
+
+The plan never mentions it, yet **five** of its EDIT files are patch targets:
+`writers/strength-session.ts` (patch 03 — whose hunk is at exactly the line where the new call is
+inserted), `queries/program-day.ts` (03, 11), `queries/export-month.ts` (03), `lib/dal/entries.ts`
+(03) and `scripts/verify.ts` (02). State that the gate is re-run and which patches were checked or
+regenerated.
+
+### A13 · The per-kid reps precedence stops being defined twice (reuse)
+
+`toProgramDay` keeps its own `r.reps ?? r.targetReps`. ⚠️ **Not a contradiction in the plan** — its
+"two consumers" are the writer and the backfill, and it acknowledges `toProgramDay`'s separate copy
+deliberately. This is a plain DRY suggestion: one `effectiveReps` helper, so a flipped precedence
+cannot make the card and the CSV disagree about what was asked.
+
+### A14 · `dayRole` is narrowed by the schema, not cast (db-safety, correctness, architecture)
+
+`writeStrengthSession.dayRole` is `string`; `programDayRows` wants `DayRole`. Narrow with
+`dayRoleSchema` and mirror the same guard at the export's call site, so a schema-less caller —
+`verify.ts` today, `/api/sync` later — cannot pass an unknown role into the typed query.
+
+### A15 · The DAL→writer hop gets a failing-capable test (architecture)
+
+The field flows through an untested spread, and PICK-1 PR 2 replaces that spread with a
+field-by-field builder. One value assertion in `entries.test.ts` gives that rewrite something to keep
+green.
+
+### A16 · Replay wording (correctness)
+
+"Taken at server-receipt time" reads as re-snapshotting on replay. The write-once behaviour is
+correct and matches the idempotency rule; say "first receipt; a replay under the same `client_id`
+keeps the original".
+
+## ✅ Open questions — both answered 2026-11-11 (see § Decisions)
+
+_Kept for the reasoning that was put to the maintainer; the rulings are D1 and D2._
+
+### 1 · Does the `prescriptionId` wire field earn its seven layers today?
+
+With A2's fallback in place, the identity only changes an outcome when **one day holds two
+prescriptions for the same movement** — warm-up sets and working sets of the same lift. The frozen
+path could tell them apart; the live fallback cannot and emits `''` for both.
+
+|                            | Evidence                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Pairs like that today      | **none** — 13 prescriptions, no duplicate `(day_role, movement)`                       |
+| Schema                     | permits them: the unique index is `(block, day_role, idx)`, not movement               |
+| `export.ts`'s own docblock | anticipates them — _"the same movement can appear twice in a day — warm-up + working"_ |
+| When one could first exist | chunk 4, which makes prescriptions editable                                            |
+
+**Drop it** (the scope lens's position): removes the wire field, the zod change, the `ScaffoldRow`
+widening, `strength-section.tsx`, the form state and five test files — and therefore **touches no UI
+file at all**, which dissolves open question 1 entirely. Match on `(dayRole, movementId)` using the
+internal id the writer already holds, which is also what PICK-1's invariant 7 schedules a later PR to
+switch the slug guard to. Cost: when such a pair is authored, both rows freeze `''`.
+
+**Keep it:** the frozen CSV distinguishes warm-up from working. Cost: the plumbing, and a deliberate
+divergence from the fallback in exactly that case — which is what the divergence table exists to
+reconcile. If kept, it is renamed **`prescriptionPublicId`** end to end: `prescriptionId` already
+means the internal bigint FK in `packages/db` (`prescriptionTargets.prescriptionId`), PICK-1 PR 2 plans
+`movementPublicId` on the same wire schema, and the plan's "one name, no mapping" is false — the
+rename already happens in `toProgramDay`.
+
+### 2 · Does the aged-out-athlete case change the backfill rule the spec already settled?
+
+The correctness lens found a class the divergence table missed — "the live program no longer answers
+for `(profile, role)`" (block superseded, movement retired, prescription soft-deleted, `kind`
+flipped) — and observed that for those rows **chunk 3's backfill freezes `''` as the athlete's entire
+history, permanently.**
+
+🔴 **The panel's first draft answered it, and should not have.** It wrote "NULL rows in that class
+must not be backfilled", which reverses spec **R1** — a pushback that was raised and **rejected**,
+with the reasoning recorded: _"NULL leaves exactly the at-risk rows unprotected… `''` makes NULL mean
+one thing — never backfilled."_ That is a decision of record, so the panel escalates instead.
+
+Two further facts the maintainer should have before ruling:
+
+- **Chunk 3 may not be able to tell the classes apart.** "The live program no longer answers" and
+  "never programmed" both return `[]` from `programDayRows`, so an instruction keyed on the
+  difference collapses to "unmatched → NULL" — which is precisely what R1 proposed.
+- **A2 reduces the blast radius.** Every row logged _after_ chunk 2 is frozen, so this only governs
+  rows that predate it.
+
+**The question:** keep R1's `''`-for-unmatched everywhere, or carve out this one class? If R1 stands
+unchanged, the Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3` stays as written
+and nothing else changes.
+
+_Both answered. The contract for implementation is § Decisions._
+
 ## Review-response log (adversarial panel)
 
-⚠️ **Not yet run.** `plan-with-panel` fills this section before any implementation code is written,
-per [docs/plans/README.md](./README.md). Owed: the five standing engineering lenses that reviewed
-chunk 1 (correctness, scope, architecture, reuse, db-safety — note this chunk has **no DDL**, so
-db-safety's remit here is the read/write path and the `''`/NULL predicate, not a migration), plus a
-single UX reviewer under AGENTS.md's UI PR rules.
+**Round 1 — 2026-11-11.** Six lenses, run before any implementation code: the five standing
+engineering lenses plus a single UX reviewer (the depth AGENTS.md sanctions for a change whose
+rendered output is unchanged). Every lens read the plan against the code it names.
 
-Three places a reviewer should look first, because they are where I am least certain:
+| #   | Lens         | Critique (short)                                                                  | Verdict         | Resolution                          |
+| --- | ------------ | --------------------------------------------------------------------------------- | --------------- | ----------------------------------- |
+| U1  | UX           | NULL rows are rewritten by every future edit, with no signal — acceptance 8 fails | **accepted**    | A2                                  |
+| D1  | DB-safety    | No proof the writer stores `''`; 11 of 13 prescriptions render it                 | **accepted**    | A3                                  |
+| C1  | Correctness  | Same gap, reached independently: three mutants stay green                         | **accepted**    | A3                                  |
+| R1  | Reuse        | The acceptance-11 row test is unimplementable — `prescribedFor` is unreachable    | **accepted**    | A1                                  |
+| S1  | Scope        | Hoist the live-map composer so writer and export run one function                 | **accepted**    | A1                                  |
+| U2  | UX           | Same fix, reached from the silent-clears direction                                | **accepted**    | A1                                  |
+| A1x | Architecture | `strength-section.tsx` missing — the identity never reaches the scaffold          | **accepted**    | A5                                  |
+| C2  | Correctness  | Same omission, found independently                                                | **accepted**    | A5                                  |
+| C3  | Correctness  | `db:verify` case 2's fixture is unreachable; the obvious fix drops a real proof   | **accepted**    | A4                                  |
+| S2  | Scope        | The new e2e cannot fail on the thing it names                                     | **accepted**    | A6                                  |
+| C4  | Correctness  | Same, citing the DoD Speed budget                                                 | **accepted**    | A6                                  |
+| R2  | Reuse        | Containment allowlist contradicts the plan's own files; third `readdirSync` copy  | **accepted**    | A7                                  |
+| A2x | Architecture | Same allowlist problem, plus chunk 3 must weaken it                               | **accepted**    | A7, A11                             |
+| S3  | Scope        | `packages/db/tsconfig.json` claim is false; two rationales rest on it             | **accepted**    | A8                                  |
+| D2  | DB-safety    | Same, reached via the isolation-level question                                    | **accepted**    | A8                                  |
+| C5  | Correctness  | Same, plus every `verify.ts` citation is stale                                    | **accepted**    | A8                                  |
+| A3x | Architecture | Same, plus `export-month.ts` is owned, not unowned                                | **accepted**    | A8, A9                              |
+| A4x | Architecture | `csv/prescribed.ts` would be owned by no guide; `programming.md` inv. 8 retires   | **accepted**    | A9                                  |
+| C6  | Correctness  | Divergence table misses the "live program no longer answers" class                | **accepted**    | A10                                 |
+| D3  | DB-safety    | `db:mutations` unmentioned; three mutated files edited                            | **accepted**    | A12                                 |
+| R3  | Reuse        | Reps precedence defined twice after the plan says it is defined once              | **accepted**    | A13                                 |
+| D4  | DB-safety    | `dayRole` crosses a type seam by cast                                             | **accepted**    | A14                                 |
+| A5x | Architecture | DAL→writer hop untested, and PICK-1 PR 2 rewrites it                              | **accepted**    | A15                                 |
+| C7  | Correctness  | Replay wording reads as re-snapshotting                                           | **accepted**    | A16                                 |
+| S4  | Scope        | Drop the `prescriptionId` wire field entirely — YAGNI until chunk 6               | **open**        | see § Open question                 |
+| A6x | Architecture | If kept, rename to `prescriptionPublicId` — collides with the internal FK         | **conditional** | folded into the open question       |
+| D5  | DB-safety    | Replay semantics sound; write-once holds                                          | _no change_     | confirmed, A16 clarifies wording    |
+| C8  | Correctness  | Outside-the-tx read is sound on the semantic ground                               | _no change_     | reason corrected in A8              |
+| U3  | UX           | Rendering is byte-identical; no a11y or 360px movement                            | _no change_     | confirmed by reading every consumer |
 
-- the divergence table in "What chunk 2 owes toward acceptance 11" — I believe it is exhaustive, but
-  it is a claim about _every_ way the two paths can be asked the same question;
-- the decision to read the program **outside** the transaction;
-- whether `ScaffoldRow` carrying an identity is a crack in the wall acceptance 12 builds, or the
-  deliberate third widening its docblock anticipated.
+**Two critiques were escalated rather than ruled on by the panel, and both are now decided.** S4 was
+a product decision about what the CSV should say — **accepted** (D1). C6b would have reversed spec
+R1, a pushback already raised and declined with its reasoning on the record; the panel had no
+standing to overturn it, and an earlier draft of A10 did so silently, which the fresh review caught.
+**Rejected** (D2), with the aged-out consequence recorded against the editable-`kind` prerequisite
+instead.
+
+**On the three places this plan asked reviewers to look first:**
+
+- **The divergence table** claimed exhaustiveness and was not exhaustive — C6. Everything else four
+  lenses tried against it (skipped movement, duplicate hand-added card, same-slug rename, role
+  switch, crafted body, superseded block) agreed or degraded correctly **at export time** — C6's class is about the
+  _permanence_ chunk 3's backfill gives them, not about disagreement today.
+- **The outside-the-transaction read** is sound, and two lenses said so independently — but for a
+  reason the plan did not give. Under READ COMMITTED a single statement sees one snapshot, so moving
+  it inside buys nothing; the stated type-degradation reason was false.
+- **`ScaffoldRow` carrying an identity** is not a crack: the id is opaque, carries no magnitude, and
+  the writer re-resolves through `programDayRows`, so it is a hint rather than an authority. The
+  question it raised turned out to be the wrong one — whether the field should exist at all (S4) is
+  the live question, not whether `ScaffoldRow` can hold it safely.
