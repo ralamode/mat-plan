@@ -196,20 +196,29 @@ describe('logStrengthSession — ids resolve before any insert (PICK-1 PR 2)', (
   /**
    * A recording db whose `movements` answers are split by WHICH lookup is asking:
    * the public-id resolve (its WHERE names `public_id`) vs the slug lookups find-or-create makes.
-   * `publicIdRow` `null` is the refusal case; the slug lookups always MISS, so find-or-create would
-   * reach its INSERT if it were ever called — which is what makes "no INSERT" a real assertion
-   * rather than a tautology.
+   * `publicIdRow` `null` is the refusal case.
+   *
+   * 🔴 **The slug lookups MISS twice and then resolve**, exactly as the TEN-1 order test above sets
+   * them up: the two namespace lookups miss so find-or-create reaches its INSERT, and the
+   * post-insert re-resolve succeeds so it RETURNS rather than throwing "movement not found after
+   * upsert". That matters for what a failure says. Probed: with the two phases swapped, this shape
+   * reddens the `INSERT INTO "movements"` assertion — the thing the test is for — whereas a stub
+   * whose slug lookups always miss reddens the `rejects.toThrow` first, with a message about an
+   * upsert, telling the next reader the wrong cause.
    */
-  const dbWithMovements = async (publicIdRow: unknown[] | null) =>
-    (await import('./recording-db')).createRecordingDb((sql) => {
+  const dbWithMovements = async (publicIdRow: unknown[] | null) => {
+    let slugLookups = 0;
+    return (await import('./recording-db')).createRecordingDb((sql) => {
       if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]];
       if (/from "activity_types"/.test(sql)) return [[1, null]];
       if (/^select .* from "movements"/.test(sql)) {
         if (/"public_id"/.test(sql)) return publicIdRow === null ? [] : [publicIdRow];
-        return []; // every slug lookup misses → find-or-create WOULD insert if reached
+        slugLookups += 1;
+        return slugLookups >= 3 ? [[88]] : []; // 1 = global miss, 2 = own miss, 3 = found after INSERT
       }
       return [];
     });
+  };
 
   it('a refused id commits no typed sibling: no INSERT, no BEGIN', async () => {
     const rows = await dbWithMovements(null);
