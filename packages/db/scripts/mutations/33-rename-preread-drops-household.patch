@@ -1,0 +1,19 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 80fa74e..c6cbeae 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -1,4 +1,4 @@
+-import { and, sql, type SQL } from 'drizzle-orm';
++import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
+ 
+ import { foldName, MAX_HOUSEHOLD_ATHLETES, type ProfileKind } from '@mat-plan/shared';
+ 
+@@ -69,7 +69,7 @@ async function profileNameFor(
+   const rows = await exec
+     .select({ name: schema.profiles.name })
+     .from(schema.profiles)
+-    .where(isLiveProfile(publicId, scope))
++    .where(and(eq(schema.profiles.publicId, publicId), isNull(schema.profiles.deletedAt)))
+     .limit(1);
+   return rows[0] ?? null;
+ }
