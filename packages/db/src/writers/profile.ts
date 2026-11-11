@@ -75,9 +75,10 @@ async function profileNameFor(
 }
 
 /**
- * Rename ONE live profile inside `scope`. Returns the row's `public_id`, or `null` when the id is
- * unknown, soft-deleted or belongs to another household — one answer for all three, which the action
- * maps to the single `NO_ATHLETE_SAVE` envelope (ADR 0006 → 404, never 403).
+ * Rename ONE live profile inside `scope`. Answers `RenameProfileResult`: the row's `public_id` on
+ * success, `refused` when the id is unknown, soft-deleted or belongs to another household — one
+ * answer for all three, which the action maps to the single `NO_ATHLETE_SAVE` envelope (ADR 0006 →
+ * 404, never 403) — or `duplicate` when the new name collides, which is ADVISORY (a-1d-ren).
  *
  * `isLiveProfile(publicId, scope)` is THE ownership predicate, imported rather than rebuilt: a
  * hand-written `and(eq(publicId), isNull(deletedAt), eq(householdId))` here would be the twelfth copy
@@ -115,9 +116,18 @@ export async function renameProfile(
   // is not enough: two live athletes sharing a name is the designed case (the add form's "Add
   // another Ada" creates it, with consent), so a casing fix on Ada #1 would be warned about Ada #2 —
   // a collision that already existed and that nobody is creating here. And the parameter is not
-  // merely redundant, it is unreachable: with the fold unchanged this returns before the lookup, and
-  // with the fold CHANGED the row's stored name folds to the OLD value and cannot match the new one.
-  // There is no third case, which is why `findNameMatch` needs no exclusion argument at all.
+  // merely redundant, it is unreachable SEQUENTIALLY: with the fold unchanged this returns before
+  // the lookup, and with the fold CHANGED the row's stored name folds to the OLD value and cannot
+  // match the new one — which is why `findNameMatch` needs no exclusion argument.
+  //
+  // ⚠️ **Under CONCURRENCY the match can be self, and an earlier version of this comment claimed
+  // otherwise.** Two renames of the SAME row to the same new name: the first commits, and the
+  // second's lookup then finds that row — now stored under the new name, folding to the new value,
+  // and self. The parent is told "another athlete looks like they're already called Bea" about
+  // themselves, while the save has in fact landed. The stored name is correct either way (the
+  // rename is idempotent on the fold), so this is advisory copy being wrong, not corruption — and
+  // `excludeProfileId` would not have helped, since the write had already happened. `createProfile`
+  // states its analogous race the same way rather than claiming an absolute.
   const folded = foldName(name);
   if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
     const match = await findNameMatch(exec, scope, folded);

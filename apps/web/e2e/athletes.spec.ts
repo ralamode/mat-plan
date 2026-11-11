@@ -217,11 +217,19 @@ test('Enter on a duplicate warning re-warns instead of saving the collision', as
 test('the rename callout fits 360px with a 40-character name', async ({ page }) => {
   // Give Athlete Three a 40-character name to collide WITH, so the callout renders the longest
   // name the schema allows rather than the 13-character seed value.
-  await renameTo(page, LONG_NAME, SEED_THREE);
+  //
+  // 🔴 **`LONG_ARCHIVE_NAME`, never `LONG_NAME`.** `LONG_NAME` is `Athlete Two` padded, and
+  // `selectProfile` matches with an UNANCHORED `new RegExp(name)` then `.click()`, which is strict.
+  // Parking an `Athlete TwoWWW…` tile on Athlete THREE means a parallel spec's
+  // `selectProfile(page, 'Athlete Two')` (`log-bodyweight.spec.ts`) sees TWO matching links and
+  // fails in strict mode — `fullyParallel` runs the files concurrently against one database. This
+  // file's own safety property ("the new name APPENDS to the seeded one") only holds while the long
+  // name sits on the athlete it was built from.
+  await renameTo(page, LONG_ARCHIVE_NAME, SEED_THREE);
   try {
     await page.setViewportSize(NARROW_VIEWPORT);
     await page.goto(athleteEditPath(SEED_TWO), { waitUntil: 'networkidle' });
-    await nameField(page).fill(LONG_NAME);
+    await nameField(page).fill(LONG_ARCHIVE_NAME);
     await saveButton(page).click();
     await expect(page.getByRole('group')).toBeVisible();
 

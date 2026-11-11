@@ -7392,14 +7392,41 @@ console.log(
   );
 
   // An acknowledgement for a DIFFERENT folded name does not wave this one through.
+  // ⚠️ Discriminated on `reason`, not on `.ok === false` alone: a writer that answered `refused` for
+  // any reason would otherwise pass a test named for the acknowledgement, which is the shape
+  // `db:mutations` exists to catch. The read-back is the other half — a warning must write nothing.
+  const staleAck = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Twin', {
+    acknowledgedDuplicate: foldName('Somebody Else'),
+  });
   assert.equal(
-    (
-      await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Twin', {
-        acknowledgedDuplicate: foldName('Somebody Else'),
-      })
-    ).ok,
-    false,
+    staleAck.ok === false && staleAck.reason,
+    'duplicate',
     'PROF-1 a-1d-ren: a stale acknowledgement does not wave a different name through',
+  );
+  assert.equal(
+    await nameOf(twinTwo.publicId),
+    'Ren Other',
+    'PROF-1 a-1d-ren: …and the stale-acknowledgement attempt wrote nothing',
+  );
+
+  // 🔴 **THE TENANCY PROOF FOR THE NEW PRE-READ, and it needs a name household B HOLDS.**
+  // `renameProfile` now reads the stored name first, through `isLiveProfile`. Every pre-existing
+  // cross-household case renames to a name NOBODY holds, so an unscoped pre-read would still answer
+  // `refused` — the UPDATE's own predicate refuses — and no assertion could go red. What an unscoped
+  // read WOULD change is this: B renaming A's athlete to a name **B** holds would answer `duplicate`
+  // instead of `refused`, which is a one-bit oracle on A's stored name, keyed on a public id. That is
+  // exactly the "one answer" ADR 0006 exists to preserve.
+  await insertProfileOwnedBy(asPg, B_SCOPE, {
+    clientId: newId(),
+    name: 'B Oracle',
+    kind: PROFILE_KIND.kid,
+  });
+  assert.equal(
+    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle')),
+    'REFUSED:refused',
+    'PROF-1 a-1d-ren: household B renaming A’s athlete to a name B HOLDS answers refused, never ' +
+      'duplicate — the fold guard’s pre-read is scoped, and a leak here would be an oracle on A’s ' +
+      'stored name',
   );
 
   console.log(
