@@ -580,7 +580,18 @@ flowchart LR
   unique index on a folded name is impossible because "Add another" is a feature. Do not describe it
   as a constraint.
 
-  🔴 **(4) And the fourth one lives in the FORM, which this guide does not own** — recorded here
+  🔴 **(4) RENAME runs the same check, but gated on the FOLD — not on the id** (PROF-1 a-1d-ren).
+  `renameProfile` reads the stored name and skips the lookup entirely when
+  `foldName(new) === foldName(stored)`. ⚠️ **Excluding the athlete being renamed is NOT equivalent
+  and was the plan's first answer:** two live athletes sharing a name is the _designed_ case, so a
+  parent fixing `ada` → `Ada` on Ada #1 would be warned about **Ada #2** — a collision that already
+  existed and that this edit does not create. The fold guard also makes an exclusion parameter
+  unreachable, which is why `findNameMatch` has none: with the fold unchanged the lookup never runs,
+  and with it changed the row's stored name folds to the OLD value and cannot match. ⚠️ The rename
+  envelope carries **no `atCap`** — a rename creates nothing, so the quota is never consulted and the
+  field would always be `false`; it is optional in `ActionState` for exactly that reason.
+
+  🔴 **(5) And the fifth one lives in the FORM, which this guide does not own** — recorded here
   because it is the only place both halves are visible. The acknowledgement travels as a submit
   button's `name`/`value`, so **which button is the form's default decides whether an unacknowledged
   Enter silently acknowledges.** HTML activates the first submit button in **tree order** on every
