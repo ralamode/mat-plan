@@ -2890,6 +2890,37 @@ logged.`) and **duplicates** — have unit coverage (`bodyweight-section.test.ts
     alternative, before it offers delete. It sits behind Beta 1's step-up, which this row adds to that
     list.
 
+- **PROF-2 — refuse a BYTE-IDENTICAL duplicate name, add and rename.** _(maintainer, 2026-11-10,
+  reviewing `a-1d-ren`'s callout: "can't we just prevent them from saving … until it is unique?")_
+  Today both forms **warn and allow** — `a-1d-add` ships "Add another Ada" as a feature and
+  `a-1d-ren` offers "Save anyway". This row is the narrower rule the maintainer and I agreed is
+  defensible: a **hard refusal** when the typed name is byte-identical to a live athlete's **and**
+  the kinds match, because that is the only case where two picker tiles are genuinely
+  indistinguishable.
+
+  🔴 **No folding, deliberately.** `foldName` is lossy by design — `José`/`Jose`, voiced kana and
+  several Devanagari and Thai vowel forms all fold equal — so a hard block on the FOLD would make it
+  impossible to name a child `José` because a `Jose` exists. The existing advisory warning stays for
+  the folded, lossy case; only the exact case becomes a refusal.
+
+  **What it costs, and whether waiting makes it worse:** it does **not** get materially more
+  expensive. It gates new writes only, so no migration or backfill is owed, and the plumbing already
+  exists — the envelope carries `duplicate`, both forms render a callout, and the writers already run
+  the lookup. The one thing that does grow is **expectation**: the longer both surfaces allow exact
+  duplicates, the more a later refusal is a behaviour regression for households that created one on
+  purpose, which is a product call rather than an engineering cost.
+
+  ⚠️ It **contradicts `a-1d-add`'s "Add another {name}"** unless both move together — a rule enforced
+  on one surface and not the other is worse than either choice, so this row covers both forms or
+  neither. Also: a byte-identical check is still a server round trip (the client does not hold the
+  household's names), so "disable the button until unique" is not the shape; the refusal arrives the
+  way every other refusal does. Check against [`ID-1`](#id-1) when taken — it owns the identity model
+  these names hang off.
+
+  **Acceptance:** an exact same-kind collision is refused on add and on rename with one typed error;
+  a folded-only collision still warns and still allows; `db:verify` proves both arms and a mutation
+  patch reddens the refusal.
+
 - **YDP — run the youth daily program (the second real program).** _(Ray, 2026-09-23.)_ Everything the
   app needs before [Ray's daily A/B program](./samples/youth-daily-program/README.md) — the one his kids
   actually run, every day, on paper — can be logged in mat-plan. Grouped because they share one goal and

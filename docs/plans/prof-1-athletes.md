@@ -1050,6 +1050,13 @@ parent may well restore later, landing two Adas on the picker with no warning at
 - Changing an athlete's `kind` (the plan's standing exclusion — it owes the export-history question an
   answer first).
 - Any cap interaction, per the table above.
+- **Refusing a collision outright.** The maintainer asked whether the form could simply block saving
+  until the name is unique (2026-11-10). It cannot block on the FOLD — that is lossy by design, so a
+  hard block would make `José` unnameable beside a `Jose` — and blocking on rename while the add form
+  ships "Add another {name}" would leave the two surfaces contradicting each other. The narrower rule
+  we agreed is defensible — refuse a **byte-identical** name with a matching kind, on **both** forms —
+  is filed as `PROF-2` ([plan.md](../plan.md)), with the note that waiting costs nothing structural:
+  it gates new writes only and owes no migration.
 - `rename-form.tsx`'s pre-existing page-level `state.error` focus gap (introduced by #350): this chunk
   fixes it on the path it makes reachable; the general case is noted in the log.
 
