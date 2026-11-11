@@ -84,3 +84,19 @@ describe('formatPrescription', () => {
     expect(formatPrescription({ sets: null, targetReps: null })).toBe('');
   });
 });
+
+/**
+ * 🔴 **The DTO's key set, pinned.** `ProgramDayRow` now carries the prescription's internal
+ * `movement_id` (V1-22 chunk 2), and the only thing keeping it off the page was a docblock saying
+ * `toProgramDay` must not map it. A probe confirmed the gap: adding `movementId` to the map left
+ * every test green. Internal ids are enumerable, and the DTO is the boundary AGENTS.md calls
+ * minimal — so a future widening has to edit this list on purpose.
+ */
+describe('ProgramDayDTO stays minimal', () => {
+  it('exposes exactly these fields — no internal ids leak through the map', () => {
+    const [dto] = toProgramDay([row]);
+    expect(Object.keys(dto!).sort()).toEqual(
+      ['idx', 'isBodyweight', 'load', 'movementName', 'sets', 'targetReps', 'unitDefault'].sort(),
+    );
+  });
+});

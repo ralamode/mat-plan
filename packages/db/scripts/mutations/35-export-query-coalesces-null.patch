@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/queries/export-month.ts b/packages/db/src/queries/export-month.ts
+index 1bc6836..2ff124a 100644
+--- a/packages/db/src/queries/export-month.ts
++++ b/packages/db/src/queries/export-month.ts
+@@ -75,7 +75,7 @@ export function strengthMonthRows(
+         // V1-22 chunk 2: the FROZEN prescription. `IS NULL` means "never snapshotted"; `''` is a
+         // real rendered value (an `open()` prescription). Selected raw — no `coalesce`, which would
+         // destroy the distinction the column exists for.
+-        prescribedSnapshot: schema.entries.prescribedSnapshot,
++        prescribedSnapshot: sql<string | null>`coalesce(${schema.entries.prescribedSnapshot}, '')`,
+         dayRole: schema.sessions.dayRole,
+         sessionType: schema.sessions.sessionType,
+         sessionId: schema.sessions.id,

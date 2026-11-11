@@ -53,24 +53,29 @@ describe('prescribed_snapshot stays out of the UI (V1-22 acceptance 12)', () => 
     expect(/prescribed_?[sS]napshot/.test(scaffold)).toBe(false);
   });
 
-  it('keeps the writers that DO name it inside the data layer', () => {
-    // Not an allowlist — a direction check. Chunk 3 adds a correction here by design, and should be
-    // able to do that without editing a gate.
-    const namers = [
+  /**
+   * 🔴 **This was a tautology and is the reason to re-read a guard you just wrote.** The first
+   * version built `namers` from globs that were already restricted to `packages/` and
+   * `apps/web/lib/`, then asserted every entry started with one of those prefixes — true by
+   * construction. It now globs the WHOLE repo, so the direction is actually checked, and it covers
+   * `e2e/`, `scripts/`, `middleware.ts` and `instrumentation*.ts`, which the narrow version did not.
+   */
+  it('is named ONLY inside the data layer, scanning the whole repo', () => {
+    const everywhere = [
+      ...globSync('apps/web/**/*.{ts,tsx,js,jsx,mjs}', { cwd: REPO }),
       ...globSync('packages/*/src/**/*.ts', { cwd: REPO }),
       ...globSync('packages/*/scripts/**/*.ts', { cwd: REPO }),
-      ...globSync('apps/web/lib/**/*.ts', { cwd: REPO }),
-    ].filter(
-      (f) =>
-        !f.includes('node_modules') &&
-        !f.endsWith('prescribed-snapshot-containment.test.ts') &&
-        /prescribed_?[sS]napshot/.test(readFileSync(join(REPO, f), 'utf8')),
-    );
+    ].filter((f) => !f.includes('node_modules') && !f.includes('.next'));
+    expect(everywhere.length).toBeGreaterThan(200);
+
+    const namers = everywhere
+      .filter((f) => !f.endsWith('prescribed-snapshot-is-contained.test.ts'))
+      .filter((f) => /prescribed_?[sS]napshot/.test(readFileSync(join(REPO, f), 'utf8')));
+
     expect(namers.length).toBeGreaterThan(0);
-    for (const f of namers) {
-      expect(
-        relative(REPO, join(REPO, f)).startsWith('packages/') || f.startsWith('apps/web/lib/'),
-      ).toBe(true);
-    }
+    const escaped = namers.filter(
+      (f) => !f.startsWith('packages/') && !f.startsWith('apps/web/lib/'),
+    );
+    expect(escaped).toEqual([]);
   });
 });
