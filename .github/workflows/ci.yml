@@ -471,9 +471,58 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
+      # 🔴 **No `--with-deps`, and that is the whole point of this step's shape.** `--with-deps`
+      # shells out to `apt-get`, which reaches Ubuntu's mirrors — and it ran on EVERY job, cache hit
+      # included, because Playwright does the dep install BEFORE it checks whether the browser is
+      # already downloaded. So it was the one network call in this step that the cache above could
+      # not cover. It failed FIVE runs in a row on 2026-11-11 with `Temporary failure resolving
+      # 'archive.ubuntu.com'` — four on a feature branch and then the post-merge run on `main`,
+      # which is the part that matters: this step can turn the trunk red on its own. It is a class
+      # of runner flakiness refiled across years rather than an outage we were unlucky to meet:
+      # actions/runner-images #675 (2020), #7048 (2023) and #10785 (2024) were each closed once the
+      # mirror recovered, and #14823 (open) is the slow-mirror variant of the same host.
+      #
+      # 🔴 **What it was fetching, read from that run's own apt output rather than inferred:** every
+      # one of the 21 shared libraries Chromium links against was `already the newest version`
+      # (`libnss3`, `libgbm1`, `libasound2t64`, `libdrm2`, …), as were `xvfb` and the entire Latin
+      # text stack — `fonts-liberation`, `fonts-noto-color-emoji`, `libfontconfig1`, `libfreetype6`.
+      # Two different reasons, worth keeping straight: Chrome's own `Depends` accounts for the 21
+      # libraries and `fonts-liberation` (the image preinstalls Chrome 156, Edge and ChromeDriver,
+      # and the package cannot install without them), while `xvfb` and `fonts-noto-color-emoji` are
+      # in the image's package list in their own right, and `libfontconfig1`/`libfreetype6` arrive
+      # transitively through `libcairo2`. Image: `ubuntu-26.04`, `20261101.186.1`.
+      #
+      # ⚠️ It was **not** a no-op, and an earlier version of this comment wrongly said so. In the
+      # cited run apt got as far as a PLAN — `0 upgraded, 9 newly installed`, 21.9 MB of archives —
+      # and then failed to fetch, so that run installed nothing; the 9 are what every green run
+      # before it installed. Seven are for scripts this app never renders (`fonts-ipafont-gothic`
+      # Japanese, `fonts-wqy-zenhei` Chinese, `fonts-tlwg-loma-otf` Thai, `xfonts-cyrillic`,
+      # `xfonts-scalable`, plus `xfonts-encodings`/`xfonts-utils`). **Two are not:**
+      # `fonts-freefont-ttf` and `fonts-unifont` are pan-Unicode, and `←`/`→` fall outside Geist's
+      # `latin` subset — so dropping them can change which font supplies those two glyphs.
+      #
+      # That cannot move an assertion, and the reason is geometric rather than typographic: every
+      # name-bearing arrow link (day, edit, routine editor) carries `NAV_LINK_CLASS`'s `min-h-11`
+      # and `NAME_WRAP_CLASS`'s `wrap-anywhere` (`lib/constants.ts`), and the tap-target checks
+      # measure `boundingBox().height` only — a wider glyph can make a row TALLER, never shorter,
+      # and a wrapping link cannot overflow. What measures width is `athletes.spec.ts`'s
+      # 40-character-name test (picker, day page, edit page, settings) and `a11y.spec.ts`'s
+      # per-screen 360px checks. ⚠️ The a11y `ROUTES` loop is **390px and has no overflow check**,
+      # so do not cite it for this.
+      #
+      # ⚠️ **If a future image drops those libraries, CI goes red at the SMOKE step, not at this
+      # one.** `playwright install` runs host validation but only *warns* — `playwright-core@1.64.1`
+      # catches the failure into a "Host validation warning" (`coreBundle.js:72213`) — so this step
+      # stays green and the browser fails when the smoke launches it. ⚠️ Playwright's friendly
+      # "missing dependencies" message can also be skipped: it caches a `DEPENDENCIES_VALIDATED`
+      # marker for 30 days (`:34979-34984`) INSIDE `~/.cache/ms-playwright`, which the step above
+      # restores, so after an image change the error may be Chromium's own loader message instead.
+      # Either way the fix is a SEPARATE `playwright install-deps chromium` step (apt, and its
+      # flakiness back with it), never `--with-deps` here: keeping the download and the OS packages
+      # apart is what lets the cache cover the half that is cacheable.
       - name: Install Chromium
         if: steps.guard.outputs.skip != 'true'
-        run: pnpm --filter web exec playwright install --with-deps chromium
+        run: pnpm --filter web exec playwright install chromium
 
       - name: Migrate + seed + link the fixture member (reuse packages/db scripts)
         if: steps.guard.outputs.skip != 'true'
