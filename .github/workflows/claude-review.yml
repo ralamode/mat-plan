@@ -62,7 +62,7 @@ jobs:
 
       # The panel read v1.0.237 (fd1c128). Any other SHA here must be re-read per docs/runbooks.md →
       # CLAUDE_CODE_OAUTH_TOKEN, step 6, before merge.
-      - uses: anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1.0.264
+      - uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1.0.268
         with:
           # zizmor: ignore[secrets-outside-env] — issue_comment always runs main's workflow and only writers
           # can push branches, so an Environment adds deployment noise to every PR for no new boundary.
