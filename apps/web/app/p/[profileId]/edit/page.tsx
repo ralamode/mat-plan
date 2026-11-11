@@ -105,7 +105,16 @@ export default async function RenameAthletePage({
         <p className="text-muted-foreground text-sm">{PROFILE_KIND_LABELS[profile.kind]}</p>
       </header>
 
-      <RenameForm profileId={profile.id} name={profile.name} from={from} fallbackPath={own} />
+      {/* `kind` gates the "both will show as" line in the duplicate warning (a-1d-ren): a picker
+          tile shows name AND kind, so a Child and an Adult sharing a name are already distinct and
+          that advice would be false. The form never renders it — this page already does. */}
+      <RenameForm
+        profileId={profile.id}
+        name={profile.name}
+        kind={profile.kind}
+        from={from}
+        fallbackPath={own}
+      />
 
       {/* PROF-1 b: archive is not on this form, so the screen says where it IS rather than leaving a
           parent to hunt. 🔴 **This is the ONE member-branched copy line in the feature** — a member
