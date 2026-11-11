@@ -4961,12 +4961,12 @@ const snapByDay = new Map(
 assert.equal(
   snapByDay.get('2026-03-02'),
   '',
-  "V1-22 chunk 2: the EXPORT query returns '' as '' — a coalesce here would hide every open() row",
+  "V1-22 chunk 2: the EXPORT query returns '' as '' — a nullif(…, '') here would send every open() row back to today's program",
 );
 assert.equal(
   snapByDay.get('2026-03-03'),
   null,
-  'V1-22 chunk 2: the EXPORT query returns NULL as NULL — a nullif here would re-derive every row',
+  "V1-22 chunk 2: the EXPORT query returns NULL as NULL — a coalesce(…, '') here would make every never-snapshotted row look frozen",
 );
 
 console.log('✓ V1-22 chunk 2: the writer freezes the prescription, and a replay keeps the first');

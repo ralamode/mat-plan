@@ -122,9 +122,12 @@ describe('rule 2 — a day role IS asserted, so every movement freezes', () => {
     programDayRows.mockResolvedValue([]);
     const scope = { householdId: 42 } as never;
     await prescribedSnapshotsFor({} as never, args({ scope }));
-    expect(programDayRows).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ profilePublicId: 'p-1', dayRole: 'strength_a', scope }),
-    );
+    // `toMatchObject` on the whole second argument, not `objectContaining`: the lens rule is to
+    // assert the value, so an extra field appearing here has to be noticed on purpose.
+    expect(programDayRows.mock.calls[0]![1]).toMatchObject({
+      profilePublicId: 'p-1',
+      dayRole: 'strength_a',
+      scope,
+    });
   });
 });

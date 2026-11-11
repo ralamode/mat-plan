@@ -35,25 +35,35 @@ vi.mock('./profiles', () => ({
   getProfileByPublicId: async () => ({ publicId: 'p-1', name: 'A' }),
 }));
 
+import type { StrengthMonthRow } from '@mat-plan/db';
+
 const { buildExportEntries } = await import('./export');
 
-/** One flat join row, in the shape `strengthMonthRows` returns. */
-const flatRow = (over: Record<string, unknown> = {}) => ({
+/**
+ * One flat join row. ⚠️ **Typed as `StrengthMonthRow`**, so `pnpm typecheck` guards the shape: the
+ * mocks are untyped `vi.fn()`s, and the first version of this fixture carried `value`/`quantityKind`
+ * where the query returns `valueNum`/`slot` — a drift nothing would have reported.
+ */
+const flatRow = (over: Partial<StrengthMonthRow> = {}): StrengthMonthRow => ({
   entryId: 1,
   date: '2026-03-02',
-  dayRole: 'strength_a',
-  sessionType: 'strength',
+  entryStatus: 'done',
+  notes: null,
   movementSlug: 'back_squat',
   movementId: 7,
-  prescribedSnapshot: null as string | null,
-  entryStatus: 'done',
-  notes: '',
+  prescribedSnapshot: null,
+  dayRole: 'strength_a',
+  sessionType: 'strength',
+  sessionId: 1,
   setId: 1,
   setIdx: 0,
   reps: 5,
-  value: '100',
+  setStatus: 'done',
+  isBodyweight: false,
+  isBand: false,
+  slot: 'load',
   unit: 'lb',
-  quantityKind: 'load',
+  valueNum: '100',
   ...over,
 });
 
