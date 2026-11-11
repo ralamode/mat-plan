@@ -767,6 +767,14 @@ Chunk 3 writes `''` for ambiguous **and** unmatched rows, as `spec:280` (A8) and
 rejection already required. The Out-of-scope line `the ''-for-ambiguous-or-unmatched rule → chunk 3`
 stands as written, and the panel's contrary instruction is withdrawn.
 
+🔴 **The ordering constraint this creates, which is the actionable half:** an athlete who is
+**already adult when chunk 3's backfill runs** has their prescribed history frozen `''` permanently;
+one who is a child at that moment is protected forever, because their rows freeze real strings. So
+**chunk 3's backfill must run before `kind` ever becomes editable.** That is guaranteed today and
+costs nothing to honour — but it is the kind of ordering that is obvious now and invisible in six
+months. Note also that chunk 3 is what _unblocks_ editable `kind`: after chunks 2 and 3 no row
+consults today's `kind`, which is the prerequisite `programming.md` invariant 8 names.
+
 ⚠️ **The aged-out-athlete consequence is recorded rather than acted on.** `programming.md`
 invariant 8 says flipping a kid to adult empties `prescribed` in every past month **and flipping
 back restores it**; a backfilled `''` makes that permanent for those rows. It is latent, not live —
