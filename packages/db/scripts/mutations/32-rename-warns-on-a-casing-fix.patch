@@ -1,10 +1,10 @@
 diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
-index a001598..9e73733 100644
+index 80fa74e..4bd7796 100644
 --- a/packages/db/src/writers/profile.ts
 +++ b/packages/db/src/writers/profile.ts
-@@ -119,7 +119,7 @@ export async function renameProfile(
-   // with the fold CHANGED the row's stored name folds to the OLD value and cannot match the new one.
-   // There is no third case, which is why `findNameMatch` needs no exclusion argument at all.
+@@ -129,7 +129,7 @@ export async function renameProfile(
+   // `excludeProfileId` would not have helped, since the write had already happened. `createProfile`
+   // states its analogous race the same way rather than claiming an absolute.
    const folded = foldName(name);
 -  if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
 +  if (options.acknowledgedDuplicate !== folded) {
