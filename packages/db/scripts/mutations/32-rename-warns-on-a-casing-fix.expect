@@ -1,0 +1,1 @@
+PROF-1 a-1d-ren: a CASING fix on one of two same-named athletes does not warn — the fold is unchanged, so no new collision is created and excluding self would not have been enough

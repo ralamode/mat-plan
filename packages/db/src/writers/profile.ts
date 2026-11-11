@@ -44,9 +44,41 @@ type ArchivedRow = { publicId: string; archivedAt: Date | null };
  */
 
 /**
- * Rename ONE live profile inside `scope`. Returns the row's `public_id`, or `null` when the id is
- * unknown, soft-deleted or belongs to another household — one answer for all three, which the action
- * maps to the single `NO_ATHLETE_SAVE` envelope (ADR 0006 → 404, never 403).
+ * What `renameProfile` answers. `refused` is the one answer for unknown / soft-deleted / another
+ * household (ADR 0006 → 404, never 403); `duplicate` is ADVISORY — the name is free to collide, and
+ * an acknowledgement waves it through.
+ */
+export type RenameProfileResult =
+  | { ok: true; publicId: string }
+  | { ok: false; reason: 'refused' }
+  | { ok: false; reason: 'duplicate'; match: NameMatch };
+
+/**
+ * The stored name of ONE live profile in `scope`, for the fold guard in `renameProfile`.
+ *
+ * ⚠️ **Scoped, and narrow on purpose.** It returns the name and nothing else: a caller handed a
+ * fuller row would be tempted to render it, and this value exists only to be folded. `scope` reaches
+ * the query through `isLiveProfile`, so `scope.householdId` keeps leaving only `ownership.ts`
+ * (`scope.test.ts`'s `UNWRAPS_SCOPE`).
+ */
+async function profileNameFor(
+  exec: Executor,
+  scope: HouseholdScope,
+  publicId: string,
+): Promise<{ name: string } | null> {
+  const rows = await exec
+    .select({ name: schema.profiles.name })
+    .from(schema.profiles)
+    .where(isLiveProfile(publicId, scope))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Rename ONE live profile inside `scope`. Answers `RenameProfileResult`: the row's `public_id` on
+ * success, `refused` when the id is unknown, soft-deleted or belongs to another household — one
+ * answer for all three, which the action maps to the single `NO_ATHLETE_SAVE` envelope (ADR 0006 →
+ * 404, never 403) — or `duplicate` when the new name collides, which is ADVISORY (a-1d-ren).
  *
  * `isLiveProfile(publicId, scope)` is THE ownership predicate, imported rather than rebuilt: a
  * hand-written `and(eq(publicId), isNull(deletedAt), eq(householdId))` here would be the twelfth copy
@@ -69,14 +101,49 @@ export async function renameProfile(
   scope: HouseholdScope,
   publicId: string,
   name: string,
-): Promise<{ publicId: string } | null> {
+  options: { acknowledgedDuplicate?: string } = {},
+): Promise<RenameProfileResult> {
+  // The CURRENT row, read first — the fold guard below needs the stored name, and `refused` must
+  // stay distinguishable from `duplicate`. One answer for unknown / soft-deleted / other household.
+  const current = await profileNameFor(exec, scope, publicId);
+  if (!current) return { ok: false, reason: 'refused' };
+
+  // 🔴 **A rename that does not change the FOLD creates no new collision, so there is nothing to
+  // warn about.** `ada` → `Ada`, `Jose` → `José`, a stray double space, or Save with nothing edited
+  // all land here. Without this guard the warning fires on exactly the edit this screen exists for.
+  //
+  // ⚠️ **It also replaces the `excludeProfileId` this plan carried for two chunks.** Excluding SELF
+  // is not enough: two live athletes sharing a name is the designed case (the add form's "Add
+  // another Ada" creates it, with consent), so a casing fix on Ada #1 would be warned about Ada #2 —
+  // a collision that already existed and that nobody is creating here. And the parameter is not
+  // merely redundant, it is unreachable SEQUENTIALLY: with the fold unchanged this returns before
+  // the lookup, and with the fold CHANGED the row's stored name folds to the OLD value and cannot
+  // match the new one — which is why `findNameMatch` needs no exclusion argument.
+  //
+  // ⚠️ **Under CONCURRENCY the match can be self, and an earlier version of this comment claimed
+  // otherwise.** Two renames of the SAME row to the same new name: the first commits, and the
+  // second's lookup then finds that row — now stored under the new name, folding to the new value,
+  // and self. The parent is told "another athlete looks like they're already called Bea" about
+  // themselves, while the save has in fact landed. The stored name is correct either way (the
+  // rename is idempotent on the fold), so this is advisory copy being wrong, not corruption — and
+  // `excludeProfileId` would not have helped, since the write had already happened. `createProfile`
+  // states its analogous race the same way rather than claiming an absolute.
+  const folded = foldName(name);
+  if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
+    const match = await findNameMatch(exec, scope, folded);
+    // ⚠️ **No `atCap` here, unlike `createProfile`.** A rename creates nothing, so the quota is
+    // never consulted and a field that is always `false` would read as meaningful.
+    if (match) return { ok: false, reason: 'duplicate', match };
+  }
+
   const rows = await exec
     .update(schema.profiles)
     .set({ name, updatedAt: sql`now()` })
     .where(isLiveProfile(publicId, scope))
     .returning({ publicId: schema.profiles.publicId });
 
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { ok: true, publicId: row.publicId } : { ok: false, reason: 'refused' };
 }
 
 /**

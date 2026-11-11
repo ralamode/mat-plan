@@ -76,8 +76,10 @@ import type { ActionState } from '@/app/p/[profileId]/action-state';
  * adding a duplicate entry (PROF-1 D6). `revalidatePath` covers the three surfaces that render the
  * name — the picker, the athlete's day page and this edit screen itself.
  *
- * ⚠️ **No duplicate-name warning here.** That is PROF-1 a-1d's, which adds the callout and the
- * `acknowledgedDuplicate` field to the schema. A rename today saves whatever the name schema accepts.
+ * **The duplicate-name warning applies here too** (PROF-1 a-1d-ren), with one difference that is the
+ * whole chunk: a rename that does not change the FOLDED name creates no new collision, so it is not
+ * checked at all — `renameProfile` holds that guard, which is what lets a parent fix `ada` → `Ada`
+ * on one of two deliberately same-named athletes without being warned about the other.
  */
 export async function renameAthleteAction(
   _prev: ActionState,
@@ -91,6 +93,9 @@ export async function renameAthleteAction(
     const parsed = renameAthleteSchema.safeParse({
       profileId: formData.get('profileId'),
       name: formData.get('name'),
+      // `?? undefined`: `formData.get` returns NULL for an absent field, and `z.string().optional()`
+      // rejects null. Probed on the add form, where it would have made every first submit refuse.
+      acknowledgedDuplicate: formData.get('acknowledgedDuplicate') ?? undefined,
     });
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
@@ -99,7 +104,13 @@ export async function renameAthleteAction(
       // empty: the form would render an invalid-but-unexplained state. It also must answer exactly
       // as an unknown or foreign id does, or a malformed id becomes an oracle for "that one was at
       // least shaped like a real athlete". Only reachable from a crafted body.
-      if (fieldErrors.profileId) return { ok: false, error: NO_ATHLETE_SAVE };
+      // ⚠️ **`acknowledgedDuplicate` joins `profileId` here** (a-1d-ren). Both are hidden fields, so
+      // a parent has no input to correct; falling through to the `name` branch would answer
+      // `fieldErrors: { name: undefined }`, which renders NOTHING — the dead state the add form hit
+      // and the reason `addAthleteAction` groups its own hidden fields the same way.
+      if (fieldErrors.profileId || fieldErrors.acknowledgedDuplicate) {
+        return { ok: false, error: NO_ATHLETE_SAVE };
+      }
       // Field-level, so the form can mark the input `aria-invalid` and show the message under it
       // rather than as a page-level alert the parent has to go looking for.
       return { ok: false, error: null, fieldErrors: { name: fieldErrors.name } };
@@ -108,12 +119,35 @@ export async function renameAthleteAction(
     const profile = await getProfileByPublicId(parsed.data.profileId);
     if (!profile) return { ok: false, error: NO_ATHLETE_SAVE };
 
-    const saved = await renameAthlete(profile.id, parsed.data.name);
-    if (!saved) return { ok: false, error: NO_ATHLETE_SAVE };
+    // 🔴 **The acknowledgement is a FOLDED NAME, re-derived server-side from the parsed value**, as
+    // `addAthleteAction` does: a boolean would let consent to "Ada" wave "Bea" through after an
+    // edit. `createProfile`'s sibling comment has the full reasoning; a crafted body can still forge
+    // it, and duplicates are advisory rather than a boundary.
+    const saved = await renameAthlete(profile.id, parsed.data.name, {
+      acknowledgedDuplicate: parsed.data.acknowledgedDuplicate,
+    });
+
+    if (!saved.ok) {
+      if (saved.reason === 'duplicate') {
+        // Not a `fieldError`: the typed name is not INVALID, and `aria-invalid` on a correct value
+        // is a lie. The form renders a callout from this and offers the one choice.
+        // ⚠️ **No `atCap`** — unlike the add envelope. A rename creates nothing, so the quota is
+        // never consulted and the field would be a value that is always false.
+        return {
+          ok: false,
+          error: null,
+          duplicate: {
+            match: saved.match,
+            folded: foldName(parsed.data.name),
+          },
+        };
+      }
+      return { ok: false, error: NO_ATHLETE_SAVE };
+    }
 
     revalidatePath(APP_HOME_PATH);
-    revalidatePath(athletePath(saved.id));
-    revalidatePath(athleteEditPath(saved.id));
+    revalidatePath(athletePath(saved.publicId));
+    revalidatePath(athleteEditPath(saved.publicId));
     return { ok: true, error: null };
   });
 }

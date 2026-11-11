@@ -18,24 +18,13 @@ import { Callout } from '@/components/ui/callout';
 import {
   athletePath,
   ATHLETE_FORM_COPY,
+  CHOICE_BUTTON_CLASS,
   HOUSEHOLD_FULL,
   INPUT_CLASS,
   NAME_WRAP_CLASS,
 } from '@/lib/constants';
 
 import { INITIAL_ACTION_STATE } from '../[profileId]/action-state';
-
-/**
- * The callout's choices. `Button` is `whitespace-nowrap` by default, so "Add another " plus a
- * 40-character name is ~364px against ~296px of callout at 360px — it overflows, and two of them side
- * by side break above ~12 characters. `h-auto whitespace-normal text-left` lets the label wrap
- * instead, and `min-w-0` stops an unbreakable token pushing the page sideways.
- *
- * One constant because it was written twice in this file, which is the second-copy trigger — and the
- * two have to stay identical: the e2e measures `scrollWidth` at 360px on the LIVE branch only, so a
- * drift in the archived branch's copy would go unmeasured.
- */
-const CHOICE_BUTTON_CLASS = 'h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal';
 
 /**
  * The add-athlete form (PROF-1 a-1u) — the client island of `/p/new`.

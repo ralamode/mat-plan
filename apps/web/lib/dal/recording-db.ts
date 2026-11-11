@@ -67,7 +67,15 @@ export function oneHouseholdThenEmpty(sql: string): unknown[][] {
   // BOTH columns `membershipHousehold` selects. A one-column row mapped to `role: undefined`,
   // which `makeHouseholdScope` now rejects outright — before PROF-1 b-s it minted a role-less scope
   // and every `toEqual` in the DAL suite ignored the missing key.
-  return /from "household_members"/.test(sql) ? [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]] : [];
+  if (/from "household_members"/.test(sql)) return [[ONE_HOUSEHOLD_ID, HOUSEHOLD_ROLE.owner]];
+  // 🔴 **The same lesson as the household row above, one layer deeper** (PROF-1 a-1d-ren).
+  // `renameProfile` now reads the stored name first — it needs it for the fold guard — and returns
+  // `refused` without touching the database when that read is empty. Answering zero rows here would
+  // mean the UPDATE under test is **never emitted**, so the four emitted-SQL proofs would assert
+  // against a query that does not exist. Narrowly matched on the single-column select the guard
+  // emits, so no broader `from "profiles"` read is affected.
+  if (/^select "name" from "profiles"/i.test(sql)) return [['Recorded Name']];
+  return [];
 }
 
 export function createRecordingDb(

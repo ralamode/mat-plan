@@ -107,6 +107,18 @@ export const athleteNameSchema = z
 export const renameAthleteSchema = z.object({
   profileId: uuidSchema,
   name: athleteNameSchema,
+  /**
+   * PROF-1 a-1d-ren — the duplicate warning's acknowledgement, the same shape and the same
+   * reasoning as `addAthleteSchema`'s: a FOLDED NAME rather than a boolean, so consent to one name
+   * cannot wave a different one through after an edit; bounded, because NFKD can expand 40
+   * characters into several hundred; compared, never stored.
+   *
+   * ⚠️ **Not a protection.** A crafted body can forge it. Duplicates are advisory on rename too.
+   */
+  acknowledgedDuplicate: z
+    .string()
+    .max(PROFILE_NAME_MAX * 20)
+    .optional(),
 });
 
 export type RenameAthleteInput = z.infer<typeof renameAthleteSchema>;

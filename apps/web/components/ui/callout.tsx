@@ -4,7 +4,10 @@ import type { ReactNode, Ref } from 'react';
  * A bordered notice with a ⚠ mark, a message and a slot for choices (PROF-1 a-1d).
  *
  * 🔴 **A presentation SHELL, not a duplicate-warning component.** It encodes none of Add / Open /
- * Restore, so `a-1d-ren`'s "Save anyway / Cancel" drops into the same component without a mode flag.
+ * Restore, so `a-1d-ren`'s single "Save anyway" drops into the same component without a mode flag.
+ * ⚠️ That chunk shipped ONE choice, not two: "Cancel" was rejected at `U11` and the 2026-11-10 UX
+ * panel settled on one button plus a sentence naming the other routes. This line said
+ * "Save anyway / Cancel" until then.
  * The moment this file knows what a duplicate is, the second caller needs a prop to turn that off.
  *
  * ⚠️ **The border is DECORATION, not a boundary.** `border` measures **1.26:1** on the light page

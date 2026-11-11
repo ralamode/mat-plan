@@ -254,7 +254,11 @@ describe('no household → dark, not leaky', () => {
     ).resolves.toBeNull();
     // PROF-1 a-r: a rename with no resolved household must not reach the database either. Without
     // this the new writer would be the one path in the file that fails OPEN of the scope check.
-    await expect(scoped.renameAthlete(PROFILE, 'Renamed')).resolves.toBeNull();
+    // a-1d-ren made the result discriminated; a no-scope miss is the tagged refusal, not `null`.
+    await expect(scoped.renameAthlete(PROFILE, 'Renamed')).resolves.toEqual({
+      ok: false,
+      reason: 'refused',
+    });
     // PROF-1 a-1w: the create has NO id to resolve, so the scope check is its only authorization
     // decision — the one function in the file where failing open would insert a row owned by
     // nobody. `scoped.test.ts` proves the resolve happens; this proves it REFUSES on a miss.

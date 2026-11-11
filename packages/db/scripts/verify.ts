@@ -92,9 +92,11 @@ import {
   findNameMatch,
   insertHouseholdMember,
   isLiveProfile,
+  insertProfileOwnedBy,
   isOwnerOf,
   movementIsGlobal,
   ownedEntryIds,
+  profileByClientId,
 } from '../src/writers/ownership';
 import {
   archiveProfile,
@@ -7220,10 +7222,17 @@ console.log(
     },
   ]);
 
+  // PROF-1 a-1d-ren widened `renameProfile` to a discriminated result (it can now answer
+  // `duplicate`). These a-r proofs assert the SUCCESS id, so they unwrap it here rather than each
+  // growing a cast — and a `duplicate`/`refused` answer where the test expects success now fails
+  // with the reason, which is more useful than `undefined !== <id>`.
+  const renamedId = (r: Awaited<ReturnType<typeof renameProfile>>) =>
+    r.ok ? r.publicId : `REFUSED:${r.reason}`;
+
   // 1 · The ordinary case: A renames A's own athlete, one row back, and the name really changed.
   const renamed = await renameProfile(asPg, A_SCOPE, AR_A_P, 'A-r Renamed');
   assert.equal(
-    renamed?.publicId,
+    renamedId(renamed),
     AR_A_P,
     'PROF-1 a-r: renaming an own live athlete returns its id',
   );
@@ -7232,8 +7241,8 @@ console.log(
   // 2 · 🔴 CRITERION 4. B tries to rename A's athlete: zero rows, `null`, and — the half a return
   // value alone would not catch — A's name is UNTOUCHED.
   assert.equal(
-    await renameProfile(asPg, B_SCOPE, AR_A_P, 'Renamed By The Wrong Household'),
-    null,
+    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'Renamed By The Wrong Household')),
+    'REFUSED:refused',
     "PROF-1 a-r: household B renaming A's profile updates 0 rows",
   );
   assert.equal(
@@ -7245,8 +7254,8 @@ console.log(
   // 2b · …and the same in the OTHER direction, which is this file's standing rule for a seam: a
   // predicate that happened to hard-code one household would pass case 2 and fail here.
   assert.equal(
-    await renameProfile(asPg, A_SCOPE, AR_B_P, 'Renamed By The Wrong Household'),
-    null,
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_B_P, 'Renamed By The Wrong Household')),
+    'REFUSED:refused',
     "PROF-1 a-r: household A renaming B's profile updates 0 rows",
   );
   assert.equal(
@@ -7258,16 +7267,16 @@ console.log(
   // 3 · A soft-deleted profile is not renameable, in its OWN household: `deleted_at IS NULL` is the
   // second conjunct, and it is the one a "scope the writes by household" refactor would drop.
   assert.equal(
-    await renameProfile(asPg, A_SCOPE, AR_A_DELETED, 'Renamed A Dead Row'),
-    null,
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_DELETED, 'Renamed A Dead Row')),
+    'REFUSED:refused',
     'PROF-1 a-r: a soft-deleted profile updates 0 rows even for its own household',
   );
   assert.equal(await nameOf(AR_A_DELETED), 'A-r Deleted', 'PROF-1 a-r: the dead row is untouched');
 
   // 4 · An unknown id is refused the same way, so the three refusals are one answer (ADR 0006).
   assert.equal(
-    await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-00000004d0ff', 'Nobody'),
-    null,
+    renamedId(await renameProfile(asPg, A_SCOPE, '019826b4-0000-7000-8000-00000004d0ff', 'Nobody')),
+    'REFUSED:refused',
     'PROF-1 a-r: an unknown public id updates 0 rows',
   );
 
@@ -7277,7 +7286,7 @@ console.log(
   // fixable without restoring them first. If this ever fails, a UX filter has been folded into the
   // ownership seam. Mutation patch `13-rename-locks-archived` is what proves this assertion can fail.
   assert.equal(
-    (await renameProfile(asPg, A_SCOPE, AR_A_ARCHIVED, 'A-r Archived Renamed'))?.publicId,
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_ARCHIVED, 'A-r Archived Renamed')),
     AR_A_ARCHIVED,
     'PROF-1 a-r: an ARCHIVED athlete is still renameable',
   );
@@ -7294,7 +7303,7 @@ console.log(
   // that closes this; it was a claim before this assertion existed.
   const AT_CAP = 'W'.repeat(PROFILE_NAME_MAX);
   assert.equal(
-    (await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP))?.publicId,
+    renamedId(await renameProfile(asPg, A_SCOPE, AR_A_P, AT_CAP)),
     AR_A_P,
     'PROF-1 a-r: a name at PROFILE_NAME_MAX is accepted by the column',
   );
@@ -7302,6 +7311,128 @@ console.log(
     await nameOf(AR_A_P),
     AT_CAP,
     'PROF-1 a-r: …and stored in full, not silently truncated',
+  );
+
+  // ── PROF-1 a-1d-ren — the duplicate warning on RENAME ────────────────────────────────────────
+  //
+  // The add form's check, with one difference that is the whole chunk: a rename that does not change
+  // the FOLD creates no new collision, so it must not warn. Two live athletes sharing a name is the
+  // DESIGNED case, which is what makes the naive "exclude self" insufficient — see `renameProfile`.
+
+  // Two live athletes under one folded name, exactly as "Add another" produces.
+  await insertProfileOwnedBy(asPg, A_SCOPE, {
+    clientId: newId(),
+    name: 'Ren Twin',
+    kind: PROFILE_KIND.kid,
+  });
+  const renTwinTwo = newId();
+  await insertProfileOwnedBy(asPg, A_SCOPE, {
+    clientId: renTwinTwo,
+    name: 'Ren Twin',
+    kind: PROFILE_KIND.kid,
+  });
+  const twinTwo = await profileByClientId(asPg, A_SCOPE, renTwinTwo);
+  assert.ok(
+    twinTwo,
+    'PROF-1 a-1d-ren: the second Ren Twin exists (or the case below proves nothing)',
+  );
+
+  // A separate live athlete to collide WITH. ⚠️ Not one of the a-r fixtures: `AR_A_P` has been
+  // renamed twice by the assertions above (last to `AT_CAP`), so a literal from earlier in this
+  // block would silently match nobody and the collision case would pass by accident.
+  await insertProfileOwnedBy(asPg, A_SCOPE, {
+    clientId: newId(),
+    name: 'Ren Other',
+    kind: PROFILE_KIND.kid,
+  });
+
+  // 🔴 THE CASE THE WHOLE GUARD EXISTS FOR. Fixing the casing of one of two same-named athletes must
+  // not warn about the other. ⚠️ Fold-EQUAL but string-DIFFERENT on purpose: `'Ren Twin'` unchanged
+  // would pass on string equality and prove nothing about the fold.
+  const casingFix = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'REN TWIN');
+  assert.equal(
+    renamedId(casingFix),
+    twinTwo.publicId,
+    'PROF-1 a-1d-ren: a CASING fix on one of two same-named athletes does not warn — the fold is ' +
+      'unchanged, so no new collision is created and excluding self would not have been enough',
+  );
+  assert.equal(
+    await nameOf(twinTwo.publicId),
+    'REN TWIN',
+    'PROF-1 a-1d-ren: …and the casing fix is actually persisted',
+  );
+
+  // The real collision: renaming to a DIFFERENT live athlete's name warns, and writes nothing.
+  const collide = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other');
+  assert.equal(
+    collide.ok === false && collide.reason,
+    'duplicate',
+    'PROF-1 a-1d-ren: renaming onto another live athlete’s name warns',
+  );
+  assert.equal(
+    collide.ok === false && collide.reason === 'duplicate' && collide.match.name,
+    'Ren Other',
+    'PROF-1 a-1d-ren: …and the match carries the STORED spelling, so the copy cannot relabel them',
+  );
+  assert.equal(
+    await nameOf(twinTwo.publicId),
+    'REN TWIN',
+    'PROF-1 a-1d-ren: …and NOTHING was written — the warning precedes the update',
+  );
+
+  // Acknowledged, the same name goes through: the warning is advisory, never a constraint.
+  assert.equal(
+    renamedId(
+      await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Other', {
+        acknowledgedDuplicate: foldName('Ren Other'),
+      }),
+    ),
+    twinTwo.publicId,
+    'PROF-1 a-1d-ren: an acknowledgement waves the collision through — advisory, not a constraint',
+  );
+
+  // An acknowledgement for a DIFFERENT folded name does not wave this one through.
+  // ⚠️ Discriminated on `reason`, not on `.ok === false` alone: a writer that answered `refused` for
+  // any reason would otherwise pass a test named for the acknowledgement, which is the shape
+  // `db:mutations` exists to catch. The read-back is the other half — a warning must write nothing.
+  const staleAck = await renameProfile(asPg, A_SCOPE, twinTwo.publicId, 'Ren Twin', {
+    acknowledgedDuplicate: foldName('Somebody Else'),
+  });
+  assert.equal(
+    staleAck.ok === false && staleAck.reason,
+    'duplicate',
+    'PROF-1 a-1d-ren: a stale acknowledgement does not wave a different name through',
+  );
+  assert.equal(
+    await nameOf(twinTwo.publicId),
+    'Ren Other',
+    'PROF-1 a-1d-ren: …and the stale-acknowledgement attempt wrote nothing',
+  );
+
+  // 🔴 **THE TENANCY PROOF FOR THE NEW PRE-READ, and it needs a name household B HOLDS.**
+  // `renameProfile` now reads the stored name first, through `isLiveProfile`. Every pre-existing
+  // cross-household case renames to a name NOBODY holds, so an unscoped pre-read would still answer
+  // `refused` — the UPDATE's own predicate refuses — and no assertion could go red. What an unscoped
+  // read WOULD change is this: B renaming A's athlete to a name **B** holds would answer `duplicate`
+  // instead of `refused`, which is a one-bit oracle on A's stored name, keyed on a public id. That is
+  // exactly the "one answer" ADR 0006 exists to preserve.
+  await insertProfileOwnedBy(asPg, B_SCOPE, {
+    clientId: newId(),
+    name: 'B Oracle',
+    kind: PROFILE_KIND.kid,
+  });
+  assert.equal(
+    renamedId(await renameProfile(asPg, B_SCOPE, AR_A_P, 'B Oracle')),
+    'REFUSED:refused',
+    'PROF-1 a-1d-ren: household B renaming A’s athlete to a name B HOLDS answers refused, never ' +
+      'duplicate — the fold guard’s pre-read is scoped, and a leak here would be an oracle on A’s ' +
+      'stored name',
+  );
+
+  console.log(
+    '✓ PROF-1 a-1d-ren: renaming warns on another live athlete’s name and writes nothing, an ' +
+      'acknowledgement waves it through, a stale one does not — and a CASING fix on one of two ' +
+      'same-named athletes does NOT warn, which excluding self alone would not have achieved',
   );
 
   // 6 · The rename touches exactly ONE row. The seeded profile in household A is the witness: a

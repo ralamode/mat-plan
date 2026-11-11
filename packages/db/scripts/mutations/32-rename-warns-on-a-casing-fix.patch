@@ -1,0 +1,13 @@
+diff --git a/packages/db/src/writers/profile.ts b/packages/db/src/writers/profile.ts
+index 80fa74e..4bd7796 100644
+--- a/packages/db/src/writers/profile.ts
++++ b/packages/db/src/writers/profile.ts
+@@ -129,7 +129,7 @@ export async function renameProfile(
+   // `excludeProfileId` would not have helped, since the write had already happened. `createProfile`
+   // states its analogous race the same way rather than claiming an absolute.
+   const folded = foldName(name);
+-  if (folded !== foldName(current.name) && options.acknowledgedDuplicate !== folded) {
++  if (options.acknowledgedDuplicate !== folded) {
+     const match = await findNameMatch(exec, scope, folded);
+     // ⚠️ **No `atCap` here, unlike `createProfile`.** A rename creates nothing, so the quota is
+     // never consulted and a field that is always `false` would read as meaningful.

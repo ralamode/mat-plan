@@ -164,6 +164,19 @@ export const CTA_CLASS = 'h-auto w-full py-2.5 text-center text-base whitespace-
  */
 export const NAME_WRAP_CLASS = 'min-w-0 wrap-anywhere';
 
+/**
+ * The callout's choices. `Button` is `whitespace-nowrap` by default, so "Add another " plus a
+ * 40-character name is ~364px against ~296px of callout at 360px — it overflows, and two of them side
+ * by side break above ~12 characters. `h-auto whitespace-normal text-left` lets the label wrap
+ * instead, and `min-w-0` stops an unbreakable token pushing the page sideways.
+ *
+ * Promoted out of `add-athlete-form.tsx` at a-1d-ren, its SECOND user — the rename callout needs the
+ * same override. Every copy has to stay identical: the e2e measures `scrollWidth` at 360px on the
+ * add form's LIVE branch only, so a drift anywhere else would go unmeasured.
+ */
+export const CHOICE_BUTTON_CLASS =
+  'h-auto w-full min-w-0 py-2.5 text-left text-base whitespace-normal';
+
 /** The public source repository: `owner/name`, as the GitHub API wants it (screenshot publishing). */
 export const GITHUB_REPO = 'ralamode/mat-plan';
 /** …and as a page, linked from the landing. */
@@ -990,6 +1003,42 @@ export const ATHLETE_FORM_COPY = {
    */
   duplicateDisambiguate: (stored: string) =>
     `Both will show as “${stored}”. Add an initial, like “${stored} B.”, to tell them apart.`,
+  /**
+   * 🔴 **The RENAME form's sentence, and it is not the add form's** (PROF-1 a-1d-ren). Under an
+   * `<h1>` reading "Rename Ada", with "Ada" in the field, `duplicateLive`'s "…who is already on your
+   * list" is read as *"yes, I know, I'm renaming her"* — on add the parent had nobody in mind; on
+   * rename they have one person firmly in mind, and the match is somebody else. A UX lens caught it
+   * before any code. The hedge ("looks like") is kept for the same lossy-fold reason as the add copy.
+   */
+  renameDuplicateLive: (stored: string, kind: string) =>
+    `Another athlete looks like they’re already called ${stored} (${kind}).`,
+  /**
+   * The archived case on rename. ⚠️ **Nothing about Restore**, which this screen cannot offer — you
+   * are renaming somebody *else*, so restoring the match would neither finish nor abandon the edit —
+   * and nothing about "your list", because an archived athlete is not on it. The consequence is the
+   * only reason to warn at all, so the sentence carries it.
+   */
+  renameDuplicateArchived: (stored: string, kind: string) =>
+    `An archived athlete is also called ${stored} (${kind}). If they’re restored later, both will ` +
+    `show as “${stored}”.`,
+  /** The one choice the rename callout offers. "Save anyway" over "Save name anyway": shorter at
+   * 360px, and the callout's own sentence already supplies the object. */
+  saveAnyway: 'Save anyway',
+  /**
+   * The routes OUT, named with what they PRESERVE. The back route means something reassuring here
+   * that it did not on add — the athlete keeps the name they already have — so the sentence says so
+   * rather than just pointing at a link.
+   *
+   * 🔴 **Two variants, because the disambiguation line already says how to change the name.** When
+   * it renders, it ends "…add an initial, like “Ada B.”, to tell them apart" — and the first version
+   * of this sentence then opened "To tell them apart, change the name", repeating the phrase in
+   * adjacent sentences and re-advising what was just advised. Caught by LOOKING at the capture, not
+   * by a test; the same way the add form's at-cap contradiction surfaced.
+   */
+  renameDuplicateRoutes: (stored: string, alreadyAdvised: boolean) =>
+    alreadyAdvised
+      ? `Or go back — ${stored} keeps their name.`
+      : `Change the name, or go back — ${stored} keeps their name.`,
   addAnother: (name: string) => `Add another ${name}`,
   openMatch: (name: string) => `Open ${name}`,
   restoreMatch: (name: string) => `Restore ${name}`,
