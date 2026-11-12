@@ -17,6 +17,11 @@ describe('MOVEMENT_PICKER_ENTRIES (PICK-1 Decision 3)', () => {
     // This is the assertion that makes "no `other` group" true by construction. A `CAT-2` row added
     // without a group fails here rather than quietly disappearing from the browse list, and an entry
     // for a slug the seed dropped fails too — an allowlist that cannot go stale.
+    //
+    // ⚠️ **`Record<SeededMovementSlug, …>` now catches both at COMPILE time**, which is strictly
+    // better. This stays because the type cannot see a slug the seed *renames* in place: both sides
+    // change together and `tsc` is satisfied, while the DB's old row loses its entry. The runtime
+    // comparison is also what a reader of this file goes looking for.
     expect(Object.keys(MOVEMENT_PICKER_ENTRIES).sort()).toEqual(
       MOVEMENT_SEED_ROWS.map((row) => row.slug).sort(),
     );

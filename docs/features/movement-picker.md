@@ -41,6 +41,7 @@ path and **creating** the deliberate one.
 | `apps/web/lib/movements/movement-picker-copy.ts`    | Every string the picker, the card hint and the Save line show.                                                                             |
 | `apps/web/components/movements/movement-picker.tsx` | The component. `'use client'`, on U0's `Sheet`.                                                                                            |
 | `apps/web/lib/i18n/plural.ts`                       | Not owned here, but every counted string above goes through it. See `I18N-1`.                                                              |
+| `apps/web/lib/i18n/locale.ts`                       | Not owned here. `APP_LOCALE` — the one locale `plural()`, `Intl.ListFormat` and `<html lang>` all read.                                    |
 
 ## Invariants
 
@@ -84,11 +85,31 @@ path and **creating** the deliberate one.
    the log-time writer and the export's live fallback alike, so there is no slug proxy left to
    switch and `MOV-1b` switches nothing.
 
-8. **The browse list shows only what the entries map groups.** A seeded row with no entry in
-   `MOVEMENT_PICKER_ENTRIES` is not browsable — it still resolves by id and by typed name — and the
-   key-set test fails until someone chooses a group. That is what makes "no `other` group" true by
-   construction rather than by a test that happens to pass, and it is why `CAT-2` cannot add a
-   movement without deciding where it lives.
+8. 🔴 **One query reaches everything below the `<input>`: the DEFERRED one.** `query` itself is read
+   only as the field's own `value`. React commits the urgent render with the old deferred value and
+   corrects it in a second pass, so a render mixing the two shows states that are _wrong_, not
+   merely stale — the first keystroke of every search announced "No matches." and then the count
+   (which is criterion 46's read-once problem), and `rd` → `rdl` offered for one frame to create a
+   duplicate of Romanian Deadlift. An earlier fix held creation while the two disagreed; that
+   patched one symptom of two. ⚠️ **Not reproducible in jsdom**, where `useDeferredValue` settles
+   synchronously — which is why it was found by reading the render and not by a red test.
+
+9. **The alias that hit comes OUT of the matcher.** `aliasHit` is the alias text (`'RDL'`), not a
+   boolean, so the "also called RDL" tag tests plain identity on authored strings. The component
+   used to re-run "fold both sides, compare keys" itself — a second copy of
+   `movement-search.ts`'s rule, in a React component, that would drift the first time the fold
+   changed.
+
+10. **Every counted string goes through `plural()`, and every `one` form carries its count.** `one`
+    is a CLDR category, not the number one: in Russian it covers 21, 31 and 101, so `'1 match.'`
+    renders "1 match." for twenty-one of them. In English the two are indistinguishable, which is
+    exactly why it is a rule here rather than something noticed later.
+
+11. **The browse list shows only what the entries map groups.** A seeded row with no entry in
+    `MOVEMENT_PICKER_ENTRIES` is not browsable — it still resolves by id and by typed name — and the
+    key-set test fails until someone chooses a group. That is what makes "no `other` group" true by
+    construction rather than by a test that happens to pass, and it is why `CAT-2` cannot add a
+    movement without deciding where it lives.
 
 ## Traps
 
@@ -114,13 +135,15 @@ path and **creating** the deliberate one.
 
 ## What is NOT covered by jsdom — all PR 4, in a browser
 
-The component's 41 cases cover list composition, tag precedence, Enter semantics, the status shape,
+The component's 42 cases cover list composition, tag precedence, Enter semantics, the status shape,
 the footer's states and the two source scans. They deliberately **do not** claim:
 
 - any of Decision 8's **360px width arithmetic** — jsdom applies no Tailwind, so `min-h-12`, the tag
   wrap and "Overhead Shoulder Press" beside a group tag are all unmeasured here;
 - real `(pointer: coarse)`, and therefore **"no keyboard on open"** (criterion 18);
-- `useDeferredValue` settling, and the status being read **once** by a screen reader (criterion 46);
+- `useDeferredValue` settling, and the status being read **once** by a screen reader (criterion 46).
+  ⚠️ jsdom settles it synchronously, so invariant 8's bug class is **invisible** here in both
+  directions: a regression that re-splits the query would not redden a single test;
 - `enterKeyHint="search"`, `maxLength` on paste, `<summary>` ≥44px;
 - Enter in the portaled input **not** submitting the form.
 

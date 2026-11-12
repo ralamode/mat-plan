@@ -472,21 +472,25 @@ describe('Enter in the search box (panel 2 · 3)', () => {
 
   it('resolves TWO exact hits to the first, catalog before household', () => {
     // No seeded pair collides, but a pre-PICK-1 household row whose SLUG differs can share a key:
-    // `Pullups` slugs to `pullups`, not `pull-up`, so it is not shadowed and Decision 5 lists it.
+    // `Pull Ups` slugs to `pull-ups`, not `pull-up`, so Decision 5 does not shadow it and the
+    // picker lists both.
     //
-    // 🔴 **The household row goes FIRST in the input, and that is what makes this test able to
-    // fail.** With the catalog row first, `Array.prototype.sort` is stable, so dropping the
-    // `isCatalog` term from the comparator leaves the same winner and the test stays green —
-    // probed. The rule under test is "catalog wins", so the input has to be ordered against it.
+    // 🔴 **This fixture is chosen so ONLY the `isCatalog` term can decide, and it is probed.** Two
+    // earlier versions could not fail. `Pullups` looked like a collision but `movementNameKey`
+    // folds the trailing `s`, so the names differ once folded (`pullup` vs `pull up`) and the
+    // alphabetical term picked the catalog row on its own — deleting `isCatalog` left the test
+    // green. Reordering the input did not help for the same reason. `Pull Ups` folds to exactly
+    // `pull up`, so rank ties, the name term is 0, and with the household row FIRST a stable sort
+    // keeps it first unless `isCatalog` fires.
     const onPick = vi.fn();
     render(
       <Harness
-        data={{ options: [householdOption('Pullups', 'h-dupe'), ...ALL_CATALOG] }}
+        data={{ options: [householdOption('Pull Ups', 'h-dupe'), ...ALL_CATALOG] }}
         onPick={onPick}
       />,
     );
     open();
-    type('pullups');
+    type('pull ups');
     pressEnter();
     expect(onPick).toHaveBeenCalledWith({
       kind: 'existing',
@@ -496,12 +500,19 @@ describe('Enter in the search box (panel 2 · 3)', () => {
 });
 
 describe('the rest of the contract', () => {
-  it('marks the current movement with aria-current', () => {
+  it('marks the current movement with aria-current, and does not also announce its tag', () => {
     const squat = catalogOption('Front Squat');
     render(<Harness data={{ options: ALL_CATALOG }} currentId={squat.publicId} />);
     open();
     const row = screen.getAllByRole('button').find((b) => b.textContent?.startsWith('Front Squat'));
     expect(row?.getAttribute('aria-current')).toBe('true');
+    // The `current` tag is VISIBLE (a sighted user needs the cue) and hidden from assistive tech,
+    // which `aria-current` has already told. Without this the row reads "Front Squat, current,
+    // current" — the UX review of the built component found it.
+    const tag = [...(row?.querySelectorAll('span') ?? [])].find(
+      (s) => s.textContent === COPY.tagCurrent,
+    );
+    expect(tag?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('resets the query when reopened', () => {

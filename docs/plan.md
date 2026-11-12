@@ -2037,21 +2037,30 @@ new user features.
 > MessageFormat and locale routing, which is this row's whole scope. Adopting one at a single locale
 > would pay that cost for none of the benefit.
 >
-> **So `apps/web/lib/i18n/plural.ts` exists now** — `plural()`, `formatList()`, `quote()` and
-> `APP_LOCALE` — and **every new counted or listed string goes through it**. It is what a library
+> **So `apps/web/lib/i18n/plural.ts` exists now** — `plural()`, `formatList()`, `quote()` — beside
+> `apps/web/lib/i18n/locale.ts`, which holds `APP_LOCALE` and is **already the only source for
+> `<html lang>`**. Every new counted or listed string goes through them. They are what a library
 > would call underneath, so this row inherits the call sites rather than rewriting them.
 >
 > **What this row still owns:** the catalogs and the library choice; `APP_LOCALE` becoming a
-> request-scoped read that `<html lang>` reads from the same source; `quote()` gaining the locale's
-> own marks (« », „ ", 「 」 — no `Intl` API exists for these, which is why it is a catalog concern);
-> and **migrating the five remaining user-facing plural sites**, listed rather than counted because a
-> grep over-reports — `lib/constants.ts`'s `movementCount` and its `${sets} set/sets`,
+> request-scoped read (the one-line change `locale.ts` exists to make possible — `<html lang>` and
+> the formatters already agree, so nothing has to be swept); `quote()` taking a locale and the
+> locale's own marks (« », „ ", 「 」 — no `Intl` API exists for these, which is why it is a catalog
+> concern); and **migrating the four remaining user-facing plural sites**, listed rather than counted
+> because a grep over-reports — `lib/constants.ts`'s `${sets} set/sets`,
 > `lib/entries/format-value-unit.ts`'s singular-vs-unit-label, `lib/programming/program-day.ts`'s
-> `setsLabel`, and `app/p/[profileId]/bodyweight-section.tsx`'s JSX branch. ⚠️ A sixth place changes
+> `setsLabel`, and `app/p/[profileId]/bodyweight-section.tsx`'s JSX branch. ⚠️ A fifth place changes
 > with them: `e2e/scaffold-submit.spec.ts` asserts one of those sentences verbatim. ⚠️ And a naive
 > `grep "=== 1 ?"` also returns `set-display.ts` (picking a reason, not a plural), two e2e helpers
 > and `publish-screenshots.ts` (tooling output in a PR comment) — none of which is user copy. _(First
-> drafted as "6 sites" from a looser grep; corrected on measuring.)_
+> drafted as "6 sites" from a looser grep; corrected on measuring. `movementCount` was the fifth and
+> came along in `PICK-1` PR 3 — the PR that adds a helper should not leave the nearest duplicate
+> behind.)_
+>
+> ⚠️ **A rule this row inherits, worth stating once:** a `one` form must carry its count
+> (`` `${n} match.` ``, never `'1 match.'`). `one` is a CLDR category, not the number one — Russian,
+> Ukrainian and Croatian put 21, 31 and 101 in it. In English the two are indistinguishable, so the
+> defect is invisible until the first locale lands.
 >
 > ⚠️ **The lesson that produced this, worth keeping:** a `n === 1 ? a : b` ternary _looks_ like it
 > handles the singular, which is how PR 3's first draft shipped `` `${n} match` + 'es' `` — one

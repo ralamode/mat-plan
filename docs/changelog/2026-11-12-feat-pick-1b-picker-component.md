@@ -13,4 +13,10 @@
   Counted copy goes through `Intl.PluralRules` / `Intl.ListFormat` rather than a ternary, which
   `I18N-1` inherits and `RTL-1` is filed above. Two code comments claiming a later PR owes a
   slug→id switch are retired: chunk 2 shipped both sides keyed on `movement_id`, so invariant 7 is
-  closed, not pending.
+  closed, not pending. A **post-implementation panel** then read the built component across six
+  lenses: the picker now derives every branch from one query value, because a render mixing the
+  immediate and deferred ones announced "No matches." before the count on the first keystroke of
+  every search and, for one frame, offered to create a duplicate of Romanian Deadlift. The matcher
+  returns which alias hit, so no component re-derives the fold rule. Today's program gets a real
+  heading, which heading navigation had been skipping. And five tests that could not fail were
+  replaced with five that can — each probed with `pnpm probe`.

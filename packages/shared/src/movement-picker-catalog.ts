@@ -70,7 +70,19 @@ type MovementPickerEntry = {
  * The six aliases are the prototype's, and each is a thing typed on a phone between sets:
  * `RDL`, `BSS`, `OHP`, `DB bench`, `KB`, `hip thrust`.
  */
-export const MOVEMENT_PICKER_ENTRIES: Readonly<Record<string, MovementPickerEntry>> = {
+/**
+ * Every seeded slug, as a union — `'box_jump' | 'bb_bench' | …` — read off `MOVEMENT_SEED_ROWS`
+ * (`as const satisfies`, so its slugs are literal types).
+ *
+ * 🔴 **This is what makes the entries map's completeness a `tsc` failure rather than a test
+ * failure.** With `Record<string, …>` a typo (`bb_bnech`) silently added a key for a movement that
+ * does not exist and silently removed the one that does, and the only thing standing between that
+ * and a movement vanishing from the browse list was the key-set test below being remembered. Now a
+ * typo is two compile errors — an unknown key and a missing one — at the keystroke.
+ */
+type SeededMovementSlug = (typeof MOVEMENT_SEED_ROWS)[number]['slug'];
+
+export const MOVEMENT_PICKER_ENTRIES: Readonly<Record<SeededMovementSlug, MovementPickerEntry>> = {
   // ── Push ──────────────────────────────────────────────────────────────────────
   bb_bench: { group: 'push' },
   dumbbell_bench_press: { group: 'push', aliases: ['DB bench'] },

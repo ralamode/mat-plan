@@ -112,7 +112,13 @@ export const SIGN_IN_PATH = '/sign-in';
  */
 export const TOKEN_SETS_PATH = '/design/tokens';
 
-/** The profile picker's copy — one source for the page and the specs that land on it. */
+/**
+ * The **profile** picker's copy — one source for the page and the specs that land on it.
+ *
+ * ⚠️ Not the movement picker, whose strings are `lib/movements/movement-picker-copy.ts`. Two things
+ * called "the picker" now exist; the name predates the other one, and a grep for `PICKER_COPY`
+ * while working on the movement sheet lands here.
+ */
 export const PICKER_COPY = {
   heading: 'Who’s logging today?',
   /**
