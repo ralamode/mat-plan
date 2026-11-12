@@ -1,7 +1,7 @@
 'use client';
 
 import { Dialog } from 'radix-ui';
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { Announcer } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -240,11 +240,21 @@ function useVisualViewport(open: boolean, node: HTMLElement | null): boolean {
  * this "unverified on Next 16.4"; it is verified by source, and the e2e asserts no `load` fired.
  */
 function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean) => void): void {
-  /** One definition of "the top entry is mine", so the four call sites below cannot drift apart. */
-  const isOurEntry = () => {
+  /**
+   * One definition of "the top entry is mine", so the four call sites below cannot drift apart.
+   *
+   * ⚠️ **`useCallback` so the four dependency arrays can be honest.** As a plain function it was
+   * recreated every render, and `react-hooks/exhaustive-deps` warned four times that it was missing
+   * from the arrays — the only `react-hooks` warnings in the app. The arrays were already *correct*
+   * in substance (its one reactive input is `id`, which every array listed), so this is not a
+   * behaviour change: memoised on `[id]`, the callback's identity changes exactly when `id` does,
+   * which is exactly when those effects re-ran before. What it buys is that a future author who
+   * gives this function a second input gets a warning instead of a silently stale closure.
+   */
+  const isOurEntry = useCallback(() => {
     const state = window.history.state;
     return state?.sheet === id && state?.doc === DOCUMENT_TOKEN;
-  };
+  }, [id]);
 
   /**
    * 🔴 **The cross-route restore, which the same-route listener below cannot do.** A link inside the
@@ -264,7 +274,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     if (restored.current) return;
     restored.current = true;
     if (!open && isOurEntry()) onOpenChange(true);
-  }, [open, id, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange]);
 
   /**
    * 🔴 **One ALWAYS-ON listener, syncing both directions** — and the first draft got this wrong in a
@@ -284,12 +294,12 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
-  }, [open, id, onOpenChange]);
+  }, [open, isOurEntry, onOpenChange]);
 
   useEffect(() => {
     if (!open) return;
     if (!isOurEntry()) window.history.pushState({ sheet: id, doc: DOCUMENT_TOKEN }, '');
-  }, [open, id]);
+  }, [open, id, isOurEntry]);
 
   /**
    * 🔴 **The pop is keyed on the open→closed TRANSITION, not on `onOpenChange`.** It lived in the
@@ -308,7 +318,7 @@ function useBackGesture(open: boolean, id: string, onOpenChange: (open: boolean)
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
     if (closed && isOurEntry()) window.history.back();
-  }, [open, id]);
+  }, [open, isOurEntry]);
 }
 
 /**
