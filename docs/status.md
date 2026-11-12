@@ -10,12 +10,14 @@ the Claude workflow alive). Updated as each PR merges. Roadmap detail in [plan.m
 
 ## Where we are right now
 
-**`CRUD-1` step 6b is UNDER WAY: `PICK-1` PR 2 ships the server half.** The log form's submit
+**`CRUD-1` step 6b is UNDER WAY: the server takes a movement id (#372), and the picker component exists.** The log form's submit
 payload now carries an optional movement **public id**, and that id — never the client's label —
 decides which `movements` row an entry references. Resolution moved wholly into `packages/db`, ids
 resolve before any typed name is created, and the namespace check is re-run inside the write
-transaction. No screen sends an id until PR 4, so nothing is visible yet; PR 3 (the picker component,
-unmounted) is not gated on this one and can run beside it.
+transaction. No screen sends an id until PR 4, so nothing is visible yet. **PR 3 adds the picker itself** —
+`movementNameKey` as the one "same movement" rule, the browse groups and aliases, the DTOs, the copy
+and the component, with its own guide — and mounts nothing. PR 4 is what a person will see, and it
+owes a UX panel plus three-width screenshots.
 
 Behind that:
 

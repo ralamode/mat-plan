@@ -90,10 +90,13 @@ export type PrescribedRowForMatch = PrescribedParts & { movementId: number };
  *
  * ⚠️ **Keyed on `movement_id`, not on the slug the export used to key on** (D1). The writer has the
  * resolved internal id in hand, and a slug compare is only ever a proxy for "the row the entry's
- * `movement_id` names" — a proxy `MOV-1` breaks, since a rename changes a slug, and one `PICK-1`
- * invariant already schedules a later PR to replace. Expected byte-identical today because movement
- * resolution is global-first, so a typed name lands on the same global row a prescription names;
- * the export's determinism test is what proves that rather than this comment.
+ * `movement_id` names" — a proxy `MOV-1`'s rename breaks, since a rename changes a slug.
+ * ✅ **Nothing is pending here.** This comment used to say a `PICK-1` invariant "schedules a later PR
+ * to replace" the proxy; chunk 2 keyed BOTH sides on `movement_id` when it shipped, so there is no
+ * proxy left and no later PR owes the switch — `movement-picker.md` invariant 7 records it closed
+ * (retired by `PICK-1` PR 3). Byte-identical today because movement resolution is global-first, so a
+ * typed name lands on the same global row a prescription names; the export's determinism test is
+ * what proves that rather than this comment.
  */
 export function liveMatchesByKey(
   rows: readonly PrescribedRowForMatch[],

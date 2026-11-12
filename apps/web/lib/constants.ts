@@ -9,6 +9,8 @@ import {
   UNIT_LABELS,
 } from '@mat-plan/shared';
 
+import { plural } from './i18n/plural';
+
 /**
  * App-only, cross-feature constants. **No server or IO dependencies** — only `@mat-plan/shared`'s
  * pure values — so it is safe to import from a `'use client'` component, from the Edge proxy, and
@@ -110,7 +112,13 @@ export const SIGN_IN_PATH = '/sign-in';
  */
 export const TOKEN_SETS_PATH = '/design/tokens';
 
-/** The profile picker's copy — one source for the page and the specs that land on it. */
+/**
+ * The **profile** picker's copy — one source for the page and the specs that land on it.
+ *
+ * ⚠️ Not the movement picker, whose strings are `lib/movements/movement-picker-copy.ts`. Two things
+ * called "the picker" now exist; the name predates the other one, and a grep for `PICKER_COPY`
+ * while working on the movement sheet lands here.
+ */
 export const PICKER_COPY = {
   heading: 'Who’s logging today?',
   /**
@@ -746,8 +754,16 @@ export const STRENGTH_COPY = {
   skippedSuffix: '(skipped)',
 } as const;
 
-/** "1 movement" / "3 movements": the one spelling, shared by the receipt and `strengthSummary`. */
-export const movementCount = (n: number) => `${n} ${n === 1 ? 'movement' : 'movements'}`;
+/**
+ * "1 movement" / "3 movements": the one spelling, shared by the receipt and `strengthSummary`.
+ *
+ * ⚠️ **Through `plural()`, not a `n === 1` ternary.** The ternary was correct English and still the
+ * wrong shape: it is the pattern a new string copies, and a locale with three forms cannot be
+ * expressed as a comparison at all. `I18N-1` migrates the rest (`docs/plan.md`); this one came along
+ * because the PR that added the helper should not leave the nearest duplicate behind.
+ */
+export const movementCount = (n: number) =>
+  plural(n, { one: `${n} movement`, other: `${n} movements` });
 export const skippedCount = (n: number) => `${n} skipped`;
 
 /** A session receipt's id in the strength section — the focus target after its save. The prefix is
