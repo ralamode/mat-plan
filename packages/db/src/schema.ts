@@ -454,8 +454,13 @@ export const entrySets = pgTable(
  * into a length quantity. A CHECK cannot read another table; this is what replaces the convention.
  *
  * **`client_id`, no `public_id`** (AGENTS.md; the `entry_sets` idiom, NOT the config-table one): a
- * quantity is client-written log data in the offline replay graph, and the UNIQUE below does
- * NOT dedupe a replay that straddles a soft-delete. Nothing addresses a quantity directly — a set's
+ * quantity is client-written log data in the offline replay graph. ⚠️ **This sentence was inverted
+ * by V1-9b B0 and is corrected here:** it used to read "the partial UNIQUE below does NOT dedupe a
+ * replay that straddles a soft-delete", which was true of a partial index — such a replay twinned.
+ * The index is non-partial now, so it DOES collide across a soft-delete, and this insert carries no
+ * `ON CONFLICT` at all. That would be a raw `23505` were it reachable; it is not, because every
+ * quantity's `client_id` is server-minted per insert (`newId()`) and these rows are written only
+ * when the parent entry was freshly created. Nothing addresses a quantity directly — a set's
  * `public_id` plus its slot is the address — so there is no `public_id`.
  *
  * ⚠️ `ON DELETE CASCADE` is hard-delete only, and the app only ever SOFT-deletes. Every reader must
@@ -818,8 +823,9 @@ export const supersets = pgTable(
   {
     id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
     publicId: uuid('public_id').notNull().unique(), // UUIDv7, app-generated (anti-IDOR)
-    // No natural key (label is free text) → client_id + partial UNIQUE is the idempotency arbiter for
-    // the offline replay graph — the sessions/entries idiom (NOT ramp_targets, which has none).
+    // No natural key (label is free text) → client_id + UNIQUE is the idempotency arbiter for the
+    // offline replay graph — the sessions/entries idiom (NOT ramp_targets, which has none).
+    // Non-partial since V1-9b B0; see this table's index below.
     clientId: uuid('client_id').notNull(),
     sessionId: bigint('session_id', { mode: 'number' })
       .notNull()

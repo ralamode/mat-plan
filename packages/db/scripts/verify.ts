@@ -8924,6 +8924,71 @@ console.log(
   assert.equal(b0Sessions.length, 1, 'V1-9b B0: the session was not twinned either');
   assert.equal(b0Sessions[0].id, b0Session.id, 'V1-9b B0: and it is the same session row');
 
+  // 4b · 🔴 **The OTHER writer B0 changes, which the strength case cannot reach.**
+  //      `insertBodyweightEntry` infers no target (`onConflictDoNothing()` — every unique
+  //      arbitrates, V1-24 1e), so it has its own three-branch fallback. Post-B0 a replay of a
+  //      HIDDEN weigh-in whose day slot has since been freed conflicts on the non-partial
+  //      `uq_entries_client_id`, misses (a) because that row is not live, misses (b) because the day
+  //      is free, and lands on the throw in (c). **Before B0 it inserted a twin** — the same defect,
+  //      through the one writer with no arbiter to re-predicate.
+  //
+  //      ⚠️ **What this case is and is NOT proven by, probed three ways.** 1e reaches (c) by two
+  //      other routes (a foreign metric's `client_id`, an evening-only day), and because `db:verify`
+  //      is fail-fast and 1e runs first, every single-literal mutation that breaks this case breaks
+  //      an earlier one too: restoring the index predicate reddens the strength case above;
+  //      dropping (a)'s liveness guard reddens 1e's dead-row case; swallowing the (c) throw reddens
+  //      1e's foreign-metric case. So this case is **not independently isolable today** — said
+  //      plainly rather than implied.
+  //
+  //      What it does catch, and nothing else would: a future change that answers THIS route
+  //      plausibly while leaving 1e's routes throwing — a fourth branch that looks up hidden rows
+  //      and returns one's id, say, which is the exact "success reported, nothing saved" shape (a)'s
+  //      liveness guard exists to prevent. It also pins the no-twin count for a writer the strength
+  //      case never touches.
+  // ⚠️ Ids in the `0000b9b0…` region because `…b0XX` is MINTED BY A GENERATOR elsewhere in this
+  //    file: the first draft reused `…00000000b010`, which a pushups entry already held, and the
+  //    target-less `DO NOTHING` swallowed that `public_id` conflict straight into the (c) throw —
+  //    presenting as "the writer refuses a fresh weigh-in", which reads like a product bug. Pick a
+  //    region, do not pick a number.
+  const B0_BW_DAY = '2026-12-02';
+  const b0WeighInType = await activityTypeIdByKey(SEED_ACTIVITY_TYPE_KEYS.weighIn);
+  const b0BwArgs = {
+    profileId: bwOwnerRow.id,
+    unit: 'lb',
+    notes: null,
+    activityTypeId: b0WeighInType,
+    kind: ENTRY_KIND.bodyweight,
+    publicId: '019826b4-0000-7000-8000-0000b9b00001',
+    clientId: '019826b4-0000-7000-8000-0000b9b00002',
+    day: B0_BW_DAY,
+    value: 81,
+  };
+  await insertBodyweightEntry(asPg, b0BwArgs);
+  await db
+    .update(schema.entries)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.entries.clientId, b0BwArgs.clientId));
+  await assert.rejects(
+    () =>
+      insertBodyweightEntry(asPg, {
+        ...b0BwArgs,
+        publicId: '019826b4-0000-7000-8000-0000b9b00003',
+      }),
+    /a replay of a HIDDEN weigh-in whose day is now free/,
+    'V1-9b B0: replaying a HIDDEN weigh-in onto its now-free day is REFUSED, not duplicated',
+  );
+  const b0BwRows = await db
+    .select({ id: schema.entries.id })
+    .from(schema.entries)
+    .where(
+      and(
+        eq(schema.entries.profileId, bwOwnerRow.id),
+        eq(schema.entries.activityDate, B0_BW_DAY),
+        eq(schema.entries.metricKey, SEED_METRIC_KEYS.bodyweight),
+      ),
+    );
+  assert.equal(b0BwRows.length, 1, 'V1-9b B0: …and the hidden weigh-in was not twinned');
+
   // 5 · The STRUCTURAL case, after the behaviour: none of the five indexes carries a predicate.
   //     Read from `pg_indexes`, so it measures the LIVE schema the migration produced rather than
   //     the TypeScript that generated it — the drift this would otherwise miss is a migration that
@@ -8953,9 +9018,17 @@ console.log(
     );
   }
 
-  // 6 · …and the NINE arbiters that stay partial, so the structural case cannot be "passed" by
+  // 6 · …and FOUR of the arbiters that stay partial, so the structural case cannot be "passed" by
   //     dropping every predicate in the schema. A hide SHOULD free a slot; it should not free an
   //     identity, and that asymmetry is the whole decision.
+  //
+  //     ⚠️ **Four of TEN, and the comment used to say nine.** Counted off `0021_snapshot.json`:
+  //     twelve partial unique indexes, ten of them on `deleted_at` (the ten below plus
+  //     `uq_household_members_clerk_user`, which is a one-live-membership constraint rather than a
+  //     slot) and two on `movements.household_id`. The plan's enumeration listed nine because it
+  //     predates the Clerk-user index. Four named here is enough to defeat "drop every predicate";
+  //     asserting the full count would redden on every unrelated new partial index, which is a
+  //     maintenance tax for a weaker signal.
   const b0Partial = await db.execute<{ indexname: string; indexdef: string }>(
     sql`select indexname, indexdef from pg_indexes
         where indexname in ('uq_entries_superset_order', 'uq_entry_sets_entry_idx',
@@ -8964,7 +9037,7 @@ console.log(
   const b0PartialRows = (
     b0Partial as unknown as { rows: { indexname: string; indexdef: string }[] }
   ).rows;
-  assert.ok(b0PartialRows.length >= 4, 'V1-9b B0: the slot arbiters are all present');
+  assert.equal(b0PartialRows.length, 4, 'V1-9b B0: all four named slot arbiters are present');
   for (const row of b0PartialRows) {
     assert.ok(
       /\bWHERE\b/i.test(row.indexdef),

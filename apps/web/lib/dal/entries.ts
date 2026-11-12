@@ -439,7 +439,12 @@ export async function logCheckinEntries(args: {
   const inserted = await db
     .insert(schema.entries)
     .values(values)
-    // client_id UNIQUE is PARTIAL (WHERE deleted_at IS NULL), so the arbiter repeats it.
+    // ⚠️ The `client_id` UNIQUE is NON-partial since V1-9b B0; the predicate is kept here for
+    // deploy-order safety (a supplied predicate still infers against a non-partial index, so the
+    // index and the arbiter can change in either order). Do not tidy it — `write-path.md`
+    // invariant 6. Consequence: a replay of a HIDDEN check-in now conflicts and reports
+    // `created: false` for every item, which the action turns into "already logged" — a typed
+    // refusal, where before B0 it inserted a twin.
     .onConflictDoNothing({
       target: schema.entries.clientId,
       where: isNull(schema.entries.deletedAt),

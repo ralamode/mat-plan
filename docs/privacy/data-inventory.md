@@ -474,8 +474,12 @@ addressable, so restoring its export path needs no migration.
 🔴 **`client_id` is no longer in the freed set at all, as of `V1-9b` B0 (2026-11-12).** All five
 remaining arbiters — `sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities` — went
 non-partial, so a hide frees a **slot** (an ordinal, a day, a position) and never an **offline
-identity**. Nine arbiters stay partial on `deleted_at`: superset order, weigh-in day, set ordinal,
-quantity slot, readiness day, ramp week, block slug, prescription slot, target pair.
+identity**. **Ten** arbiters stay partial on `deleted_at`: superset order, weigh-in day, set ordinal,
+quantity slot, readiness day, ramp week, block slug, prescription slot, target pair — and
+`uq_household_members_clerk_user`, one live membership per Clerk account, which is a constraint
+rather than a slot. ⚠️ **Counted off `0021_snapshot.json`, not off the plan**, which said nine
+because it predates that index; two further partial uniques key on `movements.household_id` rather
+than `deleted_at` and are untouched by any of this.
 **What a reader is owed, stated plainly:** a `client_id` can never be reused for a different row,
 even after the first is purged — and the "un-deleting can fail" hazard below therefore **does not
 apply to `client_id`** on any table. It still applies to the nine slots.

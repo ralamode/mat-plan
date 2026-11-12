@@ -354,20 +354,30 @@ flowchart LR
    is how you get a statement that matches nothing in between.
    ⚠️ **A NEW `client_id` arbiter is non-partial from birth** — the rule is in the
    `db-migration` skill.
-   ⚠️ **The trap B0 creates:** replaying a write whose row was hidden is now a **refusal** rather
-   than a duplicate — `reselectLiveByClientId` throws `no live row for client_id`. That is the
-   intended behaviour and `db:verify`'s B0 case asserts it; `V1-9b` B1-2 is what turns it into a
-   typed envelope instead of `error.tsx`.
-   **Still true for a PARTIAL index, of which the slot arbiters are nine:** the predicate must be
-   repeated or Postgres rejects the statement outright. drizzle:
-   `onConflictDoUpdate({ target, targetWhere })`.
-   ⚠️ **Bodyweight's CREATE is the exception: target-less `ON CONFLICT DO NOTHING` (V1-24 PR 1e).**
-   It has two uniques, `uq_entries_client_id` and 1d's natural key `uq_entries_profile_day_bodyweight`
-   (one live weigh-in per `(profile, day, coalesce(context, 'morning'))`, an EXPRESSION drizzle's
-   `target` cannot name). `insertBodyweightEntry` (`packages/db/src/writers/bodyweight.ts`) uses NO
-   target, so every unique index is an arbiter: there is no spec to mis-infer, and a concurrent re-POST
-   waits and does nothing instead of raising `23505`. It pays the three costs explicitly, and a change
-   to it must keep paying them:
+   ⚠️ **The trap B0 creates, in all four writers that key on `client_id`** — replaying a write whose
+   row was hidden is now a **refusal** rather than a duplicate. Each answers differently, and that
+   is worth knowing before B1-2 unifies them:
+   - **strength** → `reselectLiveByClientId` throws `no live row for client_id`, which reaches
+     `error.tsx` and loses the form. `db:verify`'s B0 case asserts it; mutation `39` proves it fails.
+   - **bodyweight** → `insertBodyweightEntry` infers no target, so it falls through its own three
+     branches: `dayTaken` if the day's slot is held, otherwise the throw in **(c)**, whose message
+     now names this case. Also asserted in the B0 block.
+   - **check-ins** → `created: false, id: null` per item, which the action renders as "already
+     logged": a typed refusal, and the best of the four.
+   - **life activities** → the action ignores the per-item result, so a hidden replay reports plain
+     success and writes nothing. Pre-existing shape, now reachable; B1-2 owns it.
+     🔴 **All four were a silent TWIN before B0**, which is the defect, so a refusal — even an ugly one
+     — is the improvement. `V1-9b` B1-2 is what turns each into a typed envelope.
+     **Still true for a PARTIAL index, of which ten remain on `deleted_at`:** the predicate must be
+     repeated or Postgres rejects the statement outright. drizzle:
+     `onConflictDoUpdate({ target, targetWhere })`.
+     ⚠️ **Bodyweight's CREATE is the exception: target-less `ON CONFLICT DO NOTHING` (V1-24 PR 1e).**
+     It has two uniques, `uq_entries_client_id` and 1d's natural key `uq_entries_profile_day_bodyweight`
+     (one live weigh-in per `(profile, day, coalesce(context, 'morning'))`, an EXPRESSION drizzle's
+     `target` cannot name). `insertBodyweightEntry` (`packages/db/src/writers/bodyweight.ts`) uses NO
+     target, so every unique index is an arbiter: there is no spec to mis-infer, and a concurrent re-POST
+     waits and does nothing instead of raising `23505`. It pays the three costs explicitly, and a change
+     to it must keep paying them:
    - **(a) `RETURNING` is empty on any conflict** → it re-selects; it never assumes a row.
    - **(b) a second device's different weight must not read as success** → the re-select branches: the
      row is THIS submit's (`client_id` AND profile match, live, AND a weigh-in) → `{ id }`; the day's slot

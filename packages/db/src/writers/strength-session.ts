@@ -90,8 +90,10 @@ export type ResolvedSessionMovement = {
 };
 
 /**
- * Insert the parent `sessions` row, idempotent by `client_id` (partial UNIQUE). On conflict the
- * row already exists (a replay) → re-select its id/public_id so members attach to it. `status` is
+ * Insert the parent `sessions` row, idempotent by `client_id` (UNIQUE — **non-partial since V1-9b
+ * B0**). On conflict the row already exists (a replay) → re-select the LIVE id/public_id so members
+ * attach to it, or **refuse**: a hidden row still holds the id and the re-select throws rather than
+ * attaching children to a dead parent. `status` is
  * omitted → the column default ('done'); `sessionType` is the caller's (a sourced const, never a
  * re-typed literal). NOT exported — reached only via the transactional `writeStrengthSession` wrapper,
  * so the whole graph stays all-or-nothing.
@@ -223,7 +225,7 @@ async function writeSessionStrengthEntry(
     .returning({ id: schema.entries.id, publicId: schema.entries.publicId });
 
   // Idempotent replay: the entry already exists — return it, don't re-add sets (the deleted_at-guarded
-  // re-select, so a soft-deleted row sharing this client_id is never returned).
+  // re-select, so a HIDDEN row holding this client_id is refused rather than returned — V1-9b B0).
   if (!entry) {
     return {
       ...(await reselectLiveByClientId(exec, schema.entries, args.clientId)),

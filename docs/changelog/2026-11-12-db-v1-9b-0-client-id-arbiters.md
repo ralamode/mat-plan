@@ -15,4 +15,14 @@
   **refused** rather than duplicated — which `V1-9b` B1-2 turns into a typed envelope. The migration
   takes `ACCESS EXCLUSIVE` on all five tables up front rather than upgrading mid-file, and refuses
   with a named table and a runbook pointer if any `client_id` is already shared, counting hidden rows
-  too: a non-partial index collides on a hidden/live pair where the old one did not.
+  too: a non-partial index collides on a hidden/live pair where the old one did not. **Two review
+  lenses then found the half of this that was under-told:** the change lands in **four** writers, not
+  one — the bodyweight writer infers no target, so a replay of a hidden weigh-in whose day has since
+  been freed now reaches a refusal whose message called itself "unexpected", check-ins answer with a
+  typed "already logged", and life activities report plain success while writing nothing. All four
+  were a silent twin before, which is the defect; all four are now written into the guide, and the
+  bodyweight route has a `db:verify` case it did not have. Five call-site comments still described
+  the partial index — including one this change had left **inverted**, claiming a non-partial UNIQUE
+  does not dedupe across a soft-delete when that is exactly what it now does. And the arbiters that
+  stay partial on `deleted_at` are **ten**, not the nine the plan enumerated before the Clerk-user
+  index existed.

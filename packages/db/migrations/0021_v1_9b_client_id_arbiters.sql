@@ -28,10 +28,24 @@
 -- ⚠️ `migrate.yml` runs the seed in the same job, so a refused B0 freezes EVERY later migration
 -- until the duplicate is corrected and the run re-dispatched.
 --
--- NOT CONCURRENTLY: drizzle-kit migrate wraps the file in a transaction, so CONCURRENTLY is
+-- NOT CONCURRENTLY: drizzle-kit migrate wraps the run in a transaction, so CONCURRENTLY is
 -- impossible here. `require-concurrent-index-creation` is excluded in .squawk.toml for that reason.
--- No IF EXISTS / IF NOT EXISTS: a guard would silently skip a same-named index carrying the WRONG
--- predicate, which is precisely the state this migration exists to leave behind (0012's reasoning).
+--
+-- NO GUARDS, and the reason differs by half -- the first draft gave 0012's CREATE argument for both:
+--   * no IF NOT EXISTS on the CREATEs, because such a guard would silently skip a same-named index
+--     carrying the WRONG predicate, which is precisely the state this migration exists to leave
+--     behind (0012's reasoning, and it is about CREATE);
+--   * no IF EXISTS on the DROPs, for a different reason: DROP INDEX removes by NAME whatever
+--     predicate it carries, so it could not skip a wrong one. A missing index here means the
+--     snapshot chain is broken, and failing loudly is the right answer to that.
+--
+-- ⚠️ ONE DEADLOCK WINDOW, traced rather than assumed: the LOCK list is taken in the writer's own
+-- order (sessions -> ... -> entry_set_quantities), so the write path cannot cycle with it. One READ
+-- goes the other way -- `queries/export-month.ts` selects FROM entries and LEFT JOINs sessions. If
+-- an export is mid-statement while this migration holds sessions and waits on entries, Postgres
+-- breaks the cycle after `deadlock_timeout` by aborting whichever backend's timer fires first --
+-- the export, which started waiting first. So the migration survives and a single export can error
+-- once inside a sub-second window. Acceptable; recorded so nobody re-derives it.
 
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '60s';--> statement-breakpoint
