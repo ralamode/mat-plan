@@ -1015,6 +1015,24 @@ Carry" and stops there; by its own rule (any query word of 3+ letters) `walk` is
 `walking lunge`, so **Walking Lunge matches too**. The implementation and its test expect both. It is
 also the better answer — someone typing that may mean either.
 
+### Roadmap alignment (2026-11-12, PR 3)
+
+Checked against the roadmap before shipping the component: PR 3 advances `CRUD-1` step 6b and gates
+`MOV-1` (step 7) and `PICK-2`. **The one row with a claim on this code is [`CAT-3`](../plan.md)** —
+movement taxonomy — which already records that "PICK-1 groups movements in shared code keyed by slug,
+which is enough for one household's short list and not for a library", and that the picker later gets
+**fuzzy matching and relevance ranking** "extending PICK-1's fold-and-alias rules … rather than
+replacing them". Two things this PR did on purpose keep that open:
+
+- **`MOVEMENT_PICKER_ENTRIES` maps a slug to an entry, not to a group**, so `CAT-3`'s equipment,
+  primary/secondary muscle and tracking-type facets are new **fields on the entry** (or the reference
+  tables that row specifies), not a change to this shape. One `group` stays the browse heading.
+- **`matchMovementOptions(options, query)` takes the list it is given**, so `CAT-3`'s rule that "a
+  filter narrows, never reorders" is satisfied by filtering before the call. The rank function is one
+  expression with three tiers; a fuzzy tier is appended below them.
+
+Nothing else to add here.
+
 ### Panel on the BUILT component (2026-11-12, PR 3) — six lenses
 
 The panels above reviewed a design. This one read the shipped code: correctness + tests, reuse,
