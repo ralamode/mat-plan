@@ -159,9 +159,14 @@ describe('Sheet — the frame', () => {
     render(<Harness status="3 matches" />);
     openAndCapture();
     const region = dialog().querySelector('[role="status"]');
-    // The suffix is a value two files must agree on; the helper is the single source and this is the
-    // contract test that pins it (AGENTS.md → constants).
-    expect(region?.id).toBe(sheetStatusId('test-sheet'));
+    // 🔴 **The LITERAL is on the assertion side, exactly once** — the deliberate exception in
+    // AGENTS.md's constants rule. Asserting `sheetStatusId('test-sheet')` here would put the helper
+    // on both sides, so changing the suffix would change both identically: probed, and it reported
+    // GREEN under a mutation that renamed `-status` to `-live`. A contract test that pins a value
+    // must not compute the expectation from the thing it is pinning.
+    expect(region?.id).toBe('test-sheet-status');
+    // …and the helper agrees with it, which is what makes a consumer safe to use the helper.
+    expect(sheetStatusId('test-sheet')).toBe(region?.id);
   });
 
   it('renders an overlay even for the full-screen sheet — the scroll lock lives on it', () => {
