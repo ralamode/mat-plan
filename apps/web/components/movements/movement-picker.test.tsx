@@ -499,8 +499,12 @@ describe('the rest of the contract', () => {
 
   it('a movement option carries no magnitude', () => {
     const option = catalogOption('Front Squat');
-    // @ts-expect-error — strength-logging invariant 1: a DECLARATION is not a prescription. If this
-    // ever compiles, a picked movement could prefill a load, which is the one inviolable rule.
+    // 🔴 **The suppression IS the assertion.** A DECLARATION is not a prescription
+    // (strength-logging invariant 1, AGENTS.md's one inviolable product rule). If
+    // `MovementOptionDTO` ever gains `load`, the directive below goes UNUSED and `tsc` fails — so it
+    // pins the absence, and deleting it removes a guard rather than silencing one. The plan mandates
+    // it here (Decision 5). `hold-the-bar` flags the string either way; justified in the PR.
+    // @ts-expect-error — `load` must not exist on a movement option.
     void option.load;
     expect(option.unitDefault === null || typeof option.unitDefault === 'string').toBe(true);
   });
