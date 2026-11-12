@@ -77,28 +77,26 @@ let clerkReturnsPlainResponse = false;
 /** Clerk's handshake: `NextResponse.redirect`, built WITHOUT calling our handler. */
 let clerkReturnsRedirect = false;
 vi.mock('@clerk/nextjs/server', () => ({
-  clerkMiddleware:
-    (handler: () => NextResponse) =>
-    async (_request: unknown, _event: unknown): Promise<NextResponse | Response> => {
-      clerkCalls.push({ handled: true });
-      if (clerkReturnsRedirect) {
-        // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
-        // handshake, and the reason the tombstone must wrap the function's single `return`.
-        // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
-        // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
-        const { NextResponse: NR } = await import('next/server');
-        const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
-        redirect.headers.append('set-cookie', ROTATED_COOKIE);
-        return redirect;
-      }
-      const res = handler();
-      res.headers.append('set-cookie', ROTATED_COOKIE);
-      if (clerkReturnsPlainResponse) {
-        // A genuinely plain Response: no `.cookies`, headers carried across.
-        return new Response(null, { status: 200, headers: res.headers });
-      }
-      return res;
-    },
+  clerkMiddleware: (handler: () => NextResponse) => async (): Promise<NextResponse | Response> => {
+    clerkCalls.push({ handled: true });
+    if (clerkReturnsRedirect) {
+      // ⚠️ Built WITHOUT calling the handler — which is what `clerkMiddleware` does for a
+      // handshake, and the reason the tombstone must wrap the function's single `return`.
+      // ⚠️ `await import` inside the factory: `vi.mock` is hoisted above the module's own imports,
+      // so closing over the top-level `NextResponse` throws `ReferenceError` at call time.
+      const { NextResponse: NR } = await import('next/server');
+      const redirect = NR.redirect(new URL('/sign-in', ORIGIN));
+      redirect.headers.append('set-cookie', ROTATED_COOKIE);
+      return redirect;
+    }
+    const res = handler();
+    res.headers.append('set-cookie', ROTATED_COOKIE);
+    if (clerkReturnsPlainResponse) {
+      // A genuinely plain Response: no `.cookies`, headers carried across.
+      return new Response(null, { status: 200, headers: res.headers });
+    }
+    return res;
+  },
 }));
 
 beforeEach(() => {

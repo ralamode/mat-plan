@@ -6,9 +6,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // receives the mapped arguments — or is never called for an unknown profile.
 const { state, insertBodyweightEntry } = vi.hoisted(() => ({
   state: { profileRows: [] as { id: number }[], scope: null as unknown },
-  insertBodyweightEntry: vi.fn(async (_exec: unknown, _args: Record<string, unknown>) => ({
-    id: 'written-public-id',
-  })),
+  // ⚠️ The call signature is a GENERIC, not two unused parameters. The assertions below read
+  // `mock.calls[0][1]` — the writer's second argument — so the two-parameter shape has to be typed
+  // somewhere; written as `(_exec, _args) => …` it was typed by parameters the body never used, and
+  // the repo's eslint has no `argsIgnorePattern`, so it reported two warnings for deliberate
+  // documentation. `vi.fn<T>` puts the signature where it belongs.
+  insertBodyweightEntry: vi.fn<
+    (exec: unknown, args: Record<string, unknown>) => Promise<{ id: string }>
+  >(async () => ({ id: 'written-public-id' })),
 }));
 
 vi.mock('./db', () => ({

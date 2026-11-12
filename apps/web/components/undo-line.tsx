@@ -1,12 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-  ANNOUNCE_AFTER_FOCUS_MS,
-  NAME_WRAP_CLASS,
-  UNDO_BUTTON_ATTR,
-  UNDO_LABEL,
-} from '@/lib/constants';
+import { NAME_WRAP_CLASS, UNDO_BUTTON_ATTR, UNDO_LABEL } from '@/lib/constants';
 
 /**
  * **The shared Undo line** (PROF-1 b; the spec's "Seams the plans settled",
