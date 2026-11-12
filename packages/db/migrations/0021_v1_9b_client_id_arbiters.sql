@@ -47,7 +47,7 @@ BEGIN
       'SELECT count(*) FROM (SELECT 1 FROM %I GROUP BY client_id HAVING count(*) > 1) d', tbl
     ) INTO dups;
     IF dups > 0 THEN
-      RAISE EXCEPTION 'V1-9b B0: %I holds % client_id value(s) used by more than one row (hidden rows included). A non-partial UNIQUE cannot be built over them. Correct them first with a predicate-selected db:correct correction: docs/runbooks.md -> "A pending migration wedges prod and the seed with it".', tbl, dups;
+      RAISE EXCEPTION 'V1-9b B0: table % holds % client_id value(s) used by more than one row (hidden rows included). A non-partial UNIQUE cannot be built over them. Correct them first with a predicate-selected db:correct correction: docs/runbooks.md -> "A pending migration wedges prod and the seed with it".', tbl, dups;
     END IF;
   END LOOP;
 END $$;--> statement-breakpoint
