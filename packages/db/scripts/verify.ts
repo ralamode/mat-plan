@@ -1708,10 +1708,21 @@ async function upsertReturningId(
     .values(values as never)
     .onConflictDoNothing({ target: table.clientId, where: isNull(table.deletedAt) })
     .returning({ id: table.id });
-  return (
-    row?.id ??
-    (await db.select({ id: table.id }).from(table).where(eq(table.clientId, clientId)))[0].id
-  );
+  if (row) return row.id;
+  // 🔴 **`deleted_at IS NULL`, and a throw on a miss — the production writer's
+  // `reselectLiveByClientId` shape, not a shortcut.** Before V1-9b B0 the partial UNIQUE kept a
+  // hidden row out of the index, so a conflict implied a LIVE row and an unguarded re-select was
+  // merely sloppy. B0 puts hidden rows back in the index, so a conflict can now be WITH a hidden
+  // row — and this re-select would hand its id back and attach children to a dead parent. The
+  // writer's own docblock names this helper as the place that dropped the guard; B0 is where that
+  // stops being true.
+  const [live] = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.clientId, clientId), isNull(table.deletedAt)))
+    .limit(1);
+  if (!live) throw new Error(`no live row for client_id ${clientId}`);
+  return live.id;
 }
 
 /** Insert a strength member/standalone entry (kind=NULL, movement_id+movement_name set) + its set,

@@ -214,6 +214,14 @@ all derived from the one unit, so none can disagree with it:
 6. **Idempotency is per-row `ON CONFLICT` at every level, with no parent short-circuit.** A crash
    after the session commit would otherwise orphan it. A replay dedupes row by row; a replay that adds
    a new movement attaches it to the re-selected session.
+   🔴 **Since `V1-9b` B0 (migration `0021`) a replay of a HIDDEN row is a REFUSAL, not a
+   duplicate.** The five `client_id` uniques were `WHERE deleted_at IS NULL`, so a hidden row left
+   the index and the replay inserted a twin; they are now non-partial, so the hidden row still
+   **holds** the id, the insert no-ops on conflict, and `reselectLiveByClientId` throws
+   `no live row for client_id`. ⚠️ **Today that throw reaches `error.tsx` and the form is lost** —
+   `V1-9b` B1-2 is the chunk that turns it into a typed envelope. `db:verify`'s B0 case asserts the
+   refusal and a committed mutation patch (`39`) proves it can fail. Why an identity and not a slot:
+   `write-path.md` invariant 6.
 
 7. **The profile is resolved by `public_id` INSIDE the transaction.** Never a raw internal id from the
    request. That is the BOLA seam.

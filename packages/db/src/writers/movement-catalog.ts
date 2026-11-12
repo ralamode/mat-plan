@@ -228,6 +228,16 @@ export async function resolveSessionMovements(
   scope: HouseholdScope,
   movements: readonly SessionMovementInput[],
 ): Promise<ResolvedSessionMovement[]> {
+  // Phase 2 — typed names. Find-or-create INSERTS, which is why it cannot start until every id above
+  // resolved. Also in parallel: idempotent by slug, and independent of each other.
+  const typedIds = await Promise.all(
+    movements.map(async (m) =>
+      m.movementPublicId === undefined
+        ? await findOrCreateMovement(exec, scope, m.movementName)
+        : undefined,
+    ),
+  );
+
   // Phase 1 — ids. Independent reads, so in parallel; every one is awaited before phase 2 begins.
   const byPublicId = new Map<string, { id: number; name: string }>();
   await Promise.all(
@@ -237,16 +247,6 @@ export async function resolveSessionMovements(
       if (!row) throw new MovementNotAvailableError();
       byPublicId.set(m.movementPublicId, row);
     }),
-  );
-
-  // Phase 2 — typed names. Find-or-create INSERTS, which is why it cannot start until every id above
-  // resolved. Also in parallel: idempotent by slug, and independent of each other.
-  const typedIds = await Promise.all(
-    movements.map(async (m) =>
-      m.movementPublicId === undefined
-        ? await findOrCreateMovement(exec, scope, m.movementName)
-        : undefined,
-    ),
   );
 
   return movements.map((m, i): ExhaustiveResolvedSessionMovement => {

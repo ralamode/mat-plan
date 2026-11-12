@@ -342,9 +342,25 @@ flowchart LR
 5. **Idempotency is a client UUIDv7 + a DB UNIQUE + `ON CONFLICT`** — never an app-level "does it
    exist?" check, which races. Per-row at every level of a graph, with no parent short-circuit.
 
-6. **A partial unique index needs its predicate repeated in `ON CONFLICT`.** Every `client_id` unique
-   in this schema is `WHERE deleted_at IS NULL`, so the arbiter must say so too or Postgres rejects the
-   statement outright. drizzle: `onConflictDoUpdate({ target, targetWhere })`.
+6. ✅ **No `client_id` unique is partial any more — `V1-9b` B0 was the change.** All five
+   (`sessions`, `supersets`, `entries`, `entry_sets`, `entry_set_quantities`) were
+   `WHERE deleted_at IS NULL`, which meant a hidden row stopped being an `ON CONFLICT` target and a
+   replay of the same write inserted a **twin**. `uq_profiles_client_id` was built right at
+   `PROF-1` a-0 and is now the rule rather than the exception (ADR 0008 decision 3.4).
+   🔴 **The arbiters still say `where: isNull(deletedAt)`, and that is deliberate — do not "tidy" it
+   in the PR that changes an index.** A supplied predicate still infers against a non-partial index
+   (`db:verify` exercises the real writer and proves it), so the two can change in either order
+   without a window where neither works. Dropping the `where:` in the same deploy as the index change
+   is how you get a statement that matches nothing in between.
+   ⚠️ **A NEW `client_id` arbiter is non-partial from birth** — the rule is in the
+   `db-migration` skill.
+   ⚠️ **The trap B0 creates:** replaying a write whose row was hidden is now a **refusal** rather
+   than a duplicate — `reselectLiveByClientId` throws `no live row for client_id`. That is the
+   intended behaviour and `db:verify`'s B0 case asserts it; `V1-9b` B1-2 is what turns it into a
+   typed envelope instead of `error.tsx`.
+   **Still true for a PARTIAL index, of which the slot arbiters are nine:** the predicate must be
+   repeated or Postgres rejects the statement outright. drizzle:
+   `onConflictDoUpdate({ target, targetWhere })`.
    ⚠️ **Bodyweight's CREATE is the exception: target-less `ON CONFLICT DO NOTHING` (V1-24 PR 1e).**
    It has two uniques, `uq_entries_client_id` and 1d's natural key `uq_entries_profile_day_bodyweight`
    (one live weigh-in per `(profile, day, coalesce(context, 'morning'))`, an EXPRESSION drizzle's
