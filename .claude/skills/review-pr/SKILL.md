@@ -175,6 +175,16 @@ correct list beats a long, noisy one, and a false P0 costs the author an afterno
   different answers to "which units does the server accept". A 10-line throwaway vitest probe
   against the shared schema settled it in one run, and turned up a P0. Put the probe in the
   scratchpad and copy it in only to run it; never commit it.
+- **To check whether an assertion can fail, use `pnpm probe`, not a hand-rolled checkout.** It
+  mutates one literal, runs the gate, restores the file from a snapshot of the tree (**never from
+  `HEAD`**) and verifies the restore — and it reports GREEN, DID-NOT-RUN and "red for the wrong
+  reason" as three distinct failures. ⚠️ Rolling this by hand lost uncommitted work three times in
+  one session, which is why the script exists ([lessons.md](../../../docs/lessons.md) → "Guards that
+  pass while guarding nothing").
+
+      pnpm probe --file <path> --from "<literal>" --to "<literal>" \
+        --gate "pnpm --filter web exec vitest run <suite>" --expect "<the assertion's message>"
+
 - **Severity is about the risk today.** A defect that only fires on data that doesn't exist yet
   (a catalog value nobody has seeded) is P2 with a note saying what would make it live.
 - **Report what the diff exposed, even if it predates the diff**, under its own heading ("found

@@ -580,7 +580,50 @@ HEAD)"` before opening a PR — the bare form takes a different path and may pas
   mutation produced a diff AND that the suite actually executed. A probe that cannot fail is the same
   defect as a test that cannot fail, one level up.
 
+  🔴 **AND THEN IT HAPPENED THREE MORE TIMES, WHICH IS WHY THIS IS NOW A COMMAND.** The rule above
+  was written down and then violated three times in one session (`PICK-1` PR 2 and PR 3), in the same
+  shape every time: an ad-hoc `git checkout -- <file>` reverted work that had never been committed,
+  and twice the probes that followed in the batch reported RED against a tree with nothing left in it
+  to test. One of them wiped ~180 lines of a primitive mid-batch; the loss was found only by
+  re-checking the baseline. → **Use `pnpm probe`** (`.github/scripts/probe.mjs`). It snapshots the
+  whole tree with `git stash create` — a commit object, with the stash **stack** untouched, because
+  worktrees share it — restores the file from **that snapshot rather than from `HEAD`**, and then
+  verifies the restore byte for byte. It also refuses a dirty file by default, reports GREEN as a
+  defect, treats a gate that cannot spawn as DID-NOT-RUN, and takes `--expect` so "red for the right
+  reason" is checkable. ⚠️ **The lesson here is not about probing.** A rule that has to be remembered
+  at the moment of risk is not a control; this one was re-derived correctly three times and applied
+  wrongly anyway. When a convention keeps failing, the next version of it is a script with a
+  self-test, not a better-worded paragraph.
+
 ## Guards that pass while guarding nothing
+
+- 🔴 **THE RECURRING ONE, named because it keeps coming back in different clothes: a proof whose
+  EXPECTATION is derived from the thing it is proving.** Seven instances across `#364`–`PICK-1` PR 3,
+  and the code was sound in every one — what was wrong was the proof. Two shapes:
+
+  **(a) The expectation is computed from the subject.** `expect(actual).toBe(helper(input))` where
+  `helper` is the code under test: mutate it and both sides move together, so the assertion is
+  `f(x) === f(x)`. Seen as a `sheetStatusId` contract test (the helper on both sides of its own
+  suffix); as a "these two agree" drift test between a schema and the function that **defines** it;
+  and as a `db:verify` byte-identity check comparing a refusal message against the constant it is
+  made of, past a cast that is what let it typecheck. ⚠️ AGENTS.md's constants rule already carves
+  out the fix — a contract test puts the **literal** on the assertion side, exactly once — and the
+  carve-out exists precisely because the tautology is otherwise invisible.
+
+  **(b) The name claims more than the assertion checks.** A test called _"names itself from the
+  title, which is also the initial focus target"_ that asserted only `aria-labelledby`, beside a
+  component that never wired `onOpenAutoFocus` — so the second half of the name was a claim no test
+  made and no code kept, and it shipped. Also: an export determinism test cited as proof of
+  byte-identity across branches, which it cannot witness; a "dedicated fixture" that was not
+  dedicated; and a "no new rows" claim that held only for the one case that threw before reaching the
+  writer.
+
+  → **Two habits, and the second is the one that actually works.** Write the expectation as a
+  **literal** wherever the subject could compute it. And **probe every new assertion** by reverting
+  the behaviour it protects (`pnpm probe`): shape (a) reports GREEN, shape (b) usually reddens on a
+  different assertion than the one you named, which `--expect` catches. Six of the seven were found
+  by a reviewer reading carefully; the seventh was found in one second by a machine, which is the
+  argument for probing by default rather than when something feels risky.
 
 - **A focus assertion passes when focus was ALREADY there — so a "we move focus on failure" test must
   move it away first.** → `PROF-1 a-1d` added a focus return for a failed Restore and a test asserting
