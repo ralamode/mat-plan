@@ -101,8 +101,14 @@ export function MovementPicker({
     !window.matchMedia('(pointer: coarse)').matches;
 
   // Filtering runs on the deferred value so typing stays responsive over ~110 rows (FE-12's intent).
-  const deferredQuery = useDeferredValue(query);
-  const trimmed = deferredQuery.trim();
+  //
+  // ⚠️ **Two trimmed queries, and the difference is DEFERRED vs IMMEDIATE — not raw vs folded.**
+  // `deferredTrimmed` feeds the match, which is the expensive part; `trimmedQuery` drives the footer
+  // and the browse/search branch, which must track the keystroke so the button a thumb is reaching
+  // for does not lag a frame behind the text. Neither is folded: folding happens inside
+  // `matchMovementOptions`, and nothing in this file tests a FOLDED value for emptiness — which is
+  // the point of panel 2 · 4, below.
+  const deferredTrimmed = useDeferredValue(query).trim();
 
   const result = useMemo(
     () =>
@@ -113,9 +119,9 @@ export function MovementPicker({
           aliases: option.owner === 'catalog' ? option.aliases : [],
           option,
         })),
-        trimmed,
+        deferredTrimmed,
       ),
-    [data.options, trimmed],
+    [data.options, deferredTrimmed],
   );
 
   const byName = useMemo(
@@ -137,7 +143,9 @@ export function MovementPicker({
     // `also called` fires ONLY on an alias hit, naming the alias that hit — otherwise it would
     // outrank the group label for every aliased row in search results (panel 2 · 5, against UX1 8).
     if (result.aliasHit && option.owner === 'catalog') {
-      const hit = option.aliases.find((a) => movementNameKey(a) === movementNameKey(trimmed));
+      const hit = option.aliases.find(
+        (a) => movementNameKey(a) === movementNameKey(deferredTrimmed),
+      );
       if (hit) return COPY.tagAlsoCalled(hit);
     }
     if (option.publicId === currentId) return COPY.tagCurrent;
@@ -167,23 +175,24 @@ export function MovementPicker({
   const enterTarget =
     result.exact || result.aliasHit || matches.length === 1 ? matches[0] : undefined;
 
-  // ── "Use as typed": offered for raw non-empty text that is not already in the list ─────────────
-  // 🔴 Tested on the TRIMMED RAW text, not the fold (panel 2 · 4): `🙂` and `---` fold to `''`, and
-  // testing the fold would drop them into browse mode and never show the disabled footer Decision 8
-  // promises for them.
-  const rawTrimmed = query.trim();
-  const offersTyped = rawTrimmed !== '' && !result.exact && !result.aliasHit;
+  // ── "Use as typed": offered for non-empty text that is not already in the list ─────────────────
+  // 🔴 **Emptiness is tested on the RAW text, never on the fold** (panel 2 · 4). `🙂` and `---` fold
+  // to `''`; a fold-based check would drop them into browse mode and never render the disabled
+  // footer Decision 8 promises for them. Probed by replacing this with a fold-based test, which
+  // reddens the aria-disabled cases.
+  const trimmedQuery = query.trim();
+  const offersTyped = trimmedQuery !== '' && !result.exact && !result.aliasHit;
   // The reason comes from the SCHEMA, so the UI never hand-composes a rule the boundary owns. A name
   // breaking two rules shows the first, by `typedMovementNameIssues`' order.
   const typedNameIssue = useMemo(() => {
     if (!offersTyped) return null;
-    const parsed = movementNameSchema.safeParse(rawTrimmed);
+    const parsed = movementNameSchema.safeParse(trimmedQuery);
     return parsed.success ? null : (parsed.error.issues[0]?.message ?? null);
-  }, [offersTyped, rawTrimmed]);
+  }, [offersTyped, trimmedQuery]);
 
   // ── The status region: ONE shape, `{count}. {reason}`, one reason by precedence (panel 2 · 1-2) ──
   const status = (() => {
-    if (rawTrimmed === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
+    if (trimmedQuery === '') return COPY.statusEmpty; // mounts silent — Announcer's rule 1
     const count =
       matches.length > 0
         ? COPY.statusCount(matches.length)
@@ -266,16 +275,16 @@ export function MovementPicker({
                 aria-describedby={`${SHEET_ID}-typed-hint`}
                 onClick={() => {
                   if (typedNameIssue) return; // focusable but inert, with the reason in the hint
-                  onPick({ kind: 'typed', name: rawTrimmed });
+                  onPick({ kind: 'typed', name: trimmedQuery });
                   onOpenChange(false);
                 }}
                 // `button.tsx` is `whitespace-nowrap`; a long typed name must wrap, not clip.
                 className="h-auto min-h-11 w-full whitespace-normal break-words text-base"
               >
-                {COPY.asTyped(rawTrimmed)}
+                {COPY.asTyped(trimmedQuery)}
               </Button>
               <p id={`${SHEET_ID}-typed-hint`} className="text-muted-foreground text-xs">
-                {typedNameIssue ?? COPY.asTypedHint(rawTrimmed)}
+                {typedNameIssue ?? COPY.asTypedHint(trimmedQuery)}
               </p>
             </>
           ) : null}
@@ -291,7 +300,7 @@ export function MovementPicker({
         </div>
       }
     >
-      {rawTrimmed === '' ? (
+      {trimmedQuery === '' ? (
         <>
           {data.recentIds && data.recentIds.length > 0 ? (
             <Section
